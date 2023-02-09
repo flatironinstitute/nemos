@@ -1,8 +1,7 @@
-import jax
 import jaxopt
 import jax.numpy as jnp
-from basis import MSpline
-from utils import convolve_1d_basis
+from .basis import MSpline
+from .utils import convolve_1d_basis
 
 
 class GLM:
