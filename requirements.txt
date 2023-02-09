@@ -2,5 +2,7 @@ jax
 jaxopt
 matplotlib
 numpy
-sklearn
+scikit-learn
 scipy
+# required for jaxopt, weirdly
+typing_extensions
