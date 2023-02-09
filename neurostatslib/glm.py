@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 from sklearn.linear_model import PoissonRegressor
 from scipy.ndimage import convolve1d
-from basis import MSpline
+from .basis import MSpline
 import jax
 import jaxopt
 
