@@ -7,6 +7,7 @@ Ramsay, J. O. (1988). Monotone regression splines in action.
 Statistical science, 3(4), 425-441.
 """
 import numpy as np
+import scipy.linalg
 
 
 class Basis:
@@ -20,14 +21,47 @@ class Basis:
         self.num_basis_funcs = num_basis_funcs
         self.support = support
 
-    def convolve(self, x):
-        """
-        x : ndarray
-        """
-
     @property
     def ndim(self):
         return len(self.shape)
+
+    def check_in_support(self, x):
+        raise NotImplementedError() # TODO
+
+
+class OrthExponentials(Basis):
+    """
+    Set of 1D basis functions that are decaying exponentials
+    numerically orthogonalized.
+    """
+
+    def __init__(self, *, decay_rates, window_size):
+        super().__init__(len(decay_rates), (0, window_size))
+        self.decay_rates = decay_rates
+        self.window_size = window_size
+
+    def transform(self, x=None):
+        """
+        Parameters
+        ----------
+        x : ndarray
+            1d array, shape = (num_pts,), holding elements on the
+            interval [0, window_size).
+
+        Returns
+        -------
+        vals : ndarray
+            2d array, shape = (num_pts, num_basis_funcs), holding
+            evaluated spline basis functions.
+        """
+
+        # Default is to use a grid.
+        if x is None:
+            x = np.arange(self.window_size)
+
+        return scipy.linalg.orth(
+            np.column_stack([np.exp(-lam * x) for lam in self.decay_rates])
+        ).T
 
 
 class MSpline(Basis):
@@ -81,7 +115,7 @@ class MSpline(Basis):
         Returns
         -------
         vals : ndarray
-            2d array, shape = (num_basis_funcs, num_pts), holding
+            2d array, shape = (num_pts, num_basis_funcs), holding
             evaluated spline basis functions.
         """
 
@@ -93,7 +127,7 @@ class MSpline(Basis):
         assert x.min() >= 0
         assert x.max() < 1
 
-        return np.column_stack(
+        return np.row_stack(
             [mspline(x, self.order, i, self.knot_locs) for i in range(self.num_basis_funcs)]
         )
 
@@ -139,9 +173,35 @@ if __name__ == "__main__":
         spline = MSpline(num_basis_funcs=6, window_size=1000, order=(k + 1))
         
         # Transform and plot spline bases.
-        ax.plot(spline.transform())
+        ax.plot(spline.transform().T)
         ax.set_yticks([])
         ax.set_title(f"order-{k + 1}")
 
     fig.tight_layout()
     plt.show()
+
+    # Test for orthogonalized exponentials
+    basis = OrthExponentials(
+        decay_rates=np.logspace(-1, 0, 5),
+        window_size=100
+    )
+    fig, ax = plt.subplots(1, 1)
+    ax.plot(basis.transform().T)
+    plt.show()
+
+    from utils import convolve_1d_basis
+    nt = 1000
+    spikes = np.random.RandomState(123).randn(nt) > 2.5
+    fig, ax = plt.subplots(1, 1, sharex=True)
+    X = convolve_1d_basis(
+        basis.transform(), spikes
+    )
+    ax.plot(spikes, color='k')
+    ax.plot(
+        np.arange(basis.window_size - 1, nt),
+        X[0].T
+    )
+    plt.show()
+
+
+

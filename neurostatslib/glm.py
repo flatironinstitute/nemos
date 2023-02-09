@@ -1,16 +1,8 @@
-import jax.numpy as jnp
-from sklearn.linear_model import PoissonRegressor
-from scipy.ndimage import convolve1d
-from .basis import MSpline
 import jax
 import jaxopt
-
-
-# Broadcasted 1d convolution operations.
-# [[n x t],[w]] -> [n x (t - w + 1)]
-_corr1 = jax.vmap(jax.numpy.correlate, (0, None), 0)
-# [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-_corr2 = jax.vmap(_corr1, (None, 0), 0)
+import jax.numpy as jnp
+from basis import MSpline
+from utils import convolve_1d_basis
 
 
 class GLM:
@@ -45,9 +37,10 @@ class GLM:
         nbs, nws = self._spike_basis_matrix.shape
         
         # Convolve spikes with basis functions.
-        #   Input shapes: (basis_funcs, timebins), (neurons, windowsize)
-        #   Output shape: (neurons, basis_funcs, timebins - windowsize + 1)
-        X = _corr2(self._spike_basis_matrix, spike_data)
+        X = convolve_1d_basis(
+            self._spike_basis_matrix,
+            spike_data
+        )
 
         # Initialize parameters
         init_params = (
@@ -88,7 +81,10 @@ class GLM:
         """
         Ws = self._spike_basis_coeff
         bs = self._baseline_log_fr
-        X = _corr2(self._spike_basis_matrix, spike_data)
+        X = convolve_1d_basis(
+            self._spike_basis_matrix,
+            spike_data
+        )
         log_pred = jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
         return jnp.exp(log_pred) # TODO: different link functions
 
