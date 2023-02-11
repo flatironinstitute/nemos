@@ -1,5 +1,6 @@
-import jaxopt
+import jax
 import jax.numpy as jnp
+import jaxopt
 from .basis import MSpline
 from .utils import convolve_1d_basis
 
@@ -86,18 +87,39 @@ class GLM:
         )
         log_pred = jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
         return jnp.exp(log_pred) # TODO: different link functions
+    
+    def simulate(self, random_key, num_timesteps, init_spikes, covariates=None):
+        """
+        Simulate GLM as a recurrent network.
 
+        Parameters
+        ----------
+        num_timesteps : int
+            Number of time steps to simulate.
 
-# Short test
-if __name__ == "__main__":
+        spike_data : array (num_neurons x window_size)
+            Spike counts arranged in a matrix.
+        """
 
-    nn, nt = 10, 1000
-    spike_data = jnp.ones((nn, nt))
+        Ws = self._spike_basis_coeff
+        bs = self._baseline_log_fr
+        B = self._spike_basis_matrix
 
-    model = GLM(
-        spike_basis=MSpline(num_basis_funcs=6, window_size=100, order=3),
-        covariate_basis=None
-    )
+        subkeys = jax.random.split(random_key, num=num_timesteps)
 
-    model.fit(spike_data)
-    model.predict(spike_data)
+        def scan_fn(spikes, key):
+            X = convolve_1d_basis(B, spikes)
+            # X.shape == (num_neurons x num_basis_funcs x 1)
+            log_pred = jnp.einsum("nb,nbj->n", jnp.squeeze(X), Ws)
+            new_spikes = jax.random.poisson(key, jnp.exp(log_pred))
+            concat_spikes = jnp.column_stack(
+                (spikes[:, 1:], new_spikes)
+            )
+            return concat_spikes, new_spikes
+
+        _, simulated_spikes = jax.lax.scan(
+            scan_fn, init_spikes, subkeys
+        )
+
+        return simulated_spikes.T
+
