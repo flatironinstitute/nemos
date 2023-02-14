@@ -1,7 +1,6 @@
 import jax
 from neurostatslib.glm import GLM
 from neurostatslib.basis import MSpline
-jax.config.update('jax_platform_name', 'cpu')
 
 nn, nt = 10, 1000
 key = jax.random.PRNGKey(123)

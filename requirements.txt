@@ -1,8 +1,0 @@
-jax
-jaxopt
-matplotlib
-numpy
-scikit-learn
-scipy
-# required for jaxopt, weirdly
-typing_extensions
