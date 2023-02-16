@@ -16,5 +16,5 @@ model = GLM(
 
 model.fit(spike_data)
 model.predict(spike_data)
-key, subkey = jax.random.split(key)
-X = model.simulate(subkey, 20, spike_data[:, :100])
+# key, subkey = jax.random.split(key)
+# X = model.simulate(subkey, 20, spike_data[:, :100])

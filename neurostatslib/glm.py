@@ -7,11 +7,19 @@ from .utils import convolve_1d_basis
 
 class GLM:
 
-    def __init__(self, spike_basis, covariate_basis=None, solver_name="LBFGS", solver_kwargs=dict()):
+    def __init__(
+            self,
+            spike_basis,
+            covariate_basis=None,
+            solver_name="LBFGS",
+            solver_kwargs=dict(),
+            inverse_link_function=jax.nn.softplus
+        ):
         self.spike_basis = spike_basis
         self.covariate_basis = covariate_basis
         self.solver_name = solver_name
         self.solver_kwargs = solver_kwargs
+        self.inverse_link_function = inverse_link_function
 
         # (num_basis_funcs x window_size)
         self._spike_basis_matrix = self.spike_basis.transform()
@@ -52,16 +60,19 @@ class GLM:
         #    TODO: other link functions.
         def loss(params, X, y):
             Ws, bs = params
-            log_pred = jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
-            # log_pred = vmap(lambda A, B: A @ B)(X, Ws) + bs[:, None]
-            return jnp.sum(jnp.exp(log_pred) - y * log_pred)
+            pred_fr = self.inverse_link_function(
+                jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
+            )
+            return jnp.sum(pred_fr - y * jnp.log(pred_fr))
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(
             fun=loss, **self.solver_kwargs
         )
         params, state = solver.run(
-            init_params, X=X, y=spike_data[:, (nws - 1):]
+            init_params,
+            X=X,
+            y=spike_data[:, (nws - 1):]
         )
 
         # Store parameters
@@ -94,11 +105,14 @@ class GLM:
 
         Parameters
         ----------
+        random_key: PRNGKey
+
         num_timesteps : int
             Number of time steps to simulate.
 
-        spike_data : array (num_neurons x window_size)
-            Spike counts arranged in a matrix.
+        init_spikes : array (num_neurons x window_size)
+            Spike counts arranged in a matrix. These are used to
+            jump start the forward simulation.
         """
 
         Ws = self._spike_basis_coeff
@@ -110,8 +124,10 @@ class GLM:
         def scan_fn(spikes, key):
             X = convolve_1d_basis(B, spikes)
             # X.shape == (num_neurons x num_basis_funcs x 1)
-            log_pred = jnp.einsum("nb,nbj->n", jnp.squeeze(X), Ws)
-            new_spikes = jax.random.poisson(key, jnp.exp(log_pred))
+            fr = self.inverse_link_function(
+                jnp.einsum("nb,nbj->n", jnp.squeeze(X), Ws)
+            )
+            new_spikes = jax.random.poisson(key, fr)
             concat_spikes = jnp.column_stack(
                 (spikes[:, 1:], new_spikes)
             )
