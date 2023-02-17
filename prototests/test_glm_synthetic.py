@@ -7,7 +7,7 @@ from neurostatslib.utils import convolve_1d_basis
 import matplotlib.pyplot as plt
 import itertools
 
-nn, nt, ws = 2, 1000, 100
+nn, nt, ws = 2, 5000, 100
 simulation_key = jax.random.PRNGKey(123)
 
 spike_basis = RaisedCosineBasis(
@@ -31,23 +31,24 @@ simulated_model.spike_basis_coeff_ = jnp.array(W)
 simulated_model.baseline_log_fr_ = jnp.ones(nn) * .1
 
 init_spikes = jnp.zeros((2, spike_basis.window_size))
-spike_data = simulated_model.simulate(simulation_key, 1000, init_spikes)
+spike_data = simulated_model.simulate(simulation_key, nt, init_spikes)
 sim_pred = simulated_model.predict(spike_data)
 
 fitted_model = GLM(
     spike_basis=spike_basis,
     covariate_basis=None,
-    solver_name="ScipyMinimize",
-    solver_kwargs=dict(method="trust-exact"),
-    # solver_name="GradientDescent",
-    # solver_kwargs=dict(maxiter=100, acceleration=False, verbose=True, stepsize=1e-3)
+    # solver_name="ScipyMinimize",
+    # solver_kwargs=dict(method="newton-cg", maxiter=1000, options=dict(verbose=True)),
+    solver_name="GradientDescent",
+    solver_kwargs=dict(maxiter=100, acceleration=False, verbose=True, stepsize=1e-3)
     # solver_name="LBFGS",
     # solver_kwargs=dict(maxiter=100, verbose=True, stepsize=0.0)
 )
-fitted_model.fit(spike_data, init_params=(
-    jnp.copy(simulated_model.spike_basis_coeff_),
-    jnp.copy(simulated_model.baseline_log_fr_)
-))
+# fitted_model.fit(spike_data, init_params=(
+#     jnp.copy(simulated_model.spike_basis_coeff_),
+#     jnp.copy(simulated_model.baseline_log_fr_)
+# ))
+fitted_model.fit(spike_data)
 fit_pred = fitted_model.predict(spike_data)
 
 fig, axes = plt.subplots(2, 1)
