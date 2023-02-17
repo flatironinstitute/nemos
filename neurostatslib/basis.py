@@ -29,6 +29,30 @@ class Basis:
         raise NotImplementedError() # TODO
 
 
+class RaisedCosineBasis(Basis):
+    """
+    Raised cosine basis functions with log-spacing used by Pillow et al.
+    """
+    def __init__(self, *, num_basis_funcs, window_size):
+        self.num_basis_funcs = num_basis_funcs
+        self.window_size = window_size
+
+    def transform(self, x=None):
+        if x is None:
+            # linear spacing would be...
+            # x = np.linspace(
+            #     0, np.pi * (self.num_basis_funcs - 1), self.window_size
+            # )
+            x = np.logspace(
+                np.log10(np.pi * (self.num_basis_funcs - 1)), -1, self.window_size
+            ) - .1
+
+        cx = x[None, :] - (np.pi * np.arange(self.num_basis_funcs))[:, None]
+        return .5 * (np.cos(
+            np.clip(cx, -np.pi, np.pi)
+        ) + 1)
+
+
 class OrthExponentials(Basis):
     """
     Set of 1D basis functions that are decaying exponentials
@@ -163,45 +187,54 @@ if __name__ == "__main__":
     # For plotting.
     import matplotlib.pyplot as plt
 
-    # Create figure and grid of evaluation points.
-    fig, axes = plt.subplots(1, 5, sharey=True)
+    # # Create figure and grid of evaluation points.
+    # fig, axes = plt.subplots(1, 5, sharey=True)
 
-    # Iterate over axes to plot.
-    for k, ax in enumerate(axes):
+    # # Iterate over axes to plot.
+    # for k, ax in enumerate(axes):
         
-        # Create spline object.
-        spline = MSpline(num_basis_funcs=6, window_size=1000, order=(k + 1))
+    #     # Create spline object.
+    #     spline = MSpline(num_basis_funcs=6, window_size=1000, order=(k + 1))
         
-        # Transform and plot spline bases.
-        ax.plot(spline.transform().T)
-        ax.set_yticks([])
-        ax.set_title(f"order-{k + 1}")
+    #     # Transform and plot spline bases.
+    #     ax.plot(spline.transform().T)
+    #     ax.set_yticks([])
+    #     ax.set_title(f"order-{k + 1}")
 
-    fig.tight_layout()
-    plt.show()
+    # fig.tight_layout()
+    # plt.show()
 
-    # Test for orthogonalized exponentials
-    basis = OrthExponentials(
-        decay_rates=np.logspace(-1, 0, 5),
-        window_size=100
+    # # Test for orthogonalized exponentials
+    # basis = OrthExponentials(
+    #     decay_rates=np.logspace(-1, 0, 5),
+    #     window_size=100
+    # )
+    # fig, ax = plt.subplots(1, 1)
+    # ax.plot(basis.transform().T)
+    # plt.show()
+
+    # Test for raised cosines
+    basis = RaisedCosineBasis(
+        num_basis_funcs=5,
+        window_size=1000
     )
     fig, ax = plt.subplots(1, 1)
     ax.plot(basis.transform().T)
     plt.show()
 
-    from utils import convolve_1d_basis
-    nt = 1000
-    spikes = np.random.RandomState(123).randn(nt) > 2.5
-    fig, ax = plt.subplots(1, 1, sharex=True)
-    X = convolve_1d_basis(
-        basis.transform(), spikes
-    )
-    ax.plot(spikes, color='k')
-    ax.plot(
-        np.arange(basis.window_size - 1, nt),
-        X[0].T
-    )
-    plt.show()
+    # from utils import convolve_1d_basis
+    # nt = 1000
+    # spikes = np.random.RandomState(123).randn(nt) > 2.5
+    # fig, ax = plt.subplots(1, 1, sharex=True)
+    # X = convolve_1d_basis(
+    #     basis.transform(), spikes
+    # )
+    # ax.plot(spikes, color='k')
+    # ax.plot(
+    #     np.arange(basis.window_size - 1, nt),
+    #     X[0].T
+    # )
+    # plt.show()
 
 
 

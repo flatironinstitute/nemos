@@ -11,7 +11,7 @@ class GLM:
             self,
             spike_basis,
             covariate_basis=None,
-            solver_name="LBFGS",
+            solver_name="GradientDescent",
             solver_kwargs=dict(),
             inverse_link_function=jax.nn.softplus
         ):
@@ -24,7 +24,7 @@ class GLM:
         # (num_basis_funcs x window_size)
         self._spike_basis_matrix = self.spike_basis.transform()
 
-    def fit(self, spike_data, covariates=None):
+    def fit(self, spike_data, covariates=None, init_params=None):
         """
         Parameters
         ----------
@@ -51,19 +51,19 @@ class GLM:
         )
 
         # Initialize parameters
-        init_params = (
-            jnp.zeros((nn, nbs, nn)),  # Ws, spike basis coeffs
-            jnp.zeros(nn)              # bs, bias terms
-        )
+        if init_params is None:
+            init_params = (
+                jnp.zeros((nn, nbs, nn)),  # Ws, spike basis coeffs
+                jnp.zeros(nn)              # bs, bias terms
+            )
 
-        # Poisson negative log-likelihood with an exponential link function.
-        #    TODO: other link functions.
+        # Poisson negative log-likelihood.
         def loss(params, X, y):
             Ws, bs = params
             pred_fr = self.inverse_link_function(
                 jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
             )
-            return jnp.sum(pred_fr - y * jnp.log(pred_fr))
+            return jnp.mean(pred_fr - y * jnp.log(pred_fr))
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(
@@ -76,9 +76,10 @@ class GLM:
         )
 
         # Store parameters
-        self._spike_basis_coeff = params[0]
-        self._baseline_log_fr = params[1]
-
+        self.spike_basis_coeff_ = params[0]
+        self.baseline_log_fr_ = params[1]
+        self.solver_state_ = state
+        self.solver_ = solver
 
     def predict(self, spike_data, covariates=None):
         """
@@ -90,15 +91,21 @@ class GLM:
         covariates : array (num_covariates x num_timebins)
             Other input variables (e.g. stimulus features)
         """
-        Ws = self._spike_basis_coeff
-        bs = self._baseline_log_fr
+        Ws = self.spike_basis_coeff_
+        bs = self.baseline_log_fr_
         X = convolve_1d_basis(
             self._spike_basis_matrix,
             spike_data
         )
-        log_pred = jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
-        return jnp.exp(log_pred) # TODO: different link functions
-    
+        return self.inverse_link_function(
+            jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
+        )
+
+    def score(self, spike_data, covariates=None):
+        pred_fr = self.predict(spike_data, covariates=covariates)[:, :-1]
+        ws = self.spike_basis.window_size
+        return jnp.mean(pred_fr - spike_data[:, ws:] * jnp.log(pred_fr))
+
     def simulate(self, random_key, num_timesteps, init_spikes, covariates=None):
         """
         Simulate GLM as a recurrent network.
@@ -115,17 +122,18 @@ class GLM:
             jump start the forward simulation.
         """
 
-        Ws = self._spike_basis_coeff
-        bs = self._baseline_log_fr
-        B = self._spike_basis_matrix
+        Ws = self.spike_basis_coeff_
+        bs = self.baseline_log_fr_
 
         subkeys = jax.random.split(random_key, num=num_timesteps)
 
         def scan_fn(spikes, key):
-            X = convolve_1d_basis(B, spikes)
-            # X.shape == (num_neurons x num_basis_funcs x 1)
+            X = convolve_1d_basis(
+                self._spike_basis_matrix,
+                spikes
+            ) # X.shape == (num_neurons x num_basis_funcs x 1)
             fr = self.inverse_link_function(
-                jnp.einsum("nb,nbj->n", jnp.squeeze(X), Ws)
+                jnp.einsum("nb,nbj->n", jnp.squeeze(X), Ws) + bs
             )
             new_spikes = jax.random.poisson(key, fr)
             concat_spikes = jnp.column_stack(
