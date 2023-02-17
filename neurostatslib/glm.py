@@ -48,7 +48,7 @@ class GLM:
         X = convolve_1d_basis(
             self._spike_basis_matrix,
             spike_data
-        )
+        )[:, :, :-1]
 
         # Initialize parameters
         if init_params is None:
@@ -72,7 +72,7 @@ class GLM:
         params, state = solver.run(
             init_params,
             X=X,
-            y=spike_data[:, (nws - 1):]
+            y=spike_data[:, nws:]
         )
 
         # Store parameters
@@ -133,7 +133,7 @@ class GLM:
                 spikes
             ) # X.shape == (num_neurons x num_basis_funcs x 1)
             fr = self.inverse_link_function(
-                jnp.einsum("nb,nbj->n", jnp.squeeze(X), Ws) + bs
+                jnp.einsum("nbz,nbj->n", X, Ws) + bs
             )
             new_spikes = jax.random.poisson(key, fr)
             concat_spikes = jnp.column_stack(
