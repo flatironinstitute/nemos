@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 import jaxopt
-from .basis import MSpline
 from .utils import convolve_1d_basis
 
 
