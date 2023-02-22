@@ -75,7 +75,7 @@ class OrthExponentials(Basis):
         Returns
         -------
         vals : ndarray
-            2d array, shape = (num_pts, num_basis_funcs), holding
+            2d array, shape = (num_basis_funcs, num_pts), holding
             evaluated spline basis functions.
         """
 
@@ -83,8 +83,13 @@ class OrthExponentials(Basis):
         if x is None:
             x = np.arange(self.window_size)
 
+        # because of how scipy.linalg.orth works, have to create a matrix of
+        # shape (num_pts, num_basis_funcs) and then transpose, rather than
+        # directly computing orth on the matrix of shape (num_basis_funcs,
+        # num_pts)
         return scipy.linalg.orth(
-            np.column_stack([np.exp(-lam * x) for lam in self.decay_rates])
+            np.stack([np.exp(-lam * x) for lam in self.decay_rates],
+                     axis=1)
         ).T
 
 
@@ -139,7 +144,7 @@ class MSpline(Basis):
         Returns
         -------
         vals : ndarray
-            2d array, shape = (num_pts, num_basis_funcs), holding
+            2d array, shape = (num_basis_funcs, num_pts), holding
             evaluated spline basis functions.
         """
 
@@ -151,8 +156,9 @@ class MSpline(Basis):
         assert x.min() >= 0
         assert x.max() < 1
 
-        return np.row_stack(
-            [mspline(x, self.order, i, self.knot_locs) for i in range(self.num_basis_funcs)]
+        return np.stack(
+            [mspline(x, self.order, i, self.knot_locs) for i in range(self.num_basis_funcs)],
+            axis=0
         )
 
 
