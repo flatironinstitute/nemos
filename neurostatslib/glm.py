@@ -75,6 +75,9 @@ class GLM:
             y=spike_data[:, nws:]
         )
 
+        if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
+            raise ValueError("Solver returned at least one NaN parameter, so solution is invalid!"
+                             " Try tuning optimization hyperparameters.")
         # Store parameters
         self.spike_basis_coeff_ = params[0]
         self.baseline_log_fr_ = params[1]
