@@ -1,3 +1,5 @@
+# required to get ArrayLike to render correctly, unnecessary as of python 3.10
+from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -13,30 +15,28 @@ _CORR1 = jax.vmap(partial(jnp.convolve, mode='valid'), (0, None), 0)
 _CORR2 = jax.vmap(_CORR1, (None, 0), 0)
 
 
-def convolve_1d_basis(basis_matrix, time_series):
-    """
-    Parameters
+def convolve_1d_basis(basis_matrix: ArrayLike,
+                      time_series: ArrayLike) -> ArrayLike:
+    """Parameters
     ----------
-    basis_matrix : array
-    	Matrix holding 1d basis functions, 
-    	shape == (B, W).
-    time_series : array 
-        Matrix holding multivariate time series,
-        shape == (N, T).
+    basis_matrix : (n_basis_funcs, window_size)
+    	Matrix holding 1d basis functions.
+    time_series : (n_neurons, n_timebins)
+        Matrix holding multivariate time series.
 
     Returns
     -------
-    convolved_series : array
+    convolved_series : (n_neurons, n_basis_funcs, n_timebins - window_size + 1)
         Result of convolution between all pairs of
-        features and basis functions,
-        shape == (N, B, T - W + 1).
+        features and basis functions.
 
     Notes
     -----
-    For example, `time_series` could be a matrix of
-    spike counts with `N` neurons and `T` timebins,
-    and `basis_matrix` could be a matrix of `B`
-    temporal basis functions with a window size of `W`.
+    For example, ``time_series`` could be a matrix of spike counts with
+    ``n_neurons`` neurons and ``n_timebins`` timebins, and ``basis_matrix``
+    could be a matrix of ``n_basis_funcs`` temporal basis functions with a
+    window size of ``window_size``.
+
     """
     return _CORR2(
     	jnp.atleast_2d(basis_matrix),
