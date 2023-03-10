@@ -5,9 +5,9 @@ from functools import partial
 
 # Broadcasted 1d convolution operations.
 # [[n x t],[w]] -> [n x (t - w + 1)]
-_corr1 = jax.vmap(partial(jnp.convolve, mode='valid'), (0, None), 0)
+_CORR1 = jax.vmap(partial(jnp.convolve, mode='valid'), (0, None), 0)
 # [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-_corr2 = jax.vmap(_corr1, (None, 0), 0)
+_CORR2 = jax.vmap(_CORR1, (None, 0), 0)
 
 
 def convolve_1d_basis(basis_matrix, time_series):
@@ -35,7 +35,7 @@ def convolve_1d_basis(basis_matrix, time_series):
     and `basis_matrix` could be a matrix of `B`
     temporal basis functions with a window size of `W`.
     """
-    return _corr2(
+    return _CORR2(
     	jnp.atleast_2d(basis_matrix),
     	jnp.atleast_2d(time_series)
     )
