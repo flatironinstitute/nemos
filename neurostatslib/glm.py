@@ -1,37 +1,97 @@
 import jax
 import jax.numpy as jnp
 import jaxopt
+import inspect
 from .utils import convolve_1d_basis
+from .basis import Basis
+from typing import Optional, Callable, Tuple
+from numpy.typing import NDArray
 
 
 class GLM:
+    """Generalized Linear Model for neural responses.
+
+    No stimulus / external variables, only connections to other neurons.
+
+    Parameters
+    ----------
+    spike_basis
+        Instantiated Basis object which gives the possible basis functions for
+        these neurons
+    covariate_basis
+        NOT IMPLEMENTED
+    solver_name
+        Name of the solver to use when fitting the GLM. Must be an attribute of
+        ``jaxopt``.
+    solver_kwargs
+        Dictionary of keyword arguments to pass to the solver during its
+        initialization.
+    inverse_link_function
+        Function to transform outputs of convolution with basis to firing rate.
+        Must accept any number as input and return all non-negative values.
+
+    Attributes
+    ----------
+    solver
+        jaxopt solver, set during ``fit()``
+    solver_state
+        state of the solver, set during ``fit()``
+    spike_basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
+        Solutions for the spike basis coefficients, set during ``fit()``
+    baseline_log_fr : jnp.ndarray, (n_neurons,)
+        Solutions for bias terms, set during ``fit()``
+
+    """
 
     def __init__(
             self,
-            spike_basis,
-            covariate_basis=None,
-            solver_name="GradientDescent",
-            solver_kwargs=dict(),
-            inverse_link_function=jax.nn.softplus
+            spike_basis: Basis,
+            covariate_basis: Optional[Basis] = None,
+            solver_name: str = "GradientDescent",
+            solver_kwargs: dict = dict(),
+            inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
         ):
         self.spike_basis = spike_basis
         self.covariate_basis = covariate_basis
+        if covariate_basis is not None:
+            raise NotImplementedError()
         self.solver_name = solver_name
+        try:
+            solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
+        except AttributeError:
+            raise AttributeError(f'module jaxopt has no attribute {solver_name}, pick a different solver!')
+        for k in solver_kwargs.keys():
+            if k not in solver_args:
+                raise NameError(f"kwarg {k} in solver_kwargs is not a kwarg for jaxopt.{solver_name}!")
         self.solver_kwargs = solver_kwargs
         self.inverse_link_function = inverse_link_function
 
-        # (num_basis_funcs x window_size)
+        # (n_basis_funcs, window_size)
         self._spike_basis_matrix = self.spike_basis.transform()
 
-    def fit(self, spike_data, covariates=None, init_params=None):
-        """
+    def fit(self, spike_data: NDArray,
+            covariates: Optional[NDArray] = None,
+            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None):
+        """Fit GLM to spiking data.
+
+        Following scikit-learn API, the solutions are stored as attributes
+        ``spike_basis_coeff_`` and ``baseline_log_fr``.
+
         Parameters
         ----------
-        spike_data : array (num_neurons x num_timebins)
+        spike_data : (n_neurons, n_timebins)
             Spike counts arranged in a matrix.
+        covariates : (n_covariates, n_timebins)
+            Other input variables (e.g. stimulus features). NOT IMPLEMENTED
+        init_params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
+            Initial values for the spike basis coefficients and bias terms.
 
-        covariates : array (num_covariates x num_timebins)
-            Other input variables (e.g. stimulus features)
+        Raises
+        ------
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
+            an invalid solution. Try tuning optimization hyperparameters.
+
         """
 
         if covariates is not None:
@@ -40,21 +100,19 @@ class GLM:
         assert spike_data.ndim == 2
 
         # Number of neurons and timebins
-        nn, nt = spike_data.shape
-        nbs, nws = self._spike_basis_matrix.shape
+        n_neurons, _ = spike_data.shape
+        n_basis_funcs, window_size = self._spike_basis_matrix.shape
         
-        # Convolve spikes with basis functions.
-        X = convolve_1d_basis(
-            self._spike_basis_matrix,
-            spike_data
-        )[:, :, :-1]
+        # Convolve spikes with basis functions. We drop the last sample, as
+        # those are the features that could be used to predict spikes in the
+        # next time bin
+        X = convolve_1d_basis(self._spike_basis_matrix,
+                              spike_data)[:, :, :-1]
 
         # Initialize parameters
         if init_params is None:
-            init_params = (
-                jnp.zeros((nn, nbs, nn)),  # Ws, spike basis coeffs
-                jnp.zeros(nn)              # bs, bias terms
-            )
+            init_params = (jnp.zeros((n_neurons, n_basis_funcs, n_neurons)),  # Ws, spike basis coeffs
+                           jnp.zeros(n_neurons))              # bs, bias terms
 
         # Poisson negative log-likelihood.
         def loss(params, X, y):
@@ -68,11 +126,8 @@ class GLM:
         solver = getattr(jaxopt, self.solver_name)(
             fun=loss, **self.solver_kwargs
         )
-        params, state = solver.run(
-            init_params,
-            X=X,
-            y=spike_data[:, nws:]
-        )
+        params, state = solver.run(init_params, X=X,
+                                   y=spike_data[:, window_size:])
 
         if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
             raise ValueError("Solver returned at least one NaN parameter, so solution is invalid!"
@@ -80,17 +135,17 @@ class GLM:
         # Store parameters
         self.spike_basis_coeff_ = params[0]
         self.baseline_log_fr_ = params[1]
-        self.solver_state_ = state
-        self.solver_ = solver
+        self.solver_state = state
+        self.solver = solver
 
     def predict(self, spike_data, covariates=None):
         """
         Parameters
         ----------
-        spike_data : array (num_neurons x num_timebins)
+        spike_data : array (n_neurons x n_timebins)
             Spike counts arranged in a matrix.
 
-        covariates : array (num_covariates x num_timebins)
+        covariates : array (n_covariates x n_timebins)
             Other input variables (e.g. stimulus features)
         """
         Ws = self.spike_basis_coeff_
@@ -108,7 +163,7 @@ class GLM:
         ws = self.spike_basis.window_size
         return jnp.mean(pred_fr - spike_data[:, ws:] * jnp.log(pred_fr))
 
-    def simulate(self, random_key, num_timesteps, init_spikes, covariates=None):
+    def simulate(self, random_key, n_timesteps, init_spikes, covariates=None):
         """
         Simulate GLM as a recurrent network.
 
@@ -116,10 +171,10 @@ class GLM:
         ----------
         random_key: PRNGKey
 
-        num_timesteps : int
+        n_timesteps : int
             Number of time steps to simulate.
 
-        init_spikes : array (num_neurons x window_size)
+        init_spikes : array (n_neurons x window_size)
             Spike counts arranged in a matrix. These are used to
             jump start the forward simulation.
         """
@@ -127,13 +182,13 @@ class GLM:
         Ws = self.spike_basis_coeff_
         bs = self.baseline_log_fr_
 
-        subkeys = jax.random.split(random_key, num=num_timesteps)
+        subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(spikes, key):
             X = convolve_1d_basis(
                 self._spike_basis_matrix,
                 spikes
-            ) # X.shape == (num_neurons x num_basis_funcs x 1)
+            ) # X.shape == (n_neurons x n_basis_funcs x 1)
             fr = self.inverse_link_function(
                 jnp.einsum("nbz,nbj->n", X, Ws) + bs
             )
