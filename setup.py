@@ -9,7 +9,8 @@ setup(
     install_requires=['jax',
                       'jaxopt',
                       'matplotlib',
-                      'numpy',
+                      # for numpy.typing.ArrayLike
+                      'numpy>1.20',
                       'scikit-learn',
                       'scipy',
                       'typing_extensions']
