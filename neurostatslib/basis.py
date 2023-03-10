@@ -3,6 +3,7 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 import numpy as np
+import abc
 import scipy.linalg
 from typing import Tuple, Optional
 from numpy.typing import ArrayLike, NDArray
@@ -30,6 +31,10 @@ class Basis:
 
     def check_in_support(self, x):
         raise NotImplementedError() # TODO
+
+    @abc.abstractmethod
+    def transform(self, x: Optional[ArrayLike] = None) -> NDArray:
+        pass
 
 
 class RaisedCosineBasis(Basis):
