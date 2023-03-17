@@ -1,6 +1,6 @@
 import jax
 from neurostatslib.glm import GLM
-from neurostatslib.basis import MSpline
+from neurostatslib.basis import MSplineBasis
 
 nn, nt = 10, 1000
 key = jax.random.PRNGKey(123)
@@ -10,8 +10,7 @@ spike_data = jax.random.bernoulli(
 ).astype("int32")
 
 model = GLM(
-    spike_basis=MSpline(num_basis_funcs=6, window_size=100, order=3),
-    covariate_basis=None
+    spike_basis=MSplineBasis(n_basis_funcs=6, window_size=100, order=3),
 )
 
 model.fit(spike_data)

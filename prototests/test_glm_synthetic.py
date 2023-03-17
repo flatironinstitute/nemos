@@ -13,7 +13,7 @@ nn, nt, ws = 2, 5000, 100
 simulation_key = jax.random.PRNGKey(123)
 
 spike_basis = RaisedCosineBasis(
-    num_basis_funcs=5,
+    n_basis_funcs=5,
     window_size=ws
 )
 B = spike_basis.transform()
@@ -27,7 +27,6 @@ for i, j in itertools.product(range(nn), range(nn)):
 
 simulated_model = GLM(
     spike_basis=spike_basis,
-    covariate_basis=None
 )
 simulated_model.spike_basis_coeff_ = jnp.array(W)
 simulated_model.baseline_log_fr_ = jnp.ones(nn) * .1
@@ -38,7 +37,6 @@ sim_pred = simulated_model.predict(spike_data)
 
 fitted_model = GLM(
     spike_basis=spike_basis,
-    covariate_basis=None,
     # solver_name="ScipyMinimize",
     # solver_kwargs=dict(method="newton-cg", maxiter=1000, options=dict(verbose=True)),
     solver_name="GradientDescent",
