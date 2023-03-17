@@ -18,8 +18,6 @@ class GLM:
     spike_basis
         Instantiated Basis object which gives the possible basis functions for
         these neurons
-    covariate_basis
-        NOT IMPLEMENTED
     solver_name
         Name of the solver to use when fitting the GLM. Must be an attribute of
         ``jaxopt``.
@@ -46,15 +44,11 @@ class GLM:
     def __init__(
             self,
             spike_basis: Basis,
-            covariate_basis: Optional[Basis] = None,
             solver_name: str = "GradientDescent",
             solver_kwargs: dict = dict(),
             inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
         ):
         self.spike_basis = spike_basis
-        self.covariate_basis = covariate_basis
-        if covariate_basis is not None:
-            raise NotImplementedError()
         self.solver_name = solver_name
         try:
             solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
@@ -70,7 +64,6 @@ class GLM:
         self._spike_basis_matrix = self.spike_basis.transform()
 
     def fit(self, spike_data: NDArray,
-            covariates: Optional[NDArray] = None,
             init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None):
         """Fit GLM to spiking data.
 
@@ -81,8 +74,6 @@ class GLM:
         ----------
         spike_data : (n_neurons, n_timebins)
             Spike counts arranged in a matrix.
-        covariates : (n_covariates, n_timebins)
-            Other input variables (e.g. stimulus features). NOT IMPLEMENTED
         init_params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
             Initial values for the spike basis coefficients and bias terms.
 
@@ -93,10 +84,6 @@ class GLM:
             an invalid solution. Try tuning optimization hyperparameters.
 
         """
-
-        if covariates is not None:
-            raise NotImplementedError()
-
         assert spike_data.ndim == 2
 
         # Number of neurons and timebins
@@ -138,15 +125,12 @@ class GLM:
         self.solver_state = state
         self.solver = solver
 
-    def predict(self, spike_data, covariates=None):
+    def predict(self, spike_data):
         """
         Parameters
         ----------
         spike_data : array (n_neurons x n_timebins)
             Spike counts arranged in a matrix.
-
-        covariates : array (n_covariates x n_timebins)
-            Other input variables (e.g. stimulus features)
         """
         Ws = self.spike_basis_coeff_
         bs = self.baseline_log_fr_
@@ -158,12 +142,12 @@ class GLM:
             jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
         )
 
-    def score(self, spike_data, covariates=None):
-        pred_fr = self.predict(spike_data, covariates=covariates)[:, :-1]
+    def score(self, spike_data):
+        pred_fr = self.predict(spike_data)[:, :-1]
         ws = self.spike_basis.window_size
         return jnp.mean(pred_fr - spike_data[:, ws:] * jnp.log(pred_fr))
 
-    def simulate(self, random_key, n_timesteps, init_spikes, covariates=None):
+    def simulate(self, random_key, n_timesteps, init_spikes):
         """
         Simulate GLM as a recurrent network.
 
