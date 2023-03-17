@@ -6,6 +6,7 @@ from .utils import convolve_1d_basis
 from .basis import Basis
 from typing import Optional, Callable, Tuple
 from numpy.typing import NDArray
+from sklearn.exceptions import NotFittedError
 
 
 class GLM:
@@ -75,21 +76,26 @@ class GLM:
         spike_data : (n_neurons, n_timebins)
             Spike counts arranged in a matrix.
         init_params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
-            Initial values for the spike basis coefficients and bias terms.
+            Initial values for the spike basis coefficients and bias terms. If
+            None, we initialize with zeros.
 
         Raises
         ------
+        ValueError
+            If spike_data is not two-dimensional.
+        ValueError
+            If shapes of init_params are not correct.
         ValueError
             If solver returns at least one NaN parameter, which means it found
             an invalid solution. Try tuning optimization hyperparameters.
 
         """
-        assert spike_data.ndim == 2
+        if spike_data.ndim != 2:
+            raise ValueError("spike_data must be two-dimensional, with shape (n_neurons, n_timebins)")
 
-        # Number of neurons and timebins
         n_neurons, _ = spike_data.shape
         n_basis_funcs, window_size = self._spike_basis_matrix.shape
-        
+
         # Convolve spikes with basis functions. We drop the last sample, as
         # those are the features that could be used to predict spikes in the
         # next time bin
@@ -98,16 +104,32 @@ class GLM:
 
         # Initialize parameters
         if init_params is None:
-            init_params = (jnp.zeros((n_neurons, n_basis_funcs, n_neurons)),  # Ws, spike basis coeffs
-                           jnp.zeros(n_neurons))              # bs, bias terms
+            # Ws, spike basis coeffs
+            init_params = (jnp.zeros((n_neurons, n_basis_funcs, n_neurons)),
+                           # bs, bias terms
+                           jnp.zeros(n_neurons))
 
-        # Poisson negative log-likelihood.
+        if init_params[0].ndim != 3:
+            raise ValueError("spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), but"
+                             f" init_params[0] has {init_params[0].ndim} dimensions!")
+        if init_params[0].shape[0] != init_params[0].shape[-1]:
+            raise ValueError("spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), but"
+                             f" init_params[0] has shape {init_params[0].shape}!")
+        if init_params[1].ndim != 1:
+            raise ValueError("bias terms must be of shape (n_neurons,) but init_params[0] have"
+                             f"{init_params[1].ndim} dimensions!")
+        if init_params[0].shape[0] != init_params[1].shape[0]:
+            raise ValueError("spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), and"
+                             "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both!"
+                             f"init_params[0]: {init_params[0].shape[0]}, init_params[1]: {init_params[1].shape[0]}")
+        if init_params[0].shape[0] != spike_data.shape[0]:
+            raise ValueError("spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), and"
+                             "spike_data must be of shape (n_neurons, n_timebins) but n_neurons doesn't look the same in both!"
+                             f"init_params[0]: {init_params[0].shape[0]}, spike_data: {spike_data.shape[0]}")
+
         def loss(params, X, y):
-            Ws, bs = params
-            pred_fr = self.inverse_link_function(
-                jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
-            )
-            return jnp.mean(pred_fr - y * jnp.log(pred_fr))
+            predicted_spikes = self._predict(params, X)
+            return self._score(predicted_spikes, y)
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(
@@ -125,54 +147,174 @@ class GLM:
         self.solver_state = state
         self.solver = solver
 
-    def predict(self, spike_data):
-        """
+    def _predict(self, params: Tuple[jnp.ndarray, jnp.ndarray],
+                 convolved_spike_data: NDArray) -> jnp.ndarray:
+        """Helper function for generating predictions.
+
+        This way, can use same functions during and after fitting.
+
+        Note that the ``n_timebins`` here is not necessarily the same as in
+        public functions: in particular, this method expects the *convolved*
+        spike data, which (since we use the "valid" convolutional output) means
+        that it will have fewer timebins than the un-convolved data.
+
         Parameters
         ----------
-        spike_data : array (n_neurons x n_timebins)
-            Spike counts arranged in a matrix.
+        params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
+            Values for the spike basis coefficients and bias terms.
+        convolved_spike_data : (n_basis_funcs, n_neurons, n_timebins)
+            Spike counts convolved with some set of bases functions.
+
+        Returns
+        -------
+        predicted_spikes : (n_neurons, n_timebins)
+            The predicted spikes.
+
         """
-        Ws = self.spike_basis_coeff_
-        bs = self.baseline_log_fr_
-        X = convolve_1d_basis(
-            self._spike_basis_matrix,
-            spike_data
-        )
+        Ws, bs = params
         return self.inverse_link_function(
-            jnp.einsum("nbt,nbj->nt", X, Ws) + bs[:, None]
+            jnp.einsum("nbt,nbj->nt", convolved_spike_data, Ws) + bs[:, None]
         )
 
-    def score(self, spike_data):
-        pred_fr = self.predict(spike_data)[:, :-1]
-        ws = self.spike_basis.window_size
-        return jnp.mean(pred_fr - spike_data[:, ws:] * jnp.log(pred_fr))
+    def _score(self, predicted_spikes: NDArray,
+               target_spikes: NDArray) -> jnp.ndarray:
+        """Score the predicted against target spikes.
 
-    def simulate(self, random_key, n_timesteps, init_spikes):
-        """
-        Simulate GLM as a recurrent network.
+        This computes the Poisson negative log-likehood.
 
         Parameters
         ----------
-        random_key: PRNGKey
+        predicted_spikes : (n_neurons, n_timebins)
+            The predicted spikes.
+        target_spikes : (n_neurons, n_timebins)
+            The target spikes to compare against
 
-        n_timesteps : int
-            Number of time steps to simulate.
+        Returns
+        -------
+        score : (1,)
+            The Poisson negative log-likehood
 
-        init_spikes : array (n_neurons x window_size)
-            Spike counts arranged in a matrix. These are used to
-            jump start the forward simulation.
         """
+        return jnp.mean(predicted_spikes - target_spikes * jnp.log(predicted_spikes))
 
-        Ws = self.spike_basis_coeff_
+    def predict(self, spike_data: NDArray) -> jnp.ndarray:
+        """Predict spikes based on fit parameters.
+
+        Parameters
+        ----------
+        spike_data : (n_neurons, n_timebins)
+            Spike counts arranged in a matrix. n_neurons must be the same as
+            during the fitting of this GLM instance.
+
+        Returns
+        -------
+        predicted_spikes : (n_neurons, n_timebins - window_size + 1)
+            The predicted spikes.
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            If attempting to simulate a different number of neurons than were
+            present during fitting (i.e., if ``init_spikes.shape[0] !=
+            self.baseline_log_fr_.shape[0]``).
+
+        """
+        try:
+            Ws = self.spike_basis_coeff_
+        except AttributeError:
+            raise NotFittedError("This GLM instance is not fitted yet. Call 'fit' with appropriate arguments.")
         bs = self.baseline_log_fr_
+        if spike_data.shape[0] != bs.shape[0]:
+            raise ValueError("Number of neurons must be the same during prediction and fitting! "
+                             f"spike_data n_neurons: {spike_data.shape[0]}, "
+                             f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}")
+        X = convolve_1d_basis(self._spike_basis_matrix,
+                              spike_data)
+        return self._predict((Ws, bs), X)
+
+    def score(self, spike_data: NDArray) -> jnp.ndarray:
+        """Score the predicted spikes (based on fit) to the target.
+
+        This ignores the last time point of the prediction.
+
+        This computes the Poisson negative log-likehood.
+
+        Parameters
+        ----------
+        spike_data : (n_neurons, n_timebins)
+            Spike counts arranged in a matrix. n_neurons must be the same as
+            during the fitting of this GLM instance.
+
+        Returns
+        -------
+        score : (1,)
+            The Poisson negative log-likehood
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            If attempting to simulate a different number of neurons than were
+            present during fitting (i.e., if ``init_spikes.shape[0] !=
+            self.baseline_log_fr_.shape[0]``).
+
+        """
+        predicted_spikes = self.predict(spike_data)[:, :-1]
+        window_size = self.spike_basis.window_size
+        return self._score(predicted_spikes, spike_data[:, window_size:])
+
+    def simulate(self, random_key: jax.random.PRNGKeyArray,
+                 n_timesteps: int, init_spikes: NDArray) -> jnp.ndarray:
+        """Simulate GLM as a recurrent network.
+
+        Parameters
+        ----------
+        random_key
+            jax PRNGKey to seed simulation with.
+        n_timesteps
+            Number of time steps to simulate.
+        init_spikes : (n_neurons, window_size)
+            Spike counts arranged in a matrix. These are used to
+            jump start the forward simulation. n_neurons must be the same as
+            during the fitting of this GLM instance.
+
+        Returns
+        -------
+        simulated_spikes : (n_neurons, n_timesteps)
+            The simulated spikes.
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            If attempting to simulate a different number of neurons than were
+            present during fitting (i.e., if ``init_spikes.shape[0] !=
+            self.baseline_log_fr_.shape[0]``).
+
+        """
+        try:
+            Ws = self.spike_basis_coeff_
+        except AttributeError:
+            raise NotFittedError("This GLM instance is not fitted yet. Call 'fit' with appropriate arguments.")
+        bs = self.baseline_log_fr_
+
+        if init_spikes.shape[0] != bs.shape[0]:
+            raise ValueError("Number of neurons must be the same during simulation and fitting! "
+                             f"init_spikes n_neurons: {init_spikes.shape[0]}, "
+                             f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}")
 
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(spikes, key):
+            # (n_neurons, n_basis_funcs, n_timebins)
             X = convolve_1d_basis(
                 self._spike_basis_matrix,
                 spikes
-            ) # X.shape == (n_neurons x n_basis_funcs x 1)
+            )
             fr = self.inverse_link_function(
                 jnp.einsum("nbz,nbj->n", X, Ws) + bs
             )
@@ -187,4 +329,3 @@ class GLM:
         )
 
         return simulated_spikes.T
-
