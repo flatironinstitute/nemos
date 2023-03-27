@@ -19,7 +19,7 @@ class Basis:
     window_size
         Size of basis functions.
     support
-        Domain of the basis functions.
+        Possible domain of the basis functions.
 
     """
     def __init__(self, n_basis_funcs: int,
@@ -28,17 +28,79 @@ class Basis:
         self.n_basis_funcs = n_basis_funcs
         self.window_size = window_size
         self.support = support
+        # display string when showing support
+        self._support_display = f'[{self.support[0]}, {self.support[1]})'
 
-    def check_in_support(self, x):
-        raise NotImplementedError() # TODO
+    def _check_array(self, x: NDArray, ndim: int = 1):
+        """Check whether x is array with given number of dims.
+
+        We check whether it's an array implicitly, by checking its ``ndim``
+        attribute (thus, works with both numpy and jax.numpy arrays).
+
+        Parameters
+        ----------
+        x
+            Input array to check.
+
+        Raises
+        ------
+        ValueError
+            If x does not have the appropriate number of dimensions.
+        TypeError
+            If x does not have an ndim attribute (and thus is not an array).
+
+        """
+        try:
+            if x.ndim != ndim:
+                raise ValueError(f"Input must have {ndim} dimensions but has {x.ndim} instead!")
+        except AttributeError:
+            raise TypeError("Input is not an array!")
+
+
+    def check_in_support(self, x: NDArray):
+        """Check whether x lies within support.
+
+        Parameters
+        ----------
+        x
+            Input array to check.
+
+        Raises
+        ------
+        ValueError
+            If x lies outside the interval [self.support[0], self.support[1]),
+            i.e., we check ``x<support[0]`` and ``x>=support[1]``
+
+        """
+        if (x.min() < self.support[0]) or (x.max() >= self.support[1]):
+            raise ValueError(f"Input must lie within support {self._support_display}!")
 
     @abc.abstractmethod
-    def transform(self, x: Optional[ArrayLike] = None) -> NDArray:
-        pass
+    def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
+        """Generate basis functions with given spacing.
+
+        Note input must be 1d and output 2d. Children classes can call this as
+        convenient way to check input.
+
+        Parameters
+        ----------
+        sample_pts : (n_pts,)
+            Spacing for basis functions. *RECOMMEND A GOOD DEFAULT*
+
+        Returns
+        -------
+        basis_funcs : (n_basis_funcs, n_pts)
+            basis functions
+
+        """
+        self._check_array(sample_pts)
+        self.check_in_support(sample_pts)
 
 
 class RaisedCosineBasis(Basis):
-    """Raised cosine basis functions with log-spacing used by Pillow et al.
+    """Raised cosine basis functions used by Pillow et al. [2]_.
+
+    These are "cosine bumps" that uniformly tile the space.
 
     Parameters
     ----------
@@ -46,19 +108,31 @@ class RaisedCosineBasis(Basis):
         Number of basis functions.
     window_size
         Size of basis functions.
+
+    References
+    ----------
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+
     """
     def __init__(self, n_basis_funcs: int,
                  window_size: int):
         super().__init__(n_basis_funcs, window_size,
                          (0, window_size))
 
-    def transform(self, x: Optional[ArrayLike] = None) -> NDArray:
+    def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
         ----------
-        x : (n_pts,)
-            Spacing for basis functions. If None, uses log-spacing.
+        sample_pts : (n_pts,)
+            Spacing for basis functions, holding elements on interval [0,
+            window_size). A good default is
+            ``nsl.sample_points.raised_cosine_log`` for log spacing (as used in
+            [2]_) or ``nsl.sample_points.raised_cosine_linear`` for linear
+            spacing.
 
         Returns
         -------
@@ -66,19 +140,11 @@ class RaisedCosineBasis(Basis):
             Raised cosine basis functions
 
         """
-        if x is None:
-            # linear spacing would be...
-            # x = np.linspace(
-            #     0, np.pi * (self.n_basis_funcs - 1), self.window_size
-            # )
-            x = np.logspace(
-                np.log10(np.pi * (self.n_basis_funcs - 1)), -1, self.window_size
-            ) - .1
-        x = np.array(x, ndmin=1)
-        cx = x[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
-        return .5 * (np.cos(
-            np.clip(cx, -np.pi, np.pi)
-        ) + 1)
+        super().gen_basis_funcs(sample_pts)
+        # this has shape (n_basis_funcs, n_pts) and just consists of shifted
+        # copies of the input.
+        shifted_sample_pts = sample_pts[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
+        return .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
 
 
 class OrthExponentialBasis(Basis):
@@ -99,35 +165,28 @@ class OrthExponentialBasis(Basis):
         super().__init__(len(decay_rates), window_size, (0, window_size))
         self.decay_rates = decay_rates
 
-    def transform(self, x: Optional[ArrayLike] = None) -> NDArray:
+    def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
         ----------
-        x : (n_pts,)
+        sample_pts : (n_pts,)
             Spacing for basis functions, holding elements on the interval [0,
-            window_size). If None, use a grid (``np.arange(self.window_size)``).
+            window_size). A good default is np.arange(window_size).
 
         Returns
         -------
-        vals : (n_basis_funcs, n_pts)
+        basis_funcs : (n_basis_funcs, n_pts)
             Evaluated spline basis functions
 
         """
-        if x is None:
-            x = np.arange(self.window_size)
-        x = np.array(x, ndmin=1)
-        if x.min() < 0:
-            raise ValueError(f"values in x must lie within [0, {self.window_size})")
-        if x.max() >= self.window_size:
-            raise ValueError(f"values in x must lie within [0, {self.window_size})")
-
+        super().gen_basis_funcs(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
         return scipy.linalg.orth(
-            np.stack([np.exp(-lam * x) for lam in self.decay_rates],
+            np.stack([np.exp(-lam * sample_pts) for lam in self.decay_rates],
                      axis=1)
         ).T
 
@@ -143,7 +202,9 @@ class MSplineBasis(Basis):
         Size of basis functions.
     order
         Order of the splines used in basis functions. Must lie within [1,
-        n_basis_funcs].
+        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
+        at each interior knot. The higher this number, the smoother the basis
+        representation will be.
 
 
     References
@@ -162,7 +223,7 @@ class MSplineBasis(Basis):
         num_interior_knots = n_basis_funcs - order
 
         if order < 1:
-            raise ValueError('Spline order must be non-negative!')
+            raise ValueError('Spline order must be positive!')
         # Check hyperparameters.
         if num_interior_knots < 0:
             raise ValueError(
@@ -185,33 +246,26 @@ class MSplineBasis(Basis):
             np.ones(order - 1),
         ))
 
-    def transform(self, x: Optional[ArrayLike] = None) -> NDArray:
+    def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
         ----------
-        x : (n_pts,)
+        sample_pts : (n_pts,)
             Spacing for basis functions, holding elements on the interval [0,
-            window_size). If None, use a grid (``np.arange(self.window_size)``).
+            window_size). A good default is np.arange(window_size).
 
         Returns
         -------
-        vals : (n_basis_funcs, n_pts)
-            Evaluated spline basis functions
+        basis_funcs : (n_basis_funcs, n_pts)
+            Evaluated spline basis functions.
 
         """
-        if x is None:
-            x = np.arange(self.window_size)
-        x = np.array(x, ndmin=1)
-        if x.min() < 0:
-            raise ValueError(f"values in x must lie within [0, {self.window_size})")
-        if x.max() >= self.window_size:
-            raise ValueError(f"values in x must lie within [0, {self.window_size})")
-
-        x = x / self.window_size
+        super().gen_basis_funcs(sample_pts)
+        sample_pts = sample_pts / self.window_size
 
         return np.stack(
-            [mspline(x, self.order, i, self.knot_locs) for i in range(self.n_basis_funcs)],
+            [mspline(sample_pts, self.order, i, self.knot_locs) for i in range(self.n_basis_funcs)],
             axis=0
         )
 
