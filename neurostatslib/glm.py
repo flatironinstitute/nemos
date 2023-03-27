@@ -335,7 +335,7 @@ class GLM:
                 self.spike_basis_matrix,
                 spikes
             )
-            fr = self._predict((Ws, bs), X).squeeze()
+            fr = self._predict((Ws, bs), X).squeeze(-1)
             new_spikes = jax.random.poisson(key, fr)
             concat_spikes = jnp.column_stack(
                 (spikes[:, 1:], new_spikes)
