@@ -1,11 +1,10 @@
 import jax
 import jax.numpy as jnp
 import numpy as onp
+import neurostatslib as nsl
 from neurostatslib.glm import GLM
 from neurostatslib.basis import RaisedCosineBasis
-from neurostatslib.utils import convolve_1d_basis
 import matplotlib.pyplot as plt
-import itertools
 jax.config.update("jax_platform_name", "cpu")
 jax.config.update("jax_enable_x64", True)
 
@@ -16,11 +15,10 @@ spike_basis = RaisedCosineBasis(
     n_basis_funcs=5,
     window_size=ws
 )
-B = spike_basis.transform()
+sim_pts = nsl.sample_points.raised_cosine_log(5, ws)
+B = spike_basis.gen_basis_funcs(sim_pts)
 
-simulated_model = GLM(
-    spike_basis=spike_basis,
-)
+simulated_model = GLM(B)
 simulated_model.spike_basis_coeff_ = jnp.array([0, 0, -1, -1, -1])[None, :, None]
 simulated_model.baseline_log_fr_ = jnp.ones(nn) * .1
 
@@ -29,7 +27,7 @@ spike_data = simulated_model.simulate(simulation_key, nt, init_spikes)
 sim_pred = simulated_model.predict(spike_data)
 
 fitted_model = GLM(
-    spike_basis=spike_basis,
+    B,
     # solver_name="ScipyMinimize",
     # solver_kwargs=dict(method="newton-cg", maxiter=1000, options=dict(verbose=True)),
     solver_name="GradientDescent",
