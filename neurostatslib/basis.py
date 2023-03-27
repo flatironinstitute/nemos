@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import abc
 import scipy.linalg
+import warnings
 from typing import Tuple
 from numpy.typing import NDArray
 
@@ -56,6 +57,17 @@ class Basis:
         except AttributeError:
             raise TypeError("Input is not an array!")
 
+    def _check_num_sample_pts(self, sample_pts: NDArray):
+        """Raise warning if number of sample points looks off.
+
+        It's not necessarily *wrong* if ``len(sample_pts) !=
+        self.window_size``, but that's generally what we want, so raise a
+        warning if so.
+
+        """
+        if len(sample_pts) != self.window_size:
+            warnings.warn("sample_pts is not the same length as the Basis "
+                          "window_size -- are you sure that's what you want?")
 
     def check_in_support(self, x: NDArray):
         """Check whether x lies within support.
@@ -95,6 +107,7 @@ class Basis:
         """
         self._check_array(sample_pts)
         self.check_in_support(sample_pts)
+        self._check_num_sample_pts(sample_pts)
 
 
 class RaisedCosineBasis(Basis):
@@ -144,7 +157,14 @@ class RaisedCosineBasis(Basis):
         # this has shape (n_basis_funcs, n_pts) and just consists of shifted
         # copies of the input.
         shifted_sample_pts = sample_pts[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
-        return .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
+        basis_funcs = .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
+        if (abs(basis_funcs.sum(0) - 1) > 1e-12).any():
+            raise ValueError("sample_pts was generated with too large an n_basis_funcs arg, "
+                             "our generated basis functions do not uniformly tile the space!")
+        if (basis_funcs == 0).all(1).any():
+            raise ValueError("sample_pts was generated with too small an n_basis_funcs arg, "
+                             "at least one of our generated basis functions is 0 everywhere!")
+        return basis_funcs
 
 
 class OrthExponentialBasis(Basis):
