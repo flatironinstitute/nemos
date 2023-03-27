@@ -3,7 +3,6 @@ import jax.numpy as jnp
 import jaxopt
 import inspect
 from .utils import convolve_1d_basis
-from .basis import Basis
 from typing import Optional, Callable, Tuple
 from numpy.typing import NDArray
 from sklearn.exceptions import NotFittedError
@@ -16,9 +15,9 @@ class GLM:
 
     Parameters
     ----------
-    spike_basis
-        Instantiated Basis object which gives the possible basis functions for
-        these neurons
+    spike_basis_matrix : (n_basis_funcs, window_size)
+        Matrix of basis functions to use for this GLM. Most likely the output
+        of ``Basis.gen_basis_funcs()``
     solver_name
         Name of the solver to use when fitting the GLM. Must be an attribute of
         ``jaxopt``.
@@ -44,12 +43,13 @@ class GLM:
 
     def __init__(
             self,
-            spike_basis: Basis,
+            spike_basis_matrix: NDArray,
             solver_name: str = "GradientDescent",
             solver_kwargs: dict = dict(),
             inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
         ):
-        self.spike_basis = spike_basis
+        # (n_basis_funcs, window_size)
+        self.spike_basis_matrix = spike_basis_matrix
         self.solver_name = solver_name
         try:
             solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
@@ -61,8 +61,6 @@ class GLM:
         self.solver_kwargs = solver_kwargs
         self.inverse_link_function = inverse_link_function
 
-        # (n_basis_funcs, window_size)
-        self._spike_basis_matrix = self.spike_basis.transform()
 
     def fit(self, spike_data: NDArray,
             init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None):
@@ -94,12 +92,12 @@ class GLM:
             raise ValueError("spike_data must be two-dimensional, with shape (n_neurons, n_timebins)")
 
         n_neurons, _ = spike_data.shape
-        n_basis_funcs, window_size = self._spike_basis_matrix.shape
+        n_basis_funcs, window_size = self.spike_basis_matrix.shape
 
         # Convolve spikes with basis functions. We drop the last sample, as
         # those are the features that could be used to predict spikes in the
         # next time bin
-        X = convolve_1d_basis(self._spike_basis_matrix,
+        X = convolve_1d_basis(self.spike_basis_matrix,
                               spike_data)[:, :, :-1]
 
         # Initialize parameters
@@ -198,7 +196,7 @@ class GLM:
         return jnp.mean(predicted_spikes - target_spikes * jnp.log(predicted_spikes))
 
     def predict(self, spike_data: NDArray) -> jnp.ndarray:
-        """Predict spikes based on fit parameters.
+        """Predict spikes based on fit parameters, for checking against existing data.
 
         Parameters
         ----------
@@ -220,6 +218,14 @@ class GLM:
             present during fitting (i.e., if ``init_spikes.shape[0] !=
             self.baseline_log_fr_.shape[0]``).
 
+        See Also
+        --------
+        score
+            Score predicted spikes against target.
+        simulate
+            Simulate GLM as a recurrent network, for extrapolating into the future.
+
+
         """
         try:
             Ws = self.spike_basis_coeff_
@@ -230,7 +236,7 @@ class GLM:
             raise ValueError("Number of neurons must be the same during prediction and fitting! "
                              f"spike_data n_neurons: {spike_data.shape[0]}, "
                              f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}")
-        X = convolve_1d_basis(self._spike_basis_matrix,
+        X = convolve_1d_basis(self.spike_basis_matrix,
                               spike_data)
         return self._predict((Ws, bs), X)
 
@@ -262,13 +268,15 @@ class GLM:
             self.baseline_log_fr_.shape[0]``).
 
         """
+        # ignore the last time point from predict, because that corresponds to
+        # the next time step, which we have no observed data for
         predicted_spikes = self.predict(spike_data)[:, :-1]
-        window_size = self.spike_basis.window_size
+        window_size = self.spike_basis_matrix.shape[1]
         return self._score(predicted_spikes, spike_data[:, window_size:])
 
     def simulate(self, random_key: jax.random.PRNGKeyArray,
                  n_timesteps: int, init_spikes: NDArray) -> jnp.ndarray:
-        """Simulate GLM as a recurrent network.
+        """Simulate GLM as a recurrent network, for extrapolating into the future.
 
         Parameters
         ----------
@@ -277,9 +285,10 @@ class GLM:
         n_timesteps
             Number of time steps to simulate.
         init_spikes : (n_neurons, window_size)
-            Spike counts arranged in a matrix. These are used to
-            jump start the forward simulation. n_neurons must be the same as
-            during the fitting of this GLM instance.
+            Spike counts arranged in a matrix. These are used to jump start the
+            forward simulation. ``n_neurons`` must be the same as during the
+            fitting of this GLM instance and ``window_size`` must be the same
+            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``)
 
         Returns
         -------
@@ -293,7 +302,14 @@ class GLM:
         ValueError
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``).
+            self.baseline_log_fr_.shape[0]``) or if ``init_spikes`` has the
+            wrong number of time steps (i.e., if ``init_spikes.shape[1] !=
+            self.spike_basis_matrix.shape[1]``)
+
+        See Also
+        --------
+        predict
+            Predict spikes based on fit parameters, for checking against existing data.
 
         """
         try:
@@ -306,18 +322,20 @@ class GLM:
             raise ValueError("Number of neurons must be the same during simulation and fitting! "
                              f"init_spikes n_neurons: {init_spikes.shape[0]}, "
                              f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}")
+        if init_spikes.shape[1] != self.spike_basis_matrix.shape[1]:
+            raise ValueError("init_spikes has the wrong number of time steps!"
+                             f"init_spikes time steps: {init_spikes.shape[1]}, "
+                             f"spike_basis_matrix window size: {self.spike_basis_matrix.shape[1]}")
 
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(spikes, key):
-            # (n_neurons, n_basis_funcs, n_timebins)
+            # (n_neurons, n_basis_funcs, 1)
             X = convolve_1d_basis(
-                self._spike_basis_matrix,
+                self.spike_basis_matrix,
                 spikes
             )
-            fr = self.inverse_link_function(
-                jnp.einsum("nbz,nbj->n", X, Ws) + bs
-            )
+            fr = self._predict((Ws, bs), X).squeeze()
             new_spikes = jax.random.poisson(key, fr)
             concat_spikes = jnp.column_stack(
                 (spikes[:, 1:], new_spikes)
