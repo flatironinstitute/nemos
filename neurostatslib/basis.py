@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import abc
 import scipy.linalg
-from typing import Tuple, Optional
-from numpy.typing import ArrayLike, NDArray
+from typing import Tuple
+from numpy.typing import NDArray
 
 
 class Basis:
