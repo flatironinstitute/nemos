@@ -126,8 +126,8 @@ class GLM:
                              f"init_params[0]: {init_params[0].shape[0]}, spike_data: {spike_data.shape[0]}")
 
         def loss(params, X, y):
-            predicted_spikes = self._predict(params, X)
-            return self._score(predicted_spikes, y)
+            predicted_firing_rates = self._predict(params, X)
+            return self._score(predicted_firing_rates, y)
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(
@@ -165,8 +165,8 @@ class GLM:
 
         Returns
         -------
-        predicted_spikes : (n_neurons, n_timebins)
-            The predicted spikes.
+        predicted_firing_rates : (n_neurons, n_timebins)
+            The predicted firing rates.
 
         """
         Ws, bs = params
@@ -174,16 +174,16 @@ class GLM:
             jnp.einsum("nbt,nbj->nt", convolved_spike_data, Ws) + bs[:, None]
         )
 
-    def _score(self, predicted_spikes: NDArray,
+    def _score(self, predicted_firing_rates: NDArray,
                target_spikes: NDArray) -> jnp.ndarray:
-        """Score the predicted against target spikes.
+        """Score the predicted firing rates against target spike counts.
 
         This computes the Poisson negative log-likehood.
 
         Parameters
         ----------
-        predicted_spikes : (n_neurons, n_timebins)
-            The predicted spikes.
+        predicted_firing_rates : (n_neurons, n_timebins)
+            The predicted firing rates.
         target_spikes : (n_neurons, n_timebins)
             The target spikes to compare against
 
@@ -193,10 +193,10 @@ class GLM:
             The Poisson negative log-likehood
 
         """
-        return jnp.mean(predicted_spikes - target_spikes * jnp.log(predicted_spikes))
+        return jnp.mean(predicted_firing_rates - target_spikes * jnp.log(predicted_firing_rates))
 
     def predict(self, spike_data: NDArray) -> jnp.ndarray:
-        """Predict spikes based on fit parameters, for checking against existing data.
+        """Predict firing rates based on fit parameters, for checking against existing data.
 
         Parameters
         ----------
@@ -206,8 +206,8 @@ class GLM:
 
         Returns
         -------
-        predicted_spikes : (n_neurons, n_timebins - window_size + 1)
-            The predicted spikes.
+        predicted_firing_rates : (n_neurons, n_timebins - window_size + 1)
+            The predicted firing rates.
 
         Raises
         ------
@@ -221,10 +221,9 @@ class GLM:
         See Also
         --------
         score
-            Score predicted spikes against target.
+            Score predicted firing rates against target spike counts.
         simulate
-            Simulate GLM as a recurrent network, for extrapolating into the future.
-
+            Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
 
         """
         try:
@@ -241,11 +240,12 @@ class GLM:
         return self._predict((Ws, bs), X)
 
     def score(self, spike_data: NDArray) -> jnp.ndarray:
-        """Score the predicted spikes (based on fit) to the target.
+        """Score the predicted firing rates (based on fit) to the target spike counts.
 
         This ignores the last time point of the prediction.
 
-        This computes the Poisson negative log-likehood.
+        This computes the Poisson negative log-likehood, thus the lower the
+        number the better.
 
         Parameters
         ----------
@@ -270,13 +270,13 @@ class GLM:
         """
         # ignore the last time point from predict, because that corresponds to
         # the next time step, which we have no observed data for
-        predicted_spikes = self.predict(spike_data)[:, :-1]
+        predicted_firing_rates = self.predict(spike_data)[:, :-1]
         window_size = self.spike_basis_matrix.shape[1]
-        return self._score(predicted_spikes, spike_data[:, window_size:])
+        return self._score(predicted_firing_rates, spike_data[:, window_size:])
 
     def simulate(self, random_key: jax.random.PRNGKeyArray,
                  n_timesteps: int, init_spikes: NDArray) -> jnp.ndarray:
-        """Simulate GLM as a recurrent network, for extrapolating into the future.
+        """Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
 
         Parameters
         ----------
@@ -309,7 +309,7 @@ class GLM:
         See Also
         --------
         predict
-            Predict spikes based on fit parameters, for checking against existing data.
+            Predict firing rates based on fit parameters, for checking against existing data.
 
         """
         try:
