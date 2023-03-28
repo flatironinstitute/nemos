@@ -143,6 +143,9 @@ class GLM:
         # Store parameters
         self.spike_basis_coeff_ = params[0]
         self.baseline_log_fr_ = params[1]
+        # note that this will include an error value, which is not the same as
+        # the output of loss. I believe it's the output of
+        # solver.l2_optimality_error
         self.solver_state = state
         self.solver = solver
 
@@ -196,6 +199,25 @@ class GLM:
         score : (1,)
             The Poisson negative log-likehood
 
+        Notes
+        -----
+        The Poisson probably mass function is:
+
+        .. math::
+           \frac{\lambda^k \exp(-\lambda)}{k!}
+
+        Thus, the negative log of it is:
+
+        .. math::
+           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
+           &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
+
+        Because $\Gamma(k+1)=k!$, see
+        https://en.wikipedia.org/wiki/Gamma_function.
+
+        And, in our case, ``target_spikes`` is $k$ and
+        ``predicted_firing_rates`` is $\lambda$
+
         """
         x = target_spikes * jnp.log(predicted_firing_rates)
         # this is a jax jit-friendly version of saying "put a 0 wherever
@@ -203,7 +225,8 @@ class GLM:
         # (log(0)=-inf and any non-zero multiplied by -inf gives the expected
         # +/- inf)
         x = jnp.where(jnp.isnan(x), jnp.zeros_like(x), x)
-        return jnp.mean(predicted_firing_rates - x - jax.scipy.special.gammaln(target_spikes))
+        # see above for derivation of this.
+        return jnp.mean(predicted_firing_rates - x + jax.scipy.special.gammaln(target_spikes+1))
 
     def predict(self, spike_data: NDArray) -> jnp.ndarray:
         """Predict firing rates based on fit parameters, for checking against existing data.
