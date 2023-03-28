@@ -3,3 +3,4 @@
 from . import basis
 from . import glm
 from . import sample_points
+from . import utils
