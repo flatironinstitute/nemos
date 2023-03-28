@@ -196,30 +196,13 @@ class GLM:
         score : (1,)
             The Poisson negative log-likehood
 
-        Raises
-        ------
-        ValueError
-            Numpy gives us 0*log(0)=NaN, but that should be a 0 for our use
-            case. If we get a NaN, we double-check that it only occurs where
-            both ``target_spikes`` and ``predicted_firing_rates`` are 0 and
-            raise this ValueError if that's not the case.
-        UserWarning
-            If there are any zeros in ``predicted_firing_rates``, since this
-            will likely lead to infinite log-likelihood values being returned.
-
         """
-        warnings.warn("predicted_firing_rates array contained zeros, this can "
-                      "lead to infinite log-likelihood values.")
         x = target_spikes * jnp.log(predicted_firing_rates)
-        if jnp.isnan(x).any():
-            # NaNs should only appear where there's 0 * log(0), so double check
-            # that
-            zero_frs = predicted_firing_rates == 0
-            zero_spikes = target_spikes == 0
-            if (jnp.isnan(x) != jnp.logical_and(zero_frs, zero_spikes)).all():
-                raise ValueError("NaN should only occur if we get 0*log(0), but found a NaN"
-                                 " in a different location!")
-            x = x.at[jnp.isnan(x)].set(0)
+        # this is a jax jit-friendly version of saying "put a 0 wherever
+        # there's a NaN". we do this because NaNs result from 0*log(0)
+        # (log(0)=-inf and any non-zero multiplied by -inf gives the expected
+        # +/- inf)
+        x = jnp.where(jnp.isnan(x), jnp.zeros_like(x), x)
         return jnp.mean(predicted_firing_rates - x - jax.scipy.special.gammaln(target_spikes))
 
     def predict(self, spike_data: NDArray) -> jnp.ndarray:
@@ -302,6 +285,9 @@ class GLM:
         # ignore the last time point from predict, because that corresponds to
         # the next time step, which we have no observed data for
         predicted_firing_rates = self.predict(spike_data)[:, :-1]
+        if (predicted_firing_rates == 0).any():
+            warnings.warn("predicted_firing_rates array contained zeros, this can "
+                          "lead to infinite log-likelihood values.")
         window_size = self.spike_basis_matrix.shape[1]
         return self._score(predicted_firing_rates, spike_data[:, window_size:])
 
