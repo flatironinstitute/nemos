@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import jaxopt
 import inspect
+import warnings
 from .utils import convolve_1d_basis
 from typing import Optional, Callable, Tuple
 from numpy.typing import NDArray
@@ -180,6 +181,9 @@ class GLM:
 
         This computes the Poisson negative log-likehood.
 
+        Note that you can end up with infinities in here if there are zeros in
+        ``predicted_firing_rates``. We raise a warning in that case.
+
         Parameters
         ----------
         predicted_firing_rates : (n_neurons, n_timebins)
@@ -192,8 +196,31 @@ class GLM:
         score : (1,)
             The Poisson negative log-likehood
 
+        Raises
+        ------
+        ValueError
+            Numpy gives us 0*log(0)=NaN, but that should be a 0 for our use
+            case. If we get a NaN, we double-check that it only occurs where
+            both ``target_spikes`` and ``predicted_firing_rates`` are 0 and
+            raise this ValueError if that's not the case.
+        UserWarning
+            If there are any zeros in ``predicted_firing_rates``, since this
+            will likely lead to infinite log-likelihood values being returned.
+
         """
-        return jnp.mean(predicted_firing_rates - target_spikes * jnp.log(predicted_firing_rates))
+        warnings.warn("predicted_firing_rates array contained zeros, this can "
+                      "lead to infinite log-likelihood values.")
+        x = target_spikes * jnp.log(predicted_firing_rates)
+        if jnp.isnan(x).any():
+            # NaNs should only appear where there's 0 * log(0), so double check
+            # that
+            zero_frs = predicted_firing_rates == 0
+            zero_spikes = target_spikes == 0
+            if (jnp.isnan(x) != jnp.logical_and(zero_frs, zero_spikes)).all():
+                raise ValueError("NaN should only occur if we get 0*log(0), but found a NaN"
+                                 " in a different location!")
+            x = x.at[jnp.isnan(x)].set(0)
+        return jnp.mean(predicted_firing_rates - x - jax.scipy.special.gammaln(target_spikes))
 
     def predict(self, spike_data: NDArray) -> jnp.ndarray:
         """Predict firing rates based on fit parameters, for checking against existing data.
@@ -245,7 +272,8 @@ class GLM:
         This ignores the last time point of the prediction.
 
         This computes the Poisson negative log-likehood, thus the lower the
-        number the better.
+        number the better, and zero isn't special (you can have a negative
+        score if ``spike_data > 0`` and and ``log(predicted_firing_rates) < 0``
 
         Parameters
         ----------
@@ -266,6 +294,9 @@ class GLM:
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_spikes.shape[0] !=
             self.baseline_log_fr_.shape[0]``).
+        UserWarning
+            If there are any zeros in ``self.predict(spike_data)``, since this
+            will likely lead to infinite log-likelihood values being returned.
 
         """
         # ignore the last time point from predict, because that corresponds to
