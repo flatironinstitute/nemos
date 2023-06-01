@@ -214,30 +214,7 @@ class OrthExponentialBasis(Basis):
                      axis=1)
         ).T
 
-
-class MSplineBasis(Basis):
-    """M-spline 1-dimensional basis functions.
-
-    Parameters
-    ----------
-    n_basis_funcs
-        Number of basis functions.
-    window_size
-        Size of basis functions.
-    order
-        Order of the splines used in basis functions. Must lie within [1,
-        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
-        at each interior knot. The higher this number, the smoother the basis
-        representation will be.
-
-
-    References
-    ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
-       Statistical science, 3(4), 425-441.
-
-    """
-
+class SplineBasis(Basis):
     def __init__(self, n_basis_funcs: int, window_size:int,
                  order: int = 2):
         super().__init__(n_basis_funcs, window_size, (0, window_size))
@@ -270,7 +247,7 @@ class MSplineBasis(Basis):
                 "than `n_basis_funcs` parameter."
             )
 
-        assert (perc_low >= 0)  & (perc_high <= 1), "Specify low and high percentile (perc_low, perc_high) as float between 0 and 1"
+        assert (perc_low >= 0) & (perc_high <= 1), "Specify low and high percentile (perc_low, perc_high) as float between 0 and 1"
         assert (perc_low < perc_high), "perc_low must be < perc_high. "
 
         # clip to avoid numerical errors in case of percentile numerical precision close to 0 and 1
@@ -282,6 +259,34 @@ class MSplineBasis(Basis):
             np.linspace(mn, mx, num_interior_knots + 2),
             mx * np.ones(self.order - 1),
         ))
+
+class MSplineBasis(SplineBasis):
+    """M-spline 1-dimensional basis functions.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size
+        Size of basis functions.
+    order
+        Order of the splines used in basis functions. Must lie within [1,
+        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
+        at each interior knot. The higher this number, the smoother the basis
+        representation will be.
+
+
+    References
+    ----------
+    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
+       Statistical science, 3(4), 425-441.
+
+    """
+
+    def __init__(self, n_basis_funcs: int, window_size:int,
+                 order: int = 2):
+        super().__init__(n_basis_funcs, window_size, order)
+
 
     def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -301,18 +306,45 @@ class MSplineBasis(Basis):
 
         super().gen_basis_funcs(sample_pts)
 
+        sample_pts = sample_pts / self.window_size
+
         # add knots if not passed
         if not hasattr(self, 'knot_locs'):
             self.generate_knots(sample_pts, 0., 1.)
 
-        sample_pts = sample_pts / self.window_size
 
         return np.stack(
             [mspline(sample_pts, self.order, i, self.knot_locs) for i in range(self.n_basis_funcs)],
             axis=0
         )
 
-    def gen_basis_funcs_splev(self, sample_pts: NDArray, outer_ok: bool = False, der: int = 0) -> NDArray:
+class BSplineBasis(SplineBasis):
+    """B-spline 1-dimensional basis functions.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size
+        Size of basis functions.
+    order
+        Order of the splines used in basis functions. Must lie within [1,
+        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
+        at each interior knot. The higher this number, the smoother the basis
+        representation will be.
+
+
+    References
+    ----------
+    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
+       Statistical science, 3(4), 425-441.
+
+    """
+    def __init__(self, n_basis_funcs: int, window_size:int,
+                 order: int = 2):
+        super().__init__(n_basis_funcs, window_size, order)
+
+    def gen_basis_funcs(self, sample_pts: NDArray, outer_ok: bool = False, der: int = 0) -> NDArray:
         """
         Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
         Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
@@ -379,7 +411,7 @@ class MSplineBasis(Basis):
 
 
 
-class Cyclic_MSplineBasis(MSplineBasis):
+class Cyclic_BSplineBasis(BSplineBasis):
     """Cyclic M-spline 1-dimensional basis functions.
 
     Parameters
@@ -406,9 +438,12 @@ class Cyclic_MSplineBasis(MSplineBasis):
                  order: int = 2):
 
         super().__init__(n_basis_funcs, window_size, order)
-        assert self.order > 2, f"Order > 2 required for cyclic B-spline, order {self.order} specified instead!"
+        assert self.order >= 2, f"Order >= 2 required for cyclic B-spline, order {self.order} specified instead!"
+        assert self.n_basis_funcs >= order + 2, "n_basis_funcs >= order + 2 required for cyclic B-spline"
+        assert self.n_basis_funcs >= 2*order - 2, "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
-    def gen_basis_funcs_splev(self, sample_pts: NDArray, der=0) -> NDArray:
+
+    def gen_basis_funcs(self, sample_pts: NDArray, der=0) -> NDArray:
         """
         Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
         Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
@@ -452,12 +487,13 @@ class Cyclic_MSplineBasis(MSplineBasis):
 
         # temporarily set the extended knots as attribute
         self.knot_locs = knots
-        basis_eval = super().gen_basis_funcs_splev(sample_pts, outer_ok=True, der=der)
+        basis_eval = super().gen_basis_funcs(sample_pts, outer_ok=True, der=der)
         sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
         if np.sum(ind):
-            X2 = super().gen_basis_funcs_splev(sample_pts[ind], outer_ok=True, der=der)#splineDesign(knots, x[ind], ord=ord, outer_ok=True, der=der)
+            X2 = super().gen_basis_funcs(sample_pts[ind], outer_ok=True, der=der)#splineDesign(knots, x[ind], ord=ord, outer_ok=True, der=der)
             basis_eval[:, ind] = basis_eval[:, ind] + X2
-
+        # restore points
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
         # restore the original knots
         self.knot_loc = knots_orig
         return basis_eval
