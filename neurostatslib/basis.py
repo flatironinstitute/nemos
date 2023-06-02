@@ -329,15 +329,16 @@ class BSplineBasis(SplineBasis):
         Size of basis functions.
     order
         Order of the splines used in basis functions. Must lie within [1,
-        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
+        n_basis_funcs]. The B-splines have ``order-2`` continuous derivatives
         at each interior knot. The higher this number, the smoother the basis
         representation will be.
 
 
     References
     ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
-       Statistical science, 3(4), 425-441.
+    .. [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+
 
     """
     def __init__(self, n_basis_funcs: int, window_size:int,
@@ -412,7 +413,7 @@ class BSplineBasis(SplineBasis):
 
 
 class Cyclic_BSplineBasis(BSplineBasis):
-    """Cyclic M-spline 1-dimensional basis functions.
+    """Cyclic B-spline 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -422,15 +423,9 @@ class Cyclic_BSplineBasis(BSplineBasis):
         Size of basis functions.
     order
         Order of the splines used in basis functions. Must lie within [1,
-        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
+        n_basis_funcs]. The B-splines have ``order-2`` continuous derivatives
         at each interior knot. The higher this number, the smoother the basis
         representation will be.
-
-
-    References
-    ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
-       Statistical science, 3(4), 425-441.
 
     """
 
@@ -443,7 +438,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         assert self.n_basis_funcs >= 2*order - 2, "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
 
-    def gen_basis_funcs(self, sample_pts: NDArray, der=0) -> NDArray:
+    def gen_basis_funcs(self, sample_pts: NDArray, der: int = 0) -> NDArray:
         """
         Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
         Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
@@ -465,8 +460,6 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         """
 
-
-
         # add knots if not passed
         if not hasattr(self, 'knot_locs'):
             self.generate_knots(sample_pts, 0., 1., is_cyclic=True)
@@ -475,7 +468,6 @@ class Cyclic_BSplineBasis(BSplineBasis):
         self.knot_locs = np.unique(self.knot_locs)
 
         knots_orig = self.knot_locs.copy()
-
 
         nk = knots_orig.shape[0]
 
@@ -490,7 +482,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         basis_eval = super().gen_basis_funcs(sample_pts, outer_ok=True, der=der)
         sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
         if np.sum(ind):
-            X2 = super().gen_basis_funcs(sample_pts[ind], outer_ok=True, der=der)#splineDesign(knots, x[ind], ord=ord, outer_ok=True, der=der)
+            X2 = super().gen_basis_funcs(sample_pts[ind], outer_ok=True, der=der)
             basis_eval[:, ind] = basis_eval[:, ind] + X2
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
