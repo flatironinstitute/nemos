@@ -1,8 +1,7 @@
 import jax
 from neurostatslib.glm import GLM
-from neurostatslib.basis import MSplineBasis, Cyclic_BSplineBasis, BSplineBasis
-import numpy as np
-import matplotlib.pylab as plt
+from neurostatslib.basis import MSplineBasis
+
 
 nn, nt = 10, 1000
 key = jax.random.PRNGKey(123)
