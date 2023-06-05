@@ -1,6 +1,6 @@
 import jax
-from neurostatslib.glm import GLM
-from neurostatslib.basis import MSplineBasis
+from src.neurostatslib.glm import GLM
+from src.neurostatslib.basis import MSplineBasis
 import numpy as np
 
 nn, nt = 10, 1000
