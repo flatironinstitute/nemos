@@ -1,8 +1,8 @@
 import jax
 import jax.numpy as jnp
 import numpy as onp
-from src.neurostatslib.glm import GLM
-from src.neurostatslib.basis import RaisedCosineBasis
+from neurostatslib.glm import GLM
+from neurostatslib.basis import RaisedCosineBasis
 import matplotlib.pyplot as plt
 jax.config.update("jax_platform_name", "cpu")
 jax.config.update("jax_enable_x64", True)
