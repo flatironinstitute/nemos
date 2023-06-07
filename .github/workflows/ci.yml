@@ -1,16 +1,16 @@
 name: ci
 
 on:
-  push:
-    branches:
-      - folder_struct_and_setup
-  # workflow_dispatch:
-  # schedule:
-  #   - cron: 0 0 1 * 0     # monthly
-  # pull_request:
-  #   branches:
-  #     - main
-  #     - development
+#  push:
+#    branches:
+#      - folder_struct_and_setup
+   workflow_dispatch:
+   schedule:
+     - cron: 0 0 1 * 0     # monthly
+   pull_request:
+     branches:
+       - main
+       - development
 
 jobs:
   tox:
