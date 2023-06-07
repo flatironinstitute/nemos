@@ -6,6 +6,7 @@ from neurostatslib.basis import RaisedCosineBasis
 import matplotlib.pyplot as plt
 jax.config.update("jax_platform_name", "cpu")
 jax.config.update("jax_enable_x64", True)
+import neurostatslib
 
 nn, nt, ws = 1, 5000, 100
 simulation_key = jax.random.PRNGKey(123)
@@ -14,7 +15,7 @@ spike_basis = RaisedCosineBasis(
     n_basis_funcs=5,
     window_size=ws
 )
-sim_pts = src.neurostatslib.sample_points.raised_cosine_log(5, ws)
+sim_pts = neurostatslib.sample_points.raised_cosine_log(5, ws)
 B = spike_basis.gen_basis_funcs(sim_pts)
 
 simulated_model = GLM(B)

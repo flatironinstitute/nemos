@@ -5,6 +5,7 @@ from neurostatslib.glm import GLM
 from neurostatslib.basis import RaisedCosineBasis
 import matplotlib.pyplot as plt
 import itertools
+import neurostatslib
 jax.config.update("jax_platform_name", "cpu")
 jax.config.update("jax_enable_x64", True)
 
@@ -15,7 +16,7 @@ spike_basis = RaisedCosineBasis(
     n_basis_funcs=5,
     window_size=ws
 )
-sim_pts = src.neurostatslib.sample_points.raised_cosine_log(5, ws)
+sim_pts = neurostatslib.sample_points.raised_cosine_log(5, ws)
 B = spike_basis.gen_basis_funcs(sim_pts)
 
 w0 = onp.array([-.1, -.1, -.2, -.2, -1])
