@@ -92,7 +92,7 @@ class Basis:
         """
         if (x.min() < self.support[0]) or (x.max() >= self.support[1]):
             raise ValueError(
-                f"Input must lie within support {self._support_display}!, x.min({x.min()}), x.max({x.max()})\nsupport.min({ self.support[0] }), support.max({ self.support[1] })"
+                f"Input must lie within support {self._support_displayuu}!, x.min({x.min()}), x.max({x.max()})"
             )
 
     @abc.abstractmethod
