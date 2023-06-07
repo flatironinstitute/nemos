@@ -38,7 +38,7 @@ jobs:
           pip install tox
 
       - name: Run tox
-        run: tox -e py
+        run: tox --branch-ref=${{ github.ref }} -e py
 
   check:
     if: always()
