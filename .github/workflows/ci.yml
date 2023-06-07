@@ -31,7 +31,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade --upgrade-strategy eager .
+          python -m pip install --upgrade pip
+          python -m pip install --use-feature=in-tree-build .
           pip install tox
 
       - name: Run tox
