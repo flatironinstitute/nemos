@@ -4,9 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurostatslib"
-
 version = "0.1.0"
-
 authors = [
     {name = "Edoardo Balzani", email = "ebalzani@flatironinstitute.org"},
     {name = "William Broderick", email = "wbroderick@flatironinstitute.org"},
@@ -14,15 +12,10 @@ authors = [
     {name = "Alex Williams", email = "alex.h.williams@nyu.edu"}
 ]
 description = "Toolbox for basic Generalized Linear Models (GLMs) for neural data analysis"
-
 readme = "README.md"
-
 requires-python = ">=3.8"
-
 keywords = ["neuroscience", "Poisson-GLM"]
-
-license = {file = "LICENSE"}
-
+license = { file = "LICENSE" }
 classifiers = [
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
@@ -36,7 +29,6 @@ dependencies = [
     'jax>=0.4',
     'jaxopt>=0.6',
     'matplotlib>=3.7',
-    # for numpy.typing.ArrayLike
     'numpy>1.20',
     'scikit-learn>=1.2',
     'scipy>=1.10',
@@ -47,7 +39,6 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["neurostatslib"]
-
 
 [project.optional-dependencies]
 dev = [
@@ -90,11 +81,7 @@ exclude = '''
 multi_line_output = 3
 include_trailing_comma = true
 
-[flake8]
-max-complexity = 10
-max-line-length = 160
 
 [tool.pytest.ini_options]
 addopts = "--cov=neurostatslib"
 testpaths = ["tests"]
-
