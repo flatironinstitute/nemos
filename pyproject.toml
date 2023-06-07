@@ -72,10 +72,7 @@ exclude = '''
     | buck-out
     | build
     | dist
-    | examples
-  )/
-)
-'''
+    | examples))'''
 
 [tool.isort]
 multi_line_output = 3
