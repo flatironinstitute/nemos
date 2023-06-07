@@ -91,7 +91,9 @@ class Basis:
 
         """
         if (x.min() < self.support[0]) or (x.max() >= self.support[1]):
-            raise ValueError(f"Input must lie within support {self._support_display}!")
+            raise ValueError(
+                f"Input must lie within support {self._support_display}!, x.min({x.min()}), x.max({x.max()})\nsupport.min({ self.support[0] }), support.max({ self.support[1] })"
+            )
 
     @abc.abstractmethod
     def gen_basis_funcs(

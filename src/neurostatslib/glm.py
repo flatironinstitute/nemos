@@ -204,41 +204,41 @@ class GLM:
     ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
-        This computes the Poisson negative log-likehood.
+                This computes the Poisson negative log-likehood.
 
-        Note that you can end up with infinities in here if there are zeros in
-        ``predicted_firing_rates``. We raise a warning in that case.
+                Note that you can end up with infinities in here if there are zeros in
+                ``predicted_firing_rates``. We raise a warning in that case.
 
-        Parameters
-        ----------
-        predicted_firing_rates : (n_neurons, n_timebins)
-            The predicted firing rates.
-        target_spikes : (n_neurons, n_timebins)
-            The target spikes to compare against
+                Parameters
+                ----------
+                predicted_firing_rates : (n_neurons, n_timebins)
+                    The predicted firing rates.
+                target_spikes : (n_neurons, n_timebins)
+                    The target spikes to compare against
 
-        Returns
-        -------
-        score : (1,)
-            The Poisson negative log-likehood
+                Returns
+                -------
+                score : (1,)
+                    The Poisson negative log-likehood
 
-        Notes
-        -----
-        The Poisson probably mass function is:
+                Notes
+                -----
+                The Poisson probably mass function is:
 
-        .. math::
-           \frac{\lambda^k \exp(-\lambda)}{k!}
+                .. math::
+                   \frac{\lambda^k \exp(-\lambda)}{k!}
 
-        Thus, the negative log of it is:
+                Thus, the negative log of it is:
 
-        .. math::
-           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
-           &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
+                .. math::
+        ¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
+                   &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
 
-        Because $\Gamma(k+1)=k!$, see
-        https://en.wikipedia.org/wiki/Gamma_function.
+                Because $\Gamma(k+1)=k!$, see
+                https://en.wikipedia.org/wiki/Gamma_function.
 
-        And, in our case, ``target_spikes`` is $k$ and
-        ``predicted_firing_rates`` is $\lambda$
+                And, in our case, ``target_spikes`` is $k$ and
+                ``predicted_firing_rates`` is $\lambda$
 
         """
         x = target_spikes * jnp.log(predicted_firing_rates)
