@@ -2,11 +2,13 @@
 """
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
-import numpy as np
+
 import abc
-import scipy.linalg
 import warnings
 from typing import Tuple
+
+import numpy as np
+import scipy.linalg
 from numpy.typing import NDArray
 from scipy.interpolate import splev
 
@@ -24,14 +26,13 @@ class Basis:
         Possible domain of the basis functions.
 
     """
-    def __init__(self, n_basis_funcs: int,
-                 window_size: int,
-                 support: Tuple[int, int]):
+
+    def __init__(self, n_basis_funcs: int, window_size: int, support: Tuple[int, int]):
         self.n_basis_funcs = n_basis_funcs
         self.window_size = window_size
         self.support = support
         # display string when showing support
-        self._support_display = f'[{self.support[0]}, {self.support[1]})'
+        self._support_display = f"[{self.support[0]}, {self.support[1]})"
 
     def _check_array(self, x: NDArray, ndim: int = 1):
         """Check whether x is array with given number of dims.
@@ -54,7 +55,9 @@ class Basis:
         """
         try:
             if x.ndim != ndim:
-                raise ValueError(f"Input must have {ndim} dimensions but has {x.ndim} instead!")
+                raise ValueError(
+                    f"Input must have {ndim} dimensions but has {x.ndim} instead!"
+                )
         except AttributeError:
             raise TypeError("Input is not an array!")
 
@@ -67,8 +70,10 @@ class Basis:
 
         """
         if len(sample_pts) != self.window_size:
-            warnings.warn("sample_pts is not the same length as the Basis "
-                          "window_size -- are you sure that's what you want?")
+            warnings.warn(
+                "sample_pts is not the same length as the Basis "
+                "window_size -- are you sure that's what you want?"
+            )
 
     def check_in_support(self, x: NDArray):
         """Check whether x lies within support.
@@ -89,7 +94,9 @@ class Basis:
             raise ValueError(f"Input must lie within support {self._support_display}!")
 
     @abc.abstractmethod
-    def gen_basis_funcs(self, sample_pts: NDArray, check_support: bool = True) -> NDArray:
+    def gen_basis_funcs(
+        self, sample_pts: NDArray, check_support: bool = True
+    ) -> NDArray:
         """Generate basis functions with given spacing.
 
         Note input must be 1d and output 2d. Children classes can call this as
@@ -134,10 +141,9 @@ class RaisedCosineBasis(Basis):
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
 
     """
-    def __init__(self, n_basis_funcs: int,
-                 window_size: int):
-        super().__init__(n_basis_funcs, window_size,
-                         (0, window_size))
+
+    def __init__(self, n_basis_funcs: int, window_size: int):
+        super().__init__(n_basis_funcs, window_size, (0, window_size))
 
     def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -160,14 +166,20 @@ class RaisedCosineBasis(Basis):
         super().gen_basis_funcs(sample_pts)
         # this has shape (n_basis_funcs, n_pts) and just consists of shifted
         # copies of the input.
-        shifted_sample_pts = sample_pts[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
-        basis_funcs = .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
+        shifted_sample_pts = (
+            sample_pts[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
+        )
+        basis_funcs = 0.5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
         if (abs(basis_funcs.sum(0) - 1) > 1e-12).any():
-            raise ValueError("sample_pts was generated with too large an n_basis_funcs arg, "
-                             "our generated basis functions do not uniformly tile the space!")
+            raise ValueError(
+                "sample_pts was generated with too large an n_basis_funcs arg, "
+                "our generated basis functions do not uniformly tile the space!"
+            )
         if (basis_funcs == 0).all(1).any():
-            raise ValueError("sample_pts was generated with too small an n_basis_funcs arg, "
-                             "at least one of our generated basis functions is 0 everywhere!")
+            raise ValueError(
+                "sample_pts was generated with too small an n_basis_funcs arg, "
+                "at least one of our generated basis functions is 0 everywhere!"
+            )
         return basis_funcs
 
 
@@ -184,8 +196,7 @@ class OrthExponentialBasis(Basis):
 
     """
 
-    def __init__(self, decay_rates: NDArray[np.floating],
-                 window_size: int):
+    def __init__(self, decay_rates: NDArray[np.floating], window_size: int):
         super().__init__(len(decay_rates), window_size, (0, window_size))
         self.decay_rates = decay_rates
 
@@ -210,20 +221,24 @@ class OrthExponentialBasis(Basis):
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
         return scipy.linalg.orth(
-            np.stack([np.exp(-lam * sample_pts) for lam in self.decay_rates],
-                     axis=1)
+            np.stack([np.exp(-lam * sample_pts) for lam in self.decay_rates], axis=1)
         ).T
 
+
 class SplineBasis(Basis):
-    def __init__(self, n_basis_funcs: int, window_size:int,
-                 order: int = 2):
+    def __init__(self, n_basis_funcs: int, window_size: int, order: int = 2):
         super().__init__(n_basis_funcs, window_size, (0, window_size))
         self.order = order
         if self.order < 1:
-            raise ValueError('Spline order must be positive!')
+            raise ValueError("Spline order must be positive!")
 
-
-    def generate_knots(self, sample_pts: NDArray, perc_low: float, perc_high: float, is_cyclic: bool = False) -> NDArray:
+    def generate_knots(
+        self,
+        sample_pts: NDArray,
+        perc_low: float,
+        perc_high: float,
+        is_cyclic: bool = False,
+    ) -> NDArray:
         # Set of spline knots. We need to add extra knots to
         # the end to handle boundary conditions for higher-order
         # spline bases. See Ramsay (1988) cited above.
@@ -239,7 +254,6 @@ class SplineBasis(Basis):
         if is_cyclic:
             num_interior_knots += self.order - 1
 
-
         # Check hyperparameters.
         if num_interior_knots < 0:
             raise ValueError(
@@ -247,18 +261,23 @@ class SplineBasis(Basis):
                 "than `n_basis_funcs` parameter."
             )
 
-        assert (perc_low >= 0) & (perc_high <= 1), "Specify low and high percentile (perc_low, perc_high) as float between 0 and 1"
-        assert (perc_low < perc_high), "perc_low must be < perc_high. "
+        assert (perc_low >= 0) & (
+            perc_high <= 1
+        ), "Specify low and high percentile (perc_low, perc_high) as float between 0 and 1"
+        assert perc_low < perc_high, "perc_low must be < perc_high. "
 
         # clip to avoid numerical errors in case of percentile numerical precision close to 0 and 1
         mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
         mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100))
 
-        self.knot_locs = np.concatenate((
-            mn * np.ones(self.order - 1),
-            np.linspace(mn, mx, num_interior_knots + 2),
-            mx * np.ones(self.order - 1),
-        ))
+        self.knot_locs = np.concatenate(
+            (
+                mn * np.ones(self.order - 1),
+                np.linspace(mn, mx, num_interior_knots + 2),
+                mx * np.ones(self.order - 1),
+            )
+        )
+
 
 class MSplineBasis(SplineBasis):
     """M-spline 1-dimensional basis functions.
@@ -283,10 +302,8 @@ class MSplineBasis(SplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, window_size:int,
-                 order: int = 2):
+    def __init__(self, n_basis_funcs: int, window_size: int, order: int = 2):
         super().__init__(n_basis_funcs, window_size, order)
-
 
     def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -309,14 +326,17 @@ class MSplineBasis(SplineBasis):
         sample_pts = sample_pts / self.window_size
 
         # add knots if not passed
-        if not hasattr(self, 'knot_locs'):
-            self.generate_knots(sample_pts, 0., 1.)
-
+        if not hasattr(self, "knot_locs"):
+            self.generate_knots(sample_pts, 0.0, 1.0)
 
         return np.stack(
-            [mspline(sample_pts, self.order, i, self.knot_locs) for i in range(self.n_basis_funcs)],
-            axis=0
+            [
+                mspline(sample_pts, self.order, i, self.knot_locs)
+                for i in range(self.n_basis_funcs)
+            ],
+            axis=0,
         )
+
 
 class BSplineBasis(SplineBasis):
     """B-spline 1-dimensional basis functions.
@@ -341,11 +361,13 @@ class BSplineBasis(SplineBasis):
 
 
     """
-    def __init__(self, n_basis_funcs: int, window_size:int,
-                 order: int = 2):
+
+    def __init__(self, n_basis_funcs: int, window_size: int, order: int = 2):
         super().__init__(n_basis_funcs, window_size, order)
 
-    def gen_basis_funcs(self, sample_pts: NDArray, outer_ok: bool = False, der: int = 0) -> NDArray:
+    def gen_basis_funcs(
+        self, sample_pts: NDArray, outer_ok: bool = False, der: int = 0
+    ) -> NDArray:
         """
         Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
         Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
@@ -371,9 +393,8 @@ class BSplineBasis(SplineBasis):
         """
         super().gen_basis_funcs(sample_pts, check_support=False)
         # add knots if not passed
-        if not hasattr(self, 'knot_locs'):
-            self.generate_knots(sample_pts, 0., 1.)
-
+        if not hasattr(self, "knot_locs"):
+            self.generate_knots(sample_pts, 0.0, 1.0)
 
         # sort the knots in case user passed
 
@@ -382,15 +403,21 @@ class BSplineBasis(SplineBasis):
         nk = knots.shape[0]
 
         # check for out of range points (in cyclic b-spline need_outer must be set to False)
-        need_outer = any(sample_pts < knots[self.order - 1]) or any(sample_pts > knots[nk - self.order])
-        assert (not need_outer) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+        need_outer = any(sample_pts < knots[self.order - 1]) or any(
+            sample_pts > knots[nk - self.order]
+        )
+        assert (
+            not need_outer
+        ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
 
         # select knots that are within the knots range (this takes care of eventual NaNs)
         in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
 
         if need_outer:
             reps = self.order - 1
-            knots = np.hstack((np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1]))
+            knots = np.hstack(
+                (np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1])
+            )
             nk = knots.shape[0]
         else:
             reps = 0
@@ -404,12 +431,13 @@ class BSplineBasis(SplineBasis):
         # loop one element at the time and evaluate the basis using splev
         id_basis = np.eye(n_basis, nk, dtype=np.int8)
         for i in range(reps, len(knots) - self.order - reps):
-            basis_eval[i-reps, in_sample] = splev(sample_pts[in_sample], (knots, id_basis[i], self.order - 1), der=der)
+            basis_eval[i - reps, in_sample] = splev(
+                sample_pts[in_sample], (knots, id_basis[i], self.order - 1), der=der
+            )
 
         # # check sum equal 1 (B-spline are supposed to sum to 1)
         # assert(np.abs(basis_eval.sum(axis=0) - 1).max() < 1e-6)
         return basis_eval
-
 
 
 class Cyclic_BSplineBasis(BSplineBasis):
@@ -429,14 +457,17 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, window_size: int,
-                 order: int = 2):
-
+    def __init__(self, n_basis_funcs: int, window_size: int, order: int = 2):
         super().__init__(n_basis_funcs, window_size, order)
-        assert self.order >= 2, f"Order >= 2 required for cyclic B-spline, order {self.order} specified instead!"
-        assert self.n_basis_funcs >= order + 2, "n_basis_funcs >= order + 2 required for cyclic B-spline"
-        assert self.n_basis_funcs >= 2*order - 2, "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
-
+        assert (
+            self.order >= 2
+        ), f"Order >= 2 required for cyclic B-spline, order {self.order} specified instead!"
+        assert (
+            self.n_basis_funcs >= order + 2
+        ), "n_basis_funcs >= order + 2 required for cyclic B-spline"
+        assert (
+            self.n_basis_funcs >= 2 * order - 2
+        ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
     def gen_basis_funcs(self, sample_pts: NDArray, der: int = 0) -> NDArray:
         """
@@ -461,8 +492,8 @@ class Cyclic_BSplineBasis(BSplineBasis):
         """
 
         # add knots if not passed
-        if not hasattr(self, 'knot_locs'):
-            self.generate_knots(sample_pts, 0., 1., is_cyclic=True)
+        if not hasattr(self, "knot_locs"):
+            self.generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
         self.knot_locs = np.unique(self.knot_locs)
@@ -473,8 +504,15 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         # make sure knots are sorted
         knots_orig.sort()
-        xc = knots_orig[nk - 2*self.order + 1]
-        knots = np.hstack((self.knot_locs[0] - self.knot_locs[-1] + self.knot_locs[nk - self.order: nk - 1], self.knot_locs))
+        xc = knots_orig[nk - 2 * self.order + 1]
+        knots = np.hstack(
+            (
+                self.knot_locs[0]
+                - self.knot_locs[-1]
+                + self.knot_locs[nk - self.order : nk - 1],
+                self.knot_locs,
+            )
+        )
         ind = sample_pts > xc
 
         # temporarily set the extended knots as attribute
@@ -525,35 +563,33 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
 
     # General case, defined recursively
     else:
-        return k * (
+        return (
+            k
+            * (
                 (x - T[i]) * mspline(x, k - 1, i, T)
                 + (T[i + k] - x) * mspline(x, k - 1, i + 1, T)
-        ) / ((k - 1) * (T[i + k] - T[i]))
+            )
+            / ((k - 1) * (T[i + k] - T[i]))
+        )
 
 
 # Short test
 if __name__ == "__main__":
-
     # For plotting.
     import matplotlib.pyplot as plt
 
     # # Create figure and grid of evaluation points.
     # fig, axes = plt.subplots(1, 5, sharey=True)
-
     # # Iterate over axes to plot.
     # for k, ax in enumerate(axes):
-
     #     # Create spline object.
     #     spline = MSplineBasis(n_basis_funcs=6, window_size=1000, order=(k + 1))
-
     #     # Transform and plot spline bases.
     #     ax.plot(spline.transform().T)
     #     ax.set_yticks([])
     #     ax.set_title(f"order-{k + 1}")
-
     # fig.tight_layout()
     # plt.show()
-
     # # Test for orthogonalized exponentials
     # basis = OrthExponentialBasis(
     #     decay_rates=np.logspace(-1, 0, 5),
@@ -562,12 +598,8 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots(1, 1)
     # ax.plot(basis.transform().T)
     # plt.show()
-
     # Test for raised cosines
-    basis = RaisedCosineBasis(
-        n_basis_funcs=5,
-        window_size=1000
-    )
+    basis = RaisedCosineBasis(n_basis_funcs=5, window_size=1000)
     fig, ax = plt.subplots(1, 1)
     ax.plot(basis.transform().T)
     plt.show()
@@ -585,5 +617,3 @@ if __name__ == "__main__":
     #     X[0].T
     # )
     # plt.show()
-
-

@@ -31,8 +31,7 @@ def raised_cosine_log(n_basis_funcs: int, window_size: int) -> NDArray:
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
 
     """
-    return np.logspace(np.log10(np.pi * (n_basis_funcs - 1)),
-                       -1, window_size) - .1
+    return np.logspace(np.log10(np.pi * (n_basis_funcs - 1)), -1, window_size) - 0.1
 
 
 def raised_cosine_linear(n_basis_funcs: int, window_size: int) -> NDArray:
