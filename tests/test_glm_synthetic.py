@@ -16,7 +16,7 @@ spike_basis = RaisedCosineBasis(
     n_basis_funcs=5,
     window_size=ws
 )
-sim_pts = neurostatslib.sample_points.raised_cosine_log(5, ws)
+sim_pts = jnp.clip(neurostatslib.sample_points.raised_cosine_log(5, ws),0,100)
 B = spike_basis.gen_basis_funcs(sim_pts)
 
 w0 = onp.array([-.1, -.1, -.2, -.2, -1])
