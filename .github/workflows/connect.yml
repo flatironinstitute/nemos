@@ -3,7 +3,7 @@ name: connect
 on:
   push:
     branches:
-      - debug_logspace
+      - development
 
 jobs:
   build:
