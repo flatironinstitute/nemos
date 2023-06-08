@@ -15,7 +15,7 @@ jobs:
         run: |
           echo "$DEVOPS"
         env:
-          DEVOPS: ${{ secrets.TEST_SECRET }}
+          DEVOPS: ${{ secrets.TOKEN_GITHUB }}
 #    - name: executing remote ssh commands using password
 #      uses: appleboy/ssh-action@v0.1.10
 #      with:
