@@ -5,22 +5,19 @@ on:
     branches:
       - debug_logspace
 
-permissions:
-  id-token: write
-  contents: read
-  actions: read
-# added token to secrets
 jobs:
-  connect:
-    name: connect
+
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
-      - name: Setup SSH server for Actor
-        uses: alexellis/setup-sshd-actor@master
-      - name: Connect to activated SSH gateway
-        uses: alexellis/actuated-ssh-gateway-action@master
-        with:
-          gatewayaddr: ${{ secrets.SSH_GATEWAY_IP }}
-          secure: true
-      - name: Setup a blocking tmux session
-        uses: alexellis/block-with-tmux-action@master
+    - name: executing remote ssh commands using password
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        password: ${{ secrets.PASSWORD }}
+        port: ${{ secrets.PORT }}
+        script: |
+          whoami
+          ls -al
