@@ -1,9 +1,7 @@
 name: connect
 
 on:
-  push:
-    branches:
-      - test_branch
+  workflow_dispatch:
 
 jobs:
   build:
