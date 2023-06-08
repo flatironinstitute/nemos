@@ -11,18 +11,6 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - name: test secrect content
-        run: |
-          echo "$DEVOPS"
-        env:
-          DEVOPS: ${{ secrets.TOKEN_GITHUB }}
-#    - name: executing remote ssh commands using password
-#      uses: appleboy/ssh-action@v0.1.10
-#      with:
-#        host: ${{ secrets.HOST }}
-#        username: ${{ secrets.USERNAME }}
-#        password: ${{ secrets.PASSWORD }}
-#        port: ${{ secrets.PORT }}
-#        script: |
-#          whoami
-#          ls -al
+      - uses: actions/checkout@v3
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
