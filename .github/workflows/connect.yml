@@ -11,13 +11,18 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-    - name: executing remote ssh commands using password
-      uses: appleboy/ssh-action@v0.1.10
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        password: ${{ secrets.PASSWORD }}
-        port: ${{ secrets.PORT }}
-        script: |
-          whoami
-          ls -al
+      - name: test secrect content
+        run: |
+          echo "$DEVOPS"
+        env:
+          DEVOPS: ${{ secrets.TEST_SECRET }}
+#    - name: executing remote ssh commands using password
+#      uses: appleboy/ssh-action@v0.1.10
+#      with:
+#        host: ${{ secrets.HOST }}
+#        username: ${{ secrets.USERNAME }}
+#        password: ${{ secrets.PASSWORD }}
+#        port: ${{ secrets.PORT }}
+#        script: |
+#          whoami
+#          ls -al
