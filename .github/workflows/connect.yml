@@ -20,7 +20,6 @@ jobs:
       - name: connect to activated gateway
         uses: self-actuated/connect-ssh-gateway@master
         with:
-          sshGatewayAddr: ${{ secrets.SSH_GATEWAY }}
-          secure: true
+          gateway: ${{ secrets.SSH_GATEWAY }}
       - name: Setup a blocking tmux session
         uses: alexellis/block-with-tmux-action@master
