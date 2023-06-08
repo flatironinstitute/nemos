@@ -1,0 +1,24 @@
+name: connect
+
+on:
+  push:
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+jobs:
+  connect:
+    name: connect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH server for Actor
+        uses: alexellis/setup-sshd-actor@master
+      - name: connect to activated gateway
+        uses: self-actuated/connect-ssh-gateway@master
+        with:
+          sshGatewayAddr: ${{ secrets.SSH_GATEWAY }}
+          secure: true
+      - name: Setup a blocking tmux session
+        uses: alexellis/block-with-tmux-action@master
