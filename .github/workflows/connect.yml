@@ -2,6 +2,8 @@ name: connect
 
 on:
   push:
+    branches:
+      - debug_logspace
 
 permissions:
   id-token: write
