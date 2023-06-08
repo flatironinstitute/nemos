@@ -3,7 +3,7 @@ name: connect
 on:
   push:
     branches:
-      - your_test_branch
+      - development
 
 jobs:
   build:
