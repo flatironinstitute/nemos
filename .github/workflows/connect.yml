@@ -6,11 +6,24 @@ on:
       - debug_logspace
 
 jobs:
-
   build:
-    name: Build
+    name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
