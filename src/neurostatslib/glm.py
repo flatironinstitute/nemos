@@ -1,3 +1,5 @@
+"""GLM core module
+"""
 import inspect
 import warnings
 from typing import Callable, Optional, Tuple
