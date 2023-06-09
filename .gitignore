@@ -131,3 +131,6 @@ dmypy.json
 
 # IntelliJ's project specific settings 
 .idea/
+
+.DS_Store
+
