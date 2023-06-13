@@ -65,6 +65,7 @@ class TestBspline:
 
         # evaluate on samples
         eval_basis = basis.gen_basis_funcs(sample_points, der=0)
+
         # check dimension match expected
         assert (eval_basis.shape[0] == n_basis)
         assert (eval_basis.shape[1] == sample_points.shape[0])
