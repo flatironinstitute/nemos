@@ -3,7 +3,7 @@ name: connect
 
 # Trigger the workflow manually
 on:
-  push: # workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
   build:
