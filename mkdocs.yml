@@ -1,28 +1,31 @@
-site_name: ccn-template
-repo_url: https://github.com/flatironinstitute/ccn-template
+# mkdocs.yml
+
+site_name: neurostatslib                    # The name of your documentation site
+repo_url: https://github.com/flatironinstitute//generalized-linear-models    # The URL of your repository
 
 theme:
-  name: 'material'
+  name: 'material'                         # The theme name, using the 'material' theme
   palette:
-    primary: 'light blue'
+    primary: 'light blue'                   # The primary color palette for the theme
     features:
-      - navigation.tabs
+      - navigation.tabs                    # Enable navigation tabs feature for the theme
+
 plugins:
-  - search  # make sure the search plugin is still enabled
-  - mkdocstrings
+  - search                                 # Enable the search plugin for searching within the documentation
+  - mkdocstrings                           # Enable the mkdocstrings plugin for generating documentation from docstrings
   - gen-files:
       scripts:
-        - docs/gen_ref_pages.py
+        - docs/gen_ref_pages.py            # Specify the script to generate the code reference pages
   - literate-nav:
-        nav_file: docs/SUMMARY.md
-  - section-index
+        nav_file: docs/SUMMARY.md           # Specify the navigation file for literate-style navigation
+  - section-index                           # Enable the section-index plugin for generating a section index
   - gallery:
-      examples_dirs: docs/examples          # path to your example scripts
-      gallery_dirs: docs/generated/gallery  # where to save generated gallery
-  #     # ... (other options)
+      examples_dirs: docs/examples          # Specify the directory path for example scripts
+      gallery_dirs: docs/generated/gallery  # Specify the directory to save the generated gallery
+
 nav:
-    - Home: index.md
-    - Tutorials: generated/gallery
-    - Contributing: CONTRIBUTING.md
-    - Code References: reference/
-    - About: about.md
+    - Home: index.md                        # Link to the index.md file (home page)
+    - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
+    - Contributing: CONTRIBUTING.md          # Link to the CONTRIBUTING.md file
+    - Code References: reference/            # Link to the reference/ directory
+    - About: about.md                        # Link to the about.md file
