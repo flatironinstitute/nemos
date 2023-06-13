@@ -59,7 +59,7 @@ dev = [
     "mkdocs_gen_files",             # Plugin for generating additional files in mkdocs
     "mkdocs_literate_nav",          # Plugin for literate-style navigation in mkdocs
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "pillow'                        # Image processing library
+    "pillow"                        # Image processing library
 ]
 
 
