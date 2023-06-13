@@ -25,38 +25,42 @@ classifiers = [
     "Programming Language :: Python :: 3.10"
 ]
 
+# Define dependencies for the project
 dependencies = [
-    'jax>=0.4',
-    'jaxopt>=0.6',
-    'matplotlib>=3.7',
-    'numpy>1.20',
-    'scikit-learn>=1.2',
-    'scipy>=1.10',
-    'typing_extensions>=4.6'
+    'jax>=0.4',                     # Numerical computing library
+    'jaxopt>=0.6',                  # Optimization library built on JAX
+    'matplotlib>=3.7',              # Plotting library
+    'numpy>1.20',                   # Numerical computing library
+    'scikit-learn>=1.2',            # Machine learning library
+    'scipy>=1.10',                  # Scientific computing library
+    'typing_extensions>=4.6'        # Typing extensions for Python
 ]
 
 
+# Configure package discovery for setuptools
 [tool.setuptools.packages.find]
-where = ["src"]
-include = ["neurostatslib"]
+where = ["src"]             # The directory where package modules are located
+include = ["neurostatslib"] # The specific package(s) to include in the distribution
 
+
+# Define optional dependencies for the project
 [project.optional-dependencies]
 dev = [
-  "black",
-  "isort",
-  "pip-tools",
-  "pytest",
-  "flake8",
-  "coverage",
-  "pytest-cov",
-  "mkdocs",
-  "mkdocstrings[python]",
-  "mkdocs_section_index",
-  "mkdocs_gen_files",
-  "mkdocs_literate_nav",
-  "mkdocs-gallery",
-  "pillow'
-  ]
+    "black",                        # Code formatter
+    "isort",                        # Import sorter
+    "pip-tools",                    # Dependency management
+    "pytest",                       # Testing framework
+    "flake8",                       # Code linter
+    "coverage",                     # Test coverage measurement
+    "pytest-cov",                   # Test coverage plugin for pytest
+    "mkdocs",                       # Documentation generator
+    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
+    "mkdocs_section_index",         # Plugin for generating a section index in mkdocs
+    "mkdocs_gen_files",             # Plugin for generating additional files in mkdocs
+    "mkdocs_literate_nav",          # Plugin for literate-style navigation in mkdocs
+    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
+    "pillow'                        # Image processing library
+]
 
 
 [tool.black]
@@ -81,11 +85,12 @@ exclude = '''
     | dist
     | examples))'''
 
+# Configure isort
 [tool.isort]
-multi_line_output = 3
-include_trailing_comma = true
+multi_line_output = 3             # Use three-line style for multi-line imports
+include_trailing_comma = true     # Include trailing comma in multi-line imports
 
-
+# Configure pytest
 [tool.pytest.ini_options]
-addopts = "--cov=neurostatslib"
-testpaths = ["tests"]
+addopts = "--cov=neurostatslib"   # Additional options to pass to pytest, enabling coverage for the 'neurostatslib' package
+testpaths = ["tests"]             # Specify the directory where test files are located
