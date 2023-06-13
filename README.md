@@ -1,3 +1,5 @@
+![LOGO](CCN-logo-wText.png)
+
 # generalized-linear-models
 Toolbox for basic Generalized Linear Models (GLMs) for neural data analysis
 
@@ -18,3 +20,5 @@ without `jax` and `jaxlib` already installed, so either run this before the
 earlier `pip install` command or uninstall them first (`pip uninstall jax
 jaxlib`). See [jax docs](https://github.com/google/jax#conda-installation) for
 details (the `pip` instructions did not work for me).
+
+![FOOT](CCN-letterFoot.png)
