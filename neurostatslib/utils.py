@@ -97,3 +97,44 @@ def plot_spike_raster(spike_data: Union[jnp.ndarray, np.ndarray],
     ax.eventplot(events, lineoffsets=lineoffsets, linelengths=linelengths, linewidths=linewidths, **kwargs)
     ax.set(yticks=[], xlim=[0, spike_data.shape[1]])
     return ax
+
+def rowWiseKron(A, C, jit=False, transpose=True):
+    """
+    Compute the row-wise Kronecker product between two matrices using JAX.
+
+    Parameters
+    ----------
+    A : jax.numpy.ndarray
+        The first matrix.
+    C : jax.numpy.ndarray
+        The second matrix.
+    jit : bool, optional
+        Activate Just-in-Time (JIT) compilation. Default is False.
+    transpose : bool, optional
+        Transpose matrices A and C before computation. Default is True.
+
+    Returns
+    -------
+    jax.numpy.ndarray
+        The resulting matrix with row-wise Kronecker product.
+
+    Notes
+    -----
+    This function computes the row-wise Kronecker product between dense matrices A and C
+    using JAX for automatic differentiation and GPU acceleration.
+    """
+
+    if transpose:
+        A = A.T
+        C = C.T
+
+    @jax.jit if jit else lambda x: x
+    def row_wise_kron(a, c):
+        return jnp.kron(a, c)
+
+    K = jax.vmap(row_wise_kron)(A, C)
+
+    if transpose:
+        K = K.T
+
+    return K
