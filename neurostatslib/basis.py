@@ -391,15 +391,14 @@ class BSplineBasis(SplineBasis):
         Notes
         -----
         This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined,
-        either through the `generate_knots` method or by assigning the `knot_locs` attribute.
+        through the `generate_knots` method. Knots will be flushed at the end of the call.
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
 
         """
         super().evaluate(sample_pts, check_support=False)
-        # add knots if not passed
-        if not hasattr(self, "knot_locs"):
-            self.generate_knots(sample_pts, 0.0, 1.0)
+        # add knots
+        self.generate_knots(sample_pts, 0.0, 1.0)
 
         # sort the knots in case user passed
 
@@ -440,6 +439,7 @@ class BSplineBasis(SplineBasis):
                 sample_pts[in_sample], (knots, id_basis[i], self.order - 1), der=der
             )
 
+        delattr(self, 'knot_locs')
         # # check sum equal 1 (B-spline are supposed to sum to 1)
         # assert(np.abs(basis_eval.sum(axis=0) - 1).max() < 1e-6)
         return basis_eval
