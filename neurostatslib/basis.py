@@ -95,6 +95,7 @@ class Basis:
     def evaluate(self, samples, check_support=False):
         """
         Evaluate the basis functions at the given samples.
+        (This is a placeholder, evaluate is basis type specific).
 
         Parameters
         ----------
@@ -114,6 +115,7 @@ class Basis:
     def convolve(self, samples):
         """
         Perform convolution of the basis functions with the given samples.
+        (This is a placeholder, evaluate is basis type specific).
 
         Parameters
         ----------
