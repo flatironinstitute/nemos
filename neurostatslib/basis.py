@@ -115,7 +115,7 @@ class Basis:
     def convolve(self, samples):
         """
         Perform convolution of the basis functions with the given samples.
-        (This is a placeholder, evaluate is basis type specific).
+        (This is a placeholder, convolve is basis type specific).
 
         Parameters
         ----------
