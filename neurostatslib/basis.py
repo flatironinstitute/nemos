@@ -444,7 +444,95 @@ class BSplineBasis(SplineBasis):
         # assert(np.abs(basis_eval.sum(axis=0) - 1).max() < 1e-6)
         return basis_eval
 
+class Cyclic_BSplineBasis(BSplineBasis):
+    """
+    Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
+    Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
 
+    Parameters
+    ----------
+    sample_pts : ndarray
+        Spacing for basis functions, holding elements on the interval [0,
+        window_size). A good default is np.arange(window_size).
+    der : int, optional
+        Order of the derivative of the B-spline (default is 0, e.g. Bspline eval).
+
+    Returns
+    -------
+    basis_eval : ndarray
+        Basis function evaluation results.
+    """
+
+    def __init__(self, n_basis_funcs: int, base_type: str, basis1=None, basis2=None, order: int = 2):
+        super().__init__(n_basis_funcs, base_type, basis1=basis1, basis2=basis2, order=order)
+        assert (
+            self.order >= 2
+        ), f"Order >= 2 required for cyclic B-spline, order {self.order} specified instead!"
+        assert (
+            self.n_basis_funcs >= order + 2
+        ), "n_basis_funcs >= order + 2 required for cyclic B-spline"
+        assert (
+            self.n_basis_funcs >= 2 * order - 2
+        ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
+
+    def evaluate(self, sample_pts: NDArray, der: int = 0) -> NDArray:
+        """
+        Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
+        Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
+        Parameters
+        ----------
+        sample_pts: (n_pts,)
+            Spacing for basis functions, holding elements on the interval [0,
+            window_size). A good default is np.arange(window_size).
+
+        outer_ok: bool
+            if True, accepts samples outside knots range
+            if False, raise value error
+
+        der: int
+            order of the derivative of the B-spline (default is 0, e.g. Bspline eval).
+
+        Returns
+        -------
+
+        """
+
+        # add knots if not passed
+        if not hasattr(self, "knot_locs"):
+            self.generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+
+        # for cyclic, do not repeat knots
+        self.knot_locs = np.unique(self.knot_locs)
+
+        knots_orig = self.knot_locs.copy()
+
+        nk = knots_orig.shape[0]
+
+        # make sure knots are sorted
+        knots_orig.sort()
+        xc = knots_orig[nk - 2 * self.order + 1]
+        knots = np.hstack(
+            (
+                self.knot_locs[0]
+                - self.knot_locs[-1]
+                + self.knot_locs[nk - self.order : nk - 1],
+                self.knot_locs,
+            )
+        )
+        ind = sample_pts > xc
+
+        # temporarily set the extended knots as attribute
+        self.knot_locs = knots
+        basis_eval = super().evaluate(sample_pts, outer_ok=True, der=der)
+        sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
+        if np.sum(ind):
+            X2 = super().evaluate(sample_pts[ind], outer_ok=True, der=der)
+            basis_eval[:, ind] = basis_eval[:, ind] + X2
+        # restore points
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
+        # restore the original knots
+        self.knot_loc = knots_orig
+        return basis_eval
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -488,7 +576,7 @@ if __name__ == '__main__':
     print('multiply and additive base with a evaluate type base')
     basis1 = BSplineBasis(6, 'evaluate', basis1=None, basis2=None, order=4)
     basis2 = BSplineBasis(7, 'evaluate', basis1=None, basis2=None, order=4)
-    basis3 = BSplineBasis(8, 'evaluate', basis1=None, basis2=None, order=4)
+    basis3 = Cyclic_BSplineBasis(8, 'evaluate', basis1=None, basis2=None, order=4)
     base_res = (basis1 + basis2) * basis3
     X = base_res.gen_basis(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
     print(X.shape, (6+7) * 8)
