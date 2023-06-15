@@ -53,15 +53,17 @@ dev = [
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
+]
+
+docs = [
     "mkdocs",                       # Documentation generator
     "mkdocstrings[python]",         # Python-specific plugin for mkdocs
     "mkdocs_section_index",         # Plugin for generating a section index in mkdocs
     "mkdocs_gen_files",             # Plugin for generating additional files in mkdocs
     "mkdocs_literate_nav",          # Plugin for literate-style navigation in mkdocs
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "pillow" ,                      # Image processing library
-]
-
+    "pillow"                        # Image processing library
+    ]
 
 [tool.black]
 target-version = ['py38', 'py39', 'py310']
