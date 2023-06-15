@@ -15,18 +15,13 @@ from scipy.interpolate import splev
 from utils import rowWiseKron
 
 class Basis:
-    """Generic class for basis functions.
+    """
+    Generic class for basis functions.
 
     Parameters
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    base_type : str
-        Type of basis functions ('evaluate', 'convolve', 'add', 'multiply').
-    basis1 : Basis, optional
-        First basis function for 'add' or 'multiply' base_type. Default is None.
-    basis2 : Basis, optional
-        Second basis function for 'add' or 'multiply' base_type. Default is None.
     GB_limit : float, optional
         Limit in GB for the model matrix size. Default is 16.0.
 
@@ -34,8 +29,6 @@ class Basis:
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    base_type : str
-        Type of basis functions ('evaluate', 'convolve', 'add', 'multiply').
     GB_limit : float
         Limit in GB for the model matrix size.
 
@@ -43,51 +36,35 @@ class Basis:
     -------
     evaluate(samples, check_support=False)
         Evaluate the basis functions at given samples.
+
     convolve(samples)
         Convolve the basis functions with given samples.
-    gen_basis(*x)
-        Generate the basis matrix using provided input samples.
+
+    gen_model_matrix(*x)
+        Generate the model matrix using provided input samples.
+
     check_input_number(x)
         Check the number of input samples.
+
     check_samples_consistency(x)
         Check the consistency of sample sizes.
+
     check_full_model_matrix_size(n_samples, dtype=np.float64)
         Check the size of the full model matrix.
+
     __add__(other)
         Add two Basis objects together.
-    __mul__(other)
-        Multiply two Basis objects element-wise.
 
+    __mul__(other)
+        Multiply two Basis objects together. Returns a Basis of 'multiply' type, which can be used to model
+        multi-dimensional response functions.
     """
 
-    def __init__(self, n_basis_funcs: int, base_type: str, basis1=None, basis2=None, GB_limit: float =16.):
+    def __init__(self, n_basis_funcs: int, GB_limit: float =16.):
 
-        if not base_type in ['evaluate', 'convolve', 'add', 'multiply']:
-            raise ValueError(f"base_type must be 'evaluate', 'convolve', 'add', or 'multiply'. {base_type} provided instead.")
 
         self.n_basis_funcs = n_basis_funcs
-        self.base_type = base_type
         self.GB_limit = GB_limit
-
-
-        if base_type == 'evaluate':
-            self._gen_basis = lambda x_list : self.evaluate(x_list[0])
-            self.n_input_samples = 1
-
-        if base_type == 'convolve':
-            self._gen_basis = lambda x_list : self.convolve(x_list[0])
-            self.n_input_samples = 1
-
-        if base_type == 'add':
-            self.n_input_samples = basis1.n_input_samples + basis2.n_input_samples
-            self._gen_basis = lambda x_list: np.vstack((basis1._gen_basis(x_list[:basis1.n_input_samples]),
-                                                        basis2._gen_basis(x_list[basis1.n_input_samples:])))
-
-        if base_type == 'multiply':
-            self.n_input_samples = basis1.n_input_samples + basis2.n_input_samples
-            self._gen_basis = lambda x_list: rowWiseKron(basis1._gen_basis(x_list[:basis1.n_input_samples]),
-                                                         basis2._gen_basis(x_list[basis1.n_input_samples:]), transpose=True)
-
 
         return
 
@@ -95,7 +72,6 @@ class Basis:
     def evaluate(self, samples, check_support=False):
         """
         Evaluate the basis functions at the given samples.
-        (This is a placeholder, evaluate is basis type specific).
 
         Parameters
         ----------
@@ -114,8 +90,7 @@ class Basis:
 
     def convolve(self, samples):
         """
-        Perform convolution of the basis functions with the given samples.
-        (This is a placeholder, convolve is basis type specific).
+        Convolve the basis functions with given samples.
 
         Parameters
         ----------
@@ -130,9 +105,9 @@ class Basis:
         # Perform convolution and return the result
         return
 
-    def gen_basis(self, *x: NDArray):
+    def gen_model_matrix(self, *x: NDArray):
         """
-        Generate the basis functions for the given input samples.
+        Generate the model matrix using provided input samples.
 
         Parameters
         ----------
@@ -151,7 +126,7 @@ class Basis:
         self.check_full_model_matrix_size(x[0].shape[0])
         self.check_input_number(x)
 
-        return self._gen_basis(x)
+        return self._gen_model_matrix(x)
 
 
 
@@ -222,14 +197,12 @@ class Basis:
         -------
         Basis
             The resulting Basis object.
-
         """
-        return Basis(self.n_basis_funcs + self.n_basis_funcs, base_type='add', basis1=self, basis2=other)
+        return addBasis(self, other)
 
     def __mul__(self, other):
         """
-        Multiply two Basis objects together. Returns a Basis of 'multiply' type, which can be used to model
-        multi-dimensional response functions.
+        Multiply two Basis objects together.
 
         Parameters
         ----------
@@ -240,11 +213,133 @@ class Basis:
         -------
         Basis
             The resulting Basis object.
-
         """
-        return Basis(self.n_basis_funcs * self.n_basis_funcs, base_type='multiply', basis1=self, basis2=other)
+        return mulBasis(self, other)
 
+class addBasis(Basis):
+    """
+    Class representing the addition of two Basis objects.
 
+    Parameters
+    ----------
+    basis1 : Basis
+        First basis object to add.
+    basis2 : Basis
+        Second basis object to add.
+
+    Attributes
+    ----------
+    n_basis_funcs : int
+        Number of basis functions.
+    n_input_samples : int
+        Number of input samples.
+    basis1 : Basis
+        First basis object.
+    basis2 : Basis
+        Second basis object.
+
+    Methods
+    -------
+    _gen_model_matrix(x_list)
+        Generate the model matrix using provided input samples.
+
+    """
+    def __init__(self, basis1, basis2):
+        """
+        Initialize the addBasis object.
+
+        Parameters
+        ----------
+        basis1 : Basis
+            First basis object to add.
+        basis2 : Basis
+            Second basis object to add.
+        """
+        self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
+        super().__init__(self.n_basis_funcs, GB_limit=basis1.GB_limit)
+        self.n_input_samples = basis1.n_input_samples + basis2.n_input_samples
+        self.basis1 = basis1
+        self.basis2 = basis2
+        return
+
+    def _gen_model_matrix(self, x_list):
+        """
+        Generate the model matrix using provided input samples.
+
+        Parameters
+        ----------
+        x_list : list
+            List of input samples.
+
+        Returns
+        -------
+        numpy.ndarray
+            The generated model matrix.
+        """
+        return np.vstack((self.basis1._gen_model_matrix(x_list[:self.basis1.n_input_samples]),
+                   self.basis2._gen_model_matrix(x_list[self.basis1.n_input_samples:])))
+
+class mulBasis(Basis):
+    """
+    Class representing the multiplication (external product) of two Basis objects.
+
+    Parameters
+    ----------
+    basis1 : Basis
+        First basis object to multiply.
+    basis2 : Basis
+        Second basis object to multiply.
+
+    Attributes
+    ----------
+    n_basis_funcs : int
+        Number of basis functions.
+    n_input_samples : int
+        Number of input samples.
+    basis1 : Basis
+        First basis object.
+    basis2 : Basis
+        Second basis object.
+
+    Methods
+    -------
+    _gen_model_matrix(x_list)
+        Generate the model matrix using provided input samples.
+    """
+    def __init__(self, basis1, basis2):
+        """
+        Initialize the mulBasis object.
+
+        Parameters
+        ----------
+        basis1 : Basis
+            First basis object to multiply.
+        basis2 : Basis
+            Second basis object to multiply.
+        """
+        self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
+        super().__init__(self.n_basis_funcs, GB_limit=basis1.GB_limit)
+        self.n_input_samples = basis1.n_input_samples + basis2.n_input_samples
+        self.basis1 = basis1
+        self.basis2 = basis2
+        return
+
+    def _gen_model_matrix(self, x_list):
+        """
+        Generate the model matrix given the provided input samples.
+
+        Parameters
+        ----------
+        x_list : list
+            List of input samples.
+
+        Returns
+        -------
+        numpy.ndarray
+            The generated model matrix.
+        """
+        return rowWiseKron(self.basis1._gen_model_matrix(x_list[:self.basis1.n_input_samples]),
+                           self.basis2._gen_model_matrix(x_list[self.basis1.n_input_samples:]), transpose=True)
 
 class SplineBasis(Basis):
     """
@@ -254,29 +349,55 @@ class SplineBasis(Basis):
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    base_type : str
-        Type of basis functions. Must be one of ['evaluate', 'convolve', 'add', 'multiply'].
-    basis1 : Basis, optional
-        The first basis function object. Required if base_type is 'add' or 'multiply'.
-    basis2 : Basis, optional
-        The second basis function object. Required if base_type is 'add' or 'multiply'.
     order : int, optional
         Spline order. Default is 2.
+    eval_type : str, optional
+        Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
+
+    Attributes
+    ----------
+    order : int
+        Spline order.
+    n_input_samples : int
+        Number of input samples.
+
+    Methods
+    -------
+    generate_knots(sample_pts, perc_low, perc_high, is_cyclic=False)
+        Generate knot locations for spline basis functions.
 
     """
-    def __init__(self, n_basis_funcs: int, base_type: str, basis1=None, basis2=None, order: int = 2):
-        super().__init__(n_basis_funcs, base_type, basis1=basis1, basis2=basis2)
+
+    def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
+        """
+        Initialize the SplineBasis object.
+
+        Parameters
+        ----------
+        n_basis_funcs : int
+            Number of basis functions.
+        order : int, optional
+            Spline order. Default is 2.
+        eval_type : str, optional
+            Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
+        """
+        super().__init__(n_basis_funcs)
         self.order = order
+        self.n_input_samples = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
+        if eval_type not in ['evaluate', 'convolve']:
+            raise ValueError(
+                f"eval_type must be 'evaluate' or 'convolve'. '{eval_type}' provided instead."
+            )
 
     def generate_knots(
         self,
-        sample_pts: NDArray,
+        sample_pts: np.ndarray,
         perc_low: float,
         perc_high: float,
         is_cyclic: bool = False,
-    ) -> NDArray:
+    ) -> np.ndarray:
         """
         Generate knot locations for spline basis functions.
 
@@ -302,9 +423,7 @@ class SplineBasis(Basis):
             If the spline order is larger than the number of basis functions.
         AssertionError
             If the percentiles or order values are not within the valid range.
-
         """
-
         # Determine number of interior knots.
         num_interior_knots = self.n_basis_funcs - self.order
         if is_cyclic:
@@ -317,10 +436,9 @@ class SplineBasis(Basis):
                 "than `n_basis_funcs` parameter."
             )
 
-        assert (perc_low >= 0) & (
-            perc_high <= 1
-        ), "Specify low and high percentile (perc_low, perc_high) as float between 0 and 1"
-        assert perc_low < perc_high, "perc_low must be < perc_high. "
+        assert 0 <= perc_low <= 1, "Specify `perc_low` as a float between 0 and 1."
+        assert 0 <= perc_high <= 1, "Specify `perc_high` as a float between 0 and 1."
+        assert perc_low < perc_high, "perc_low must be less than perc_high."
 
         # clip to avoid numerical errors in case of percentile numerical precision close to 0 and 1
         mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
@@ -333,6 +451,9 @@ class SplineBasis(Basis):
                 mx * np.ones(self.order - 1),
             )
         )
+        return self.knot_locs
+
+
 
 class BSplineBasis(SplineBasis):
     """
@@ -342,16 +463,12 @@ class BSplineBasis(SplineBasis):
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    base_type : str
-        Type of basis functions. Must be one of ['evaluate', 'convolve', 'add', 'multiply'].
-    basis1 : Basis, optional
-        The first basis function object. Required if base_type is 'add' or 'multiply'.
-    basis2 : Basis, optional
-        The second basis function object. Required if base_type is 'add' or 'multiply'.
     order : int, optional
         Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
+    eval_type : str, optional
+        Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
 
     References
     ----------
@@ -360,27 +477,46 @@ class BSplineBasis(SplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, base_type: str, basis1=None, basis2=None, order: int = 2):
-        super().__init__(n_basis_funcs, base_type, basis1=basis1, basis2=basis2, order=order)
+    def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
+        """
+        Initialize the BSplineBasis object.
+
+        Parameters
+        ----------
+        n_basis_funcs : int
+            Number of basis functions.
+        order : int, optional
+            Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+            The B-splines have (order-2) continuous derivatives at each interior knot.
+            The higher this number, the smoother the basis representation will be.
+        eval_type : str, optional
+            Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
+        """
+        super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
+
+        if eval_type == 'evaluate':
+            self._gen_model_matrix = lambda x_list: self.evaluate(x_list[0])
+        elif eval_type == 'convolve':
+            self._gen_model_matrix = lambda x_list: self.convolve(x_list[0])
 
     def evaluate(
-        self, sample_pts: NDArray, outer_ok: bool = False, der: int = 0
-    ) -> NDArray:
+        self, sample_pts: np.ndarray, outer_ok: bool = False, der: int = 0
+    ) -> np.ndarray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
         Parameters
         ----------
-        sample_pts : NDArray
+        sample_pts : np.ndarray
             The sample points at which the B-spline is evaluated.
         outer_ok : bool, optional
-            If True, accepts samples outside the knots range. If False, raises a value error.
+            If True, accepts samples outside the knots range. If False, raises a ValueError.
         der : int, optional
             Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
 
         Returns
         -------
-        NDArray
+        np.ndarray
             The evaluated basis functions.
 
         Raises
@@ -390,18 +526,16 @@ class BSplineBasis(SplineBasis):
 
         Notes
         -----
-        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined,
+        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
         through the `generate_knots` method. Knots will be flushed at the end of the call.
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
-
         """
         super().evaluate(sample_pts, check_support=False)
         # add knots
         self.generate_knots(sample_pts, 0.0, 1.0)
 
         # sort the knots in case user passed
-
         knots = self.knot_locs
         knots.sort()
         nk = knots.shape[0]
@@ -440,31 +574,42 @@ class BSplineBasis(SplineBasis):
             )
 
         delattr(self, 'knot_locs')
-        # # check sum equal 1 (B-spline are supposed to sum to 1)
-        # assert(np.abs(basis_eval.sum(axis=0) - 1).max() < 1e-6)
         return basis_eval
+
 
 class Cyclic_BSplineBasis(BSplineBasis):
     """
-    Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
-    Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
+    B-spline 1-dimensional basis functions for cyclic splines.
 
     Parameters
     ----------
-    sample_pts : ndarray
-        Spacing for basis functions, holding elements on the interval [0,
-        window_size). A good default is np.arange(window_size).
-    der : int, optional
-        Order of the derivative of the B-spline (default is 0, e.g. Bspline eval).
+    n_basis_funcs : int
+        Number of basis functions.
+    order : int, optional
+        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+        The B-splines have (order-2) continuous derivatives at each interior knot.
+        The higher this number, the smoother the basis representation will be.
+    eval_type : str, optional
+        Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
 
-    Returns
-    -------
-    basis_eval : ndarray
-        Basis function evaluation results.
     """
 
-    def __init__(self, n_basis_funcs: int, base_type: str, basis1=None, basis2=None, order: int = 2):
-        super().__init__(n_basis_funcs, base_type, basis1=basis1, basis2=basis2, order=order)
+    def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
+        """
+        Initialize the Cyclic_BSplineBasis object.
+
+        Parameters
+        ----------
+        n_basis_funcs : int
+            Number of basis functions.
+        order : int, optional
+            Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+            The B-splines have (order-2) continuous derivatives at each interior knot.
+            The higher this number, the smoother the basis representation will be.
+        eval_type : str, optional
+            Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
+        """
+        super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
         assert (
             self.order >= 2
         ), f"Order >= 2 required for cyclic B-spline, order {self.order} specified instead!"
@@ -475,28 +620,34 @@ class Cyclic_BSplineBasis(BSplineBasis):
             self.n_basis_funcs >= 2 * order - 2
         ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
-    def evaluate(self, sample_pts: NDArray, der: int = 0) -> NDArray:
+    def evaluate(self, sample_pts: np.ndarray, der: int = 0) -> np.ndarray:
         """
-        Generate basis functions with given spacing, calls scipy.interpolate.splev which is a wrapper to fortran.
-        Comes with the additional bonus of evaluating the derivatives of b-spline, needed for smoothing penalization.
+        Evaluate the B-spline basis functions with given sample points.
+
         Parameters
         ----------
-        sample_pts: (n_pts,)
-            Spacing for basis functions, holding elements on the interval [0,
-            window_size). A good default is np.arange(window_size).
-
-        outer_ok: bool
-            if True, accepts samples outside knots range
-            if False, raise value error
-
-        der: int
-            order of the derivative of the B-spline (default is 0, e.g. Bspline eval).
+        sample_pts : np.ndarray
+            The sample points at which the B-spline is evaluated.
+        der : int, optional
+            Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
 
         Returns
         -------
+        np.ndarray
+            The evaluated basis functions.
 
+        Raises
+        ------
+        AssertionError
+            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
+
+        Notes
+        -----
+        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
+        through the `generate_knots` method. Knots will be flushed at the end of the call.
+
+        The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
-
         # add knots if not passed
         if not hasattr(self, "knot_locs"):
             self.generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
@@ -534,6 +685,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         self.knot_loc = knots_orig
         return basis_eval
 
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     from matplotlib import cm
@@ -542,24 +694,24 @@ if __name__ == '__main__':
 
 
     samples = np.random.normal(size=100)
-    basis1 = BSplineBasis(15, 'evaluate', basis1=None, basis2=None, order=4)
-    basis2 = BSplineBasis(15, 'evaluate', basis1=None, basis2=None, order=4)
+    basis1 = BSplineBasis(15, eval_type='evaluate', order=4)
+    basis2 = BSplineBasis(15, eval_type='evaluate', order=4)
     basis_add = basis1 + basis2
     basis_add_add = basis_add + basis2
     basis_add_add_add = basis_add_add + basis_add
 
 
 
-    print(basis_add.gen_basis(samples, samples).shape)
-    print(basis_add_add.gen_basis(samples, samples, samples).shape)
-    print(basis_add_add_add.gen_basis(samples, samples, samples, samples, samples).shape)
+    print(basis_add.gen_model_matrix(samples, samples).shape)
+    print(basis_add_add.gen_model_matrix(samples, samples, samples).shape)
+    print(basis_add_add_add.gen_model_matrix(samples, samples, samples, samples, samples).shape)
 
 
-    basis1 = BSplineBasis(15, 'evaluate', basis1=None, basis2=None, order=4)
-    basis2 = BSplineBasis(15, 'evaluate', basis1=None, basis2=None, order=4)
+    basis1 = BSplineBasis(15, eval_type='evaluate', order=4)
+    basis2 = BSplineBasis(15, eval_type='evaluate', order=4)
     mulbase = basis1 * basis2
     X, Y = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
-    Z = mulbase.gen_basis(X.flatten(), Y.flatten())
+    Z = mulbase.gen_model_matrix(X.flatten(), Y.flatten())
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     Z = np.array(Z)
     Z[Z==0] = np.nan
@@ -574,9 +726,9 @@ if __name__ == '__main__':
     ax.set_title('Overlapped Surfaces')
 
     print('multiply and additive base with a evaluate type base')
-    basis1 = BSplineBasis(6, 'evaluate', basis1=None, basis2=None, order=4)
-    basis2 = BSplineBasis(7, 'evaluate', basis1=None, basis2=None, order=4)
-    basis3 = Cyclic_BSplineBasis(8, 'evaluate', basis1=None, basis2=None, order=4)
+    basis1 = BSplineBasis(6, eval_type='evaluate', order=4)
+    basis2 = BSplineBasis(7, eval_type='evaluate', order=4)
+    basis3 = Cyclic_BSplineBasis(8, eval_type='evaluate', order=4)
     base_res = (basis1 + basis2) * basis3
-    X = base_res.gen_basis(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
+    X = base_res.gen_model_matrix(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
     print(X.shape, (6+7) * 8)
