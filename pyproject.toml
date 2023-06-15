@@ -36,16 +36,7 @@ dependencies = [
     'typing_extensions>=4.6'        # Typing extensions for Python
 ]
 
-[options.extras_require]
-docs = [
-    "mkdocs",                       # Documentation generator
-    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
-    "mkdocs-section-index",         # Plugin for generating a section index in mkdocs
-    "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
-    "mkdocs-literate-nav",          # Plugin for literate-style navigation in mkdocs
-    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "pillow"                        # Image processing library
-]
+
 
 # Configure package discovery for setuptools
 [tool.setuptools.packages.find]
@@ -64,7 +55,15 @@ dev = [
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
 ]
-
+docs = [
+    "mkdocs",                       # Documentation generator
+    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
+    "mkdocs-section-index",         # Plugin for generating a section index in mkdocs
+    "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
+    "mkdocs-literate-nav",          # Plugin for literate-style navigation in mkdocs
+    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
+    "pillow"                        # Image processing library
+]
 
 [tool.black]
 target-version = ['py38', 'py39', 'py310']
