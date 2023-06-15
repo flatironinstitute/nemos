@@ -55,6 +55,7 @@ dev = [
     "pytest-cov",                   # Test coverage plugin for pytest
 ]
 
+[options.extras_require]
 docs = [
     "mkdocs",                       # Documentation generator
     "mkdocstrings[python]",         # Python-specific plugin for mkdocs
