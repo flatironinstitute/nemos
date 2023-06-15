@@ -648,9 +648,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
-        # add knots if not passed
-        if not hasattr(self, "knot_locs"):
-            self.generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+        self.generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
         self.knot_locs = np.unique(self.knot_locs)
@@ -682,7 +680,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
         # restore the original knots
-        self.knot_loc = knots_orig
+        delattr(self, 'knot_locs')
         return basis_eval
 
 
