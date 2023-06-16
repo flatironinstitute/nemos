@@ -1,7 +1,7 @@
 ![LOGO](CCN-logo-wText.png)
 
-# generalized-linear-models
-Toolbox for basic Generalized Linear Models (GLMs) for neural data analysis
+# nueorstatslib
+A toolbox of statistical analysis for neuroscience. 
 
 ## Setup
 
