@@ -26,6 +26,4 @@ plugins:
 nav:
     - Home: index.md                        # Link to the index.md file (home page)
     - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
-    - Contributing: CONTRIBUTING.md          # Link to the CONTRIBUTING.md file
     - Code References: reference/            # Link to the reference/ directory
-    - About: about.md                        # Link to the about.md file
