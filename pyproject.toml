@@ -62,8 +62,10 @@ docs = [
     "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
     "mkdocs-literate-nav",          # Plugin for literate-style navigation in mkdocs
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "pillow"                        # Image processing library
+    "pillow",                       # Image processing library,
+    "mkdocs-material"
 ]
+
 
 [tool.black]
 target-version = ['py38', 'py39', 'py310']
