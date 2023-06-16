@@ -1,4 +1,4 @@
-# Neurostatslib 
+# neurostatslib 
 A toolbox of statistical analysis for neuroscience. 
 
 ## Disclaimer
