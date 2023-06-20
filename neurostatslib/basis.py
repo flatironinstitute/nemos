@@ -312,16 +312,16 @@ class SplineBasis(Basis):
 
     Parameters
     ----------
-    _n_basis_funcs : int
+    n_basis_funcs : int
         Number of basis functions.
-    _order : int, optional
+    order : int, optional
         Spline order. Default is 2.
 
     Attributes
     ----------
-    order : int
+    _order : int
         Spline order.
-    n_input_samples : int
+    _n_input_samples : int
         Number of input samples.
 
     Methods
