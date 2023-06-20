@@ -59,7 +59,7 @@ class Basis:
 
 
         self._n_basis_funcs = n_basis_funcs
-        self.GB_limit = GB_limit
+        self._GB_limit = GB_limit
 
         return
 
@@ -97,7 +97,7 @@ class Basis:
 
 
 
-    def _check_input_number(self,x: tuple[NDArray]):
+    def _check_input_number(self, x: tuple[NDArray]):
         """
         Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
 
@@ -134,7 +134,7 @@ class Basis:
 
     def _check_full_model_matrix_size(self, n_samples, dtype: type = np.float64):
         """
-        Check the size in GB of the full model matrix is <= self.GB_limit
+        Check the size in GB of the full model matrix is <= self._GB_limit
 
         Parameters
         ----------
@@ -149,8 +149,8 @@ class Basis:
             If the size of the model matrix exceeds the specified memory limit.
         """
         size_in_bytes = np.dtype(dtype).itemsize * n_samples * self._n_basis_funcs
-        if size_in_bytes > self.GB_limit * 10**9:
-            raise MemoryError(f'Model matrix size exceeds {self.GB_limit} GB.')
+        if size_in_bytes > self._GB_limit * 10**9:
+            raise MemoryError(f'Model matrix size exceeds {self._GB_limit} GB.')
     def __add__(self, other):
         """
         Add two Basis objects together.
@@ -223,7 +223,7 @@ class addBasis(Basis):
             Second basis object to add.
         """
         self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs, GB_limit=basis1.GB_limit)
+        super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -285,7 +285,7 @@ class mulBasis(Basis):
             Second basis object to multiply.
         """
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs, GB_limit=basis1.GB_limit)
+        super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -318,8 +318,6 @@ class SplineBasis(Basis):
         Number of basis functions.
     order : int, optional
         Spline order. Default is 2.
-    eval_type : str, optional
-        Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
 
     Attributes
     ----------
@@ -335,28 +333,14 @@ class SplineBasis(Basis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
-        """
-        Initialize the SplineBasis object.
+    def __init__(self, n_basis_funcs: int, order: int = 2):
 
-        Parameters
-        ----------
-        n_basis_funcs : int
-            Number of basis functions.
-        order : int, optional
-            Spline order. Default is 2.
-        eval_type : str, optional
-            Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
-        """
         super().__init__(n_basis_funcs)
         self._order = order
         self._n_input_samples = 1
         if self._order < 1:
             raise ValueError("Spline order must be positive!")
-        if eval_type not in ['evaluate', 'convolve']:
-            raise ValueError(
-                f"eval_type must be 'evaluate' or 'convolve'. '{eval_type}' provided instead."
-            )
+
 
     def _generate_knots(
         self,
@@ -434,8 +418,7 @@ class BSplineBasis(SplineBasis):
         Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
-    eval_type : str, optional
-        Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
+
 
     References
     ----------
@@ -444,22 +427,9 @@ class BSplineBasis(SplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
-        """
-        Initialize the BSplineBasis object.
+    def __init__(self, n_basis_funcs: int, order: int = 2):
 
-        Parameters
-        ----------
-        n_basis_funcs : int
-            Number of basis functions.
-        order : int, optional
-            Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
-            The B-splines have (order-2) continuous derivatives at each interior knot.
-            The higher this number, the smoother the basis representation will be.
-        eval_type : str, optional
-            Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
-        """
-        super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
+        super().__init__(n_basis_funcs, order=order)
 
     def _evaluate(
         self, sample_pts: tuple[NDArray], outer_ok: bool = False, der: int = 0
@@ -556,9 +526,9 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
+    def __init__(self, n_basis_funcs: int, order: int = 2):
 
-        super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
+        super().__init__(n_basis_funcs, order=order)
         assert (
             self._order >= 2
         ), f"Order >= 2 required for cyclic B-spline, order {self._order} specified instead!"
@@ -642,8 +612,8 @@ if __name__ == '__main__':
 
 
     samples = np.random.normal(size=100)
-    basis1 = BSplineBasis(15, eval_type='evaluate', order=4)
-    basis2 = BSplineBasis(15, eval_type='evaluate', order=4)
+    basis1 = BSplineBasis(15, order=4)
+    basis2 = BSplineBasis(15, order=4)
     basis_add = basis1 + basis2
     basis_add_add = basis_add + basis2
     basis_add_add_add = basis_add_add + basis_add
@@ -655,8 +625,8 @@ if __name__ == '__main__':
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
 
-    basis1 = BSplineBasis(15, eval_type='evaluate', order=4)
-    basis2 = BSplineBasis(15, eval_type='evaluate', order=4)
+    basis1 = BSplineBasis(15, order=4)
+    basis2 = BSplineBasis(15, order=4)
     mulbase = basis1 * basis2
     X, Y = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
     Z = mulbase.evaluate(X.flatten(), Y.flatten())
@@ -674,9 +644,9 @@ if __name__ == '__main__':
     ax.set_title('Overlapped Surfaces')
 
     print('multiply and additive base with a evaluate type base')
-    basis1 = BSplineBasis(6, eval_type='evaluate', order=4)
-    basis2 = BSplineBasis(7, eval_type='evaluate', order=4)
-    basis3 = Cyclic_BSplineBasis(8, eval_type='evaluate', order=4)
+    basis1 = BSplineBasis(6, order=4)
+    basis2 = BSplineBasis(7, order=4)
+    basis3 = Cyclic_BSplineBasis(8, order=4)
     base_res = (basis1 + basis2) * basis3
     X = base_res.evaluate(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
     print(X.shape, (6+7) * 8)
