@@ -60,8 +60,10 @@ class Basis:
 
         self._n_basis_funcs = n_basis_funcs
         self._GB_limit = GB_limit
+        self._n_input_samples = 0
 
         return
+
 
     def _evaluate(self, x: tuple[NDArray]):
         subclass_name = type(self).__name__
@@ -94,7 +96,6 @@ class Basis:
         self._check_input_number(xi)
 
         return self._evaluate(xi)
-
 
 
     def _check_input_number(self, x: tuple[NDArray]):
