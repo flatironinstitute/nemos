@@ -153,11 +153,11 @@ class Basis:
 
         # get the samples
         sample_tuple = self._get_samples(n_samples)
-        Xs = np.meshgrid(*sample_tuple)
+        Xs = np.meshgrid(*sample_tuple,indexing='ij')
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
         Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
-            (self._n_basis_funcs,) + n_samples[::-1]
+            (self._n_basis_funcs,) + n_samples
         )
 
         return *Xs, Y
@@ -328,11 +328,9 @@ class addBasis(Basis):
             The equi-spaced sample locations for each coordinate.
 
         """
-
-        return (
-            self._basis1._get_samples(n_samples[: self._basis1._n_input_samples]),
-            self._basis2._get_samples(n_samples[self._basis1._n_input_samples :]),
-        )
+        sample_1 = self._basis1._get_samples(n_samples[: self._basis1._n_input_samples])
+        sample_2 = self._basis2._get_samples(n_samples[self._basis1._n_input_samples:])
+        return sample_1 + sample_2
 
 
 class mulBasis(Basis):
@@ -408,10 +406,9 @@ class mulBasis(Basis):
 
         """
 
-        return (
-            self._basis1._get_samples(n_samples[: self._basis1._n_input_samples]),
-            self._basis2._get_samples(n_samples[self._basis1._n_input_samples :]),
-        )
+        sample_1 = self._basis1._get_samples(n_samples[: self._basis1._n_input_samples])
+        sample_2 = self._basis2._get_samples(n_samples[self._basis1._n_input_samples:])
+        return sample_1 + sample_2
 
 
 class SplineBasis(Basis):
@@ -635,10 +632,10 @@ class BSplineBasis(SplineBasis):
 
         Returns
         -------
-        NDArray
+        tuple[NDArray]
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0])
+        return (np.linspace(0, 1, n_samples[0]),)
 
 
 class Cyclic_BSplineBasis(BSplineBasis):
@@ -754,10 +751,10 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         Returns
         -------
-        NDArray
+        tuple[NDArray]
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0])
+        return (np.linspace(0, 1, n_samples[0]),)
 
 
 if __name__ == "__main__":
@@ -804,3 +801,12 @@ if __name__ == "__main__":
         np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100)
     )
     print(X.shape, (6 + 7) * 8)
+
+
+
+    basis1 = BSplineBasis(6, order=4)
+    basis2 = BSplineBasis(7, order=4)
+    basis3 = BSplineBasis(8, order=4)
+
+    multb = basis1 + basis2 * basis3
+    X, Y, W, Z = multb.gen_basis(10, 11, 12)
