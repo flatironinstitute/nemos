@@ -34,14 +34,9 @@ class Basis:
 
     Methods
     -------
-    evaluate(samples, check_support=False)
-        Evaluate the basis functions at given samples.
 
-    convolve(samples)
-        Convolve the basis functions with given samples.
-
-    evaluate(*x)
-        Generate the model matrix using provided input samples.
+    evaluate(*xi)
+        Evaluate the basis at the input samples x1,...,xn
 
     check_input_number(x)
         Check the number of input samples.
@@ -63,7 +58,7 @@ class Basis:
     def __init__(self, n_basis_funcs: int, GB_limit: float =16.):
 
 
-        self.n_basis_funcs = n_basis_funcs
+        self._n_basis_funcs = n_basis_funcs
         self.GB_limit = GB_limit
 
         return
@@ -74,7 +69,7 @@ class Basis:
 
     def evaluate(self, *xi: NDArray):
         """
-        This method evaluate the basis set at the given samples using the subclass-specific "_evaluate" method.
+        This method evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
         The specific functionality of _evaluate should be implemented in the subclasses.
 
         Parameters
@@ -116,8 +111,8 @@ class Basis:
         ValueError
             If the number of inputs doesn't match what the Basis object requires.
         """
-        if len(x) != self.n_input_samples:
-            raise ValueError(f'input number mismatch. Basis requires {self.n_input_samples} input samples, {len(x)} inputs provided instead.')
+        if len(x) != self._n_input_samples:
+            raise ValueError(f'input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead.')
 
     def _check_samples_consistency(self, x: tuple[NDArray]):
         """
@@ -136,6 +131,7 @@ class Basis:
         sample_sizes = [samp.shape[0] for samp in x]
         if any(elem != sample_sizes[0] for elem in sample_sizes):
             raise ValueError(f'sample size mismatch. Input elements have inconsistent sample sizes.')
+
     def _check_full_model_matrix_size(self, n_samples, dtype: type = np.float64):
         """
         Check the size in GB of the full model matrix is <= self.GB_limit
@@ -152,7 +148,7 @@ class Basis:
         MemoryError
             If the size of the model matrix exceeds the specified memory limit.
         """
-        size_in_bytes = np.dtype(dtype).itemsize * n_samples * self.n_basis_funcs
+        size_in_bytes = np.dtype(dtype).itemsize * n_samples * self._n_basis_funcs
         if size_in_bytes > self.GB_limit * 10**9:
             raise MemoryError(f'Model matrix size exceeds {self.GB_limit} GB.')
     def __add__(self, other):
@@ -211,7 +207,7 @@ class addBasis(Basis):
 
     Methods
     -------
-    _evaluate(x_list)
+    _evaluate(x_tuple)
         Generate the model matrix using provided input samples.
 
     """
@@ -226,11 +222,11 @@ class addBasis(Basis):
         basis2 : Basis
             Second basis object to add.
         """
-        self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs, GB_limit=basis1.GB_limit)
-        self.n_input_samples = basis1.n_input_samples + basis2.n_input_samples
-        self.basis1 = basis1
-        self.basis2 = basis2
+        self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
+        super().__init__(self._n_basis_funcs, GB_limit=basis1.GB_limit)
+        self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
+        self._basis1 = basis1
+        self._basis2 = basis2
         return
 
     def _evaluate(self, x_tuple: tuple[NDArray]):
@@ -239,7 +235,7 @@ class addBasis(Basis):
 
         Parameters
         ----------
-        x_tuple : list
+        x_tuple : tuple
             List of input samples.
 
         Returns
@@ -247,8 +243,8 @@ class addBasis(Basis):
         numpy.ndarray
             The generated model matrix.
         """
-        return np.vstack((self.basis1._evaluate(x_tuple[:self.basis1.n_input_samples]),
-                   self.basis2._evaluate(x_tuple[self.basis1.n_input_samples:])))
+        return np.vstack((self._basis1._evaluate(x_tuple[:self._basis1._n_input_samples]),
+                   self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:])))
 
 class mulBasis(Basis):
     """
@@ -288,11 +284,11 @@ class mulBasis(Basis):
         basis2 : Basis
             Second basis object to multiply.
         """
-        self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs, GB_limit=basis1.GB_limit)
-        self.n_input_samples = basis1.n_input_samples + basis2.n_input_samples
-        self.basis1 = basis1
-        self.basis2 = basis2
+        self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
+        super().__init__(self._n_basis_funcs, GB_limit=basis1.GB_limit)
+        self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
+        self._basis1 = basis1
+        self._basis2 = basis2
         return
 
     def _evaluate(self, x_tuple: tuple[NDArray]):
@@ -309,8 +305,8 @@ class mulBasis(Basis):
         numpy.ndarray
             The generated model matrix.
         """
-        return rowWiseKron(self.basis1._evaluate(x_tuple[:self.basis1.n_input_samples]),
-                           self.basis2._evaluate(x_tuple[self.basis1.n_input_samples:]), transpose=True)
+        return rowWiseKron(self._basis1._evaluate(x_tuple[:self._basis1._n_input_samples]),
+                           self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:]), transpose=True)
 
 class SplineBasis(Basis):
     """
@@ -353,9 +349,9 @@ class SplineBasis(Basis):
             Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
         """
         super().__init__(n_basis_funcs)
-        self.order = order
-        self.n_input_samples = 1
-        if self.order < 1:
+        self._order = order
+        self._n_input_samples = 1
+        if self._order < 1:
             raise ValueError("Spline order must be positive!")
         if eval_type not in ['evaluate', 'convolve']:
             raise ValueError(
@@ -396,9 +392,9 @@ class SplineBasis(Basis):
             If the percentiles or order values are not within the valid range.
         """
         # Determine number of interior knots.
-        num_interior_knots = self.n_basis_funcs - self.order
+        num_interior_knots = self._n_basis_funcs - self._order
         if is_cyclic:
-            num_interior_knots += self.order - 1
+            num_interior_knots += self._order - 1
 
         # Check hyperparameters.
         if num_interior_knots < 0:
@@ -417,9 +413,9 @@ class SplineBasis(Basis):
 
         self.knot_locs = np.concatenate(
             (
-                mn * np.ones(self.order - 1),
+                mn * np.ones(self._order - 1),
                 np.linspace(mn, mx, num_interior_knots + 2),
-                mx * np.ones(self.order - 1),
+                mx * np.ones(self._order - 1),
             )
         )
         return self.knot_locs
@@ -465,11 +461,6 @@ class BSplineBasis(SplineBasis):
         """
         super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
 
-        # if eval_type == 'evaluate':
-        #     self._evaluate = lambda x_list: self.evaluate(x_list[0])
-        # elif eval_type == 'convolve':
-        #     self._evaluate = lambda x_list: self.convolve(x_list[0])
-
     def _evaluate(
         self, sample_pts: tuple[NDArray], outer_ok: bool = False, der: int = 0
     ) -> np.ndarray:
@@ -478,7 +469,7 @@ class BSplineBasis(SplineBasis):
 
         Parameters
         ----------
-        sample_pts : np.ndarray
+        sample_pts : NDArray
             The sample points at which the B-spline is evaluated.
         outer_ok : bool, optional
             If True, accepts samples outside the knots range. If False, raises a ValueError.
@@ -487,7 +478,7 @@ class BSplineBasis(SplineBasis):
 
         Returns
         -------
-        np.ndarray
+        NDArray
             The evaluated basis functions.
 
         Raises
@@ -514,8 +505,8 @@ class BSplineBasis(SplineBasis):
         nk = knots.shape[0]
 
         # check for out of range points (in cyclic b-spline need_outer must be set to False)
-        need_outer = any(sample_pts < knots[self.order - 1]) or any(
-            sample_pts > knots[nk - self.order]
+        need_outer = any(sample_pts < knots[self._order - 1]) or any(
+            sample_pts > knots[nk - self._order]
         )
         assert (
             not need_outer
@@ -525,7 +516,7 @@ class BSplineBasis(SplineBasis):
         in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
 
         if need_outer:
-            reps = self.order - 1
+            reps = self._order - 1
             knots = np.hstack(
                 (np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1])
             )
@@ -534,16 +525,16 @@ class BSplineBasis(SplineBasis):
             reps = 0
 
         # number of basis elements
-        n_basis = nk - self.order
+        n_basis = nk - self._order
 
         # initialize the basis element container
         basis_eval = np.zeros((n_basis - 2 * reps, sample_pts.shape[0]))
 
         # loop one element at the time and evaluate the basis using splev
         id_basis = np.eye(n_basis, nk, dtype=np.int8)
-        for i in range(reps, len(knots) - self.order - reps):
+        for i in range(reps, len(knots) - self._order - reps):
             basis_eval[i - reps, in_sample] = splev(
-                sample_pts[in_sample], (knots, id_basis[i], self.order - 1), der=der
+                sample_pts[in_sample], (knots, id_basis[i], self._order - 1), der=der
             )
 
         delattr(self, 'knot_locs')
@@ -562,35 +553,20 @@ class Cyclic_BSplineBasis(BSplineBasis):
         Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
-    eval_type : str, optional
-        Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
 
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2, eval_type: str = 'evaluate'):
-        """
-        Initialize the Cyclic_BSplineBasis object.
 
-        Parameters
-        ----------
-        n_basis_funcs : int
-            Number of basis functions.
-        order : int, optional
-            Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
-            The B-splines have (order-2) continuous derivatives at each interior knot.
-            The higher this number, the smoother the basis representation will be.
-        eval_type : str, optional
-            Type of basis functions. Must be one of ['evaluate', 'convolve']. Default is 'evaluate'.
-        """
         super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
         assert (
-            self.order >= 2
-        ), f"Order >= 2 required for cyclic B-spline, order {self.order} specified instead!"
+            self._order >= 2
+        ), f"Order >= 2 required for cyclic B-spline, order {self._order} specified instead!"
         assert (
-            self.n_basis_funcs >= order + 2
+            self._n_basis_funcs >= order + 2
         ), "n_basis_funcs >= order + 2 required for cyclic B-spline"
         assert (
-            self.n_basis_funcs >= 2 * order - 2
+            self._n_basis_funcs >= 2 * order - 2
         ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
     def _evaluate(self, sample_pts: tuple[NDArray], der: int = 0) -> np.ndarray:
@@ -635,12 +611,12 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         # make sure knots are sorted
         knots_orig.sort()
-        xc = knots_orig[nk - 2 * self.order + 1]
+        xc = knots_orig[nk - 2 * self._order + 1]
         knots = np.hstack(
             (
                 self.knot_locs[0]
                 - self.knot_locs[-1]
-                + self.knot_locs[nk - self.order : nk - 1],
+                + self.knot_locs[nk - self._order : nk - 1],
                 self.knot_locs,
             )
         )
@@ -648,10 +624,10 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         # temporarily set the extended knots as attribute
         self.knot_locs = knots
-        basis_eval = super()._evaluate([sample_pts], outer_ok=True, der=der)
+        basis_eval = super()._evaluate((sample_pts,), outer_ok=True, der=der)
         sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
         if np.sum(ind):
-            X2 = super()._evaluate([sample_pts[ind]], outer_ok=True, der=der)
+            X2 = super()._evaluate((sample_pts[ind],), outer_ok=True, der=der)
             basis_eval[:, ind] = basis_eval[:, ind] + X2
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
