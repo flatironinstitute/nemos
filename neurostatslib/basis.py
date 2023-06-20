@@ -14,6 +14,7 @@ from scipy.interpolate import splev
 
 from utils import rowWiseKron
 
+
 class Basis:
     """
     Generic class for basis functions.
@@ -56,9 +57,7 @@ class Basis:
         multi-dimensional response functions.
     """
 
-    def __init__(self, n_basis_funcs: int, GB_limit: float =16.):
-
-
+    def __init__(self, n_basis_funcs: int, GB_limit: float = 16.0):
         self._n_basis_funcs = n_basis_funcs
         self._GB_limit = GB_limit
         self._n_input_samples = 0
@@ -81,6 +80,28 @@ class Basis:
         ------
         NotImplementedError
             If the subclass does not implement the _evaluate method.
+        """
+        subclass_name = type(self).__name__
+        raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
+
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_gen_basis" method.
+
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n] : int
+            The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        tuple[NDArray]
+            The  equi-spaced samples covering the basis domain.
+
+        Raises
+        ------
+        NotImplementedError
+            If the subclass does not implement the _gen_basis method.
         """
         subclass_name = type(self).__name__
         raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
@@ -111,13 +132,43 @@ class Basis:
 
         return self._evaluate(xi)
 
-    def _check_input_number(self, x: tuple[NDArray]):
+    def gen_basis(self, *n_samples: int):
+        """
+        Evaluate the basis set on a grid of equi-spaced sample points. The i-th axis of the grid will be sampled
+        with n_samples[i] equi-spaced points.
+
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n] : int
+            The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        NDArray
+            The basis function evaluated at the samples :math:`\prod_{i} \text{n_samples}_i \times x \text{n_basis}`.
+
+        """
+        self._check_input_number(n_samples)
+        self._check_full_model_matrix_size(np.prod(n_samples) * self._n_basis_funcs)
+
+        # get the samples
+        sample_tuple = self._get_samples(n_samples)
+        Xs = np.meshgrid(*sample_tuple)
+
+        # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
+        Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+            (self._n_basis_funcs,) + n_samples[::-1]
+        )
+
+        return *Xs, Y
+
+    def _check_input_number(self, x: tuple):
         """
         Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
 
         Parameters
         ----------
-        x : tuple of NDArray
+        x : tuple
             The input samples.
 
         Raises
@@ -126,7 +177,9 @@ class Basis:
             If the number of inputs doesn't match what the Basis object requires.
         """
         if len(x) != self._n_input_samples:
-            raise ValueError(f'Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead.')
+            raise ValueError(
+                f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead."
+            )
 
     def _check_samples_consistency(self, x: tuple[NDArray]):
         """
@@ -144,7 +197,9 @@ class Basis:
         """
         sample_sizes = [samp.shape[0] for samp in x]
         if any(elem != sample_sizes[0] for elem in sample_sizes):
-            raise ValueError('Sample size mismatch. Input elements have inconsistent sample sizes.')
+            raise ValueError(
+                "Sample size mismatch. Input elements have inconsistent sample sizes."
+            )
 
     def _check_full_model_matrix_size(self, n_samples, dtype=np.float64):
         """
@@ -164,7 +219,7 @@ class Basis:
         """
         size_in_bytes = np.dtype(dtype).itemsize * n_samples * self._n_basis_funcs
         if size_in_bytes > self._GB_limit * 10**9:
-            raise MemoryError(f'Model matrix size exceeds {self._GB_limit} GB.')
+            raise MemoryError(f"Model matrix size exceeds {self._GB_limit} GB.")
 
     def __add__(self, other):
         """
@@ -227,8 +282,8 @@ class addBasis(Basis):
         Evaluate t
 
     """
-    def __init__(self, basis1, basis2):
 
+    def __init__(self, basis1, basis2):
         self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
@@ -250,8 +305,35 @@ class addBasis(Basis):
         NDArray
             The basis function evaluated at the samples (Time points x number of basis)
         """
-        return np.vstack((self._basis1._evaluate(x_tuple[:self._basis1._n_input_samples]),
-                   self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:])))
+        return np.vstack(
+            (
+                self._basis1._evaluate(x_tuple[: self._basis1._n_input_samples]),
+                self._basis2._evaluate(x_tuple[self._basis1._n_input_samples :]),
+            )
+        )
+
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Get equi-spaced samples for all the input dimensions. This will be used to evaluate
+        the basis on a grid of points derived by the samples
+
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n] : int
+            The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        NDArray
+            The basis function evaluated at equi-spaced samples.
+
+        """
+
+        return (
+            self._basis1._get_samples(n_samples[: self._basis1._n_input_samples]),
+            self._basis2._get_samples(n_samples[self._basis1._n_input_samples :]),
+        )
+
 
 class mulBasis(Basis):
     """
@@ -280,8 +362,8 @@ class mulBasis(Basis):
     _evaluate(x_tuple)
         Evaluates the basis function at the samples x_tuple[0],..,x_tuple[n]
     """
-    def __init__(self, basis1, basis2):
 
+    def __init__(self, basis1, basis2):
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
@@ -303,8 +385,34 @@ class mulBasis(Basis):
         NDArray
             The basis function evaluated at the samples (Time points x number of basis)
         """
-        return rowWiseKron(self._basis1._evaluate(x_tuple[:self._basis1._n_input_samples]),
-                           self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:]), transpose=True)
+        return rowWiseKron(
+            self._basis1._evaluate(x_tuple[: self._basis1._n_input_samples]),
+            self._basis2._evaluate(x_tuple[self._basis1._n_input_samples :]),
+            transpose=True,
+        )
+
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Get equi-spaced samples for all the input dimensions. This will be used to evaluate
+        the basis on a grid of points derived by the samples
+
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n] : int
+            The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        NDArray
+            The basis function evaluated at equi-spaced samples.
+
+        """
+
+        return (
+            self._basis1._get_samples(n_samples[: self._basis1._n_input_samples]),
+            self._basis2._get_samples(n_samples[self._basis1._n_input_samples :]),
+        )
+
 
 class SplineBasis(Basis):
     """
@@ -332,13 +440,11 @@ class SplineBasis(Basis):
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2):
-
         super().__init__(n_basis_funcs)
         self._order = order
         self._n_input_samples = 1
         if self._order < 1:
             raise ValueError("Spline order must be positive!")
-
 
     def _generate_knots(
         self,
@@ -403,7 +509,6 @@ class SplineBasis(Basis):
         return self.knot_locs
 
 
-
 class BSplineBasis(SplineBasis):
     """
     B-spline 1-dimensional basis functions.
@@ -438,7 +543,6 @@ class BSplineBasis(SplineBasis):
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2):
-
         super().__init__(n_basis_funcs, order=order)
 
     def _evaluate(
@@ -517,8 +621,24 @@ class BSplineBasis(SplineBasis):
                 sample_pts[in_sample], (knots, id_basis[i], self._order - 1), der=der
             )
 
-        delattr(self, 'knot_locs')
+        delattr(self, "knot_locs")
         return basis_eval
+
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Generate the basis functions on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples : tuple of int
+           The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        NDArray
+           The basis function evaluated at the equi-spaced samples.
+        """
+        return np.linspace(0, 1, n_samples[0])
 
 
 class Cyclic_BSplineBasis(BSplineBasis):
@@ -548,7 +668,6 @@ class Cyclic_BSplineBasis(BSplineBasis):
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2):
-
         super().__init__(n_basis_funcs, order=order)
         assert (
             self._order >= 2
@@ -624,50 +743,64 @@ class Cyclic_BSplineBasis(BSplineBasis):
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
         return basis_eval
 
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Generate the basis functions on a grid of equi-spaced sample points.
 
-if __name__ == '__main__':
+        Parameters
+        ----------
+        n_samples : tuple of int
+           The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        NDArray
+           The basis function evaluated at the equi-spaced samples.
+        """
+        return np.linspace(0, 1, n_samples[0])
+
+
+if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from matplotlib import cm
     from matplotlib.ticker import LinearLocator
-
-
 
     samples = np.random.normal(size=100)
     basis1 = BSplineBasis(15, order=4)
     basis2 = BSplineBasis(15, order=4)
     basis_add = basis1 + basis2
+
     basis_add_add = basis_add + basis2
     basis_add_add_add = basis_add_add + basis_add
-
-
 
     print(basis_add.evaluate(samples, samples).shape)
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
-
     basis1 = BSplineBasis(15, order=4)
     basis2 = BSplineBasis(15, order=4)
     mulbase = basis1 * basis2
-    X, Y = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
-    Z = mulbase.evaluate(X.flatten(), Y.flatten())
+    X, Y, Z = mulbase.gen_basis(100, 110)
+
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     Z = np.array(Z)
-    Z[Z==0] = np.nan
-    ax.plot_surface(X, Y, Z[50].reshape(X.shape), cmap='viridis', alpha=0.8)
-    ax.plot_surface(X, Y, Z[100].reshape(X.shape), cmap='rainbow', alpha=0.8)
-    ax.plot_surface(X, Y, Z[200].reshape(X.shape), cmap='inferno', alpha=0.8)
+    Z[Z == 0] = np.nan
+    ax.plot_surface(X, Y, Z[50], cmap="viridis", alpha=0.8)
+    ax.plot_surface(X, Y, Z[100], cmap="rainbow", alpha=0.8)
+    ax.plot_surface(X, Y, Z[200], cmap="inferno", alpha=0.8)
 
     # Customize the plot
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_title('Overlapped Surfaces')
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_title("Overlapped Surfaces")
 
-    print('multiply and additive base with a evaluate type base')
+    print("multiply and additive base with a evaluate type base")
     basis1 = BSplineBasis(6, order=4)
     basis2 = BSplineBasis(7, order=4)
     basis3 = Cyclic_BSplineBasis(8, order=4)
     base_res = (basis1 + basis2) * basis3
-    X = base_res.evaluate(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
-    print(X.shape, (6+7) * 8)
+    X = base_res.evaluate(
+        np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100)
+    )
+    print(X.shape, (6 + 7) * 8)
