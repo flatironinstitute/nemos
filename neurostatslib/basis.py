@@ -75,7 +75,7 @@ class Basis:
         Returns
         -------
         NDArray
-            The generated basis functions.
+            The basis function evaluated at the samples (Time points x number of basis).
 
         Raises
         ------
@@ -224,7 +224,7 @@ class addBasis(Basis):
     Methods
     -------
     _evaluate(x_tuple)
-        Generate the model matrix using provided input samples.
+        Evaluate t
 
     """
     def __init__(self, basis1, basis2):
@@ -278,7 +278,7 @@ class mulBasis(Basis):
     Methods
     -------
     _evaluate(x_tuple)
-        Generate the model matrix using provided input samples.
+        Evaluates the basis function at the samples x_tuple[0],..,x_tuple[n]
     """
     def __init__(self, basis1, basis2):
 
@@ -417,6 +417,18 @@ class BSplineBasis(SplineBasis):
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
 
+    Attributes
+    ----------
+    _order : int
+        Spline order.
+    _n_input_samples : int
+        Number of input samples.
+
+    Methods
+    -------
+    _evaluate(x_tuple)
+       Evaluate the basis function at the samples x_tuple[0]. x_tuple must be of length 1 in order to pass the checks
+       of super().evaluate
 
     References
     ----------
@@ -447,7 +459,7 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         NDArray
-            The evaluated basis functions.
+            The basis function evaluated at the samples (Time points x number of basis)
 
         Raises
         ------
@@ -551,7 +563,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         Returns
         -------
         NDArray
-            The evaluated basis functions.
+            The basis function evaluated at the samples (Time points x number of basis)
 
         Raises
         ------
