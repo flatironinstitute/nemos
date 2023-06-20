@@ -324,8 +324,8 @@ class addBasis(Basis):
 
         Returns
         -------
-        NDArray
-            The basis function evaluated at equi-spaced samples.
+        tuple[NDArray]
+            The equi-spaced sample locations for each coordinate.
 
         """
 
@@ -403,8 +403,8 @@ class mulBasis(Basis):
 
         Returns
         -------
-        NDArray
-            The basis function evaluated at equi-spaced samples.
+        tuple[NDArray]
+            The equi-spaced sample locations for each coordinate.
 
         """
 
@@ -636,7 +636,7 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         NDArray
-           The basis function evaluated at the equi-spaced samples.
+           The equi-spaced sample location.
         """
         return np.linspace(0, 1, n_samples[0])
 
@@ -755,7 +755,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         Returns
         -------
         NDArray
-           The basis function evaluated at the equi-spaced samples.
+           The equi-spaced sample location.
         """
         return np.linspace(0, 1, n_samples[0])
 
