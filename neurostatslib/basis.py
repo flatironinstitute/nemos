@@ -27,14 +27,15 @@ class Basis:
 
     Attributes
     ----------
-    n_basis_funcs : int
+    _n_basis_funcs : int
         Number of basis functions.
-    GB_limit : float
+    _GB_limit : float
         Limit in GB for the model matrix size.
+    _n_input_samples : int
+        Number of inputs that the evaluate method requires.
 
     Methods
     -------
-
     evaluate(*xi)
         Evaluate the basis at the input samples x1,...,xn
 
@@ -62,17 +63,31 @@ class Basis:
         self._GB_limit = GB_limit
         self._n_input_samples = 0
 
-        return
-
-
     def _evaluate(self, x: tuple[NDArray]):
+        """
+        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
+
+        Parameters
+        ----------
+        x1,...,xn : tuple
+            The input samples.
+
+        Returns
+        -------
+        numpy.ndarray
+            The generated basis functions.
+
+        Raises
+        ------
+        NotImplementedError
+            If the subclass does not implement the _evaluate method.
+        """
         subclass_name = type(self).__name__
         raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
 
     def evaluate(self, *xi: NDArray):
         """
-        This method evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
-        The specific functionality of _evaluate should be implemented in the subclasses.
+        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
 
         Parameters
         ----------
@@ -89,7 +104,6 @@ class Basis:
         NotImplementedError
             If the subclass does not implement the _evaluate method.
         """
-
         # checks on input and outputs
         self._check_samples_consistency(xi)
         self._check_full_model_matrix_size(xi[0].shape[0])
@@ -97,14 +111,13 @@ class Basis:
 
         return self._evaluate(xi)
 
-
     def _check_input_number(self, x: tuple[NDArray]):
         """
         Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
 
         Parameters
         ----------
-        x : List[numpy.ndarray]
+        x : tuple of NDArray
             The input samples.
 
         Raises
@@ -113,7 +126,7 @@ class Basis:
             If the number of inputs doesn't match what the Basis object requires.
         """
         if len(x) != self._n_input_samples:
-            raise ValueError(f'input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead.')
+            raise ValueError(f'Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead.')
 
     def _check_samples_consistency(self, x: tuple[NDArray]):
         """
@@ -121,21 +134,21 @@ class Basis:
 
         Parameters
         ----------
-        x : list
-           The input samples.
+        x : tuple of numpy.ndarray
+            The input samples.
 
         Raises
         ------
         ValueError
-           If the time point number is inconsistent between inputs.
+            If the time point number is inconsistent between inputs.
         """
         sample_sizes = [samp.shape[0] for samp in x]
         if any(elem != sample_sizes[0] for elem in sample_sizes):
-            raise ValueError(f'sample size mismatch. Input elements have inconsistent sample sizes.')
+            raise ValueError('Sample size mismatch. Input elements have inconsistent sample sizes.')
 
-    def _check_full_model_matrix_size(self, n_samples, dtype: type = np.float64):
+    def _check_full_model_matrix_size(self, n_samples, dtype=np.float64):
         """
-        Check the size in GB of the full model matrix is <= self._GB_limit
+        Check the size in GB of the full model matrix is <= self._GB_limit.
 
         Parameters
         ----------
@@ -152,6 +165,7 @@ class Basis:
         size_in_bytes = np.dtype(dtype).itemsize * n_samples * self._n_basis_funcs
         if size_in_bytes > self._GB_limit * 10**9:
             raise MemoryError(f'Model matrix size exceeds {self._GB_limit} GB.')
+
     def __add__(self, other):
         """
         Add two Basis objects together.
@@ -183,6 +197,7 @@ class Basis:
             The resulting Basis object.
         """
         return mulBasis(self, other)
+
 
 class addBasis(Basis):
     """
@@ -345,11 +360,11 @@ class SplineBasis(Basis):
 
     def _generate_knots(
         self,
-        sample_pts: np.ndarray,
+        sample_pts: NDArray,
         perc_low: float,
         perc_high: float,
         is_cyclic: bool = False,
-    ) -> np.ndarray:
+    ) -> NDArray:
         """
         Generate knot locations for spline basis functions.
 
@@ -434,7 +449,7 @@ class BSplineBasis(SplineBasis):
 
     def _evaluate(
         self, sample_pts: tuple[NDArray], outer_ok: bool = False, der: int = 0
-    ) -> np.ndarray:
+    ) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -540,7 +555,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
             self._n_basis_funcs >= 2 * order - 2
         ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
-    def _evaluate(self, sample_pts: tuple[NDArray], der: int = 0) -> np.ndarray:
+    def _evaluate(self, sample_pts: tuple[NDArray], der: int = 0) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -553,7 +568,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         Returns
         -------
-        np.ndarray
+        NDArray
             The evaluated basis functions.
 
         Raises
