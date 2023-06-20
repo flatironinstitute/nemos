@@ -74,7 +74,7 @@ class Basis:
 
         Returns
         -------
-        numpy.ndarray
+        NDArray
             The generated basis functions.
 
         Raises
@@ -134,7 +134,7 @@ class Basis:
 
         Parameters
         ----------
-        x : tuple of numpy.ndarray
+        x : tuple of NDArray
             The input samples.
 
         Raises
@@ -212,13 +212,13 @@ class addBasis(Basis):
 
     Attributes
     ----------
-    n_basis_funcs : int
+    _n_basis_funcs : int
         Number of basis functions.
-    n_input_samples : int
+    _n_input_samples : int
         Number of input samples.
-    basis1 : Basis
+    _basis1 : Basis
         First basis object.
-    basis2 : Basis
+    _basis2 : Basis
         Second basis object.
 
     Methods
@@ -228,16 +228,7 @@ class addBasis(Basis):
 
     """
     def __init__(self, basis1, basis2):
-        """
-        Initialize the addBasis object.
 
-        Parameters
-        ----------
-        basis1 : Basis
-            First basis object to add.
-        basis2 : Basis
-            Second basis object to add.
-        """
         self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
@@ -247,17 +238,17 @@ class addBasis(Basis):
 
     def _evaluate(self, x_tuple: tuple[NDArray]):
         """
-        Generate the model matrix using provided input samples.
+        Evaluate the basis at the input samples.
 
         Parameters
         ----------
         x_tuple : tuple
-            List of input samples.
+            Tuple of input samples.
 
         Returns
         -------
-        numpy.ndarray
-            The generated model matrix.
+        NDArray
+            The basis function evaluated at the samples (Time points x number of basis)
         """
         return np.vstack((self._basis1._evaluate(x_tuple[:self._basis1._n_input_samples]),
                    self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:])))
@@ -290,16 +281,7 @@ class mulBasis(Basis):
         Generate the model matrix using provided input samples.
     """
     def __init__(self, basis1, basis2):
-        """
-        Initialize the mulBasis object.
 
-        Parameters
-        ----------
-        basis1 : Basis
-            First basis object to multiply.
-        basis2 : Basis
-            Second basis object to multiply.
-        """
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
@@ -309,17 +291,17 @@ class mulBasis(Basis):
 
     def _evaluate(self, x_tuple: tuple[NDArray]):
         """
-        Generate the model matrix given the provided input samples.
+        Evaluate the basis at the input samples.
 
         Parameters
         ----------
         x_tuple : tuple
-            List of input samples.
+            Tuple of input samples.
 
         Returns
         -------
-        numpy.ndarray
-            The generated model matrix.
+        NDArray
+            The basis function evaluated at the samples (Time points x number of basis)
         """
         return rowWiseKron(self._basis1._evaluate(x_tuple[:self._basis1._n_input_samples]),
                            self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:]), transpose=True)
@@ -330,9 +312,9 @@ class SplineBasis(Basis):
 
     Parameters
     ----------
-    n_basis_funcs : int
+    _n_basis_funcs : int
         Number of basis functions.
-    order : int, optional
+    _order : int, optional
         Spline order. Default is 2.
 
     Attributes
@@ -370,7 +352,7 @@ class SplineBasis(Basis):
 
         Parameters
         ----------
-        sample_pts : numpy.ndarray
+        sample_pts : NDArray
             The sample points.
         perc_low : float
             The low percentile value.
@@ -381,7 +363,7 @@ class SplineBasis(Basis):
 
         Returns
         -------
-        numpy.ndarray
+        NDArray
             The knot locations for the spline basis functions.
 
         Raises
