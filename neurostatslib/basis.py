@@ -122,9 +122,9 @@ class Basis:
         x = list(x)
 
         # checks on input and outputs
-        self.check_samples_consistency(x)
-        self.check_full_model_matrix_size(x[0].shape[0])
-        self.check_input_number(x)
+        self._check_samples_consistency(x)
+        self._check_full_model_matrix_size(x[0].shape[0])
+        self._check_input_number(x)
 
         return self._gen_model_matrix(x)
 
@@ -132,9 +132,9 @@ class Basis:
 
 
 
-    def check_input_number(self,x: list):
+    def _check_input_number(self,x: list):
         """
-        Check the consistency of sample sizes.
+        Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
 
         Parameters
         ----------
@@ -144,13 +144,14 @@ class Basis:
         Raises
         ------
         ValueError
-            If the input sample sizes are inconsistent.
+            If the number of inputs doesn't match what the Basis object requires.
         """
         if len(x) != self.n_input_samples:
             raise ValueError(f'input number mismatch. Basis requires {self.n_input_samples} input samples, {len(x)} inputs provided instead.')
-    def check_samples_consistency(self, x: list):
+
+    def _check_samples_consistency(self, x: list):
         """
-        Check the consistency of sample sizes.
+        Check that each input provided to the Basis object has the same number of time points.
 
         Parameters
         ----------
@@ -160,14 +161,14 @@ class Basis:
         Raises
         ------
         ValueError
-           If the input sample sizes are inconsistent.
+           If the time point number is inconsistent between inputs.
         """
         sample_sizes = [samp.shape[0] for samp in x]
         if any(elem != sample_sizes[0] for elem in sample_sizes):
             raise ValueError(f'sample size mismatch. Input elements have inconsistent sample sizes.')
-    def check_full_model_matrix_size(self, n_samples, dtype: type = np.float64):
+    def _check_full_model_matrix_size(self, n_samples, dtype: type = np.float64):
         """
-        Check the size of the full model matrix.
+        Check the size in GB of the full model matrix is <= self.GB_limit
 
         Parameters
         ----------
@@ -679,8 +680,6 @@ class Cyclic_BSplineBasis(BSplineBasis):
             basis_eval[:, ind] = basis_eval[:, ind] + X2
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
-        # restore the original knots
-        delattr(self, 'knot_locs')
         return basis_eval
 
 
