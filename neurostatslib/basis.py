@@ -534,6 +534,17 @@ class Cyclic_BSplineBasis(BSplineBasis):
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
 
+    Attributes
+    ----------
+    _n_basis_funcs : int
+        Number of basis functions.
+    _order : int
+        Order of the splines used in basis functions.
+
+    Methods
+    -------
+    _evaluate(sample_pts, der)
+        Evaluate the B-spline basis functions with given sample points.
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2):
@@ -556,7 +567,7 @@ class Cyclic_BSplineBasis(BSplineBasis):
         Parameters
         ----------
         sample_pts : tuple
-            The sample points at which the B-spline is evaluated.
+            The sample points at which the B-spline is evaluated. Must be a tuple of length 1.
         der : int, optional
             Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
 
