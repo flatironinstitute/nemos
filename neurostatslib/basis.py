@@ -364,7 +364,7 @@ class SplineBasis(Basis):
 
     Methods
     -------
-    generate_knots(sample_pts, perc_low, perc_high, is_cyclic=False)
+    _generate_knots(sample_pts, perc_low, perc_high, is_cyclic=False)
         Generate knot locations for spline basis functions.
 
     """
@@ -392,7 +392,7 @@ class SplineBasis(Basis):
                 f"eval_type must be 'evaluate' or 'convolve'. '{eval_type}' provided instead."
             )
 
-    def generate_knots(
+    def _generate_knots(
         self,
         sample_pts: np.ndarray,
         perc_low: float,
@@ -528,13 +528,13 @@ class BSplineBasis(SplineBasis):
         Notes
         -----
         This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `generate_knots` method. Knots will be flushed at the end of the call.
+        through the `_generate_knots` method. Knots will be flushed at the end of the call.
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
         super().evaluate(sample_pts, check_support=False)
         # add knots
-        self.generate_knots(sample_pts, 0.0, 1.0)
+        self._generate_knots(sample_pts, 0.0, 1.0)
 
         # sort the knots in case user passed
         knots = self.knot_locs
@@ -645,11 +645,11 @@ class Cyclic_BSplineBasis(BSplineBasis):
         Notes
         -----
         This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `generate_knots` method. Knots will be flushed at the end of the call.
+        through the `_generate_knots` method. Knots will be flushed at the end of the call.
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
-        self.generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
         self.knot_locs = np.unique(self.knot_locs)
