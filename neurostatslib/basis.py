@@ -40,7 +40,7 @@ class Basis:
     convolve(samples)
         Convolve the basis functions with given samples.
 
-    gen_model_matrix(*x)
+    evaluate(*x)
         Generate the model matrix using provided input samples.
 
     check_input_number(x)
@@ -68,71 +68,41 @@ class Basis:
 
         return
 
+    def _evaluate(self, x: tuple[NDArray]):
+        subclass_name = type(self).__name__
+        raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
 
-    def evaluate(self, samples, check_support=False):
+    def evaluate(self, *xi: NDArray):
         """
-        Evaluate the basis functions at the given samples.
+        This method evaluate the basis set at the given samples using the subclass-specific "_evaluate" method.
+        The specific functionality of _evaluate should be implemented in the subclasses.
 
         Parameters
         ----------
-        samples : numpy.ndarray or List[numpy.ndarray]
-            The input samples.
-        check_support : bool, optional
-            Whether to perform support checks. Default is False.
-
-        Returns
-        -------
-        numpy.ndarray
-            The basis function values evaluated at the given samples.
-        """
-        # perform checks and evaluate basis
-        return
-
-    def convolve(self, samples):
-        """
-        Convolve the basis functions with given samples.
-
-        Parameters
-        ----------
-        samples : numpy.ndarray
+        x1,...,xn : NDArray
             The input samples.
 
         Returns
         -------
-        numpy.ndarray
-            The convolution result of the basis functions with the given samples.
-        """
-        # Perform convolution and return the result
-        return
-
-    def gen_model_matrix(self, *x: NDArray):
-        """
-        Generate the model matrix using provided input samples.
-
-        Parameters
-        ----------
-        *x : numpy.ndarray
-            The input samples.
-
-        Returns
-        -------
-        numpy.ndarray
+        NDArray
             The generated basis functions.
+
+        Raises
+        ------
+        NotImplementedError
+            If the subclass does not implement the _evaluate method.
         """
-        x = list(x)
 
         # checks on input and outputs
-        self._check_samples_consistency(x)
-        self._check_full_model_matrix_size(x[0].shape[0])
-        self._check_input_number(x)
+        self._check_samples_consistency(xi)
+        self._check_full_model_matrix_size(xi[0].shape[0])
+        self._check_input_number(xi)
 
-        return self._gen_model_matrix(x)
-
-
+        return self._evaluate(xi)
 
 
 
-    def _check_input_number(self,x: list):
+    def _check_input_number(self,x: tuple[NDArray]):
         """
         Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
 
@@ -149,7 +119,7 @@ class Basis:
         if len(x) != self.n_input_samples:
             raise ValueError(f'input number mismatch. Basis requires {self.n_input_samples} input samples, {len(x)} inputs provided instead.')
 
-    def _check_samples_consistency(self, x: list):
+    def _check_samples_consistency(self, x: tuple[NDArray]):
         """
         Check that each input provided to the Basis object has the same number of time points.
 
@@ -241,7 +211,7 @@ class addBasis(Basis):
 
     Methods
     -------
-    _gen_model_matrix(x_list)
+    _evaluate(x_list)
         Generate the model matrix using provided input samples.
 
     """
@@ -263,13 +233,13 @@ class addBasis(Basis):
         self.basis2 = basis2
         return
 
-    def _gen_model_matrix(self, x_list):
+    def _evaluate(self, x_tuple: tuple[NDArray]):
         """
         Generate the model matrix using provided input samples.
 
         Parameters
         ----------
-        x_list : list
+        x_tuple : list
             List of input samples.
 
         Returns
@@ -277,8 +247,8 @@ class addBasis(Basis):
         numpy.ndarray
             The generated model matrix.
         """
-        return np.vstack((self.basis1._gen_model_matrix(x_list[:self.basis1.n_input_samples]),
-                   self.basis2._gen_model_matrix(x_list[self.basis1.n_input_samples:])))
+        return np.vstack((self.basis1._evaluate(x_tuple[:self.basis1.n_input_samples]),
+                   self.basis2._evaluate(x_tuple[self.basis1.n_input_samples:])))
 
 class mulBasis(Basis):
     """
@@ -304,7 +274,7 @@ class mulBasis(Basis):
 
     Methods
     -------
-    _gen_model_matrix(x_list)
+    _evaluate(x_tuple)
         Generate the model matrix using provided input samples.
     """
     def __init__(self, basis1, basis2):
@@ -325,13 +295,13 @@ class mulBasis(Basis):
         self.basis2 = basis2
         return
 
-    def _gen_model_matrix(self, x_list):
+    def _evaluate(self, x_tuple: tuple[NDArray]):
         """
         Generate the model matrix given the provided input samples.
 
         Parameters
         ----------
-        x_list : list
+        x_tuple : tuple
             List of input samples.
 
         Returns
@@ -339,8 +309,8 @@ class mulBasis(Basis):
         numpy.ndarray
             The generated model matrix.
         """
-        return rowWiseKron(self.basis1._gen_model_matrix(x_list[:self.basis1.n_input_samples]),
-                           self.basis2._gen_model_matrix(x_list[self.basis1.n_input_samples:]), transpose=True)
+        return rowWiseKron(self.basis1._evaluate(x_tuple[:self.basis1.n_input_samples]),
+                           self.basis2._evaluate(x_tuple[self.basis1.n_input_samples:]), transpose=True)
 
 class SplineBasis(Basis):
     """
@@ -495,13 +465,13 @@ class BSplineBasis(SplineBasis):
         """
         super().__init__(n_basis_funcs, order=order, eval_type=eval_type)
 
-        if eval_type == 'evaluate':
-            self._gen_model_matrix = lambda x_list: self.evaluate(x_list[0])
-        elif eval_type == 'convolve':
-            self._gen_model_matrix = lambda x_list: self.convolve(x_list[0])
+        # if eval_type == 'evaluate':
+        #     self._evaluate = lambda x_list: self.evaluate(x_list[0])
+        # elif eval_type == 'convolve':
+        #     self._evaluate = lambda x_list: self.convolve(x_list[0])
 
-    def evaluate(
-        self, sample_pts: np.ndarray, outer_ok: bool = False, der: int = 0
+    def _evaluate(
+        self, sample_pts: tuple[NDArray], outer_ok: bool = False, der: int = 0
     ) -> np.ndarray:
         """
         Evaluate the B-spline basis functions with given sample points.
@@ -532,7 +502,9 @@ class BSplineBasis(SplineBasis):
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
-        super().evaluate(sample_pts, check_support=False)
+        # sample_points is a tuple of length 1 if passed the checks in Basis.evaluate
+        sample_pts = sample_pts[0]
+
         # add knots
         self._generate_knots(sample_pts, 0.0, 1.0)
 
@@ -621,13 +593,13 @@ class Cyclic_BSplineBasis(BSplineBasis):
             self.n_basis_funcs >= 2 * order - 2
         ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
 
-    def evaluate(self, sample_pts: np.ndarray, der: int = 0) -> np.ndarray:
+    def _evaluate(self, sample_pts: tuple[NDArray], der: int = 0) -> np.ndarray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
         Parameters
         ----------
-        sample_pts : np.ndarray
+        sample_pts : tuple
             The sample points at which the B-spline is evaluated.
         der : int, optional
             Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
@@ -649,6 +621,9 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
+        # sample points is a tuple of length 1 if the checks in Basis.evaluate did not raise an exception
+        sample_pts = sample_pts[0]
+
         self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -673,10 +648,10 @@ class Cyclic_BSplineBasis(BSplineBasis):
 
         # temporarily set the extended knots as attribute
         self.knot_locs = knots
-        basis_eval = super().evaluate(sample_pts, outer_ok=True, der=der)
+        basis_eval = super()._evaluate([sample_pts], outer_ok=True, der=der)
         sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
         if np.sum(ind):
-            X2 = super().evaluate(sample_pts[ind], outer_ok=True, der=der)
+            X2 = super()._evaluate([sample_pts[ind]], outer_ok=True, der=der)
             basis_eval[:, ind] = basis_eval[:, ind] + X2
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
@@ -699,16 +674,16 @@ if __name__ == '__main__':
 
 
 
-    print(basis_add.gen_model_matrix(samples, samples).shape)
-    print(basis_add_add.gen_model_matrix(samples, samples, samples).shape)
-    print(basis_add_add_add.gen_model_matrix(samples, samples, samples, samples, samples).shape)
+    print(basis_add.evaluate(samples, samples).shape)
+    print(basis_add_add.evaluate(samples, samples, samples).shape)
+    print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
 
     basis1 = BSplineBasis(15, eval_type='evaluate', order=4)
     basis2 = BSplineBasis(15, eval_type='evaluate', order=4)
     mulbase = basis1 * basis2
     X, Y = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
-    Z = mulbase.gen_model_matrix(X.flatten(), Y.flatten())
+    Z = mulbase.evaluate(X.flatten(), Y.flatten())
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     Z = np.array(Z)
     Z[Z==0] = np.nan
@@ -727,5 +702,5 @@ if __name__ == '__main__':
     basis2 = BSplineBasis(7, eval_type='evaluate', order=4)
     basis3 = Cyclic_BSplineBasis(8, eval_type='evaluate', order=4)
     base_res = (basis1 + basis2) * basis3
-    X = base_res.gen_model_matrix(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
+    X = base_res.evaluate(np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100))
     print(X.shape, (6+7) * 8)
