@@ -8,9 +8,8 @@ import warnings
 from typing import Tuple
 
 import numpy as np
-import scipy.linalg
 from numpy.typing import NDArray
-from scipy.interpolate import splev
+
 
 from utils import rowWiseKron
 
@@ -62,6 +61,7 @@ class Basis:
         self._GB_limit = GB_limit
         self._n_input_samples = 0
 
+    @abc.abstractmethod
     def _evaluate(self, x: tuple[NDArray]):
         """
         Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
@@ -84,6 +84,7 @@ class Basis:
         subclass_name = type(self).__name__
         raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
 
+    @abc.abstractmethod
     def _get_samples(self, n_samples: tuple[int]):
         """
         Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_gen_basis" method.
@@ -130,7 +131,24 @@ class Basis:
         self._check_full_model_matrix_size(xi[0].shape[0])
         self._check_input_number(xi)
 
-        return self._evaluate(xi)
+        eval_basis = self._evaluate(xi)
+
+        # checks on the evaluated basis
+        self._check_enough_samples(eval_basis)
+
+        # check the conditioning
+        conditioning = np.linalg.cond(eval_basis)
+        if np.isinf(conditioning):
+            if any(eval_basis.sum(axis=1) == 0):
+                warnings.warn("eval_basis has an empty row. No samples in the input domain "
+                                 "of at least one basis function. Try to reduce the number of basis or increase the sample"
+                                 "size")
+            else:
+                warnings.warn("Linearly dependent columns in eval_basis. Check for perfect collinearity in the inputs"
+                                 "or insufficient sample size.")
+                
+        print(f'Conditioning of the evaluated basis function: {conditioning}')
+        return eval_basis
 
     def gen_basis(self, *n_samples: int):
         """
@@ -161,6 +179,24 @@ class Basis:
         )
 
         return *Xs, Y
+
+    def _check_enough_samples(self, eval_basis: NDArray):
+        """
+        Checks if there are enough samples for evaluation.
+
+        Parameters
+        ----------
+        eval_basis : np.ndarray
+            The basis set for evaluation.
+
+        Raises
+        ------
+        UserWarning
+            If the number of basis sets exceeds the number of samples.
+        """
+        if eval_basis.shape[0] > eval_basis.shape[1]:
+            warnings.warn('Basis set number exceeds the number of samples! '
+                             'Reduce the number of basis or increase sample size')
 
     def _check_input_number(self, x: tuple):
         """
@@ -522,226 +558,6 @@ class SplineBasis(Basis):
         return (np.linspace(0, 1, n_samples[0]),)
 
 
-class BSplineBasis(SplineBasis):
-    """
-    B-spline 1-dimensional basis functions.
-
-    Parameters
-    ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    order : int, optional
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
-        The B-splines have (order-2) continuous derivatives at each interior knot.
-        The higher this number, the smoother the basis representation will be.
-
-    Attributes
-    ----------
-    _order : int
-        Spline order.
-    _n_input_samples : int
-        Number of input samples.
-
-    Methods
-    -------
-    _evaluate(x_tuple)
-       Evaluate the basis function at the samples x_tuple[0]. x_tuple must be of length 1 in order to pass the checks
-       of super().evaluate
-
-    References
-    ----------
-    [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
-    Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
-
-    """
-
-    def __init__(self, n_basis_funcs: int, order: int = 2):
-        super().__init__(n_basis_funcs, order=order)
-
-    def _evaluate(
-        self, sample_pts: tuple[NDArray], outer_ok: bool = False, der: int = 0
-    ) -> NDArray:
-        """
-        Evaluate the B-spline basis functions with given sample points.
-
-        Parameters
-        ----------
-        sample_pts : NDArray
-            The sample points at which the B-spline is evaluated.
-        outer_ok : bool, optional
-            If True, accepts samples outside the knots range. If False, raises a ValueError.
-        der : int, optional
-            Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
-
-        Returns
-        -------
-        NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
-
-        Raises
-        ------
-        AssertionError
-            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
-
-        Notes
-        -----
-        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `_generate_knots` method. Knots will be flushed at the end of the call.
-
-        The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
-        """
-        # sample_points is a tuple of length 1 if passed the checks in Basis.evaluate
-        sample_pts = sample_pts[0]
-
-        # add knots
-        self._generate_knots(sample_pts, 0.0, 1.0)
-
-        # sort the knots in case user passed
-        knots = self.knot_locs
-        knots.sort()
-        nk = knots.shape[0]
-
-        # check for out of range points (in cyclic b-spline need_outer must be set to False)
-        need_outer = any(sample_pts < knots[self._order - 1]) or any(
-            sample_pts > knots[nk - self._order]
-        )
-        assert (
-            not need_outer
-        ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
-
-        # select knots that are within the knots range (this takes care of eventual NaNs)
-        in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
-
-        if need_outer:
-            reps = self._order - 1
-            knots = np.hstack(
-                (np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1])
-            )
-            nk = knots.shape[0]
-        else:
-            reps = 0
-
-        # number of basis elements
-        n_basis = nk - self._order
-
-        # initialize the basis element container
-        basis_eval = np.zeros((n_basis - 2 * reps, sample_pts.shape[0]))
-
-        # loop one element at the time and evaluate the basis using splev
-        id_basis = np.eye(n_basis, nk, dtype=np.int8)
-        for i in range(reps, len(knots) - self._order - reps):
-            basis_eval[i - reps, in_sample] = splev(
-                sample_pts[in_sample], (knots, id_basis[i], self._order - 1), der=der
-            )
-
-        delattr(self, "knot_locs")
-        return basis_eval
-
-
-
-class Cyclic_BSplineBasis(BSplineBasis):
-    """
-    B-spline 1-dimensional basis functions for cyclic splines.
-
-    Parameters
-    ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    order : int, optional
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
-        The B-splines have (order-2) continuous derivatives at each interior knot.
-        The higher this number, the smoother the basis representation will be.
-
-    Attributes
-    ----------
-    _n_basis_funcs : int
-        Number of basis functions.
-    _order : int
-        Order of the splines used in basis functions.
-
-    Methods
-    -------
-    _evaluate(sample_pts, der)
-        Evaluate the B-spline basis functions with given sample points.
-    """
-
-    def __init__(self, n_basis_funcs: int, order: int = 2):
-        super().__init__(n_basis_funcs, order=order)
-        assert (
-            self._order >= 2
-        ), f"Order >= 2 required for cyclic B-spline, order {self._order} specified instead!"
-        assert (
-            self._n_basis_funcs >= order + 2
-        ), "n_basis_funcs >= order + 2 required for cyclic B-spline"
-        assert (
-            self._n_basis_funcs >= 2 * order - 2
-        ), "n_basis_funcs >= 2*(order - 1) required for cyclic B-spline"
-
-    def _evaluate(self, sample_pts: tuple[NDArray], der: int = 0) -> NDArray:
-        """
-        Evaluate the B-spline basis functions with given sample points.
-
-        Parameters
-        ----------
-        sample_pts : tuple
-            The sample points at which the B-spline is evaluated. Must be a tuple of length 1.
-        der : int, optional
-            Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
-
-        Returns
-        -------
-        NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
-
-        Raises
-        ------
-        AssertionError
-            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
-
-        Notes
-        -----
-        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `_generate_knots` method. Knots will be flushed at the end of the call.
-
-        The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
-        """
-        # sample points is a tuple of length 1 if the checks in Basis.evaluate did not raise an exception
-        sample_pts = sample_pts[0]
-
-        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
-
-        # for cyclic, do not repeat knots
-        self.knot_locs = np.unique(self.knot_locs)
-
-        knots_orig = self.knot_locs.copy()
-
-        nk = knots_orig.shape[0]
-
-        # make sure knots are sorted
-        knots_orig.sort()
-        xc = knots_orig[nk - 2 * self._order + 1]
-        knots = np.hstack(
-            (
-                self.knot_locs[0]
-                - self.knot_locs[-1]
-                + self.knot_locs[nk - self._order : nk - 1],
-                self.knot_locs,
-            )
-        )
-        ind = sample_pts > xc
-
-        # temporarily set the extended knots as attribute
-        self.knot_locs = knots
-        basis_eval = super()._evaluate((sample_pts,), outer_ok=True, der=der)
-        sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
-        if np.sum(ind):
-            X2 = super()._evaluate((sample_pts[ind],), outer_ok=True, der=der)
-            basis_eval[:, ind] = basis_eval[:, ind] + X2
-        # restore points
-        sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
-        return basis_eval
-
-
 class MSplineBasis(SplineBasis):
     """M-spline 1-dimensional basis functions.
 
@@ -796,6 +612,162 @@ class MSplineBasis(SplineBasis):
             axis=0
         )
 
+class RaisedCosineBasis(Basis):
+    def __init__(self, n_basis_funcs: int):
+        super().__init__(n_basis_funcs)
+        self._n_input_samples = 1
+
+    @abc.abstractmethod
+    def _transform_samples(self, sample_pts: NDArray):
+        """
+        Abstract method for transforming sample points.
+
+        Parameters
+        ----------
+        sample_pts : NDArray
+           The sample points to be transformed.
+
+        Raises
+        ------
+        NotImplementedError
+           If the method is not implemented in the subclass.
+        """
+        subclass_name = type(self).__name__
+        raise NotImplementedError(f"RaisedCosineBasis object {subclass_name} must implement _transform_samples method!")
+
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+        """Generate basis functions with given samples.
+
+        Parameters
+        ----------
+        sample_pts : (n_pts,)
+            Spacing for basis functions, holding elements on interval [0,
+            window_size). A good default is
+            ``nsl.sample_points.raised_cosine_log`` for log spacing (as used in
+            [2]_) or ``nsl.sample_points.raised_cosine_linear`` for linear
+            spacing.
+
+        Returns
+        -------
+        basis_funcs : (n_basis_funcs, n_pts)
+            Raised cosine basis functions
+
+        """
+        sample_pts = sample_pts[0]
+
+        if any(sample_pts < -1E-12) or any(sample_pts > 1 + 1E-12):
+            raise ValueError(f"Sample points for RaisedCosine basis must lie in [0,1]!")
+
+        # transform to the proper domain
+        sample_pts = self._transform_samples(sample_pts)
+
+        shifted_sample_pts = sample_pts[None, :] - (np.pi * np.arange(self._n_basis_funcs))[:, None]
+        basis_funcs = .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
+
+        return basis_funcs
+
+
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Generate an array equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples : tuple of int
+           The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        tuple[NDArray]
+           The equi-spaced sample location.
+        """
+        return (np.linspace(0, 1, n_samples[0]),)
+
+class LinearRaisedCosineBasis(Basis):
+    """Raised cosine basis functions used by Pillow et al. [2]_.
+
+    These are "cosine bumps" that uniformly tile the space.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size
+        Size of basis functions.
+
+    References
+    ----------
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+
+    """
+    def __init__(self, n_basis_funcs: int):
+        super().__init__(n_basis_funcs)
+
+
+
+class LinearRaisedCosineBasis(RaisedCosineBasis):
+    """Linearly-spaced raised cosine basis functions used by Pillow et al. [2]_.
+
+    These are "cosine bumps" that uniformly tile the space.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size
+        Size of basis functions.
+
+    References
+    ----------
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+
+    """
+    def __init__(self, n_basis_funcs: int):
+        super().__init__(n_basis_funcs)
+
+
+    def _transform_samples(self, sample_pts: NDArray):
+        return sample_pts * np.pi * (self._n_basis_funcs - 1)
+
+
+
+class LogRaisedCosineBasis(RaisedCosineBasis):
+    """Log-spaced raised cosine basis functions used by Pillow et al. [2]_.
+
+    These are "cosine bumps" that uniformly tile the space.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size
+        Size of basis functions.
+
+    References
+    ----------
+    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+
+    """
+    def __init__(self, n_basis_funcs: int):
+        super().__init__(n_basis_funcs)
+
+
+    def _transform_samples(self, sample_pts: NDArray):
+        return np.power(10, -(np.log10((self._n_basis_funcs-1) * np.pi) + 1) * sample_pts +
+                        np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
+
+
+
+
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
     """Compute M-spline basis function.
 
@@ -840,12 +812,13 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+    plt.close('all')
     from matplotlib import cm
     from matplotlib.ticker import LinearLocator
 
     samples = np.random.normal(size=100)
-    basis1 = BSplineBasis(15, order=4)
-    basis2 = BSplineBasis(15, order=4)
+    basis1 = MSplineBasis(15, order=4)
+    basis2 = MSplineBasis(15, order=4)
     basis_add = basis1 + basis2
 
     basis_add_add = basis_add + basis2
@@ -855,7 +828,7 @@ if __name__ == "__main__":
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
-    basis1 = BSplineBasis(15, order=4)
+    basis1 = LogRaisedCosineBasis(15)
     basis2 = MSplineBasis(15, order=4)
     mulbase = basis1 * basis2
     X, Y, Z = mulbase.gen_basis(100, 110)
@@ -874,20 +847,20 @@ if __name__ == "__main__":
     ax.set_title("Overlapped Surfaces")
 
     print("multiply and additive base with a evaluate type base")
-    basis1 = BSplineBasis(6, order=4)
+    basis1 = LogRaisedCosineBasis(6)
     basis2 = MSplineBasis(7, order=4)
-    basis3 = Cyclic_BSplineBasis(8, order=4)
+    basis3 = LinearRaisedCosineBasis(8)
     base_res = (basis1 + basis2) * basis3
     X = base_res.evaluate(
-        np.linspace(0, 1, 100), np.linspace(0, 1, 100), np.linspace(0, 1, 100)
+        np.linspace(0, 1, 64), np.linspace(0, 1, 64), np.linspace(0, 1, 64)
     )
     print(X.shape, (6 + 7) * 8)
 
-
-
-    basis1 = BSplineBasis(6, order=4)
-    basis2 = BSplineBasis(7, order=4)
-    basis3 = MSplineBasis(8, order=4)
-
-    multb = basis1 + basis2 * basis3
-    X, Y, W, Z = multb.gen_basis(10, 11, 12)
+    #
+    #
+    # basis1 = MSplineBasis(6, order=4)
+    # basis2 = MSplineBasis(7, order=4)
+    # basis3 = MSplineBasis(8, order=4)
+    #
+    # multb = basis1 + basis2 * basis3
+    # X, Y, W, Z = multb.gen_basis(10, 11, 12)
