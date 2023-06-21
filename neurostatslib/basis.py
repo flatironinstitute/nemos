@@ -419,11 +419,11 @@ class mulBasis(Basis):
         NDArray
             The basis function evaluated at the samples (Time points x number of basis)
         """
-        return rowWiseKron(
+        return np.array(rowWiseKron(
             self._basis1._evaluate(x_tuple[: self._basis1._n_input_samples]),
             self._basis2._evaluate(x_tuple[self._basis1._n_input_samples :]),
             transpose=True,
-        )
+        ))
 
     def _get_samples(self, n_samples: tuple[int]):
         """
