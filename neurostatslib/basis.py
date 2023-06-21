@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-from utils import rowWiseKron
+from neurostatslib.utils import rowWiseKron
 
 
 class Basis:
@@ -556,6 +556,21 @@ class SplineBasis(Basis):
            The equi-spaced sample location.
         """
         return (np.linspace(0, 1, n_samples[0]),)
+
+    def _evaluate(self, n_samples: tuple[int]):
+        """
+           Evaluate the basis function at the specified number of samples.
+
+           Parameters
+           ----------
+           n_samples : tuple[int]
+               The number of samples to evaluate for each input dimension.
+
+           Returns
+           -------
+           None
+           """
+        pass
 
 
 class MSplineBasis(SplineBasis):
