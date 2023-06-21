@@ -505,6 +505,22 @@ class SplineBasis(Basis):
         )
         return self.knot_locs
 
+    def _get_samples(self, n_samples: tuple[int]):
+        """
+        Generate the basis functions on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples : tuple of int
+           The number of samples in each axis of the grid.
+
+        Returns
+        -------
+        tuple[NDArray]
+           The equi-spaced sample location.
+        """
+        return (np.linspace(0, 1, n_samples[0]),)
+
 
 class BSplineBasis(SplineBasis):
     """
@@ -621,21 +637,6 @@ class BSplineBasis(SplineBasis):
         delattr(self, "knot_locs")
         return basis_eval
 
-    def _get_samples(self, n_samples: tuple[int]):
-        """
-        Generate the basis functions on a grid of equi-spaced sample points.
-
-        Parameters
-        ----------
-        n_samples : tuple of int
-           The number of samples in each axis of the grid.
-
-        Returns
-        -------
-        tuple[NDArray]
-           The equi-spaced sample location.
-        """
-        return (np.linspace(0, 1, n_samples[0]),)
 
 
 class Cyclic_BSplineBasis(BSplineBasis):
@@ -740,21 +741,101 @@ class Cyclic_BSplineBasis(BSplineBasis):
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
         return basis_eval
 
-    def _get_samples(self, n_samples: tuple[int]):
-        """
-        Generate the basis functions on a grid of equi-spaced sample points.
+
+class MSplineBasis(SplineBasis):
+    """M-spline 1-dimensional basis functions.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size
+        Size of basis functions.
+    order
+        Order of the splines used in basis functions. Must lie within [1,
+        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
+        at each interior knot. The higher this number, the smoother the basis
+        representation will be.
+
+
+    References
+    ----------
+    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
+       Statistical science, 3(4), 425-441.
+
+    """
+
+    def __init__(self, n_basis_funcs: int,  order: int = 2):
+        super().__init__(n_basis_funcs, order)
+
+
+    def _evaluate(self, sample_pts: tuple[NDArray]) -> NDArray:
+        """Generate basis functions with given spacing.
 
         Parameters
         ----------
-        n_samples : tuple of int
-           The number of samples in each axis of the grid.
+        sample_pts : (n_pts,)
+            Spacing for basis functions, holding elements on the interval [0,
+            window_size). A good default is np.arange(window_size).
 
         Returns
         -------
-        tuple[NDArray]
-           The equi-spaced sample location.
+        basis_funcs : (n_basis_funcs, n_pts)
+            Evaluated spline basis functions.
+
         """
-        return (np.linspace(0, 1, n_samples[0]),)
+
+        sample_pts = sample_pts[0]
+
+        # add knots if not passed
+        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+
+
+        return np.stack(
+            [mspline(sample_pts, self._order, i, self.knot_locs) for i in range(self._n_basis_funcs)],
+            axis=0
+        )
+
+def mspline(x: NDArray, k: int, i: int, T: NDArray):
+    """Compute M-spline basis function.
+
+    Parameters
+    ----------
+    x : (n_pts,)
+        Spacing for basis functions, holding elements on the interval [0,
+        window_size). If None, use a grid (``np.arange(self.window_size)``).
+    k
+        Order of the spline basis.
+    i
+        Number of the spline basis.
+    T : (k + n_basis_funcs,)
+        knot locations. should lie in interval [0, 1].
+
+
+    Returns
+    -------
+    spline : (n_pts,)
+        M-spline basis function.
+    """
+
+    # Boundary conditions.
+    if (T[i + k] - T[i]) < 1e-6:
+        return np.zeros_like(x)
+
+    # Special base case of first-order spline basis.
+    elif k == 1:
+        v = np.zeros_like(x)
+        v[(x >= T[i]) & (x < T[i + 1])] = 1 / (T[i + 1] - T[i])
+        return v
+
+    # General case, defined recursively
+    else:
+        return k * (
+                (x - T[i]) * mspline(x, k - 1, i, T)
+                + (T[i + k] - x) * mspline(x, k - 1, i + 1, T)
+        ) / ((k - 1) * (T[i + k] - T[i]))
+
+
 
 
 if __name__ == "__main__":
@@ -775,7 +856,7 @@ if __name__ == "__main__":
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
     basis1 = BSplineBasis(15, order=4)
-    basis2 = BSplineBasis(15, order=4)
+    basis2 = MSplineBasis(15, order=4)
     mulbase = basis1 * basis2
     X, Y, Z = mulbase.gen_basis(100, 110)
 
@@ -794,7 +875,7 @@ if __name__ == "__main__":
 
     print("multiply and additive base with a evaluate type base")
     basis1 = BSplineBasis(6, order=4)
-    basis2 = BSplineBasis(7, order=4)
+    basis2 = MSplineBasis(7, order=4)
     basis3 = Cyclic_BSplineBasis(8, order=4)
     base_res = (basis1 + basis2) * basis3
     X = base_res.evaluate(
@@ -806,7 +887,7 @@ if __name__ == "__main__":
 
     basis1 = BSplineBasis(6, order=4)
     basis2 = BSplineBasis(7, order=4)
-    basis3 = BSplineBasis(8, order=4)
+    basis3 = MSplineBasis(8, order=4)
 
     multb = basis1 + basis2 * basis3
     X, Y, W, Z = multb.gen_basis(10, 11, 12)
