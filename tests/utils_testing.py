@@ -99,7 +99,6 @@ def abstract_methods_compliance(module, base_class):
         lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
     )
 
-
     inherits_dict = inherits(module, base_class)
     abstract_methods = list_abstract_methods(base_class)
 
