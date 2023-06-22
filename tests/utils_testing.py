@@ -1,44 +1,16 @@
 import inspect
-
 import abc
-def inherits(module, super_class):
-    """
-    Check if classes in a module inherit from a given super class.
+from typing import List, Tuple
 
-    Parameters
-    ----------
-    module : module
-        The module object.
-    module_name : str
-        The name of the module.
-    super_class_name : str
-        The name of the super class to check for inheritance.
-
-    Returns
-    -------
-    dict
-        A dictionary mapping class names to a boolean indicating if they inherit from the super class.
-    """
-    basis_classes = inspect.getmembers(
-        module,
-        lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
-    )
-    inherits_dict = {}
-    for class_name, class_obj in basis_classes:
-        inheritance = [base_class.__name__ for base_class in inspect.getmro(class_obj)[1:]]
-        inherits_dict[class_name] = super_class.__name__ in inheritance
-    return inherits_dict
-
-
-def has_method(class_obj, base_class_obj, method_name):
+def reimplements_method(class_obj: type, base_class_obj: type, method_name: str) -> bool:
     """
     Check if a class has a specific method defined in the subclass, not inherited from the specified base class.
 
     Parameters
     ----------
-    class_obj : class
+    class_obj :
         The class object to check.
-    base_class_obj : class
+    base_class_obj :
         The base class object against which the check is performed.
     method_name : str
         The name of the method to check for.
@@ -53,81 +25,163 @@ def has_method(class_obj, base_class_obj, method_name):
     superclass_method = getattr(base_class_obj, method_name, None)
     return subclass_method != superclass_method
 
+def get_subclass_methods(class_obj: type) -> List[Tuple[str, type]]:
+    """
+    Get the subclass-only methods.
 
+    Parameters
+    ----------
+    class_obj :
+        The class object to inspect.
 
-def list_abstract_methods(class_obj):
+    Returns
+    -------
+    List[Tuple[str, type]]
+        A list of tuples representing the methods that are specific to the subclass.
+        Each tuple contains the method name (str) and the corresponding method object.
+    """
+    class_methods = inspect.getmembers(class_obj, predicate=inspect.isfunction)
+
+    # Retrieve the superclass methods
+    superclass_methods = []
+    if class_obj.__bases__:
+        superclass = class_obj.__bases__[0]
+        superclass_methods = inspect.getmembers(superclass, predicate=inspect.isfunction)
+
+    # Filter out the methods defined in the superclass
+    subclass_methods = [method for method in class_methods if method not in superclass_methods]
+
+    return subclass_methods
+
+def list_abstract_methods(class_obj: type) -> List[Tuple[str, type]]:
     """
     Retrieve the names of abstract methods from a class object.
 
     Parameters
     ----------
-    class_obj : class
+    class_obj :
         The class object to inspect.
 
     Returns
     -------
-    list
-        A list of abstract method names.
+        A list of tuples representing the abstract methods in the class.
+        Each tuple contains the method name (str) and the corresponding method object.
     """
-    class_methods = inspect.getmembers(class_obj, predicate=inspect.isfunction)
+    class_methods = get_subclass_methods(class_obj)
     abstract_methods = [
-        method_name for method_name, method in class_methods
+        (method_name, method) for method_name, method in class_methods
         if getattr(method, "__isabstractmethod__", False)
     ]
     return abstract_methods
 
-
-def abstract_methods_compliance(module, base_class):
+def is_abstract(class_obj: type) -> bool:
     """
-    Check if classes in a module properly implement abstract methods defined in a base class.
+    Check if a type object is an abstract class.
 
     Parameters
     ----------
-    module : module
-        The module object.
-    base_class : class
-        The base class object containing abstract methods to check.
+    class_obj : type
+        The type object to check.
 
-    Raises
-    ------
-    ValueError
-        If any subclass does not properly implement an abstract method defined in the base class.
+    Returns
+    -------
+    bool
+        True if the type object is an abstract class, False otherwise.
     """
-    # Get all classes defined in the math module
-    basis_classes = inspect.getmembers(
-        module,
-        lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
-    )
+    return abc.ABC in getattr(class_obj, '__bases__', [])
 
-    inherits_dict = inherits(module, base_class)
-    abstract_methods = list_abstract_methods(base_class)
-
-    # Print class names and their inheritance
-    for class_name, class_obj in basis_classes:
-        if inherits_dict[class_name]:
-            for method in abstract_methods:
-                boolean = has_method(class_obj, base_class, method)
-                print(f"{class_name} has method {method}? {boolean}")
-                if not boolean:
-                    raise ValueError(f'Abstract method {method} not implemented in {class_obj} sub-class!')
-    return
-
-def check_all_abstract_methods_compliance(module):
+def get_non_abstract_classes(module) -> List[Tuple[str, type]]:
     """
-    Check if all classes in a module properly implement abstract methods defined in their respective base classes.
+    List all non-abstract classes in a module.
 
     Parameters
     ----------
     module : module
         The module object to inspect.
+
+    Returns
+    -------
+    List[Tuple[str, type]]
+        A list of tuples representing the non-abstract classes in the module.
+        Each tuple contains the class name (str) and the corresponding class object.
     """
-    base_classes = inspect.getmembers(
+    basis_classes = inspect.getmembers(
         module,
         lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
     )
-    for _, base_class in base_classes:
-        string = f'\nAnalyzing base class {base_class.__name__}:\n'
-        string += '-'*len(string)
+    return [(name, class_obj) for name, class_obj in basis_classes if not is_abstract(class_obj)]
+
+def get_abstract_classes(module) -> List[Tuple[str, type]]:
+    """
+    List all abstract classes in a module.
+
+    Parameters
+    ----------
+    module : module
+        The module object to inspect.
+
+    Returns
+    -------
+    List[Tuple[str, type]]
+        A list of tuples representing the abstract classes in the module.
+        Each tuple contains the class name (str) and the corresponding class object.
+    """
+    basis_classes = inspect.getmembers(
+        module,
+        lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
+    )
+    return [(name, class_obj) for name, class_obj in basis_classes if is_abstract(class_obj)]
+
+def get_superclass_abstract_methods(class_obj: type) -> List[Tuple[str, type, type]]:
+    """
+    Retrieve the abstract methods defined in the superclass.
+
+    Parameters
+    ----------
+    class_obj :
+        The class object to inspect.
+
+    Returns
+    -------
+    List[Tuple[str, type, type]]
+        A list of tuples representing the abstract methods defined in the superclass.
+        Each tuple contains the method name (str), method object, and superclass object.
+    """
+    super_class = class_obj.__base__
+
+    if super_class:
+        super_class_abstract_methods = get_superclass_abstract_methods(super_class)
+        super_class_abstract_methods += [
+            (method_name, method, super_class)
+            for method_name, method in list_abstract_methods(super_class)
+            if getattr(method, "__isabstractmethod__", False)
+        ]
+    else:
+        super_class_abstract_methods = []
+
+    return super_class_abstract_methods
+
+def check_all_abstract_methods_compliance(module) -> None:
+    """
+    Check if all classes in a module properly implement abstract methods defined in their respective base classes.
+
+    Parameters
+    ----------
+    module :
+        The module object to inspect.
+
+    Raises
+    ------
+    ValueError
+        If any abstract method is not implemented in the subclass.
+    """
+    non_abstract_classes = get_non_abstract_classes(module)
+    for _, base_class in non_abstract_classes:
+        string = f'\nAnalyzing class {base_class.__name__}:\n'
+        string += '-' * len(string)
         print(string)
-        abstract_methods_compliance(module, base_class)
-    return
+        for method_name, method, super_class in get_superclass_abstract_methods(base_class):
+            boolean = reimplements_method(base_class, super_class, method_name)
+            print(f"Is method \"{method_name}\" re-instantiated? {boolean}")
+            if not boolean:
+                raise ValueError(f"Abstract method {method} not implemented in {base_class} sub-class!")

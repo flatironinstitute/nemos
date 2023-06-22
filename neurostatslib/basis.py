@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from neurostatslib.utils import rowWiseKron
 
 
-class Basis:
+class Basis(abc.ABC):
     """
     Generic class for basis functions.
 
@@ -70,7 +70,9 @@ class Basis:
         x1,...,xn : tuple
             The input samples.
         """
-        pass
+        subclass_name = type(self).__name__
+        raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
+        #pass
 
     @abc.abstractmethod
     def _get_samples(self, n_samples: tuple[int]) -> tuple[NDArray, ...]:
@@ -121,10 +123,10 @@ class Basis:
         eval_basis = self._evaluate(xi)
 
         # checks on the evaluated basis
-        self._check_enough_samples(eval_basis)
+        self._check_enough_samples(eval_basis) # move to the GLM model
 
         # check the conditioning
-        conditioning = np.linalg.cond(eval_basis)
+        conditioning = np.linalg.cond(eval_basis) # model should do that
         if np.isinf(conditioning):
             if any(eval_basis.sum(axis=1) == 0):
                 warnings.warn("eval_basis has an empty row. No samples in the input domain "
@@ -137,7 +139,7 @@ class Basis:
         print(f'Conditioning of the evaluated basis function: {conditioning}')
         return eval_basis
 
-    def gen_basis(self, *n_samples: int) -> tuple[tuple[NDArray, ...], NDArray]:
+    def evaluate_on_grid(self, *n_samples: int) -> tuple[tuple[NDArray, ...], NDArray]:
         """
         Evaluate the basis set on a grid of equi-spaced sample points. The i-th axis of the grid will be sampled
         with n_samples[i] equi-spaced points.
@@ -150,7 +152,10 @@ class Basis:
         Returns
         -------
         Tuple[Tuple[Any, ...], NDArray]
-            A tuple containing the meshgrid values and the basis function evaluated at the samples.
+            Xs
+            A tuple containing the meshgrid values
+            Y
+            the basis function evaluated at the samples.
 
         """
         self._check_input_number(n_samples)
@@ -277,7 +282,7 @@ class Basis:
         return mulBasis(self, other)
 
 
-class addBasis(Basis):
+class addBasis(Basis, abc.ABC):
     """
     Class representing the addition of two Basis objects.
 
@@ -356,7 +361,7 @@ class addBasis(Basis):
         return sample_1 + sample_2
 
 
-class mulBasis(Basis):
+class mulBasis(Basis,abc.ABC):
     """
     Class representing the multiplication (external product) of two Basis objects.
 
@@ -434,7 +439,7 @@ class mulBasis(Basis):
         return sample_1 + sample_2
 
 
-class SplineBasis(Basis):
+class SplineBasis(Basis, abc.ABC):
     """
     SplineBasis class inherits from the Basis class and represents spline basis functions.
 
@@ -544,22 +549,6 @@ class SplineBasis(Basis):
         """
         return (np.linspace(0, 1, n_samples[0]),)
 
-    @abc.abstractmethod
-    def _evaluate(self, n_samples: tuple[int]) -> NDArray:
-        """
-           Evaluate the basis function at the specified number of samples.
-
-           Parameters
-           ----------
-           n_samples : tuple[int]
-               The number of samples to evaluate for each input dimension.
-
-           Returns
-           -------
-           None
-           """
-        pass
-
 
 class MSplineBasis(SplineBasis):
     """M-spline 1-dimensional basis functions.
@@ -614,7 +603,7 @@ class MSplineBasis(SplineBasis):
         )
 
 
-class RaisedCosineBasis(Basis):
+class RaisedCosineBasis(Basis, abc.ABC):
     def __init__(self, n_basis_funcs: int) -> None:
         super().__init__(n_basis_funcs)
         self._n_input_samples = 1
@@ -679,7 +668,7 @@ class RaisedCosineBasis(Basis):
         return (np.linspace(0, 1, n_samples[0]),)
 
 
-class LinearRaisedCosineBasis(RaisedCosineBasis):
+class RaisedCosineBasisLinear(RaisedCosineBasis):
     """Linearly-spaced raised cosine basis functions used by Pillow et al. [2]_.
 
     These are "cosine bumps" that uniformly tile the space.
@@ -705,7 +694,7 @@ class LinearRaisedCosineBasis(RaisedCosineBasis):
         return sample_pts * np.pi * (self._n_basis_funcs - 1)
 
 
-class LogRaisedCosineBasis(RaisedCosineBasis):
+class RaisedCosineBasisLog(RaisedCosineBasis):
     """Log-spaced raised cosine basis functions used by Pillow et al. [2]_.
     These are "cosine bumps" that uniformly tile the space.
 
@@ -780,22 +769,22 @@ if __name__ == "__main__":
     from matplotlib import cm
     from matplotlib.ticker import LinearLocator
 
-    samples = np.random.normal(size=100)
-    basis1 = MSplineBasis(15, order=4)
-    basis2 = MSplineBasis(15, order=4)
-    basis_add = basis1 + basis2
+    # samples = np.random.normal(size=100)
+    # basis1 = MSplineBasis(15, order=4)
+    # basis2 = MSplineBasis(15, order=4)
+    # basis_add = basis1 + basis2
+    #
+    # basis_add_add = basis_add + basis2
+    # basis_add_add_add = basis_add_add + basis_add
+    #
+    # print(basis_add.evaluate(samples, samples).shape)
+    # print(basis_add_add.evaluate(samples, samples, samples).shape)
+    # print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
-    basis_add_add = basis_add + basis2
-    basis_add_add_add = basis_add_add + basis_add
-
-    print(basis_add.evaluate(samples, samples).shape)
-    print(basis_add_add.evaluate(samples, samples, samples).shape)
-    print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
-
-    basis1 = LogRaisedCosineBasis(15)
+    basis1 = RaisedCosineBasisLog(15)
     basis2 = MSplineBasis(15, order=4)
     mulbase = basis1 * basis2
-    X, Y, Z = mulbase.gen_basis(100, 110)
+    X, Y, Z = mulbase.evaluate_on_grid(100, 110) # maybe create a visualize basis class.
 
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     Z = np.array(Z)
@@ -809,16 +798,16 @@ if __name__ == "__main__":
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
     ax.set_title("Overlapped Surfaces")
-
-    print("multiply and additive base with a evaluate type base")
-    basis1 = LogRaisedCosineBasis(6)
-    basis2 = MSplineBasis(7, order=4)
-    basis3 = LinearRaisedCosineBasis(8)
-    base_res = (basis1 + basis2) * basis3
-    X = base_res.evaluate(
-        np.linspace(0, 1, 64), np.linspace(0, 1, 64), np.linspace(0, 1, 64)
-    )
-    print(X.shape, (6 + 7) * 8)
+    #
+    # print("multiply and additive base with a evaluate type base")
+    # basis1 = LogRaisedCosineBasis(6)
+    # basis2 = MSplineBasis(7, order=4)
+    # basis3 = LinearRaisedCosineBasis(8)
+    # base_res = (basis1 + basis2) * basis3
+    # X = base_res.evaluate(
+    #     np.linspace(0, 1, 64), np.linspace(0, 1, 64), np.linspace(0, 1, 64)
+    # )
+    # print(X.shape, (6 + 7) * 8)
 
     #
     #

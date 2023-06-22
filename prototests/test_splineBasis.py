@@ -1,5 +1,4 @@
 # content of ./test_parametrize.py
-import pytest
 import numpy as np
 from neurostatslib.basis import BSplineBasis, Cyclic_BSplineBasis
 
