@@ -44,37 +44,6 @@ def get_subclass_methods_from_instance(class_instance):
     return inspect.getmembers(class_instance, predicate=inspect.ismethod)
 
 
-def get_subclass_methods_from_type(class_type: type) -> list[tuple[str, func], ...]:
-    """
-    Retrieves methods that are specific to type (excludes inherited methods).
-
-    Parameters:
-    class_type: type
-        Usually a custom type object (for example, neurostatslib.basis.Basis).
-
-    Returns:
-        A list of tuples representing the methods that are specific to the instantiated class.
-        Each tuple contains the method name (str) and the corresponding method object.
-
-    Raises:
-    ValueError: If the provided argument is not an instantiated class.
-    """
-
-    if not isinstance(class_type, type):
-        raise ValueError('Must provide a type!')
-
-    methods = []
-    for name, method in inspect.getmembers(class_type, predicate=inspect.isfunction):
-        superclass_method = getattr(class_type.__base__, name, None)
-        if (superclass_method is None) or (superclass_method != method):
-            methods.append((name, method))
-
-    return methods
-
-def fully_annotated(class_obj):
-    return True
-
-
 def tmp_test_annotation(class_instance):
     """
     Check that the annotation in the scripts agree with the following rules:
