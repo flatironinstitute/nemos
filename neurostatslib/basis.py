@@ -257,7 +257,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
-        The resulting Basis object.
+            The resulting Basis object.
         """
         return addBasis(self, other)
 
@@ -272,7 +272,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
-        The resulting Basis object.
+            The resulting Basis object.
         """
         return mulBasis(self, other)
 
