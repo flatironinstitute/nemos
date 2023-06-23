@@ -21,7 +21,7 @@ class Basis(abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    GB_limit : optional
+    gb_limit : optional
         Limit in GB for the model matrix size. Default is 16.0.
 
     Attributes
@@ -55,9 +55,9 @@ class Basis(abc.ABC):
         multi-dimensional response functions.
     """
 
-    def __init__(self, n_basis_funcs: int, GB_limit: float = 16.0) -> None:
+    def __init__(self, n_basis_funcs: int, gb_limit: float = 16.0) -> None:
         self._n_basis_funcs = n_basis_funcs
-        self._GB_limit = GB_limit
+        self._GB_limit = gb_limit
         self._n_input_samples = 0
 
     @abc.abstractmethod
@@ -308,7 +308,7 @@ class addBasis(Basis, abc.ABC):
 
     def __init__(self, basis1, basis2) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
+        super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -383,7 +383,7 @@ class mulBasis(Basis,abc.ABC):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs, GB_limit=basis1._GB_limit)
+        super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
