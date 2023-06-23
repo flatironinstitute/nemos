@@ -61,7 +61,7 @@ class Basis(abc.ABC):
         self._n_input_samples = 0
 
     @abc.abstractmethod
-    def _evaluate(self, x: tuple[NDArray]) -> NDArray:
+    def _evaluate(self, *x: NDArray) -> NDArray:
         """
         Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
 
@@ -70,9 +70,7 @@ class Basis(abc.ABC):
         x1,...,xn : tuple
             The input samples.
         """
-        subclass_name = type(self).__name__
-        raise NotImplementedError(f"{subclass_name} must implement _evaluate method!")
-        #pass
+        pass
 
     @abc.abstractmethod
     def _get_samples(self, n_samples: tuple[int]) -> tuple[NDArray, ...]:
@@ -116,11 +114,11 @@ class Basis(abc.ABC):
             If the subclass does not implement the _evaluate method.
         """
         # checks on input and outputs
-        self._check_samples_consistency(xi)
+        self._check_samples_consistency(*xi)
         self._check_full_model_matrix_size(xi[0].shape[0])
         self._check_input_number(xi)
 
-        eval_basis = self._evaluate(xi)
+        eval_basis = self._evaluate(*xi)
 
         # checks on the evaluated basis
         self._check_enough_samples(eval_basis) # move to the GLM model
@@ -209,7 +207,7 @@ class Basis(abc.ABC):
                 f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead."
             )
 
-    def _check_samples_consistency(self, x: tuple[NDArray]) -> None:
+    def _check_samples_consistency(self, *x: NDArray) -> None:
         """
         Check that each input provided to the Basis object has the same number of time points.
 
@@ -319,7 +317,7 @@ class addBasis(Basis, abc.ABC):
         self._basis2 = basis2
         return
 
-    def _evaluate(self, x_tuple: tuple[NDArray]) -> NDArray:
+    def _evaluate(self, *x_tuple: NDArray) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -335,8 +333,8 @@ class addBasis(Basis, abc.ABC):
         """
         return np.vstack(
             (
-                self._basis1._evaluate(x_tuple[: self._basis1._n_input_samples]),
-                self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:]),
+                self._basis1._evaluate(*x_tuple[: self._basis1._n_input_samples]),
+                self._basis2._evaluate(*x_tuple[self._basis1._n_input_samples:]),
             )
         )
 
@@ -397,7 +395,7 @@ class mulBasis(Basis,abc.ABC):
         self._basis2 = basis2
         return
 
-    def _evaluate(self, x_tuple: tuple[NDArray, ...]) -> NDArray:
+    def _evaluate(self, *x_tuple: NDArray) -> NDArray: # try * all _evaluate
         """
         Evaluate the basis at the input samples.
 
@@ -412,8 +410,8 @@ class mulBasis(Basis,abc.ABC):
             The basis function evaluated at the samples (Time points x number of basis)
         """
         return np.array(rowWiseKron(
-            self._basis1._evaluate(x_tuple[: self._basis1._n_input_samples]),
-            self._basis2._evaluate(x_tuple[self._basis1._n_input_samples:]),
+            self._basis1._evaluate(*x_tuple[: self._basis1._n_input_samples]),
+            self._basis2._evaluate(*x_tuple[self._basis1._n_input_samples:]),
             transpose=True,
         ))
 
@@ -576,7 +574,7 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
-    def _evaluate(self, sample_pts: tuple[NDArray]) -> NDArray:
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -592,7 +590,7 @@ class MSplineBasis(SplineBasis):
 
         """
 
-        sample_pts = sample_pts[0]
+        #sample_pts = sample_pts[0]
 
         # add knots if not passed
         self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
@@ -638,9 +636,9 @@ class RaisedCosineBasis(Basis, abc.ABC):
             Raised cosine basis functions
 
         """
-        sample_pts = sample_pts[0]
+        #sample_pts = sample_pts[0]
 
-        if any(sample_pts < -1E-12) or any(sample_pts > 1 + 1E-12):
+        if any(sample_pts < -1E-12) or any(sample_pts > 1 + 1E-12): # check for a better way to control precision
             raise ValueError(f"Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
@@ -769,17 +767,18 @@ if __name__ == "__main__":
     from matplotlib import cm
     from matplotlib.ticker import LinearLocator
 
-    # samples = np.random.normal(size=100)
-    # basis1 = MSplineBasis(15, order=4)
-    # basis2 = MSplineBasis(15, order=4)
-    # basis_add = basis1 + basis2
-    #
-    # basis_add_add = basis_add + basis2
-    # basis_add_add_add = basis_add_add + basis_add
-    #
-    # print(basis_add.evaluate(samples, samples).shape)
-    # print(basis_add_add.evaluate(samples, samples, samples).shape)
-    # print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
+    samples = np.random.normal(size=100)
+    basis1 = MSplineBasis(15, order=4)
+    basis2 = MSplineBasis(15, order=4)
+    basis_add = basis1 + basis2
+
+    basis_add_add = basis_add + basis2
+
+    basis_add_add_add = basis_add_add + basis_add
+
+    print(basis_add.evaluate(samples, samples).shape)
+    print(basis_add_add.evaluate(samples, samples, samples).shape)
+    print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
     basis1 = RaisedCosineBasisLog(15)
     basis2 = MSplineBasis(15, order=4)
@@ -792,12 +791,12 @@ if __name__ == "__main__":
     ax.plot_surface(X, Y, Z[50], cmap="viridis", alpha=0.8)
     ax.plot_surface(X, Y, Z[100], cmap="rainbow", alpha=0.8)
     ax.plot_surface(X, Y, Z[200], cmap="inferno", alpha=0.8)
-
-    # Customize the plot
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.set_title("Overlapped Surfaces")
+    #
+    # # Customize the plot
+    # ax.set_xlabel("X")
+    # ax.set_ylabel("Y")
+    # ax.set_zlabel("Z")
+    # ax.set_title("Overlapped Surfaces")
     #
     # print("multiply and additive base with a evaluate type base")
     # basis1 = LogRaisedCosineBasis(6)
