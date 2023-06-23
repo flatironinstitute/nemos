@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import abc
 import warnings
-from typing import Tuple
+from typing import Tuple, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -15,13 +15,13 @@ from neurostatslib.utils import rowWiseKron
 
 class Basis(abc.ABC):
     """
-    Generic class for basis functions.
+    Abstract class for basis functions.
 
     Parameters
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
-    GB_limit : float, optional
+    GB_limit : optional
         Limit in GB for the model matrix size. Default is 16.0.
 
     Attributes
@@ -67,25 +67,25 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        x1,...,xn : tuple
+        x[0],...,x[n] : (number of samples, )
             The input samples.
         """
         pass
 
     @abc.abstractmethod
-    def _get_samples(self, n_samples: tuple[int]) -> tuple[NDArray, ...]:
+    def _get_samples(self, *n_samples: int) -> Tuple[NDArray, ...]:
         """
-        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_gen_basis" method.
+        Get equi-spaced samples for all the input dimensions. This will be used to evaluate
+        the basis on a grid of points derived by the samples
 
         Parameters
         ----------
-        n_samples[0],...,n_samples[n] : int
+        n_samples[0],...,n_samples[n]
             The number of samples in each axis of the grid.
 
         Returns
         -------
-        tuple[NDArray]
-            The  equi-spaced samples covering the basis domain.
+            The equi-spaced samples covering the basis domain.
 
         Raises
         ------
@@ -96,16 +96,15 @@ class Basis(abc.ABC):
 
     def evaluate(self, *xi: NDArray) -> NDArray:
         """
-        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
+        Evaluate the basis set at the given samples x[0],...,x[n] using the subclass-specific "_evaluate" method.
 
         Parameters
         ----------
-        x1,...,xn : NDArray
+        xi[0],...,xi[n] : (number of samples, )
             The input samples.
 
         Returns
         -------
-        NDArray
             The generated basis functions.
 
         Raises
@@ -137,22 +136,22 @@ class Basis(abc.ABC):
         print(f'Conditioning of the evaluated basis function: {conditioning}')
         return eval_basis
 
-    def evaluate_on_grid(self, *n_samples: int) -> tuple[tuple[NDArray, ...], NDArray]:
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, ...]:
         """
         Evaluate the basis set on a grid of equi-spaced sample points. The i-th axis of the grid will be sampled
         with n_samples[i] equi-spaced points.
 
         Parameters
         ----------
-        n_samples[0],...,n_samples[n] : int
+        n_samples[0],...,n_samples[n]
             The number of samples in each axis of the grid.
 
         Returns
         -------
-        Tuple[Tuple[Any, ...], NDArray]
-            Xs
-            A tuple containing the meshgrid values
-            Y
+            Xs[1], ..., Xs[n] : (n_samples[0], ... , n_samples[n])
+            A tuple containing the meshgrid values, one element for each of the n dimension of the grid, where n equals
+            to the number of inputs.
+            Y : (number of basis, n_samples[0], ... , n_samples[n])
             the basis function evaluated at the samples.
 
         """
@@ -176,8 +175,8 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        eval_basis : np.ndarray
-            The basis set for evaluation.
+        eval_basis : (number of basis, number of samples)
+            The basis evaluated at the samples
 
         Raises
         ------
@@ -188,13 +187,13 @@ class Basis(abc.ABC):
             warnings.warn('Basis set number exceeds the number of samples! '
                           'Reduce the number of basis or increase sample size')
 
-    def _check_input_number(self, x: tuple) -> None:
+    def _check_input_number(self, xi: Tuple) -> None:
         """
         Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
 
         Parameters
         ----------
-        x : tuple
+        xi[0], ..., xi[n] : (number of samples, )
             The input samples.
 
         Raises
@@ -202,18 +201,18 @@ class Basis(abc.ABC):
         ValueError
             If the number of inputs doesn't match what the Basis object requires.
         """
-        if len(x) != self._n_input_samples:
+        if len(xi) != self._n_input_samples:
             raise ValueError(
-                f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(x)} inputs provided instead."
+                f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(xi)} inputs provided instead."
             )
 
-    def _check_samples_consistency(self, *x: NDArray) -> None:
+    def _check_samples_consistency(self, *xi: NDArray) -> None:
         """
         Check that each input provided to the Basis object has the same number of time points.
 
         Parameters
         ----------
-        x : tuple of NDArray
+        xi[0], ..., xi[n] : (number of samples, )
             The input samples.
 
         Raises
@@ -221,21 +220,21 @@ class Basis(abc.ABC):
         ValueError
             If the time point number is inconsistent between inputs.
         """
-        sample_sizes = [samp.shape[0] for samp in x]
+        sample_sizes = [samp.shape[0] for samp in xi]
         if any(elem != sample_sizes[0] for elem in sample_sizes):
             raise ValueError(
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
 
-    def _check_full_model_matrix_size(self, n_samples, dtype=np.float64) -> None:
+    def _check_full_model_matrix_size(self, n_samples: int, dtype: type = np.float64) -> None:
         """
         Check the size in GB of the full model matrix is <= self._GB_limit.
 
         Parameters
         ----------
-        n_samples : int
+        n_samples
             Number of samples.
-        dtype : type, optional
+        dtype : optional
             Data type of the model matrix. Default is np.float64.
 
         Raises
@@ -247,19 +246,18 @@ class Basis(abc.ABC):
         if size_in_bytes > self._GB_limit * 10 ** 9:
             raise MemoryError(f"Model matrix size exceeds {self._GB_limit} GB.")
 
-    def __add__(self, other) -> Basis:
+    def __add__(self, other: Basis) -> Basis:
         """
         Add two Basis objects together.
 
         Parameters
         ----------
-        other : Basis
+        other
             The other Basis object to add.
 
         Returns
         -------
-        Basis
-            The resulting Basis object.
+        The resulting Basis object.
         """
         return addBasis(self, other)
 
@@ -269,13 +267,12 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        other : Basis
+        other
             The other Basis object to multiply.
 
         Returns
         -------
-        Basis
-            The resulting Basis object.
+        The resulting Basis object.
         """
         return mulBasis(self, other)
 
@@ -286,9 +283,9 @@ class addBasis(Basis, abc.ABC):
 
     Parameters
     ----------
-    basis1 : Basis
+    basis1 :
         First basis object to add.
-    basis2 : Basis
+    basis2 :
         Second basis object to add.
 
     Attributes
@@ -317,28 +314,27 @@ class addBasis(Basis, abc.ABC):
         self._basis2 = basis2
         return
 
-    def _evaluate(self, *x_tuple: NDArray) -> NDArray:
+    def _evaluate(self, *xi: NDArray) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
         Parameters
         ----------
-        x_tuple : tuple
+        xi[0], ..., xi[n] : (number of samples, )
             Tuple of input samples.
 
         Returns
         -------
-        NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
+            The basis function evaluated at the samples (number of samples x number of basis)
         """
         return np.vstack(
             (
-                self._basis1._evaluate(*x_tuple[: self._basis1._n_input_samples]),
-                self._basis2._evaluate(*x_tuple[self._basis1._n_input_samples:]),
+                self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_samples:]),
             )
         )
 
-    def _get_samples(self, n_samples: tuple[int, ...]) -> tuple[NDArray, ...]:
+    def _get_samples(self, *n_samples: int) -> Tuple[NDArray, ...]:
         """
         Get equi-spaced samples for all the input dimensions. This will be used to evaluate
         the basis on a grid of points derived by the samples
@@ -349,14 +345,12 @@ class addBasis(Basis, abc.ABC):
             The number of samples in each axis of the grid.
 
         Returns
-        -------
-        tuple[NDArray]
             The equi-spaced sample locations for each coordinate.
 
         """
         sample_1 = self._basis1._get_samples(n_samples[: self._basis1._n_input_samples])
         sample_2 = self._basis2._get_samples(n_samples[self._basis1._n_input_samples:])
-        return sample_1 + sample_2
+        return *sample_1,  *sample_2
 
 
 class mulBasis(Basis,abc.ABC):
@@ -365,20 +359,20 @@ class mulBasis(Basis,abc.ABC):
 
     Parameters
     ----------
-    basis1 : Basis
+    basis1 :
         First basis object to multiply.
-    basis2 : Basis
+    basis2 :
         Second basis object to multiply.
 
     Attributes
     ----------
-    n_basis_funcs : int
+    _n_basis_funcs : int
         Number of basis functions.
-    n_input_samples : int
+    _n_input_samples : int
         Number of input samples.
-    basis1 : Basis
+    _basis1 : Basis
         First basis object.
-    basis2 : Basis
+    _basis2 : Basis
         Second basis object.
 
     Methods
@@ -395,46 +389,44 @@ class mulBasis(Basis,abc.ABC):
         self._basis2 = basis2
         return
 
-    def _evaluate(self, *x_tuple: NDArray) -> NDArray: # try * all _evaluate
+    def _evaluate(self, *xi: NDArray) -> NDArray: # try * all _evaluate
         """
         Evaluate the basis at the input samples.
 
         Parameters
         ----------
-        x_tuple : tuple
+        xi[0], ..., xi[n] : (number of samples, )
             Tuple of input samples.
 
         Returns
         -------
-        NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
+            The basis function evaluated at the samples (number of samples x number of basis)
         """
         return np.array(rowWiseKron(
-            self._basis1._evaluate(*x_tuple[: self._basis1._n_input_samples]),
-            self._basis2._evaluate(*x_tuple[self._basis1._n_input_samples:]),
+            self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
+            self._basis2._evaluate(*xi[self._basis1._n_input_samples:]),
             transpose=True,
         ))
 
-    def _get_samples(self, n_samples: tuple[int, ...]) -> tuple[NDArray, ...]:
+    def _get_samples(self, *n_samples: int) -> Tuple[NDArray, ...]:
         """
         Get equi-spaced samples for all the input dimensions. This will be used to evaluate
         the basis on a grid of points derived by the samples
 
         Parameters
         ----------
-        n_samples[0],...,n_samples[n] : int
+        n_samples[0],...,n_samples[n]
             The number of samples in each axis of the grid.
 
         Returns
         -------
-        tuple[NDArray]
             The equi-spaced sample locations for each coordinate.
 
         """
 
         sample_1 = self._basis1._get_samples(n_samples[: self._basis1._n_input_samples])
         sample_2 = self._basis2._get_samples(n_samples[self._basis1._n_input_samples:])
-        return sample_1 + sample_2
+        return *sample_1, *sample_2
 
 
 class SplineBasis(Basis, abc.ABC):
@@ -443,9 +435,9 @@ class SplineBasis(Basis, abc.ABC):
 
     Parameters
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
-    order : int, optional
+    order : optional
         Spline order. Default is 2.
 
     Attributes
@@ -481,18 +473,17 @@ class SplineBasis(Basis, abc.ABC):
 
         Parameters
         ----------
-        sample_pts : NDArray
+        sample_pts : (number of samples, )
             The sample points.
-        perc_low : float
+        perc_low
             The low percentile value.
-        perc_high : float
+        perc_high
             The high percentile value.
-        is_cyclic : bool, optional
+        is_cyclic : optional
             Whether the spline is cyclic. Default is False.
 
         Returns
         -------
-        NDArray
             The knot locations for the spline basis functions.
 
         Raises
@@ -531,21 +522,20 @@ class SplineBasis(Basis, abc.ABC):
         )
         return self.knot_locs
 
-    def _get_samples(self, n_samples: tuple[int]) -> tuple[NDArray]:
+    def _get_samples(self, n_samples: int) -> NDArray:
         """
         Generate the basis functions on a grid of equi-spaced sample points.
 
         Parameters
         ----------
-        n_samples : tuple of int
+        n_samples
            The number of samples in each axis of the grid.
 
         Returns
         -------
-        tuple[NDArray]
            The equi-spaced sample location.
         """
-        return (np.linspace(0, 1, n_samples[0]),)
+        return np.linspace(0, 1, n_samples[0])
 
 
 class MSplineBasis(SplineBasis):
@@ -553,11 +543,11 @@ class MSplineBasis(SplineBasis):
 
     Parameters
     ----------
-    n_basis_funcs
+    n_basis_funcs :
         Number of basis functions.
-    window_size
+    window_size :
         Size of basis functions.
-    order
+    order :
         Order of the splines used in basis functions. Must lie within [1,
         n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
         at each interior knot. The higher this number, the smoother the basis
@@ -579,13 +569,13 @@ class MSplineBasis(SplineBasis):
 
         Parameters
         ----------
-        sample_pts : (n_pts,)
+        sample_pts : (number of samples, )
             Spacing for basis functions, holding elements on the interval [0,
             window_size). A good default is np.arange(window_size).
 
         Returns
         -------
-        basis_funcs : (n_basis_funcs, n_pts)
+        basis_funcs : (number of basis, number of samples)
             Evaluated spline basis functions.
 
         """
@@ -613,7 +603,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
         Parameters
         ----------
-        sample_pts : NDArray
+        sample_pts : (number of samples, )
            The sample points to be transformed.
         """
         pass
@@ -623,16 +613,16 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
         Parameters
         ----------
-        sample_pts : (n_pts,)
+        sample_pts : (number of samples,)
             Spacing for basis functions, holding elements on interval [0,
-            window_size). A good default is
+            1). A good default is
             ``nsl.sample_points.raised_cosine_log`` for log spacing (as used in
             [2]_) or ``nsl.sample_points.raised_cosine_linear`` for linear
             spacing.
 
         Returns
         -------
-        basis_funcs : (n_basis_funcs, n_pts)
+        basis_funcs : (number of basis, number of samples)
             Raised cosine basis functions
 
         """
@@ -649,21 +639,20 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
         return basis_funcs
 
-    def _get_samples(self, n_samples: tuple[int]) -> tuple[NDArray]:
+    def _get_samples(self, n_samples: int) -> NDArray:
         """
         Generate an array equi-spaced sample points.
 
         Parameters
         ----------
-        n_samples : tuple of int
+        n_samples
            The number of samples in each axis of the grid.
 
         Returns
         -------
-        tuple[NDArray]
            The equi-spaced sample location.
         """
-        return (np.linspace(0, 1, n_samples[0]),)
+        return np.linspace(0, 1, n_samples[0])
 
 
 class RaisedCosineBasisLinear(RaisedCosineBasis):
@@ -689,6 +678,18 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         super().__init__(n_basis_funcs)
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
+        """
+        Linearly map the samples from [0,1] to the the [0, (number of basis - 1) * pi]
+        Parameters
+        ----------
+        sample_pts : (number of samples, )
+            The sample points used for evaluating the splines
+
+        Returns
+        -------
+        NDArray : (number of samples, )
+            A transformed version of the sample points that matches the Raised Cosine basis domain.
+        """
         return sample_pts * np.pi * (self._n_basis_funcs - 1)
 
 
@@ -716,6 +717,19 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         super().__init__(n_basis_funcs)
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
+        """
+        Maps the equi-spaced samples from [0,1] to log equi-spaced samples [0, (number of basis - 1) * pi]
+
+        Parameters
+        ----------
+        sample_pts : (number of samples, )
+            The sample points used for evaluating the splines
+
+        Returns
+        -------
+        NDArray : (number of samples, )
+            A transformed version of the sample points that matches the Raised Cosine basis domain.
+        """
         return np.power(10, -(np.log10((self._n_basis_funcs - 1) * np.pi) + 1) * sample_pts +
                         np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
 
@@ -725,20 +739,20 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
 
     Parameters
     ----------
-    x : (n_pts,)
+    x : (number of samples, )
         Spacing for basis functions, holding elements on the interval [0,
         window_size). If None, use a grid (``np.arange(self.window_size)``).
     k
         Order of the spline basis.
     i
         Number of the spline basis.
-    T : (k + n_basis_funcs,)
+    T : (k + number of basis,)
         knot locations. should lie in interval [0, 1].
 
 
     Returns
     -------
-    spline : (n_pts,)
+    spline : (number of samples, )
         M-spline basis function.
     """
 
