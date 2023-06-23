@@ -61,13 +61,13 @@ class Basis(abc.ABC):
         self._n_input_samples = 0
 
     @abc.abstractmethod
-    def _evaluate(self, *x: NDArray) -> NDArray:
+    def _evaluate(self, *xi: NDArray) -> NDArray:
         """
         Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
 
         Parameters
         ----------
-        x[0],...,x[n] : (number of samples, )
+        xi[0],...,xi[n] : (number of samples, )
             The input samples.
         """
         pass
@@ -159,7 +159,7 @@ class Basis(abc.ABC):
         self._check_full_model_matrix_size(np.prod(n_samples) * self._n_basis_funcs)
 
         # get the samples
-        sample_tuple = self._get_samples(n_samples)
+        sample_tuple = self._get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing='ij')
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
@@ -205,8 +205,8 @@ class Basis(abc.ABC):
             raise ValueError(
                 f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(xi)} inputs provided instead."
             )
-
-    def _check_samples_consistency(self, *xi: NDArray) -> None:
+    @staticmethod
+    def _check_samples_consistency(*xi: NDArray) -> None:
         """
         Check that each input provided to the Basis object has the same number of time points.
 
@@ -348,9 +348,9 @@ class addBasis(Basis, abc.ABC):
             The equi-spaced sample locations for each coordinate.
 
         """
-        sample_1 = self._basis1._get_samples(n_samples[: self._basis1._n_input_samples])
-        sample_2 = self._basis2._get_samples(n_samples[self._basis1._n_input_samples:])
-        return *sample_1,  *sample_2
+        sample_1 = self._basis1._get_samples(*n_samples[: self._basis1._n_input_samples])
+        sample_2 = self._basis2._get_samples(*n_samples[self._basis1._n_input_samples:])
+        return sample_1,  sample_2
 
 
 class mulBasis(Basis,abc.ABC):
@@ -424,9 +424,10 @@ class mulBasis(Basis,abc.ABC):
 
         """
 
-        sample_1 = self._basis1._get_samples(n_samples[: self._basis1._n_input_samples])
-        sample_2 = self._basis2._get_samples(n_samples[self._basis1._n_input_samples:])
-        return *sample_1, *sample_2
+        sample_1 = self._basis1._get_samples(*n_samples[: self._basis1._n_input_samples])
+        sample_2 = self._basis2._get_samples(*n_samples[self._basis1._n_input_samples:])
+
+        return sample_1 + sample_2
 
 
 class SplineBasis(Basis, abc.ABC):
@@ -522,7 +523,7 @@ class SplineBasis(Basis, abc.ABC):
         )
         return self.knot_locs
 
-    def _get_samples(self, n_samples: int) -> NDArray:
+    def _get_samples(self, n_samples: int) -> Tuple[NDArray]:
         """
         Generate the basis functions on a grid of equi-spaced sample points.
 
@@ -535,7 +536,7 @@ class SplineBasis(Basis, abc.ABC):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0])
+        return np.linspace(0, 1, n_samples),
 
 
 class MSplineBasis(SplineBasis):
@@ -639,7 +640,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
         return basis_funcs
 
-    def _get_samples(self, n_samples: int) -> NDArray:
+    def _get_samples(self, n_samples: int) -> Tuple[NDArray]:
         """
         Generate an array equi-spaced sample points.
 
@@ -652,7 +653,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0])
+        return np.linspace(0, 1, n_samples),
 
 
 class RaisedCosineBasisLinear(RaisedCosineBasis):
