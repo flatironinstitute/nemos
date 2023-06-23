@@ -4,9 +4,6 @@ name: connect
 # Trigger the workflow manually
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - restructuring_repo
 
 jobs:
   build:
