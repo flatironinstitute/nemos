@@ -6,7 +6,7 @@ from neurostatslib.glm import GLM
 from neurostatslib.basis import RaisedCosineBasis
 import matplotlib.pyplot as plt
 
-if __name__ == '__main__':
+def test_glm_fit():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
@@ -44,21 +44,21 @@ if __name__ == '__main__':
     fitted_model.fit(spike_data)
     fit_pred = fitted_model.predict(spike_data)
 
-    fig, ax = plt.subplots(1, 1)
-    ax.plot(onp.arange(nt), spike_data[0])
-    ax.plot(onp.arange(ws, nt + 1), sim_pred[0])
-    ax.plot(onp.arange(ws, nt + 1), fit_pred[0])
-    plt.show()
+    # fig, ax = plt.subplots(1, 1)
+    # ax.plot(onp.arange(nt), spike_data[0])
+    # ax.plot(onp.arange(ws, nt + 1), sim_pred[0])
+    # ax.plot(onp.arange(ws, nt + 1), fit_pred[0])
+    # plt.show()
 
-    fig, ax = plt.subplots(1, 1, sharey=True)
-    ax.plot(
-        B.T @ simulated_model.spike_basis_coeff_[0, :, 0],
-        label="true"
-    )
-    ax.plot(
-        B.T @ fitted_model.spike_basis_coeff_[0, :, 0],
-        label="est"
-    )
-    ax.axhline(0, dashes=[2, 2], color='k')
-    ax.legend()
-    plt.show()
+    # fig, ax = plt.subplots(1, 1, sharey=True)
+    # ax.plot(
+    #     B.T @ simulated_model.spike_basis_coeff_[0, :, 0],
+    #     label="true"
+    # )
+    # ax.plot(
+    #     B.T @ fitted_model.spike_basis_coeff_[0, :, 0],
+    #     label="est"
+    # )
+    # ax.axhline(0, dashes=[2, 2], color='k')
+    # ax.legend()
+    # plt.show()

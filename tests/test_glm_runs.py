@@ -42,8 +42,7 @@ def test_setup_Mbasis():
 
     return
 
-if __name__ == "__main__":
-    test_setup_Mbasis()
+def test_run_end_to_end_glm():
     nn, nt = 10, 1000
     key = jax.random.PRNGKey(123)
     key, subkey = jax.random.split(key)
@@ -59,3 +58,4 @@ if __name__ == "__main__":
     model.predict(spike_data)
     key, subkey = jax.random.split(key)
     X = model.simulate(subkey, 20, spike_data[:, :100])
+    return

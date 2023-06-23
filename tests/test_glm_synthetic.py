@@ -41,7 +41,7 @@ def test_set_up_glm():
 
     return
 
-if __name__ == '__main__':
+def test_fit_glm2():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
@@ -86,25 +86,25 @@ if __name__ == '__main__':
     fitted_model.fit(spike_data)
     fit_pred = fitted_model.predict(spike_data)
 
-    fig, axes = plt.subplots(2, 1)
-    axes[0].plot(onp.arange(nt), spike_data[0])
-    axes[0].plot(onp.arange(ws, nt + 1), sim_pred[0])
-    axes[0].plot(onp.arange(ws, nt + 1), fit_pred[0])
-    axes[1].plot(onp.arange(nt), spike_data[1])
-    axes[1].plot(onp.arange(ws, nt + 1), sim_pred[1])
-    axes[1].plot(onp.arange(ws, nt + 1), fit_pred[1])
-    plt.show()
+    # fig, axes = plt.subplots(2, 1)
+    # axes[0].plot(onp.arange(nt), spike_data[0])
+    # axes[0].plot(onp.arange(ws, nt + 1), sim_pred[0])
+    # axes[0].plot(onp.arange(ws, nt + 1), fit_pred[0])
+    # axes[1].plot(onp.arange(nt), spike_data[1])
+    # axes[1].plot(onp.arange(ws, nt + 1), sim_pred[1])
+    # axes[1].plot(onp.arange(ws, nt + 1), fit_pred[1])
+    # plt.show()
 
-    fig, axes = plt.subplots(nn, nn, sharey=True)
-    for i, j in itertools.product(range(nn), range(nn)):
-        axes[i, j].plot(
-            B.T @ simulated_model.spike_basis_coeff_[i, :, j],
-            label="true"
-        )
-        axes[i, j].plot(
-            B.T @ fitted_model.spike_basis_coeff_[i, :, j],
-            label="est"
-        )
-        axes[i, j].axhline(0, dashes=[2, 2], color='k')
-    axes[-1, -1].legend()
-    plt.show()
+    # fig, axes = plt.subplots(nn, nn, sharey=True)
+    # for i, j in itertools.product(range(nn), range(nn)):
+    #     axes[i, j].plot(
+    #         B.T @ simulated_model.spike_basis_coeff_[i, :, j],
+    #         label="true"
+    #     )
+    #     axes[i, j].plot(
+    #         B.T @ fitted_model.spike_basis_coeff_[i, :, j],
+    #         label="est"
+    #     )
+    #     axes[i, j].axhline(0, dashes=[2, 2], color='k')
+    # axes[-1, -1].legend()
+    # plt.show()
