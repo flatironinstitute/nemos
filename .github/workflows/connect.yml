@@ -8,8 +8,11 @@ on:
 jobs:
   build:
     name: build                        # Name of the job
-    runs-on: ubuntu-latest             # Operating system for the job
-
+    strategy:
+      matrix:
+        os: [ubuntu-latest] #[ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.8', '3.9', '3.10']
+    runs-on: ${{ matrix.os }}             # Operating system for the job
     steps:
       - name: Checkout                 # Step to checkout the repository
         uses: actions/checkout@v3
@@ -19,7 +22,7 @@ jobs:
       - name: Set up Python            # Step to set up Python
         uses: actions/setup-python@v4  # Use v4 for compatibility with pyproject.toml
         with:
-          python-version: '3.10'       # Specify the Python version
+          python-version: ${{ matrix.python-version }}       # Specify the Python version
           cache: pip                   # Cache the pip packages
 
       - name: Install dependencies     # Step to install dependencies
