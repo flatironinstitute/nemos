@@ -12,7 +12,7 @@ class DimensionMismatchError(Exception):
 
 def test_setup_Mbasis():
     """
-    Minimal test for MBasis definition.
+    Minimal test for MSplineBasis definition.
 
     Returns
     -------
