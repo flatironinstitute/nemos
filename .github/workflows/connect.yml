@@ -16,9 +16,7 @@ jobs:
     steps:
       - name: Checkout                 # Step to checkout the repository
         uses: actions/checkout@v3
-        with:
-          ref: ${{ github.ref }}       # Use the current Git reference
-
+        
       - name: Set up Python            # Step to set up Python
         uses: actions/setup-python@v4  # Use v4 for compatibility with pyproject.toml
         with:
