@@ -8,9 +8,10 @@ import warnings
 from typing import Tuple, Any
 
 import numpy as np
+from numpy import ndarray
 from numpy.typing import NDArray
 
-from neurostatslib.utils import rowWiseKron
+from neurostatslib.utils import row_wise_kron
 
 
 class Basis(abc.ABC):
@@ -156,7 +157,8 @@ class Basis(abc.ABC):
 
         """
         self._check_input_number(n_samples)
-        self._check_full_model_matrix_size(np.prod(n_samples) * self._n_basis_funcs)
+        n_basis: int = np.prod(n_samples, dtype=int)
+        self._check_full_model_matrix_size(n_basis * self._n_basis_funcs)
 
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
@@ -259,7 +261,7 @@ class Basis(abc.ABC):
         -------
             The resulting Basis object.
         """
-        return addBasis(self, other)
+        return Addbasis(self, other)
 
     def __mul__(self, other) -> Basis:
         """
@@ -274,10 +276,10 @@ class Basis(abc.ABC):
         -------
             The resulting Basis object.
         """
-        return mulBasis(self, other)
+        return Mulbasis(self, other)
 
 
-class addBasis(Basis, abc.ABC):
+class Addbasis(Basis, abc.ABC):
     """
     Class representing the addition of two Basis objects.
 
@@ -353,7 +355,7 @@ class addBasis(Basis, abc.ABC):
         return sample_1,  sample_2
 
 
-class mulBasis(Basis,abc.ABC):
+class Mulbasis(Basis, abc.ABC):
     """
     Class representing the multiplication (external product) of two Basis objects.
 
@@ -389,7 +391,7 @@ class mulBasis(Basis,abc.ABC):
         self._basis2 = basis2
         return
 
-    def _evaluate(self, *xi: NDArray) -> NDArray: # try * all _evaluate
+    def _evaluate(self, *xi: NDArray) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -402,7 +404,7 @@ class mulBasis(Basis,abc.ABC):
         -------
             The basis function evaluated at the samples (number of samples x number of basis)
         """
-        return np.array(rowWiseKron(
+        return np.array(row_wise_kron(
             self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
             self._basis2._evaluate(*xi[self._basis1._n_input_samples:]),
             transpose=True,
@@ -523,7 +525,7 @@ class SplineBasis(Basis, abc.ABC):
         )
         return self.knot_locs
 
-    def _get_samples(self, n_samples: int) -> Tuple[NDArray]:
+    def _get_samples(self, *n_samples: int) -> Tuple[NDArray]:
         """
         Generate the basis functions on a grid of equi-spaced sample points.
 
@@ -536,7 +538,7 @@ class SplineBasis(Basis, abc.ABC):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples),
+        return np.linspace(0, 1, n_samples[0]),
 
 
 class MSplineBasis(SplineBasis):
@@ -565,7 +567,7 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -581,13 +583,11 @@ class MSplineBasis(SplineBasis):
 
         """
 
-        #sample_pts = sample_pts[0]
-
         # add knots if not passed
-        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+        self._generate_knots(sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=True)
 
         return np.stack(
-            [mspline(sample_pts, self._order, i, self.knot_locs) for i in range(self._n_basis_funcs)],
+            [mspline(sample_pts[0], self._order, i, self.knot_locs) for i in range(self._n_basis_funcs)],
             axis=0
         )
 
@@ -609,7 +609,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         """
         pass
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -627,20 +627,19 @@ class RaisedCosineBasis(Basis, abc.ABC):
             Raised cosine basis functions
 
         """
-        #sample_pts = sample_pts[0]
 
-        if any(sample_pts < -1E-12) or any(sample_pts > 1 + 1E-12): # check for a better way to control precision
+        if any(sample_pts[0] < -1E-12) or any(sample_pts[0] > 1 + 1E-12):
             raise ValueError(f"Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
-        sample_pts = self._transform_samples(sample_pts)
+        transform_sample_pts = self._transform_samples(sample_pts[0])
 
-        shifted_sample_pts = sample_pts[None, :] - (np.pi * np.arange(self._n_basis_funcs))[:, None]
+        shifted_sample_pts = transform_sample_pts[None, :] - (np.pi * np.arange(self._n_basis_funcs))[:, None]
         basis_funcs = .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
 
         return basis_funcs
 
-    def _get_samples(self, n_samples: int) -> Tuple[NDArray]:
+    def _get_samples(self, *n_samples: int) -> Tuple[NDArray]:
         """
         Generate an array equi-spaced sample points.
 
@@ -653,7 +652,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples),
+        return np.linspace(0, 1, n_samples[0]),
 
 
 class RaisedCosineBasisLinear(RaisedCosineBasis):
@@ -776,11 +775,10 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt # type: ignore
 
     plt.close('all')
-    from matplotlib import cm
-    from matplotlib.ticker import LinearLocator
+
 
     samples = np.random.normal(size=100)
     basis1 = MSplineBasis(15, order=4)
@@ -795,9 +793,9 @@ if __name__ == "__main__":
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
 
-    basis1 = RaisedCosineBasisLog(15)
-    basis2 = MSplineBasis(15, order=4)
-    mulbase = basis1 * basis2
+    basis_rcl = RaisedCosineBasisLog(15)
+    basi_ms = MSplineBasis(15, order=4)
+    mulbase = basis_rcl * basi_ms
     X, Y, Z = mulbase.evaluate_on_grid(100, 110) # maybe create a visualize basis class.
 
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
