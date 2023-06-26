@@ -1,11 +1,18 @@
+import matplotlib
+
+matplotlib.use('agg')
+
+import itertools
+
 import jax
 import jax.numpy as jnp
-import numpy as onp
-import neurostatslib as nsl
-from neurostatslib.glm import GLM
-from neurostatslib.basis import RaisedCosineBasis
 import matplotlib.pyplot as plt
-import itertools
+import numpy as onp
+
+import neurostatslib as nsl
+from neurostatslib.basis import RaisedCosineBasis
+from neurostatslib.glm import GLM
+
 
 def test_set_up_glm():
     """Test the setup of the Generalized Linear Model (GLM).
@@ -72,39 +79,34 @@ def test_fit_glm2():
 
     fitted_model = GLM(
         B,
-        # solver_name="ScipyMinimize",
-        # solver_kwargs=dict(method="newton-cg", maxiter=1000, options=dict(verbose=True)),
         solver_name="GradientDescent",
         solver_kwargs=dict(maxiter=10000, acceleration=False, verbose=True, stepsize=-1)
-        # solver_name="LBFGS",
-        # solver_kwargs=dict(maxiter=100, verbose=True, stepsize=-1)
     )
-    # fitted_model.fit(spike_data, init_params=(
-    #     jnp.copy(simulated_model.spike_basis_coeff_),
-    #     jnp.copy(simulated_model.baseline_log_fr_)
-    # ))
+   
     fitted_model.fit(spike_data)
     fit_pred = fitted_model.predict(spike_data)
 
-    # fig, axes = plt.subplots(2, 1)
-    # axes[0].plot(onp.arange(nt), spike_data[0])
-    # axes[0].plot(onp.arange(ws, nt + 1), sim_pred[0])
-    # axes[0].plot(onp.arange(ws, nt + 1), fit_pred[0])
-    # axes[1].plot(onp.arange(nt), spike_data[1])
-    # axes[1].plot(onp.arange(ws, nt + 1), sim_pred[1])
-    # axes[1].plot(onp.arange(ws, nt + 1), fit_pred[1])
-    # plt.show()
+    fig, axes = plt.subplots(2, 1)
+    axes[0].plot(onp.arange(nt), spike_data[0])
+    axes[0].plot(onp.arange(ws, nt + 1), sim_pred[0])
+    axes[0].plot(onp.arange(ws, nt + 1), fit_pred[0])
+    axes[1].plot(onp.arange(nt), spike_data[1])
+    axes[1].plot(onp.arange(ws, nt + 1), sim_pred[1])
+    axes[1].plot(onp.arange(ws, nt + 1), fit_pred[1])
+    plt.show()
+    plt.close('all')
 
-    # fig, axes = plt.subplots(nn, nn, sharey=True)
-    # for i, j in itertools.product(range(nn), range(nn)):
-    #     axes[i, j].plot(
-    #         B.T @ simulated_model.spike_basis_coeff_[i, :, j],
-    #         label="true"
-    #     )
-    #     axes[i, j].plot(
-    #         B.T @ fitted_model.spike_basis_coeff_[i, :, j],
-    #         label="est"
-    #     )
-    #     axes[i, j].axhline(0, dashes=[2, 2], color='k')
-    # axes[-1, -1].legend()
-    # plt.show()
+    fig, axes = plt.subplots(nn, nn, sharey=True)
+    for i, j in itertools.product(range(nn), range(nn)):
+        axes[i, j].plot(
+            B.T @ simulated_model.spike_basis_coeff_[i, :, j],
+            label="true"
+        )
+        axes[i, j].plot(
+            B.T @ fitted_model.spike_basis_coeff_[i, :, j],
+            label="est"
+        )
+        axes[i, j].axhline(0, dashes=[2, 2], color='k')
+    axes[-1, -1].legend()
+    plt.show()
+    plt.close('all')

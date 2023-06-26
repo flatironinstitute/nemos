@@ -1,7 +1,9 @@
 import jax
-from neurostatslib.glm import GLM
-from neurostatslib.basis import MSplineBasis
 import numpy as np
+
+from neurostatslib.basis import MSplineBasis
+from neurostatslib.glm import GLM
+
 
 class DimensionMismatchError(Exception):
     """Exception raised for dimension mismatch errors."""
