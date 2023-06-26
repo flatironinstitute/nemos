@@ -48,8 +48,8 @@ def test_glm_fit():
     ax.plot(onp.arange(nt), spike_data[0])
     ax.plot(onp.arange(ws, nt + 1), sim_pred[0])
     ax.plot(onp.arange(ws, nt + 1), fit_pred[0])
-    plt.show()
-    plt.close('all')
+    
+    #plt.close('all')
     fig, ax = plt.subplots(1, 1, sharey=True)
     ax.plot(
         B.T @ simulated_model.spike_basis_coeff_[0, :, 0],
@@ -61,5 +61,5 @@ def test_glm_fit():
     )
     ax.axhline(0, dashes=[2, 2], color='k')
     ax.legend()
-    plt.show()
-    plt.close('all')
+    
+    #plt.close('all')

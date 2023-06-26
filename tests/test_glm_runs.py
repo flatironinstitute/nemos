@@ -12,7 +12,7 @@ class DimensionMismatchError(Exception):
         self.message = message
         super().__init__(self.message)
 
-def test_setup_Mbasis():
+def test_setup_msplinebasis():
     """
     Minimal test for MSplineBasis definition.
 
@@ -42,7 +42,7 @@ def test_setup_Mbasis():
         if spike_basis_matrix.shape[1] != window:
             raise DimensionMismatchError(f"The output basis basis matrix has {spike_basis_matrix.shape[1]} window size, while the window size specified is {window}. They must agree.")
 
-    return
+    
 
 def test_run_end_to_end_glm():
     nn, nt = 10, 1000
@@ -60,4 +60,4 @@ def test_run_end_to_end_glm():
     model.predict(spike_data)
     key, subkey = jax.random.split(key)
     X = model.simulate(subkey, 20, spike_data[:, :100])
-    return
+    

@@ -46,7 +46,7 @@ def test_set_up_glm():
 
     simulated_model = GLM(B)
 
-    return
+    
 
 def test_fit_glm2():
     jax.config.update("jax_platform_name", "cpu")
@@ -93,8 +93,7 @@ def test_fit_glm2():
     axes[1].plot(onp.arange(nt), spike_data[1])
     axes[1].plot(onp.arange(ws, nt + 1), sim_pred[1])
     axes[1].plot(onp.arange(ws, nt + 1), fit_pred[1])
-    plt.show()
-    plt.close('all')
+    
 
     fig, axes = plt.subplots(nn, nn, sharey=True)
     for i, j in itertools.product(range(nn), range(nn)):
@@ -108,5 +107,4 @@ def test_fit_glm2():
         )
         axes[i, j].axhline(0, dashes=[2, 2], color='k')
     axes[-1, -1].legend()
-    plt.show()
     plt.close('all')
