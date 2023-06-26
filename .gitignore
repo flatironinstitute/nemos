@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# IntelliJ's project specific settings 
+.idea/
+
+.DS_Store
+
+# mkdocs generated folder
+docs/generated/
+
+# vscode
+.vscode/

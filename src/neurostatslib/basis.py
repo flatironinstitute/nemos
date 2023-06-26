@@ -2,11 +2,13 @@
 """
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
-import numpy as np
+
 import abc
-import scipy.linalg
 import warnings
 from typing import Tuple
+
+import numpy as np
+import scipy.linalg
 from numpy.typing import NDArray
 
 
@@ -23,14 +25,13 @@ class Basis:
         Possible domain of the basis functions.
 
     """
-    def __init__(self, n_basis_funcs: int,
-                 window_size: int,
-                 support: Tuple[int, int]):
+
+    def __init__(self, n_basis_funcs: int, window_size: int, support: Tuple[int, int]):
         self.n_basis_funcs = n_basis_funcs
         self.window_size = window_size
         self.support = support
         # display string when showing support
-        self._support_display = f'[{self.support[0]}, {self.support[1]})'
+        self._support_display = f"[{self.support[0]}, {self.support[1]})"
 
     def _check_array(self, x: NDArray, ndim: int = 1):
         """Check whether x is array with given number of dims.
@@ -53,7 +54,9 @@ class Basis:
         """
         try:
             if x.ndim != ndim:
-                raise ValueError(f"Input must have {ndim} dimensions but has {x.ndim} instead!")
+                raise ValueError(
+                    f"Input must have {ndim} dimensions but has {x.ndim} instead!"
+                )
         except AttributeError:
             raise TypeError("Input is not an array!")
 
@@ -66,8 +69,10 @@ class Basis:
 
         """
         if len(sample_pts) != self.window_size:
-            warnings.warn("sample_pts is not the same length as the Basis "
-                          "window_size -- are you sure that's what you want?")
+            warnings.warn(
+                "sample_pts is not the same length as the Basis "
+                "window_size -- are you sure that's what you want?"
+            )
 
     def check_in_support(self, x: NDArray):
         """Check whether x lies within support.
@@ -130,10 +135,9 @@ class RaisedCosineBasis(Basis):
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
 
     """
-    def __init__(self, n_basis_funcs: int,
-                 window_size: int):
-        super().__init__(n_basis_funcs, window_size,
-                         (0, window_size))
+
+    def __init__(self, n_basis_funcs: int, window_size: int):
+        super().__init__(n_basis_funcs, window_size, (0, window_size))
 
     def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -156,14 +160,20 @@ class RaisedCosineBasis(Basis):
         super().gen_basis_funcs(sample_pts)
         # this has shape (n_basis_funcs, n_pts) and just consists of shifted
         # copies of the input.
-        shifted_sample_pts = sample_pts[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
-        basis_funcs = .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
+        shifted_sample_pts = (
+            sample_pts[None, :] - (np.pi * np.arange(self.n_basis_funcs))[:, None]
+        )
+        basis_funcs = 0.5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
         if (abs(basis_funcs.sum(0) - 1) > 1e-12).any():
-            raise ValueError("sample_pts was generated with too large an n_basis_funcs arg, "
-                             "our generated basis functions do not uniformly tile the space!")
+            raise ValueError(
+                "sample_pts was generated with too large an n_basis_funcs arg, "
+                "our generated basis functions do not uniformly tile the space!"
+            )
         if (basis_funcs == 0).all(1).any():
-            raise ValueError("sample_pts was generated with too small an n_basis_funcs arg, "
-                             "at least one of our generated basis functions is 0 everywhere!")
+            raise ValueError(
+                "sample_pts was generated with too small an n_basis_funcs arg, "
+                "at least one of our generated basis functions is 0 everywhere!"
+            )
         return basis_funcs
 
 
@@ -180,8 +190,7 @@ class OrthExponentialBasis(Basis):
 
     """
 
-    def __init__(self, decay_rates: NDArray[np.floating],
-                 window_size: int):
+    def __init__(self, decay_rates: NDArray[np.floating], window_size: int):
         super().__init__(len(decay_rates), window_size, (0, window_size))
         self.decay_rates = decay_rates
 
@@ -206,8 +215,7 @@ class OrthExponentialBasis(Basis):
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
         return scipy.linalg.orth(
-            np.stack([np.exp(-lam * sample_pts) for lam in self.decay_rates],
-                     axis=1)
+            np.stack([np.exp(-lam * sample_pts) for lam in self.decay_rates], axis=1)
         ).T
 
 
@@ -234,8 +242,7 @@ class MSplineBasis(Basis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, window_size:int,
-                 order: int = 2):
+    def __init__(self, n_basis_funcs: int, window_size: int, order: int = 2):
         super().__init__(n_basis_funcs, window_size, (0, window_size))
         self.order = order
 
@@ -243,7 +250,7 @@ class MSplineBasis(Basis):
         num_interior_knots = n_basis_funcs - order
 
         if order < 1:
-            raise ValueError('Spline order must be positive!')
+            raise ValueError("Spline order must be positive!")
         # Check hyperparameters.
         if num_interior_knots < 0:
             raise ValueError(
@@ -260,11 +267,13 @@ class MSplineBasis(Basis):
         #
         # TODO : allow users to specify the knot locations if
         # they want.... but this could be the default.
-        self.knot_locs = np.concatenate((
-            np.zeros(order - 1),
-            np.linspace(0, 1, num_interior_knots + 2),
-            np.ones(order - 1),
-        ))
+        self.knot_locs = np.concatenate(
+            (
+                np.zeros(order - 1),
+                np.linspace(0, 1, num_interior_knots + 2),
+                np.ones(order - 1),
+            )
+        )
 
     def gen_basis_funcs(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -285,8 +294,11 @@ class MSplineBasis(Basis):
         sample_pts = sample_pts / self.window_size
 
         return np.stack(
-            [mspline(sample_pts, self.order, i, self.knot_locs) for i in range(self.n_basis_funcs)],
-            axis=0
+            [
+                mspline(sample_pts, self.order, i, self.knot_locs)
+                for i in range(self.n_basis_funcs)
+            ],
+            axis=0,
         )
 
 
@@ -323,35 +335,33 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
 
     # General case, defined recursively
     else:
-        return k * (
-            (x - T[i]) * mspline(x, k - 1, i, T)
-            + (T[i + k] - x) * mspline(x, k - 1, i + 1, T)
-        ) / ((k-1) * (T[i + k] - T[i]))
+        return (
+            k
+            * (
+                (x - T[i]) * mspline(x, k - 1, i, T)
+                + (T[i + k] - x) * mspline(x, k - 1, i + 1, T)
+            )
+            / ((k - 1) * (T[i + k] - T[i]))
+        )
 
 
 # Short test
 if __name__ == "__main__":
-
     # For plotting.
     import matplotlib.pyplot as plt
 
     # # Create figure and grid of evaluation points.
     # fig, axes = plt.subplots(1, 5, sharey=True)
-
     # # Iterate over axes to plot.
     # for k, ax in enumerate(axes):
-        
     #     # Create spline object.
     #     spline = MSplineBasis(n_basis_funcs=6, window_size=1000, order=(k + 1))
-        
     #     # Transform and plot spline bases.
     #     ax.plot(spline.transform().T)
     #     ax.set_yticks([])
     #     ax.set_title(f"order-{k + 1}")
-
     # fig.tight_layout()
     # plt.show()
-
     # # Test for orthogonalized exponentials
     # basis = OrthExponentialBasis(
     #     decay_rates=np.logspace(-1, 0, 5),
@@ -360,12 +370,8 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots(1, 1)
     # ax.plot(basis.transform().T)
     # plt.show()
-
     # Test for raised cosines
-    basis = RaisedCosineBasis(
-        n_basis_funcs=5,
-        window_size=1000
-    )
+    basis = RaisedCosineBasis(n_basis_funcs=5, window_size=1000)
     fig, ax = plt.subplots(1, 1)
     ax.plot(basis.transform().T)
     plt.show()
@@ -383,6 +389,3 @@ if __name__ == "__main__":
     #     X[0].T
     # )
     # plt.show()
-
-
-

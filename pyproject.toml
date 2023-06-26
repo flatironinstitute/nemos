@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurostatslib"
+version = "0.1.0"
+authors = [
+    {name = "Edoardo Balzani", email = "ebalzani@flatironinstitute.org"},
+    {name = "William Broderick", email = "wbroderick@flatironinstitute.org"},
+    {name = "Guillaume Vejo", email = "gviejo@flatironinstitute.org"},
+    {name = "Alex Williams", email = "alex.h.williams@nyu.edu"}
+]
+description = "Toolbox for basic Generalized Linear Models (GLMs) for neural data analysis"
+readme = "README.md"
+requires-python = ">=3.8"
+keywords = ["neuroscience", "Poisson-GLM"]
+license = { file = "LICENSE" }
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10"
+]
+
+# Define dependencies for the project
+dependencies = [
+    'jax>=0.4',                     # Numerical computing library
+    'jaxopt>=0.6',                  # Optimization library built on JAX
+    'matplotlib>=3.7',              # Plotting library
+    'numpy>1.20',                   # Numerical computing library
+    'scikit-learn>=1.2',            # Machine learning library
+    'scipy>=1.10',                  # Scientific computing library
+    'typing_extensions>=4.6'        # Typing extensions for Python
+]
+
+
+
+# Configure package discovery for setuptools
+[tool.setuptools.packages.find]
+where = ["src"]             # The directory where package modules are located
+include = ["neurostatslib"] # The specific package(s) to include in the distribution
+
+
+# Define optional dependencies for the project
+[project.optional-dependencies]
+dev = [
+    "black",                        # Code formatter
+    "isort",                        # Import sorter
+    "pip-tools",                    # Dependency management
+    "pytest",                       # Testing framework
+    "flake8",                       # Code linter
+    "coverage",                     # Test coverage measurement
+    "pytest-cov",                   # Test coverage plugin for pytest
+]
+docs = [
+    "mkdocs",                       # Documentation generator
+    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
+    "mkdocs-section-index",         # Plugin for generating a section index in mkdocs
+    "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
+    "mkdocs-literate-nav",          # Plugin for literate-style navigation in mkdocs
+    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
+    "mkdocs-material"
+]
+
+
+[tool.black]
+target-version = ['py38', 'py39', 'py310']
+skip-string-normalization = false
+exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.md
+    | \.toml
+    | \.cfg
+    | \.txt
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | examples))'''
+
+# Configure isort
+[tool.isort]
+multi_line_output = 3             # Use three-line style for multi-line imports
+include_trailing_comma = true     # Include trailing comma in multi-line imports
+
+# Configure pytest
+[tool.pytest.ini_options]
+addopts = "--cov=neurostatslib"   # Additional options to pass to pytest, enabling coverage for the 'neurostatslib' package
+testpaths = ["tests"]             # Specify the directory where test files are located

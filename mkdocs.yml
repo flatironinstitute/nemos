@@ -1,0 +1,29 @@
+site_name: neurostatslib
+repo_url: https://github.com/flatironinstitute/generalized-linear-models
+
+theme:
+  name: 'material'                         # The theme name, using the 'material' theme
+  palette:
+    primary: 'light blue'                   # The primary color palette for the theme
+    features:
+      - navigation.tabs                    # Enable navigation tabs feature for the theme
+
+plugins:
+  - search
+  - gallery:
+        examples_dirs: docs/examples
+        gallery_dirs: docs/generated/gallery
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py            # Specify the script to generate the code reference pages
+  - literate-nav:
+        nav_file: docs/SUMMARY.md           # Specify the navigation file for literate-style navigation
+  - section-index                           # Enable the section-index plugin for generating a section index
+  - mkdocstrings
+
+
+
+nav:
+    - Home: index.md                        # Link to the index.md file (home page)
+    - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
+    - Code References: reference/            # Link to the reference/ directory

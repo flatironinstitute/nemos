@@ -1,26 +1,29 @@
+"""Utility functions for data pre-processing
+"""
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
+
+from functools import partial
+from typing import Optional, Union
+
 import jax
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
-from typing import Union, Optional
-from functools import partial
-import matplotlib.pyplot as plt
 
 # Broadcasted 1d convolution operations.
 # [[n x t],[w]] -> [n x (t - w + 1)]
-_CORR1 = jax.vmap(partial(jnp.convolve, mode='valid'), (0, None), 0)
+_CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
 # [[n x t],[p x w]] -> [n x p x (t - w + 1)]
 _CORR2 = jax.vmap(_CORR1, (None, 0), 0)
 
 
-def convolve_1d_basis(basis_matrix: ArrayLike,
-                      time_series: ArrayLike) -> ArrayLike:
+def convolve_1d_basis(basis_matrix: ArrayLike, time_series: ArrayLike) -> ArrayLike:
     """Parameters
     ----------
     basis_matrix : (n_basis_funcs, window_size)
-    	Matrix holding 1d basis functions.
+        Matrix holding 1d basis functions.
     time_series : (n_neurons, n_timebins)
         Matrix holding multivariate time series.
 
@@ -38,18 +41,17 @@ def convolve_1d_basis(basis_matrix: ArrayLike,
     window size of ``window_size``.
 
     """
-    return _CORR2(
-    	jnp.atleast_2d(basis_matrix),
-    	jnp.atleast_2d(time_series)
-    )
+    return _CORR2(jnp.atleast_2d(basis_matrix), jnp.atleast_2d(time_series))
 
 
-def plot_spike_raster(spike_data: Union[jnp.ndarray, np.ndarray],
-                      lineoffsets: Union[None, float, ArrayLike] = None,
-                      linelengths: Union[float, ArrayLike] = .2,
-                      linewidths: Union[float, ArrayLike] = .5,
-                      ax: Optional[plt.Axes] = None,
-                      **kwargs) -> plt.Axes:
+def plot_spike_raster(
+    spike_data: Union[jnp.ndarray, np.ndarray],
+    lineoffsets: Union[None, float, ArrayLike] = None,
+    linelengths: Union[float, ArrayLike] = 0.2,
+    linewidths: Union[float, ArrayLike] = 0.5,
+    ax: Optional[plt.Axes] = None,
+    **kwargs,
+) -> plt.Axes:
     """Plot decent looking spike raster.
 
     We set ``yticks=[]`` and ``xlim=[0, spike_data.shape[1]]``.
@@ -88,12 +90,22 @@ def plot_spike_raster(spike_data: Union[jnp.ndarray, np.ndarray],
 
     """
     if spike_data.ndim != 2:
-        raise ValueError(f"spike_data should be 2d, but got {spike_data.ndim}d instead!")
+        raise ValueError(
+            f"spike_data should be 2d, but got {spike_data.ndim}d instead!"
+        )
     events = [d.nonzero()[0] for d in spike_data]
     if ax is None:
-        _, ax = plt.subplots(1, 1, figsize=(spike_data.shape[1]/100, spike_data.shape[0]/5))
+        _, ax = plt.subplots(
+            1, 1, figsize=(spike_data.shape[1] / 100, spike_data.shape[0] / 5)
+        )
     if lineoffsets is None:
         lineoffsets = jnp.arange(len(events))
-    ax.eventplot(events, lineoffsets=lineoffsets, linelengths=linelengths, linewidths=linewidths, **kwargs)
+    ax.eventplot(
+        events,
+        lineoffsets=lineoffsets,
+        linelengths=linelengths,
+        linewidths=linewidths,
+        **kwargs,
+    )
     ax.set(yticks=[], xlim=[0, spike_data.shape[1]])
     return ax
