@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import abc
 import warnings
-from typing import Tuple, Any
+
+from typing import Tuple
 
 import numpy as np
-from numpy import ndarray
+import scipy.linalg
+
 from numpy.typing import NDArray
 
 from neurostatslib.utils import row_wise_kron
@@ -734,7 +736,8 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
                         np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
 
 
-def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
+
+def mspline(x: NDArray, k: int, i: int, T: NDArray):
     """Compute M-spline basis function.
 
     Parameters
@@ -768,10 +771,16 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
 
     # General case, defined recursively
     else:
-        return k * (
+
+        return (
+            k
+            * (
                 (x - T[i]) * mspline(x, k - 1, i, T)
                 + (T[i + k] - x) * mspline(x, k - 1, i + 1, T)
-        ) / ((k - 1) * (T[i + k] - T[i]))
+            )
+            / ((k - 1) * (T[i + k] - T[i]))
+        )
+
 
 
 if __name__ == "__main__":
