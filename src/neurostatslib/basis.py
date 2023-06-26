@@ -736,36 +736,45 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
                         np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
 
 class OrthExponentialBasis(Basis):
-    """Set of 1D basis functions that are decaying exponentials numerically
+    """
+    Set of 1D basis functions that are decaying exponentials numerically
     orthogonalized.
 
     Parameters
     ----------
-    decay_rates : (n_basis_funcs,)
-        Decay rates of the basis functions
+    n_basis_funcs
+            Number of basis functions.
+        decay_rates : (n_basis_funcs,)
+            Decay rates of the exponentials.
+        gb_limit : optional
+            The size limit in GB for the model matrix that can be generated, by default 16.0 GB.
     """
 
     def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating], gb_limit: float = 16.0):
         super().__init__(n_basis_funcs=n_basis_funcs, gb_limit=gb_limit)
+
         if decay_rates.shape[0] != n_basis_funcs:
-            raise ValueError(f"The number of basis function must match the number of decay rates provided. Basis function provided ({n_basis_funcs}) != Dacays rate provided ({decay_rates.shape[0]})")
+            raise ValueError(f"The number of basis functions must match the number of decay rates provided. "
+                             f"Number of basis functions provided: {n_basis_funcs}, "
+                             f"Number of decay rates provided: {decay_rates.shape[0]}")
+
+
         self._decay_rates = decay_rates
         self._n_input_samples = 1
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
-        """Generate basis functions with given spacing.
+        """
+        Generate basis functions with given spacing.
 
         Parameters
         ----------
         sample_pts : (n_pts,)
-            Spacing for basis functions, holding elements on the interval [0,
-            1). 
+            Spacing for basis functions, holding elements on the interval [0, 1).
 
         Returns
         -------
         basis_funcs : (n_basis_funcs, n_pts)
-            Evaluated spline basis functions
-
+            Evaluated exponentially decaying basis functions, numerically orthogonalized.
         """
         
         # because of how scipy.linalg.orth works, have to create a matrix of
