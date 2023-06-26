@@ -1,4 +1,7 @@
-"""Generate the code reference pages and navigation."""
+"""Generate the code reference pages and navigation.
+
+See [CCN template repo](https://ccn-template.readthedocs.io/en/latest/notes/03-documentation/) for why.
+"""
 
 from pathlib import Path
 
