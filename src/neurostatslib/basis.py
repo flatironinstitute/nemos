@@ -735,7 +735,61 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         return np.power(10, -(np.log10((self._n_basis_funcs - 1) * np.pi) + 1) * sample_pts +
                         np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
 
+class OrthExponentialBasis(Basis):
+    """Set of 1D basis functions that are decaying exponentials numerically
+    orthogonalized.
 
+    Parameters
+    ----------
+    decay_rates : (n_basis_funcs,)
+        Decay rates of the basis functions
+    """
+
+    def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating], gb_limit: float = 16.0):
+        super().__init__(n_basis_funcs=n_basis_funcs, gb_limit=gb_limit)
+        if decay_rates.shape[0] != n_basis_funcs:
+            raise ValueError(f"The number of basis function must match the number of decay rates provided. Basis function provided ({n_basis_funcs}) != Dacays rate provided ({decay_rates.shape[0]})")
+        self._decay_rates = decay_rates
+        self._n_input_samples = 1
+
+    def _evaluate(self, *sample_pts: NDArray) -> NDArray:
+        """Generate basis functions with given spacing.
+
+        Parameters
+        ----------
+        sample_pts : (n_pts,)
+            Spacing for basis functions, holding elements on the interval [0,
+            1). 
+
+        Returns
+        -------
+        basis_funcs : (n_basis_funcs, n_pts)
+            Evaluated spline basis functions
+
+        """
+        
+        # because of how scipy.linalg.orth works, have to create a matrix of
+        # shape (n_pts, n_basis_funcs) and then transpose, rather than
+        # directly computing orth on the matrix of shape (n_basis_funcs,
+        # n_pts)
+        return scipy.linalg.orth(
+            np.stack([np.exp(-lam * sample_pts[0]) for lam in self._decay_rates], axis=1)
+        ).T
+
+    def _get_samples(self, *n_samples: int) -> Tuple[NDArray]:
+        """
+        Generate an array equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples
+           The number of samples in each axis of the grid.
+
+        Returns
+        -------
+           The equi-spaced sample location.
+        """
+        return np.linspace(0, 1, n_samples[0]),
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
     """Compute M-spline basis function.
