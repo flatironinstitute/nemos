@@ -20,7 +20,25 @@ def test_basis_abstract_method_compliance() -> None:
     return
 
 
-def test_init_and_evaluate_basis(initialize_basis, capfd):
+def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
+    """
+    Test initialization and evaluation of basis classes.
+
+    Parameters:
+    -----------
+    - initialize_basis (dict):
+        A dictionary containing basis names as keys and their initialization arguments as values.
+    - capfd
+        pytest fixture for capturing stdout and stderr.
+
+    Raises:
+    -------
+    - ValueError
+        If the dimensions of the evaluated basis do not match the expected dimensions.
+
+    Returns:
+    - None
+    """
     for basis_name in initialize_basis:
         basis_class = getattr(basis, basis_name)
         with capfd.disabled():
