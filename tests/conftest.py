@@ -1,6 +1,20 @@
 import numpy as np
 import pytest
 
+
+def pytest_generate_tests(metafunc):
+    # called once per each test function
+    if not (hasattr(metafunc.function, '__qualname__') and '.' in metafunc.function.__qualname__):
+        # skip if not class
+        return
+
+    funcarglist = metafunc.cls.params[metafunc.function.__name__]
+
+    argnames = sorted(funcarglist[0])
+    metafunc.parametrize(
+        argnames, [[funcargs[name] for name in argnames] for funcargs in funcarglist]
+    )
+
 @pytest.fixture
 def initialize_basis():
     init_input_dict = {
@@ -33,3 +47,4 @@ def min_basis_funcs(basis_obj):
         min_basis['BSplineBasis'] = basis_obj._order + 2
 
     yield min_basis[basis_obj.__class__.__name__] <= basis_obj._n_basis_funcs
+

@@ -6,7 +6,8 @@ import numpy as np
 from numpy.typing import NDArray
 # automatic define user accessible basis and check the methods
 
-# @pytest.parametrize('basis_func',)
+
+
 def test_basis_abstract_method_compliance() -> None:
     """
     Check that each non-abstract class implements all abstract methods of super-classes.
@@ -63,6 +64,25 @@ def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
                         f"The window size is {window_size}",
                         f"The second dimension of the evaluated basis is {eval_basis.shape[1]}")
 
-@pytest.mark.parametrize("min_basis_funcs", [basis.MSplineBasis], indirect=True)
-def test_min_basis_requirements_error():
-    pass
+
+class TestBspline:
+    # a map specifying multiple argument sets for a test method, this parameters should raise an exception
+    params = {'test_msplinebasis_insufficient_nbasis': []}
+
+    # fill the parameter grid for M-spline so that it fails due to the number of basis
+    for n_basis in [-1, 0]:
+        for order in [2]:
+            params['test_msplinebasis_insufficient_nbasis'].append({'n_basis': n_basis, 'order': order})
+
+    params['test_basis_eval_checks'] = [
+        {'basis_obj': basis.MSplineBasis(10)}
+        , basis.RaisedCosineBasisLog(10),basis.RaisedCosineBasisLinear(10),basis.OrthExponentialBasis(10, np.linspace(1,10,10))}
+    ]
+    def test_msplinebasis_insufficient_nbasis(self, n_basis, order):
+        with pytest.raises(ValueError):
+            basis.MSplineBasis(n_basis, order)
+
+    def test_basis_eval_checks(self, n_basis, order):
+        with pytest.raises(ValueError):
+            basis.MSplineBasis(n_basis, order)
+
