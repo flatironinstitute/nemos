@@ -57,11 +57,12 @@ class Basis(abc.ABC):
         Multiply two Basis objects together. Returns a Basis of 'multiply' type, which can be used to model
         multi-dimensional response functions.
     """
-
     def __init__(self, n_basis_funcs: int, gb_limit: float = 16.0) -> None:
         self._n_basis_funcs = n_basis_funcs
         self._GB_limit = gb_limit
         self._n_input_samples = 0
+        self._check_n_basis_min()
+
 
     @abc.abstractmethod
     def _evaluate(self, *xi: NDArray) -> NDArray:
@@ -250,6 +251,18 @@ class Basis(abc.ABC):
         if size_in_bytes > self._GB_limit * 10 ** 9:
             raise MemoryError(f"Model matrix size exceeds {self._GB_limit} GB.")
 
+    @abc.abstractmethod
+    def _check_n_basis_min(self) -> None:
+        """
+        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        pass
     def __add__(self, other: Basis) -> Basis:
         """
         Add two Basis objects together.
@@ -317,6 +330,9 @@ class Addbasis(Basis, abc.ABC):
         self._basis1 = basis1
         self._basis2 = basis2
         return
+
+    def _check_n_basis_min(self) -> None:
+        pass
 
     def _evaluate(self, *xi: NDArray) -> NDArray:
         """
@@ -392,6 +408,9 @@ class Mulbasis(Basis, abc.ABC):
         self._basis1 = basis1
         self._basis2 = basis2
         return
+
+    def _check_n_basis_min(self) -> None:
+        pass
 
     def _evaluate(self, *xi: NDArray) -> NDArray:
         """
@@ -593,6 +612,20 @@ class MSplineBasis(SplineBasis):
             axis=0
         )
 
+    def _check_n_basis_min(self) -> None:
+        """
+        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self._n_basis_funcs < 1:
+            raise ValueError(
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead")
+
 
 class RaisedCosineBasis(Basis, abc.ABC):
     def __init__(self, n_basis_funcs: int) -> None:
@@ -694,6 +727,20 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         """
         return sample_pts * np.pi * (self._n_basis_funcs - 1)
 
+    def _check_n_basis_min(self) -> None:
+        """
+        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self._n_basis_funcs < 1:
+            raise ValueError(
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead")
+
 
 class RaisedCosineBasisLog(RaisedCosineBasis):
     """Log-spaced raised cosine basis functions used by Pillow et al. [2]_.
@@ -735,6 +782,20 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         return np.power(10, -(np.log10((self._n_basis_funcs - 1) * np.pi) + 1) * sample_pts +
                         np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
 
+    def _check_n_basis_min(self) -> None:
+        """
+        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self._n_basis_funcs < 2:
+            raise ValueError(
+                f"Object class {self.__class__.__name__} requires >= 2 basis elements. {self._n_basis_funcs} basis elements specified instead")
+
 class OrthExponentialBasis(Basis):
     """
     Set of 1D basis functions that are decaying exponentials numerically
@@ -761,6 +822,20 @@ class OrthExponentialBasis(Basis):
 
         self._decay_rates = decay_rates
         self._n_input_samples = 1
+
+    def _check_n_basis_min(self) -> None:
+        """
+        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self._n_basis_funcs < 1:
+            raise ValueError(
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead")
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """
@@ -852,8 +927,8 @@ if __name__ == "__main__":
     plt.close('all')
 
 
-    samples = np.random.normal(size=100)
-    basis1 = MSplineBasis(15, order=4)
+    samples = np.random.uniform(size=100)
+    basis1 = RaisedCosineBasisLog(5)
     basis2 = MSplineBasis(15, order=4)
     basis_add = basis1 + basis2
 

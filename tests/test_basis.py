@@ -26,7 +26,7 @@ def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
 
     Parameters:
     -----------
-    - initialize_basis (dict):
+    - initialize_basis:
         A dictionary containing basis names as keys and their initialization arguments as values.
     - capfd
         pytest fixture for capturing stdout and stderr.
@@ -42,7 +42,9 @@ def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
     for basis_name in initialize_basis:
         basis_class = getattr(basis, basis_name)
         with capfd.disabled():
-            print(f"Testing class {basis_name}\n--------------------")
+            disp_str = f"Testing class {basis_name}\n"
+            disp_str += '-' * (len(disp_str) - 1)
+            print(disp_str)
         for args in initialize_basis[basis_name]:
             basis_instance = basis_class(*args)
             with capfd.disabled():
@@ -60,3 +62,7 @@ def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
                         f"Dimensions do not agree: The window size should match the second dimensiton of the evaluated basis."
                         f"The window size is {window_size}",
                         f"The second dimension of the evaluated basis is {eval_basis.shape[1]}")
+
+@pytest.mark.parametrize("min_basis_funcs", [basis.MSplineBasis], indirect=True)
+def test_min_basis_requirements_error():
+    pass
