@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-
+import neurostatslib.basis as basis
 
 def pytest_generate_tests(metafunc):
     # called once per each test function
@@ -16,7 +16,7 @@ def pytest_generate_tests(metafunc):
     )
 
 @pytest.fixture
-def initialize_basis():
+def init_basis_parameter_grid():
     init_input_dict = {
         'MSplineBasis': [
             (nbasis, order) for nbasis in range(6,10) for order in range(1, 5)
@@ -33,18 +33,53 @@ def initialize_basis():
     }
     return init_input_dict
 
-@pytest.fixture
-def min_basis_funcs(basis_obj):
-    min_basis = {
-        'MSplineBasis': 1,
-        'RaisedCosineBasisLinear': 1,
-        'RaisedCosineBasisLog': 2,
-        'OrthExponentialBasis': 1
-    }
-    if basis_obj.__class__.__name__ == 'CyclicBsplineBasis':
-        min_basis['CyclicBsplineBasis'] = max(basis_obj._order * 2 - 2, basis_obj._order + 2)
-    elif basis_obj.__class__.__name__ == 'CyclicBsplineBasis':
-        min_basis['BSplineBasis'] = basis_obj._order + 2
 
-    yield min_basis[basis_obj.__class__.__name__] <= basis_obj._n_basis_funcs
+
+@pytest.fixture
+def min_basis_funcs():
+    min_basis = {}
+    for spline in ['MSplineBasis']:
+        for order in [-1, 0, 1, 2, 3, 4]:
+            for n_basis in [-1, 0, 1, 3, 10, 20]:
+
+                if spline == 'CyclicBSplineBasis':
+                    raise_exception = (n_basis < max(order * 2 - 2, order + 2)) or (order < 2)
+                elif spline == 'BSplineBasis':
+                    raise_exception = n_basis < order + 2
+                elif spline == 'MSplineBasis':
+                    raise_exception = order < 1
+
+                min_basis[spline] = {'args': {'order': order, 'n_basis_funcs': n_basis}, 'raise_exception': raise_exception}
+
+    for n_basis in [-1, 0, 1, 3, 10, 20]:
+        min_basis['RaisedCosineBasisLinear'] = {'args':{'n_basis_funcs': n_basis}, 'raise_exception': n_basis < 1}
+        min_basis['RaisedCosineBasisLog'] = {'args':{'n_basis_funcs': n_basis}, 'raise_exception': n_basis < 2}
+        min_basis['OrthExponentialBasis'] = {'args':{'n_basis_funcs': n_basis, 'decay_rates':np.linspace(0,1,max(1,n_basis))}, 'raise_exception': n_basis < 1}
+
+
+    return min_basis
+
+
+@pytest.fixture
+def evaluate_basis_object():
+    params = {
+        'MSplineBasis': {'basis_obj': basis.MSplineBasis(10), 'n_input': 1},
+        'RaisedCosineBasisLinear': {'basis_obj': basis.MSplineBasis(10), 'n_input': 1},
+        'OrthExponentialBasis': {'basis_obj': basis.OrthExponentialBasis(10, np.linspace(1, 10, 10)), 'n_input': 1},
+        'add2': {'basis_obj': basis.MSplineBasis(10) + basis.MSplineBasis(10), 'n_input': 2},
+        'mul2': {'basis_obj': basis.MSplineBasis(10) * basis.MSplineBasis(10), 'n_input': 2},
+        'add3': {'basis_obj': basis.MSplineBasis(10) + basis.MSplineBasis(10) + basis.MSplineBasis(10), 'n_input': 3}
+
+    }
+
+    return params
+
+@pytest.fixture
+def basis_sample_consistency_check():
+    params = [
+        {'basis_obj': basis.MSplineBasis(10) + basis.MSplineBasis(10), 'n_input': 2},
+        {'basis_obj': basis.MSplineBasis(10) * basis.MSplineBasis(10), 'n_input': 2},
+        {'basis_obj': basis.MSplineBasis(10) + basis.MSplineBasis(10) + basis.MSplineBasis(10), 'n_input': 3}
+    ]
+    return params
 

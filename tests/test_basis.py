@@ -6,8 +6,6 @@ import numpy as np
 from numpy.typing import NDArray
 # automatic define user accessible basis and check the methods
 
-
-
 def test_basis_abstract_method_compliance() -> None:
     """
     Check that each non-abstract class implements all abstract methods of super-classes.
@@ -20,15 +18,47 @@ def test_basis_abstract_method_compliance() -> None:
     utils_testing.check_all_abstract_methods_compliance(basis)
     return
 
-
-def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
+def test_all_basis_are_in_fixture(init_basis_parameter_grid: pytest.fixture,
+                                  min_basis_funcs: pytest.fixture,
+                                  evaluate_basis_object: pytest.fixture) -> None:
     """
-    Test initialization and evaluation of basis classes.
+    Check that all the basis initialization are tested by inspecting the basis module and make sure that all
+    the non-abstract classes, except additive and multiplicative are listed in the fixture. If this test fails,
+    it means that you need to add some newly implemented basis function to the fixtures.
+
+    Parameters
+    ----------
+    init_basis_parameter_grid
+        Fixture containing the initialization arguments for the basis classes.
+
+    min_basis_funcs
+        Fixture containing a dictionary specifying the minimum number of basis functions allowed.
+
+    evaluate_basis_object
+        Fixture containing a dictionary specifying the basis objects used for evaluation.
+
+    Returns
+    -------
+    None
+    """
+    for class_name, class_obj in utils_testing.get_non_abstract_classes(basis):
+        print(f"\n-> Testing \"{class_name}\"")
+        assert (class_name in init_basis_parameter_grid.keys())
+        assert (class_name in min_basis_funcs.keys())
+        assert (class_name in evaluate_basis_object.keys())
+
+def test_init_and_evaluate_basis(init_basis_parameter_grid: pytest.fixture, capfd: pytest.fixture) -> None:
+    """
+    Test initialization and evaluation of basis classes:
+    Checks:
+        - does the initialization accepts the expected inputs?
+        - does evaluation works and returns an NDArray with the expected dimensions?
 
     Parameters:
     -----------
     - initialize_basis:
-        A dictionary containing basis names as keys and their initialization arguments as values.
+        A dictionary containing basis names as keys and their initialization arguments as values. This is defined
+        as a pytest.fixture in conftest.py
     - capfd
         pytest fixture for capturing stdout and stderr.
 
@@ -40,13 +70,13 @@ def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
     Returns:
     - None
     """
-    for basis_name in initialize_basis:
+    for basis_name in init_basis_parameter_grid:
         basis_class = getattr(basis, basis_name)
         with capfd.disabled():
             disp_str = f"Testing class {basis_name}\n"
             disp_str += '-' * (len(disp_str) - 1)
             print(disp_str)
-        for args in initialize_basis[basis_name]:
+        for args in init_basis_parameter_grid[basis_name]:
             basis_instance = basis_class(*args)
             with capfd.disabled():
                 print(f"num basis: {args[0]}")
@@ -64,25 +94,106 @@ def test_init_and_evaluate_basis(initialize_basis: dict, capfd) -> None:
                         f"The window size is {window_size}",
                         f"The second dimension of the evaluated basis is {eval_basis.shape[1]}")
 
+def test_min_basis_number(min_basis_funcs: pytest.fixture) -> None:
+    """
+    Check that the expected minimum number of basis is appropriately matched and a ValueError exception is raised
+    otherwise.
 
-class TestBspline:
-    # a map specifying multiple argument sets for a test method, this parameters should raise an exception
-    params = {'test_msplinebasis_insufficient_nbasis': []}
+    Parameters
+    ----------
+    min_basis_funcs : pytest.fixture
+        Fixture containing a dictionary with the following keys:
+            'args': ndarray
+                The basis function initialization arguments.
+            'raise_exception': bool
+                True if the argument would result in an exception being raised, False otherwise.
 
-    # fill the parameter grid for M-spline so that it fails due to the number of basis
-    for n_basis in [-1, 0]:
-        for order in [2]:
-            params['test_msplinebasis_insufficient_nbasis'].append({'n_basis': n_basis, 'order': order})
+    Returns
+    -------
+    None
+    """
+    for class_name in min_basis_funcs:
+        print(f"\n-> Testing \"{class_name}\"")
+        basis_obj = getattr(basis, class_name)
+        # params that should not raise exception
+        if not min_basis_funcs[class_name]['raise_exception']:
+            basis_obj(**min_basis_funcs[class_name]['args'])
+        else:
+            with pytest.raises(ValueError):
+                basis_obj(**min_basis_funcs[class_name]['args'])
 
-    params['test_basis_eval_checks'] = [
-        {'basis_obj': basis.MSplineBasis(10)}
-        , basis.RaisedCosineBasisLog(10),basis.RaisedCosineBasisLinear(10),basis.OrthExponentialBasis(10, np.linspace(1,10,10))}
-    ]
-    def test_msplinebasis_insufficient_nbasis(self, n_basis, order):
+
+def test_basis_sample_consistency_check(basis_sample_consistency_check: pytest.fixture, capfd: pytest.fixture) -> None:
+    """
+    Check that the expected minimum number of basis is appropriately matched and a ValueError exception is raised
+    otherwise.
+
+    Parameters
+    ----------
+    min_basis_funcs
+        Fixture containing a dictionary with the following keys:
+            "args" : NDArray
+                The basis function initialization arguments.
+            "raise_exception" : bool
+                True if the argument would result in an exception being raised, False otherwise.
+
+    Returns
+    -------
+    None
+    """
+    for pars in basis_sample_consistency_check:
+        basis_obj = pars['basis_obj']
+        n_input = pars['n_input']
+        # check that consistent samples do not raise an error
+        with capfd.disabled():
+            print(f' -> Testing \"{basis_obj.__class__.__name__}\" with {basis_obj._n_input_samples} components')
+
+        inputs = [np.linspace(0, 1, 100 + k) for k in range(n_input)]
         with pytest.raises(ValueError):
-            basis.MSplineBasis(n_basis, order)
+            capfd.readouterr()
+            basis_obj.evaluate(*inputs)
 
-    def test_basis_eval_checks(self, n_basis, order):
-        with pytest.raises(ValueError):
-            basis.MSplineBasis(n_basis, order)
+def test_basis_eval_checks(evaluate_basis_object: pytest.fixture, capfd: pytest.fixture):
+    """
+    Test if the basis function object can be evaluated, and check that the appropriate exceptions are raised
+    if the input does not conform with the requirements.
+
+    Parameters
+    ----------
+    evaluate_basis_object
+        Fixture containing a dictionary with the following keys:
+            "basis_obj" : basis object
+                The basis function object to test.
+            "n_input" : int
+                The number of input samples.
+
+    capfd
+        Fixture for capturing stdout and stderr.
+
+    Returns
+    -------
+    None
+    """
+    for class_name in evaluate_basis_object:
+        basis_obj = evaluate_basis_object[class_name]['basis_obj']
+        n_input = evaluate_basis_object[class_name]['n_input']
+        # check that the correct input do not raise an error
+        with capfd.disabled():
+            print(f" -> Testing \"{basis_obj.__class__.__name__}\"")
+        inputs = [np.linspace(0, 1, 20)] * n_input
+        basis_obj.evaluate(*inputs)
+        inputs = [20] * n_input
+        basis_obj.evaluate_on_grid(*inputs)
+        # hide print conditioning number
+        capfd.readouterr()
+        # check that incorrect input number raises value error
+        for delta_input in [-1, 1]:
+            with pytest.raises(ValueError):
+                inputs = [np.linspace(0,1,10)] * (n_input + delta_input) # wrong number of inputs passed
+                basis_obj.evaluate(*inputs)
+
+        for delta_input in [-1, 1]:
+            with pytest.raises(ValueError):
+                inputs = [10] * (n_input + delta_input) # wrong number of inputs passed
+                basis_obj.evaluate_on_grid(*inputs)
 

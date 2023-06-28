@@ -118,8 +118,9 @@ class Basis(abc.ABC):
         """
         # checks on input and outputs
         self._check_samples_consistency(*xi)
-        self._check_full_model_matrix_size(xi[0].shape[0])
         self._check_input_number(xi)
+        self._check_full_model_matrix_size(xi[0].shape[0])
+
 
         eval_basis = self._evaluate(*xi)
 
@@ -190,7 +191,7 @@ class Basis(abc.ABC):
         """
         if eval_basis.shape[0] > eval_basis.shape[1]:
             warnings.warn('Basis set number exceeds the number of samples! '
-                          'Reduce the number of basis or increase sample size')
+                          'Consider reducing the number of basis or increase sample size.')
 
     def _check_input_number(self, xi: Tuple) -> None:
         """
@@ -276,7 +277,7 @@ class Basis(abc.ABC):
         -------
             The resulting Basis object.
         """
-        return Addbasis(self, other)
+        return AdditiveBasis(self, other)
 
     def __mul__(self, other) -> Basis:
         """
@@ -291,10 +292,10 @@ class Basis(abc.ABC):
         -------
             The resulting Basis object.
         """
-        return Mulbasis(self, other)
+        return MultiplicativeBasis(self, other)
 
 
-class Addbasis(Basis, abc.ABC):
+class AdditiveBasis(Basis, abc.ABC):
     """
     Class representing the addition of two Basis objects.
 
@@ -323,7 +324,7 @@ class Addbasis(Basis, abc.ABC):
 
     """
 
-    def __init__(self, basis1, basis2) -> None:
+    def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
@@ -370,10 +371,10 @@ class Addbasis(Basis, abc.ABC):
         """
         sample_1 = self._basis1._get_samples(*n_samples[: self._basis1._n_input_samples])
         sample_2 = self._basis2._get_samples(*n_samples[self._basis1._n_input_samples:])
-        return sample_1,  sample_2
+        return sample_1 + sample_2
 
 
-class Mulbasis(Basis, abc.ABC):
+class MultiplicativeBasis(Basis, abc.ABC):
     """
     Class representing the multiplication (external product) of two Basis objects.
 
@@ -933,24 +934,24 @@ if __name__ == "__main__":
     basis_add = basis1 + basis2
 
     basis_add_add = basis_add + basis2
-
-    basis_add_add_add = basis_add_add + basis_add
-
-    print(basis_add.evaluate(samples, samples).shape)
-    print(basis_add_add.evaluate(samples, samples, samples).shape)
-    print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
-
-    basis_rcl = RaisedCosineBasisLog(15)
-    basi_ms = MSplineBasis(15, order=4)
-    mulbase = basis_rcl * basi_ms
-    X, Y, Z = mulbase.evaluate_on_grid(100, 110) # maybe create a visualize basis class.
-
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    Z = np.array(Z)
-    Z[Z == 0] = np.nan
-    ax.plot_surface(X, Y, Z[50], cmap="viridis", alpha=0.8)
-    ax.plot_surface(X, Y, Z[100], cmap="rainbow", alpha=0.8)
-    ax.plot_surface(X, Y, Z[200], cmap="inferno", alpha=0.8)
+    basis_add_add.evaluate_on_grid(10,10,10)
+    # basis_add_add_add = basis_add_add + basis_add
+    #
+    # print(basis_add.evaluate(samples, samples).shape)
+    # print(basis_add_add.evaluate(samples, samples, samples).shape)
+    # print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
+    #
+    # basis_rcl = RaisedCosineBasisLog(15)
+    # basi_ms = MSplineBasis(15, order=4)
+    # mulbase = basis_rcl * basi_ms
+    # X, Y, Z = mulbase.evaluate_on_grid(100, 110) # maybe create a visualize basis class.
+    #
+    # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    # Z = np.array(Z)
+    # Z[Z == 0] = np.nan
+    # ax.plot_surface(X, Y, Z[50], cmap="viridis", alpha=0.8)
+    # ax.plot_surface(X, Y, Z[100], cmap="rainbow", alpha=0.8)
+    # ax.plot_surface(X, Y, Z[200], cmap="inferno", alpha=0.8)
     #
     # # Customize the plot
     # ax.set_xlabel("X")
