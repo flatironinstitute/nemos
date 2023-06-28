@@ -75,7 +75,7 @@ class GLM:
         spike_data: NDArray,
         init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ):
-        """Fit GLM to spiking data.
+        """Fit GLM to spiking data. 1
 
         Following scikit-learn API, the solutions are stored as attributes
         ``spike_basis_coeff_`` and ``baseline_log_fr``.
