@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 ## Define a basis function
 
@@ -6,8 +7,6 @@ Let's start by defining a basis function object of the type `MSplineBasis`. The 
 - the number of basis functions, which should be a positive integer.
 - the order of the spline, which should be an integer greater than 1.
 """
-
-# %%
 
 import numpy as np
 import matplotlib.pylab as plt
@@ -28,6 +27,7 @@ mspline_basis = nsl.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
 # An equi-spaced set of knots will cover the range between min( `samples` )  and max(`samples`) will be generated.
 
 # %%
+
 samples = np.linspace(0,10, 1000)
 eval_basis = mspline_basis.evaluate(samples)
 
@@ -36,10 +36,36 @@ print(f"Evaluated M-spline of order {order} with {eval_basis.shape[0]} "
 # %%
 # Plot the basis elements
 # -----------------------
+
+# %%
+
 plt.figure()
 plt.title(f"M-spline basis with {eval_basis.shape[0]} elements")
 plt.plot(eval_basis.T)
 plt.show()
+
+
+
+# %%
+# Evaluate a basis and plot a log-spaced Cosine Raised basis
+# ----------------------------------------------------------
+# This basis initialization requires only the number of basis as an input. The domain of the basis
+# is the interval [0,1], therefore the input to evaluate must be in that domain
+
+# %%
+raised_cosine_log = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=10)
+samples = np.linspace(0,1, 1000)
+eval_basis = raised_cosine_log.evaluate(samples)
+
+
+# %%
+# Plot log-spaced Raised Cosine basis
+# -----------------------------------
+plt.figure()
+plt.title(f"Log-spaced Raised Cosine basis with {eval_basis.shape[0]} elements")
+plt.plot(eval_basis.T)
+plt.show()
+
 
 
 
