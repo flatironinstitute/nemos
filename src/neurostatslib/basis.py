@@ -535,8 +535,10 @@ class SplineBasis(Basis, abc.ABC):
         assert perc_low < perc_high, "perc_low must be less than perc_high."
 
         # clip to avoid numerical errors in case of percentile numerical precision close to 0 and 1
+        # Spline basis have support on the semi-open [a, b)  interval, we add a small epsilon
+        # to mx so that the so that basis_element(max(samples)) != 0
         mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
-        mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100))
+        mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100)) + 10**-8
 
         self.knot_locs = np.concatenate(
             (

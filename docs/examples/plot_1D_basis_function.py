@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""
+""" 
+# Plot 1D basis functions
+
 ## Define a basis function
 
 Let's start by defining a basis function object of the type `MSplineBasis`. The hyperparameters required to initialize the class are:
@@ -49,12 +51,12 @@ plt.show()
 # %%
 # Evaluate a basis and plot a log-spaced Cosine Raised basis
 # ----------------------------------------------------------
-# This basis initialization requires only the number of basis as an input. The domain of the basis
-# is the interval [0,1], therefore the input to evaluate must be in that domain
+# This basis initialization requires only the number of basis as an input. 
+# The basis has support on the interval [0,1].
 
 # %%
 raised_cosine_log = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=10)
-samples = np.linspace(0,1, 1000)
+samples = np.linspace(0, 1, 1000)
 eval_basis = raised_cosine_log.evaluate(samples)
 
 
