@@ -606,7 +606,7 @@ class MSplineBasis(SplineBasis):
         """
 
         # add knots if not passed
-        self._generate_knots(sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=True)
+        self._generate_knots(sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=False)
 
         return np.stack(
             [mspline(sample_pts[0], self._order, i, self.knot_locs) for i in range(self._n_basis_funcs)],
@@ -930,7 +930,8 @@ if __name__ == "__main__":
 
     samples = np.random.uniform(size=100)
     basis1 = RaisedCosineBasisLog(5)
-    basis2 = MSplineBasis(15, order=4)
+    basis2 = MSplineBasis(10, order=3)
+    res = basis2.evaluate(np.linspace(0,1,1000))
     basis_add = basis1 + basis2
 
     basis_add_add = basis_add + basis2
