@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# 2D Basis Functions Plotting
+# Plotting 2D Basis Functions
 
 ## Defining a 2D Basis Function
 
