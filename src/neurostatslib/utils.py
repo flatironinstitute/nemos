@@ -110,6 +110,7 @@ def plot_spike_raster(
     ax.set(yticks=[], xlim=[0, spike_data.shape[1]])
     return ax
 
+
 def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True):
     """
     Compute the row-wise Kronecker product between two matrices using JAX.
@@ -140,7 +141,7 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True):
         A = A.T
         C = C.T
 
-    @jax.jit if jit else lambda x: x
+    @ jax.jit if jit else lambda x: x
     def row_wise_kron(a, c):
         return jnp.kron(a, c)
 
