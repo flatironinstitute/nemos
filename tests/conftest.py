@@ -65,6 +65,7 @@ def evaluate_basis_object():
     params = {
         'MSplineBasis': {'basis_obj': basis.MSplineBasis(10), 'n_input': 1},
         'RaisedCosineBasisLinear': {'basis_obj': basis.MSplineBasis(10), 'n_input': 1},
+        'RaisedCosineBasisLog': {'basis_obj': basis.MSplineBasis(10), 'n_input': 1},
         'OrthExponentialBasis': {'basis_obj': basis.OrthExponentialBasis(10, np.linspace(1, 10, 10)), 'n_input': 1},
         'add2': {'basis_obj': basis.MSplineBasis(10) + basis.MSplineBasis(10), 'n_input': 2},
         'mul2': {'basis_obj': basis.MSplineBasis(10) * basis.MSplineBasis(10), 'n_input': 2},
