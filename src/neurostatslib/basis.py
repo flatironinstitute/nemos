@@ -690,7 +690,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         """
 
         if any(sample_pts[0] < -1e-12) or any(sample_pts[0] > 1 + 1e-12):
-            raise ValueError(f"Sample points for RaisedCosine basis must lie in [0,1]!")
+            raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
         transform_sample_pts = self._transform_samples(sample_pts[0])
