@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import abc
 import warnings
-
 from typing import Tuple
 
 import numpy as np
 import scipy.linalg
-
 from numpy.typing import NDArray
 
 from neurostatslib.utils import row_wise_kron
@@ -57,12 +55,12 @@ class Basis(abc.ABC):
         Multiply two Basis objects together. Returns a Basis of 'multiply' type, which can be used to model
         multi-dimensional response functions.
     """
+
     def __init__(self, n_basis_funcs: int, gb_limit: float = 16.0) -> None:
         self._n_basis_funcs = n_basis_funcs
         self._GB_limit = gb_limit
         self._n_input_samples = 0
         self._check_n_basis_min()
-
 
     @abc.abstractmethod
     def _evaluate(self, *xi: NDArray) -> NDArray:
@@ -71,8 +69,8 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        xi[0],...,xi[n] : (number of samples, )
-            The input samples.
+        *xi: (number of samples, )
+            The input samples xi[0],...,xi[n] .
         """
         pass
 
@@ -121,24 +119,27 @@ class Basis(abc.ABC):
         self._check_input_number(xi)
         self._check_full_model_matrix_size(xi[0].shape[0])
 
-
         eval_basis = self._evaluate(*xi)
 
         # checks on the evaluated basis
-        self._check_enough_samples(eval_basis) # move to the GLM model
+        self._check_enough_samples(eval_basis)  # move to the GLM model
 
         # check the conditioning
-        conditioning = np.linalg.cond(eval_basis) # model should do that
+        conditioning = np.linalg.cond(eval_basis)  # model should do that
         if np.isinf(conditioning):
             if any(eval_basis.sum(axis=1) == 0):
-                warnings.warn("eval_basis has an empty row. No samples in the input domain "
-                              "of at least one basis function. Try to reduce the number of basis or increase the sample"
-                              "size")
+                warnings.warn(
+                    "eval_basis has an empty row. No samples in the input domain "
+                    "of at least one basis function. Try to reduce the number of basis or increase the sample"
+                    "size"
+                )
             else:
-                warnings.warn("Linearly dependent columns in eval_basis. Check for perfect collinearity in the inputs"
-                              "or insufficient sample size.")
+                warnings.warn(
+                    "Linearly dependent columns in eval_basis. Check for perfect collinearity in the inputs"
+                    "or insufficient sample size."
+                )
 
-        print(f'Conditioning of the evaluated basis function: {conditioning}')
+        print(f"Conditioning of the evaluated basis function: {conditioning}")
         return eval_basis
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, ...]:
@@ -166,7 +167,7 @@ class Basis(abc.ABC):
 
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
-        Xs = np.meshgrid(*sample_tuple, indexing='ij')
+        Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
         Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
@@ -190,8 +191,10 @@ class Basis(abc.ABC):
             If the number of basis sets exceeds the number of samples.
         """
         if eval_basis.shape[0] > eval_basis.shape[1]:
-            warnings.warn('Basis set number exceeds the number of samples! '
-                          'Consider reducing the number of basis or increase sample size.')
+            warnings.warn(
+                "Basis set number exceeds the number of samples! "
+                "Consider reducing the number of basis or increase sample size."
+            )
 
     def _check_input_number(self, xi: Tuple) -> None:
         """
@@ -211,6 +214,7 @@ class Basis(abc.ABC):
             raise ValueError(
                 f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(xi)} inputs provided instead."
             )
+
     @staticmethod
     def _check_samples_consistency(*xi: NDArray) -> None:
         """
@@ -232,7 +236,9 @@ class Basis(abc.ABC):
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
 
-    def _check_full_model_matrix_size(self, n_samples: int, dtype: type = np.float64) -> None:
+    def _check_full_model_matrix_size(
+        self, n_samples: int, dtype: type = np.float64
+    ) -> None:
         """
         Check the size in GB of the full model matrix is <= self._GB_limit.
 
@@ -249,7 +255,7 @@ class Basis(abc.ABC):
             If the size of the model matrix exceeds the specified memory limit.
         """
         size_in_bytes = np.dtype(dtype).itemsize * n_samples * self._n_basis_funcs
-        if size_in_bytes > self._GB_limit * 10 ** 9:
+        if size_in_bytes > self._GB_limit * 10**9:
             raise MemoryError(f"Model matrix size exceeds {self._GB_limit} GB.")
 
     @abc.abstractmethod
@@ -264,6 +270,7 @@ class Basis(abc.ABC):
             If an insufficient number of basis element is requested for the basis type
         """
         pass
+
     def __add__(self, other: Basis) -> Basis:
         """
         Add two Basis objects together.
@@ -351,7 +358,7 @@ class AdditiveBasis(Basis, abc.ABC):
         return np.vstack(
             (
                 self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_samples:]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_samples :]),
             )
         )
 
@@ -369,8 +376,12 @@ class AdditiveBasis(Basis, abc.ABC):
             The equi-spaced sample locations for each coordinate.
 
         """
-        sample_1 = self._basis1._get_samples(*n_samples[: self._basis1._n_input_samples])
-        sample_2 = self._basis2._get_samples(*n_samples[self._basis1._n_input_samples:])
+        sample_1 = self._basis1._get_samples(
+            *n_samples[: self._basis1._n_input_samples]
+        )
+        sample_2 = self._basis2._get_samples(
+            *n_samples[self._basis1._n_input_samples :]
+        )
         return sample_1 + sample_2
 
 
@@ -426,11 +437,13 @@ class MultiplicativeBasis(Basis, abc.ABC):
         -------
             The basis function evaluated at the samples (number of samples x number of basis)
         """
-        return np.array(row_wise_kron(
-            self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
-            self._basis2._evaluate(*xi[self._basis1._n_input_samples:]),
-            transpose=True,
-        ))
+        return np.array(
+            row_wise_kron(
+                self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_samples :]),
+                transpose=True,
+            )
+        )
 
     def _get_samples(self, *n_samples: int) -> Tuple[NDArray, ...]:
         """
@@ -448,8 +461,12 @@ class MultiplicativeBasis(Basis, abc.ABC):
 
         """
 
-        sample_1 = self._basis1._get_samples(*n_samples[: self._basis1._n_input_samples])
-        sample_2 = self._basis2._get_samples(*n_samples[self._basis1._n_input_samples:])
+        sample_1 = self._basis1._get_samples(
+            *n_samples[: self._basis1._n_input_samples]
+        )
+        sample_2 = self._basis2._get_samples(
+            *n_samples[self._basis1._n_input_samples :]
+        )
 
         return sample_1 + sample_2
 
@@ -487,11 +504,11 @@ class SplineBasis(Basis, abc.ABC):
             raise ValueError("Spline order must be positive!")
 
     def _generate_knots(
-            self,
-            sample_pts: NDArray,
-            perc_low: float,
-            perc_high: float,
-            is_cyclic: bool = False,
+        self,
+        sample_pts: NDArray,
+        perc_low: float,
+        perc_high: float,
+        is_cyclic: bool = False,
     ) -> NDArray:
         """
         Generate knot locations for spline basis functions.
@@ -562,7 +579,7 @@ class SplineBasis(Basis, abc.ABC):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0]),
+        return (np.linspace(0, 1, n_samples[0]),)
 
 
 class MSplineBasis(SplineBasis):
@@ -608,11 +625,16 @@ class MSplineBasis(SplineBasis):
         """
 
         # add knots if not passed
-        self._generate_knots(sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=False)
+        self._generate_knots(
+            sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=False
+        )
 
         return np.stack(
-            [mspline(sample_pts[0], self._order, i, self.knot_locs) for i in range(self._n_basis_funcs)],
-            axis=0
+            [
+                mspline(sample_pts[0], self._order, i, self.knot_locs)
+                for i in range(self._n_basis_funcs)
+            ],
+            axis=0,
         )
 
     def _check_n_basis_min(self) -> None:
@@ -627,7 +649,8 @@ class MSplineBasis(SplineBasis):
         """
         if self._n_basis_funcs < 1:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead")
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
+            )
 
 
 class RaisedCosineBasis(Basis, abc.ABC):
@@ -666,14 +689,17 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
         """
 
-        if any(sample_pts[0] < -1E-12) or any(sample_pts[0] > 1 + 1E-12):
-            raise ValueError(f"Sample points for RaisedCosine basis must lie in [0,1]!")
+        if any(sample_pts[0] < -1e-12) or any(sample_pts[0] > 1 + 1e-12):
+            raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
         transform_sample_pts = self._transform_samples(sample_pts[0])
 
-        shifted_sample_pts = transform_sample_pts[None, :] - (np.pi * np.arange(self._n_basis_funcs))[:, None]
-        basis_funcs = .5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
+        shifted_sample_pts = (
+            transform_sample_pts[None, :]
+            - (np.pi * np.arange(self._n_basis_funcs))[:, None]
+        )
+        basis_funcs = 0.5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
 
         return basis_funcs
 
@@ -690,7 +716,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0]),
+        return (np.linspace(0, 1, n_samples[0]),)
 
 
 class RaisedCosineBasisLinear(RaisedCosineBasis):
@@ -742,7 +768,8 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         """
         if self._n_basis_funcs < 1:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead")
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
+            )
 
 
 class RaisedCosineBasisLog(RaisedCosineBasis):
@@ -782,8 +809,14 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         NDArray : (number of samples, )
             A transformed version of the sample points that matches the Raised Cosine basis domain.
         """
-        return np.power(10, -(np.log10((self._n_basis_funcs - 1) * np.pi) + 1) * sample_pts +
-                        np.log10((self._n_basis_funcs - 1) * np.pi)) - 0.1
+        return (
+            np.power(
+                10,
+                -(np.log10((self._n_basis_funcs - 1) * np.pi) + 1) * sample_pts
+                + np.log10((self._n_basis_funcs - 1) * np.pi),
+            )
+            - 0.1
+        )
 
     def _check_n_basis_min(self) -> None:
         """
@@ -797,7 +830,9 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         """
         if self._n_basis_funcs < 2:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 2 basis elements. {self._n_basis_funcs} basis elements specified instead")
+                f"Object class {self.__class__.__name__} requires >= 2 basis elements. {self._n_basis_funcs} basis elements specified instead"
+            )
+
 
 class OrthExponentialBasis(Basis):
     """
@@ -814,14 +849,20 @@ class OrthExponentialBasis(Basis):
             The size limit in GB for the model matrix that can be generated, by default 16.0 GB.
     """
 
-    def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating], gb_limit: float = 16.0):
+    def __init__(
+        self,
+        n_basis_funcs: int,
+        decay_rates: NDArray[np.floating],
+        gb_limit: float = 16.0,
+    ):
         super().__init__(n_basis_funcs=n_basis_funcs, gb_limit=gb_limit)
 
         if decay_rates.shape[0] != n_basis_funcs:
-            raise ValueError(f"The number of basis functions must match the number of decay rates provided. "
-                             f"Number of basis functions provided: {n_basis_funcs}, "
-                             f"Number of decay rates provided: {decay_rates.shape[0]}")
-
+            raise ValueError(
+                f"The number of basis functions must match the number of decay rates provided. "
+                f"Number of basis functions provided: {n_basis_funcs}, "
+                f"Number of decay rates provided: {decay_rates.shape[0]}"
+            )
 
         self._decay_rates = decay_rates
         self._n_input_samples = 1
@@ -838,7 +879,8 @@ class OrthExponentialBasis(Basis):
         """
         if self._n_basis_funcs < 1:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead")
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
+            )
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """
@@ -854,13 +896,15 @@ class OrthExponentialBasis(Basis):
         basis_funcs : (n_basis_funcs, n_pts)
             Evaluated exponentially decaying basis functions, numerically orthogonalized.
         """
-        
+
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
         return scipy.linalg.orth(
-            np.stack([np.exp(-lam * sample_pts[0]) for lam in self._decay_rates], axis=1)
+            np.stack(
+                [np.exp(-lam * sample_pts[0]) for lam in self._decay_rates], axis=1
+            )
         ).T
 
     def _get_samples(self, *n_samples: int) -> Tuple[NDArray]:
@@ -876,7 +920,8 @@ class OrthExponentialBasis(Basis):
         -------
            The equi-spaced sample location.
         """
-        return np.linspace(0, 1, n_samples[0]),
+        return (np.linspace(0, 1, n_samples[0]),)
+
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
     """Compute M-spline basis function.
@@ -912,7 +957,6 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
 
     # General case, defined recursively
     else:
-
         return (
             k
             * (
@@ -923,21 +967,19 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
         )
 
 
-
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt # type: ignore
+    import matplotlib.pyplot as plt  # type: ignore
 
-    plt.close('all')
-
+    plt.close("all")
 
     samples = np.random.uniform(size=100)
     basis1 = RaisedCosineBasisLog(5)
     basis2 = MSplineBasis(10, order=3)
-    res = basis2.evaluate(np.linspace(0,1,1000))
+    res = basis2.evaluate(np.linspace(0, 1, 1000))
     basis_add = basis1 + basis2
 
     basis_add_add = basis_add + basis2
-    basis_add_add.evaluate_on_grid(10,10,10)
+    basis_add_add.evaluate_on_grid(10, 10, 10)
     # basis_add_add_add = basis_add_add + basis_add
     #
     # print(basis_add.evaluate(samples, samples).shape)
