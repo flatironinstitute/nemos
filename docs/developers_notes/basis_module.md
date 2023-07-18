@@ -11,15 +11,15 @@ Abstract Class Basis
 │
 ├─ Abstract Subclass SplineBasis
 │   │
-│   └─ Subclass MSplineBasis
+│   └─ Concrete Subclass MSplineBasis
 │
 ├─ Abstract Subclass RaisedCosineBasis
 │   │
-│   ├─ Subclass RaisedCosineBasisLinear
+│   ├─ Concrete Subclass RaisedCosineBasisLinear
 │   │
-│   └─ Subclass RaisedCosineBasisLog
+│   └─ Concrete Subclass RaisedCosineBasisLog
 │
-└─ Class OrthExponentialBasis
+└─ Concrete Subclass OrthExponentialBasis
 ```
 
 We've used abstract classes to ensure that any basis object inheriting from the superclass will implement the abstract methods of the superclass. This guarantees that if the inputs and outputs of those methods conform to the requirements specified by the abstract superclass, any new basis class implementation will integrate seamlessly with the basis objects already implemented in the library.

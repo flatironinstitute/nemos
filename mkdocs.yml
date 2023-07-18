@@ -32,4 +32,6 @@ extra_css:
 nav:
     - Home: index.md                        # Link to the index.md file (home page)
     - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
-    - Code References: reference/            # Link to the reference/ directory
+    - For Developers: developers_notes/     # Link to the developers notes
+    - Code References: reference/           # Link to the reference/ directory
+
