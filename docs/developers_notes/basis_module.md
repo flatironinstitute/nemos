@@ -22,7 +22,7 @@ Abstract Class Basis
 └─ Concrete Subclass OrthExponentialBasis
 ```
 
-We've used abstract classes to ensure that any basis object inheriting from the superclass will implement the abstract methods of the superclass. This guarantees that if the inputs and outputs of those methods conform to the requirements specified by the abstract superclass, any new basis class implementation will integrate seamlessly with the basis objects already implemented in the library.
+We've used abstract classes to ensure that any basis object inheriting from the superclass will implement the abstract methods of the superclass. This guarantees that if the inputs and outputs of those methods conform to the requirements specified by the abstract superclass, any new basis class implementation will be able to be dropped in as replacements for the currently-implented Basis objects (e.g., in `GLM`).
 
 The user only needs to instantiate the non-abstract subclasses located at the bottom of the hierarchy. These classes provide two public methods, `evaluate` and `evaluate_on_grid`, both of which are defined in the superclass `Basis`. These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe."
 
