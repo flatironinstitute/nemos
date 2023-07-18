@@ -24,7 +24,7 @@ Abstract Class Basis
 
 We've used abstract classes to ensure that any basis object inheriting from the superclass will implement the abstract methods of the superclass. This guarantees that if the inputs and outputs of those methods conform to the requirements specified by the abstract superclass, any new basis class implementation will be able to be dropped in as replacements for the currently-implented Basis objects (e.g., in `GLM`).
 
-The user only needs to instantiate the non-abstract subclasses located at the bottom of the hierarchy. These classes provide two public methods, `evaluate` and `evaluate_on_grid`, both of which are defined in the superclass `Basis`. These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe."
+The user only needs to instantiate the concrete subclasses located at the bottom of the hierarchy. These classes provide two public methods, `evaluate` and `evaluate_on_grid`, both of which are defined in the superclass `Basis`. These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe."
 
 Additionally, a user can combine multiple objects that are subclasses of Basis, creating a higher-dimensional basis set object. Basis objects can be combined using the `__add__` and `__mul__` methods, which allow for the following syntax:
 
@@ -60,7 +60,7 @@ This method performs the following steps:
 
 ### Abstract Methods
 
-The `neurostatslib.basis.Basis` class has the following abstract methods, which every non-abstract subclass must implement:
+The `neurostatslib.basis.Basis` class has the following abstract methods, which every concrete subclass must implement:
 
 1. `_evaluate`: Evaluates a basis over some specified samples.
 2. `_get_samples`: Returns a tuple of equidistant samples (as flat numpy arrays) for each dimension of the basis function. These samples are used to form a grid over which the basis is evaluated.
@@ -120,7 +120,7 @@ The `OrthExponentialBasis` class extends the `Basis` abstract class and represen
 
 ## Developer Guidelines
 
-Developers are welcome focus on either develop non-abstract classes for new basis function types
+Developers are welcome focus on either develop concrete classes for new basis function types
 as we as add additional checks at evaluation, as well as improve the documentation and readability
 of the code. What we won't advise is to alter the abstract-classes structure, which may affect
 the overall module and how each of the objects interacts with each other.
