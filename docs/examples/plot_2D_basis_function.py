@@ -36,8 +36,14 @@ prod_basis = a_basis * b_basis
 # one for the x-coordinate and one for the y-coordinate.
 # The number of elements of the product basis is the product of the elements of the 1D basis.
 
+<<<<<<< HEAD
+# Define a trajectory with 1000 time-points representing 
+# the recorded trajectory of the animal
+T = 1000 
+=======
 # Define a trajectory with 1000 time-points representing the recorded trajectory of the animal
 T = 1000
+>>>>>>> d5c69aab054452f745e4d7b80ad3eeeb4af2e9da
 x_coord = np.linspace(0, 10, 1000)
 y_coord = np.linspace(0, 50, 1000)
 
@@ -56,7 +62,11 @@ print(f"Product of two 1D splines with {eval_basis.shape[0]} "
 # To plot a 2D basis set, we evaluate the basis on a grid of points over the basis function domain.
 # We use the `evaluate_on_grid` method of neurostatslib.basis for this.
 
+<<<<<<< HEAD
+X, Y, Z = prod_basis.evaluate_on_grid(100,100)
+=======
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
+>>>>>>> d5c69aab054452f745e4d7b80ad3eeeb4af2e9da
 
 # Setup a 3D plot
 fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
@@ -70,6 +80,34 @@ plt.title(f"Product basis with {eval_basis.shape[0]} elements")
 plt.show()
 
 # %%
+<<<<<<< HEAD
+# Mix & match different basis types
+# ---------------------------------
+# Different types of basis element can be combined together with multiplication and addition,
+# this will be particularly useful one of the coordinates will be periodic (e.g. an angle).
+# In principle, one can build N-dimensional basis by multiplying N-basis objects or add them 
+# or any combination of the two operations. Be mindful of the exponential growth of the 
+# number of basis elements for multiplicative compositions.
+
+
+# Define 1D basis objects of different kinds
+a_basis = nsl.basis.RaisedCosineBasisLinear(n_basis_funcs=10)
+b_basis = nsl.basis.MSplineBasis(n_basis_funcs=10, order=2)
+
+# add and multiply basis
+add_basis = a_basis + b_basis
+mult_basis = a_basis * b_basis
+
+print(
+      f"Additive basis with {add_basis._n_basis_funcs} elements.\n"
+      f"Multiplicative basis with {mult_basis._n_basis_funcs} elements."
+)
+
+# %%
+# Plotting the Log-spaced Raised Cosine Basis
+# -----------------------------------
+# Now, we plot the log-spaced Raised Cosine basis elements
+=======
 # Define and Evaluate a 2D Additive Basis
 # ---------------------------------------
 # Just like in the multiplicative case, we can create an additive basis function as the sum of two 1D basis functions.
@@ -152,3 +190,4 @@ print(f"Product of three 1D splines results in {prod_basis_3._n_basis_funcs} "
 
 
 
+>>>>>>> d5c69aab054452f745e4d7b80ad3eeeb4af2e9da
