@@ -5,9 +5,9 @@ The `neurostatslib.basis` module provides objects that allow users to construct 
 ```
 Abstract Class Basis
 |
-├─ Abstract Subclass AdditiveBasis
+├─ Concrete Subclass AdditiveBasis
 │
-├─ Abstract Subclass MultiplicativeBasis
+├─ Concrete Subclass MultiplicativeBasis
 │
 ├─ Abstract Subclass SplineBasis
 │   │

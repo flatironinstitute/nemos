@@ -302,7 +302,7 @@ class Basis(abc.ABC):
         return MultiplicativeBasis(self, other)
 
 
-class AdditiveBasis(Basis, abc.ABC):
+class AdditiveBasis(Basis):
     """
     Class representing the addition of two Basis objects.
 
@@ -385,7 +385,7 @@ class AdditiveBasis(Basis, abc.ABC):
         return sample_1 + sample_2
 
 
-class MultiplicativeBasis(Basis, abc.ABC):
+class MultiplicativeBasis(Basis):
     """
     Class representing the multiplication (external product) of two Basis objects.
 
