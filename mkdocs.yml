@@ -19,7 +19,15 @@ plugins:
   - literate-nav:
         nav_file: docs/SUMMARY.md           # Specify the navigation file for literate-style navigation
   - section-index                           # Enable the section-index plugin for generating a section index
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          selection:
+            docstring_style: numpy
+          rendering:
+            show_source: true
+          options:
+            members_order: source
 
 extra_javascript:
   - javascripts/katex.js

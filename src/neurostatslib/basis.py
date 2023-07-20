@@ -34,26 +34,6 @@ class Basis(abc.ABC):
     _n_input_samples : int
         Number of inputs that the evaluate method requires.
 
-    Methods
-    -------
-    evaluate(*xi)
-        Evaluate the basis at the input samples x1,...,xn
-
-    check_input_number(x)
-        Check the number of input samples.
-
-    check_samples_consistency(x)
-        Check the consistency of sample sizes.
-
-    check_full_model_matrix_size(n_samples, dtype=np.float64)
-        Check the size of the full model matrix.
-
-    __add__(other)
-        Add two Basis objects together.
-
-    __mul__(other)
-        Multiply two Basis objects together. Returns a Basis of 'multiply' type, which can be used to model
-        multi-dimensional response functions.
     """
 
     def __init__(self, n_basis_funcs: int, gb_limit: float = 16.0) -> None:
@@ -107,6 +87,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
+            NDArray
             The generated basis functions.
 
         Raises
@@ -163,7 +144,7 @@ class Basis(abc.ABC):
         """
         self._check_input_number(n_samples)
         n_basis: int = np.prod(n_samples, dtype=int)
-        self._check_full_model_matrix_size(n_basis * self._n_basis_funcs)
+        self._check_full_model_matrix_size(n_basis)
 
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
@@ -282,11 +263,12 @@ class Basis(abc.ABC):
 
         Returns
         -------
+            AdditiveBasis
             The resulting Basis object.
         """
         return AdditiveBasis(self, other)
 
-    def __mul__(self, other) -> Basis:
+    def __mul__(self, other: Basis) -> Basis:
         """
         Multiply two Basis objects together.
 
@@ -324,10 +306,6 @@ class AdditiveBasis(Basis):
     _basis2 : Basis
         Second basis object.
 
-    Methods
-    -------
-    _evaluate(x_tuple)
-        Evaluate t
 
     """
 
@@ -407,10 +385,6 @@ class MultiplicativeBasis(Basis):
     _basis2 : Basis
         Second basis object.
 
-    Methods
-    -------
-    _evaluate(x_tuple)
-        Evaluates the basis function at the samples x_tuple[0],..,x_tuple[n]
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -488,11 +462,6 @@ class SplineBasis(Basis, abc.ABC):
         Spline order.
     _n_input_samples : int
         Number of input samples.
-
-    Methods
-    -------
-    _generate_knots(sample_pts, perc_low, perc_high, is_cyclic=False)
-        Generate knot locations for spline basis functions.
 
     """
 
@@ -589,8 +558,7 @@ class MSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    window_size :
-        Size of basis functions.
+
     order :
         Order of the splines used in basis functions. Must lie within [1,
         n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
@@ -614,8 +582,8 @@ class MSplineBasis(SplineBasis):
         Parameters
         ----------
         sample_pts : (number of samples, )
-            Spacing for basis functions, holding elements on the interval [0,
-            window_size). A good default is np.arange(window_size).
+            Spacing for basis functions, holding elements on the interval [min(sample_pts),
+            max(sample_pts)].
 
         Returns
         -------
@@ -780,8 +748,6 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
     ----------
     n_basis_funcs
         Number of basis functions.
-    window_size
-        Size of basis functions.
 
     References
     ----------
@@ -929,8 +895,7 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
     Parameters
     ----------
     x : (number of samples, )
-        Spacing for basis functions, holding elements on the interval [0,
-        window_size). If None, use a grid (``np.arange(self.window_size)``).
+        Spacing for basis functions.
     k
         Order of the spline basis.
     i

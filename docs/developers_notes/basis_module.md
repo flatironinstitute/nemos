@@ -1,5 +1,7 @@
 # The Basis Module
 
+## Introduction
+
 The `neurostatslib.basis` module provides objects that allow users to construct and evaluate basis functions of various types. The classes are hierarchically organized as follows:
 
 ```
@@ -22,17 +24,7 @@ Abstract Class Basis
 └─ Concrete Subclass OrthExponentialBasis
 ```
 
-We've used abstract classes to ensure that any basis object inheriting from the superclass will implement the abstract methods of the superclass. This guarantees that if the inputs and outputs of those methods conform to the requirements specified by the abstract superclass, any new basis class implementation will be able to be dropped in as replacements for the currently-implented Basis objects (e.g., in `GLM`).
-
-The user only needs to instantiate the concrete subclasses located at the bottom of the hierarchy. These classes provide two public methods, `evaluate` and `evaluate_on_grid`, both of which are defined in the superclass `Basis`. These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe."
-
-Additionally, a user can combine multiple objects that are subclasses of Basis, creating a higher-dimensional basis set object. Basis objects can be combined using the `__add__` and `__mul__` methods, which allow for the following syntax:
-
-```
-basis_add = basis_a + basis_b # calls basis_a.__add__(basis_b)
-
-basis_add = basis_a * basis_b # calls basis_b.__mul_(basis_b)
-```
+The super-class `Basis` provides two public methods, [`evaluate`](#the-public-method-evaluate) and [`evaluate_on_grid`](#the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the private abstract method `_evaluate` that is specific for each concrete class. See below for more details.
 
 ## The Class `neurostatslib.basis.Basis`
 
@@ -66,59 +58,18 @@ The `neurostatslib.basis.Basis` class has the following abstract methods, which 
 2. `_get_samples`: Returns a tuple of equidistant samples (as flat numpy arrays) for each dimension of the basis function. These samples are used to form a grid over which the basis is evaluated.
 3. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
 
+## Contributors Guidelines
 
-## The `AdditiveBasis` Class
+### Implementing Concrete Basis Objects
+To write a usable (i.e., concrete, non-abstract) basis object, you
 
-This class extends the abstract `Basis` class and represents a set of basis functions that are combined additively. It overrides the `_evaluate`, `_get_samples`, and `_check_n_basis_min` methods with specific implementations for additive basis functions.
-
-### Overridden Methods
-
-1. `_evaluate`: For an `AdditiveBasis` object, this method should evaluate each basis function at the specified samples and then add the results together.
-2. `_get_samples`: This method should return equidistant samples over the domain of each basis function. The samples should then be summed together.
-3. `_check_n_basis_min`: This method checks whether the number of basis functions meets the minimum requirement for an additive basis set.
-
-## The `MultiplicativeBasis` Class
-
-This class extends the `Basis` abstract class and represents a set of basis functions that are combined multiplicatively. It overrides the `_evaluate`, `_get_samples`, and `_check_n_basis_min` methods with specific implementations for multiplicative basis functions.
-
-### Overridden Methods
-
-1. `_evaluate`: For a `MultiplicativeBasis` object, this method should evaluate each basis function at the specified samples and then multiply the results together.
-2. `_get_samples`: This method should return equidistant samples over the domain of each basis function. The samples should then be multiplied together.
-3. `_check_n_basis_min`: This method checks whether the number of basis functions meets the minimum requirement for a multiplicative basis set.
-
-## The `SplineBasis` and `MSplineBasis` Classes
-
-The `SplineBasis` class is an abstract subclass of `Basis` that represents a spline basis function. The `MSplineBasis` class is a concrete subclass of `SplineBasis` that implements a specific type of spline basis, the M-spline.
-
-### Overridden Methods for `MSplineBasis`
-
-1. `_evaluate`: For an `MSplineBasis` object, this method should evaluate the M-spline at the specified samples.
-2. `_get_samples`: This method should return equidistant samples over the domain of the M-spline.
-3. `_check_n_basis_min`: This method checks whether the number of M-spline basis functions meets the minimum requirement.
-
-## The `RaisedCosineBasis`, `RaisedCosineBasisLinear`, and `RaisedCosineBasisLog` Classes
-
-The `RaisedCosineBasis` class is an abstract subclass of `Basis` that represents a raised cosine basis function. The `RaisedCosineBasisLinear` and `RaisedCosineBasisLog` classes are concrete subclasses of `RaisedCosineBasis` that implement specific types of raised cosine basis functions.
-
-### Overridden Methods for `RaisedCosineBasisLinear` and `RaisedCosineBasisLog`
-
-1. `_evaluate`: For these objects, this method should evaluate the raised cosine function (with either linear or logarithmic spacing) at the specified samples.
-2. `_get_samples`: This method should return equidistant samples over the domain of the raised cosine function.
-3. `_check_n_basis_min`: This method checks whether the number of raised cosine basis functions meets the minimum requirement.
-
-## The `OrthExponentialBasis` Class
-
-The `OrthExponentialBasis` class extends the `Basis` abstract class and represents an orthogonal exponential basis set. It overrides the `_evaluate`, `_get_samples`, and `_check_n_basis_min` methods with specific implementations for orthogonal exponential basis functions.
-
-### Overridden Methods
-
-1. `_evaluate`: For an `OrthExponentialBasis` object, this method should evaluate each basis function at the specified samples and then combine them orthogonally.
-2. `_get_samples`: This method should return equidistant samples over the domain of each basis function. The samples are then combined orthogonally.
-3. `_check_n_basis_min`: This method checks whether the number of basis functions meets the minimum requirement for an orthogonal exponential basis set.
+- **Must** inherit the abstract superclass `Basis`
+- **Must** define the `_evaluate`, `_check_n_basis_min`, and `_get_samples` methods with the expected input/output format, see [Code References](../../reference/neurostatslib/basis/) for the specifics.
+- **Should not** overwrite the `evaluate` and `evaluate_on_grid` methods inherited from `Basis`.
+- **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 
 
-## Developer Guidelines
+### Additonal Guidelines
 
 Developers are welcome focus on either develop concrete classes for new basis function types
 as we as add additional checks at evaluation, as well as improve the documentation and readability

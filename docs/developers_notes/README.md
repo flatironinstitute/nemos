@@ -1,6 +1,6 @@
 # Introduction
 
-Welcome to the Developer Notes of the `neurostatslib` project. These notes are a compilation of detailed technical information about the various modules, classes, and functions that make up this library. They are intended to help current and future developers understand the design decisions, structure, and functioning of the library, and to provide guidance on how to modify, extend, and maintain the codebase.
+Welcome to the Developer Notes of the `neurostatslib` project. These notes aim to provide detailed technical information about the various modules, classes, and functions that make up this library, as well as guidelines on how to write code that integrates nicely with our package. They are intended to help current and future developers understand the design decisions, structure, and functioning of the library, and to provide guidance on how to modify, extend, and maintain the codebase.
 
 ## Intended Audience
 
@@ -18,7 +18,11 @@ Please note that these notes assume a certain level of programming knowledge. Fa
 
 ## Navigating the Developer Notes
 
-The Developer Notes are organized into sections, each dedicated to a different module or class within the `neurostatslib` library. Each section provides an overview of the class or module, a description of its role and functionality within the library, and a detailed guide to its methods and attributes.
+The Developer Notes are divided into sections, each focusing on a different module or class within the `neurostatslib` library. Each section provides an overview of the class or module, explains its role and functionality within the library, and offers a comprehensive guide to its classes and functions. Typically, we will provide instructions on how to extend the existing modules. We generally advocate for the use of inheritance and encourage consistency with the existing codebase. In creating developer instructions, we follow the conventions outlined below:
+
+- **Must**: This denotes a requirement. Any method or function that fails to meet the requirement will not be merged.
+- **Should**: This denotes a suggestion. Reasons should be provided if a suggestion is not followed.
+- **May**: This denotes an option that, if implemented, could enhance the user/developer experience but can be overlooked if deemed unnecessary. 
 
 ## Interact with us
 
