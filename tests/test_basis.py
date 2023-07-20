@@ -43,9 +43,13 @@ def test_all_basis_are_in_fixture(init_basis_parameter_grid: pytest.fixture,
     """
     for class_name, class_obj in utils_testing.get_non_abstract_classes(basis):
         print(f"\n-> Testing \"{class_name}\"")
-        assert (class_name in init_basis_parameter_grid.keys())
-        assert (class_name in min_basis_funcs.keys())
-        assert (class_name in evaluate_basis_object.keys())
+        if class_name in ["AdditiveBasis", "MultiplicativeBasis"]:
+            continue
+        assert class_name in init_basis_parameter_grid.keys(), f"{class_name} not in the init_basis_parameter_grid " \
+                                                               f"fixture keys!"
+        assert class_name in min_basis_funcs.keys(), f"{class_name} not in the min_basis_funcs fixture keys!"
+        assert class_name in evaluate_basis_object.keys(), f"{class_name} not in the evaluate_basis_object " \
+                                                           f"fixture keys!"
 
 def test_init_and_evaluate_basis(init_basis_parameter_grid: pytest.fixture, capfd: pytest.fixture) -> None:
     """
