@@ -62,8 +62,8 @@ import matplotlib.pyplot as plt
 import neurostatslib as nsl
 
 # Define 1D basis objects
-a_basis = nsl.basis.MSplineBasis(n_basis_funcs=20, order=3)
-b_basis = nsl.basis.MSplineBasis(n_basis_funcs=10, order=2)
+a_basis = nsl.basis.MSplineBasis(n_basis_funcs=15, order=3)
+b_basis = nsl.basis.MSplineBasis(n_basis_funcs=14, order=2)
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
@@ -132,18 +132,25 @@ print(f"Product of two 1D splines with {eval_basis.shape[0]} "
 # %%
 # Plotting works in the same way as before
 
+# Set this figure as the thumbnail
+# mkdocs_gallery_thumbnail_number = 2
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
 
 # Setup a 3D plot
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+fig, axs = plt.subplots(1, 3, figsize=(8,3))
 
 # Plot only the support
-Z[Z == 0] = np.nan
-ax.plot_surface(X, Y, Z[50], cmap="viridis", alpha=0.8)
-ax.plot_surface(X, Y, Z[83], cmap="rainbow", alpha=0.8)
-ax.plot_surface(X, Y, Z[125], cmap="inferno", alpha=0.8)
-plt.title(f"Product basis with {eval_basis.shape[0]} elements")
+axs[0].contourf(X, Y, Z[50], cmap="Blues")
+axs[1].contourf(X, Y, Z[75], cmap="Blues")
+axs[2].contourf(X, Y, Z[125], cmap="Blues")
+for cc in range(3):
+      #axs[cc].axis("equal")
+      axs[cc].set_xlim(0, 1)
+      axs[cc].set_ylim(0, 1)
+plt.suptitle(f"Product basis with {eval_basis.shape[0]} elements")
+plt.tight_layout()
 plt.show()
+
 
 # %%
 # !!! info
@@ -186,14 +193,20 @@ print(f"Product of three 1D splines results in {prod_basis_3._n_basis_funcs} "
 # The evaluation of the product of 3 basis is a 4 dimensional tensor; we can visualize slices of it.
 
 X, Y, W, Z = prod_basis_3.evaluate_on_grid(30, 30, 30)
+
+# select any slice
 slices = [1, 27]
 basis_elem = {1:224, 27:407}
 cmaps = {1:'viridis', 27:'inferno'}
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+fig, axs = plt.subplots(1,2)
+cnt = 0
 for slice in slices:
       X_slice = X[:, :, slice]
       Y_slice = X[:, :, slice]
       Z_slice = Z[:, :, :, slice]
-      ax.plot_surface(X_slice, Y_slice, Z_slice[basis_elem[slice]],
-                      alpha=0.5,cmap=cmaps[slice])
+      axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem[slice]],
+                      cmap='Blues')
+      cnt += 1
+
+plt.tight_layout()
 plt.show()
