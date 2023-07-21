@@ -157,7 +157,17 @@ def test_basis_sample_consistency_check(basis_sample_consistency_check: pytest.f
             capfd.readouterr()
             basis_obj.evaluate(*inputs)
 
-def test_basis_eval_checks(evaluate_basis_object: pytest.fixture, capfd: pytest.fixture):
+# Use pytest.mark.parametrize to run the test for each basis separately.
+@pytest.mark.parametrize("class_name", [
+    'MSplineBasis',
+    'RaisedCosineBasisLinear',
+    'RaisedCosineBasisLog',
+    'OrthExponentialBasis',
+    'add2',
+    'mul2',
+    'add3'
+])
+def test_basis_eval_checks(evaluate_basis_object: pytest.fixture, capfd: pytest.fixture, class_name):
     """
     Test if the basis function object can be evaluated, and check that the appropriate exceptions are raised
     if the input does not conform with the requirements.
@@ -174,30 +184,75 @@ def test_basis_eval_checks(evaluate_basis_object: pytest.fixture, capfd: pytest.
     capfd
         Fixture for capturing stdout and stderr.
 
+    class_name : str
+        The name of the basis class to be tested.
+
     Returns
     -------
     None
     """
-    for class_name in evaluate_basis_object:
-        basis_obj = evaluate_basis_object[class_name]['basis_obj']
-        n_input = evaluate_basis_object[class_name]['n_input']
-        # check that the correct input do not raise an error
-        with capfd.disabled():
-            print(f" -> Testing \"{basis_obj.__class__.__name__}\"")
-        inputs = [np.linspace(0, 1, 20)] * n_input
-        basis_obj.evaluate(*inputs)
-        inputs = [20] * n_input
-        basis_obj.evaluate_on_grid(*inputs)
-        # hide print conditioning number
-        capfd.readouterr()
-        # check that incorrect input number raises value error
-        for delta_input in [-1, 1]:
-            with pytest.raises(ValueError):
-                inputs = [np.linspace(0,1,10)] * (n_input + delta_input) # wrong number of inputs passed
-                basis_obj.evaluate(*inputs)
+    basis_obj = evaluate_basis_object[class_name]['basis_obj']
+    n_input = evaluate_basis_object[class_name]['n_input']
+    # check that the correct input does not raise an error
+    with capfd.disabled():
+        print(f" -> Testing \"{basis_obj.__class__.__name__}\"")
+    inputs = [np.linspace(0, 1, 20)] * n_input
+    basis_obj.evaluate(*inputs)
+    inputs = [20] * n_input
+    basis_obj.evaluate_on_grid(*inputs)
+    # hide print conditioning number
+    capfd.readouterr()
+    # check that incorrect input number raises value error
+    for delta_input in [-1, 1]:
+        with pytest.raises(ValueError):
+            inputs = [np.linspace(0, 1, 10)] * (n_input + delta_input)  # wrong number of inputs passed
+            basis_obj.evaluate(*inputs)
 
-        for delta_input in [-1, 1]:
-            with pytest.raises(ValueError):
-                inputs = [10] * (n_input + delta_input) # wrong number of inputs passed
-                basis_obj.evaluate_on_grid(*inputs)
-
+    for delta_input in [-1, 1]:
+        with pytest.raises(ValueError):
+            inputs = [10] * (n_input + delta_input)  # wrong number of inputs passed
+            basis_obj.evaluate_on_grid(*inputs)
+# def test_basis_eval_checks(evaluate_basis_object: pytest.fixture, capfd: pytest.fixture):
+#     """
+#     Test if the basis function object can be evaluated, and check that the appropriate exceptions are raised
+#     if the input does not conform with the requirements.
+#
+#     Parameters
+#     ----------
+#     evaluate_basis_object
+#         Fixture containing a dictionary with the following keys:
+#             "basis_obj" : basis object
+#                 The basis function object to test.
+#             "n_input" : int
+#                 The number of input samples.
+#
+#     capfd
+#         Fixture for capturing stdout and stderr.
+#
+#     Returns
+#     -------
+#     None
+#     """
+#     for class_name in evaluate_basis_object:
+#         basis_obj = evaluate_basis_object[class_name]['basis_obj']
+#         n_input = evaluate_basis_object[class_name]['n_input']
+#         # check that the correct input do not raise an error
+#         with capfd.disabled():
+#             print(f" -> Testing \"{basis_obj.__class__.__name__}\"")
+#         inputs = [np.linspace(0, 1, 20)] * n_input
+#         basis_obj.evaluate(*inputs)
+#         inputs = [20] * n_input
+#         basis_obj.evaluate_on_grid(*inputs)
+#         # hide print conditioning number
+#         capfd.readouterr()
+#         # check that incorrect input number raises value error
+#         for delta_input in [-1, 1]:
+#             with pytest.raises(ValueError):
+#                 inputs = [np.linspace(0,1,10)] * (n_input + delta_input) # wrong number of inputs passed
+#                 basis_obj.evaluate(*inputs)
+#
+#         for delta_input in [-1, 1]:
+#             with pytest.raises(ValueError):
+#                 inputs = [10] * (n_input + delta_input) # wrong number of inputs passed
+#                 basis_obj.evaluate_on_grid(*inputs)
+#
