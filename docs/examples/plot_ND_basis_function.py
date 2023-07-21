@@ -97,8 +97,8 @@ fig, axs = plt.subplots(1, 2, figsize=(8, 3))
 basis_elem = [5, 25]
 
 for cc in range(len(basis_elem)):
-      axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues")
-      axs[cc].set_title(f"Basis element {basis_elem[cc]}")
+    axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues")
+    axs[cc].set_title(f"Basis element {basis_elem[cc]}")
 plt.show()
 
 # %%
@@ -143,15 +143,14 @@ fig, axs = plt.subplots(1, 3, figsize=(8, 3))
 # Plot only the support
 basis_elem = [50, 75, 125]
 for cc in range(3):
-      axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues", levels=5)
-      axs[cc].set_title(f"Basis element: {basis_elem[cc]}")
-      axs[cc].set_xlim(0, 1)
-      axs[cc].set_ylim(0, 1)
+    axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues", levels=5)
+    axs[cc].set_title(f"Basis element: {basis_elem[cc]}")
+    axs[cc].set_xlim(0, 1)
+    axs[cc].set_ylim(0, 1)
 
 plt.suptitle(f"Product basis with {eval_basis.shape[0]} elements")
 plt.tight_layout()
 plt.show()
-
 
 # %%
 # !!! info
@@ -159,7 +158,6 @@ plt.show()
 #     This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.
 #     A practical example would be characterizing the responses to position
 #     in a linear maze and the LFP phase angle.
-
 
 
 # %%
@@ -197,21 +195,22 @@ print(f"Product of three 1D splines results in {prod_basis_3._n_basis_funcs} "
 X, Y, W, Z = prod_basis_3.evaluate_on_grid(30, 30, 30)
 
 # select any slice
-slices = [18, 17]
-basis_elem = {18: 300, 17: 300}
-vmax = Z[list(basis_elem.values()), :, :, slices].max()
-fig, axs = plt.subplots(1, 2, figsize=(6,3))
+slices = [17, 18, 19]
+basis_elem = 300
+vmax = Z[basis_elem, :, :, slices].max()
+fig, axs = plt.subplots(1, 3, figsize=(8, 3))
 cnt = 0
-for slice in slices:
-      X_slice = X[:, :, slice]
-      Y_slice = Y[:, :, slice]
+for slice_i in slices:
+    X_slice = X[:, :, slice_i]
+    Y_slice = Y[:, :, slice_i]
 
-      Z_slice = Z[:, :, :, slice]
-      axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem[slice]],
+    Z_slice = Z[:, :, :, slice_i]
+    axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem],
                       cmap='Blues', vmin=0, vmax=vmax)
-      axs[cnt].set_title(f"Basis element {basis_elem[slice]} of slice {slice}")
-      cnt += 1
+    axs[cnt].set_title(f"Slice {slice_i}")
+    cnt += 1
 
+plt.suptitle(f"Basis element: {basis_elem}")
 plt.tight_layout()
 plt.show()
 

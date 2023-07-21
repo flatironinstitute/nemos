@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# 1D Basis Functions
+# One-Dimensional Basis
 
 ## Defining a 1D Basis Object
 
