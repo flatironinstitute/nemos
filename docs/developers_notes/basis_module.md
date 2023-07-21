@@ -34,9 +34,8 @@ The `evaluate` method checks input consistency and evaluates the basis function 
 
 1. Checks that the inputs all have the same sample size `N`, and raises a `ValueError` if this is not the case.
 2. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
-3. Checks that the output of the method does not exceed `gb_limit` GB of memory size. This size limit is specified at class initialization.
-4. Calls the `_evaluate` method on the input, which is the subclass-specific implementation of the basis set evaluation.
-5. Returns a numpy array of shape `(N, n_basis_funcs)`, with each basis element evaluated at the samples.
+3. Calls the `_evaluate` method on the input, which is the subclass-specific implementation of the basis set evaluation.
+4. Returns a numpy array of shape `(N, n_basis_funcs)`, with each basis element evaluated at the samples.
 
 ### The Public Method `evaluate_on_grid`
 
@@ -45,10 +44,9 @@ The `evaluate_on_grid` method evaluates the basis set on a grid of equidistant s
 This method performs the following steps:
 
 1. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
-2. Checks that the output of the method does not exceed `gb_limit` GB of memory size. This size limit is specified at class initialization.
-3. Calls the subclass-specific `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
-4. Calls the subclass-specific `_evaluate` method.
-5. Returns both the sample grid points and the evaluation output at each grid point.
+2. Calls the subclass-specific `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
+3. Calls the subclass-specific `_evaluate` method.
+4. Returns both the sample grid points and the evaluation output at each grid point.
 
 ### Abstract Methods
 
