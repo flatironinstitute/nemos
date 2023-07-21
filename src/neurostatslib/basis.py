@@ -831,6 +831,7 @@ class OrthExponentialBasis(Basis):
             )
 
         self._decay_rates = decay_rates
+        self._check_rates()
         self._n_input_samples = 1
 
     def _check_n_basis_min(self) -> None:
@@ -847,6 +848,11 @@ class OrthExponentialBasis(Basis):
             raise ValueError(
                 f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
             )
+
+    def _check_rates(self):
+        if len(set(self._decay_rates)) != len(self._decay_rates):
+            raise ValueError("Two or more rate are repeated! Repeating rate will result in a "
+                             "linearly dependent set of function for the basis.")
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """
