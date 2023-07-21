@@ -91,13 +91,14 @@ print(f"Sum of two 1D splines with {eval_basis.shape[0]} "
 
 X, Y, Z = additive_basis.evaluate_on_grid(200, 200)
 
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+fig, axs = plt.subplots(1, 2, figsize=(8, 3))
 
-# Only plot the support (not required but facilitates visualizing the different basis element)
-Z[Z == 0] = np.nan
-ax.plot_surface(X, Y, Z[5], cmap="viridis", alpha=0.8)
-ax.plot_surface(X, Y, Z[25], cmap="inferno", alpha=0.8)
-plt.title(f"Additive basis with {eval_basis.shape[0]} elements")
+# Plot a couple of basis elements
+basis_elem = [5, 25]
+
+for cc in range(len(basis_elem)):
+      axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues")
+      axs[cc].set_title(f"Basis element {basis_elem[cc]}")
 plt.show()
 
 # %%
@@ -137,16 +138,16 @@ print(f"Product of two 1D splines with {eval_basis.shape[0]} "
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
 
 # Setup a 3D plot
-fig, axs = plt.subplots(1, 3, figsize=(8,3))
+fig, axs = plt.subplots(1, 3, figsize=(8, 3))
 
 # Plot only the support
-axs[0].contourf(X, Y, Z[50], cmap="Blues")
-axs[1].contourf(X, Y, Z[75], cmap="Blues")
-axs[2].contourf(X, Y, Z[125], cmap="Blues")
+basis_elem = [50, 75, 125]
 for cc in range(3):
-      #axs[cc].axis("equal")
+      axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues", levels=5)
+      axs[cc].set_title(f"Basis element: {basis_elem[cc]}")
       axs[cc].set_xlim(0, 1)
       axs[cc].set_ylim(0, 1)
+
 plt.suptitle(f"Product basis with {eval_basis.shape[0]} elements")
 plt.tight_layout()
 plt.show()
@@ -192,21 +193,32 @@ print(f"Product of three 1D splines results in {prod_basis_3._n_basis_funcs} "
 # %%
 # The evaluation of the product of 3 basis is a 4 dimensional tensor; we can visualize slices of it.
 
+
 X, Y, W, Z = prod_basis_3.evaluate_on_grid(30, 30, 30)
 
 # select any slice
-slices = [1, 27]
-basis_elem = {1:224, 27:407}
-cmaps = {1:'viridis', 27:'inferno'}
-fig, axs = plt.subplots(1,2)
+slices = [18, 17]
+basis_elem = {18: 300, 17: 300}
+vmax = Z[list(basis_elem.values()), :, :, slices].max()
+fig, axs = plt.subplots(1, 2, figsize=(6,3))
 cnt = 0
 for slice in slices:
       X_slice = X[:, :, slice]
-      Y_slice = X[:, :, slice]
+      Y_slice = Y[:, :, slice]
+
       Z_slice = Z[:, :, :, slice]
       axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem[slice]],
-                      cmap='Blues')
+                      cmap='Blues', vmin=0, vmax=vmax)
+      axs[cnt].set_title(f"Basis element {basis_elem[slice]} of slice {slice}")
       cnt += 1
 
 plt.tight_layout()
 plt.show()
+
+# Check sparsity
+print(f"Sparsity check: {(Z == 0).sum() / Z.size * 100: .2f}% of the evaluated basis is null.")
+
+# %%
+# !!! info
+#     The evaluated basis is going to be **sparse** if the basis elements support do not cover the
+#     full domain of the basis.
