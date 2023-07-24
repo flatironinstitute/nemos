@@ -20,11 +20,11 @@ def test_basis_abstract_method_compliance() -> None:
     return
 
 
-def test_all_basis_are_in_fixture() -> None:
+def test_all_basis_are_parametrized() -> None:
     """
     Check that all the basis initialization are tested by inspecting the basis module and make sure that all
-    the non-abstract classes, except additive and multiplicative are listed in the fixture. If this test fails,
-    it means that you need to add some newly implemented basis function to the fixtures.
+    the non-abstract classes, except additive and multiplicative are listed in the params for TestInitAndEvaluate.
+    If this test fails, it means that you need to add some newly implemented basis function.
 
     Returns
     -------

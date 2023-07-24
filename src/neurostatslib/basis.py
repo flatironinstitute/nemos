@@ -851,8 +851,10 @@ class OrthExponentialBasis(Basis):
 
     def _check_rates(self):
         if len(set(self._decay_rates)) != len(self._decay_rates):
-            raise ValueError("Two or more rate are repeated! Repeating rate will result in a "
-                             "linearly dependent set of function for the basis.")
+            raise ValueError(
+                "Two or more rate are repeated! Repeating rate will result in a "
+                "linearly dependent set of function for the basis."
+            )
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """
