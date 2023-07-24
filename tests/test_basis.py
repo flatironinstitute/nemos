@@ -86,7 +86,10 @@ class TestInitAndEvaluate:
             "pars": {
                 "class_name": "OrthExponentialBasis",
                 "sample_size": sample_size,
-                "args": {"n_basis_funcs": nbasis, "decay_rates": np.linspace(10, nbasis * 10, nbasis)},
+                "args": {
+                    "n_basis_funcs": nbasis,
+                    "decay_rates": np.linspace(10, nbasis * 10, nbasis),
+                },
             }
         }
         for sample_size in [50, 80, 100]
