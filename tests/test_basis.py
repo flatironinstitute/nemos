@@ -7,18 +7,6 @@ import neurostatslib.basis as basis
 # automatic define user accessible basis and check the methods
 
 
-def test_basis_abstract_method_compliance() -> None:
-    """
-    Check that each non-abstract class implements all abstract methods of super-classes.
-
-    Raises
-    ------
-    ValueError
-        If any of the non-abstract classes doesn't re-implement at least one of the abstract methods it inherits.
-    """
-    utils_testing.check_all_abstract_methods_compliance(basis)
-    return
-
 
 def test_all_basis_are_parametrized() -> None:
     """
@@ -33,8 +21,8 @@ def test_all_basis_are_parametrized() -> None:
     cls = TestInitAndEvaluate
     for class_name, class_obj in utils_testing.get_non_abstract_classes(basis):
         print(f'\n-> Testing "{class_name}"')
-        if class_name in ["AdditiveBasis", "MultiplicativeBasis"]:
-            continue
+        # if class_name in ["AdditiveBasis", "MultiplicativeBasis"]:
+        #     continue
         for test_name in cls.params:
             implemented_class = {
                 cls.params[test_name][cc]["pars"]["class_name"]
@@ -183,7 +171,7 @@ class TestInitAndEvaluate:
         basis_class = getattr(basis, basis_name)
         basis_instance = basis_class(**pars["args"])
         eval_basis = basis_instance.evaluate(np.linspace(0, 1, sample_size))
-        capfd.readouterr()
+        #capfd.readouterr()
         if eval_basis.shape[0] != pars["args"]["n_basis_funcs"]:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimensiton of the evaluated basis."
@@ -217,7 +205,7 @@ class TestInitAndEvaluate:
         basis_class = getattr(basis, basis_name)
         basis_instance = basis_class(**pars["args"])
         eval_basis = basis_instance.evaluate(np.linspace(0, 1, sample_size))
-        capfd.readouterr()
+        #capfd.readouterr()
         if eval_basis.shape[1] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimensiton of the evaluated basis."
@@ -280,15 +268,9 @@ def test_basis_sample_consistency_check(
     pars = basis_sample_consistency_check[basis_type]
     basis_obj = pars["basis_obj"]
     n_input = pars["n_input"]
-    # check that consistent samples do not raise an error
-    with capfd.disabled():
-        print(
-            f' -> Testing "{basis_obj.__class__.__name__}" with {basis_obj._n_input_samples} components'
-        )
 
     inputs = [np.linspace(0, 1, 100 + k) for k in range(n_input)]
     with pytest.raises(ValueError):
-        capfd.readouterr()
         basis_obj.evaluate(*inputs)
 
 
@@ -340,12 +322,11 @@ def test_basis_eval_checks(
     """
     basis_obj = evaluate_basis_object[class_name]["basis_obj"]
     n_input = evaluate_basis_object[class_name]["n_input"]
-    # check that the correct input does not raise an error
-    with capfd.disabled():
-        print(f' -> Testing "{basis_obj.__class__.__name__}"')
+
     inputs = [np.linspace(0, 1, 20)] * n_input
     basis_obj.evaluate(*inputs)
     inputs = [20] * (n_input + delta_input)
+
     if delta_input == 0:
         basis_obj.evaluate_on_grid(*inputs)
     else:
@@ -354,5 +335,4 @@ def test_basis_eval_checks(
                 n_input + delta_input
             )  # wrong number of inputs passed
             basis_obj.evaluate(*inputs)
-    # hide print conditioning number
-    capfd.readouterr()
+

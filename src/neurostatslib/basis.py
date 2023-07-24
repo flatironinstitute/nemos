@@ -67,6 +67,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
+        :
             The equi-spaced samples covering the basis domain.
 
         Raises
@@ -87,7 +88,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
-            NDArray
+        :
             The generated basis functions.
 
         Raises
@@ -135,10 +136,10 @@ class Basis(abc.ABC):
 
         Returns
         -------
-            Xs[1], ..., Xs[n] : (n_samples[0], ... , n_samples[n])
+        Xs[1], ..., Xs[n] : (n_samples[0], ... , n_samples[n])
             A tuple containing the meshgrid values, one element for each of the n dimension of the grid, where n equals
             to the number of inputs.
-            Y : (number of basis, n_samples[0], ... , n_samples[n])
+        Y : (number of basis, n_samples[0], ... , n_samples[n])
             the basis function evaluated at the samples.
 
         """
@@ -252,7 +253,7 @@ class Basis(abc.ABC):
         """
         pass
 
-    def __add__(self, other: Basis) -> Basis:
+    def __add__(self, other: Basis) -> AdditiveBasis:
         """
         Add two Basis objects together.
 
@@ -263,12 +264,12 @@ class Basis(abc.ABC):
 
         Returns
         -------
-            AdditiveBasis
+        : AdditiveBasis
             The resulting Basis object.
         """
         return AdditiveBasis(self, other)
 
-    def __mul__(self, other: Basis) -> Basis:
+    def __mul__(self, other: Basis) -> MultiplicativeBasis:
         """
         Multiply two Basis objects together.
 
@@ -279,6 +280,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
+        : MultiplicativeBasis
             The resulting Basis object.
         """
         return MultiplicativeBasis(self, other)
@@ -331,6 +333,7 @@ class AdditiveBasis(Basis):
 
         Returns
         -------
+        :
             The basis function evaluated at the samples (number of samples x number of basis)
         """
         return np.vstack(
@@ -409,6 +412,7 @@ class MultiplicativeBasis(Basis):
 
         Returns
         -------
+        :
             The basis function evaluated at the samples (number of samples x number of basis)
         """
         return np.array(
@@ -431,6 +435,7 @@ class MultiplicativeBasis(Basis):
 
         Returns
         -------
+        :
             The equi-spaced sample locations for each coordinate.
 
         """
@@ -546,7 +551,8 @@ class SplineBasis(Basis, abc.ABC):
 
         Returns
         -------
-           The equi-spaced sample location.
+        :
+            The equi-spaced sample location.
         """
         return (np.linspace(0, 1, n_samples[0]),)
 
@@ -719,7 +725,7 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
 
         Returns
         -------
-        NDArray : (number of samples, )
+        : (number of samples, )
             A transformed version of the sample points that matches the Raised Cosine basis domain.
         """
         return sample_pts * np.pi * (self._n_basis_funcs - 1)
@@ -772,7 +778,7 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
 
         Returns
         -------
-        NDArray : (number of samples, )
+        : (number of samples, )
             A transformed version of the sample points that matches the Raised Cosine basis domain.
         """
         return (
@@ -809,9 +815,9 @@ class OrthExponentialBasis(Basis):
     ----------
     n_basis_funcs
             Number of basis functions.
-        decay_rates : (n_basis_funcs,)
+    decay_rates : (n_basis_funcs,)
             Decay rates of the exponentials.
-        gb_limit : optional
+    gb_limit : optional
             The size limit in GB for the model matrix that can be generated, by default 16.0 GB.
     """
 
@@ -892,6 +898,7 @@ class OrthExponentialBasis(Basis):
 
         Returns
         -------
+        :
            The equi-spaced sample location.
         """
         return (np.linspace(0, 1, n_samples[0]),)
