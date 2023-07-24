@@ -86,4 +86,3 @@ def basis_sample_consistency_check():
             {'basis_obj': basis.MSplineBasis(10) + basis.MSplineBasis(10) + basis.MSplineBasis(10), 'n_input': 3}
     }
     return params
-

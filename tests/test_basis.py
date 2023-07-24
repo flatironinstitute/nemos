@@ -20,175 +20,235 @@ def test_basis_abstract_method_compliance() -> None:
     return
 
 
-def test_all_basis_are_in_fixture(
-    init_basis_parameter_grid: pytest.fixture,
-    min_basis_funcs: pytest.fixture,
-    evaluate_basis_object: pytest.fixture,
-) -> None:
+def test_all_basis_are_in_fixture() -> None:
     """
     Check that all the basis initialization are tested by inspecting the basis module and make sure that all
     the non-abstract classes, except additive and multiplicative are listed in the fixture. If this test fails,
     it means that you need to add some newly implemented basis function to the fixtures.
 
-    Parameters
-    ----------
-    init_basis_parameter_grid
-        Fixture containing the initialization arguments for the basis classes.
-
-    min_basis_funcs
-        Fixture containing a dictionary specifying the minimum number of basis functions allowed.
-
-    evaluate_basis_object
-        Fixture containing a dictionary specifying the basis objects used for evaluation.
-
     Returns
     -------
     None
     """
+    cls = TestInitAndEvaluate
     for class_name, class_obj in utils_testing.get_non_abstract_classes(basis):
         print(f'\n-> Testing "{class_name}"')
         if class_name in ["AdditiveBasis", "MultiplicativeBasis"]:
             continue
-        assert class_name in init_basis_parameter_grid.keys(), (
-            f"{class_name} not in the init_basis_parameter_grid " f"fixture keys!"
-        )
-        assert (
-            class_name in min_basis_funcs.keys()
-        ), f"{class_name} not in the min_basis_funcs fixture keys!"
-        assert class_name in evaluate_basis_object.keys(), (
-            f"{class_name} not in the evaluate_basis_object " f"fixture keys!"
-        )
-
-
-def test_init_and_evaluate_basis(
-    init_basis_parameter_grid: pytest.fixture, capfd: pytest.fixture
-) -> None:
-    """
-    Test initialization and evaluation of basis classes:
-    Checks:
-        - does the initialization accepts the expected inputs?
-        - does evaluation works and returns an NDArray with the expected dimensions?
-
-    Parameters:
-    -----------
-    - initialize_basis:
-        A dictionary containing basis names as keys and their initialization arguments as values. This is defined
-        as a pytest.fixture in conftest.py
-    - capfd
-        pytest fixture for capturing stdout and stderr.
-
-    Raises:
-    -------
-    - ValueError
-        If the dimensions of the evaluated basis do not match the expected dimensions.
-
-    Returns:
-    - None
-    """
-    for basis_name in init_basis_parameter_grid:
-        basis_class = getattr(basis, basis_name)
-        with capfd.disabled():
-            disp_str = f"Testing class {basis_name}\n"
-            disp_str += "-" * (len(disp_str) - 1)
-            print(disp_str)
-        for args in init_basis_parameter_grid[basis_name]:
-            basis_instance = basis_class(*args)
-            with capfd.disabled():
-                print(f"num basis: {args[0]}")
-            for window_size in [50, 80, 100]:
-                eval_basis = basis_instance.evaluate(np.linspace(0, 1, window_size))
-                capfd.readouterr()
-                if eval_basis.shape[0] != args[0]:
-                    raise ValueError(
-                        f"Dimensions do not agree: The number of basis should match the first dimensiton of the evaluated basis."
-                        f"The number of basis is {args[0]}",
-                        f"The first dimension of the evaluated basis is {eval_basis.shape[0]}",
-                    )
-
-                if eval_basis.shape[1] != window_size:
-                    raise ValueError(
-                        f"Dimensions do not agree: The window size should match the second dimensiton of the evaluated basis."
-                        f"The window size is {window_size}",
-                        f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
-                    )
-
-
-min_basis = []
-for spline in ["MSplineBasis"]:
-    for order in [-1, 0, 1, 2, 3, 4]:
-        for n_basis in [-1, 0, 1, 3, 10, 20]:
-            if spline == "CyclicBSplineBasis":
-                raise_exception = (n_basis < max(order * 2 - 2, order + 2)) or (
-                    order < 2
-                ) | n_basis <= 0
-            elif spline == "BSplineBasis":
-                raise_exception = n_basis < order + 2 | n_basis > 0
-            elif spline == "MSplineBasis":
-                raise_exception = (order < 1) | (n_basis < 1)
-
-            min_basis.append(
-                {
-                    "class_name": spline,
-                    "args": {"order": order, "n_basis_funcs": n_basis},
-                    "raise_exception": raise_exception,
-                }
+        for test_name in cls.params:
+            implemented_class = {
+                cls.params[test_name][cc]["pars"]["class_name"]
+                for cc in range(len(cls.params[test_name]))
+            }
+            assert class_name in implemented_class, (
+                f"{class_name} not in the init_basis_parameter_grid " f"fixture keys!"
             )
 
-for n_basis in [-1, 0, 1, 3, 10, 20]:
-    min_basis.append(
+
+class TestInitAndEvaluate:
+    test_input = [
         {
-            "class_name": "RaisedCosineBasisLinear",
-            "args": {"n_basis_funcs": n_basis},
-            "raise_exception": n_basis < 1,
+            "pars": {
+                "class_name": name,
+                "sample_size": sample_size,
+                "args": {"n_basis_funcs": nbasis, "order": order},
+            }
         }
-    )
-    min_basis.append(
+        for name in ["MSplineBasis"]
+        for sample_size in [50, 80, 100]
+        for nbasis in range(6, 10)
+        for order in range(1, 5)
+    ]
+    test_input += [
         {
-            "class_name": "RaisedCosineBasisLog",
-            "args": {"n_basis_funcs": n_basis},
-            "raise_exception": n_basis < 2,
+            "pars": {
+                "class_name": "RaisedCosineBasisLinear",
+                "sample_size": sample_size,
+                "args": {"n_basis_funcs": nbasis},
+            }
         }
-    )
-    min_basis.append(
+        for sample_size in [50, 80, 100]
+        for nbasis in range(2, 10)
+    ]
+    test_input += [
         {
-            "class_name": "OrthExponentialBasis",
-            "args": {
-                "n_basis_funcs": n_basis,
-                "decay_rates": np.linspace(0, 1, max(1, n_basis)),
-            },
-            "raise_exception": n_basis < 1,
+            "pars": {
+                "class_name": "RaisedCosineBasisLog",
+                "sample_size": sample_size,
+                "args": {"n_basis_funcs": nbasis},
+            }
         }
-    )
+        for sample_size in [50, 80, 100]
+        for nbasis in range(2, 10)
+    ]
+    test_input += [
+        {
+            "pars": {
+                "class_name": "OrthExponentialBasis",
+                "sample_size": sample_size,
+                "args": {"n_basis_funcs": nbasis, "decay_rates": np.linspace(10, nbasis * 10, nbasis)},
+            }
+        }
+        for sample_size in [50, 80, 100]
+        for nbasis in range(6, 10)
+    ]
 
+    min_basis = []
+    for spline in ["MSplineBasis"]:
+        for order in [-1, 0, 1, 2, 3, 4]:
+            for n_basis in [-1, 0, 1, 3, 10, 20]:
+                if spline == "CyclicBSplineBasis":
+                    raise_exception = (n_basis < max(order * 2 - 2, order + 2)) or (
+                        order < 2
+                    ) | n_basis <= 0
+                elif spline == "BSplineBasis":
+                    raise_exception = n_basis < order + 2 | n_basis > 0
+                elif spline == "MSplineBasis":
+                    raise_exception = (order < 1) | (n_basis < 1)
 
-@pytest.mark.parametrize("min_basis", min_basis)
-def test_min_basis_number(min_basis) -> None:
-    """
-    Check that the expected minimum number of basis is appropriately matched and a ValueError exception is raised
-    otherwise.
+                min_basis.append(
+                    {
+                        "pars": {
+                            "class_name": spline,
+                            "args": {"order": order, "n_basis_funcs": n_basis},
+                            "raise_exception": raise_exception,
+                        }
+                    }
+                )
 
-    Parameters
-    ----------
-    min_basis_funcs : pytest.fixture
-        Fixture containing a dictionary with the following keys:
-            'args': ndarray
-                The basis function initialization arguments.
-            'raise_exception': bool
-                True if the argument would result in an exception being raised, False otherwise.
+    for n_basis in [-1, 0, 1, 3, 10, 20]:
+        min_basis.append(
+            {
+                "pars": {
+                    "class_name": "RaisedCosineBasisLinear",
+                    "args": {"n_basis_funcs": n_basis},
+                    "raise_exception": n_basis < 1,
+                }
+            }
+        )
+        min_basis.append(
+            {
+                "pars": {
+                    "class_name": "RaisedCosineBasisLog",
+                    "args": {"n_basis_funcs": n_basis},
+                    "raise_exception": n_basis < 2,
+                }
+            }
+        )
+        min_basis.append(
+            {
+                "pars": {
+                    "class_name": "OrthExponentialBasis",
+                    "args": {
+                        "n_basis_funcs": n_basis,
+                        "decay_rates": np.linspace(0, 1, max(1, n_basis)),
+                    },
+                    "raise_exception": n_basis < 1,
+                }
+            }
+        )
 
-    Returns
-    -------
-    None
-    """
-    class_name = min_basis["class_name"]
-    print(f'\n-> Testing "{class_name}"')
-    basis_obj = getattr(basis, class_name)
-    # params that should not raise exception
-    if not min_basis["raise_exception"]:
-        basis_obj(**min_basis["args"])
-    else:
-        with pytest.raises(ValueError):
-            basis_obj(**min_basis["args"])
+    params = {
+        "test_nbasis": test_input,
+        "test_sample_size": test_input,
+        "test_min_basis": min_basis,
+    }
+
+    def test_nbasis(self, pars: dict, capfd: pytest.fixture):
+        """
+        Test initialization and evaluation of basis classes:
+        Check:
+            - does evaluation works and returns an NDArray with the expected number of basis?
+
+        Parameters:
+        -----------
+        - pars:
+            A dictionary containing basis names as keys and their initialization arguments as values.
+        - capfd
+            pytest fixture for capturing stdout and stderr.
+
+        Raises:
+        -------
+        - ValueError
+            If the dimensions of the evaluated basis do not match the expected dimensions.
+
+        Returns:
+        - None
+        """
+        basis_name = pars["class_name"]
+        sample_size = pars["sample_size"]
+        basis_class = getattr(basis, basis_name)
+        basis_instance = basis_class(**pars["args"])
+        eval_basis = basis_instance.evaluate(np.linspace(0, 1, sample_size))
+        capfd.readouterr()
+        if eval_basis.shape[0] != pars["args"]["n_basis_funcs"]:
+            raise ValueError(
+                "Dimensions do not agree: The number of basis should match the first dimensiton of the evaluated basis."
+                f"The number of basis is {pars['args']['n_basis_funcs']}",
+                f"The first dimension of the evaluated basis is {eval_basis.shape[0]}",
+            )
+
+    def test_sample_size(self, pars: dict, capfd: pytest.fixture):
+        """
+        Test initialization and evaluation of basis classes:
+        Check:
+            - does evaluation works and returns an NDArray with the expected number of samples?
+
+        Parameters:
+        -----------
+        - pars:
+            A dictionary containing basis names as keys and their initialization arguments as values.
+        - capfd
+            pytest fixture for capturing stdout and stderr.
+
+        Raises:
+        -------
+        - ValueError
+            If the dimensions of the evaluated basis do not match the expected dimensions.
+
+        Returns:
+        - None
+        """
+        basis_name = pars["class_name"]
+        sample_size = pars["sample_size"]
+        basis_class = getattr(basis, basis_name)
+        basis_instance = basis_class(**pars["args"])
+        eval_basis = basis_instance.evaluate(np.linspace(0, 1, sample_size))
+        capfd.readouterr()
+        if eval_basis.shape[1] != sample_size:
+            raise ValueError(
+                f"Dimensions do not agree: The window size should match the second dimensiton of the evaluated basis."
+                f"The window size is {sample_size}",
+                f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
+            )
+
+    def test_min_basis(self, pars):
+        """
+        Check that the expected minimum number of basis is appropriately matched and a ValueError exception is raised
+        otherwise.
+
+        Parameters
+        ----------
+        min_basis_funcs : pytest.fixture
+            Fixture containing a dictionary with the following keys:
+                'args': ndarray
+                    The basis function initialization arguments.
+                'raise_exception': bool
+                    True if the argument would result in an exception being raised, False otherwise.
+
+        Returns
+        -------
+        None
+        """
+        class_name = pars["class_name"]
+        basis_obj = getattr(basis, class_name)
+
+        # params that should not raise exception
+        if not pars["raise_exception"]:
+            basis_obj(**pars["args"])
+        else:
+            with pytest.raises(ValueError):
+                basis_obj(**pars["args"])
 
 
 @pytest.mark.parametrize("basis_type", ["add2", "mul2", "add3"])
