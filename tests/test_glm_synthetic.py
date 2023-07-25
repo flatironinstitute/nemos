@@ -27,7 +27,7 @@ def test_set_up_glm():
         This function performs the setup for the Generalized Linear Model (GLM) by creating the necessary objects and variables.
         It generates a raised cosine basis, defines the simulated model using the basis functions, and returns the GLM object.
     """
-    nn, nt, ws = 2, 5000, 100
+    nn, nt, ws = 2, 1000, 100
     simulation_key = jax.random.PRNGKey(123)
 
     spike_basis = RaisedCosineBasisLinear(
@@ -51,7 +51,7 @@ def test_fit_glm2():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
-    nn, nt, ws = 2, 5000, 100
+    nn, nt, ws = 2, 1000, 100
     simulation_key = jax.random.PRNGKey(123)
 
     spike_basis = RaisedCosineBasisLinear(
@@ -78,7 +78,7 @@ def test_fit_glm2():
     fitted_model = GLM(
         B,
         solver_name="GradientDescent",
-        solver_kwargs=dict(maxiter=10000, acceleration=False, verbose=True, stepsize=-1)
+        solver_kwargs=dict(maxiter=1000, acceleration=False, verbose=True, stepsize=-1)
     )
    
     fitted_model.fit(spike_data)

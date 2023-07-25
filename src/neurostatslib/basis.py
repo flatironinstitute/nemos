@@ -850,7 +850,22 @@ class OrthExponentialBasis(Basis):
         if any(sample_pts[0] < 0):
             raise ValueError("OrthExponentialBasis requires positive samples. Negative values provided instead!")
 
-    def _check_sample_size(self, *sample_pts):
+    def _check_sample_size(self, *sample_pts: NDArray):
+        """
+        Check that the sample size is greater than the number of basis. This is necessary for the
+        orthogonalization procedure, that otherwise will return (sample_size, ) basis elements instead of
+        the expected number.
+        Parameters
+        ----------
+        sample_pts :
+            Spacing for basis functions, holding elements on the interval [0, inf).
+
+        Raises
+        ------
+        ValueError
+            If the number of basis element is less than the number of samples.
+        """
+        print(sample_pts[0].size, self._n_basis_funcs)
         if sample_pts[0].size < self._n_basis_funcs:
             raise ValueError("OrthExponentialBasis requires at least as many samples as basis functions!\n"
                              f"Class instantiated with {self._n_basis_funcs} basis functions but only {sample_pts[0].size} samples provided!")
@@ -863,7 +878,7 @@ class OrthExponentialBasis(Basis):
         Parameters
         ----------
         sample_pts : (n_pts,)
-            Spacing for basis functions, holding elements on the interval [0, 1).
+            Spacing for basis functions, holding elements on the interval [0, inf).
 
         Returns
         -------
@@ -871,6 +886,7 @@ class OrthExponentialBasis(Basis):
             Evaluated exponentially decaying basis functions, numerically orthogonalized.
         """
         self._check_sample_range(sample_pts[0])
+        self._check_sample_size(sample_pts[0])
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
@@ -954,45 +970,10 @@ if __name__ == "__main__":
 
     basis_add_add = basis_add + basis2
     basis_add_add.evaluate_on_grid(10, 10, 10)
-    # basis_add_add_add = basis_add_add + basis_add
-    #
-    # print(basis_add.evaluate(samples, samples).shape)
-    # print(basis_add_add.evaluate(samples, samples, samples).shape)
-    # print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
-    #
-    # basis_rcl = RaisedCosineBasisLog(15)
-    # basi_ms = MSplineBasis(15, order=4)
-    # mulbase = basis_rcl * basi_ms
-    # X, Y, Z = mulbase.evaluate_on_grid(100, 110) # maybe create a visualize basis class.
-    #
-    # fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    # Z = np.array(Z)
-    # Z[Z == 0] = np.nan
-    # ax.plot_surface(X, Y, Z[50], cmap="viridis", alpha=0.8)
-    # ax.plot_surface(X, Y, Z[100], cmap="rainbow", alpha=0.8)
-    # ax.plot_surface(X, Y, Z[200], cmap="inferno", alpha=0.8)
-    #
-    # # Customize the plot
-    # ax.set_xlabel("X")
-    # ax.set_ylabel("Y")
-    # ax.set_zlabel("Z")
-    # ax.set_title("Overlapped Surfaces")
-    #
-    # print("multiply and additive base with a evaluate type base")
-    # basis1 = LogRaisedCosineBasis(6)
-    # basis2 = MSplineBasis(7, order=4)
-    # basis3 = LinearRaisedCosineBasis(8)
-    # base_res = (basis1 + basis2) * basis3
-    # X = base_res.evaluate(
-    #     np.linspace(0, 1, 64), np.linspace(0, 1, 64), np.linspace(0, 1, 64)
-    # )
-    # print(X.shape, (6 + 7) * 8)
+    basis_add_add_add = basis_add_add + basis_add
 
-    #
-    #
-    # basis1 = MSplineBasis(6, order=4)
-    # basis2 = MSplineBasis(7, order=4)
-    # basis3 = MSplineBasis(8, order=4)
-    #
-    # multb = basis1 + basis2 * basis3
-    # X, Y, W, Z = multb.gen_basis(10, 11, 12)
+    print(basis_add.evaluate(samples, samples).shape)
+    print(basis_add_add.evaluate(samples, samples, samples).shape)
+    print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
+
+

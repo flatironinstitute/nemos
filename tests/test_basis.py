@@ -335,14 +335,17 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
     def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, order):
         """
-        Verifies that the minimum number of basis functions and order required (i.e., 1) are enforced.
+        Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
+        order < #basis are enforced.
         """
-        raise_exception = (order < 1) | (n_basis_funcs < 1)
+        raise_exception = (order < 1) | (n_basis_funcs < 1) | (order > n_basis_funcs)
         if raise_exception:
             with pytest.raises(ValueError):
-                self.cls(n_basis_funcs=n_basis_funcs, order=order)
+                basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+                basis_obj.evaluate(np.linspace(0, 1, 10))
         else:
-            self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj.evaluate(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
@@ -827,4 +830,23 @@ class TestMultiplicativeBasis(CombinedBasis):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
+
+    @pytest.mark.parametrize("basis_a", [basis.MSplineBasis])
+    @pytest.mark.parametrize("basis_b", [basis.OrthExponentialBasis])
+    @pytest.mark.parametrize("n_basis_a", [5])
+    @pytest.mark.parametrize("n_basis_b", [6])
+    @pytest.mark.parametrize("sample_size_a",[11, 12])
+    @pytest.mark.parametrize("sample_size_b",[11, 12])
+    def test_inconsistent_sample_sizes(self, basis_a, basis_b, n_basis_a,n_basis_b, sample_size_a, sample_size_b):
+        """Test that the inputs of inconsistent sample sizes result in an exception when evaluate is called
+        """
+        raise_exception = sample_size_a != sample_size_b
+        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_obj = basis_a_obj * basis_b_obj
+        if raise_exception:
+            with pytest.raises(ValueError):
+                basis_obj.evaluate(np.linspace(0, 1,sample_size_a), np.linspace(0, 1,sample_size_b))
+        else:
+            basis_obj.evaluate(np.linspace(0, 1,sample_size_a), np.linspace(0, 1,sample_size_b))
+
 

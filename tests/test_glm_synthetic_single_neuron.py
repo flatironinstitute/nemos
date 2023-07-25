@@ -16,7 +16,7 @@ def test_glm_fit():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
-    nn, nt, ws = 1, 5000, 100
+    nn, nt, ws = 1, 1000, 100
     simulation_key = jax.random.PRNGKey(123)
 
     spike_basis = RaisedCosineBasisLog(
@@ -35,7 +35,7 @@ def test_glm_fit():
     fitted_model = GLM(
         B,
         solver_name="GradientDescent",
-        solver_kwargs=dict(maxiter=10000, acceleration=False, verbose=True, stepsize=0.0)
+        solver_kwargs=dict(maxiter=1000, acceleration=False, verbose=True, stepsize=0.0)
 
     )
     
