@@ -99,7 +99,6 @@ class Basis(abc.ABC):
         # checks on input and outputs
         self._check_samples_consistency(*xi)
         self._check_input_number(xi)
-        self._check_full_model_matrix_size(xi[0].shape[0])
 
         eval_basis = self._evaluate(*xi)
 
@@ -129,7 +128,6 @@ class Basis(abc.ABC):
         """
         self._check_input_number(n_samples)
         n_basis: int = np.prod(n_samples, dtype=int)
-        self._check_full_model_matrix_size(n_basis)
 
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
@@ -202,27 +200,6 @@ class Basis(abc.ABC):
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
 
-    def _check_full_model_matrix_size(
-        self, n_samples: int, dtype: type = np.float64
-    ) -> None:
-        """
-        Check the size in GB of the full model matrix is <= self._GB_limit.
-
-        Parameters
-        ----------
-        n_samples
-            Number of samples.
-        dtype : optional
-            Data type of the model matrix. Default is np.float64.
-
-        Raises
-        ------
-        MemoryError
-            If the size of the model matrix exceeds the specified memory limit.
-        """
-        size_in_bytes = np.dtype(dtype).itemsize * n_samples * self._n_basis_funcs
-        if size_in_bytes > self._GB_limit * 10**9:
-            raise MemoryError(f"Model matrix size exceeds {self._GB_limit} GB.")
 
     @abc.abstractmethod
     def _check_n_basis_min(self) -> None:
