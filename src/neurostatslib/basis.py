@@ -106,22 +106,22 @@ class Basis(abc.ABC):
         # checks on the evaluated basis
         self._check_enough_samples(eval_basis)  # move to the GLM model
 
-        # check the conditioning
-        conditioning = np.linalg.cond(eval_basis)  # model should do that
-        if np.isinf(conditioning):
-            if any(eval_basis.sum(axis=1) == 0):
-                warnings.warn(
-                    "eval_basis has an empty row. No samples in the input domain "
-                    "of at least one basis function. Try to reduce the number of basis or increase the sample"
-                    "size"
-                )
-            else:
-                warnings.warn(
-                    "Linearly dependent columns in eval_basis. Check for perfect collinearity in the inputs"
-                    "or insufficient sample size."
-                )
-
-        print(f"Conditioning of the evaluated basis function: {conditioning}")
+        # # check the conditioning
+        # conditioning = np.linalg.cond(eval_basis)  # model should do that
+        # if np.isinf(conditioning):
+        #     if any(eval_basis.sum(axis=1) == 0):
+        #         warnings.warn(
+        #             "eval_basis has an empty row. No samples in the input domain "
+        #             "of at least one basis function. Try to reduce the number of basis or increase the sample"
+        #             "size"
+        #         )
+        #     else:
+        #         warnings.warn(
+        #             "Linearly dependent columns in eval_basis. Check for perfect collinearity in the inputs"
+        #             "or insufficient sample size."
+        #         )
+        #
+        # print(f"Conditioning of the evaluated basis function: {conditioning}")
         return eval_basis
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, ...]:

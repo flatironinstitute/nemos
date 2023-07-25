@@ -7,7 +7,9 @@ def pytest_generate_tests(metafunc):
     if not (hasattr(metafunc.function, '__qualname__') and '.' in metafunc.function.__qualname__):
         # skip if not class
         return
-
+    if not 'params' in metafunc.cls.__dict__:
+        # skip if params is not defined
+        return
     funcarglist = metafunc.cls.params[metafunc.function.__name__]
 
     argnames = sorted(funcarglist[0])
