@@ -840,11 +840,44 @@ class OrthExponentialBasis(Basis):
             )
 
     def _check_rates(self):
+        """
+        Check if the decay rates list has duplicate entries.
+
+        Raises
+        ------
+        ValueError
+            If two or more decay rates are repeated, which would result in a linearly
+            dependent set of functions for the basis.
+        """
         if len(set(self._decay_rates)) != len(self._decay_rates):
             raise ValueError(
                 "Two or more rate are repeated! Repeating rate will result in a "
                 "linearly dependent set of function for the basis."
             )
+
+    def _check_sample_range(self, *sample_pts):
+        """
+        Check if the sample points are all positive.
+
+        Parameters
+        ----------
+        *sample_pts : float or array-like
+            Sample points to check.
+
+        Raises
+        ------
+        ValueError
+            If any of the sample points are negative, as OrthExponentialBasis requires
+            positive samples.
+        """
+        if any(sample_pts[0] < 0):
+            raise ValueError("OrthExponentialBasis requires positive samples. Negative values provided instead!")
+
+    def _check_sample_size(self, *sample_pts):
+        if sample_pts[0].size < self._n_basis_funcs:
+            raise ValueError("OrthExponentialBasis requires at least as many samples as basis functions!\n"
+                             f"Class instantiated with {self._n_basis_funcs} basis functions but only {sample_pts[0].size} samples provided!")
+
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """
@@ -860,7 +893,7 @@ class OrthExponentialBasis(Basis):
         basis_funcs : (n_basis_funcs, n_pts)
             Evaluated exponentially decaying basis functions, numerically orthogonalized.
         """
-
+        self._check_sample_range(sample_pts[0])
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,

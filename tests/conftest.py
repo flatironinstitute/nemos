@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 import neurostatslib.basis as basis
 
 
