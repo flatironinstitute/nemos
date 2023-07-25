@@ -127,7 +127,6 @@ class Basis(abc.ABC):
 
         """
         self._check_input_number(n_samples)
-        n_basis: int = np.prod(n_samples, dtype=int)
 
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
@@ -199,7 +198,6 @@ class Basis(abc.ABC):
             raise ValueError(
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
-
 
     @abc.abstractmethod
     def _check_n_basis_min(self) -> None:
@@ -848,7 +846,9 @@ class OrthExponentialBasis(Basis):
             positive samples.
         """
         if any(sample_pts[0] < 0):
-            raise ValueError("OrthExponentialBasis requires positive samples. Negative values provided instead!")
+            raise ValueError(
+                "OrthExponentialBasis requires positive samples. Negative values provided instead!"
+            )
 
     def _check_sample_size(self, *sample_pts: NDArray):
         """
@@ -867,9 +867,10 @@ class OrthExponentialBasis(Basis):
         """
         print(sample_pts[0].size, self._n_basis_funcs)
         if sample_pts[0].size < self._n_basis_funcs:
-            raise ValueError("OrthExponentialBasis requires at least as many samples as basis functions!\n"
-                             f"Class instantiated with {self._n_basis_funcs} basis functions but only {sample_pts[0].size} samples provided!")
-
+            raise ValueError(
+                "OrthExponentialBasis requires at least as many samples as basis functions!\n"
+                f"Class instantiated with {self._n_basis_funcs} basis functions but only {sample_pts[0].size} samples provided!"
+            )
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """
@@ -975,5 +976,3 @@ if __name__ == "__main__":
     print(basis_add.evaluate(samples, samples).shape)
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
-
-

@@ -7,7 +7,6 @@ import utils_testing
 
 import neurostatslib.basis as basis
 
-
 # automatic define user accessible basis and check the methods
 
 
@@ -21,17 +20,25 @@ def test_all_basis_are_tested() -> None:
     )
 
     # Filter the classes that are subclasses of 'SuperClass'.
-    subclasses = [cls for _, cls in all_classes if issubclass(cls, BasisFuncsTesting) and cls != BasisFuncsTesting]
+    subclasses = [
+        cls
+        for _, cls in all_classes
+        if issubclass(cls, BasisFuncsTesting) and cls != BasisFuncsTesting
+    ]
 
     # Create the set of basis function objects that are tested using the cls definition
     tested_bases = {test_cls.cls for test_cls in subclasses}
 
     # Create the set of all the concrete basis classes
-    all_bases = {class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)}
+    all_bases = {
+        class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)
+    }
 
     if all_bases != all_bases.intersection(tested_bases):
-        raise ValueError("Test should be implemented for each of the concrete classes in the basis module.\n"
-                         f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}")
+        raise ValueError(
+            "Test should be implemented for each of the concrete classes in the basis module.\n"
+            f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
+        )
 
 
 class BasisFuncsTesting(abc.ABC):
@@ -47,7 +54,6 @@ class BasisFuncsTesting(abc.ABC):
 
 
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
-
     cls = basis.RaisedCosineBasisLog
 
     @pytest.mark.parametrize(
@@ -72,7 +78,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_basis_funcs, sample_size
+        self, n_basis_funcs, sample_size
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
@@ -171,7 +177,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
 
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
-
     cls = basis.RaisedCosineBasisLinear
 
     @pytest.mark.parametrize(
@@ -195,7 +200,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_basis_funcs, sample_size
+        self, n_basis_funcs, sample_size
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
@@ -281,8 +286,8 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input):
         """
-       Validates that the evaluate_on_grid() method correctly handles the number of input samples that are provided.
-       """
+        Validates that the evaluate_on_grid() method correctly handles the number of input samples that are provided.
+        """
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
@@ -294,12 +299,13 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
 
 class TestMSplineBasis(BasisFuncsTesting):
-
     cls = basis.MSplineBasis
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
-    def test_evaluate_returns_expected_number_of_basis(self, n_basis_funcs: int, order: int):
+    def test_evaluate_returns_expected_number_of_basis(
+        self, n_basis_funcs: int, order: int
+    ):
         """
         Verifies that the evaluate() method returns the expected number of basis functions.
         """
@@ -317,7 +323,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [4, 10, 100])
     @pytest.mark.parametrize("order", [1, 2, 3])
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_basis_funcs, sample_size, order
+        self, n_basis_funcs, sample_size, order
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
@@ -415,12 +421,13 @@ class TestMSplineBasis(BasisFuncsTesting):
 
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
-
     cls = basis.OrthExponentialBasis
 
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
-    def test_evaluate_returns_expected_number_of_basis(self, n_basis_funcs, sample_size):
+    def test_evaluate_returns_expected_number_of_basis(
+        self, n_basis_funcs, sample_size
+    ):
         """Tests whether the evaluate method returns the expected number of basis functions."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates)
@@ -436,7 +443,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 20])
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_basis_funcs, sample_size
+        self, n_basis_funcs, sample_size
     ):
         """Tests whether the sample size of the evaluated result matches that of the input."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
@@ -524,7 +531,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         else:
             basis_obj.evaluate_on_grid(*inputs)
 
-    @pytest.mark.parametrize("decay_rates", [[1, 2, 3], [0.01, 0.02, 0.001], [2, 1, 1, 2.4]])
+    @pytest.mark.parametrize(
+        "decay_rates", [[1, 2, 3], [0.01, 0.02, 0.001], [2, 1, 1, 2.4]]
+    )
     def test_decay_rate_repetition(self, decay_rates):
         """
         Tests whether the class instance correctly processes the decay rates without repetition.
@@ -539,7 +548,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         else:
             self.cls(n_basis_funcs=len(decay_rates), decay_rates=decay_rates)
 
-    @pytest.mark.parametrize("decay_rates", [[], [1], [1, 2, 3], [1, 0.01, 0.02, 0.001]])
+    @pytest.mark.parametrize(
+        "decay_rates", [[], [1], [1, 2, 3], [1, 0.01, 0.02, 0.001]]
+    )
     @pytest.mark.parametrize("n_basis_func", [1, 2, 3, 4])
     def test_decay_rate_size_match_n_basis_func(self, decay_rates, n_basis_func):
         """Tests whether the size of decay rates matches the number of basis functions."""
@@ -559,6 +570,7 @@ class CombinedBasis(BasisFuncsTesting):
     Properties:
     - cls: Class (default = None)
     """
+
     cls = None
 
     @staticmethod
@@ -569,7 +581,9 @@ class CombinedBasis(BasisFuncsTesting):
         elif basis_a in [basis.RaisedCosineBasisLinear, basis.RaisedCosineBasisLog]:
             basis_a_obj = basis_a(n_basis_funcs=n_basis_a)
         elif basis_a == basis.OrthExponentialBasis:
-            basis_a_obj = basis_a(n_basis_funcs=n_basis_a, decay_rates=np.arange(1, 1 + n_basis_a))
+            basis_a_obj = basis_a(
+                n_basis_funcs=n_basis_a, decay_rates=np.arange(1, 1 + n_basis_a)
+            )
         elif basis_a == basis.AdditiveBasis:
             b1 = basis.MSplineBasis(n_basis_funcs=n_basis_a, order=2)
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_a + 1)
@@ -579,14 +593,18 @@ class CombinedBasis(BasisFuncsTesting):
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_a + 1)
             basis_a_obj = b1 * b2
         else:
-            raise ValueError(f"Test for basis addition not implemented for basis of type {basis_a}!")
+            raise ValueError(
+                f"Test for basis addition not implemented for basis of type {basis_a}!"
+            )
 
         if basis_b == basis.MSplineBasis:
             basis_b_obj = basis_b(n_basis_funcs=n_basis_b, order=4)
         elif basis_b in [basis.RaisedCosineBasisLinear, basis.RaisedCosineBasisLog]:
             basis_b_obj = basis_b(n_basis_funcs=n_basis_b)
         elif basis_b == basis.OrthExponentialBasis:
-            basis_b_obj = basis_b(n_basis_funcs=n_basis_b, decay_rates=np.arange(1, 1 + n_basis_b))
+            basis_b_obj = basis_b(
+                n_basis_funcs=n_basis_b, decay_rates=np.arange(1, 1 + n_basis_b)
+            )
         elif basis_b == basis.AdditiveBasis:
             b1 = basis.MSplineBasis(n_basis_funcs=n_basis_b, order=2)
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_b + 1)
@@ -596,7 +614,9 @@ class CombinedBasis(BasisFuncsTesting):
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_b + 1)
             basis_b_obj = b1 * b2
         else:
-            raise ValueError(f"Test for basis addition not implemented for basis of type {basis_b}!")
+            raise ValueError(
+                f"Test for basis addition not implemented for basis of type {basis_b}!"
+            )
         return basis_a_obj, basis_b_obj
 
 
@@ -606,19 +626,34 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("sample_size", [10, 1000])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    def test_evaluate_returns_expected_number_of_basis(self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b):
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    def test_evaluate_returns_expected_number_of_basis(
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+    ):
         """
         Test whether the evaluation of the `AdditiveBasis` results in a number of basis
         that is the sum of the number of basis functions from two individual bases.
         """
         # define the two basis
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
 
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.evaluate(*[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples)
-        if eval_basis.shape[0] != basis_a_obj._n_basis_funcs + basis_b_obj._n_basis_funcs:
+        eval_basis = basis_obj.evaluate(
+            *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
+        )
+        if (
+            eval_basis.shape[0]
+            != basis_a_obj._n_basis_funcs + basis_b_obj._n_basis_funcs
+        ):
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
                 f"The number of basis is {n_basis_a + n_basis_b}",
@@ -628,17 +663,27 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
         Test whether the output sample size from the `AdditiveBasis` evaluate function matches the input sample size.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.evaluate(*[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples)
+        eval_basis = basis_obj.evaluate(
+            *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
+        )
         if eval_basis.shape[1] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
@@ -646,19 +691,31 @@ class TestAdditiveBasis(CombinedBasis):
                 f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
             )
 
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    def test_number_of_required_inputs_evaluate(self, n_input, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_number_of_required_inputs_evaluate(
+        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
+    ):
         """
         Test whether the number of required inputs for the `evaluate` function matches
         the sum of the number of input samples from the two bases.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj + basis_b_obj
-        raise_exception = n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        raise_exception = (
+            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
             with pytest.raises(ValueError):
@@ -667,48 +724,82 @@ class TestAdditiveBasis(CombinedBasis):
             basis_obj.evaluate(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_evaluate_on_grid_meshgrid_size(
+        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+    ):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj + basis_b_obj
-        res = basis_obj.evaluate_on_grid(*[sample_size]*basis_obj._n_input_samples)
+        res = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_input_samples)
         for grid in res[:-1]:
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    def test_evaluate_on_grid_basis_size(self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_evaluate_on_grid_basis_size(
+        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+    ):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.evaluate_on_grid(*[sample_size]*basis_obj._n_input_samples)[-1]
+        eval_basis = basis_obj.evaluate_on_grid(
+            *[sample_size] * basis_obj._n_input_samples
+        )[-1]
         assert eval_basis.shape[1] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 5, 6, 11, 30])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    def test_evaluate_on_grid_input_number(self, n_input,basis_a, basis_b,n_basis_a,n_basis_b):
+    def test_evaluate_on_grid_input_number(
+        self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
+    ):
         """
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj + basis_b_obj
         inputs = [20] * n_input
-        raise_exception = n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        raise_exception = (
+            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        )
         if raise_exception:
             with pytest.raises(ValueError):
                 basis_obj.evaluate_on_grid(*inputs)
@@ -722,19 +813,34 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("sample_size", [10, 1000])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    def test_evaluate_returns_expected_number_of_basis(self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b):
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    def test_evaluate_returns_expected_number_of_basis(
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+    ):
         """
         Test whether the evaluation of the `MultiplicativeBasis` results in a number of basis
         that is the product of the number of basis functions from two individual bases.
         """
         # define the two basis
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
 
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.evaluate(*[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples)
-        if eval_basis.shape[0] != basis_a_obj._n_basis_funcs * basis_b_obj._n_basis_funcs:
+        eval_basis = basis_obj.evaluate(
+            *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
+        )
+        if (
+            eval_basis.shape[0]
+            != basis_a_obj._n_basis_funcs * basis_b_obj._n_basis_funcs
+        ):
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
                 f"The number of basis is {n_basis_a * n_basis_b}",
@@ -744,17 +850,27 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [6, 30, 35])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
         Test whether the output sample size from the `MultiplicativeBasis` evaluate function matches the input sample size.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.evaluate(*[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples)
+        eval_basis = basis_obj.evaluate(
+            *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
+        )
         if eval_basis.shape[1] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
@@ -762,19 +878,31 @@ class TestMultiplicativeBasis(CombinedBasis):
                 f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
             )
 
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    def test_number_of_required_inputs_evaluate(self, n_input, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_number_of_required_inputs_evaluate(
+        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
+    ):
         """
         Test whether the number of required inputs for the `evaluate` function matches
         the sum of the number of input samples from the two bases.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj * basis_b_obj
-        raise_exception = n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        raise_exception = (
+            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
             with pytest.raises(ValueError):
@@ -783,48 +911,82 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_obj.evaluate(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_evaluate_on_grid_meshgrid_size(
+        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+    ):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj * basis_b_obj
-        res = basis_obj.evaluate_on_grid(*[sample_size]*basis_obj._n_input_samples)
+        res = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_input_samples)
         for grid in res[:-1]:
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    def test_evaluate_on_grid_basis_size(self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_evaluate_on_grid_basis_size(
+        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+    ):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.evaluate_on_grid(*[sample_size]*basis_obj._n_input_samples)[-1]
+        eval_basis = basis_obj.evaluate_on_grid(
+            *[sample_size] * basis_obj._n_input_samples
+        )[-1]
         assert eval_basis.shape[1] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 5, 6, 11, 30])
-    @pytest.mark.parametrize("basis_a", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
-    @pytest.mark.parametrize("basis_b", [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)])
+    @pytest.mark.parametrize(
+        "basis_a",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
+    @pytest.mark.parametrize(
+        "basis_b",
+        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+    )
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    def test_evaluate_on_grid_input_number(self, n_input,basis_a, basis_b,n_basis_a,n_basis_b):
+    def test_evaluate_on_grid_input_number(
+        self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
+    ):
         """
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj * basis_b_obj
         inputs = [20] * n_input
-        raise_exception = n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        raise_exception = (
+            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+        )
         if raise_exception:
             with pytest.raises(ValueError):
                 basis_obj.evaluate_on_grid(*inputs)
@@ -835,18 +997,23 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("basis_b", [basis.OrthExponentialBasis])
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
-    @pytest.mark.parametrize("sample_size_a",[11, 12])
-    @pytest.mark.parametrize("sample_size_b",[11, 12])
-    def test_inconsistent_sample_sizes(self, basis_a, basis_b, n_basis_a,n_basis_b, sample_size_a, sample_size_b):
-        """Test that the inputs of inconsistent sample sizes result in an exception when evaluate is called
-        """
+    @pytest.mark.parametrize("sample_size_a", [11, 12])
+    @pytest.mark.parametrize("sample_size_b", [11, 12])
+    def test_inconsistent_sample_sizes(
+        self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size_a, sample_size_b
+    ):
+        """Test that the inputs of inconsistent sample sizes result in an exception when evaluate is called"""
         raise_exception = sample_size_a != sample_size_b
-        basis_a_obj, basis_b_obj = self.instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b)
+        basis_a_obj, basis_b_obj = self.instantiate_basis(
+            n_basis_a, n_basis_b, basis_a, basis_b
+        )
         basis_obj = basis_a_obj * basis_b_obj
         if raise_exception:
             with pytest.raises(ValueError):
-                basis_obj.evaluate(np.linspace(0, 1,sample_size_a), np.linspace(0, 1,sample_size_b))
+                basis_obj.evaluate(
+                    np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
+                )
         else:
-            basis_obj.evaluate(np.linspace(0, 1,sample_size_a), np.linspace(0, 1,sample_size_b))
-
-
+            basis_obj.evaluate(
+                np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
+            )
