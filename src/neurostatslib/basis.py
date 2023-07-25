@@ -116,7 +116,7 @@ class Basis(abc.ABC):
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
         Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
-            (self._n_basis_funcs,) + n_samples
+            (self._n_basis_funcs,  *n_samples)
         )
 
         return *Xs, Y
