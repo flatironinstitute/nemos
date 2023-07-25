@@ -64,16 +64,6 @@ class Basis(abc.ABC):
         ----------
         n_samples[0],...,n_samples[n]
             The number of samples in each axis of the grid.
-
-        Returns
-        -------
-        :
-            The equi-spaced samples covering the basis domain.
-
-        Raises
-        ------
-        NotImplementedError
-            If the subclass does not implement the _gen_basis method.
         """
         pass
 
@@ -90,11 +80,6 @@ class Basis(abc.ABC):
         -------
         :
             The generated basis functions.
-
-        Raises
-        ------
-        NotImplementedError
-            If the subclass does not implement the _evaluate method.
         """
         # checks on input and outputs
         self._check_samples_consistency(*xi)
@@ -959,9 +944,6 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt  # type: ignore
-
-    plt.close("all")
 
     samples = np.random.uniform(size=100)
     basis1 = RaisedCosineBasisLog(5)
