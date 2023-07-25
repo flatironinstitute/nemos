@@ -2,7 +2,10 @@ import inspect
 import abc
 from typing import List, Tuple
 
-def reimplements_method(class_obj: type, base_class_obj: type, method_name: str) -> bool:
+
+def reimplements_method(
+    class_obj: type, base_class_obj: type, method_name: str
+) -> bool:
     """
     Check if a class has a specific method defined in the subclass, not inherited from the specified base class.
 
@@ -25,6 +28,7 @@ def reimplements_method(class_obj: type, base_class_obj: type, method_name: str)
     superclass_method = getattr(base_class_obj, method_name, None)
     return subclass_method != superclass_method
 
+
 def get_subclass_methods(class_obj: type) -> List[Tuple[str, type]]:
     """
     Get the subclass-only methods.
@@ -46,12 +50,17 @@ def get_subclass_methods(class_obj: type) -> List[Tuple[str, type]]:
     superclass_methods = []
     if class_obj.__bases__:
         superclass = class_obj.__bases__[0]
-        superclass_methods = inspect.getmembers(superclass, predicate=inspect.isfunction)
+        superclass_methods = inspect.getmembers(
+            superclass, predicate=inspect.isfunction
+        )
 
     # Filter out the methods defined in the superclass
-    subclass_methods = [method for method in class_methods if method not in superclass_methods]
+    subclass_methods = [
+        method for method in class_methods if method not in superclass_methods
+    ]
 
     return subclass_methods
+
 
 def list_abstract_methods(class_obj: type) -> List[Tuple[str, type]]:
     """
@@ -69,10 +78,12 @@ def list_abstract_methods(class_obj: type) -> List[Tuple[str, type]]:
     """
     class_methods = get_subclass_methods(class_obj)
     abstract_methods = [
-        (method_name, method) for method_name, method in class_methods
+        (method_name, method)
+        for method_name, method in class_methods
         if getattr(method, "__isabstractmethod__", False)
     ]
     return abstract_methods
+
 
 def is_abstract(class_obj: type) -> bool:
     """
@@ -88,7 +99,8 @@ def is_abstract(class_obj: type) -> bool:
     bool
         True if the type object is an abstract class, False otherwise.
     """
-    return abc.ABC in getattr(class_obj, '__bases__', [])
+    return abc.ABC in getattr(class_obj, "__bases__", [])
+
 
 def get_non_abstract_classes(module) -> List[Tuple[str, type]]:
     """
@@ -106,10 +118,14 @@ def get_non_abstract_classes(module) -> List[Tuple[str, type]]:
         Each tuple contains the class name (str) and the corresponding class object.
     """
     basis_classes = inspect.getmembers(
-        module,
-        lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
+        module, lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
     )
-    return [(name, class_obj) for name, class_obj in basis_classes if not is_abstract(class_obj)]
+    return [
+        (name, class_obj)
+        for name, class_obj in basis_classes
+        if not is_abstract(class_obj)
+    ]
+
 
 def get_abstract_classes(module) -> List[Tuple[str, type]]:
     """
@@ -127,10 +143,12 @@ def get_abstract_classes(module) -> List[Tuple[str, type]]:
         Each tuple contains the class name (str) and the corresponding class object.
     """
     basis_classes = inspect.getmembers(
-        module,
-        lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
+        module, lambda obj: inspect.isclass(obj) and obj.__module__ == module.__name__
     )
-    return [(name, class_obj) for name, class_obj in basis_classes if is_abstract(class_obj)]
+    return [
+        (name, class_obj) for name, class_obj in basis_classes if is_abstract(class_obj)
+    ]
+
 
 def get_superclass_abstract_methods(class_obj: type) -> List[Tuple[str, type, type]]:
     """
@@ -161,6 +179,7 @@ def get_superclass_abstract_methods(class_obj: type) -> List[Tuple[str, type, ty
 
     return super_class_abstract_methods
 
+
 def check_all_abstract_methods_compliance(module) -> None:
     """
     Check if all classes in a module properly implement abstract methods defined in their respective base classes.
@@ -177,11 +196,15 @@ def check_all_abstract_methods_compliance(module) -> None:
     """
     non_abstract_classes = get_non_abstract_classes(module)
     for _, base_class in non_abstract_classes:
-        string = f'\nAnalyzing class {base_class.__name__}:\n'
-        string += '-' * len(string)
+        string = f"\nAnalyzing class {base_class.__name__}:\n"
+        string += "-" * len(string)
         print(string)
-        for method_name, method, super_class in get_superclass_abstract_methods(base_class):
+        for method_name, method, super_class in get_superclass_abstract_methods(
+            base_class
+        ):
             boolean = reimplements_method(base_class, super_class, method_name)
-            print(f"Is method \"{method_name}\" re-instantiated? {boolean}")
+            print(f'Is method "{method_name}" re-instantiated? {boolean}')
             if not boolean:
-                raise ValueError(f"Abstract method {method} not implemented in {base_class} sub-class!")
+                raise ValueError(
+                    f"Abstract method {method} not implemented in {base_class} sub-class!"
+                )
