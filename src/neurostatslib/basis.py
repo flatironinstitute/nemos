@@ -87,9 +87,6 @@ class Basis(abc.ABC):
 
         eval_basis = self._evaluate(*xi)
 
-        # checks on the evaluated basis
-        self._check_enough_samples(eval_basis)  # move to the GLM model
-
         return eval_basis
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, ...]:
@@ -123,26 +120,6 @@ class Basis(abc.ABC):
         )
 
         return *Xs, Y
-
-    def _check_enough_samples(self, eval_basis: NDArray) -> None:
-        """
-        Checks if there are enough samples for evaluation.
-
-        Parameters
-        ----------
-        eval_basis : (number of basis, number of samples)
-            The basis evaluated at the samples
-
-        Raises
-        ------
-        UserWarning
-            If the number of basis sets exceeds the number of samples.
-        """
-        if eval_basis.shape[0] > eval_basis.shape[1]:
-            warnings.warn(
-                "Basis set number exceeds the number of samples! "
-                "Consider reducing the number of basis or increase sample size."
-            )
 
     def _check_input_number(self, xi: Tuple) -> None:
         """
