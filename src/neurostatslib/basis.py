@@ -236,8 +236,10 @@ class Basis(abc.ABC):
 
         Raises
         ------
-        ValueError
+        TypeError
             If the provided exponent is not an integer.
+        ValueError
+            If the integer is zero or negative.
         """
         if not isinstance(exponent, int):
             raise TypeError("Exponent should be an integer")
