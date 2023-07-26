@@ -22,11 +22,9 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          selection:
-            docstring_style: numpy
-          rendering:
-            show_source: true
           options:
+            docstring_style: numpy         
+            show_source: true
             members_order: source
 
 extra_javascript:
