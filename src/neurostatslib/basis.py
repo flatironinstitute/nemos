@@ -425,7 +425,6 @@ class MSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
-
     order :
         Order of the splines used in basis functions. Must lie within [1,
         n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
