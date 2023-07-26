@@ -392,8 +392,8 @@ class SplineBasis(Basis, abc.ABC):
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
-        super().__init__(n_basis_funcs)
         self._order = order
+        super().__init__(n_basis_funcs)
         self._n_input_samples = 1
         if self._order < 1:
             raise ValueError("Spline order must be positive!")
@@ -495,12 +495,6 @@ class MSplineBasis(SplineBasis):
 
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
-        # Check hyperparameters.
-        if self._n_basis_funcs < self._order:
-            raise ValueError(
-                "Spline `order` parameter cannot be larger "
-                "than `n_basis_funcs` parameter."
-            )
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -540,9 +534,10 @@ class MSplineBasis(SplineBasis):
         ValueError
             If an insufficient number of basis element is requested for the basis type
         """
-        if self._n_basis_funcs < 1:
+        if self._n_basis_funcs < self._order:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
+                f"{self.__class__.__name__} `order` parameter cannot be larger "
+                "than `n_basis_funcs` parameter."
             )
 
 
@@ -581,8 +576,8 @@ class RaisedCosineBasis(Basis, abc.ABC):
             Raised cosine basis functions
 
         """
-        if any(sample_pts[0] < -np.finfo(sample_pts[0].dtype).precision) or any(
-            sample_pts[0] > 1 + np.finfo(sample_pts[0].dtype).precision
+        if any(sample_pts[0] < -np.finfo(sample_pts[0].dtype).resolution) or any(
+            sample_pts[0] > 1 + np.finfo(sample_pts[0].dtype).resolution
         ):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
