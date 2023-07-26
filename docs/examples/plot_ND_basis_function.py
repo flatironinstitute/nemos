@@ -221,3 +221,19 @@ print(f"Sparsity check: {(Z == 0).sum() / Z.size * 100: .2f}% of the evaluated b
 # !!! info
 #     The evaluated basis is going to be **sparse** if the basis elements support do not cover the
 #     full domain of the basis.
+
+# %%
+# Here we demonstrate a shortcut syntax for multiplying bases of the same class.
+# This is achieved using the power operator with an integer exponent.
+
+# First, let's define a basis `power_basis` that is equivalent to `prod_basis_3`,
+# but we use the power syntax this time:
+power_basis = a_basis**3
+
+# Now, evaluate the `prod_basis_3` on a 30x30x30 grid and get the last item, let's call it `Z_pow`:
+Z_pow_syntax = power_basis.evaluate_on_grid(30, 30, 30)[-1]
+Z_prod_syntax = (a_basis * a_basis * a_basis).evaluate_on_grid(30, 30, 30)[-1]
+
+# We can now assert that the original basis and the new `power_basis` match.
+# If they do, the total number of mismatched entries should be zero.
+print(f"Total mismatched entries: {(Z_pow_syntax != Z_prod_syntax).sum()}")

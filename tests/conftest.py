@@ -21,5 +21,3 @@ def pytest_generate_tests(metafunc):
     metafunc.parametrize(
         argnames, [[funcargs[name] for name in argnames] for funcargs in funcarglist]
     )
-
-

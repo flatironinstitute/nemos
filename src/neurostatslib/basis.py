@@ -219,6 +219,37 @@ class Basis(abc.ABC):
         """
         return MultiplicativeBasis(self, other)
 
+    def __pow__(self, exponent):
+        """Exponentiation of a Basis object.
+
+        Define the power of a basis by repeatedly applying the method __multiply__. The exponent must be a positive
+        integer.
+
+        Parameters
+        ----------
+        exponent :
+            Positive integer exponent
+
+        Returns
+        -------
+            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
+
+        Raises
+        ------
+        ValueError
+            If the provided exponent is not an integer.
+        """
+        if not isinstance(exponent, int):
+            raise TypeError("Exponent should be an integer")
+
+        if exponent <= 0:
+            raise ValueError("Exponent should be a non-negative integer")
+
+        result = self
+        for _ in range(exponent - 1):
+            result = result * self
+        return result
+
 
 class AdditiveBasis(Basis):
     """
@@ -839,3 +870,6 @@ if __name__ == "__main__":
     print(basis_add.evaluate(samples, samples).shape)
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
+
+    pow_bas = basis1**2
+    print(pow_bas.evaluate(samples, samples).shape)

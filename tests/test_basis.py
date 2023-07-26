@@ -574,50 +574,29 @@ class CombinedBasis(BasisFuncsTesting):
     cls = None
 
     @staticmethod
-    def instantiate_basis(n_basis_a, n_basis_b, basis_a, basis_b):
+    def instantiate_basis(n_basis, basis_class):
         """Instantiate and return two basis of the type specified."""
-        if basis_a == basis.MSplineBasis:
-            basis_a_obj = basis_a(n_basis_funcs=n_basis_a, order=4)
-        elif basis_a in [basis.RaisedCosineBasisLinear, basis.RaisedCosineBasisLog]:
-            basis_a_obj = basis_a(n_basis_funcs=n_basis_a)
-        elif basis_a == basis.OrthExponentialBasis:
-            basis_a_obj = basis_a(
-                n_basis_funcs=n_basis_a, decay_rates=np.arange(1, 1 + n_basis_a)
+        if basis_class == basis.MSplineBasis:
+            basis_obj = basis_class(n_basis_funcs=n_basis, order=4)
+        elif basis_class in [basis.RaisedCosineBasisLinear, basis.RaisedCosineBasisLog]:
+            basis_obj = basis_class(n_basis_funcs=n_basis)
+        elif basis_class == basis.OrthExponentialBasis:
+            basis_obj = basis_class(
+                n_basis_funcs=n_basis, decay_rates=np.arange(1, 1 + n_basis)
             )
-        elif basis_a == basis.AdditiveBasis:
-            b1 = basis.MSplineBasis(n_basis_funcs=n_basis_a, order=2)
-            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_a + 1)
-            basis_a_obj = b1 + b2
-        elif basis_a == basis.MultiplicativeBasis:
-            b1 = basis.MSplineBasis(n_basis_funcs=n_basis_a, order=2)
-            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_a + 1)
-            basis_a_obj = b1 * b2
+        elif basis_class == basis.AdditiveBasis:
+            b1 = basis.MSplineBasis(n_basis_funcs=n_basis, order=2)
+            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
+            basis_obj = b1 + b2
+        elif basis_class == basis.MultiplicativeBasis:
+            b1 = basis.MSplineBasis(n_basis_funcs=n_basis, order=2)
+            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
+            basis_obj = b1 * b2
         else:
             raise ValueError(
-                f"Test for basis addition not implemented for basis of type {basis_a}!"
+                f"Test for basis addition not implemented for basis of type {basis_class}!"
             )
-
-        if basis_b == basis.MSplineBasis:
-            basis_b_obj = basis_b(n_basis_funcs=n_basis_b, order=4)
-        elif basis_b in [basis.RaisedCosineBasisLinear, basis.RaisedCosineBasisLog]:
-            basis_b_obj = basis_b(n_basis_funcs=n_basis_b)
-        elif basis_b == basis.OrthExponentialBasis:
-            basis_b_obj = basis_b(
-                n_basis_funcs=n_basis_b, decay_rates=np.arange(1, 1 + n_basis_b)
-            )
-        elif basis_b == basis.AdditiveBasis:
-            b1 = basis.MSplineBasis(n_basis_funcs=n_basis_b, order=2)
-            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_b + 1)
-            basis_b_obj = b1 + b2
-        elif basis_b == basis.MultiplicativeBasis:
-            b1 = basis.MSplineBasis(n_basis_funcs=n_basis_b, order=2)
-            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis_b + 1)
-            basis_b_obj = b1 * b2
-        else:
-            raise ValueError(
-                f"Test for basis addition not implemented for basis of type {basis_b}!"
-            )
-        return basis_a_obj, basis_b_obj
+        return basis_obj
 
 
 class TestAdditiveBasis(CombinedBasis):
@@ -642,9 +621,8 @@ class TestAdditiveBasis(CombinedBasis):
         that is the sum of the number of basis functions from two individual bases.
         """
         # define the two basis
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
 
         basis_obj = basis_a_obj + basis_b_obj
         eval_basis = basis_obj.evaluate(
@@ -677,9 +655,8 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the output sample size from the `AdditiveBasis` evaluate function matches the input sample size.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         eval_basis = basis_obj.evaluate(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
@@ -709,9 +686,8 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the number of required inputs for the `evaluate` function matches
         the sum of the number of input samples from the two bases.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         raise_exception = (
             n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
@@ -740,9 +716,8 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         res = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_input_samples)
         for grid in res[:-1]:
@@ -765,9 +740,8 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         eval_basis = basis_obj.evaluate_on_grid(
             *[sample_size] * basis_obj._n_input_samples
@@ -792,9 +766,8 @@ class TestAdditiveBasis(CombinedBasis):
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         inputs = [20] * n_input
         raise_exception = (
@@ -829,9 +802,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         that is the product of the number of basis functions from two individual bases.
         """
         # define the two basis
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
 
         basis_obj = basis_a_obj * basis_b_obj
         eval_basis = basis_obj.evaluate(
@@ -864,9 +836,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         Test whether the output sample size from the `MultiplicativeBasis` evaluate function matches the input sample size.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         eval_basis = basis_obj.evaluate(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
@@ -896,9 +867,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         Test whether the number of required inputs for the `evaluate` function matches
         the sum of the number of input samples from the two bases.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         raise_exception = (
             n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
@@ -927,9 +897,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         res = basis_obj.evaluate_on_grid(*[sample_size] * basis_obj._n_input_samples)
         for grid in res[:-1]:
@@ -952,9 +921,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         eval_basis = basis_obj.evaluate_on_grid(
             *[sample_size] * basis_obj._n_input_samples
@@ -979,9 +947,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         inputs = [20] * n_input
         raise_exception = (
@@ -1004,9 +971,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     ):
         """Test that the inputs of inconsistent sample sizes result in an exception when evaluate is called"""
         raise_exception = sample_size_a != sample_size_b
-        basis_a_obj, basis_b_obj = self.instantiate_basis(
-            n_basis_a, n_basis_b, basis_a, basis_b
-        )
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         if raise_exception:
             with pytest.raises(ValueError):
@@ -1017,3 +983,42 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_obj.evaluate(
                 np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
             )
+
+
+@pytest.mark.parametrize(
+    "exponent", [-1, 0, 0.5, basis.RaisedCosineBasisLog(4), 1, 2, 3]
+)
+@pytest.mark.parametrize(
+    "basis_class",
+    [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
+)
+def test_power_of_basis(exponent, basis_class):
+    """Test if the power behaves as expected."""
+    raise_exception_type = not type(exponent) is int
+
+    if not raise_exception_type:
+        raise_exception_value = exponent <= 0
+    else:
+        raise_exception_value = False
+
+    basis_obj = CombinedBasis.instantiate_basis(5, basis_class)
+
+    if raise_exception_type:
+        with pytest.raises(TypeError):
+            basis_obj**exponent
+    elif raise_exception_value:
+        with pytest.raises(ValueError):
+            basis_obj**exponent
+    else:
+        basis_pow = basis_obj**exponent
+        samples = np.linspace(0, 1, 10)
+        eval_pow = basis_pow.evaluate(*[samples] * basis_pow._n_input_samples)
+
+        if exponent == 2:
+            basis_obj = basis_obj * basis_obj
+        elif exponent == 3:
+            basis_obj = basis_obj * basis_obj * basis_obj
+
+        assert np.all(
+            eval_pow == basis_obj.evaluate(*[samples] * basis_obj._n_input_samples)
+        )
