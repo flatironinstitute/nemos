@@ -116,7 +116,7 @@ class Basis(abc.ABC):
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
         Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
-            (self._n_basis_funcs,  *n_samples)
+            (self._n_basis_funcs, *n_samples)
         )
 
         return *Xs, Y
@@ -311,6 +311,7 @@ class MultiplicativeBasis(Basis):
         Second basis object.
 
     """
+
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
@@ -389,6 +390,7 @@ class SplineBasis(Basis, abc.ABC):
         Number of input samples.
 
     """
+
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs)
         self._order = order
@@ -399,8 +401,8 @@ class SplineBasis(Basis, abc.ABC):
     def _generate_knots(
         self,
         sample_pts: NDArray,
-        perc_low: float = 0.,
-        perc_high: float = 1.,
+        perc_low: float = 0.0,
+        perc_high: float = 1.0,
         is_cyclic: bool = False,
     ) -> NDArray:
         """
@@ -432,7 +434,6 @@ class SplineBasis(Basis, abc.ABC):
         num_interior_knots = self._n_basis_funcs - self._order
         if is_cyclic:
             num_interior_knots += self._order - 1
-
 
         assert 0 <= perc_low <= 1, "Specify `perc_low` as a float between 0 and 1."
         assert 0 <= perc_high <= 1, "Specify `perc_high` as a float between 0 and 1."
@@ -580,7 +581,9 @@ class RaisedCosineBasis(Basis, abc.ABC):
             Raised cosine basis functions
 
         """
-        if any(sample_pts[0] < -1e-12) or any(sample_pts[0] > 1 + 1e-12):
+        if any(sample_pts[0] < -np.finfo(sample_pts[0].dtype).precision) or any(
+            sample_pts[0] > 1 + np.finfo(sample_pts[0].dtype).precision
+        ):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
@@ -874,6 +877,7 @@ class OrthExponentialBasis(Basis):
         """
         return (np.linspace(0, 1, n_samples[0]),)
 
+
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
     """
     Compute M-spline basis function.
@@ -917,7 +921,6 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
 
 
 if __name__ == "__main__":
-
     samples = np.random.uniform(size=100)
     basis1 = RaisedCosineBasisLog(5)
     basis2 = MSplineBasis(10, order=3)
@@ -931,4 +934,3 @@ if __name__ == "__main__":
     print(basis_add.evaluate(samples, samples).shape)
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
-
