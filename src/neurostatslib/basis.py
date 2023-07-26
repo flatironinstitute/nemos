@@ -1,5 +1,5 @@
-"""Bases classes.
-"""
+"""Bases classes."""
+
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
@@ -57,8 +57,8 @@ class Basis(abc.ABC):
     @abc.abstractmethod
     def _get_samples(self, *n_samples: int) -> Tuple[NDArray, ...]:
         """
-        Get equi-spaced samples for all the input dimensions. This will be used to evaluate
-        the basis on a grid of points derived by the samples
+        Get equi-spaced samples for all the input dimensions. This will be used to evaluate the basis on a grid of
+        points derived by the samples.
 
         Parameters
         ----------
@@ -275,6 +275,7 @@ class AdditiveBasis(Basis):
             The number of samples in each axis of the grid.
 
         Returns
+        -------
             The equi-spaced sample locations for each coordinate.
 
         """
@@ -310,7 +311,6 @@ class MultiplicativeBasis(Basis):
         Second basis object.
 
     """
-
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
         super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
@@ -360,7 +360,6 @@ class MultiplicativeBasis(Basis):
             The equi-spaced sample locations for each coordinate.
 
         """
-
         sample_1 = self._basis1._get_samples(
             *n_samples[: self._basis1._n_input_samples]
         )
@@ -390,7 +389,6 @@ class SplineBasis(Basis, abc.ABC):
         Number of input samples.
 
     """
-
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs)
         self._order = order
@@ -401,8 +399,8 @@ class SplineBasis(Basis, abc.ABC):
     def _generate_knots(
         self,
         sample_pts: NDArray,
-        perc_low: float,
-        perc_high: float,
+        perc_low: float = 0.,
+        perc_high: float = 1.,
         is_cyclic: bool = False,
     ) -> NDArray:
         """
@@ -413,9 +411,9 @@ class SplineBasis(Basis, abc.ABC):
         sample_pts : (number of samples, )
             The sample points.
         perc_low
-            The low percentile value.
+            The low percentile value, between [0,1).
         perc_high
-            The high percentile value.
+            The high percentile value, between (0,1].
         is_cyclic : optional
             Whether the spline is cyclic. Default is False.
 
@@ -435,12 +433,6 @@ class SplineBasis(Basis, abc.ABC):
         if is_cyclic:
             num_interior_knots += self._order - 1
 
-        # Check hyperparameters.
-        if num_interior_knots < 0:
-            raise ValueError(
-                "Spline `order` parameter cannot be larger "
-                "than `n_basis_funcs` parameter."
-            )
 
         assert 0 <= perc_low <= 1, "Specify `perc_low` as a float between 0 and 1."
         assert 0 <= perc_high <= 1, "Specify `perc_high` as a float between 0 and 1."
@@ -502,6 +494,12 @@ class MSplineBasis(SplineBasis):
 
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
+        # Check hyperparameters.
+        if self._n_basis_funcs < self._order:
+            raise ValueError(
+                "Spline `order` parameter cannot be larger "
+                "than `n_basis_funcs` parameter."
+            )
 
     def _evaluate(self, *sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
@@ -518,7 +516,6 @@ class MSplineBasis(SplineBasis):
             Evaluated spline basis functions.
 
         """
-
         # add knots if not passed
         self._generate_knots(
             sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -583,7 +580,6 @@ class RaisedCosineBasis(Basis, abc.ABC):
             Raised cosine basis functions
 
         """
-
         if any(sample_pts[0] < -1e-12) or any(sample_pts[0] > 1 + 1e-12):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
@@ -639,6 +635,7 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
         Linearly map the samples from [0,1] to the the [0, (number of basis - 1) * pi]
+
         Parameters
         ----------
         sample_pts : (number of samples, )
@@ -690,7 +687,7 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
-        Maps the equi-spaced samples from [0,1] to log equi-spaced samples [0, (number of basis - 1) * pi]
+        Map the equi-spaced samples from [0,1] to log equi-spaced samples [0, (number of basis - 1) * pi]
 
         Parameters
         ----------
@@ -814,9 +811,10 @@ class OrthExponentialBasis(Basis):
 
     def _check_sample_size(self, *sample_pts: NDArray):
         """
-        Check that the sample size is greater than the number of basis. This is necessary for the
-        orthogonalization procedure, that otherwise will return (sample_size, ) basis elements instead of
-        the expected number.
+        Check that the sample size is greater than the number of basis.
+        This is necessary for the orthogonalization procedure, that otherwise will return (sample_size, )
+        basis elements instead of the expected number.
+
         Parameters
         ----------
         sample_pts :
@@ -876,9 +874,9 @@ class OrthExponentialBasis(Basis):
         """
         return (np.linspace(0, 1, n_samples[0]),)
 
-
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
-    """Compute M-spline basis function.
+    """
+    Compute M-spline basis function.
 
     Parameters
     ----------
@@ -891,13 +889,11 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
     T : (k + number of basis,)
         knot locations. should lie in interval [0, 1].
 
-
     Returns
     -------
     spline : (number of samples, )
         M-spline basis function.
     """
-
     # Boundary conditions.
     if (T[i + k] - T[i]) < 1e-6:
         return np.zeros_like(x)
@@ -935,3 +931,4 @@ if __name__ == "__main__":
     print(basis_add.evaluate(samples, samples).shape)
     print(basis_add_add.evaluate(samples, samples, samples).shape)
     print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
+
