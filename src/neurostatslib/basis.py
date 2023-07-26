@@ -17,6 +17,8 @@ __all__ = [
     "RaisedCosineBasisLinear",
     "RaisedCosineBasisLog",
     "OrthExponentialBasis",
+    "AdditiveBasis",
+    "MultiplicativeBasis",
 ]
 
 
@@ -169,7 +171,7 @@ class Basis(abc.ABC):
         ValueError
             If the time point number is inconsistent between inputs.
         """
-        sample_sizes = [samp.shape[0] for samp in xi]
+        sample_sizes = [sample.shape[0] for sample in xi]
         if any(elem != sample_sizes[0] for elem in sample_sizes):
             raise ValueError(
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
@@ -237,7 +239,7 @@ class AdditiveBasis(Basis):
     _n_basis_funcs : int
         Number of basis functions.
     _n_input_samples : int
-        Number of input samples.
+        Number of input arrays provided at evaluation.
     _basis1 : Basis
         First basis object.
     _basis2 : Basis
@@ -295,7 +297,7 @@ class MultiplicativeBasis(Basis):
     _n_basis_funcs : int
         Number of basis functions.
     _n_input_samples : int
-        Number of input samples.
+        Number of input arrays provided at evaluation.
     _basis1 : Basis
         First basis object.
     _basis2 : Basis
@@ -353,7 +355,7 @@ class SplineBasis(Basis, abc.ABC):
     _order : int
         Spline order.
     _n_input_samples : int
-        Number of input samples.
+        Number of input arrays provided at evaluation.
 
     """
 
@@ -444,7 +446,7 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
-    def _evaluate(self, *sample_pts: NDArray) -> NDArray:
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -460,13 +462,11 @@ class MSplineBasis(SplineBasis):
 
         """
         # add knots if not passed
-        self._generate_knots(
-            sample_pts[0], perc_low=0.0, perc_high=1.0, is_cyclic=False
-        )
+        self._generate_knots(sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False)
 
         return np.stack(
             [
-                mspline(sample_pts[0], self._order, i, self.knot_locs)
+                mspline(sample_pts, self._order, i, self.knot_locs)
                 for i in range(self._n_basis_funcs)
             ],
             axis=0,
@@ -506,7 +506,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         """
         pass
 
-    def _evaluate(self, *sample_pts: NDArray) -> NDArray:
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -528,13 +528,13 @@ class RaisedCosineBasis(Basis, abc.ABC):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        if any(sample_pts[0] < -np.finfo(sample_pts[0].dtype).resolution) or any(
-            sample_pts[0] > 1 + np.finfo(sample_pts[0].dtype).resolution
+        if any(sample_pts < -np.finfo(sample_pts.dtype).resolution) or any(
+            sample_pts > 1 + np.finfo(sample_pts.dtype).resolution
         ):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
-        transform_sample_pts = self._transform_samples(sample_pts[0])
+        transform_sample_pts = self._transform_samples(sample_pts)
 
         shifted_sample_pts = (
             transform_sample_pts[None, :]
@@ -724,13 +724,13 @@ class OrthExponentialBasis(Basis):
                 "linearly dependent set of function for the basis."
             )
 
-    def _check_sample_range(self, *sample_pts):
+    def _check_sample_range(self, sample_pts: NDArray):
         """
         Check if the sample points are all positive.
 
         Parameters
         ----------
-        *sample_pts : float or array-like
+        sample_pts
             Sample points to check.
 
         Raises
@@ -739,7 +739,7 @@ class OrthExponentialBasis(Basis):
             If any of the sample points are negative, as OrthExponentialBasis requires
             positive samples.
         """
-        if any(sample_pts[0] < 0):
+        if any(sample_pts < 0):
             raise ValueError(
                 "OrthExponentialBasis requires positive samples. Negative values provided instead!"
             )
@@ -767,7 +767,7 @@ class OrthExponentialBasis(Basis):
                 f"Class instantiated with {self._n_basis_funcs} basis functions but only {sample_pts[0].size} samples provided!"
             )
 
-    def _evaluate(self, *sample_pts: NDArray) -> NDArray:
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
         """
         Generate basis functions with given spacing.
 
@@ -781,16 +781,14 @@ class OrthExponentialBasis(Basis):
         basis_funcs : (n_basis_funcs, n_pts)
             Evaluated exponentially decaying basis functions, numerically orthogonalized.
         """
-        self._check_sample_range(sample_pts[0])
-        self._check_sample_size(sample_pts[0])
+        self._check_sample_range(sample_pts)
+        self._check_sample_size(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
         return scipy.linalg.orth(
-            np.stack(
-                [np.exp(-lam * sample_pts[0]) for lam in self._decay_rates], axis=1
-            )
+            np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
         ).T
 
 
