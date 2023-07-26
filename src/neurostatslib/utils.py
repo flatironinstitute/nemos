@@ -113,8 +113,8 @@ def plot_spike_raster(
 
 def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.array:
     """
-    Compute the row-wise Kronecker product between two matrices using JAX. See [`here`]
-    (https://en.wikipedia.org/wiki/Kronecker_product) for more details on the Kronecker product.
+    Compute the row-wise Kronecker product between two matrices using JAX. See [1]
+    for more details on the Kronecker product.
 
     Parameters
     ----------
@@ -136,6 +136,9 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     -----
     This function computes the row-wise Kronecker product between dense matrices A and C
     using JAX for automatic differentiation and GPU acceleration.
+
+    .. [1] Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
+       Technical University of Denmark 7.15 (2008): 510.
     """
 
     if transpose:
