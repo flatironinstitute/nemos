@@ -34,23 +34,18 @@ class Basis(abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    gb_limit : optional
-        Limit in GB for the model matrix size. Default is 16.0.
 
     Attributes
     ----------
     _n_basis_funcs : int
         Number of basis functions.
-    _GB_limit : float
-        Limit in GB for the model matrix size.
     _n_input_samples : int
         Number of inputs that the evaluate method requires.
 
     """
 
-    def __init__(self, n_basis_funcs: int, gb_limit: float = 16.0) -> None:
+    def __init__(self, n_basis_funcs: int) -> None:
         self._n_basis_funcs = n_basis_funcs
-        self._GB_limit = gb_limit
         self._n_input_samples = 0
         self._check_n_basis_min()
 
@@ -250,7 +245,7 @@ class AdditiveBasis(Basis):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
+        super().__init__(self._n_basis_funcs)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -307,7 +302,7 @@ class MultiplicativeBasis(Basis):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs, gb_limit=basis1._GB_limit)
+        super().__init__(self._n_basis_funcs)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -670,17 +665,14 @@ class OrthExponentialBasis(Basis):
             Number of basis functions.
     decay_rates : (n_basis_funcs,)
             Decay rates of the exponentials.
-    gb_limit : optional
-            The size limit in GB for the model matrix that can be generated, by default 16.0 GB.
     """
 
     def __init__(
         self,
         n_basis_funcs: int,
-        decay_rates: NDArray[np.floating],
-        gb_limit: float = 16.0,
+        decay_rates: NDArray[np.floating]
     ):
-        super().__init__(n_basis_funcs=n_basis_funcs, gb_limit=gb_limit)
+        super().__init__(n_basis_funcs=n_basis_funcs)
 
         if decay_rates.shape[0] != n_basis_funcs:
             raise ValueError(
