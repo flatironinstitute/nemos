@@ -62,8 +62,9 @@ class Basis(abc.ABC):
         pass
 
     def _get_samples(self, *n_samples: int) -> Generator[NDArray, ...]:
-        """
-        Get equi-spaced samples for all the input dimensions. This will be used to evaluate the basis on a grid of
+        """Get equi-spaced samples for all the input dimensions.
+
+        This will be used to evaluate the basis on a grid of
         points derived by the samples.
 
         Parameters
@@ -101,9 +102,9 @@ class Basis(abc.ABC):
         return eval_basis
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
-        """
-        Evaluate the basis set on a grid of equi-spaced sample points. The i-th axis of the grid will be sampled
-        with n_samples[i] equi-spaced points.
+        """Evaluate the basis set on a grid of equi-spaced sample points.
+
+        The i-th axis of the grid will be sampled with n_samples[i] equi-spaced points.
 
         Parameters
         ----------
@@ -174,8 +175,9 @@ class Basis(abc.ABC):
 
     @abc.abstractmethod
     def _check_n_basis_min(self) -> None:
-        """
-        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        """Check that the user required enough basis elements.
+
+        Most of the basis work with at least 1 element, but some
         such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
 
         Raises
@@ -468,8 +470,9 @@ class MSplineBasis(SplineBasis):
         )
 
     def _check_n_basis_min(self) -> None:
-        """
-        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        """Check that the user required enough basis elements.
+
+        Most of the basis work with at least 1 element, but some
         such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
 
         Raises
@@ -579,8 +582,9 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         return sample_pts * np.pi * (self._n_basis_funcs - 1)
 
     def _check_n_basis_min(self) -> None:
-        """
-        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        """Check that the user required enough basis elements.
+
+        Most of the basis work with at least 1 element, but some
         such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
 
         Raises
@@ -596,6 +600,7 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
 
 class RaisedCosineBasisLog(RaisedCosineBasis):
     """Log-spaced raised cosine basis functions used by Pillow et al. [2]_.
+
     These are "cosine bumps" that uniformly tile the space.
 
     Parameters
@@ -616,8 +621,9 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         super().__init__(n_basis_funcs)
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
-        """
-        Map the equi-spaced samples from [0,1] to log equi-spaced samples [0, (number of basis - 1) * pi]
+        """Map the sample domain to log-space.
+
+        Map the equi-spaced samples from [0,1] to log equi-spaced samples [0, (number of basis - 1) * pi].
 
         Parameters
         ----------
@@ -639,8 +645,9 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         )
 
     def _check_n_basis_min(self) -> None:
-        """
-        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        """Check that the user required enough basis elements.
+
+        Most of the basis work with at least 1 element, but some
         such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
 
         Raises
@@ -655,9 +662,7 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
 
 
 class OrthExponentialBasis(Basis):
-    """
-    Set of 1D basis functions that are decaying exponentials numerically
-    orthogonalized.
+    """Set of 1D basis decaying exponential functions numerically orthogonalized.
 
     Parameters
     ----------
@@ -682,8 +687,9 @@ class OrthExponentialBasis(Basis):
         self._n_input_samples = 1
 
     def _check_n_basis_min(self) -> None:
-        """
-        Check that the user required enough basis elements. Most of the basis work with at least 1 element, but some
+        """Check that the user required enough basis elements.
+
+        Most of the basis work with at least 1 element, but some
         such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
 
         Raises
@@ -733,14 +739,14 @@ class OrthExponentialBasis(Basis):
             )
 
     def _check_sample_size(self, *sample_pts: NDArray):
-        """
-        Check that the sample size is greater than the number of basis.
+        """Check that the sample size is greater than the number of basis.
+
         This is necessary for the orthogonalization procedure, that otherwise will return (sample_size, )
         basis elements instead of the expected number.
 
         Parameters
         ----------
-        sample_pts :
+        sample_pts
             Spacing for basis functions, holding elements on the interval [0, inf).
 
         Raises
@@ -756,18 +762,17 @@ class OrthExponentialBasis(Basis):
             )
 
     def _evaluate(self, sample_pts: NDArray) -> NDArray:
-        """
-        Generate basis functions with given spacing.
+        """Generate basis functions with given spacing.
 
         Parameters
         ----------
-        sample_pts :
+        sample_pts
             Spacing for basis functions, holding elements on the interval [0, inf), shape (n_pts,).
 
         Returns
         -------
-        basis_funcs : (n_basis_funcs, n_pts)
-            Evaluated exponentially decaying basis functions, numerically orthogonalized.
+        basis_funcs
+            Evaluated exponentially decaying basis functions, numerically orthogonalized, shape (n_basis_funcs, n_pts).
         """
         self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)
@@ -781,23 +786,22 @@ class OrthExponentialBasis(Basis):
 
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
-    """
-    Compute M-spline basis function.
+    """Compute M-spline basis function.
 
     Parameters
     ----------
-    x :
+    x
         Spacing for basis functions, shape (number of samples, ).
     k
         Order of the spline basis.
     i
         Number of the spline basis.
-    T :
+    T
         knot locations. should lie in interval [0, 1], shape (k + number of basis,).
 
     Returns
     -------
-    spline :
+    spline
         M-spline basis function, shape (number of samples, ).
     """
     # Boundary conditions.
