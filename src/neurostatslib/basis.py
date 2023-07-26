@@ -100,7 +100,7 @@ class Basis(abc.ABC):
 
         return eval_basis
 
-    def evaluate_on_grid(self, *n_samples: int) -> Tuple[NDArray, ...]:
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """
         Evaluate the basis set on a grid of equi-spaced sample points. The i-th axis of the grid will be sampled
         with n_samples[i] equi-spaced points.
@@ -112,11 +112,11 @@ class Basis(abc.ABC):
 
         Returns
         -------
-        Xs[1], ..., Xs[n] : (n_samples[0], ... , n_samples[n])
-            A tuple containing the meshgrid values, one element for each of the n dimension of the grid, where n equals
-            to the number of inputs.
-        Y : (number of basis, n_samples[0], ... , n_samples[n])
-            the basis function evaluated at the samples.
+        *Xs :
+            A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
+            where n equals to the number of inputs. The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
+        Y :
+            The basis function evaluated at the samples, shape (number of basis, n_samples[0], ... , n_samples[n]).
 
         """
         self._check_input_number(n_samples)
@@ -343,7 +343,7 @@ class SplineBasis(Basis, abc.ABC):
     n_basis_funcs :
         Number of basis functions.
     order : optional
-        Spline order. Default is 2.
+        Spline order.
 
     Attributes
     ----------
@@ -380,7 +380,7 @@ class SplineBasis(Basis, abc.ABC):
         perc_high
             The high percentile value, between (0,1].
         is_cyclic : optional
-            Whether the spline is cyclic. Default is False.
+            Whether the spline is cyclic.
 
         Returns
         -------
@@ -663,8 +663,8 @@ class OrthExponentialBasis(Basis):
     ----------
     n_basis_funcs
             Number of basis functions.
-    decay_rates : (n_basis_funcs,)
-            Decay rates of the exponentials.
+    decay_rates :
+            Decay rates of the exponentials, shape (n_basis_funcs,).
     """
 
     def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating]):
