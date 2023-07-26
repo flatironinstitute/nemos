@@ -66,14 +66,3 @@ To write a usable (i.e., concrete, non-abstract) basis object, you
 - **Should not** overwrite the `evaluate` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 
-
-### Additonal Guidelines
-
-Developers are welcome focus on either develop concrete classes for new basis function types
-as we as add additional checks at evaluation, as well as improve the documentation and readability
-of the code. What we won't advise is to alter the abstract-classes structure, which may affect
-the overall module and how each of the objects interacts with each other.
-
-Feel free however to work on any piece of code you fell you can improve. More importantly, remember
-to thoroughly test all your classes and functions, and provide clear, detailed comments in your code. 
-This will not only help others use your library, but also facilitate future maintenance and development.
