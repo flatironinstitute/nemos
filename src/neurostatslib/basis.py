@@ -667,11 +667,7 @@ class OrthExponentialBasis(Basis):
             Decay rates of the exponentials.
     """
 
-    def __init__(
-        self,
-        n_basis_funcs: int,
-        decay_rates: NDArray[np.floating]
-    ):
+    def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating]):
         super().__init__(n_basis_funcs=n_basis_funcs)
 
         if decay_rates.shape[0] != n_basis_funcs:
