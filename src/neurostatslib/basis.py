@@ -115,9 +115,11 @@ class Basis(abc.ABC):
         -------
         *Xs :
             A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
-            where n equals to the number of inputs. The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
+            where n equals to the number of inputs.
+            The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
         Y :
-            The basis function evaluated at the samples, shape (number of basis, n_samples[0], ... , n_samples[n]).
+            The basis function evaluated at the samples,
+            shape (number of basis, n_samples[0], ... , n_samples[n]).
 
         """
         self._check_input_number(n_samples)
@@ -135,7 +137,7 @@ class Basis(abc.ABC):
 
     def _check_input_number(self, xi: Tuple) -> None:
         """
-        Check that the number of inputs provided by the user matches the number of inputs that the Basis object requires.
+        Check that the number of inputs provided by the user matches the number of inputs required.
 
         Parameters
         ----------
@@ -149,7 +151,8 @@ class Basis(abc.ABC):
         """
         if len(xi) != self._n_input_samples:
             raise ValueError(
-                f"Input number mismatch. Basis requires {self._n_input_samples} input samples, {len(xi)} inputs provided instead."
+                f"Input number mismatch. Basis requires {self._n_input_samples} input samples, "
+                f"{len(xi)} inputs provided instead."
             )
 
     @staticmethod
@@ -222,8 +225,8 @@ class Basis(abc.ABC):
     def __pow__(self, exponent):
         """Exponentiation of a Basis object.
 
-        Define the power of a basis by repeatedly applying the method __multiply__. The exponent must be a positive
-        integer.
+        Define the power of a basis by repeatedly applying the method __multiply__.
+        The exponent must be a positive integer.
 
         Parameters
         ----------
@@ -609,7 +612,8 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         Returns
         -------
         :
-            A transformed version of the sample points that matches the Raised Cosine basis domain, shape (number of samples, ).
+            A transformed version of the sample points that matches the Raised Cosine basis domain,
+            shape (number of samples, ).
         """
         return sample_pts * np.pi * (self._n_basis_funcs - 1)
 
@@ -626,7 +630,8 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         """
         if self._n_basis_funcs < 1:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
+                f"{self._n_basis_funcs} basis elements specified instead"
             )
 
 
@@ -665,7 +670,8 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         Returns
         -------
         :
-            A transformed version of the sample points that matches the Raised Cosine basis domain, shape (number of samples, ).
+            A transformed version of the sample points that matches the Raised Cosine basis domain,
+            shape (number of samples, ).
         """
         return (
             np.power(
@@ -689,7 +695,8 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         """
         if self._n_basis_funcs < 2:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 2 basis elements. {self._n_basis_funcs} basis elements specified instead"
+                f"Object class {self.__class__.__name__} requires >= 2 basis elements. "
+                f"{self._n_basis_funcs} basis elements specified instead"
             )
 
 
@@ -731,7 +738,8 @@ class OrthExponentialBasis(Basis):
         """
         if self._n_basis_funcs < 1:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. {self._n_basis_funcs} basis elements specified instead"
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
+                f"{self._n_basis_funcs} basis elements specified instead"
             )
 
     def _check_rates(self):
@@ -773,8 +781,8 @@ class OrthExponentialBasis(Basis):
     def _check_sample_size(self, *sample_pts: NDArray):
         """Check that the sample size is greater than the number of basis.
 
-        This is necessary for the orthogonalization procedure, that otherwise will return (sample_size, )
-        basis elements instead of the expected number.
+        This is necessary for the orthogonalization procedure,
+        that otherwise will return (sample_size, ) basis elements instead of the expected number.
 
         Parameters
         ----------
@@ -790,7 +798,8 @@ class OrthExponentialBasis(Basis):
         if sample_pts[0].size < self._n_basis_funcs:
             raise ValueError(
                 "OrthExponentialBasis requires at least as many samples as basis functions!\n"
-                f"Class instantiated with {self._n_basis_funcs} basis functions but only {sample_pts[0].size} samples provided!"
+                f"Class instantiated with {self._n_basis_funcs} basis functions "
+                f"but only {sample_pts[0].size} samples provided!"
             )
 
     def _evaluate(self, sample_pts: NDArray) -> NDArray:
@@ -804,7 +813,8 @@ class OrthExponentialBasis(Basis):
         Returns
         -------
         basis_funcs
-            Evaluated exponentially decaying basis functions, numerically orthogonalized, shape (n_basis_funcs, n_pts).
+            Evaluated exponentially decaying basis functions,
+            numerically orthogonalized, shape (n_basis_funcs, n_pts).
         """
         self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)

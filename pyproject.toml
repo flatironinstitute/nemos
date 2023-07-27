@@ -92,6 +92,7 @@ exclude = '''
 [tool.isort]
 multi_line_output = 3             # Use three-line style for multi-line imports
 include_trailing_comma = true     # Include trailing comma in multi-line imports
+profile = "black"
 
 # Configure pytest
 [tool.pytest.ini_options]
