@@ -37,7 +37,7 @@ class Basis(abc.ABC):
 
     Attributes
     ----------
-    _n_basis_funcs : int
+    n_basis_funcs : int
         Number of basis functions.
     _n_input_samples : int
         Number of inputs that the evaluate method requires.
@@ -45,7 +45,7 @@ class Basis(abc.ABC):
     """
 
     def __init__(self, n_basis_funcs: int) -> None:
-        self._n_basis_funcs = n_basis_funcs
+        self.n_basis_funcs = n_basis_funcs
         self._n_input_samples = 0
         self._check_n_basis_min()
 
@@ -130,7 +130,7 @@ class Basis(abc.ABC):
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
         Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
-            (self._n_basis_funcs, *n_samples)
+            (self.n_basis_funcs, *n_samples)
         )
 
         return *Xs, Y
@@ -269,7 +269,7 @@ class AdditiveBasis(Basis):
 
     Attributes
     ----------
-    _n_basis_funcs : int
+    n_basis_funcs : int
         Number of basis functions.
     _n_input_samples : int
         Number of input arrays provided at evaluation.
@@ -282,8 +282,8 @@ class AdditiveBasis(Basis):
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        self._n_basis_funcs = basis1._n_basis_funcs + basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs)
+        self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
+        super().__init__(self.n_basis_funcs)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -327,7 +327,7 @@ class MultiplicativeBasis(Basis):
 
     Attributes
     ----------
-    _n_basis_funcs : int
+    n_basis_funcs : int
         Number of basis functions.
     _n_input_samples : int
         Number of input arrays provided at evaluation.
@@ -339,8 +339,8 @@ class MultiplicativeBasis(Basis):
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        self._n_basis_funcs = basis1._n_basis_funcs * basis2._n_basis_funcs
-        super().__init__(self._n_basis_funcs)
+        self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
+        super().__init__(self.n_basis_funcs)
         self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
         self._basis1 = basis1
         self._basis2 = basis2
@@ -385,7 +385,7 @@ class SplineBasis(Basis, abc.ABC):
 
     Attributes
     ----------
-    _order : int
+    order : int
         Spline order.
     _n_input_samples : int
         Number of input arrays provided at evaluation.
@@ -393,10 +393,10 @@ class SplineBasis(Basis, abc.ABC):
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
-        self._order = order
+        self.order = order
         super().__init__(n_basis_funcs)
         self._n_input_samples = 1
-        if self._order < 1:
+        if self.order < 1:
             raise ValueError("Spline order must be positive!")
 
     def _generate_knots(
@@ -430,9 +430,9 @@ class SplineBasis(Basis, abc.ABC):
             If the percentiles or order values are not within the valid range.
         """
         # Determine number of interior knots.
-        num_interior_knots = self._n_basis_funcs - self._order
+        num_interior_knots = self.n_basis_funcs - self.order
         if is_cyclic:
-            num_interior_knots += self._order - 1
+            num_interior_knots += self.order - 1
 
         assert 0 <= perc_low <= 1, "Specify `perc_low` as a float between 0 and 1."
         assert 0 <= perc_high <= 1, "Specify `perc_high` as a float between 0 and 1."
@@ -446,9 +446,9 @@ class SplineBasis(Basis, abc.ABC):
 
         self.knot_locs = np.concatenate(
             (
-                mn * np.ones(self._order - 1),
+                mn * np.ones(self.order - 1),
                 np.linspace(mn, mx, num_interior_knots + 2),
-                mx * np.ones(self._order - 1),
+                mx * np.ones(self.order - 1),
             )
         )
         return self.knot_locs
@@ -498,8 +498,8 @@ class MSplineBasis(SplineBasis):
 
         return np.stack(
             [
-                mspline(sample_pts, self._order, i, self.knot_locs)
-                for i in range(self._n_basis_funcs)
+                mspline(sample_pts, self.order, i, self.knot_locs)
+                for i in range(self.n_basis_funcs)
             ],
             axis=0,
         )
@@ -515,7 +515,7 @@ class MSplineBasis(SplineBasis):
         ValueError
             If an insufficient number of basis element is requested for the basis type
         """
-        if self._n_basis_funcs < self._order:
+        if self.n_basis_funcs < self.order:
             raise ValueError(
                 f"{self.__class__.__name__} `order` parameter cannot be larger "
                 "than `n_basis_funcs` parameter."
@@ -571,7 +571,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
         shifted_sample_pts = (
             transform_sample_pts[None, :]
-            - (np.pi * np.arange(self._n_basis_funcs))[:, None]
+            - (np.pi * np.arange(self.n_basis_funcs))[:, None]
         )
         basis_funcs = 0.5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
 
@@ -615,7 +615,7 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
             A transformed version of the sample points that matches the Raised Cosine basis domain,
             shape (number of samples, ).
         """
-        return sample_pts * np.pi * (self._n_basis_funcs - 1)
+        return sample_pts * np.pi * (self.n_basis_funcs - 1)
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
@@ -628,10 +628,10 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
         ValueError
             If an insufficient number of basis element is requested for the basis type
         """
-        if self._n_basis_funcs < 1:
+        if self.n_basis_funcs < 1:
             raise ValueError(
                 f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
-                f"{self._n_basis_funcs} basis elements specified instead"
+                f"{self.n_basis_funcs} basis elements specified instead"
             )
 
 
@@ -676,8 +676,8 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         return (
             np.power(
                 10,
-                -(np.log10((self._n_basis_funcs - 1) * np.pi) + 1) * sample_pts
-                + np.log10((self._n_basis_funcs - 1) * np.pi),
+                -(np.log10((self.n_basis_funcs - 1) * np.pi) + 1) * sample_pts
+                + np.log10((self.n_basis_funcs - 1) * np.pi),
             )
             - 0.1
         )
@@ -693,10 +693,10 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         ValueError
             If an insufficient number of basis element is requested for the basis type
         """
-        if self._n_basis_funcs < 2:
+        if self.n_basis_funcs < 2:
             raise ValueError(
                 f"Object class {self.__class__.__name__} requires >= 2 basis elements. "
-                f"{self._n_basis_funcs} basis elements specified instead"
+                f"{self.n_basis_funcs} basis elements specified instead"
             )
 
 
@@ -736,10 +736,10 @@ class OrthExponentialBasis(Basis):
         ValueError
             If an insufficient number of basis element is requested for the basis type
         """
-        if self._n_basis_funcs < 1:
+        if self.n_basis_funcs < 1:
             raise ValueError(
                 f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
-                f"{self._n_basis_funcs} basis elements specified instead"
+                f"{self.n_basis_funcs} basis elements specified instead"
             )
 
     def _check_rates(self):
@@ -794,11 +794,11 @@ class OrthExponentialBasis(Basis):
         ValueError
             If the number of basis element is less than the number of samples.
         """
-        print(sample_pts[0].size, self._n_basis_funcs)
-        if sample_pts[0].size < self._n_basis_funcs:
+        print(sample_pts[0].size, self.n_basis_funcs)
+        if sample_pts[0].size < self.n_basis_funcs:
             raise ValueError(
                 "OrthExponentialBasis requires at least as many samples as basis functions!\n"
-                f"Class instantiated with {self._n_basis_funcs} basis functions "
+                f"Class instantiated with {self.n_basis_funcs} basis functions "
                 f"but only {sample_pts[0].size} samples provided!"
             )
 

@@ -630,7 +630,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         if (
             eval_basis.shape[0]
-            != basis_a_obj._n_basis_funcs + basis_b_obj._n_basis_funcs
+            != basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
         ):
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
@@ -811,7 +811,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         if (
             eval_basis.shape[0]
-            != basis_a_obj._n_basis_funcs * basis_b_obj._n_basis_funcs
+            != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs
         ):
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."

@@ -83,7 +83,7 @@ eval_basis = additive_basis.evaluate(x_coord, y_coord)
 
 print(f"Sum of two 1D splines with {eval_basis.shape[0]} "
       f"basis element and {eval_basis.shape[1]} samples:\n"
-      f"\t- a_basis had {a_basis._n_basis_funcs} elements\n\t- b_basis had {b_basis._n_basis_funcs} elements.")
+      f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 
 # %%
 # To plot a 2D basis set, we evaluate the basis on a grid of points over the basis function domain.
@@ -128,7 +128,7 @@ eval_basis = prod_basis.evaluate(x_coord, y_coord)
 # as well as the number of elements in the original 1D basis objects
 print(f"Product of two 1D splines with {eval_basis.shape[0]} "
       f"basis element and {eval_basis.shape[1]} samples:\n"
-      f"\t- a_basis had {a_basis._n_basis_funcs} elements\n\t- b_basis had {b_basis._n_basis_funcs} elements.")
+      f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 
 # %%
 # Plotting works in the same way as before
@@ -185,7 +185,7 @@ prod_basis_3 = a_basis * b_basis * c_basis
 samples = np.linspace(0, 1, T)
 eval_basis = prod_basis_3.evaluate(samples, samples, samples)
 
-print(f"Product of three 1D splines results in {prod_basis_3._n_basis_funcs} "
+print(f"Product of three 1D splines results in {prod_basis_3.n_basis_funcs} "
       f"basis elements.\nEvaluation output of shape {eval_basis.shape}")
 
 # %%
