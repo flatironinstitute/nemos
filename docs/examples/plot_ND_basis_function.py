@@ -54,8 +54,7 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 # $$
 # f(x,y) \\approx \sum_i \alpha_i \cdot a_i(x) + \sum_j \beta_j \cdot b_j(y).
 # $$
-# Here, we simply add two basis objects, 'a_basis' and 'b_basis', together to define the additive basis.
-
+# Here, we simply add two basis objects, `a_basis` and `b_basis`, together to define the additive basis.
 
 import numpy as np
 import matplotlib.pyplot as plt
