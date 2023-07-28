@@ -7,6 +7,7 @@ import utils_testing
 
 import neurostatslib.basis as basis
 
+
 # automatic define user accessible basis and check the methods
 
 
@@ -78,7 +79,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
     def test_sample_size_of_evaluate_matches_that_of_input(
-        self, n_basis_funcs, sample_size
+            self, n_basis_funcs, sample_size
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
@@ -99,7 +100,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         """
         raise_exception = n_basis_funcs < 2
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=f"Object class {self.cls.__name__} "
+                                                 "requires >= 2 basis elements."):
                 self.cls(n_basis_funcs=n_basis_funcs)
         else:
             self.cls(n_basis_funcs=n_basis_funcs)
@@ -114,7 +116,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         raise_exception = (sample_range[0] < 0) | (sample_range[1] > 1)
         basis_obj = self.cls(n_basis_funcs=5)
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Sample points for RaisedCosine basis must lie in"):
                 basis_obj.evaluate(np.linspace(*sample_range, 100))
         else:
             basis_obj.evaluate(np.linspace(*sample_range, 100))
@@ -128,7 +130,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -141,7 +143,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         raise_exception = sample_size < 0
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
@@ -155,7 +157,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         raise_exception = sample_size < 0
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
@@ -170,7 +172,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+                                                 r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -200,7 +203,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
     def test_sample_size_of_evaluate_matches_that_of_input(
-        self, n_basis_funcs, sample_size
+            self, n_basis_funcs, sample_size
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
@@ -221,7 +224,8 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         """
         raise_exception = n_basis_funcs < 1
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=f"Object class {self.cls.__name__} "
+                                                 "requires >= 1 basis elements\."):
                 self.cls(n_basis_funcs=n_basis_funcs)
         else:
             self.cls(n_basis_funcs=n_basis_funcs)
@@ -236,7 +240,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         raise_exception = (sample_range[0] < 0) | (sample_range[1] > 1)
         basis_obj = self.cls(n_basis_funcs=5)
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Sample points for RaisedCosine basis must lie in"):
                 basis_obj.evaluate(np.linspace(*sample_range, 100))
         else:
             basis_obj.evaluate(np.linspace(*sample_range, 100))
@@ -250,7 +254,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -263,7 +267,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         raise_exception = sample_size < 0
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
@@ -277,7 +281,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         raise_exception = sample_size < 0
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
@@ -292,7 +296,8 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+                                                 r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -304,7 +309,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
     def test_evaluate_returns_expected_number_of_basis(
-        self, n_basis_funcs: int, order: int
+            self, n_basis_funcs: int, order: int
     ):
         """
         Verifies that the evaluate() method returns the expected number of basis functions.
@@ -323,7 +328,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [4, 10, 100])
     @pytest.mark.parametrize("order", [1, 2, 3])
     def test_sample_size_of_evaluate_matches_that_of_input(
-        self, n_basis_funcs, sample_size, order
+            self, n_basis_funcs, sample_size, order
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
@@ -346,7 +351,8 @@ class TestMSplineBasis(BasisFuncsTesting):
         """
         raise_exception = (order < 1) | (n_basis_funcs < 1) | (order > n_basis_funcs)
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Spline order must be positive!|"
+                                                 rf"{self.cls.__name__} `order` parameter cannot be larger than"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
                 basis_obj.evaluate(np.linspace(0, 1, 10))
         else:
@@ -372,7 +378,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -385,7 +391,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         raise_exception = sample_size < 0
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
@@ -399,7 +405,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         raise_exception = sample_size < 0
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
@@ -414,7 +420,8 @@ class TestMSplineBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+                                                 r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -426,7 +433,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
     def test_evaluate_returns_expected_number_of_basis(
-        self, n_basis_funcs, sample_size
+            self, n_basis_funcs, sample_size
     ):
         """Tests whether the evaluate method returns the expected number of basis functions."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
@@ -443,7 +450,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 20])
     def test_sample_size_of_evaluate_matches_that_of_input(
-        self, n_basis_funcs, sample_size
+            self, n_basis_funcs, sample_size
     ):
         """Tests whether the sample size of the evaluated result matches that of the input."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
@@ -462,7 +469,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         raise_exception = n_basis_funcs < 1
         decay_rates = np.arange(1, 1 + n_basis_funcs)
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=f"Object class {self.cls.__name__} "
+                                                 r"requires >= 1 basis elements\."):
                 self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates)
         else:
             self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates)
@@ -478,7 +486,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         raise_exception = sample_range[0] < 0
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=rf"{self.cls.__name__} requires positive samples\. "
+                                                 r"Negative values provided instead\!"):
                 basis_obj.evaluate(np.linspace(*sample_range, 100))
         else:
             basis_obj.evaluate(np.linspace(*sample_range, 100))
@@ -490,7 +499,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -501,7 +510,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         raise_exception = sample_size < 5
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=rf"{self.cls.__name__} requires at least as "
+                                                 r"many samples as basis functions\!|"
+                                                 r"Number of samples, .+, must be non-negative\."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
@@ -513,7 +524,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         raise_exception = sample_size < 5
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\.|"
+                                                 rf"{self.cls.__name__} requires at least as many samples as basis"):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
@@ -526,7 +538,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+                                                 r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -543,7 +556,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         # raise exception if any of the decay rate is repeated
         raise_exception = len(set(decay_rates)) != len(decay_rates)
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Two or more rate are repeated\! Repeating rate will"):
                 self.cls(n_basis_funcs=len(decay_rates), decay_rates=decay_rates)
         else:
             self.cls(n_basis_funcs=len(decay_rates), decay_rates=decay_rates)
@@ -557,7 +570,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         raise_exception = len(decay_rates) != n_basis_func
         decay_rates = np.asarray(decay_rates, dtype=float)
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="The number of basis functions must match the"):
                 self.cls(n_basis_funcs=n_basis_func, decay_rates=decay_rates)
         else:
             self.cls(n_basis_funcs=n_basis_func, decay_rates=decay_rates)
@@ -614,7 +627,7 @@ class TestAdditiveBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     def test_evaluate_returns_expected_number_of_basis(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+            self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
         Test whether the evaluation of the `AdditiveBasis` results in a number of basis
@@ -629,8 +642,8 @@ class TestAdditiveBasis(CombinedBasis):
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
         )
         if (
-            eval_basis.shape[0]
-            != basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
+                eval_basis.shape[0]
+                != basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
         ):
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
@@ -650,7 +663,7 @@ class TestAdditiveBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     def test_sample_size_of_evaluate_matches_that_of_input(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+            self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
         Test whether the output sample size from the `AdditiveBasis` evaluate function matches the input sample size.
@@ -680,7 +693,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     def test_number_of_required_inputs_evaluate(
-        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
+            self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
         Test whether the number of required inputs for the `evaluate` function matches
@@ -690,11 +703,11 @@ class TestAdditiveBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         raise_exception = (
-            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+                n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -711,7 +724,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_meshgrid_size(
-        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+            self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
         Test whether the resulting meshgrid size matches the sample size input.
@@ -735,7 +748,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_basis_size(
-        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+            self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
@@ -760,7 +773,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_input_number(
-        self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
+            self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
     ):
         """
         Test whether the number of inputs provided to `evaluate_on_grid` matches
@@ -771,10 +784,11 @@ class TestAdditiveBasis(CombinedBasis):
         basis_obj = basis_a_obj + basis_b_obj
         inputs = [20] * n_input
         raise_exception = (
-            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+                n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
         )
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+                                                 r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -795,7 +809,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     def test_evaluate_returns_expected_number_of_basis(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+            self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
         Test whether the evaluation of the `MultiplicativeBasis` results in a number of basis
@@ -810,8 +824,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_samples
         )
         if (
-            eval_basis.shape[0]
-            != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs
+                eval_basis.shape[0]
+                != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs
         ):
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
@@ -831,7 +845,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     def test_sample_size_of_evaluate_matches_that_of_input(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
+            self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
         Test whether the output sample size from the `MultiplicativeBasis` evaluate function matches the input sample size.
@@ -861,7 +875,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     def test_number_of_required_inputs_evaluate(
-        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
+            self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
         Test whether the number of required inputs for the `evaluate` function matches
@@ -871,11 +885,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         raise_exception = (
-            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+                n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -892,7 +906,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_meshgrid_size(
-        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+            self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
         Test whether the resulting meshgrid size matches the sample size input.
@@ -916,7 +930,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_basis_size(
-        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+            self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
@@ -941,7 +955,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_input_number(
-        self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
+            self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
     ):
         """
         Test whether the number of inputs provided to `evaluate_on_grid` matches
@@ -952,10 +966,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_obj = basis_a_obj * basis_b_obj
         inputs = [20] * n_input
         raise_exception = (
-            n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
+                n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
         )
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+                                                 r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -967,7 +982,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size_a", [11, 12])
     @pytest.mark.parametrize("sample_size_b", [11, 12])
     def test_inconsistent_sample_sizes(
-        self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size_a, sample_size_b
+            self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size_a, sample_size_b
     ):
         """Test that the inputs of inconsistent sample sizes result in an exception when evaluate is called"""
         raise_exception = sample_size_a != sample_size_b
@@ -975,7 +990,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         if raise_exception:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"Sample size mismatch\. Input elements have inconsistent"):
                 basis_obj.evaluate(
                     np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
                 )
@@ -1004,13 +1019,13 @@ def test_power_of_basis(exponent, basis_class):
     basis_obj = CombinedBasis.instantiate_basis(5, basis_class)
 
     if raise_exception_type:
-        with pytest.raises(TypeError):
-            basis_obj**exponent
+        with pytest.raises(TypeError, match=r"Exponent should be an integer\!"):
+            basis_obj ** exponent
     elif raise_exception_value:
-        with pytest.raises(ValueError):
-            basis_obj**exponent
+        with pytest.raises(ValueError, match=r"Exponent should be a non-negative integer\!"):
+            basis_obj ** exponent
     else:
-        basis_pow = basis_obj**exponent
+        basis_pow = basis_obj ** exponent
         samples = np.linspace(0, 1, 10)
         eval_pow = basis_pow.evaluate(*[samples] * basis_pow._n_input_samples)
 

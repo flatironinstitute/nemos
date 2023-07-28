@@ -61,7 +61,8 @@ class Basis(abc.ABC):
         """
         pass
 
-    def _get_samples(self, *n_samples: int) -> Generator[NDArray, ...]:
+    @staticmethod
+    def _get_samples(*n_samples: int) -> Generator[NDArray, ...]:
         """Get equi-spaced samples for all the input dimensions.
 
         This will be used to evaluate the basis on a grid of
@@ -245,10 +246,10 @@ class Basis(abc.ABC):
             If the integer is zero or negative.
         """
         if not isinstance(exponent, int):
-            raise TypeError("Exponent should be an integer")
+            raise TypeError("Exponent should be an integer!")
 
         if exponent <= 0:
-            raise ValueError("Exponent should be a non-negative integer")
+            raise ValueError("Exponent should be a non-negative integer!")
 
         result = self
         for _ in range(exponent - 1):
