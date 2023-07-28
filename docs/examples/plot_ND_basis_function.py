@@ -17,30 +17,37 @@ and the resulting basis objects will be referred to as additive or multiplicativ
 Consider we have two inputs $\mathbf{x} \in \mathbb{R}^N,\; \mathbf{y}\in \mathbb{R}^M$.
 Let's say we've defined two basis functions for these inputs:
 
-- $ [ a_1 (\mathbf{x}), ..., a_k (\mathbf{x}) ] $ for $\mathbf{x}$
-- $[b_1 (\mathbf{y}), ..., b_h (\mathbf{y}) ]$ for $\mathbf{y}$.
+- $ [ a_0 (\mathbf{x}), ..., a_{k-1} (\mathbf{x}) ] $ for $\mathbf{x}$
+- $[b_0 (\mathbf{y}), ..., b_{h-1} (\mathbf{y}) ]$ for $\mathbf{y}$.
 
 These basis functions can be combined in the following ways:
 
-1. **Addition:** If we assume that the response function can be adequately described as the sum of the two components, the function is defined as:
+1. **Addition:** If we assume that there is no interaction between the stimuli, the response function can be adequately described by the sum of the individual components. The function is defined as:
    $$
    f(\mathbf{x}, \mathbf{y}) \\approx \sum_{i} \\alpha_{i} \, a_i (\mathbf{x})  + \sum_{j} \\beta_j b_j(\mathbf{y}).
    $$
-   The resulting additive basis simply consists of the concatenation of the two basis sets: $[a_1 (\mathbf{x}), ..., a_k (\mathbf{x}),b_1 (\mathbf{y}), ..., b_h (\mathbf{y}) ]$, for a total of $k+h$ basis elements.
+   The resulting additive basis simply consists of the concatenation of the two basis sets: $$[A_0 (\mathbf{x}, \mathbf{y}), ..., A_{k+h-1} (\mathbf{x}, \mathbf{y})],$$ where
+   $$
+   A_j(\mathbf{x}, \mathbf{y}) = \\begin{cases} a_j(\mathbf{x}) & \\text{if }\; j \leq k-1 \\\\\ b_{j-k+1}(\mathbf{y}) & \\text{otherwise.} \end{cases}
+   $$
+   Note that we have a total of $k+h$ basis elements, and that each element is constant in one of the axis.
 
-2. **Multiplication:** If we expect the response function to capture arbitrary interactions between the inputs, we can approximate an arbitrary response function as the external product of the two bases:
+2. **Multiplication:** If we expect the response function to capture arbitrary interactions between the inputs, we can approximate it as the external product of the two bases:
    $$
    f(\mathbf{x}, \mathbf{y}) \\approx \sum_{ij} \\alpha_{ij} \, a_i (\mathbf{x}) b_j(\mathbf{y}).
    $$
-   In this case, the resulting basis consists of the $h \cdot k$ products of the individual bases: $[a_1(\mathbf{x})b_1(\mathbf{y}),..., a_k(\mathbf{x})b_h(\mathbf{y})]$.
-
+   In this case, the resulting basis consists of the $h \cdot k$ products of the individual bases: $$[A_0(\mathbf{x}, \mathbf{y}),..., A_{k \cdot h-1}(\mathbf{x}, \mathbf{y})],$$
+   where,
+   $$
+   A_{i \cdot h + j}(\mathbf{x}, \mathbf{y}) = a_i(\mathbf{x})b_{j}(\mathbf{y}), \; \\text{for} \; i=0,\dots, k-1 \; \\text{ and } \; j=0,\dots,h-1.
+   $$
 
 In the subsequent sections, we will:
 
 1. Demonstrate the definition, evaluation, and visualization of 2D additive and multiplicative bases.
 2. Illustrate how to iteratively apply addition and multiplication operations to extend to dimensions beyond two.
 
-## 2D Basis functions
+## 2D Basis Functions
 
 Consider an instance where we want to capture a neuron's response to an animal's position within a given arena.
 In this scenario, the stimuli are the 2D coordinates (x, y) that represent the animal's position at each time point.
@@ -62,7 +69,7 @@ import neurostatslib as nsl
 
 # Define 1D basis objects
 a_basis = nsl.basis.MSplineBasis(n_basis_funcs=15, order=3)
-b_basis = nsl.basis.MSplineBasis(n_basis_funcs=14, order=2)
+b_basis = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=14)
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
@@ -74,8 +81,9 @@ additive_basis = a_basis + b_basis
 # Define a trajectory with 1000 time-points representing the recorded trajectory of the animal
 T = 1000
 
-x_coord = np.linspace(0, 10, 1000)
-y_coord = np.linspace(0, 50, 1000)
+# Define two variables
+x_coord = np.linspace(0, 1, 1000)
+y_coord = np.linspace(0, 1, 1000)
 
 # Evaluate the basis functions for the given trajectory.
 eval_basis = additive_basis.evaluate(x_coord, y_coord)
@@ -85,19 +93,54 @@ print(f"Sum of two 1D splines with {eval_basis.shape[0]} "
       f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 
 # %%
-# To plot a 2D basis set, we evaluate the basis on a grid of points over the basis function domain.
+# #### Plotting 2D Additive Basis Elements
+# Let's select and plot a basis element from each of the basis we added.
+
+basis_a_element = 5
+basis_b_element = 1
+# Plot the 1D basis elements
+fig, axs = plt.subplots(1, 2, figsize=(6, 3))
+
+axs[0].set_title(f"$a_{{{basis_a_element}}}(x)$", color="b")
+axs[0].plot(x_coord, a_basis.evaluate(x_coord).T, "grey", alpha=.3)
+axs[0].plot(x_coord, a_basis.evaluate(x_coord)[basis_a_element], "b")
+axs[0].set_xlabel("x-coord")
+
+axs[1].set_title(f"$b_{{{basis_b_element}}}(x)$", color="b")
+axs[1].plot(y_coord, b_basis.evaluate(x_coord).T, "grey", alpha=.3)
+axs[1].plot(y_coord, b_basis.evaluate(x_coord)[basis_b_element], "b")
+axs[1].set_xlabel("y-coord")
+plt.tight_layout()
+
+# %%
+# We can visualize how these elements are extended in 2D by evaluating the additive basis
+# on a grid of points that spans its domain and plotting the result.
 # We use the `evaluate_on_grid` method for this.
 
 X, Y, Z = additive_basis.evaluate_on_grid(200, 200)
 
-fig, axs = plt.subplots(1, 2, figsize=(8, 3))
+# %%
+# We can select the indices of the 2D additive basis that corresponds to the 1D original elements.
 
-# Plot a couple of basis elements
-basis_elem = [5, 25]
+basis_elem_idx = [basis_a_element, a_basis.n_basis_funcs + basis_b_element]
 
-for cc in range(len(basis_elem)):
-    axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues")
-    axs[cc].set_title(f"Basis element {basis_elem[cc]}")
+# %%
+# Finally, we can plot the 2D counterparts.
+fig, axs = plt.subplots(1, 2, figsize=(6, 3))
+
+# Plot the corresponding 2D elements.
+# As expected, each element will be constant on one of the axis.
+axs[0].set_title(f"$A_{{{basis_elem_idx[0]}}}(x,y) = "
+                 f"a_{{{basis_a_element}}}(x)$", color="b")
+
+axs[1].set_title(f"$A_{{{basis_elem_idx[1]}}}(x,y) = "
+                 f"b_{{{basis_b_element}}}(x)$", color="b")
+
+for cc in range(len(basis_elem_idx)):
+    axs[cc].contourf(X, Y, Z[basis_elem_idx[cc]], cmap="Blues")
+    axs[cc].set_xlabel("x-coord")
+    axs[cc].set_ylabel("y-coord")
+plt.tight_layout()
 plt.show()
 
 # %%
@@ -117,7 +160,7 @@ plt.show()
 prod_basis = a_basis * b_basis
 
 # %%
-# Again evaluating an input will require 2 inputs.
+# Again evaluating the basis will require 2 inputs.
 # The number of elements of the product basis will be the product of the elements of the two 1D bases.
 
 # Evaluate the product basis at the x and y coordinates
@@ -130,26 +173,43 @@ print(f"Product of two 1D splines with {eval_basis.shape[0]} "
       f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 
 # %%
-# Plotting works in the same way as before
+# Plotting works in the same way as before. To demonstrate that, we select a few pairs of 1D basis elements,
+# and we visualize the corresponding product.
 
 # Set this figure as the thumbnail
-# mkdocs_gallery_thumbnail_number = 2
+# mkdocs_gallery_thumbnail_number = 3
+
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
 
-# Setup a 3D plot
-fig, axs = plt.subplots(1, 3, figsize=(8, 3))
+# basis element pairs
+element_pairs = [[0, 0], [5, 1], [10, 5]]
 
-# Plot only the support
-basis_elem = [50, 75, 125]
-for cc in range(3):
-    axs[cc].contourf(X, Y, Z[basis_elem[cc]], cmap="Blues", levels=5)
-    axs[cc].set_title(f"Basis element: {basis_elem[cc]}")
-    axs[cc].set_xlim(0, 1)
-    axs[cc].set_ylim(0, 1)
+# plot the 1D basis element and their product
+fig, axs = plt.subplots(3,3,figsize=(8, 6))
+cc = 0
+for i, j in element_pairs:
+    # plot the element form a_basis
+    axs[cc, 0].plot(x_coord, a_basis.evaluate(x_coord).T, "grey", alpha=.3)
+    axs[cc, 0].plot(x_coord, a_basis.evaluate(x_coord)[i], "b")
+    axs[cc, 0].set_title(f"$a_{{{i}}}(x)$",color='b')
 
-plt.suptitle(f"Product basis with {eval_basis.shape[0]} elements")
+    # plot the element form b_basis
+    axs[cc, 1].plot(y_coord, b_basis.evaluate(y_coord).T, "grey", alpha=.3)
+    axs[cc, 1].plot(y_coord, b_basis.evaluate(y_coord)[j], "b")
+    axs[cc, 1].set_title(f"$b_{{{j}}}(y)$",color='b')
+
+    # select & plot the corresponding product basis element
+    k = i * b_basis.n_basis_funcs + j
+    axs[cc, 2].contourf(X, Y, Z[k], cmap='Blues', level=5)
+    axs[cc, 2].set_title(f"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
+    axs[cc, 2].set_xlabel('x-coord')
+    axs[cc, 2].set_ylabel('y-coord')
+
+    cc += 1
+axs[2, 0].set_xlabel('x-coord')
+axs[2, 1].set_xlabel('y-coord')
+
 plt.tight_layout()
-plt.show()
 
 # %%
 # !!! info
@@ -195,8 +255,8 @@ X, Y, W, Z = prod_basis_3.evaluate_on_grid(30, 30, 30)
 
 # select any slice
 slices = [17, 18, 19]
-basis_elem = 300
-vmax = Z[basis_elem, :, :, slices].max()
+basis_elem_idx = 300
+vmax = Z[basis_elem_idx, :, :, slices].max()
 fig, axs = plt.subplots(1, 3, figsize=(8, 3))
 cnt = 0
 for slice_i in slices:
@@ -204,12 +264,12 @@ for slice_i in slices:
     Y_slice = Y[:, :, slice_i]
 
     Z_slice = Z[:, :, :, slice_i]
-    axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem],
+    axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem_idx],
                       cmap='Blues', vmin=0, vmax=vmax)
     axs[cnt].set_title(f"Slice {slice_i}")
     cnt += 1
 
-plt.suptitle(f"Basis element: {basis_elem}")
+plt.suptitle(f"Basis element: {basis_elem_idx}")
 plt.tight_layout()
 plt.show()
 
