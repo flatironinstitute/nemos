@@ -862,22 +862,3 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
             )
             / ((k - 1) * (T[i + k] - T[i]))
         )
-
-
-if __name__ == "__main__":
-    samples = np.random.uniform(size=100)
-    basis1 = RaisedCosineBasisLog(5)
-    basis2 = MSplineBasis(10, order=3)
-    res = basis2.evaluate(np.linspace(0, 1, 1000))
-    basis_add = basis1 + basis2
-
-    basis_add_add = basis_add + basis2
-    basis_add_add.evaluate_on_grid(10, 10, 10)
-    basis_add_add_add = basis_add_add + basis_add
-
-    print(basis_add.evaluate(samples, samples).shape)
-    print(basis_add_add.evaluate(samples, samples, samples).shape)
-    print(basis_add_add_add.evaluate(samples, samples, samples, samples, samples).shape)
-
-    pow_bas = basis1**2
-    print(pow_bas.evaluate(samples, samples).shape)
