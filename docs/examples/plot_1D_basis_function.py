@@ -55,7 +55,7 @@ equispaced_samples, eval_basis = mspline_basis.evaluate_on_grid(n_samples)
 
 # Plot each basis element
 plt.figure()
-plt.title(f"M-spline basis with {eval_basis.shape[0]} elements\nevaluated at {eval_basis.shape[1]} saample points")
+plt.title(f"M-spline basis with {eval_basis.shape[0]} elements\nevaluated at {eval_basis.shape[1]} sample points")
 plt.plot(np.repeat(equispaced_samples, n_basis).reshape(-1, n_basis), eval_basis.T)
 plt.show()
 
