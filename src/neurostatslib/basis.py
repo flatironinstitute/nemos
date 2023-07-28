@@ -152,7 +152,7 @@ class Basis(abc.ABC):
         """
         if len(xi) != self._n_input_samples:
             raise ValueError(
-                f"Input number mismatch. Basis requires {self._n_input_samples} input samples, "
+                f"Input number mismatch. This basis evaluation requires {self._n_input_samples} input samples, "
                 f"{len(xi)} inputs provided instead."
             )
 

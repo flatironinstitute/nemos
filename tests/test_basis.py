@@ -130,7 +130,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ "
+                                                 "input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -172,7 +173,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -254,7 +255,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -296,7 +297,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -378,7 +379,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -420,7 +421,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -499,7 +500,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_samples
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -538,7 +539,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_samples
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -707,7 +708,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -787,7 +788,7 @@ class TestAdditiveBasis(CombinedBasis):
                 n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
         )
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -889,7 +890,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. Basis requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -969,7 +970,7 @@ class TestMultiplicativeBasis(CombinedBasis):
                 n_input != basis_a_obj._n_input_samples + basis_b_obj._n_input_samples
         )
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. Basis requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
