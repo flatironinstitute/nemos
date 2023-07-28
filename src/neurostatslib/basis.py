@@ -507,8 +507,7 @@ class MSplineBasis(SplineBasis):
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
-        Most of the basis work with at least 1 element, but some
-        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+        Check that MSplineBasis has at least as many basis as the order of the spline.
 
         Raises
         ------
@@ -620,8 +619,7 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
-        Most of the basis work with at least 1 element, but some
-        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+        Check that the number of basis is at least 1.
 
         Raises
         ------
@@ -685,8 +683,7 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
-        Most of the basis work with at least 1 element, but some
-        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+        Checks that the number of basis is at least 2.
 
         Raises
         ------
@@ -728,8 +725,7 @@ class OrthExponentialBasis(Basis):
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
-        Most of the basis work with at least 1 element, but some
-        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
+        Checks that the number of basis is at least 1.
 
         Raises
         ------
