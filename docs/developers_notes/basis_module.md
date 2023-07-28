@@ -45,7 +45,7 @@ This method performs the following steps:
 
 1. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
 2. Calls the subclass-specific `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
-3. Calls the subclass-specific `_evaluate` method.
+3. Calls the `evaluate` method.
 4. Returns both the sample grid points of shape `(m1, ..., mN)`, and the evaluation output at each grid point of shape `(n_basis_funcs, m1, ..., mN)`, where `mi` is the number of sample points for the i-th axis of the grid.
 
 ### Abstract Methods
@@ -53,8 +53,7 @@ This method performs the following steps:
 The `neurostatslib.basis.Basis` class has the following abstract methods, which every concrete subclass must implement:
 
 1. `_evaluate`: Evaluates a basis over some specified samples.
-2. `_get_samples`: Returns a tuple of equidistant samples (as flat numpy arrays) for each dimension of the basis function. These samples are used to form a grid over which the basis is evaluated.
-3. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
+2. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
 
 ## Contributors Guidelines
 
@@ -62,7 +61,7 @@ The `neurostatslib.basis.Basis` class has the following abstract methods, which 
 To write a usable (i.e., concrete, non-abstract) basis object, you
 
 - **Must** inherit the abstract superclass `Basis`
-- **Must** define the `_evaluate`, `_check_n_basis_min`, and `_get_samples` methods with the expected input/output format, see [Code References](../../reference/neurostatslib/basis/) for the specifics.
+- **Must** define the `_evaluate` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/neurostatslib/basis/) for the specifics.
 - **Should not** overwrite the `evaluate` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 
