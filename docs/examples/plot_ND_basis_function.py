@@ -200,7 +200,7 @@ for i, j in element_pairs:
 
     # select & plot the corresponding product basis element
     k = i * b_basis.n_basis_funcs + j
-    axs[cc, 2].contourf(X, Y, Z[k], cmap='Blues', level=5)
+    axs[cc, 2].contourf(X, Y, Z[k], cmap='Blues')
     axs[cc, 2].set_title(f"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
     axs[cc, 2].set_xlabel('x-coord')
     axs[cc, 2].set_ylabel('y-coord')

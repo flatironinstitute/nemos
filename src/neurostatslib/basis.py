@@ -1154,4 +1154,3 @@ def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, o
         )
 
     return basis_eval
-
