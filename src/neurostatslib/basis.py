@@ -904,7 +904,7 @@ class BSplineBasis(SplineBasis):
 
     References
     ----------
-    [2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    ..[2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
     Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     """
@@ -912,20 +912,14 @@ class BSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2):
         super().__init__(n_basis_funcs, order=order)
 
-    def _evaluate(
-            self, sample_pts: NDArray, outer_ok: bool = False, der: int = 0, knots_locs: NDArray=None
-    ) -> NDArray:
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
         Parameters
         ----------
-        sample_pts : NDArray
+        sample_pts :
             The sample points at which the B-spline is evaluated.
-        outer_ok : bool, optional
-            If True, accepts samples outside the knots range. If False, raises a ValueError.
-        der : int, optional
-            Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
 
         Returns
         -------
@@ -940,55 +934,16 @@ class BSplineBasis(SplineBasis):
         Notes
         -----
         This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `_generate_knots` method. Knots will be flushed at the end of the call.
+        through the `_generate_knots` method.
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
         super()._check_samples_non_empty(sample_pts)
 
         # add knots
-        if knots_locs is None:
-            self._generate_knots(sample_pts, 0.0, 1.0)
-        else:
-            self.knot_locs = knots_locs
+        self._generate_knots(sample_pts, 0.0, 1.0)
 
-        # sort the knots in case user passed
-        knots = self.knot_locs
-        knots.sort()
-        nk = knots.shape[0]
-
-        # check for out of range points (in cyclic b-spline need_outer must be set to False)
-        need_outer = any(sample_pts < knots[self.order - 1]) or any(
-            sample_pts > knots[nk - self.order]
-        )
-        assert (
-                   not need_outer
-               ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
-
-        # select knots that are within the knots range (this takes care of eventual NaNs)
-        in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
-
-        if need_outer:
-            reps = self.order - 1
-            knots = np.hstack(
-                (np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1])
-            )
-            nk = knots.shape[0]
-        else:
-            reps = 0
-
-        # number of basis elements
-        n_basis = nk - self.order
-
-        # initialize the basis element container
-        basis_eval = np.zeros((n_basis - 2 * reps, sample_pts.shape[0]))
-
-        # loop one element at the time and evaluate the basis using splev
-        id_basis = np.eye(n_basis, nk, dtype=np.int8)
-        for i in range(reps, len(knots) - self.order - reps):
-            basis_eval[i - reps, in_sample] = splev(
-                sample_pts[in_sample], (knots, id_basis[i], self.order - 1), der=der
-            )
+        basis_eval = bspline(sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=False)
 
         return basis_eval
 
@@ -1009,7 +964,7 @@ class BSplineBasis(SplineBasis):
             )
 
 
-class CyclicBSplineBasis(BSplineBasis):
+class CyclicBSplineBasis(SplineBasis):
     """
     B-spline 1-dimensional basis functions for cyclic splines.
 
@@ -1041,16 +996,14 @@ class CyclicBSplineBasis(BSplineBasis):
             raise ValueError(f"Order >= 2 required for cyclic B-spline, "
                              f"order {self.order} specified instead!")
 
-    def _evaluate(self, sample_pts: NDArray, der: int = 0) -> NDArray:
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
         Parameters
         ----------
-        sample_pts : tuple
+        sample_pts :
             The sample points at which the B-spline is evaluated. Must be a tuple of length 1.
-        der : int, optional
-            Order of the derivative of the B-spline (default is 0, e.g., B-spline evaluation).
 
         Returns
         -------
@@ -1065,7 +1018,7 @@ class CyclicBSplineBasis(BSplineBasis):
         Notes
         -----
         This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `_generate_knots` method. Knots will be flushed at the end of the call.
+        through the `_generate_knots` method.
 
         The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
         """
@@ -1082,6 +1035,8 @@ class CyclicBSplineBasis(BSplineBasis):
 
         # make sure knots are sorted
         knots_orig.sort()
+
+        # extend knots
         xc = knots_orig[nk - 2 * self.order + 1]
         knots = np.hstack(
             (
@@ -1095,13 +1050,13 @@ class CyclicBSplineBasis(BSplineBasis):
 
         # temporarily set the extended knots as attribute
         self.knot_locs = knots
-        basis_eval = super()._evaluate(sample_pts, outer_ok=True, der=der,
-                                       knots_locs=self.knot_locs)
+
+        basis_eval = bspline(sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=True)
         sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
+
         if np.sum(ind):
-            X2 = super()._evaluate(sample_pts[ind], outer_ok=True, der=der,
-                                   knots_locs=self.knot_locs)
-            basis_eval[:, ind] = basis_eval[:, ind] + X2
+            basis_eval[:, ind] = basis_eval[:, ind] + bspline(sample_pts[ind], self.knot_locs, order=self.order,
+                                                              outer_ok=True, der=0)
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
         # restore the original knots
@@ -1124,6 +1079,82 @@ class CyclicBSplineBasis(BSplineBasis):
             raise ValueError(
                 f"Insufficient basis elements for {self.__class__.__name__} instantiation."
             )
+
+
+def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, outer_ok: bool = False):
+    """
+    Calculate and return the evaluation of B-spline basis.
+
+    This function evaluates B-spline basis for given sample points. It checks for
+    out of range points and optionally handles them. It also handles the NaNs if present.
+
+    Parameters
+    ----------
+    sample_pts :
+        An array containing sample points for which B-spline basis needs to be evaluated.
+    knots :
+        An array containing knots for the B-spline basis. The knots are sorted in ascending order.
+    order :
+        The order of the B-spline basis. Default is 4.
+    der :
+        The derivative of the B-spline basis to be evaluated. Default is 0.
+    outer_ok :
+        If True, allows for evaluation at points outside the range of knots.
+        Default is False, in which case an assertion error is raised when
+        points outside the knots range are encountered.
+
+    Returns
+    -------
+    basis_eval :
+        An array containing the evaluation of B-spline basis for the given sample points.
+
+    Raises
+    ------
+    AssertionError
+        If `outer_ok` is False and the sample points lie outside the B-spline knots range.
+
+    Notes
+    -----
+    The function uses splev function from scipy.interpolate library for the basis evaluation.
+    """
+    knots.sort()
+    nk = knots.shape[0]
+
+    # check for out of range points (in cyclic b-spline need_outer must be set to False)
+    need_outer = any(sample_pts < knots[order - 1]) or any(
+        sample_pts > knots[nk - order]
+    )
+    assert (
+               not need_outer
+           ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+
+    # select knots that are within the knots range (this takes care of eventual NaNs)
+    in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
+
+    if need_outer:
+        reps = order - 1
+        knots = np.hstack(
+            (np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1])
+        )
+        nk = knots.shape[0]
+    else:
+        reps = 0
+
+    # number of basis elements
+    n_basis = nk - order
+
+    # initialize the basis element container
+    basis_eval = np.zeros((n_basis - 2 * reps, sample_pts.shape[0]))
+
+    # loop one element at the time and evaluate the basis using splev
+    id_basis = np.eye(n_basis, nk, dtype=np.int8)
+    for i in range(reps, len(knots) - order - reps):
+        basis_eval[i - reps, in_sample] = splev(
+            sample_pts[in_sample], (knots, id_basis[i], order - 1), der=der
+        )
+
+    return basis_eval
+
 
 if __name__=="__main__":
     import matplotlib.pylab as plt
