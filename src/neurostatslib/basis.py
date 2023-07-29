@@ -1155,10 +1155,3 @@ def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, o
 
     return basis_eval
 
-
-if __name__=="__main__":
-    import matplotlib.pylab as plt
-    bas = CyclicBSplineBasis(n_basis_funcs=10, order=3)
-    plt.plot(bas.evaluate(np.linspace(0,1,1000)).T)
-    bas2 = MSplineBasis(10,2)
-    bas2.evaluate(np.linspace(0,1,1000))
