@@ -10,7 +10,7 @@ import jaxopt
 from numpy.typing import NDArray
 from sklearn.exceptions import NotFittedError
 
-from .utils import convolve_1d_basis
+from .utils import convolve_1d_trials
 
 
 class GLM:
@@ -110,7 +110,8 @@ class GLM:
         # Convolve spikes with basis functions. We drop the last sample, as
         # those are the features that could be used to predict spikes in the
         # next time bin
-        X = convolve_1d_basis(self.spike_basis_matrix, spike_data)[:, :, :-1]
+        X = convolve_1d_trials(self.spike_basis_matrix, [spike_data])[0][:, :, :-1]
+
 
         # Initialize parameters
         if init_params is None:
@@ -298,7 +299,7 @@ class GLM:
                 f"spike_data n_neurons: {spike_data.shape[0]}, "
                 f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
             )
-        X = convolve_1d_basis(self.spike_basis_matrix, spike_data)
+        X = convolve_1d_trials(self.spike_basis_matrix, spike_data[None, :, :])[0]
         return self._predict((Ws, bs), X)
 
     def score(self, spike_data: NDArray) -> jnp.ndarray:
@@ -412,7 +413,7 @@ class GLM:
 
         def scan_fn(spikes, key):
             # (n_neurons, n_basis_funcs, 1)
-            X = convolve_1d_basis(self.spike_basis_matrix, spikes)
+            X = convolve_1d_trials(self.spike_basis_matrix, spikes[None, :, :])[0]
             fr = self._predict((Ws, bs), X).squeeze(-1)
             new_spikes = jax.random.poisson(key, fr)
             concat_spikes = jnp.column_stack((spikes[:, 1:], new_spikes))

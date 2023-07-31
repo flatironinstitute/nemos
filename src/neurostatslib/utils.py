@@ -10,38 +10,156 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy.typing import ArrayLike
-
-# Broadcasted 1d convolution operations.
-# [[n x t],[w]] -> [n x (t - w + 1)]
-_CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
-# [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-_CORR2 = jax.vmap(_CORR1, (None, 0), 0)
+from numpy.typing import ArrayLike, NDArray
 
 
-def convolve_1d_basis(basis_matrix: ArrayLike, time_series: ArrayLike) -> ArrayLike:
-    """Parameters
+def convolve_1d_trials(basis_matrix: ArrayLike, trials_time_series: ArrayLike[NDArray]) -> ArrayLike[jnp.ndarray]:
+    """
+    Convolve trial time series with a basis matrix.
+
+    This function checks if all trials have the same duration. If they do, it uses a fast method
+    to convolve all trials with the basis matrix at once. If they do not, it falls back to convolving
+    each trial individually.
+
+    Parameters
     ----------
-    basis_matrix : (n_basis_funcs, window_size)
-        Matrix holding 1d basis functions.
-    time_series : (n_neurons, n_timebins)
-        Matrix holding multivariate time series.
+    basis_matrix :
+        The basis matrix with which to convolve the trials. Shape (n_basis_funcs, window_size).
+    trials_time_series :
+        The time series of trials to convolve with the basis matrix. It should be a list of 2D arrays,
+        where each array represents a trial and its second dimension matches the first dimension
+        of the basis_matrix. Each trial has shape (n_neurons, n_timebins_trial).
 
     Returns
     -------
-    convolved_series : (n_neurons, n_basis_funcs, n_timebins - window_size + 1)
-        Result of convolution between all pairs of
-        features and basis functions.
+    :
+        The convolved trials. It is a list of 3D arrays, where each array represents a convolved trial.
+        Each element of the list will have shape (n_neurons, n_basis_funcs, n_timebins_trial - window_size - 1).
 
-    Notes
-    -----
-    For example, ``time_series`` could be a matrix of spike counts with
-    ``n_neurons`` neurons and ``n_timebins`` timebins, and ``basis_matrix``
-    could be a matrix of ``n_basis_funcs`` temporal basis functions with a
-    window size of ``window_size``.
-
+    Raises
+    ------
+    ValueError
+        - If basis_matrix is not a 2D array-like object.
+        - If trials_time_series is not an iterable of 2D array-like objects.
+        - If trials_time_series contains empty trials.
+        - If the number of time points in each trial is less than the window size.
     """
-    return _CORR2(jnp.atleast_2d(basis_matrix), jnp.atleast_2d(time_series))
+
+    basis_matrix = jnp.asarray(basis_matrix)
+    # check input size
+    if basis_matrix.ndim != 2:
+        raise ValueError("basis_matrix must be a 2 dimensional array-like object.")
+
+    try:
+        # this should fail for variable trial length
+        trials_time_series = jnp.asarray(trials_time_series)
+        if trials_time_series.ndim != 3:
+            raise ValueError
+
+
+    except ValueError:
+        # convert each trial two array
+        trials_time_series = [jnp.asarray(trial) for trial in trials_time_series]
+        if not all(trial.ndim == 2 for trial in trials_time_series):
+            raise ValueError("trials_time_series must be an iterable of 2 dimensional array-like objects.")
+
+    if any(k == 0 for trial in trials_time_series for k in trial.shape) | (len(trials_time_series) == 0):
+        raise ValueError("trials_time_series should not contain empty trials!")
+
+    # Broadcasted 1d convolution operations
+    _CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
+
+    # Check window size
+    ws = len(basis_matrix[0])
+    if any(trial.shape[1] < ws for trial in trials_time_series):
+        raise ValueError("Insufficient trial duration. The number of time points in each trial must "
+                         "be greater or equal to the window size.")
+
+    # Same trial duration
+    # [[r x n x t], [w]] -> [r x n x (t - w + 1)]
+    _CORR2 = jax.vmap(_CORR1, (1, None), 1)
+    _CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 0), 2)
+
+    # Variable trial dur
+    # [[n x t],[p x w]] -> [n x p x (t - w + 1)]
+    _CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR1, (None, 0), 1)
+
+    # Check if all trials have the same duration
+    same_dur = trials_time_series.ndim == 3 if isinstance(trials_time_series, jnp.ndarray) else False
+
+    if same_dur:
+        print('All trials have the same duration.')
+        conv_trials = list(_CORR_SAME_TRIAL_DUR(trials_time_series, basis_matrix))
+    else:
+        print('Trials have variable durations.')
+        conv_trials = [_CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(trial), basis_matrix) for trial in trials_time_series]
+
+    return conv_trials
+
+
+def nan_pad_conv(conv_trials: ArrayLike, window_size: int, convolution_type: Optional[str] = 'causal') -> ArrayLike:
+    """
+    Add NaN padding to convolution trials based on the convolution type.
+
+    This function adds NaN padding to the left and/or right of the trial based on the specified convolution type.
+    It also removes the first or last time point of every trial based on the convolution type. The trials with
+    the same duration are processed together for efficiency.
+
+    Parameters
+    ----------
+    conv_trials :
+        A 4D array-like of trials to be padded. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial).
+    window_size :
+        The window size to determine the padding.
+    convolution_type :
+        The type of convolution, by default 'causal'. It must be one of 'causal', 'acausal', or 'anti-causal'.
+
+    Returns
+    -------
+    ArrayLike
+        A 4D array-like of padded trials. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial + padding).
+
+    Raises
+    ------
+    ValueError
+        If the convolution_type is not one of 'causal', 'acausal', or 'anti-causal'.
+    """
+
+    padding_settings = {
+        "causal": (window_size, 0),
+        "acausal": ((window_size - 1)//2, window_size - 1 - (window_size - 1)//2),
+        "anti-causal": (0, window_size)
+    }
+
+    if convolution_type not in padding_settings:
+        raise ValueError(f'convolution_type must be "causal", "acausal", or "anti-causal". {convolution_type} provided instead!')
+
+    pad_left, pad_right = padding_settings[convolution_type]
+
+    # Check if all trials have the same duration
+    same_dur = len(set(len(trial[-1]) for trial in conv_trials)) == 1
+
+    if same_dur:
+        conv_trials = jnp.asarray(conv_trials)
+        # Adjust time points
+        if convolution_type in ("causal", "anti-causal"):
+            start, end = (1, None) if convolution_type == "anti-causal" else (None, -1)
+            conv_trials = conv_trials[:, :, :, start:end]
+
+        conv_trials = list(jnp.pad(conv_trials,
+                                   ((0, 0), (0, 0), (0, 0), (pad_left, pad_right)),
+                                   constant_values=jnp.nan))
+    else:
+        # Adjust time points
+        if convolution_type in ("causal", "anti-causal"):
+            start, end = (1, None) if convolution_type == "anti-causal" else (None, -1)
+            conv_trials = [trial[:, :, :, start:end] for trial in conv_trials]
+
+        conv_trials = [jnp.pad(x, ((0, 0), (0, 0), (pad_left, pad_right)),
+                               constant_values=jnp.nan) for x in conv_trials]
+
+    return conv_trials
+
 
 
 def plot_spike_raster(
