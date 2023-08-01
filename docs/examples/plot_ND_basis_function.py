@@ -34,7 +34,7 @@ These basis functions can be combined in the following ways:
 
 2. **Multiplication:** If we expect the response function to capture arbitrary interactions between the inputs, we can approximate it as the external product of the two bases:
    $$
-   f(\mathbf{x}, \mathbf{y}) \\approx \sum_{ij} \\alpha_{ij} \, a_i (\mathbf{x}) b_j(\mathbf{y}).
+   f(\mathbf{x}, \mathbf{y}) \\approx \sum_{i=0}^{k-1}\sum_{j=0}^{h-1} \\alpha_{ij} \, a_i (\mathbf{x}) b_j(\mathbf{y}).
    $$
    In this case, the resulting basis consists of the $h \cdot k$ products of the individual bases: $$[A_0(\mathbf{x}, \mathbf{y}),..., A_{k \cdot h-1}(\mathbf{x}, \mathbf{y})],$$
    where,
