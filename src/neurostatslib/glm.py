@@ -112,7 +112,6 @@ class GLM:
         # next time bin
         X = convolve_1d_trials(self.spike_basis_matrix, [spike_data])[0][:, :, :-1]
 
-
         # Initialize parameters
         if init_params is None:
             # Ws, spike basis coeffs

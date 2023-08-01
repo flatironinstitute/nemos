@@ -13,7 +13,9 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 
-def convolve_1d_trials(basis_matrix: ArrayLike, trials_time_series: ArrayLike[NDArray]) -> ArrayLike[jnp.ndarray]:
+def convolve_1d_trials(
+    basis_matrix: ArrayLike, trials_time_series: ArrayLike[NDArray]
+) -> ArrayLike[jnp.ndarray]:
     """
     Convolve trial time series with a basis matrix.
 
@@ -56,14 +58,17 @@ def convolve_1d_trials(basis_matrix: ArrayLike, trials_time_series: ArrayLike[ND
         if trials_time_series.ndim != 3:
             raise ValueError
 
-
     except ValueError:
         # convert each trial two array
         trials_time_series = [jnp.asarray(trial) for trial in trials_time_series]
         if not all(trial.ndim == 2 for trial in trials_time_series):
-            raise ValueError("trials_time_series must be an iterable of 2 dimensional array-like objects.")
+            raise ValueError(
+                "trials_time_series must be an iterable of 2 dimensional array-like objects."
+            )
 
-    if any(k == 0 for trial in trials_time_series for k in trial.shape) | (len(trials_time_series) == 0):
+    if any(k == 0 for trial in trials_time_series for k in trial.shape) | (
+        len(trials_time_series) == 0
+    ):
         raise ValueError("trials_time_series should not contain empty trials!")
 
     # Broadcasted 1d convolution operations
@@ -72,8 +77,10 @@ def convolve_1d_trials(basis_matrix: ArrayLike, trials_time_series: ArrayLike[ND
     # Check window size
     ws = len(basis_matrix[0])
     if any(trial.shape[1] < ws for trial in trials_time_series):
-        raise ValueError("Insufficient trial duration. The number of time points in each trial must "
-                         "be greater or equal to the window size.")
+        raise ValueError(
+            "Insufficient trial duration. The number of time points in each trial must "
+            "be greater or equal to the window size."
+        )
 
     # Same trial duration
     # [[r x n x t], [w]] -> [r x n x (t - w + 1)]
@@ -85,19 +92,28 @@ def convolve_1d_trials(basis_matrix: ArrayLike, trials_time_series: ArrayLike[ND
     _CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR1, (None, 0), 1)
 
     # Check if all trials have the same duration
-    same_dur = trials_time_series.ndim == 3 if isinstance(trials_time_series, jnp.ndarray) else False
+    same_dur = (
+        trials_time_series.ndim == 3
+        if isinstance(trials_time_series, jnp.ndarray)
+        else False
+    )
 
     if same_dur:
-        print('All trials have the same duration.')
+        print("All trials have the same duration.")
         conv_trials = list(_CORR_SAME_TRIAL_DUR(trials_time_series, basis_matrix))
     else:
-        print('Trials have variable durations.')
-        conv_trials = [_CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(trial), basis_matrix) for trial in trials_time_series]
+        print("Trials have variable durations.")
+        conv_trials = [
+            _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(trial), basis_matrix)
+            for trial in trials_time_series
+        ]
 
     return conv_trials
 
 
-def nan_pad_conv(conv_trials: ArrayLike, window_size: int, convolution_type: Optional[str] = 'causal') -> ArrayLike:
+def nan_pad_conv(
+    conv_trials: ArrayLike, window_size: int, convolution_type: Optional[str] = "causal"
+) -> ArrayLike:
     """
     Add NaN padding to convolution trials based on the convolution type.
 
@@ -127,12 +143,14 @@ def nan_pad_conv(conv_trials: ArrayLike, window_size: int, convolution_type: Opt
 
     padding_settings = {
         "causal": (window_size, 0),
-        "acausal": ((window_size - 1)//2, window_size - 1 - (window_size - 1)//2),
-        "anti-causal": (0, window_size)
+        "acausal": ((window_size - 1) // 2, window_size - 1 - (window_size - 1) // 2),
+        "anti-causal": (0, window_size),
     }
 
     if convolution_type not in padding_settings:
-        raise ValueError(f'convolution_type must be "causal", "acausal", or "anti-causal". {convolution_type} provided instead!')
+        raise ValueError(
+            f'convolution_type must be "causal", "acausal", or "anti-causal". {convolution_type} provided instead!'
+        )
 
     pad_left, pad_right = padding_settings[convolution_type]
 
@@ -146,20 +164,25 @@ def nan_pad_conv(conv_trials: ArrayLike, window_size: int, convolution_type: Opt
             start, end = (1, None) if convolution_type == "anti-causal" else (None, -1)
             conv_trials = conv_trials[:, :, :, start:end]
 
-        conv_trials = list(jnp.pad(conv_trials,
-                                   ((0, 0), (0, 0), (0, 0), (pad_left, pad_right)),
-                                   constant_values=jnp.nan))
+        conv_trials = list(
+            jnp.pad(
+                conv_trials,
+                ((0, 0), (0, 0), (0, 0), (pad_left, pad_right)),
+                constant_values=jnp.nan,
+            )
+        )
     else:
         # Adjust time points
         if convolution_type in ("causal", "anti-causal"):
             start, end = (1, None) if convolution_type == "anti-causal" else (None, -1)
             conv_trials = [trial[:, :, :, start:end] for trial in conv_trials]
 
-        conv_trials = [jnp.pad(x, ((0, 0), (0, 0), (pad_left, pad_right)),
-                               constant_values=jnp.nan) for x in conv_trials]
+        conv_trials = [
+            jnp.pad(x, ((0, 0), (0, 0), (pad_left, pad_right)), constant_values=jnp.nan)
+            for x in conv_trials
+        ]
 
     return conv_trials
-
 
 
 def plot_spike_raster(
