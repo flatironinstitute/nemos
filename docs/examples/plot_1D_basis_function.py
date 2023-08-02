@@ -69,14 +69,14 @@ plt.show()
 
 # Instantiate the basis noting that the `RaisedCosineBasisLog` does not require an `order` parameter
 raised_cosine_log = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=10)
-samples = np.linspace(0, 1, 1000)
 
-# Evaluate the raised cosine basis at the sample points (same method in all Basis elements)
-eval_basis = raised_cosine_log.evaluate(samples)
+# Evaluate the raised cosine basis at the equi-spaced sample points
+# (same method in all Basis elements)
+samples, eval_basis = raised_cosine_log.evaluate_on_grid(1000)
 
 # Plot the evaluated log-spaced raised cosine basis
 plt.figure()
 plt.title(f"Log-spaced Raised Cosine basis with {eval_basis.shape[0]} elements")
-plt.plot(eval_basis.T)
+plt.plot(samples, eval_basis.T)
 plt.show()
 
