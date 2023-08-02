@@ -97,32 +97,31 @@ class Test1DConvolution:
 
 class TestPadding:
 
-    @pytest.mark.parametrize("convolution_type", ["causal", "acausal", "anti-causal"])
+    @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal"])
     @pytest.mark.parametrize("iterable", [[np.zeros([1]*n)] * 2 for n in range(1, 6)] +
                                          [[np.zeros([1, 2, 4]), np.zeros([1, 2, 4])]] +
                                          [[np.zeros([1, 2, 4]), np.zeros([1, 1, 1, 1])]] +
                                          [[np.zeros([1, 2, 4, 5]), np.zeros([1, 1, 1, 1, 1])]]
     )
-    def test_check_dim(self, iterable, convolution_type):
+    def test_check_dim(self, iterable, filter_type):
         raise_exception = any(trial.ndim != 3 for trial in iterable)
         if raise_exception:
-            with pytest.raises(ValueError, match="conv_trials must be an array-like of "
-                                                 "3 dimensional NDArray!"):
-                utils.nan_pad_conv(iterable, 3, convolution_type)
+            with pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays"):
+                utils.nan_pad_conv(iterable, 3, filter_type)
         else:
-            utils.nan_pad_conv(iterable, 3, convolution_type)
+            utils.nan_pad_conv(iterable, 3, filter_type)
 
-    @pytest.mark.parametrize("convolution_type", ["causal", "acausal", "anti-causal", ""])
+    @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal", ""])
     @pytest.mark.parametrize("iterable",
                              [[np.zeros([2, 4, 5]), np.zeros([1, 1, 10])]]
                              )
-    def test_conv_type(self, iterable, convolution_type):
-        raise_exception = not (convolution_type in ["causal", "anti-causal", "acausal"])
+    def test_conv_type(self, iterable, filter_type):
+        raise_exception = not (filter_type in ["causal", "anti-causal", "acausal"])
         if raise_exception:
-            with pytest.raises(ValueError, match='convolution_type must be "causal", "acausal"'):
-                utils.nan_pad_conv(iterable, 3, convolution_type)
+            with pytest.raises(ValueError, match='filter_type must be "causal", "acausal"'):
+                utils.nan_pad_conv(iterable, 3, filter_type)
         else:
-            utils.nan_pad_conv(iterable, 3, convolution_type)
+            utils.nan_pad_conv(iterable, 3, filter_type)
 
     @pytest.mark.parametrize("iterable",
                              [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]]

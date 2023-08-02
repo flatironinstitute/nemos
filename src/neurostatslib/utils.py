@@ -134,7 +134,7 @@ def convolve_1d_trials(
 def pad_last_dimension(
     array: jnp.ndarray,
     window_size: int,
-    convolution_type: str = "causal",
+    filter_type: str = "causal",
     constant_values: float = jnp.nan,
 ) -> jnp.ndarray:
     """
@@ -146,7 +146,7 @@ def pad_last_dimension(
         The array to be padded.
     window_size:
         The window size to determine the padding.
-    convolution_type:
+    filter_type:
         The type of convolution, default is 'causal'. It must be one of 'causal', 'acausal', or 'anti-causal'.
     constant_values:
         The constant values for padding, default is jnp.nan.
@@ -162,14 +162,14 @@ def pad_last_dimension(
         "anti-causal": (0, window_size),
     }
 
-    pad_width = ((0, 0),) * (array.ndim - 1) + (padding_settings[convolution_type],)
+    pad_width = ((0, 0),) * (array.ndim - 1) + (padding_settings[filter_type],)
     return jnp.pad(array, pad_width, constant_values=constant_values)
 
 
 def nan_pad_conv(
     conv_trials: Union[Iterable[jnp.ndarray], Iterable[NDArray], NDArray, jnp.ndarray],
     window_size: int,
-    convolution_type: str = "causal",
+    filter_type: str = "causal",
 ) -> List[jnp.ndarray]:
     """
     Add NaN padding to convolution trials based on the convolution type.
@@ -180,7 +180,7 @@ def nan_pad_conv(
         A 4D array-like of trials to be padded. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial).
     window_size:
         The window size to determine the padding.
-    convolution_type: str, optional
+    filter_type: str, optional
         The type of convolution, by default 'causal'. It must be one of 'causal', 'acausal', or 'anti-causal'.
 
     Returns
@@ -191,7 +191,7 @@ def nan_pad_conv(
     Raises
     ------
     ValueError
-        If the window_size is not a positive integer, or if the convolution_type is not one of 'causal',
+        If the window_size is not a positive integer, or if the filter_type is not one of 'causal',
         'acausal', or 'anti-causal'. Also raises ValueError if the dimensionality of conv_trials is not as expected.
     """
     if not isinstance(window_size, int) or window_size <= 0:
@@ -205,12 +205,12 @@ def nan_pad_conv(
         "anti-causal": (1, None),
     }
 
-    if convolution_type not in adjust_indices:
+    if filter_type not in adjust_indices:
         raise ValueError(
-            f'convolution_type must be "causal", "acausal", or "anti-causal". {convolution_type} provided instead!'
+            f'filter_type must be "causal", "acausal", or "anti-causal". {filter_type} provided instead!'
         )
 
-    start, end = adjust_indices[convolution_type]
+    start, end = adjust_indices[filter_type]
 
     try:
         conv_trials = jnp.asarray(conv_trials)
@@ -222,7 +222,7 @@ def nan_pad_conv(
         conv_trials = conv_trials[:, :, :, start:end]
         return list(
             pad_last_dimension(
-                conv_trials, window_size, convolution_type, constant_values=jnp.nan
+                conv_trials, window_size, filter_type, constant_values=jnp.nan
             )
         )
 
@@ -236,7 +236,7 @@ def nan_pad_conv(
             pad_last_dimension(
                 trial[:, :, start:end],
                 window_size,
-                convolution_type,
+                filter_type,
                 constant_values=jnp.nan,
             )
             for trial in conv_trials
