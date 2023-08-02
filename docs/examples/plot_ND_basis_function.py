@@ -55,7 +55,7 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 """
 
 # %%
-# ### 2D Additive Basis
+# ### Additive Basis Object
 # One way to model the response to our 2D stimuli is to hypothesize that it decomposes into two factors:
 # one due to the x-coordinate and another due to the y-coordinate. We can express this relationship as:
 # $$
