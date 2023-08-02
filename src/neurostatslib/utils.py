@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Optional, Union, Iterable, List
+from typing import Iterable, List, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -83,7 +83,7 @@ def convolve_1d_trials(
             raise ValueError
 
     except ValueError:
-        # convert each trial two array
+        # convert each trial to array
         time_series = [jnp.asarray(trial) for trial in time_series]
         if not check_dimensionality(time_series, 2):
             raise ValueError(
@@ -95,9 +95,6 @@ def convolve_1d_trials(
     ):
         raise ValueError("trials_time_series should not contain empty trials!")
 
-    # Broadcasted 1d convolution operations
-    _CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
-
     # Check window size
     ws = len(basis_matrix[0])
     if any(trial.shape[1] < ws for trial in time_series):
@@ -105,6 +102,9 @@ def convolve_1d_trials(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
         )
+
+    # Broadcasted 1d convolution operations
+    _CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
 
     # Same trial duration
     # [[r x n x t], [w]] -> [r x n x (t - w + 1)]
