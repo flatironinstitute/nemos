@@ -94,7 +94,7 @@ class Basis(abc.ABC):
         """
         # checks on input and outputs
         self._check_samples_consistency(*xi)
-        self._check_input_number(xi)
+        self._check_input_dimensionality(xi)
 
         eval_basis = self._evaluate(*xi)
 
@@ -121,7 +121,7 @@ class Basis(abc.ABC):
             shape (number of basis, n_samples[0], ... , n_samples[n]).
 
         """
-        self._check_input_number(n_samples)
+        self._check_input_dimensionality(n_samples)
 
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
@@ -134,7 +134,7 @@ class Basis(abc.ABC):
 
         return *Xs, Y
 
-    def _check_input_number(self, xi: Tuple) -> None:
+    def _check_input_dimensionality(self, xi: Tuple) -> None:
         """
         Check that the number of inputs provided by the user matches the number of inputs required.
 
