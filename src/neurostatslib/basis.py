@@ -91,6 +91,12 @@ class Basis(abc.ABC):
         -------
         :
             The generated basis functions.
+
+        Raises
+        ------
+        ValueError
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            the Basis object requires.
         """
         # checks on input and outputs
         self._check_samples_consistency(*xi)
@@ -104,6 +110,8 @@ class Basis(abc.ABC):
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
         The i-th axis of the grid will be sampled with n_samples[i] equi-spaced points.
+        The method uses numpy.meshgrid with `indexing="ij"`, returning matrix indexing
+        instead of the default cartesian indexing, see Notes.
 
         Parameters
         ----------
@@ -119,6 +127,19 @@ class Basis(abc.ABC):
         Y :
             The basis function evaluated at the samples,
             shape (number of basis, n_samples[0], ... , n_samples[n]).
+
+        Raises
+        ------
+        ValueError
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            the Basis object requires.
+
+        Notes
+        -----
+        Setting "indexing = 'ij'" returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+        $M_1,...,M_N$, outputs are of shape $(M_1, M_2, M_3, ....,M_N)$.
+        This differs from the numpy.meshgrid default, which uses Cartesian indexing.
+        For the same input, Cartesian indexing would return an output of shape $(M_2, M_1, M_3, ....,M_N)$.
 
         """
         self._check_input_dimensionality(n_samples)
@@ -545,9 +566,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        if any(sample_pts < -np.finfo(sample_pts.dtype).resolution) or any(
-            sample_pts > 1 + np.finfo(sample_pts.dtype).resolution
-        ):
+        if any(sample_pts < 0) or any(sample_pts > 1):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
         # transform to the proper domain
