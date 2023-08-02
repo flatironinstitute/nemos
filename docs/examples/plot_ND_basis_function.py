@@ -24,7 +24,7 @@ These basis functions can be combined in the following ways:
 
 1. **Addition:** If we assume that there is no interaction between the stimuli, the response function can be adequately described by the sum of the individual components. The function is defined as:
    $$
-   f(\mathbf{x}, \mathbf{y}) \\approx \sum_{i} \\alpha_{i} \, a_i (\mathbf{x})  + \sum_{j} \\beta_j b_j(\mathbf{y}).
+   f(\mathbf{x}, \mathbf{y}) \\approx \sum_{i=0}^{k-1} \\alpha_{i} \, a_i (\mathbf{x})  + \sum_{j=0}^{h-1} \\beta_j b_j(\mathbf{y}).
    $$
    The resulting additive basis simply consists of the concatenation of the two basis sets: $$[A_0 (\mathbf{x}, \mathbf{y}), ..., A_{k+h-1} (\mathbf{x}, \mathbf{y})],$$ where
    $$
