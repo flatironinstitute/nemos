@@ -64,4 +64,5 @@ To write a usable (i.e., concrete, non-abstract) basis object, you
 - **Must** define the `_evaluate` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/neurostatslib/basis/) for the specifics.
 - **Should not** overwrite the `evaluate` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
+- **May** reimplement the `_get_samples` method if your basis domain differs from `[0,1]`. However, we recommend mapping the specific basis domain to `[0,1]` whenever possible.
 
