@@ -49,7 +49,7 @@ class Test1DConvolution:
     def test_spike_count_ndim(self, basis_matrix, trial_counts):
         raise_exception = any(trial.ndim != 2 for trial in trial_counts)
         if raise_exception:
-            with pytest.raises(ValueError, match="trials_time_series must be an iterable "
+            with pytest.raises(ValueError, match="time_series must be an iterable "
                                                  "of 2 dimensional array-like objects."):
                 utils.convolve_1d_trials(basis_matrix, trial_counts)
         else:
@@ -75,7 +75,7 @@ class Test1DConvolution:
         np.zeros((1, 0, 40)),  # invalid
     ])
     def test_empty_counts(self, basis_matrix, trial_counts):
-        with pytest.raises(ValueError, match="trials_time_series should not contain"):
+        with pytest.raises(ValueError, match="time_series should not contain"):
             utils.convolve_1d_trials(basis_matrix, trial_counts)
 
     @pytest.mark.parametrize("basis_matrix", [np.random.normal(size=(3, 4)) for i in range(2)])
