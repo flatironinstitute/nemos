@@ -95,4 +95,99 @@ class Test1DConvolution:
                                                                             "\"valid\" mode."
 
 
+class TestPadding:
 
+    @pytest.mark.parametrize("convolution_type", ["causal", "acausal", "anti-causal"])
+    @pytest.mark.parametrize("iterable", [[np.zeros([1]*n)] * 2 for n in range(1, 6)] +
+                                         [[np.zeros([1, 2, 4]), np.zeros([1, 2, 4])]] +
+                                         [[np.zeros([1, 2, 4]), np.zeros([1, 1, 1, 1])]] +
+                                         [[np.zeros([1, 2, 4, 5]), np.zeros([1, 1, 1, 1, 1])]]
+    )
+    def test_check_dim(self, iterable, convolution_type):
+        raise_exception = any(trial.ndim != 3 for trial in iterable)
+        if raise_exception:
+            with pytest.raises(ValueError, match="conv_trials must be an array-like of "
+                                                 "3 dimensional NDArray!"):
+                utils.nan_pad_conv(iterable, 3, convolution_type)
+        else:
+            utils.nan_pad_conv(iterable, 3, convolution_type)
+
+    @pytest.mark.parametrize("convolution_type", ["causal", "acausal", "anti-causal", ""])
+    @pytest.mark.parametrize("iterable",
+                             [[np.zeros([2, 4, 5]), np.zeros([1, 1, 10])]]
+                             )
+    def test_conv_type(self, iterable, convolution_type):
+        raise_exception = not (convolution_type in ["causal", "anti-causal", "acausal"])
+        if raise_exception:
+            with pytest.raises(ValueError, match='convolution_type must be "causal", "acausal"'):
+                utils.nan_pad_conv(iterable, 3, convolution_type)
+        else:
+            utils.nan_pad_conv(iterable, 3, convolution_type)
+
+    @pytest.mark.parametrize("iterable",
+                             [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]]
+                             )
+    @pytest.mark.parametrize("window_size", [0, 1, 2, 3, 5, 6])
+    def test_padding_nan_causal(self, window_size, iterable):
+        raise_exception = (not isinstance(window_size, int)) or (window_size <= 0)
+        if raise_exception:
+            with pytest.raises(ValueError, match="window_size must be a positive integer!"):
+                utils.nan_pad_conv(iterable, window_size, "anti-causal")
+        else:
+            padded = utils.nan_pad_conv(iterable, window_size, "causal")
+            for trial in padded:
+                print(trial.shape, window_size)
+            assert all(np.isnan(trial[:, :, :window_size]).all() for trial in padded), "Missing NaNs at the " \
+                                                                                       "beginning of the array!"
+            assert all(not np.isnan(trial[:, :, window_size:]).any() for trial in padded), "Fund NaNs at the " \
+                                                                                      "end of the array!"
+            assert all(padded[k].shape[2] == iterable[k].shape[2] - 1 + window_size for k in range(len(padded))), \
+                "Size after padding doesn't match expectation. Should be T + window_size - 1."
+
+    @pytest.mark.parametrize("iterable",
+                             [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]]
+                             )
+    @pytest.mark.parametrize("window_size", [0, 1, 2, 3, 5, 6])
+    def test_padding_nan_anti_causal(self, window_size, iterable):
+        raise_exception = (not isinstance(window_size, int)) or (window_size <= 0)
+        if raise_exception:
+            with pytest.raises(ValueError, match="window_size must be a positive integer!"):
+                utils.nan_pad_conv(iterable, window_size, "anti-causal")
+        else:
+            padded = utils.nan_pad_conv(iterable, window_size, "anti-causal")
+            for trial in padded:
+                print(trial.shape, window_size)
+            assert all(np.isnan(trial[:, :, trial.shape[2]-window_size:]).all() for trial in padded), "Missing NaNs at the " \
+                                                                                       "end of the array!"
+            assert all(not np.isnan(trial[:, :, :trial.shape[2]-window_size]).any() for trial in padded), "Fund NaNs at the " \
+                                                                                           "beginning of the array!"
+            assert all(padded[k].shape[2] == iterable[k].shape[2] - 1 + window_size for k in range(len(padded))), \
+                "Size after padding doesn't match expectation. Should be T + window_size - 1."
+
+    @pytest.mark.parametrize("iterable",
+                             [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]]
+                             )
+    @pytest.mark.parametrize("window_size", [-1, 0.2, 0, 1, 2, 3, 5, 6])
+    def test_padding_nan_causal(self, window_size, iterable):
+        raise_exception = (not isinstance(window_size, int)) or (window_size <= 0)
+        if raise_exception:
+            with pytest.raises(ValueError, match="window_size must be a positive integer!"):
+                utils.nan_pad_conv(iterable, window_size, "acausal")
+
+        else:
+            init_nan, end_nan = (window_size - 1) // 2, window_size - 1 - (window_size - 1) // 2
+            padded = utils.nan_pad_conv(iterable, window_size, "acausal")
+            for trial in padded:
+                print(trial.shape, window_size)
+            assert all(
+                np.isnan(trial[:, :, :init_nan]).all() for trial in padded), "Missing NaNs at the " \
+                                                                             "beginning of the array!"
+            assert all(
+                np.isnan(trial[:, :, trial.shape[2] - end_nan:]).all() for trial in padded), "Missing NaNs at the " \
+                                                                                             "end of the array!"
+
+            assert all(
+                not np.isnan(trial[:, :, init_nan: trial.shape[2] - end_nan]).any() for trial in padded), "Fund NaNs in " \
+                                                                                                     "the middle of the array!"
+            assert all(padded[k].shape[2] == iterable[k].shape[2] - 1 + window_size for k in range(len(padded))), \
+                "Size after padding doesn't match expectation. Should be T + window_size - 1."

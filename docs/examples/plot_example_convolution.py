@@ -41,10 +41,16 @@ plt.plot(w.T)
 # convolve the spikes:
 # the function requires an iterable (one element per trial)
 # and returns a list of convolutions
-spk_conv = convolve_1d_trials(w, [spk])
+spk_conv = convolve_1d_trials(w, [spk, np.zeros((1,20))])
 
 # %%
 # NaN pad for causal, anti-causal and acausal filters.
+# A causal filters captures how an event influences the future firing-rate. As an example, we may think of
+# a spike event which is followed by an immediate drop in firing rate, known as refractory period.
+# On the other hand,
+# anti-causal filters can be used to describe how spike activity may lead to an event, for example spiking
+# activity in pre-motor cortex may be predictive of the event "movement onset".
+
 
 # pad according to the causal direction of the filter
 spk_causal_utils = np.squeeze(nan_pad_conv(spk_conv, ws, convolution_type="causal")[0])
