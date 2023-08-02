@@ -39,8 +39,6 @@ class Basis(abc.ABC):
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    _n_input_samples : int
-        Number of inputs that the evaluate method requires.
 
     """
 
@@ -272,12 +270,6 @@ class AdditiveBasis(Basis):
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    _n_input_samples : int
-        Number of input arrays provided at evaluation.
-    _basis1 : Basis
-        First basis object.
-    _basis2 : Basis
-        Second basis object.
 
 
     """
@@ -330,12 +322,6 @@ class MultiplicativeBasis(Basis):
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    _n_input_samples : int
-        Number of input arrays provided at evaluation.
-    _basis1 : Basis
-        First basis object.
-    _basis2 : Basis
-        Second basis object.
 
     """
 
@@ -388,8 +374,6 @@ class SplineBasis(Basis, abc.ABC):
     ----------
     order : int
         Spline order.
-    _n_input_samples : int
-        Number of input arrays provided at evaluation.
 
     """
 
