@@ -126,7 +126,7 @@ basis_elem_idx = [basis_a_element, a_basis.n_basis_funcs + basis_b_element]
 
 # %%
 # Finally, we can plot the 2D counterparts.
-fig, axs = plt.subplots(1, 2, figsize=(6, 3))
+fig, axs = plt.subplots(1, 2, subplot_kw={'aspect': 1})
 
 # Plot the corresponding 2D elements.
 # As expected, each element will be constant on one of the axis.
@@ -204,6 +204,7 @@ for i, j in element_pairs:
     axs[cc, 2].set_title(f"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
     axs[cc, 2].set_xlabel('x-coord')
     axs[cc, 2].set_ylabel('y-coord')
+    axs[cc, 2].set_aspect("equal")
 
     cc += 1
 axs[2, 0].set_xlabel('x-coord')
