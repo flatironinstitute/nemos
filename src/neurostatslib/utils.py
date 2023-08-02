@@ -87,13 +87,13 @@ def convolve_1d_trials(
         time_series = [jnp.asarray(trial) for trial in time_series]
         if not check_dimensionality(time_series, 2):
             raise ValueError(
-                "trials_time_series must be an iterable of 2 dimensional array-like objects."
+                "time_series must be an iterable of 2 dimensional array-like objects."
             )
 
     if any(k == 0 for trial in time_series for k in trial.shape) | (
         len(time_series) == 0
     ):
-        raise ValueError("trials_time_series should not contain empty trials!")
+        raise ValueError("time_series should not contain empty trials!")
 
     # Check window size
     ws = len(basis_matrix[0])
