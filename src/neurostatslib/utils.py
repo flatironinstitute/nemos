@@ -119,10 +119,10 @@ def convolve_1d_trials(
     same_dur = time_series.ndim == 3 if isinstance(time_series, jnp.ndarray) else False
 
     if same_dur:
-        print("All trials have the same duration.")
+        # Trials have the same duration.
         conv_trials = list(_CORR_SAME_TRIAL_DUR(time_series, basis_matrix))
     else:
-        print("Trials have variable durations.")
+        # Trials have variable durations.
         conv_trials = [
             _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(trial), basis_matrix)
             for trial in time_series
