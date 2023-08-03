@@ -31,14 +31,14 @@ mspline_basis = nsl.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
 # the range from the smallest to the largest sample. These knots are then used to construct a uniformly spaced basis.
 
 # Generate an array of sample points
-samples = np.random.uniform(0,10, size=1000)
+samples = np.random.uniform(0, 10, size=1000)
 
 # Evaluate the basis at the sample points
 eval_basis = mspline_basis.evaluate(samples)
 
 # Output information about the evaluated basis
-print(f"Evaluated M-spline of order {order} with {eval_basis.shape[0]} "
-      f"basis element and {eval_basis.shape[1]} samples.")
+print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "
+      f"basis element and {eval_basis.shape[0]} samples.")
 
 # %%
 # Plotting the Basis Function Elements:
@@ -55,8 +55,8 @@ equispaced_samples, eval_basis = mspline_basis.evaluate_on_grid(n_samples)
 
 # Plot each basis element
 plt.figure()
-plt.title(f"M-spline basis with {eval_basis.shape[0]} elements\nevaluated at {eval_basis.shape[1]} sample points")
-plt.plot(np.repeat(equispaced_samples, n_basis).reshape(-1, n_basis), eval_basis.T)
+plt.title(f"M-spline basis with {eval_basis.shape[1]} elements\nevaluated at {eval_basis.shape[0]} sample points")
+plt.plot(equispaced_samples, eval_basis)
 plt.show()
 
 # %%
@@ -76,7 +76,7 @@ samples, eval_basis = raised_cosine_log.evaluate_on_grid(1000)
 
 # Plot the evaluated log-spaced raised cosine basis
 plt.figure()
-plt.title(f"Log-spaced Raised Cosine basis with {eval_basis.shape[0]} elements")
-plt.plot(samples, eval_basis.T)
+plt.title(f"Log-spaced Raised Cosine basis with {eval_basis.shape[1]} elements")
+plt.plot(samples, eval_basis)
 plt.show()
 
