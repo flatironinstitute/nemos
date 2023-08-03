@@ -87,7 +87,9 @@ def convolve_1d_trials(
     # check input size
     if basis_matrix.ndim != 2:
         raise ValueError("basis_matrix must be a 2 dimensional array-like object.")
-
+    elif 0 in basis_matrix.shape:
+        raise ValueError("Empty basis_matrix provided. "
+                         f"The shape of basis_matrix is {basis_matrix.shape}!")
     try:
         # this should fail for variable trial length
         time_series = jnp.asarray(time_series)
@@ -108,7 +110,7 @@ def convolve_1d_trials(
         raise ValueError("time_series should not contain empty trials!")
 
     # Check window size
-    ws = len(basis_matrix[1])
+    ws = len(basis_matrix)
     if any(trial.shape[0] < ws for trial in time_series):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
