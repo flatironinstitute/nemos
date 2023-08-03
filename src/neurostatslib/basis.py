@@ -237,12 +237,12 @@ class Basis(abc.ABC):
 
         Returns
         -------
-        : MultiplicativeBasis
+        :
             The resulting Basis object.
         """
         return MultiplicativeBasis(self, other)
 
-    def __pow__(self, exponent):
+    def __pow__(self, exponent: int) -> MultiplicativeBasis:
         """Exponentiation of a Basis object.
 
         Define the power of a basis by repeatedly applying the method __multiply__.
@@ -255,6 +255,7 @@ class Basis(abc.ABC):
 
         Returns
         -------
+        :
             The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
 
         Raises
