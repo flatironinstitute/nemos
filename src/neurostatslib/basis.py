@@ -298,7 +298,9 @@ class AdditiveBasis(Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
         super().__init__(self.n_basis_funcs)
-        self._n_input_dimensionality = basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        self._n_input_dimensionality = (
+            basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        )
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -349,7 +351,9 @@ class MultiplicativeBasis(Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
         super().__init__(self.n_basis_funcs)
-        self._n_input_dimensionality = basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        self._n_input_dimensionality = (
+            basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        )
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -509,7 +513,6 @@ class MSplineBasis(SplineBasis):
             ],
             axis=0,
         )
-
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
