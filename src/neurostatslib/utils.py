@@ -13,6 +13,18 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 
+# Same trial duration
+# [[r x t x n], [w]] -> [r x (t - w + 1) x n]
+# Broadcasted 1d convolution operations
+_CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
+_CORR2 = jax.vmap(_CORR1, (2, None), 2)
+_CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 1), 3)
+
+# Variable trial dur
+# [[n x t],[p x w]] -> [n x p x (t - w + 1)]
+_CORR3 = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
+_CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
+
 def check_dimensionality(
     iterable: Union[NDArray, Iterable[NDArray], jnp.ndarray, Iterable[jnp.ndarray]],
     expected_dim: int,
@@ -50,17 +62,17 @@ def convolve_1d_trials(
     Parameters
     ----------
     basis_matrix :
-        The basis matrix with which to convolve the trials. Shape (n_basis_funcs, window_size).
+        The basis matrix with which to convolve the trials. Shape (window_size, n_basis_funcs).
     time_series :
         The time series of trials to convolve with the basis matrix. It should be a list of 2D arrays,
         where each array represents a trial and its second dimension matches the first dimension
-        of the basis_matrix. Each trial has shape (n_neurons, n_timebins_trial).
+        of the basis_matrix. Each trial has shape (n_timebins_trial, n_neurons).
 
     Returns
     -------
     :
         The convolved trials. It is a list of 3D arrays, where each array represents a convolved trial.
-        Each element of the list will have shape (n_neurons, n_basis_funcs, n_timebins_trial - window_size - 1).
+        Each element of the list will have shape (n_timebins_trial - window_size - 1, n_neurons, n_basis_funcs).
 
     Raises
     ------
@@ -90,36 +102,25 @@ def convolve_1d_trials(
                 "time_series must be an iterable of 2 dimensional array-like objects."
             )
 
-    if any(k == 0 for trial in time_series for k in trial.shape) | (
+    if any(k == 0 for trial in time_series for k in trial.shape) or (
         len(time_series) == 0
     ):
         raise ValueError("time_series should not contain empty trials!")
 
     # Check window size
-    ws = len(basis_matrix[0])
-    if any(trial.shape[1] < ws for trial in time_series):
+    ws = len(basis_matrix[1])
+    if any(trial.shape[0] < ws for trial in time_series):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
         )
 
-    # Broadcasted 1d convolution operations
-    _CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
 
-    # Same trial duration
-    # [[r x n x t], [w]] -> [r x n x (t - w + 1)]
-    _CORR2 = jax.vmap(_CORR1, (1, None), 1)
-    _CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 0), 2)
-
-    # Variable trial dur
-    # [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-    _CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR1, (None, 0), 1)
-
-    # Check if all trials have the same duration
+    # Check if all trials have the same duration # check if needed
     same_dur = time_series.ndim == 3 if isinstance(time_series, jnp.ndarray) else False
 
     if same_dur:
-        # Trials have the same duration.
+        # Trials have the same duration. # call conv instead of corr
         conv_trials = list(_CORR_SAME_TRIAL_DUR(time_series, basis_matrix))
     else:
         # Trials have variable durations.
@@ -131,8 +132,9 @@ def convolve_1d_trials(
     return conv_trials
 
 
-def pad_last_dimension(
+def pad_dimension(
     array: jnp.ndarray,
+    axis: int,
     window_size: int,
     filter_type: str = "causal",
     constant_values: float = jnp.nan,
@@ -144,6 +146,8 @@ def pad_last_dimension(
     ----------
     array:
         The array to be padded.
+    axis:
+        The axis to be padded.
     window_size:
         The window size to determine the padding.
     filter_type:
@@ -156,13 +160,19 @@ def pad_last_dimension(
     :
         An array with padded last dimension.
     """
+    if axis < 0 or not isinstance(axis, int):
+        raise ValueError("`axis` must be a non negative integer.")
+    elif axis >= array.ndim:
+        raise IndexError("`axis` must be smaller than `array.ndim`. "
+                         f"array.ndim is {array.ndim}, axis = {axis} provided!")
+
     padding_settings = {
         "causal": (window_size, 0),
         "acausal": ((window_size - 1) // 2, window_size - 1 - (window_size - 1) // 2),
         "anti-causal": (0, window_size),
     }
 
-    pad_width = ((0, 0),) * (array.ndim - 1) + (padding_settings[filter_type],)
+    pad_width = ((0, 0), ) * axis + (padding_settings[filter_type],) + ((0, 0), ) * (array.ndim - 1 - axis)
     return jnp.pad(array, pad_width, constant_values=constant_values)
 
 
@@ -198,7 +208,7 @@ def nan_pad_conv(
         raise ValueError(
             f"window_size must be a positive integer! Window size of {window_size} provided instead!"
         )
-
+    # add a note about this in docstrings
     adjust_indices = {
         "causal": (None, -1),
         "acausal": (None, None),
@@ -219,10 +229,10 @@ def nan_pad_conv(
                 "conv_trials must be an iterable of 3D arrays or a 4D array!"
             )
 
-        conv_trials = conv_trials[:, :, :, start:end]
+        conv_trials = conv_trials[:, start:end]
         return list(
-            pad_last_dimension(
-                conv_trials, window_size, filter_type, constant_values=jnp.nan
+            pad_dimension(
+                conv_trials, 1, window_size, filter_type, constant_values=jnp.nan
             )
         )
 
@@ -233,8 +243,9 @@ def nan_pad_conv(
             )
 
         return [
-            pad_last_dimension(
-                trial[:, :, start:end],
+            pad_dimension(
+                trial[start:end],
+                0,
                 window_size,
                 filter_type,
                 constant_values=jnp.nan,
