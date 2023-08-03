@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as onp
 
 import neurostatslib as nsl
-from neurostatslib.basis import RaisedCosineBasis
+from neurostatslib.basis import RaisedCosineBasisLog
 from neurostatslib.glm import GLM
 
 
@@ -16,28 +16,26 @@ def test_glm_fit():
     jax.config.update("jax_platform_name", "cpu")
     jax.config.update("jax_enable_x64", True)
 
-    nn, nt, ws = 1, 5000, 100
+    nn, nt, ws = 1, 1000, 100
     simulation_key = jax.random.PRNGKey(123)
 
-    spike_basis = RaisedCosineBasis(
-        n_basis_funcs=5,
-        window_size=ws
+    spike_basis = RaisedCosineBasisLog(
+        n_basis_funcs=5
     )
-    sim_pts = nsl.sample_points.raised_cosine_log(5, ws)
-    B = spike_basis.gen_basis_funcs(sim_pts)
+    B = spike_basis.evaluate(onp.linspace(0, 1, ws))
 
     simulated_model = GLM(B)
     simulated_model.spike_basis_coeff_ = jnp.array([0, 0, -1, -1, -1])[None, :, None]
     simulated_model.baseline_log_fr_ = jnp.ones(nn) * .1
 
-    init_spikes = jnp.zeros((nn, spike_basis.window_size))
+    init_spikes = jnp.zeros((nn, ws))
     spike_data = simulated_model.simulate(simulation_key, nt, init_spikes)
     sim_pred = simulated_model.predict(spike_data)
 
     fitted_model = GLM(
         B,
         solver_name="GradientDescent",
-        solver_kwargs=dict(maxiter=10000, acceleration=False, verbose=True, stepsize=0.0)
+        solver_kwargs=dict(maxiter=1000, acceleration=False, verbose=True, stepsize=0.0)
 
     )
     

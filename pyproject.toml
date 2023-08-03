@@ -92,8 +92,15 @@ exclude = '''
 [tool.isort]
 multi_line_output = 3             # Use three-line style for multi-line imports
 include_trailing_comma = true     # Include trailing comma in multi-line imports
+profile = "black"
 
 # Configure pytest
 [tool.pytest.ini_options]
 addopts = "--cov=neurostatslib"   # Additional options to pass to pytest, enabling coverage for the 'neurostatslib' package
 testpaths = ["tests"]             # Specify the directory where test files are located
+
+[tool.coverage.report]
+exclude_lines = [
+    "@abc.abstractmethod",
+    "if __name__ == .__main__.:"
+]

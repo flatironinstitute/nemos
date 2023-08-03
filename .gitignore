@@ -129,6 +129,10 @@ dmypy.json
 .pyre/
 
 
+# PyCharm project specs
+.idea/
+
+
 # IntelliJ's project specific settings 
 .idea/
 
