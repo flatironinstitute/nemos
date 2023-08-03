@@ -298,7 +298,9 @@ class AdditiveBasis(Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
         super().__init__(self.n_basis_funcs)
-        self._n_input_dimensionality = basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        self._n_input_dimensionality = (
+            basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        )
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -323,7 +325,7 @@ class AdditiveBasis(Basis):
         return np.hstack(
             (
                 self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
 
@@ -349,7 +351,9 @@ class MultiplicativeBasis(Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
         super().__init__(self.n_basis_funcs)
-        self._n_input_dimensionality = basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        self._n_input_dimensionality = (
+            basis1._n_input_dimensionality + basis2._n_input_dimensionality
+        )
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -374,7 +378,7 @@ class MultiplicativeBasis(Basis):
         return np.array(
             row_wise_kron(
                 self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
@@ -722,7 +726,6 @@ class OrthExponentialBasis(Basis):
                 f"Number of decay rates provided: {self._decay_rates.shape[0]}"
             )
 
-
         self._check_rates()
         self._n_input_dimensionality = 1
 
@@ -865,4 +868,3 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
             )
             / ((k - 1) * (T[i + k] - T[i]))
         )
-

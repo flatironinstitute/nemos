@@ -34,7 +34,7 @@ def test_setup_msplinebasis():
     window = 100
     for order in range(1,6):
         spike_basis = MSplineBasis(n_basis_funcs=n_basis, order=order)
-        spike_basis_matrix = spike_basis.evaluate(np.arange(window))
+        spike_basis_matrix = spike_basis.evaluate(np.arange(window)).T
         if spike_basis_matrix.shape[0] != n_basis:
             raise DimensionMismatchError(f"The output basis matrix has {spike_basis_matrix.shape[1]} time points, while the number of basis specified is {n_basis}. They must agree.")
 
@@ -53,7 +53,7 @@ def test_run_end_to_end_glm():
     ).astype("int64")
 
     spike_basis = MSplineBasis(n_basis_funcs=6, order=3)
-    spike_basis_matrix = spike_basis.evaluate(np.arange(100))
+    spike_basis_matrix = spike_basis.evaluate(np.arange(100)).T
     model = GLM(spike_basis_matrix)
 
     model.fit(spike_data)
