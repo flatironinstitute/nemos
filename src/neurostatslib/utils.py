@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-
 # Same trial duration
 # [[r x t x n], [w]] -> [r x (t - w + 1) x n]
 # Broadcasted 1d convolution operations
@@ -24,6 +23,7 @@ _CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 1), 3)
 # [[n x t],[p x w]] -> [n x p x (t - w + 1)]
 _CORR3 = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
 _CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
+
 
 def check_dimensionality(
     iterable: Union[NDArray, Iterable[NDArray], jnp.ndarray, Iterable[jnp.ndarray]],
@@ -88,8 +88,10 @@ def convolve_1d_trials(
     if basis_matrix.ndim != 2:
         raise ValueError("basis_matrix must be a 2 dimensional array-like object.")
     elif 0 in basis_matrix.shape:
-        raise ValueError("Empty basis_matrix provided. "
-                         f"The shape of basis_matrix is {basis_matrix.shape}!")
+        raise ValueError(
+            "Empty basis_matrix provided. "
+            f"The shape of basis_matrix is {basis_matrix.shape}!"
+        )
     try:
         # this should fail for variable trial length
         time_series = jnp.asarray(time_series)
@@ -112,11 +114,12 @@ def convolve_1d_trials(
     # Check window size
     ws = len(basis_matrix)
     if any(trial.shape[0] < ws for trial in time_series):
+        print(ws)
+        print([trial.shape for trial in time_series])
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
         )
-
 
     # Check if all trials have the same duration # check if needed
     same_dur = time_series.ndim == 3 if isinstance(time_series, jnp.ndarray) else False
@@ -165,8 +168,10 @@ def pad_dimension(
     if axis < 0 or not isinstance(axis, int):
         raise ValueError("`axis` must be a non negative integer.")
     elif axis >= array.ndim:
-        raise IndexError("`axis` must be smaller than `array.ndim`. "
-                         f"array.ndim is {array.ndim}, axis = {axis} provided!")
+        raise IndexError(
+            "`axis` must be smaller than `array.ndim`. "
+            f"array.ndim is {array.ndim}, axis = {axis} provided!"
+        )
 
     padding_settings = {
         "causal": (window_size, 0),
@@ -174,7 +179,11 @@ def pad_dimension(
         "anti-causal": (0, window_size),
     }
 
-    pad_width = ((0, 0), ) * axis + (padding_settings[filter_type],) + ((0, 0), ) * (array.ndim - 1 - axis)
+    pad_width = (
+        ((0, 0),) * axis
+        + (padding_settings[filter_type],)
+        + ((0, 0),) * (array.ndim - 1 - axis)
+    )
     return jnp.pad(array, pad_width, constant_values=constant_values)
 
 
