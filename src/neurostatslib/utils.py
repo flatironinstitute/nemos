@@ -114,8 +114,6 @@ def convolve_1d_trials(
     # Check window size
     ws = len(basis_matrix)
     if any(trial.shape[0] < ws for trial in time_series):
-        print(ws)
-        print([trial.shape for trial in time_series])
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
