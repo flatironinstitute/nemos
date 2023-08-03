@@ -44,7 +44,7 @@ class Basis(abc.ABC):
 
     def __init__(self, n_basis_funcs: int) -> None:
         self.n_basis_funcs = n_basis_funcs
-        self._n_input_samples = 0
+        self._n_input_dimensionality = 0
         self._check_n_basis_min()
 
     @abc.abstractmethod
@@ -169,9 +169,9 @@ class Basis(abc.ABC):
         ValueError
             If the number of inputs doesn't match what the Basis object requires.
         """
-        if len(xi) != self._n_input_samples:
+        if len(xi) != self._n_input_dimensionality:
             raise ValueError(
-                f"Input number mismatch. This basis evaluation requires {self._n_input_samples} input samples, "
+                f"Input number mismatch. This basis evaluation requires {self._n_input_dimensionality} input samples, "
                 f"{len(xi)} inputs provided instead."
             )
 
@@ -298,7 +298,7 @@ class AdditiveBasis(Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
         super().__init__(self.n_basis_funcs)
-        self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
+        self._n_input_dimensionality = basis1._n_input_dimensionality + basis2._n_input_dimensionality
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -322,8 +322,8 @@ class AdditiveBasis(Basis):
         """
         return np.vstack(
             (
-                self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_samples :]),
+                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
 
@@ -349,7 +349,7 @@ class MultiplicativeBasis(Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
         super().__init__(self.n_basis_funcs)
-        self._n_input_samples = basis1._n_input_samples + basis2._n_input_samples
+        self._n_input_dimensionality = basis1._n_input_dimensionality + basis2._n_input_dimensionality
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -373,8 +373,8 @@ class MultiplicativeBasis(Basis):
         """
         return np.array(
             row_wise_kron(
-                self._basis1._evaluate(*xi[: self._basis1._n_input_samples]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_samples :]),
+                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=True,
             )
         )
@@ -401,7 +401,7 @@ class SplineBasis(Basis, abc.ABC):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         self.order = order
         super().__init__(n_basis_funcs)
-        self._n_input_samples = 1
+        self._n_input_dimensionality = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
 
@@ -510,6 +510,7 @@ class MSplineBasis(SplineBasis):
             axis=0,
         )
 
+
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
@@ -530,7 +531,7 @@ class MSplineBasis(SplineBasis):
 class RaisedCosineBasis(Basis, abc.ABC):
     def __init__(self, n_basis_funcs: int) -> None:
         super().__init__(n_basis_funcs)
-        self._n_input_samples = 1
+        self._n_input_dimensionality = 1
 
     @abc.abstractmethod
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
@@ -724,7 +725,7 @@ class OrthExponentialBasis(Basis):
 
         self._decay_rates = decay_rates
         self._check_rates()
-        self._n_input_samples = 1
+        self._n_input_dimensionality = 1
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
