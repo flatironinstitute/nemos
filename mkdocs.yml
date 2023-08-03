@@ -19,11 +19,25 @@ plugins:
   - literate-nav:
         nav_file: docs/SUMMARY.md           # Specify the navigation file for literate-style navigation
   - section-index                           # Enable the section-index plugin for generating a section index
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy         
+            show_source: true
+            members_order: source
 
+extra_javascript:
+  - javascripts/katex.js
+  - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/katex.min.js
+  - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/contrib/auto-render.min.js
 
+extra_css:
+  - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/katex.min.css
 
 nav:
     - Home: index.md                        # Link to the index.md file (home page)
     - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
-    - Code References: reference/            # Link to the reference/ directory
+    - For Developers: developers_notes/     # Link to the developers notes
+    - Code References: reference/           # Link to the reference/ directory
+
