@@ -38,11 +38,10 @@ spk[-4] = 1
 #     see [jax.numpy.convolve](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.convolve.html).
 
 
-# create two filters
-# use raised cos log (OLD SYNTAX, WILL CHANGE AFTER new_basis PR IS MERGED)
-sim_pts = nsl.sample_points.raised_cosine_log(3, ws)
-spike_basis = nsl.basis.RaisedCosineBasis(n_basis_funcs=3, window_size=ws)
-w = spike_basis.gen_basis_funcs(sim_pts).T
+# create three filters
+basis_obj = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=3)
+_, w = basis_obj.evaluate_on_grid(ws)
+w = w.T
 
 plt.plot(w)
 
@@ -88,6 +87,8 @@ rect_anticausal = patches.Rectangle((len(spk)-ws, -2.5), ws, 5, alpha=0.3, color
 rect_acausal_left = patches.Rectangle((0, -2.5), (ws-1)//2, 5, alpha=0.3, color='grey')
 rect_acausal_right = patches.Rectangle((len(spk) - (ws-1)//2, -2.5), (ws-1)//2, 5, alpha=0.3, color='grey')
 
+# Set this figure as the thumbnail
+# mkdocs_gallery_thumbnail_number = 2
 
 plt.figure(figsize=(6, 4))
 
