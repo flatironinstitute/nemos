@@ -126,7 +126,7 @@ class Basis(abc.ABC):
             The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
         Y :
             The basis function evaluated at the samples,
-            shape (number of basis, n_samples[0], ... , n_samples[n]).
+            shape (n_basis_funcs, n_samples[0], ... , n_samples[n]).
 
         Raises
         ------
@@ -171,7 +171,7 @@ class Basis(abc.ABC):
         """
         if len(xi) != self._n_input_dimensionality:
             raise ValueError(
-                f"Input number mismatch. This basis evaluation requires {self._n_input_dimensionality} input samples, "
+                f"Input dimensionality mismatch. This basis evaluation requires {self._n_input_dimensionality} inputs, "
                 f"{len(xi)} inputs provided instead."
             )
 
@@ -321,7 +321,7 @@ class AdditiveBasis(Basis):
         Returns
         -------
         :
-            The basis function evaluated at the samples (number of samples x number of basis)
+            The basis function evaluated at the samples (number of samples x n_basis_funcs)
         """
         return np.vstack(
             (
@@ -374,7 +374,7 @@ class MultiplicativeBasis(Basis):
         Returns
         -------
         :
-            The basis function evaluated at the samples (number of samples x number of basis)
+            The basis function evaluated at the samples (number of samples x n_basis_funcs)
         """
         return np.array(
             row_wise_kron(
@@ -501,7 +501,7 @@ class MSplineBasis(SplineBasis):
         Returns
         -------
         basis_funcs :
-            Evaluated spline basis functions, shape (number of basis, number of samples).
+            Evaluated spline basis functions, shape (n_basis_funcs, number of samples).
 
         """
         # add knots if not passed
@@ -564,7 +564,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         Returns
         -------
         basis_funcs :
-            Raised cosine basis functions, shape (number of basis, number of samples).
+            Raised cosine basis functions, shape (n_basis_funcs, number of samples).
 
         Raises
         ------
@@ -610,7 +610,7 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
-        Linearly map the samples from [0,1] to the the [0, (number of basis - 1) * pi].
+        Linearly map the samples from [0,1] to the the [0, (n_basis_funcs - 1) * pi].
 
         Parameters
         ----------
@@ -667,7 +667,7 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """Map the sample domain to log-space.
 
-        Map the equi-spaced samples from [0,1] to log equi-spaced samples [0, (number of basis - 1) * pi].
+        Map the equi-spaced samples from [0,1] to log equi-spaced samples [0, (n_basis_funcs - 1) * pi].
 
         Parameters
         ----------
@@ -678,7 +678,7 @@ class RaisedCosineBasisLog(RaisedCosineBasis):
         -------
         :
             A transformed version of the sample points that matches the Raised Cosine basis domain,
-            shape (number of samples, ).
+            shape (n_sample_points, ).
         """
         return (
             np.power(
@@ -838,18 +838,18 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
     Parameters
     ----------
     x
-        Spacing for basis functions, shape (number of samples, ).
+        Spacing for basis functions, shape (n_sample_points, ).
     k
         Order of the spline basis.
     i
         Number of the spline basis.
     T
-        knot locations. should lie in interval [0, 1], shape (k + number of basis,).
+        knot locations. should lie in interval [0, 1], shape (k + n_basis_funcs,).
 
     Returns
     -------
     spline
-        M-spline basis function, shape (number of samples, ).
+        M-spline basis function, shape (n_sample_points, ).
     """
     # Boundary conditions.
     if (T[i + k] - T[i]) < 1e-6:
