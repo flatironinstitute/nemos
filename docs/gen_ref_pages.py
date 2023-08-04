@@ -23,9 +23,24 @@ for path in sorted(Path("src").rglob("*.py")):
         continue
 
     nav[parts] = doc_path.as_posix()
-    with mkdocs_gen_files.open(full_doc_path, "w") as fd:
-        ident = ".".join(parts)
-        fd.write(f"::: {ident}")
+    if full_doc_path.name != 'index.md':
+        with mkdocs_gen_files.open(full_doc_path, "w") as fd:
+            ident = ".".join(parts)
+            fd.write(f"::: {ident}")
+    else:
+        this_module_path = Path("src") / path.parent.name
+        module_index = ""
+        for module_scripts in sorted(this_module_path.rglob("*.py")):
+            if "__init__" in module_scripts.name:
+                continue
+            module_index += f"* [{module_scripts.name.replace('.py', '')}]" \
+                            f"({module_scripts.name.replace('.py', '.md')})\n"
+
+        with mkdocs_gen_files.open(full_doc_path, "w") as fd:
+            fd.write(module_index)
+
+
+
 
     mkdocs_gen_files.set_edit_path(full_doc_path, path)
 
