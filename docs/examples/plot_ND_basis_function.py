@@ -137,7 +137,7 @@ axs[1].set_title(f"$A_{{{basis_elem_idx[1]}}}(x,y) = "
                  f"b_{{{basis_b_element}}}(x)$", color="b")
 
 for cc in range(len(basis_elem_idx)):
-    axs[cc].contourf(X, Y, Z[:, :, basis_elem_idx[cc]], cmap="Blues")
+    axs[cc].contourf(X, Y, Z[..., basis_elem_idx[cc]], cmap="Blues")
     axs[cc].set_xlabel("x-coord")
     axs[cc].set_ylabel("y-coord")
 plt.tight_layout()
