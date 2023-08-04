@@ -12,7 +12,7 @@ import matplotlib.patches as patches
 import neurostatslib as nsl
 
 np.random.seed(10)
-ws = 15
+ws = 11
 # samples
 n_samples = 100
 
@@ -39,7 +39,7 @@ spk[-4] = 1
 
 
 # create three filters
-basis_obj = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=3)
+basis_obj = nsl.basis.RaisedCosineBasisLinear(n_basis_funcs=3)
 _, w = basis_obj.evaluate_on_grid(ws)
 w = w.T
 
