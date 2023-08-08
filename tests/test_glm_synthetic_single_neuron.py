@@ -22,7 +22,7 @@ def test_glm_fit():
     spike_basis = RaisedCosineBasisLog(
         n_basis_funcs=5
     )
-    B = spike_basis.evaluate(onp.linspace(0, 1, ws))
+    B = spike_basis.evaluate(onp.linspace(0, 1, ws)).T
 
     simulated_model = GLM(B)
     simulated_model.spike_basis_coeff_ = jnp.array([0, 0, -1, -1, -1])[None, :, None]
