@@ -359,6 +359,10 @@ class GLM:
         random_key: jax.random.PRNGKeyArray,
         n_timesteps: int,
         init_spikes: NDArray,
+        coupling_basis_matrix: NDArray,
+        X_input: NDArray,
+        index_coupling: NDArray[int],
+        index_input: NDArray[int],
     ) -> jnp.ndarray:
         """Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
 
@@ -373,7 +377,16 @@ class GLM:
             forward simulation. ``n_neurons`` must be the same as during the
             fitting of this GLM instance and ``window_size`` must be the same
             as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``)
-
+        coupling_basis_matrix:
+            Coupling and auto-correlation filter basis matrix. Shape (n_neurons, n_basis_coupling)
+        X_input:
+            Part of the exogenous matrix that captures the external inputs (currents convolved with a basis,
+            images convolved with basis, position time series evaluated in a basis).
+            Shape (n_timesteps, n_basis_input).
+        index_coupling:
+            Indices of the exogenous corresponding to the coupling filters, must be 0 <= index_coupling <= n_features - 1
+        index_input:
+            Indices of the exogenous corresponding to the feedforward inputs, must be 0 <= index_input <= n_features - 1
         Returns
         -------
         simulated_spikes : (n_neurons, n_timesteps)
@@ -395,6 +408,10 @@ class GLM:
         predict
             Predict firing rates based on fit parameters, for checking against existing data.
 
+        Notes
+        -----
+            n_basis_input + n_basis_coupling = self.spike_basis_coeff_.shape[1]
+
         """
         self.check_is_fit()
 
@@ -413,6 +430,11 @@ class GLM:
 
         def scan_fn(spikes, key):
             # (n_neurons, n_basis_funcs, 1)
+            # new syntax with equivalent output
+            # X = jnp.transpose(
+            #     convolve_1d_trials(self.spike_basis_matrix.T, spikes.T[None, :, :])[0],
+            #     (1, 2, 0),
+            # )
             X = convolve_1d_basis(self.spike_basis_matrix, spikes)
             fr = self._predict((Ws, bs), X).squeeze(-1)
             new_spikes = jax.random.poisson(key, fr)
