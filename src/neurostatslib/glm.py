@@ -104,7 +104,7 @@ class GLM:
                 "spike_data must be two-dimensional, with shape (n_neurons, n_timebins)"
             )
 
-        n_neurons, _ = spike_data.shape
+        _, n_neurons = spike_data.shape
         n_features = X.shape[2]
 
         # Initialize parameters
@@ -121,11 +121,7 @@ class GLM:
                 "spike basis coefficients must be of shape (n_neurons, n_features), but"
                 f" init_params[0] has {init_params[0].ndim} dimensions!"
             )
-        if init_params[0].shape[0] != init_params[0].shape[-1]:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_features), but"
-                f" init_params[0] has shape {init_params[0].shape}!"
-            )
+
         if init_params[1].ndim != 1:
             raise ValueError(
                 "bias terms must be of shape (n_neurons,) but init_params[0] have"
@@ -139,9 +135,9 @@ class GLM:
             )
         if init_params[0].shape[0] != spike_data.shape[1]:
             raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_features), and"
-                "spike_data must be of shape (n_time_bins, n_neurons) but n_neurons doesn't look the same in both!"
-                f"init_params[0]: {init_params[0].shape[0]}, spike_data: {spike_data.shape[1]}"
+                "spike basis coefficients must be of shape (n_neurons, n_features), and "
+                "spike_data must be of shape (n_time_bins, n_neurons) but n_neurons doesn't look the same in both! "
+                f"init_params[0]: {init_params[0].shape[1]}, spike_data: {spike_data.shape[1]}"
             )
 
         def loss(params, X, y):
@@ -179,9 +175,9 @@ class GLM:
 
         Parameters
         ----------
-        params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
+        params : ((n_neurons, n_features), (n_neurons,))
             Values for the spike basis coefficients and bias terms.
-        X : (n_time_bins, n_features)
+        X : (n_time_bins, n_neurons, n_features)
             The model matrix.
 
         Returns
@@ -360,9 +356,7 @@ class GLM:
         n_timesteps: int,
         init_spikes: NDArray,
         coupling_basis_matrix: NDArray,
-        X_input: NDArray,
-        index_coupling: NDArray[int],
-        index_input: NDArray[int],
+        X_input: NDArray
     ) -> jnp.ndarray:
         """Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
 
@@ -372,21 +366,18 @@ class GLM:
             jax PRNGKey to seed simulation with.
         n_timesteps
             Number of time steps to simulate.
-        init_spikes : (n_neurons, window_size)
+        init_spikes :
             Spike counts arranged in a matrix. These are used to jump start the
             forward simulation. ``n_neurons`` must be the same as during the
             fitting of this GLM instance and ``window_size`` must be the same
-            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``)
+            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``), shape (n_neurons, window_size)
         coupling_basis_matrix:
             Coupling and auto-correlation filter basis matrix. Shape (n_neurons, n_basis_coupling)
         X_input:
             Part of the exogenous matrix that captures the external inputs (currents convolved with a basis,
             images convolved with basis, position time series evaluated in a basis).
             Shape (n_timesteps, n_basis_input).
-        index_coupling:
-            Indices of the exogenous corresponding to the coupling filters, must be 0 <= index_coupling <= n_features - 1
-        index_input:
-            Indices of the exogenous corresponding to the feedforward inputs, must be 0 <= index_input <= n_features - 1
+
         Returns
         -------
         simulated_spikes : (n_neurons, n_timesteps)
@@ -419,27 +410,37 @@ class GLM:
         bs = self.baseline_log_fr_
         self.check_n_neurons(init_spikes, bs)
 
-        if init_spikes.shape[1] != self.spike_basis_matrix.shape[1]:
+        if X_input.shape[2] + coupling_basis_matrix.shape[1]*bs.shape[0] != Ws.shape[1]:
+            raise ValueError("The number of feed forward input features"
+                             "and the number of recurrent features must add up to"
+                             "the overall model features."
+                             f"The total number of feature of the model is {Ws.shape[1]}. {X_input.shape[1]} "
+                             f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
+                             f"provided instead.")
+
+        if init_spikes.shape[1] != coupling_basis_matrix.shape[1]:
             raise ValueError(
                 "init_spikes has the wrong number of time steps!"
                 f"init_spikes time steps: {init_spikes.shape[1]}, "
-                f"spike_basis_matrix window size: {self.spike_basis_matrix.shape[1]}"
+                f"spike_basis_matrix window size: {coupling_basis_matrix.shape[1]}"
             )
 
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
-        def scan_fn(spikes, key):
+        def scan_fn(data, key):
             # (n_neurons, n_basis_funcs, 1)
             # new syntax with equivalent output
             # X = jnp.transpose(
             #     convolve_1d_trials(self.spike_basis_matrix.T, spikes.T[None, :, :])[0],
             #     (1, 2, 0),
             # )
-            X = convolve_1d_basis(self.spike_basis_matrix, spikes)
+            spikes, chunk = data
+            X = convolve_1d_basis(coupling_basis_matrix, spikes)
+            X = jnp.hstack((X, X_input[chunk:chunk+1, :]))
             fr = self._predict((Ws, bs), X).squeeze(-1)
             new_spikes = jax.random.poisson(key, fr)
             # this remains always of the same shape
-            concat_spikes = jnp.column_stack((spikes[:, 1:], new_spikes))
+            concat_spikes = jnp.column_stack((spikes[:, 1:], new_spikes)), chunk + 1
             return concat_spikes, new_spikes
 
         _, simulated_spikes = jax.lax.scan(scan_fn, init_spikes, subkeys)
