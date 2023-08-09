@@ -370,7 +370,7 @@ class GLM:
             Spike counts arranged in a matrix. These are used to jump start the
             forward simulation. ``n_neurons`` must be the same as during the
             fitting of this GLM instance and ``window_size`` must be the same
-            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``), shape (n_neurons, window_size)
+            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``), shape (window_size,n_neurons)
         coupling_basis_matrix:
             Coupling and auto-correlation filter basis matrix. Shape (n_neurons, n_basis_coupling)
         X_input:
@@ -404,6 +404,7 @@ class GLM:
             n_basis_input + n_basis_coupling = self.spike_basis_coeff_.shape[1]
 
         """
+        from jax.experimental import host_callback
         self.check_is_fit()
 
         Ws = self.spike_basis_coeff_
@@ -418,31 +419,32 @@ class GLM:
                              f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
                              f"provided instead.")
 
-        if init_spikes.shape[1] != coupling_basis_matrix.shape[1]:
+        if init_spikes.shape[0] != coupling_basis_matrix.shape[0]:
             raise ValueError(
                 "init_spikes has the wrong number of time steps!"
                 f"init_spikes time steps: {init_spikes.shape[1]}, "
                 f"spike_basis_matrix window size: {coupling_basis_matrix.shape[1]}"
             )
 
+
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(data, key):
-            # (n_neurons, n_basis_funcs, 1)
-            # new syntax with equivalent output
-            # X = jnp.transpose(
-            #     convolve_1d_trials(self.spike_basis_matrix.T, spikes.T[None, :, :])[0],
-            #     (1, 2, 0),
-            # )
             spikes, chunk = data
-            X = convolve_1d_basis(coupling_basis_matrix, spikes)
-            X = jnp.hstack((X, X_input[chunk:chunk+1, :]))
-            fr = self._predict((Ws, bs), X).squeeze(-1)
-            new_spikes = jax.random.poisson(key, fr)
+            conv_spk = jnp.transpose(
+                jnp.array(convolve_1d_basis(coupling_basis_matrix.T, spikes.T)),
+                (2, 0, 1)
+            )
+            slice = jax.lax.dynamic_slice(
+                X_input, (chunk, 0, 0), (1, X_input.shape[1], X_input.shape[2])
+            )
+            X = jnp.concatenate([conv_spk] * spikes.shape[1] + [slice], axis=2)
+            firing_rate = self._predict((Ws, bs), X)
+            new_spikes = jax.random.poisson(key, firing_rate)
             # this remains always of the same shape
-            concat_spikes = jnp.column_stack((spikes[:, 1:], new_spikes)), chunk + 1
+            concat_spikes = jnp.row_stack((spikes[1:], new_spikes)), chunk + 1
             return concat_spikes, new_spikes
 
-        _, simulated_spikes = jax.lax.scan(scan_fn, init_spikes, subkeys)
+        _, simulated_spikes = jax.lax.scan(scan_fn, (init_spikes,0), subkeys)
 
-        return simulated_spikes.T
+        return jnp.squeeze(simulated_spikes, axis=1)
