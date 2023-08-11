@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 # Same trial duration
-# [[r x t x n], [w]] -> [r x (t - w + 1) x n]
+# [[r , t , n], [w]] -> [r , (t - w + 1) , n]
 # Broadcasted 1d convolution operations
 _CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
 _CORR2 = jax.vmap(_CORR1, (2, None), 2)
