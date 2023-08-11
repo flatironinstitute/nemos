@@ -88,8 +88,8 @@ y_coord = np.linspace(0, 1, 1000)
 # Evaluate the basis functions for the given trajectory.
 eval_basis = additive_basis.evaluate(x_coord, y_coord)
 
-print(f"Sum of two 1D splines with {eval_basis.shape[0]} "
-      f"basis element and {eval_basis.shape[1]} samples:\n"
+print(f"Sum of two 1D splines with {eval_basis.shape[1]} "
+      f"basis element and {eval_basis.shape[0]} samples:\n"
       f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 
 # %%
@@ -102,13 +102,13 @@ basis_b_element = 1
 fig, axs = plt.subplots(1, 2, figsize=(6, 3))
 
 axs[0].set_title(f"$a_{{{basis_a_element}}}(x)$", color="b")
-axs[0].plot(x_coord, a_basis.evaluate(x_coord).T, "grey", alpha=.3)
-axs[0].plot(x_coord, a_basis.evaluate(x_coord)[basis_a_element], "b")
+axs[0].plot(x_coord, a_basis.evaluate(x_coord), "grey", alpha=.3)
+axs[0].plot(x_coord, a_basis.evaluate(x_coord)[:, basis_a_element], "b")
 axs[0].set_xlabel("x-coord")
 
 axs[1].set_title(f"$b_{{{basis_b_element}}}(x)$", color="b")
-axs[1].plot(y_coord, b_basis.evaluate(x_coord).T, "grey", alpha=.3)
-axs[1].plot(y_coord, b_basis.evaluate(x_coord)[basis_b_element], "b")
+axs[1].plot(y_coord, b_basis.evaluate(x_coord), "grey", alpha=.3)
+axs[1].plot(y_coord, b_basis.evaluate(x_coord)[:, basis_b_element], "b")
 axs[1].set_xlabel("y-coord")
 plt.tight_layout()
 
@@ -126,7 +126,7 @@ basis_elem_idx = [basis_a_element, a_basis.n_basis_funcs + basis_b_element]
 
 # %%
 # Finally, we can plot the 2D counterparts.
-fig, axs = plt.subplots(1, 2, subplot_kw={'aspect': 1})
+_, axs = plt.subplots(1, 2, subplot_kw={'aspect': 1})
 
 # Plot the corresponding 2D elements.
 # As expected, each element will be constant on one of the axis.
@@ -137,7 +137,7 @@ axs[1].set_title(f"$A_{{{basis_elem_idx[1]}}}(x,y) = "
                  f"b_{{{basis_b_element}}}(x)$", color="b")
 
 for cc in range(len(basis_elem_idx)):
-    axs[cc].contourf(X, Y, Z[basis_elem_idx[cc]], cmap="Blues")
+    axs[cc].contourf(X, Y, Z[..., basis_elem_idx[cc]], cmap="Blues")
     axs[cc].set_xlabel("x-coord")
     axs[cc].set_ylabel("y-coord")
 plt.tight_layout()
@@ -168,8 +168,8 @@ eval_basis = prod_basis.evaluate(x_coord, y_coord)
 
 # Output the number of elements and samples of the evaluated basis, 
 # as well as the number of elements in the original 1D basis objects
-print(f"Product of two 1D splines with {eval_basis.shape[0]} "
-      f"basis element and {eval_basis.shape[1]} samples:\n"
+print(f"Product of two 1D splines with {eval_basis.shape[1]} "
+      f"basis element and {eval_basis.shape[0]} samples:\n"
       f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 
 # %%
@@ -190,18 +190,18 @@ fig, axs = plt.subplots(3,3,figsize=(8, 6))
 cc = 0
 for i, j in element_pairs:
     # plot the element form a_basis
-    axs[cc, 0].plot(x_coord, a_basis.evaluate(x_coord).T, "grey", alpha=.3)
-    axs[cc, 0].plot(x_coord, a_basis.evaluate(x_coord)[i], "b")
+    axs[cc, 0].plot(x_coord, a_basis.evaluate(x_coord), "grey", alpha=.3)
+    axs[cc, 0].plot(x_coord, a_basis.evaluate(x_coord)[:, i], "b")
     axs[cc, 0].set_title(f"$a_{{{i}}}(x)$",color='b')
 
     # plot the element form b_basis
-    axs[cc, 1].plot(y_coord, b_basis.evaluate(y_coord).T, "grey", alpha=.3)
-    axs[cc, 1].plot(y_coord, b_basis.evaluate(y_coord)[j], "b")
+    axs[cc, 1].plot(y_coord, b_basis.evaluate(y_coord), "grey", alpha=.3)
+    axs[cc, 1].plot(y_coord, b_basis.evaluate(y_coord)[:, j], "b")
     axs[cc, 1].set_title(f"$b_{{{j}}}(y)$",color='b')
 
     # select & plot the corresponding product basis element
     k = i * b_basis.n_basis_funcs + j
-    axs[cc, 2].contourf(X, Y, Z[k], cmap='Blues')
+    axs[cc, 2].contourf(X, Y, Z[:, :, k], cmap='Blues')
     axs[cc, 2].set_title(f"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
     axs[cc, 2].set_xlabel('x-coord')
     axs[cc, 2].set_ylabel('y-coord')
@@ -258,15 +258,15 @@ X, Y, W, Z = prod_basis_3.evaluate_on_grid(30, 30, 30)
 # select any slice
 slices = [17, 18, 19]
 basis_elem_idx = 300
-vmax = Z[basis_elem_idx, :, :, slices].max()
+vmax = Z[:, :, slices, basis_elem_idx].max()
 fig, axs = plt.subplots(1, 3, figsize=(8, 3))
 cnt = 0
 for slice_i in slices:
     X_slice = X[:, :, slice_i]
     Y_slice = Y[:, :, slice_i]
 
-    Z_slice = Z[:, :, :, slice_i]
-    axs[cnt].contourf(X_slice, Y_slice, Z_slice[basis_elem_idx],
+    Z_slice = Z[:, :, slice_i]
+    axs[cnt].contourf(X_slice, Y_slice, Z_slice[:, :, basis_elem_idx],
                       cmap='Blues', vmin=0, vmax=vmax)
     axs[cnt].set_title(f"Slice {slice_i}")
     cnt += 1
