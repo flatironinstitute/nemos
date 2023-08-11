@@ -11,8 +11,8 @@ class Test1DConvolution:
         vec = np.ones(trial_count_shape)
         raise_exception = any(k == 0 for k in basis_matrix.shape)
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Empty basis_matrix provided\. "
-                                                 fr"The shape of basis_matrix is \(0, 0\)!"):
+            with pytest.raises(ValueError, match="Empty basis_matrix provided\. "
+                                                 r"The shape of basis_matrix is \(0, 0\)!"):
                 utils.convolve_1d_trials(basis_matrix, vec)
         else:
             conv = utils.convolve_1d_trials(basis_matrix, vec)
@@ -99,7 +99,6 @@ class Test1DConvolution:
 
 class TestPadding:
 
-    @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal"])
     @pytest.mark.parametrize("iterable", [[np.zeros([1]*n)] * 2 for n in range(1, 6)] +
                                          [[np.zeros([1, 2, 4]), np.zeros([1, 2, 4])]] +
                                          [[np.zeros([1, 2, 4]), np.zeros([1, 1, 1, 1])]] +
@@ -109,9 +108,9 @@ class TestPadding:
         raise_exception = any(trial.ndim != 3 for trial in iterable)
         if raise_exception:
             with pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays"):
-                utils.nan_pad_conv(iterable, 3, filter_type)
+                utils.nan_pad_conv(iterable, 3, "causal")
         else:
-            utils.nan_pad_conv(iterable, 3, filter_type)
+            utils.nan_pad_conv(iterable, 3, "causal")
 
     @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal", ""])
     @pytest.mark.parametrize("iterable",
@@ -120,7 +119,7 @@ class TestPadding:
     def test_conv_type(self, iterable, filter_type):
         raise_exception = not (filter_type in ["causal", "anti-causal", "acausal"])
         if raise_exception:
-            with pytest.raises(ValueError, match='filter_type must be "causal", "acausal"'):
+            with pytest.raises(ValueError, match='filter_type must be causal, acausal'):
                 utils.nan_pad_conv(iterable, 3, filter_type)
         else:
             utils.nan_pad_conv(iterable, 3, filter_type)
@@ -128,7 +127,7 @@ class TestPadding:
     @pytest.mark.parametrize("iterable",
                              [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]]
                              )
-    @pytest.mark.parametrize("window_size", [0, 1, 2, 3, 5, 6])
+    @pytest.mark.parametrize("window_size", [0.1, -1, 0, 1, 2, 3, 5, 6])
     def test_padding_nan_causal(self, window_size, iterable):
         raise_exception = (not isinstance(window_size, int)) or (window_size <= 0)
         if raise_exception:

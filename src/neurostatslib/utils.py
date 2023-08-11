@@ -151,7 +151,7 @@ def pad_dimension(
     window_size:
         The window size to determine the padding.
     filter_type:
-        The type of convolution, default is 'causal'. It must be one of 'causal', 'acausal', or 'anti-causal'.
+        The type of convolution.
     constant_values:
         The constant values for padding, default is jnp.nan.
 
@@ -173,6 +173,12 @@ def pad_dimension(
         "acausal": ((window_size - 1) // 2, window_size - 1 - (window_size - 1) // 2),
         "anti-causal": (0, window_size),
     }
+
+    if filter_type not in padding_settings:
+        cases_string = ' or '.join(padding_settings).replace(' or ', ", ", len(padding_settings)-2)
+        raise ValueError(
+            f"filter_type must be {cases_string}. {filter_type} provided instead!"
+        )
 
     pad_width = (
         ((0, 0),) * axis
@@ -197,7 +203,7 @@ def nan_pad_conv(
     window_size:
         The window size to determine the padding.
     filter_type: str, optional
-        The type of convolution, by default 'causal'. It must be one of 'causal', 'acausal', or 'anti-causal'.
+        The type of convolution.
 
     Returns
     -------
@@ -222,8 +228,9 @@ def nan_pad_conv(
     }
 
     if filter_type not in adjust_indices:
+        cases_string = ' or '.join(adjust_indices).replace(' or ', ", ", len(adjust_indices)-2)
         raise ValueError(
-            f'filter_type must be "causal", "acausal", or "anti-causal". {filter_type} provided instead!'
+            f'filter_type must be {cases_string}. {filter_type} provided instead!'
         )
 
     start, end = adjust_indices[filter_type]

@@ -23,10 +23,12 @@ for path in sorted(Path("src").rglob("*.py")):
         continue
 
     nav[parts] = doc_path.as_posix()
+    # if the md file name is `module.md`, generate documentation from docstrings
     if full_doc_path.name != 'index.md':
         with mkdocs_gen_files.open(full_doc_path, "w") as fd:
             ident = ".".join(parts)
             fd.write(f"::: {ident}")
+    # if the md file name is `index.md`, add the list of modules with hyperlinks
     else:
         this_module_path = Path("src") / path.parent.name
         module_index = ""
