@@ -119,8 +119,8 @@ def convolve_1d_trials(
             "be greater or equal to the window size."
         )
 
-    # Check if all trials have the same duration # check if needed
-    same_dur = time_series.ndim == 3 if isinstance(time_series, jnp.ndarray) else False
+    # Check if all trials have the same duration
+    same_dur = isinstance(time_series, jnp.ndarray)
 
     if same_dur:
         # Trials have the same duration. # call conv instead of corr
