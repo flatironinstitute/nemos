@@ -4,44 +4,272 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Optional, Union
+from typing import Iterable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
-# Broadcasted 1d convolution operations.
-# [[n x t],[w]] -> [n x (t - w + 1)]
+# Same trial duration
+# [[r , t , n], [w]] -> [r , (t - w + 1) , n]
+# Broadcasted 1d convolution operations
 _CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
+_CORR2 = jax.vmap(_CORR1, (2, None), 2)
+_CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 1), 3)
+
+# Variable trial dur
 # [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-_CORR2 = jax.vmap(_CORR1, (None, 0), 0)
+_CORR3 = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
+_CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
 
 
-def convolve_1d_basis(basis_matrix: ArrayLike, time_series: ArrayLike) -> ArrayLike:
-    """Parameters
+def check_dimensionality(
+    iterable: Union[NDArray, Iterable[NDArray], jnp.ndarray, Iterable[jnp.ndarray]],
+    expected_dim: int,
+) -> bool:
+    """
+    Check the dimensionality of the arrays in iterable.
+
+    Check that all arrays in iterable has the expected dimensionality.
+
+    Parameters
     ----------
-    basis_matrix : (n_basis_funcs, window_size)
-        Matrix holding 1d basis functions.
-    time_series : (n_neurons, n_timebins)
-        Matrix holding multivariate time series.
+    iterable :
+        Array-like object containing numpy or jax.numpy NDArrays.
+    expected_dim :
+        Number of expected dimension for the NDArrays.
 
     Returns
     -------
-    convolved_series : (n_neurons, n_basis_funcs, n_timebins - window_size + 1)
-        Result of convolution between all pairs of
-        features and basis functions.
-
-    Notes
-    -----
-    For example, ``time_series`` could be a matrix of spike counts with
-    ``n_neurons`` neurons and ``n_timebins`` timebins, and ``basis_matrix``
-    could be a matrix of ``n_basis_funcs`` temporal basis functions with a
-    window size of ``window_size``.
-
+    True if all the arrays has the expected number of dimension, False otherwise.
     """
-    return _CORR2(jnp.atleast_2d(basis_matrix), jnp.atleast_2d(time_series))
+    return not any(array.ndim != expected_dim for array in iterable)
+
+
+def convolve_1d_trials(
+    basis_matrix: ArrayLike,
+    time_series: Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray],
+) -> List[jnp.ndarray]:
+    """
+    Convolve trial time series with a basis matrix.
+
+    This function checks if all trials have the same duration. If they do, it uses a fast method
+    to convolve all trials with the basis matrix at once. If they do not, it falls back to convolving
+    each trial individually.
+
+    Parameters
+    ----------
+    basis_matrix :
+        The basis matrix with which to convolve the trials. Shape (window_size, n_basis_funcs).
+    time_series :
+        The time series of trials to convolve with the basis matrix. It should be a list of 2D arrays,
+        where each array represents a trial and its second dimension matches the first dimension
+        of the basis_matrix. Each trial has shape (n_timebins_trial, n_neurons).
+
+    Returns
+    -------
+    :
+        The convolved trials. It is a list of 3D arrays, where each array represents a convolved trial.
+        Each element of the list will have shape (n_timebins_trial - window_size - 1, n_neurons, n_basis_funcs).
+
+    Raises
+    ------
+    ValueError
+        - If basis_matrix is not a 2D array-like object.
+        - If trials_time_series is not an iterable of 2D array-like objects.
+        - If trials_time_series contains empty trials.
+        - If the number of time points in each trial is less than the window size.
+    """
+
+    basis_matrix = jnp.asarray(basis_matrix)
+    # check input size
+    if basis_matrix.ndim != 2:
+        raise ValueError("basis_matrix must be a 2 dimensional array-like object.")
+    elif 0 in basis_matrix.shape:
+        raise ValueError(
+            "Empty basis_matrix provided. "
+            f"The shape of basis_matrix is {basis_matrix.shape}!"
+        )
+    try:
+        # this should fail for variable trial length
+        time_series = jnp.asarray(time_series)
+        if time_series.ndim != 3:
+            raise ValueError
+
+    except ValueError:
+        # convert each trial to array
+        time_series = [jnp.asarray(trial) for trial in time_series]
+        if not check_dimensionality(time_series, 2):
+            raise ValueError(
+                "time_series must be an iterable of 2 dimensional array-like objects."
+            )
+
+    if any(k == 0 for trial in time_series for k in trial.shape) or (
+        len(time_series) == 0
+    ):
+        raise ValueError("time_series should not contain empty trials!")
+
+    # Check window size
+    ws = len(basis_matrix)
+    if any(trial.shape[0] < ws for trial in time_series):
+        raise ValueError(
+            "Insufficient trial duration. The number of time points in each trial must "
+            "be greater or equal to the window size."
+        )
+
+    if isinstance(time_series, jnp.ndarray):
+        # if the conversion to array went through, time_series have trials with equal size
+        conv_trials = list(_CORR_SAME_TRIAL_DUR(time_series, basis_matrix))
+    else:
+        # trials have different length
+        conv_trials = [
+            _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(trial), basis_matrix)
+            for trial in time_series
+        ]
+
+    return conv_trials
+
+
+def _pad_dimension(
+    array: jnp.ndarray,
+    axis: int,
+    window_size: int,
+    filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
+    constant_values: float = jnp.nan,
+) -> jnp.ndarray:
+    """
+    Add padding to the last dimension of an array based on the convolution type.
+
+    This is a helper function used by `nan_pad_conv`, which is the function we expect the user will interact with.
+    Parameters
+    ----------
+    array:
+        The array to be padded.
+    axis:
+        The axis to be padded.
+    window_size:
+        The window size to determine the padding.
+    filter_type:
+        The type of convolution.
+    constant_values:
+        The constant values for padding, default is jnp.nan.
+
+    Returns
+    -------
+    :
+        An array with padded last dimension.
+    """
+    if axis < 0 or not isinstance(axis, int):
+        raise ValueError("`axis` must be a non negative integer.")
+    elif axis >= array.ndim:
+        raise IndexError(
+            "`axis` must be smaller than `array.ndim`. "
+            f"array.ndim is {array.ndim}, axis = {axis} provided!"
+        )
+
+    padding_settings = {
+        "causal": (window_size, 0),
+        "acausal": ((window_size - 1) // 2, window_size - 1 - (window_size - 1) // 2),
+        "anti-causal": (0, window_size),
+    }
+
+    if filter_type not in padding_settings:
+        cases_string = " or ".join(padding_settings).replace(
+            " or ", ", ", len(padding_settings) - 2
+        )
+        raise ValueError(
+            f"filter_type must be {cases_string}. {filter_type} provided instead!"
+        )
+
+    pad_width = (
+        ((0, 0),) * axis
+        + (padding_settings[filter_type],)
+        + ((0, 0),) * (array.ndim - 1 - axis)
+    )
+    return jnp.pad(array, pad_width, constant_values=constant_values)
+
+
+def nan_pad_conv(
+    conv_trials: Union[Iterable[jnp.ndarray], Iterable[NDArray], NDArray, jnp.ndarray],
+    window_size: int,
+    filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
+) -> List[jnp.ndarray]:
+    """
+    Add NaN padding to convolution trials based on the convolution type.
+
+    Parameters
+    ----------
+    conv_trials:
+        A 4D array-like of trials to be padded. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial).
+    window_size:
+        The window size to determine the padding.
+    filter_type: str, optional
+        The type of convolution.
+
+    Returns
+    -------
+    :
+        A 4D array-like of padded trials. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial + padding).
+
+    Raises
+    ------
+    ValueError
+        If the window_size is not a positive integer, or if the filter_type is not one of 'causal',
+        'acausal', or 'anti-causal'. Also raises ValueError if the dimensionality of conv_trials is not as expected.
+    """
+    if not isinstance(window_size, int) or window_size <= 0:
+        raise ValueError(
+            f"window_size must be a positive integer! Window size of {window_size} provided instead!"
+        )
+    # add a note about this in docstrings
+    adjust_indices = {
+        "causal": (None, -1),
+        "acausal": (None, None),
+        "anti-causal": (1, None),
+    }
+
+    if filter_type not in adjust_indices:
+        cases_string = " or ".join(adjust_indices).replace(
+            " or ", ", ", len(adjust_indices) - 2
+        )
+        raise ValueError(
+            f"filter_type must be {cases_string}. {filter_type} provided instead!"
+        )
+
+    start, end = adjust_indices[filter_type]
+
+    try:
+        conv_trials = jnp.asarray(conv_trials)
+        if conv_trials.ndim != 4:
+            raise ValueError(
+                "conv_trials must be an iterable of 3D arrays or a 4D array!"
+            )
+
+        conv_trials = conv_trials[:, start:end]
+        return list(
+            _pad_dimension(
+                conv_trials, 1, window_size, filter_type, constant_values=jnp.nan
+            )
+        )
+
+    except (TypeError, ValueError):
+        if not check_dimensionality(conv_trials, 3):
+            raise ValueError(
+                "conv_trials must be an iterable of 3D arrays or a 4D array!"
+            )
+
+        return [
+            _pad_dimension(
+                trial[start:end],
+                0,
+                window_size,
+                filter_type,
+                constant_values=jnp.nan,
+            )
+            for trial in conv_trials
+        ]
 
 
 def plot_spike_raster(
