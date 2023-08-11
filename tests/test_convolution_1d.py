@@ -140,7 +140,7 @@ class TestPadding:
                 print(trial.shape, window_size)
             assert all(np.isnan(trial[:window_size]).all() for trial in padded), "Missing NaNs at the " \
                                                                                        "beginning of the array!"
-            assert all(not np.isnan(trial[window_size:]).any() for trial in padded), "Fund NaNs at the " \
+            assert all(not np.isnan(trial[window_size:]).any() for trial in padded), "Found NaNs at the " \
                                                                                       "end of the array!"
             assert all(padded[k].shape[0] == iterable[k].shape[0] - 1 + window_size for k in range(len(padded))), \
                 "Size after padding doesn't match expectation. Should be T + window_size - 1."
