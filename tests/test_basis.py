@@ -130,8 +130,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ "
-                                                 "input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ "
+                                                 "inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -173,7 +173,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_dimensionality
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -255,7 +255,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -297,7 +297,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_dimensionality
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -379,7 +379,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -421,7 +421,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_dimensionality
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -500,7 +500,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -534,12 +534,12 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input):
-        """Tests whether the evaluate_on_grid method correctly processes the input number."""
+        """Tests whether the evaluate_on_grid method correctly processes the Input dimensionality."""
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         inputs = [10] * n_input
         raise_exception = n_input != basis_obj._n_input_dimensionality
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -708,7 +708,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -788,7 +788,7 @@ class TestAdditiveBasis(CombinedBasis):
                 n_input != basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
         )
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
@@ -890,7 +890,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -970,7 +970,7 @@ class TestMultiplicativeBasis(CombinedBasis):
                 n_input != basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
         )
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs, "
                                                  r"[0-9]+ inputs provided instead."):
                 basis_obj.evaluate_on_grid(*inputs)
         else:

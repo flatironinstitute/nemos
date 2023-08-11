@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Iterable, List, Optional, Union, Literal
+from typing import Iterable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -175,7 +175,9 @@ def pad_dimension(
     }
 
     if filter_type not in padding_settings:
-        cases_string = ' or '.join(padding_settings).replace(' or ', ", ", len(padding_settings)-2)
+        cases_string = " or ".join(padding_settings).replace(
+            " or ", ", ", len(padding_settings) - 2
+        )
         raise ValueError(
             f"filter_type must be {cases_string}. {filter_type} provided instead!"
         )
@@ -228,9 +230,11 @@ def nan_pad_conv(
     }
 
     if filter_type not in adjust_indices:
-        cases_string = ' or '.join(adjust_indices).replace(' or ', ", ", len(adjust_indices)-2)
+        cases_string = " or ".join(adjust_indices).replace(
+            " or ", ", ", len(adjust_indices) - 2
+        )
         raise ValueError(
-            f'filter_type must be {cases_string}. {filter_type} provided instead!'
+            f"filter_type must be {cases_string}. {filter_type} provided instead!"
         )
 
     start, end = adjust_indices[filter_type]

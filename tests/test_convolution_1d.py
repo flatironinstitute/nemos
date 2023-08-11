@@ -104,7 +104,7 @@ class TestPadding:
                                          [[np.zeros([1, 2, 4]), np.zeros([1, 1, 1, 1])]] +
                                          [[np.zeros([1, 2, 4, 5]), np.zeros([1, 1, 1, 1, 1])]]
     )
-    def test_check_dim(self, iterable, filter_type):
+    def test_check_dim(self, iterable):
         raise_exception = any(trial.ndim != 3 for trial in iterable)
         if raise_exception:
             with pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays"):
