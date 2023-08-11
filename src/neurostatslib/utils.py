@@ -37,9 +37,9 @@ def check_dimensionality(
     Parameters
     ----------
     iterable :
-    Array-like object containing numpy or jax.numpy NDArrays.
+        Array-like object containing numpy or jax.numpy NDArrays.
     expected_dim :
-    Number of expected dimension for the NDArrays.
+        Number of expected dimension for the NDArrays.
 
     Returns
     -------
