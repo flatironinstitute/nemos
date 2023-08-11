@@ -84,8 +84,8 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        xi[0],...,xi[n] : (number of samples, )
-            The input samples.
+        xi[0],...,xi[n] :
+            The input samples, each  with shape (number of samples, ).
 
         Returns
         -------
@@ -126,7 +126,8 @@ class Basis(abc.ABC):
             The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
         Y :
             The basis function evaluated at the samples,
-            shape (n_basis_funcs, n_samples[0], ... , n_samples[n]).
+            shape (n_samples[0], ... , n_samples[n], number of basis).
+
 
         Raises
         ------
@@ -150,7 +151,7 @@ class Basis(abc.ABC):
 
         # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
         Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
-            (self.n_basis_funcs, *n_samples)
+            (*n_samples, self.n_basis_funcs)
         )
 
         return *Xs, Y
@@ -161,8 +162,8 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        xi[0], ..., xi[n] : (number of samples, )
-            The input samples.
+        xi[0], ..., xi[n] :
+            The input samples, shape (number of samples, ).
 
         Raises
         ------
@@ -182,8 +183,8 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        xi[0], ..., xi[n] : (number of samples, )
-            The input samples.
+        xi[0], ..., xi[n] :
+            The input samples, shape (number of samples, ).
 
         Raises
         ------
@@ -321,9 +322,9 @@ class AdditiveBasis(Basis):
         Returns
         -------
         :
-            The basis function evaluated at the samples (number of samples x n_basis_funcs)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
-        return np.vstack(
+        return np.hstack(
             (
                 self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
@@ -374,13 +375,13 @@ class MultiplicativeBasis(Basis):
         Returns
         -------
         :
-            The basis function evaluated at the samples (number of samples x n_basis_funcs)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
         return np.array(
             row_wise_kron(
                 self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
-                transpose=True,
+                transpose=False,
             )
         )
 
@@ -501,7 +502,7 @@ class MSplineBasis(SplineBasis):
         Returns
         -------
         basis_funcs :
-            Evaluated spline basis functions, shape (n_basis_funcs, number of samples).
+            Evaluated spline basis functions, shape (n_samples, n_basis_funcs).
 
         """
         # add knots if not passed
@@ -512,7 +513,7 @@ class MSplineBasis(SplineBasis):
                 mspline(sample_pts, self.order, i, self.knot_locs)
                 for i in range(self.n_basis_funcs)
             ],
-            axis=0,
+            axis=1,
         )
 
     def _check_n_basis_min(self) -> None:
@@ -564,7 +565,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
         Returns
         -------
         basis_funcs :
-            Raised cosine basis functions, shape (n_basis_funcs, number of samples).
+            Raised cosine basis functions, shape (n_samples, n_basis_funcs).
 
         Raises
         ------
@@ -578,8 +579,8 @@ class RaisedCosineBasis(Basis, abc.ABC):
         transform_sample_pts = self._transform_samples(sample_pts)
 
         shifted_sample_pts = (
-            transform_sample_pts[None, :]
-            - (np.pi * np.arange(self.n_basis_funcs))[:, None]
+            transform_sample_pts[:, None]
+            - (np.pi * np.arange(self.n_basis_funcs))[None, :]
         )
         basis_funcs = 0.5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
 
@@ -719,15 +720,14 @@ class OrthExponentialBasis(Basis):
 
     def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating]):
         super().__init__(n_basis_funcs=n_basis_funcs)
-
-        if decay_rates.shape[0] != n_basis_funcs:
+        self._decay_rates = np.asarray(decay_rates)
+        if self._decay_rates.shape[0] != n_basis_funcs:
             raise ValueError(
                 f"The number of basis functions must match the number of decay rates provided. "
                 f"Number of basis functions provided: {n_basis_funcs}, "
-                f"Number of decay rates provided: {decay_rates.shape[0]}"
+                f"Number of decay rates provided: {self._decay_rates.shape[0]}"
             )
 
-        self._decay_rates = decay_rates
         self._check_rates()
         self._n_input_dimensionality = 1
 
@@ -799,7 +799,6 @@ class OrthExponentialBasis(Basis):
         ValueError
             If the number of basis element is less than the number of samples.
         """
-        print(sample_pts[0].size, self.n_basis_funcs)
         if sample_pts[0].size < self.n_basis_funcs:
             raise ValueError(
                 "OrthExponentialBasis requires at least as many samples as basis functions!\n"
@@ -819,7 +818,7 @@ class OrthExponentialBasis(Basis):
         -------
         basis_funcs
             Evaluated exponentially decaying basis functions,
-            numerically orthogonalized, shape (n_basis_funcs, n_pts).
+            numerically orthogonalized, shape (number of basis, number of samples).
         """
         self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)
@@ -829,7 +828,7 @@ class OrthExponentialBasis(Basis):
         # n_pts)
         return scipy.linalg.orth(
             np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
-        ).T
+        )
 
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray):

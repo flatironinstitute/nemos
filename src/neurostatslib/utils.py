@@ -132,7 +132,7 @@ def convolve_1d_trials(
     return conv_trials
 
 
-def pad_dimension(
+def _pad_dimension(
     array: jnp.ndarray,
     axis: int,
     window_size: int,
@@ -142,6 +142,7 @@ def pad_dimension(
     """
     Add padding to the last dimension of an array based on the convolution type.
 
+    This is a helper function used by `nan_pad_conv`, which is the function we expect the user will interact with.
     Parameters
     ----------
     array:
@@ -248,7 +249,7 @@ def nan_pad_conv(
 
         conv_trials = conv_trials[:, start:end]
         return list(
-            pad_dimension(
+            _pad_dimension(
                 conv_trials, 1, window_size, filter_type, constant_values=jnp.nan
             )
         )
@@ -260,7 +261,7 @@ def nan_pad_conv(
             )
 
         return [
-            pad_dimension(
+            _pad_dimension(
                 trial[start:end],
                 0,
                 window_size,
