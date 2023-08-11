@@ -322,7 +322,7 @@ class AdditiveBasis(Basis):
         Returns
         -------
         :
-            The basis function evaluated at the samples (number of samples x n_basis_funcs)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
         return np.hstack(
             (
@@ -375,7 +375,7 @@ class MultiplicativeBasis(Basis):
         Returns
         -------
         :
-            The basis function evaluated at the samples (number of samples x n_basis_funcs)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
         return np.array(
             row_wise_kron(
