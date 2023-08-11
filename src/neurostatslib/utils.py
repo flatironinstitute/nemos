@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, List, Optional, Union, Literal
 
 import jax
 import jax.numpy as jnp
@@ -136,7 +136,7 @@ def pad_dimension(
     array: jnp.ndarray,
     axis: int,
     window_size: int,
-    filter_type: str = "causal",
+    filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
     constant_values: float = jnp.nan,
 ) -> jnp.ndarray:
     """
@@ -185,7 +185,7 @@ def pad_dimension(
 def nan_pad_conv(
     conv_trials: Union[Iterable[jnp.ndarray], Iterable[NDArray], NDArray, jnp.ndarray],
     window_size: int,
-    filter_type: str = "causal",
+    filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
 ) -> List[jnp.ndarray]:
     """
     Add NaN padding to convolution trials based on the convolution type.
