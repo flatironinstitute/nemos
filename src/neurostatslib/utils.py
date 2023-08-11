@@ -119,14 +119,11 @@ def convolve_1d_trials(
             "be greater or equal to the window size."
         )
 
-    # Check if all trials have the same duration
-    same_dur = isinstance(time_series, jnp.ndarray)
-
-    if same_dur:
-        # Trials have the same duration. # call conv instead of corr
+    if isinstance(time_series, jnp.ndarray):
+        # if the conversion to array went through, time_series have trials with equal size
         conv_trials = list(_CORR_SAME_TRIAL_DUR(time_series, basis_matrix))
     else:
-        # Trials have variable durations.
+        # trials have different length
         conv_trials = [
             _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(trial), basis_matrix)
             for trial in time_series
