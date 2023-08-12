@@ -10,7 +10,7 @@ import jaxopt
 from numpy.typing import NDArray
 from sklearn.exceptions import NotFittedError
 
-from .utils import convolve_1d_basis
+from .utils import convolve_1d_trials
 
 
 class GLM:
@@ -141,7 +141,7 @@ class GLM:
             )
 
         def loss(params, X, y):
-            return self._score(X, y, params)
+            return -self._score(X, y, params)
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
@@ -162,7 +162,9 @@ class GLM:
         self.solver = solver
 
     def _predict(
-        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
+            self,
+            params: Tuple[jnp.ndarray, jnp.ndarray],
+            X: NDArray
     ) -> jnp.ndarray:
         """Helper function for generating predictions.
 
@@ -192,59 +194,59 @@ class GLM:
         )
 
     def _score(
-        self, X: NDArray, target_spikes: NDArray, params: Tuple[jnp.ndarray, jnp.ndarray]
+            self,
+            X: NDArray,
+            target_spikes: NDArray,
+            params: Tuple[jnp.ndarray, jnp.ndarray]
     ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
-                This computes the Poisson negative log-likehood.
+        This computes the Poisson negative log-likehood.
 
-                Note that you can end up with infinities in here if there are zeros in
-                ``predicted_firing_rates``. We raise a warning in that case.
+        Note that you can end up with infinities in here if there are zeros in
+        ``predicted_firing_rates``. We raise a warning in that case.
 
-                Parameters
-                ----------
-                X : (n_time_bins, n_neurons, n_features)
-                    The exogenous variables.
-                target_spikes : (n_time_bins, n_neurons )
-                    The target spikes to compare against
-                params : ((n_neurons, n_features), (n_neurons,))
-                    Values for the spike basis coefficients and bias terms.
+        Parameters
+        ----------
+        X : (n_time_bins, n_neurons, n_features)
+            The exogenous variables.
+        target_spikes : (n_time_bins, n_neurons )
+            The target spikes to compare against
+        params : ((n_neurons, n_features), (n_neurons,))
+            Values for the spike basis coefficients and bias terms.
 
-                Returns
-                -------
-                score : (1,)
-                    The Poisson negative log-likehood
+        Returns
+        -------
+        score : (1,)
+            The Poisson log-likehood
 
-                Notes
-                -----
-                The Poisson probably mass function is:
+        Notes
+        -----
+        The Poisson probably mass function is:
 
-                .. math::
-                   \frac{\lambda^k \exp(-\lambda)}{k!}
+        .. math::
+           \frac{\lambda^k \exp(-\lambda)}{k!}
 
-                Thus, the negative log of it is:
+        Thus, the negative log of it is:
 
-                .. math::
-        ¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
-                   &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
+        .. math::
+¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
+           &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
 
-                Because $\Gamma(k+1)=k!$, see
-                https://en.wikipedia.org/wiki/Gamma_function.
+        Because $\Gamma(k+1)=k!$, see
+        https://en.wikipedia.org/wiki/Gamma_function.
 
-                And, in our case, ``target_spikes`` is $k$ and
-                ``predicted_firing_rates`` is $\lambda$
+        And, in our case, ``target_spikes`` is $k$ and
+        ``predicted_firing_rates`` is $\lambda$
 
         """
-        predicted_firing_rates = self._predict(params, X)
+        # Avoid the edge-case of 0*log(0), much faster than
+        # where on large arrays.
+        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10**-10)
         x = target_spikes * jnp.log(predicted_firing_rates)
-        # this is a jax jit-friendly version of saying "put a 0 wherever
-        # there's a NaN". we do this because NaNs result from 0*log(0)
-        # (log(0)=-inf and any non-zero multiplied by -inf gives the expected
-        # +/- inf)
-        x = jnp.where(jnp.isnan(x), jnp.zeros_like(x), x)
         # see above for derivation of this.
-        return jnp.mean(
-            predicted_firing_rates - x + jax.scipy.special.gammaln(target_spikes + 1)
+        return - jnp.mean(
+            predicted_firing_rates - x
         )
 
     def check_is_fit(self):
@@ -348,7 +350,8 @@ class GLM:
         Ws = self.spike_basis_coeff_
         bs = self.baseline_log_fr_
         self.check_n_neurons(spike_data, bs)
-        return self._score(X, spike_data, (Ws, bs))
+        norm_factor = jnp.mean(jax.scipy.special.gammaln(spike_data + 1))
+        return self._score(X, spike_data, (Ws, bs)) - norm_factor
 
     def simulate(
         self,
