@@ -34,7 +34,7 @@ for k in range(nn):
     pred_skl[:, k] = model_skl.predict(X[:, k,:])
 
 model_jax = GLM(solver_name="BFGS", solver_kwargs={'tol':10**-8, 'maxiter':1000},inverse_link_function=jnp.exp)
-model_jax.fit(spikes, X)
+model_jax.fit(X, spikes)
 mean_ll_jax = model_jax._score(X, spikes, (W_true, b_true))
 firing_rate_jax = model_jax._predict((W_true, b_true),X)
 

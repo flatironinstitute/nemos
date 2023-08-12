@@ -47,10 +47,10 @@ class GLM:
     """
 
     def __init__(
-        self,
-        solver_name: str = "GradientDescent",
-        solver_kwargs: dict = dict(),
-        inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
+            self,
+            solver_name: str = "GradientDescent",
+            solver_kwargs: dict = dict(),
+            inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
     ):
         self.solver_name = solver_name
         try:
@@ -68,10 +68,10 @@ class GLM:
         self.inverse_link_function = inverse_link_function
 
     def fit(
-        self,
-        spike_data: NDArray,
-        X: NDArray,
-        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+            self,
+            X: NDArray,
+            spike_data: NDArray,
+            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ):
         """Fit GLM to spiking data.
 
@@ -80,10 +80,10 @@ class GLM:
 
         Parameters
         ----------
-        spike_data :
-            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
         X :
             Predictors, shape (n_time_bins, n_neurons, n_features)
+        spike_data :
+            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
         init_params :
             Initial values for the spike basis coefficients and bias terms. If
             None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
@@ -113,7 +113,7 @@ class GLM:
             init_params = (
                 jnp.zeros((n_neurons, n_features)),
                 # bs, bias terms
-                jnp.zeros(n_neurons),
+                jnp.log(jnp.mean(spike_data, axis=0))
             )
 
         if init_params[0].ndim != 2:
@@ -242,7 +242,7 @@ class GLM:
         """
         # Avoid the edge-case of 0*log(0), much faster than
         # where on large arrays.
-        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10**-10)
+        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10 ** -10)
         x = target_spikes * jnp.log(predicted_firing_rates)
         # see above for derivation of this.
         return - jnp.mean(
@@ -262,6 +262,7 @@ class GLM:
                 f"spike_data n_neurons: {spike_data.shape[1]}, "
                 f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
             )
+
     def check_n_features(self, spike_data, bs):
         if spike_data.shape[1] != bs.shape[0]:
             raise ValueError(
@@ -270,16 +271,13 @@ class GLM:
                 f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
             )
 
-    def predict(self, X: NDArray, spike_data: NDArray) -> jnp.ndarray:
+    def predict(self, X: NDArray) -> jnp.ndarray:
         """Predict firing rates based on fit parameters, for checking against existing data.
 
         Parameters
         ----------
         X : (n_time_bins, n_neurons, n_features)
             The exogenous variables.
-        spike_data : (n_time_bins, n_neurons)
-            Spike counts arranged in a matrix. n_neurons must be the same as
-            during the fitting of this GLM instance.
 
         Returns
         -------
@@ -306,7 +304,7 @@ class GLM:
         self.check_is_fit()
         Ws = self.spike_basis_coeff_
         bs = self.baseline_log_fr_
-        self.check_n_neurons(spike_data, bs)
+        self.check_n_neurons(X, bs)
         return self._predict((Ws, bs), X)
 
     def score(self, X: NDArray, spike_data: NDArray) -> jnp.ndarray:
@@ -329,7 +327,7 @@ class GLM:
         Returns
         -------
         score : (1,)
-            The Poisson negative log-likehood
+            The Poisson log-likehood
 
         Raises
         ------
@@ -354,12 +352,12 @@ class GLM:
         return self._score(X, spike_data, (Ws, bs)) - norm_factor
 
     def simulate(
-        self,
-        random_key: jax.random.PRNGKeyArray,
-        n_timesteps: int,
-        init_spikes: NDArray,
-        coupling_basis_matrix: NDArray,
-        X_input: NDArray
+            self,
+            random_key: jax.random.PRNGKeyArray,
+            n_timesteps: int,
+            init_spikes: NDArray,
+            coupling_basis_matrix: NDArray,
+            feedforward_input: NDArray
     ) -> jnp.ndarray:
         """Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
 
@@ -376,7 +374,7 @@ class GLM:
             as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``), shape (window_size,n_neurons)
         coupling_basis_matrix:
             Coupling and auto-correlation filter basis matrix. Shape (n_neurons, n_basis_coupling)
-        X_input:
+        feedforward_input:
             Part of the exogenous matrix that captures the external inputs (currents convolved with a basis,
             images convolved with basis, position time series evaluated in a basis).
             Shape (n_timesteps, n_basis_input).
@@ -414,11 +412,11 @@ class GLM:
         bs = self.baseline_log_fr_
         self.check_n_neurons(init_spikes, bs)
 
-        if X_input.shape[2] + coupling_basis_matrix.shape[1]*bs.shape[0] != Ws.shape[1]:
+        if feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0] != Ws.shape[1]:
             raise ValueError("The number of feed forward input features"
                              "and the number of recurrent features must add up to"
                              "the overall model features."
-                             f"The total number of feature of the model is {Ws.shape[1]}. {X_input.shape[1]} "
+                             f"The total number of feature of the model is {Ws.shape[1]}. {feedforward_input.shape[1]} "
                              f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
                              f"provided instead.")
 
@@ -429,25 +427,26 @@ class GLM:
                 f"spike_basis_matrix window size: {coupling_basis_matrix.shape[1]}"
             )
 
-
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
-        def scan_fn(data, key):
+        def scan_fn(data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray) -> Tuple[Tuple[NDArray, int], NDArray]:
             spikes, chunk = data
             conv_spk = jnp.transpose(
-                jnp.array(convolve_1d_basis(coupling_basis_matrix.T, spikes.T)),
-                (2, 0, 1)
+                convolve_1d_trials(coupling_basis_matrix.T, spikes.T[None, :, :])[0],
+                (1, 2, 0),
             )
-            slice = jax.lax.dynamic_slice(
-                X_input, (chunk, 0, 0), (1, X_input.shape[1], X_input.shape[2])
+            input_slice = jax.lax.dynamic_slice(
+                feedforward_input,
+                (chunk, 0, 0),
+                (1, feedforward_input.shape[1], feedforward_input.shape[2])
             )
-            X = jnp.concatenate([conv_spk] * spikes.shape[1] + [slice], axis=2)
+            X = jnp.concatenate([conv_spk] * spikes.shape[1] + [input_slice], axis=2)
             firing_rate = self._predict((Ws, bs), X)
             new_spikes = jax.random.poisson(key, firing_rate)
             # this remains always of the same shape
             concat_spikes = jnp.row_stack((spikes[1:], new_spikes)), chunk + 1
             return concat_spikes, new_spikes
 
-        _, simulated_spikes = jax.lax.scan(scan_fn, (init_spikes,0), subkeys)
+        _, simulated_spikes = jax.lax.scan(scan_fn, (init_spikes, 0), subkeys)
 
         return jnp.squeeze(simulated_spikes, axis=1)
