@@ -379,61 +379,76 @@ class GLMBase(Model, abc.ABC):
             raise NotImplementedError(f"Scoring method {self.score_type} not implemented!")
         return score
 
+
     def simulate(
             self,
             random_key: jax.random.PRNGKeyArray,
             n_timesteps: int,
             init_spikes: NDArray,
             coupling_basis_matrix: NDArray,
-            feedforward_input: NDArray
-    ) -> jnp.ndarray:
-        """Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
+            feedforward_input: NDArray,
+            device: str = 'cpu'
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Simulate spike trains using GLM as a recurrent network.
+
+        This method extrapolates spike trains into the future. By default, it runs on the CPU. GPU
+        implementations may be slow due to the non-parallelizable nature of computations. Nonetheless,
+        device selection is provided to avoid data transfer overheads between devices.
 
         Parameters
         ----------
         random_key
-            jax PRNGKey to seed simulation with.
+            PRNGKey for seeding the simulation.
         n_timesteps
-            Number of time steps to simulate.
-        init_spikes :
-            Spike counts arranged in a matrix. These are used to jump start the
-            forward simulation. ``n_neurons`` must be the same as during the
-            fitting of this GLM instance and ``window_size`` must be the same
-            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``), shape (window_size,n_neurons)
-        coupling_basis_matrix:
-            Coupling and auto-correlation filter basis matrix. Shape (n_neurons, n_basis_coupling)
-        feedforward_input:
-            Part of the exogenous matrix that captures the external inputs (currents convolved with a basis,
-            images convolved with basis, position time series evaluated in a basis).
-            Shape (n_timesteps, n_neurons, n_basis_input).
+            Number of time steps for simulation.
+        init_spikes
+            Spike counts matrix used to initiate the simulation.
+            Expected shape: (window_size, n_neurons).
+        coupling_basis_matrix
+            Basis matrix for coupling and auto-correlation filters.
+            Expected shape: (window_size, n_basis_coupling).
+        feedforward_input
+            Exogenous matrix representing external inputs like convolved currents, images, etc.
+            Expected shape: (n_timesteps, n_neurons, n_basis_input).
+        device : optional
+            Computational device to use ('cpu' or 'gpu'). Default is 'cpu'.
 
         Returns
         -------
-        simulated_spikes : (n_neurons, n_timesteps)
-            The simulated spikes.
+        simulated_spikes
+            Simulated spikes. Shape: (n_neurons, n_timesteps).
+        firing_rates
+            Simulated firing rates. Shape: (n_neurons, n_timesteps).
 
         Raises
         ------
         NotFittedError
-            If ``fit`` has not been called first with this instance.
+            Raised if the instance has not been previously fitted.
         ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``) or if ``init_spikes`` has the
-            wrong number of time steps (i.e., if ``init_spikes.shape[1] !=
-            self.spike_basis_matrix.shape[1]``)
+            Raised for incompatible shapes between `init_spikes` and the fitting data,
+            or between `init_spikes` and `coupling_basis_matrix`.
 
         See Also
         --------
-        predict
-            Predict firing rates based on fit parameters, for checking against existing data.
+        predict : Method to predict firing rates using fit parameters.
 
         Notes
         -----
-            n_basis_input + n_basis_coupling = self.spike_basis_coeff_.shape[1]
-
+        The sum of n_basis_input and n_basis_coupling should match `self.spike_basis_coeff_.shape[1]`.
         """
-        from jax.experimental import host_callback
+        if device == 'cpu':
+            target_device = jax.devices('cpu')[0]
+        elif device == 'gpu':
+            target_device = jax.devices('gpu')[0]
+        else:
+            raise ValueError(f"Invalid device: {device}. Choose 'cpu' or 'gpu'.")
+
+        # Transfer data to the target device
+        init_spikes = jax.device_put(init_spikes, target_device)
+        coupling_basis_matrix = jax.device_put(coupling_basis_matrix, target_device)
+        feedforward_input = jax.device_put(feedforward_input, target_device)
+
         self.check_is_fit()
 
         Ws = self.spike_basis_coeff_
@@ -451,33 +466,50 @@ class GLMBase(Model, abc.ABC):
         if init_spikes.shape[0] != coupling_basis_matrix.shape[0]:
             raise ValueError(
                 "init_spikes has the wrong number of time steps!"
-                f"init_spikes time steps: {init_spikes.shape[0]}, "
-                f"spike_basis_matrix window size: {coupling_basis_matrix.shape[0]}"
+                f"init_spikes time steps: {init_spikes.shape[1]}, "
+                f"spike_basis_matrix window size: {coupling_basis_matrix.shape[1]}"
             )
 
-        #subkeys = jax.random.split(random_key[0], num=n_timesteps)
-        subkeys = jax.random.split(random_key)
+        subkeys = jax.random.split(random_key, num=n_timesteps)
 
-        def scan_fn(data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray) -> Tuple[Tuple[NDArray, int], NDArray]:
+        def scan_fn(data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray)\
+                -> Tuple[Tuple[NDArray, int], NDArray]:
+            """Function to scan over time steps and simulate spikes and firing rates.
+
+            This function simulates the spikes and firing rates for each time step
+            based on the previous spike data, feedforward input, and model coefficients.
+            """
             spikes, chunk = data
+
+            # Convolve the spike data with the coupling basis matrix
             conv_spk = convolve_1d_trials(coupling_basis_matrix, spikes[None, :, :])[0]
 
+            # Extract the corresponding slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
                 feedforward_input,
                 (chunk, 0, 0),
                 (1, feedforward_input.shape[1], feedforward_input.shape[2])
             )
-            X = jnp.concatenate([conv_spk] * spikes.shape[1] + [input_slice], axis=2)
+
+            # Reshape the convolved spikes and concatenate with the input slice to form the model input
+            conv_spk = jnp.tile(conv_spk.reshape(conv_spk.shape[0], -1),
+                                conv_spk.shape[1]
+                                ).reshape(conv_spk.shape[0], conv_spk.shape[1], -1)
+            X = jnp.concatenate([conv_spk, input_slice], axis=2)
+
+            # Predict the firing rate using the model coefficients
             firing_rate = self._predict((Ws, bs), X)
-            #key = jnp.squeeze(jax.lax.dynamic_slice(random_key, (chunk, 0), (1, random_key.shape[1])))
+
+            # Simulate spikes based on the predicted firing rate
             new_spikes = jax.random.poisson(key, firing_rate)
-            # this remains always of the same shape
+
+            # Prepare the spikes for the next iteration (keeping the most recent spikes)
             concat_spikes = jnp.row_stack((spikes[1:], new_spikes)), chunk + 1
-            return concat_spikes, new_spikes
+            return concat_spikes, (new_spikes, firing_rate)
 
-        _, simulated_spikes = jax.lax.scan(scan_fn, (init_spikes, 0), subkeys)
-
-        return jnp.squeeze(simulated_spikes, axis=1)
+        _, outputs = jax.lax.scan(scan_fn, (init_spikes, 0), subkeys)
+        simulated_spikes, firing_rates = outputs
+        return jnp.squeeze(simulated_spikes, axis=1), jnp.squeeze(firing_rates, axis=1)
 
 class GLM(GLMBase):
 
