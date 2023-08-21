@@ -881,9 +881,9 @@ class BSplineBasis(SplineBasis):
 
     Parameters
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
-    order : int, optional
+    order :
         Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
@@ -892,8 +892,6 @@ class BSplineBasis(SplineBasis):
     ----------
     order :
         Spline order.
-    _n_input_samples :
-        Number of input samples.
 
     Methods
     -------
@@ -969,9 +967,9 @@ class CyclicBSplineBasis(SplineBasis):
 
     Parameters
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
-    order : int, optional
+    order :
         Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
@@ -1054,7 +1052,7 @@ class CyclicBSplineBasis(SplineBasis):
         sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
 
         if np.sum(ind):
-            basis_eval[:, ind] = basis_eval[:, ind] + bspline(sample_pts[ind], self.knot_locs, order=self.order,
+            basis_eval[ind] = basis_eval[ind] + bspline(sample_pts[ind], self.knot_locs, order=self.order,
                                                               outer_ok=True, der=0)
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
@@ -1106,6 +1104,7 @@ def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, o
     -------
     basis_eval :
         An array containing the evaluation of B-spline basis for the given sample points.
+        Shape (n_samples, n_basis_funcs).
 
     Raises
     ------
@@ -1152,4 +1151,4 @@ def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, o
             sample_pts[in_sample], (knots, id_basis[i], order - 1), der=der
         )
 
-    return basis_eval
+    return basis_eval.T

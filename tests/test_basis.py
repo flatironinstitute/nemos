@@ -590,11 +590,11 @@ class TestBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, 100))
-        if eval_basis.shape[0] != n_basis_funcs:
+        if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
             )
         return
 
@@ -609,11 +609,11 @@ class TestBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
-        if eval_basis.shape[1] != sample_size:
+        if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -649,10 +649,10 @@ class TestBSplineBasis(BasisFuncsTesting):
         Confirms that the evaluate() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        raise_exception = n_input != basis_obj._n_input_samples
+        raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -685,7 +685,7 @@ class TestBSplineBasis(BasisFuncsTesting):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
-            assert eval_basis.shape[1] == sample_size
+            assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input):
@@ -694,10 +694,9 @@ class TestBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [10] * n_input
-        raise_exception = n_input != basis_obj._n_input_samples
+        raise_exception = n_input != basis_obj._n_input_dimensionality
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
-                                                 r"[0-9]+ inputs provided instead."):
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs"):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
@@ -716,7 +715,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, 100))
-        if eval_basis.shape[0] != n_basis_funcs:
+        if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
                 f"The number of basis is {n_basis_funcs}",
@@ -735,7 +734,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
-        if eval_basis.shape[1] != sample_size:
+        if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
                 f"The window size is {sample_size}",
@@ -776,10 +775,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Confirms that the evaluate() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        raise_exception = n_input != basis_obj._n_input_samples
+        raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
         if raise_exception:
-            with pytest.raises(ValueError, match="Input number mismatch. This basis evaluation requires [0-9]+ input samples,"):
+            with pytest.raises(ValueError, match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs"):
                 basis_obj.evaluate(*inputs)
         else:
             basis_obj.evaluate(*inputs)
@@ -812,7 +811,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
-            assert eval_basis.shape[1] == sample_size
+            assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
     def test_evaluate_on_grid_input_number(self, n_input):
@@ -821,10 +820,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [10] * n_input
-        raise_exception = n_input != basis_obj._n_input_samples
+        raise_exception = n_input != basis_obj._n_input_dimensionality
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Input number mismatch\. This basis evaluation requires [0-9]+ input samples, "
-                                                 r"[0-9]+ inputs provided instead."):
+            with pytest.raises(ValueError, match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs"):
                 basis_obj.evaluate_on_grid(*inputs)
         else:
             basis_obj.evaluate_on_grid(*inputs)
