@@ -21,7 +21,7 @@ __all__ = [
     "RaisedCosineBasisLog",
     "OrthExponentialBasis",
     "AdditiveBasis",
-    "MultiplicativeBasis"
+    "MultiplicativeBasis",
 ]
 
 
