@@ -15,12 +15,13 @@ from neurostatslib.utils import row_wise_kron
 
 __all__ = [
     "MSplineBasis",
+    "BSplineBasis",
+    "CyclicBSplineBasis",
     "RaisedCosineBasisLinear",
     "RaisedCosineBasisLog",
     "OrthExponentialBasis",
     "AdditiveBasis",
-    "MultiplicativeBasis",
-    "BSplineBasis",
+    "MultiplicativeBasis"
 ]
 
 
