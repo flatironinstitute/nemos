@@ -7,7 +7,7 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, Any
 
 import jax.numpy as jnp
 from numpy.typing import NDArray
@@ -141,15 +141,15 @@ class Model(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def predict(self, X: NDArray):
+    def predict(self, X: NDArray) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
-    def score(self, X: NDArray, y: NDArray):
+    def score(self, X: NDArray, y: NDArray) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
-    def _predict(self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray):
+    def _predict(self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
@@ -158,5 +158,5 @@ class Model(abc.ABC):
         X: NDArray,
         y: NDArray,
         params: Tuple[jnp.ndarray, jnp.ndarray],
-    ):
+    ) -> jnp.ndarray:
         pass

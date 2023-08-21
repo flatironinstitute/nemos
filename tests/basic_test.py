@@ -1,4 +1,4 @@
-from neurostatslib.glm import GLM
+from neurostatslib.glm import PoissonGLM
 from sklearn.linear_model import PoissonRegressor
 import numpy as np
 import matplotlib.pylab as plt
@@ -34,7 +34,7 @@ for k in range(nn):
     pred_skl[:, k] = model_skl.predict(X[:, k,:])
 
 
-model_jax = GLM(score_type="pseudo-r2",solver_name="BFGS",
+model_jax = PoissonGLM(score_type="pseudo-r2",solver_name="BFGS",
                 solver_kwargs={'jit':True, 'tol': 10**-8, 'maxiter':1000},
                 inverse_link_function=jnp.exp)
 model_jax.fit(X, spikes)

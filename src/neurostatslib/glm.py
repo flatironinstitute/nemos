@@ -15,11 +15,10 @@ from .utils import convolve_1d_trials
 
 
 class PoissonGLMBase(Model, abc.ABC):
-    """Base class for Poisson-GLM.
+    """Abstract base class for Poisson GLMs.
 
-    The class includes methods for predicting rates, scoring the mode, and simulating counts.
-    The abstract method `fit` will be reimplemented in concrete classes according
-    to the type of regularization.
+    Provides methods for score computation, simulation, and prediction.
+    Must be subclassed with a method for fitting to data.
 
     Parameters
     ----------
@@ -55,11 +54,9 @@ class PoissonGLMBase(Model, abc.ABC):
                 f"module jaxopt has no attribute {solver_name}, pick a different solver!"
             )
 
-        for k in solver_kwargs.keys():
-            if k not in solver_args:
-                raise NameError(
-                    f"kwarg {k} in solver_kwargs is not a kwarg for jaxopt.{solver_name}!"
-                )
+        undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
+        if undefined_kwargs:
+            raise NameError(f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!")
 
         if score_type not in ["log-likelihood", "pseudo-r2"]:
             raise NotImplementedError(
@@ -79,22 +76,20 @@ class PoissonGLMBase(Model, abc.ABC):
     def _predict(
         self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
     ) -> jnp.ndarray:
-        """Helper function for generating predictions.
-
-        This way, can use same functions during and after fitting.
+        """
+        Predict firing rates given predictors and parameters.
 
         Parameters
         ----------
         params :
-            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
+            Tuple containing the spike basis coefficients and bias terms.
         X :
-            The model matrix. Shape (n_time_bins, n_neurons, n_features).
+            Predictors. Shape (n_time_bins, n_neurons, n_features).
 
         Returns
         -------
-        predicted_firing_rates :
+        jnp.ndarray
             The predicted firing rates. Shape (n_time_bins, n_neurons).
-
         """
         Ws, bs = params
         return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
@@ -107,43 +102,40 @@ class PoissonGLMBase(Model, abc.ABC):
     ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
-        This computes the Poisson negative log-likelihood.
+        This computes the Poisson negative log-likelihood up to a constant.
 
         Note that you can end up with infinities in here if there are zeros in
         ``predicted_firing_rates``. We raise a warning in that case.
 
         Parameters
         ----------
-        X : (n_time_bins, n_neurons, n_features)
-            The exogenous variables.
-        target_spikes : (n_time_bins, n_neurons )
-            The target spikes to compare against
-        params : ((n_neurons, n_features), (n_neurons,))
-            Values for the spike basis coefficients and bias terms.
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+        target_spikes :
+            The target spikes to compare against. Shape (n_time_bins, n_neurons).
+        params :
+            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
 
         Returns
         -------
-        score : (1,)
-            The Poisson log-likehood
+        jnp.ndarray
+            The Poisson negative log-likehood. Shape (1,).
 
         Notes
         -----
-        The Poisson probably mass function is:
+        The Poisson probability mass function is:
 
-        .. math::
+        $$
            \frac{\lambda^k \exp(-\lambda)}{k!}
+        $$
 
-        Thus, the negative log of it is:
+        But the $k!$ term is not a function of the parameters and can be disregarded
+        when computing the loss-function. Thus, the negative log of it is:
 
-        .. math::
-¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
-           &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
-
-        Because $\Gamma(k+1)=k!$, see
-        https://en.wikipedia.org/wiki/Gamma_function.
-
-        And, in our case, ``target_spikes`` is $k$ and
-        ``predicted_firing_rates`` is $\lambda$
+        $$
+           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
+           &= -k\log(\lambda)-\lambda + \text{const}
+        $$
 
         """
         # Avoid the edge-case of 0*log(0), much faster than
@@ -154,40 +146,62 @@ class PoissonGLMBase(Model, abc.ABC):
         return jnp.mean(predicted_firing_rates - x)
 
     def _residual_deviance(self, predicted_rate, y):
-        """Compute the residual deviance for a Poisson model.
+        r"""Compute the residual deviance for a Poisson model.
 
         Parameters
         ----------
-        X:
-            The predictors. Shape (n_time_bins, n_neurons, n_features).
+        predicted_rate:
+            The predicted firing rates.
         y:
-            The spike counts. Shape (n_time_bins, n_neurons).
+            The spike counts.
 
         Returns
         -------
             The residual deviance of the model.
+
+        Notes
+        -----
+        Deviance is a measure of the goodness of fit of a statistical model.
+        For a Poisson model, the residual deviance is computed as:
+
+        $$
+        \begin{aligned}
+            D(y, \hat{y}) &= 2 \sum \left[ y \log\left(\frac{y}{\hat{y}}\right) - (y - \hat{y}) \right]\\\
+            &= -2 \left( \text{LL}\left(y | \hat{y}\right) - \text{LL}\left(y | y\right)\right)
+        \end{aligned}
+        $$
+        where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
+        log-likelihood. Lower values of deviance indicate a better fit.
+
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(y / predicted_rate, self.FLOAT_EPS, jnp.inf)
         resid_dev = y * jnp.log(ratio) - (y - predicted_rate)
         return resid_dev
 
-    def _pseudo_r2(self, X, y):
-        """Pseudo-R2 calculation.
+    def _pseudo_r2(self, params, X, y):
+        r"""Pseudo-R^2 calculation for a Poisson GLM.
+
+        The Pseudo-R^2 metric gives a sense of how well the model fits the data,
+        relative to a null (or baseline) model.
 
         Parameters
         ----------
+        params :
+            Tuple containing the spike basis coefficients and bias terms.
         X:
-            The predictors. Shape (n_time_bins, n_neurons, n_features).
+            The predictors.
         y:
-            The spike counts. Shape (n_time_bins, n_neurons).
+            The spike counts.
 
         Returns
         -------
         :
-            The pseudo-r2 of the model.
+            The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
+            whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
+
         """
-        mu = self.predict(X)
+        mu = self._predict(params, X)
         res_dev_t = self._residual_deviance(mu, y)
         resid_deviance = jnp.sum(res_dev_t**2)
 
@@ -197,14 +211,25 @@ class PoissonGLMBase(Model, abc.ABC):
 
         return (null_deviance - resid_deviance) / null_deviance
 
-    def check_is_fit(self):
+    def _check_is_fit(self):
+        """Ensure the instance has been fitted."""
         if self.basis_coeff_ is None:
             raise NotFittedError(
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
     @staticmethod
-    def check_n_neurons(params, *args):
+    def _check_n_neurons(params, *args):
+        """
+        Validate the number of neurons in model parameters and input arguments.
+
+        This function checks that the number of neurons is consistent across
+        the model parameters (`params`) and any additional inputs (`args`).
+        Specifically, it ensures that the spike basis coefficients and bias terms
+        have the same first dimension and that this dimension matches the second
+        dimension of all input matrices in `args`.
+
+        """
         n_neurons = params[0].shape[0]
         if n_neurons != params[1].shape[0]:
             raise ValueError(
@@ -223,7 +248,14 @@ class PoissonGLMBase(Model, abc.ABC):
                 )
 
     @staticmethod
-    def check_n_features(Ws, X):
+    def _check_n_features(Ws, X):
+        """
+        Validate the number of features between model coefficients and input data.
+
+        This function checks that the number of features in the spike basis
+        coefficients (`Ws`) matches the number of features in the input data (`X`).
+
+        """
         if Ws.shape[1] != X.shape[2]:
             raise ValueError(
                 "Inconsistent number of features. "
@@ -231,18 +263,15 @@ class PoissonGLMBase(Model, abc.ABC):
                 f"X has {X.shape[2]} features instead!"
             )
 
-    def check_params(
+    def _check_params(
         self, params: Tuple[NDArray, NDArray], X: NDArray, spike_data: NDArray
     ):
         """
+        Validate the dimensions and consistency of parameters and data.
 
-        Parameters
-        ----------
-        params
-        args
-
-        Returns
-        -------
+        This function checks the consistency of shapes and dimensions for model
+        parameters, input predictors (`X`), and spike counts (`spike_data`).
+        It ensures that the parameters and data are compatible for the model.
 
         """
         if len(params) != 2:
@@ -260,7 +289,7 @@ class PoissonGLMBase(Model, abc.ABC):
             )
 
         # check that the neurons
-        self.check_n_neurons(params, X, spike_data)
+        self._check_n_neurons(params, X, spike_data)
 
         if spike_data.ndim != 2:
             raise ValueError(
@@ -270,29 +299,31 @@ class PoissonGLMBase(Model, abc.ABC):
             raise ValueError(
                 "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features)"
             )
-        self.check_n_features(params[0], X)
+        self._check_n_features(params[0], X)
 
     def predict(self, X: NDArray) -> jnp.ndarray:
-        """Predict firing rates based on fit parameters, for checking against existing data.
+        """Predict firing rates based on fit parameters.
 
         Parameters
         ----------
-        X :
+        X : NDArray
             The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
 
         Returns
         -------
-        predicted_firing_rates : (n_neurons, n_time_bins)
-            The predicted firing rates.
+        predicted_firing_rates : jnp.ndarray
+            The predicted firing rates with shape (n_neurons, n_time_bins).
 
         Raises
         ------
         NotFittedError
             If ``fit`` has not been called first with this instance.
         ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_link_fr_.shape[0]``).
+            - If `params` is not a JAX pytree of size two.
+            - If weights and bias terms in `params` don't have the expected dimensions.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If there's an inconsistent number of features between spike basis coefficients and `X`.
 
         See Also
         --------
@@ -300,38 +331,48 @@ class PoissonGLMBase(Model, abc.ABC):
             Score predicted firing rates against target spike counts.
         simulate
             Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
-
         """
-        self.check_is_fit()
+        self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
-        self.check_n_neurons((Ws, bs), X)
-        self.check_n_features(Ws, X)
+        self._check_n_neurons((Ws, bs), X)
+        self._check_n_features(Ws, X)
         return self._predict((Ws, bs), X)
 
-    def score(self, X: NDArray, spike_data: NDArray) -> jnp.ndarray:
+    def score(self,
+              X: NDArray,
+              spike_data: NDArray,
+              score_type: Optional[Literal["log-likelihood", "pseudo-r2"]] = None) -> jnp.ndarray:
         r"""Score the predicted firing rates (based on fit) to the target spike counts.
 
-        This ignores the last time point of the prediction.
-
-        This computes the Poisson mean log-likelihood or the pseudo-R2, thus the higher the
+        This computes the Poisson mean log-likelihood or the pseudo-$R^2$, thus the higher the
         number the better.
 
         The formula for the mean log-likelihood is the following,
 
         $$
-        \text{LL}(\hat{\lambda} | y) = \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
-        [y_{tn} \log(\hat{\lambda}_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})]
+        \begin{aligned}
+        \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+        [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})] \\\
+        &= \frac{1}{T \cdot N} [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \Gamma({y\_{tn}+1})]
+        \end{aligned}
         $$
 
-        The pseudo-R2 can be computed as follows,
+        Because $\Gamma(k+1)=k!$, see
+        https://en.wikipedia.org/wiki/Gamma_function.
+
+        The pseudo-$R^2$ can be computed as follows,
 
         $$
-            \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
+        \begin{aligned}
+            R^2_{\text{pseudo}} &= \frac{D_{\text{null}} - D_{\text{model}}}{D_{\text{null}}} \\\
+            &= \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
             - \log \text{LL}(\bar{\lambda}| y)},
+        \end{aligned}
         $$
 
-        where $y_{tn}$ and $\hat{\lambda}_{tn}$ are the spike counts and the model predicted rate
+        where $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is the deviance for
+        the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the spike counts and the model predicted rate
          of neuron $n$ at time-point $t$ respectively, and $\bar{\lambda}$ is the mean firing rate.
 
         Parameters
@@ -345,7 +386,7 @@ class PoissonGLMBase(Model, abc.ABC):
         Returns
         -------
         score : (1,)
-            The Poisson log-likehood
+            The Poisson log-likehood or the pseudo-$R^2$ of the current model.
 
         Raises
         ------
@@ -355,9 +396,6 @@ class PoissonGLMBase(Model, abc.ABC):
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_spikes.shape[0] !=
             self.baseline_link_fr_.shape[0]``).
-        UserWarning
-            If there are any zeros in ``self.predict(spike_data)``, since this
-            will likely lead to infinite log-likelihood values being returned.
 
         Notes
         -----
@@ -365,23 +403,29 @@ class PoissonGLMBase(Model, abc.ABC):
         among which the number of model parameters. The log-likelihood can assume both positive
         and negative values.
 
-        The pseudo-R2 is a standardized metric and assumes values between 0 and 1.
-
+        The Pseudo-$R^2$ is not equivalent to the $R^2$ value in linear regression. While both provide a measure
+        of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
+        The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
         """
+
         # ignore the last time point from predict, because that corresponds to
         # the next time step, which we have no observed data for
-        self.check_is_fit()
+        self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
-        self.check_n_neurons((Ws, bs), X, spike_data)
-        self.check_n_features(Ws, X)
-        if self.score_type == "log-likelihood":
+        self._check_n_neurons((Ws, bs), X, spike_data)
+        self._check_n_features(Ws, X)
+
+        if score_type is None:
+            score_type = self.score_type
+
+        if score_type == "log-likelihood":
             score = -(
                 self._score(X, spike_data, (Ws, bs))
                 + jax.scipy.special.gammaln(spike_data + 1).mean()
             )
-        elif self.score_type == "pseudo-r2":
-            score = self._pseudo_r2(X, spike_data)
+        elif score_type == "pseudo-r2":
+            score = self._pseudo_r2((Ws,bs), X, spike_data)
         else:
             # this should happen only if one manually set score_type
             raise NotImplementedError(
@@ -434,52 +478,61 @@ class PoissonGLMBase(Model, abc.ABC):
         device: str = "cpu",
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
-        Simulate spike trains using GLM as a recurrent network.
+        Simulate spike trains using the GLM as a recurrent network.
 
-        This method extrapolates spike trains into the future. By default, it runs on the CPU. GPU
-        implementations may be slow due to the non-parallelizable nature of computations. Nonetheless,
-        device selection is provided to avoid data transfer overheads between devices.
+        This function projects spike trains into the future, employing the fitted
+        parameters of the GLM. While the default computation device is the CPU,
+        users can opt for GPU; however, it may not provide substantial speed-up due
+        to the inherently sequential nature of certain computations.
 
         Parameters
         ----------
-        random_key
+        random_key :
             PRNGKey for seeding the simulation.
-        n_timesteps
-            Number of time steps for simulation.
-        init_spikes
-            Spike counts matrix used to initiate the simulation.
+        n_timesteps :
+            Duration of the simulation in terms of time steps.
+        init_spikes :
+            Initial spike counts matrix that kickstarts the simulation.
             Expected shape: (window_size, n_neurons).
-        coupling_basis_matrix
-            Basis matrix for coupling and auto-correlation filters.
-            Expected shape: (window_size, n_basis_coupling).
-        feedforward_input
-            Exogenous matrix representing external inputs like convolved currents, images, etc.
-            Expected shape: (n_timesteps, n_neurons, n_basis_input).
-        device : optional
-            Computational device to use ('cpu' or 'gpu'). Default is 'cpu'.
+        coupling_basis_matrix :
+            Basis matrix for coupling, representing inter-neuron effects
+            and auto-correlations. Expected shape: (window_size, n_basis_coupling).
+        feedforward_input :
+            External input matrix, representing factors like convolved currents,
+            light intensities, etc. Expected shape: (n_timesteps, n_neurons, n_basis_input).
+        device :
+            Computation device to use ('cpu' or 'gpu'). Default is 'cpu'.
 
         Returns
         -------
-        simulated_spikes
-            Simulated spikes. Shape: (n_neurons, n_timesteps).
-        firing_rates
-            Simulated firing rates. Shape: (n_neurons, n_timesteps).
+        simulated_spikes :
+            Simulated spike counts for each neuron over time.
+            Shape: (n_neurons, n_timesteps).
+        firing_rates :
+            Simulated firing rates for each neuron over time.
+            Shape: (n_neurons, n_timesteps).
 
         Raises
         ------
         NotFittedError
-            Raised if the instance has not been previously fitted.
+            If the model hasn't been fitted prior to calling this method.
+        Raises
+        ------
         ValueError
-            Raised for incompatible shapes between `init_spikes` and the fitting data,
-            or between `init_spikes` and `coupling_basis_matrix`.
+            - If the instance has not been previously fitted.
+            - If there's an inconsistency between the number of neurons in model parameters.
+            - If the number of neurons in input arguments doesn't match with model parameters.
+            - For an invalid computational device selection.
+
 
         See Also
         --------
-        predict : Method to predict firing rates using fit parameters.
+        predict : Method to predict firing rates based on the model's parameters.
 
         Notes
         -----
-        The sum of n_basis_input and n_basis_coupling should match `self.basis_coeff_.shape[1]`.
+        The sum of n_basis_input and n_basis_coupling should equal `self.basis_coeff_.shape[1]` to ensure
+        consistency in the model's input feature dimensionality.
         """
         if device == "cpu":
             target_device = jax.devices("cpu")[0]
@@ -493,11 +546,11 @@ class PoissonGLMBase(Model, abc.ABC):
         coupling_basis_matrix = jax.device_put(coupling_basis_matrix, target_device)
         feedforward_input = jax.device_put(feedforward_input, target_device)
 
-        self.check_is_fit()
+        self._check_is_fit()
 
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
-        self.check_n_neurons((Ws, bs), feedforward_input, init_spikes)
+        self._check_n_neurons((Ws, bs), feedforward_input, init_spikes)
 
         if (
             feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
@@ -628,12 +681,13 @@ class PoissonGLM(PoissonGLMBase):
         Raises
         ------
         ValueError
-            If spike_data is not two-dimensional.
-        ValueError
-            If shapes of init_params are not correct.
-        ValueError
-            If solver returns at least one NaN parameter, which means it found
-            an invalid solution. Try tuning optimization hyperparameters.
+            - If `params` is not a JAX pytree of size two.
+            - If shapes of init_params are not correct.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If spike_data is not two-dimensional.
+            - If solver returns at least one NaN parameter, which means it found
+              an invalid solution. Try tuning optimization hyperparameters.
 
         """
         _, n_neurons = spike_data.shape
@@ -648,7 +702,7 @@ class PoissonGLM(PoissonGLMBase):
                 jnp.log(jnp.mean(spike_data, axis=0)),
             )
 
-        self.check_params(init_params, X, spike_data)
+        self._check_params(init_params, X, spike_data)
 
         def loss(params, X, y):
             return self._score(X, y, params)
