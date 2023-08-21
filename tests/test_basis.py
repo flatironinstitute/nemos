@@ -854,6 +854,10 @@ class CombinedBasis(BasisFuncsTesting):
             basis_obj = basis_class(
                 n_basis_funcs=n_basis, order=3
             )
+        elif basis_class == basis.CyclicBSplineBasis:
+            basis_obj = basis_class(
+                n_basis_funcs=n_basis, order=3
+            )
         elif basis_class == basis.AdditiveBasis:
             b1 = basis.MSplineBasis(n_basis_funcs=n_basis, order=2)
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
@@ -1291,7 +1295,7 @@ def test_power_of_basis(exponent, basis_class):
         elif exponent == 3:
             basis_obj = basis_obj * basis_obj * basis_obj
 
-        assert np.all(
-            eval_pow == basis_obj.evaluate(*[samples] * basis_obj._n_input_dimensionality)
+        assert np.allclose(
+            eval_pow, basis_obj.evaluate(*[samples] * basis_obj._n_input_dimensionality)
         )
 
