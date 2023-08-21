@@ -13,7 +13,11 @@ Abstract Class Basis
 │
 ├─ Abstract Subclass SplineBasis
 │   │
-│   └─ Concrete Subclass MSplineBasis
+│   ├─ Concrete Subclass MSplineBasis
+│   │
+│   ├─ Concrete Subclass BSplineBasis
+│   │
+│   └─ Concrete Subclass CyclicBSplineBasis
 │
 ├─ Abstract Subclass RaisedCosineBasis
 │   │
