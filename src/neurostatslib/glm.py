@@ -23,9 +23,6 @@ class PoissonGLMBase(Model, abc.ABC):
 
     Parameters
     ----------
-    spike_basis_matrix : (n_basis_funcs, window_size)
-        Matrix of basis functions to use for this GLM. Most likely the output
-        of ``Basis.gen_basis_funcs()``
     solver_name
         Name of the solver to use when fitting the GLM. Must be an attribute of
         ``jaxopt``.
@@ -35,17 +32,10 @@ class PoissonGLMBase(Model, abc.ABC):
     inverse_link_function
         Function to transform outputs of convolution with basis to firing rate.
         Must accept any number as input and return all non-negative values.
-
-    Attributes
-    ----------
-    solver
-        jaxopt solver, set during ``fit()``
-    solver_state
-        state of the solver, set during ``fit()``
-    basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
-        Solutions for the spike basis coefficients, set during ``fit()``
-    baseline_log_fr : jnp.ndarray, (n_neurons,)
-        Solutions for bias terms, set during ``fit()``
+    kwargs:
+        Additional keyword arguments. ``kwargs`` may depend on the concrete
+        subclass implementation (e.g. alpha, the regularization hyperparamter, will be present for
+        penalized GLMs but not for the un-penalized case).
 
     """
 
@@ -82,6 +72,9 @@ class PoissonGLMBase(Model, abc.ABC):
         self.inverse_link_function = inverse_link_function
         # set additional kwargs e.g. regularization hyperparameters and so on...
         super().__init__(**kwargs)
+        # initialize parameters to None
+        self.baseline_link_fr_ = None
+        self.basis_coeff_ = None
 
     def _predict(
         self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
@@ -90,22 +83,17 @@ class PoissonGLMBase(Model, abc.ABC):
 
         This way, can use same functions during and after fitting.
 
-        Note that the ``n_timebins`` here is not necessarily the same as in
-        public functions: in particular, this method expects the *convolved*
-        spike data, which (since we use the "valid" convolutional output) means
-        that it will have fewer timebins than the un-convolved data.
-
         Parameters
         ----------
-        params : ((n_neurons, n_features), (n_neurons,))
-            Values for the spike basis coefficients and bias terms.
-        X : (n_time_bins, n_neurons, n_features)
-            The model matrix.
+        params :
+            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
+        X :
+            The model matrix. Shape (n_time_bins, n_neurons, n_features).
 
         Returns
         -------
-        predicted_firing_rates : (n_time_bins, n_neurons)
-            The predicted firing rates.
+        predicted_firing_rates :
+            The predicted firing rates. Shape (n_time_bins, n_neurons).
 
         """
         Ws, bs = params
@@ -119,43 +107,43 @@ class PoissonGLMBase(Model, abc.ABC):
     ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
-                This computes the Poisson negative log-likelihood.
+        This computes the Poisson negative log-likelihood.
 
-                Note that you can end up with infinities in here if there are zeros in
-                ``predicted_firing_rates``. We raise a warning in that case.
+        Note that you can end up with infinities in here if there are zeros in
+        ``predicted_firing_rates``. We raise a warning in that case.
 
-                Parameters
-                ----------
-                X : (n_time_bins, n_neurons, n_features)
-                    The exogenous variables.
-                target_spikes : (n_time_bins, n_neurons )
-                    The target spikes to compare against
-                params : ((n_neurons, n_features), (n_neurons,))
-                    Values for the spike basis coefficients and bias terms.
+        Parameters
+        ----------
+        X : (n_time_bins, n_neurons, n_features)
+            The exogenous variables.
+        target_spikes : (n_time_bins, n_neurons )
+            The target spikes to compare against
+        params : ((n_neurons, n_features), (n_neurons,))
+            Values for the spike basis coefficients and bias terms.
 
-                Returns
-                -------
-                score : (1,)
-                    The Poisson log-likehood
+        Returns
+        -------
+        score : (1,)
+            The Poisson log-likehood
 
-                Notes
-                -----
-                The Poisson probably mass function is:
+        Notes
+        -----
+        The Poisson probably mass function is:
 
-                .. math::
-                   \frac{\lambda^k \exp(-\lambda)}{k!}
+        .. math::
+           \frac{\lambda^k \exp(-\lambda)}{k!}
 
-                Thus, the negative log of it is:
+        Thus, the negative log of it is:
 
-                .. math::
-        ¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
-                   &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
+        .. math::
+¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
+           &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
 
-                Because $\Gamma(k+1)=k!$, see
-                https://en.wikipedia.org/wiki/Gamma_function.
+        Because $\Gamma(k+1)=k!$, see
+        https://en.wikipedia.org/wiki/Gamma_function.
 
-                And, in our case, ``target_spikes`` is $k$ and
-                ``predicted_firing_rates`` is $\lambda$
+        And, in our case, ``target_spikes`` is $k$ and
+        ``predicted_firing_rates`` is $\lambda$
 
         """
         # Avoid the edge-case of 0*log(0), much faster than
@@ -210,7 +198,7 @@ class PoissonGLMBase(Model, abc.ABC):
         return (null_deviance - resid_deviance) / null_deviance
 
     def check_is_fit(self):
-        if not hasattr(self, "basis_coeff_"):
+        if self.basis_coeff_ is None:
             raise NotFittedError(
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
@@ -370,9 +358,9 @@ class PoissonGLMBase(Model, abc.ABC):
         UserWarning
             If there are any zeros in ``self.predict(spike_data)``, since this
             will likely lead to infinite log-likelihood values being returned.
+
         Notes
         -----
-
         The log-likelihood is not on a standard scale, its value is influenced by many factors,
         among which the number of model parameters. The log-likelihood can assume both positive
         and negative values.
@@ -411,7 +399,7 @@ class PoissonGLMBase(Model, abc.ABC):
         """Fit GLM to spiking data.
 
         Following scikit-learn API, the solutions are stored as attributes
-        ``basis_coeff_`` and ``baseline_log_fr``.
+        ``basis_coeff_`` and ``baseline_link_fr``.
 
         Parameters
         ----------
@@ -575,6 +563,33 @@ class PoissonGLMBase(Model, abc.ABC):
 
 
 class PoissonGLM(PoissonGLMBase):
+    """Un-regularized Poisson-GLM.
+
+    The class fits the un-penalized maximum likelihood Poisson GLM parameter estimate.
+
+    Parameters
+    ----------
+    solver_name
+        Name of the solver to use when fitting the GLM. Must be an attribute of
+        ``jaxopt``.
+    solver_kwargs
+        Dictionary of keyword arguments to pass to the solver during its
+        initialization.
+    inverse_link_function
+        Function to transform outputs of convolution with basis to firing rate.
+        Must accept any number as input and return all non-negative values.
+
+    Attributes
+    ----------
+    solver
+        jaxopt solver, set during ``fit()``
+    solver_state
+        state of the solver, set during ``fit()``
+    basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
+        Solutions for the spike basis coefficients, set during ``fit()``
+    baseline_log_fr : jnp.ndarray, (n_neurons,)
+        Solutions for bias terms, set during ``fit()``
+    """
     def __init__(
         self,
         solver_name: str = "GradientDescent",
