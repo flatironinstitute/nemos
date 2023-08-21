@@ -68,8 +68,8 @@ def test_fit_glm2():
         W[i, :, j] = w0 if (i == j) else w1
 
     simulated_model = GLM(B)
-    simulated_model.spike_basis_coeff_ = jnp.array(W)
-    simulated_model.baseline_log_fr_ = jnp.ones(nn) * .1
+    simulated_model.basis_coeff_ = jnp.array(W)
+    simulated_model.baseline_link_fr_ = jnp.ones(nn) * .1
 
     init_spikes = jnp.zeros((2, ws))
     spike_data = simulated_model.simulate(simulation_key, nt, init_spikes)
@@ -96,11 +96,11 @@ def test_fit_glm2():
     fig, axes = plt.subplots(nn, nn, sharey=True)
     for i, j in itertools.product(range(nn), range(nn)):
         axes[i, j].plot(
-            B.T @ simulated_model.spike_basis_coeff_[i, :, j],
+            B.T @ simulated_model.basis_coeff_[i, :, j],
             label="true"
         )
         axes[i, j].plot(
-            B.T @ fitted_model.spike_basis_coeff_[i, :, j],
+            B.T @ fitted_model.basis_coeff_[i, :, j],
             label="est"
         )
         axes[i, j].axhline(0, dashes=[2, 2], color='k')

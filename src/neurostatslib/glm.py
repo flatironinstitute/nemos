@@ -1,8 +1,8 @@
 """GLM core module
 """
-import inspect
 import abc
-from typing import Callable, Optional, Tuple, Literal
+import inspect
+from typing import Callable, Literal, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -10,14 +10,16 @@ import jaxopt
 from numpy.typing import NDArray
 from sklearn.exceptions import NotFittedError
 
-from .utils import convolve_1d_trials
 from .model_base import Model
+from .utils import convolve_1d_trials
 
 
-class GLMBase(Model, abc.ABC):
-    """Generalized Linear Model for neural responses.
+class PoissonGLMBase(Model, abc.ABC):
+    """Base class for Poisson-GLM.
 
-    No stimulus / external variables, only connections to other neurons.
+    The class includes methods for predicting rates, scoring the mode, and simulating counts.
+    The abstract method `fit` will be reimplemented in concrete classes according
+    to the type of regularization.
 
     Parameters
     ----------
@@ -40,7 +42,7 @@ class GLMBase(Model, abc.ABC):
         jaxopt solver, set during ``fit()``
     solver_state
         state of the solver, set during ``fit()``
-    spike_basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
+    basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
         Solutions for the spike basis coefficients, set during ``fit()``
     baseline_log_fr : jnp.ndarray, (n_neurons,)
         Solutions for bias terms, set during ``fit()``
@@ -48,12 +50,12 @@ class GLMBase(Model, abc.ABC):
     """
 
     def __init__(
-            self,
-            solver_name: str = "GradientDescent",
-            solver_kwargs: dict = dict(),
-            inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
-            score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
-            **kwargs
+        self,
+        solver_name: str = "GradientDescent",
+        solver_kwargs: dict = dict(),
+        inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
+        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
+        **kwargs,
     ):
         self.solver_name = solver_name
         try:
@@ -69,55 +71,20 @@ class GLMBase(Model, abc.ABC):
                     f"kwarg {k} in solver_kwargs is not a kwarg for jaxopt.{solver_name}!"
                 )
 
-        if score_type not in ['log-likelihood', 'pseudo-r2']:
-            raise NotImplementedError("Scoring method not implemented. "
-                                      f"score_type must be either 'log-likelihood', or 'pseudo-r2'."
-                                      f" {score_type} provided instead.")
+        if score_type not in ["log-likelihood", "pseudo-r2"]:
+            raise NotImplementedError(
+                "Scoring method not implemented. "
+                f"score_type must be either 'log-likelihood', or 'pseudo-r2'."
+                f" {score_type} provided instead."
+            )
         self.score_type = score_type
         self.solver_kwargs = solver_kwargs
         self.inverse_link_function = inverse_link_function
         # set additional kwargs e.g. regularization hyperparameters and so on...
         super().__init__(**kwargs)
 
-    @abc.abstractmethod
-    def fit(
-            self,
-            X: NDArray,
-            spike_data: NDArray,
-            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
-    ) -> None:
-        """Fit GLM to spiking data.
-
-        Following scikit-learn API, the solutions are stored as attributes
-        ``spike_basis_coeff_`` and ``baseline_log_fr``.
-
-        Parameters
-        ----------
-        X :
-            Predictors, shape (n_time_bins, n_neurons, n_features)
-        spike_data :
-            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
-        init_params :
-            Initial values for the spike basis coefficients and bias terms. If
-            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
-
-        Raises
-        ------
-        ValueError
-            If spike_data is not two-dimensional.
-        ValueError
-            If shapes of init_params are not correct.
-        ValueError
-            If solver returns at least one NaN parameter, which means it found
-            an invalid solution. Try tuning optimization hyperparameters.
-
-        """
-        pass
-
     def _predict(
-            self,
-            params: Tuple[jnp.ndarray, jnp.ndarray],
-            X: NDArray
+        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
     ) -> jnp.ndarray:
         """Helper function for generating predictions.
 
@@ -142,65 +109,61 @@ class GLMBase(Model, abc.ABC):
 
         """
         Ws, bs = params
-        return self.inverse_link_function(
-            jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
-        )
+        return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
 
     def _score(
-            self,
-            X: NDArray,
-            target_spikes: NDArray,
-            params: Tuple[jnp.ndarray, jnp.ndarray]
+        self,
+        X: NDArray,
+        target_spikes: NDArray,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
     ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
-        This computes the Poisson negative log-likelihood.
+                This computes the Poisson negative log-likelihood.
 
-        Note that you can end up with infinities in here if there are zeros in
-        ``predicted_firing_rates``. We raise a warning in that case.
+                Note that you can end up with infinities in here if there are zeros in
+                ``predicted_firing_rates``. We raise a warning in that case.
 
-        Parameters
-        ----------
-        X : (n_time_bins, n_neurons, n_features)
-            The exogenous variables.
-        target_spikes : (n_time_bins, n_neurons )
-            The target spikes to compare against
-        params : ((n_neurons, n_features), (n_neurons,))
-            Values for the spike basis coefficients and bias terms.
+                Parameters
+                ----------
+                X : (n_time_bins, n_neurons, n_features)
+                    The exogenous variables.
+                target_spikes : (n_time_bins, n_neurons )
+                    The target spikes to compare against
+                params : ((n_neurons, n_features), (n_neurons,))
+                    Values for the spike basis coefficients and bias terms.
 
-        Returns
-        -------
-        score : (1,)
-            The Poisson log-likehood
+                Returns
+                -------
+                score : (1,)
+                    The Poisson log-likehood
 
-        Notes
-        -----
-        The Poisson probably mass function is:
+                Notes
+                -----
+                The Poisson probably mass function is:
 
-        .. math::
-           \frac{\lambda^k \exp(-\lambda)}{k!}
+                .. math::
+                   \frac{\lambda^k \exp(-\lambda)}{k!}
 
-        Thus, the negative log of it is:
+                Thus, the negative log of it is:
 
-        .. math::
-¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
-           &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
+                .. math::
+        ¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
+                   &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
 
-        Because $\Gamma(k+1)=k!$, see
-        https://en.wikipedia.org/wiki/Gamma_function.
+                Because $\Gamma(k+1)=k!$, see
+                https://en.wikipedia.org/wiki/Gamma_function.
 
-        And, in our case, ``target_spikes`` is $k$ and
-        ``predicted_firing_rates`` is $\lambda$
+                And, in our case, ``target_spikes`` is $k$ and
+                ``predicted_firing_rates`` is $\lambda$
 
         """
         # Avoid the edge-case of 0*log(0), much faster than
         # where on large arrays.
-        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10 ** -10)
+        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10**-10)
         x = target_spikes * jnp.log(predicted_firing_rates)
         # see above for derivation of this.
-        return jnp.mean(
-            predicted_firing_rates - x
-        )
+        return jnp.mean(predicted_firing_rates - x)
 
     def _residual_deviance(self, predicted_rate, y):
         """Compute the residual deviance for a Poisson model.
@@ -238,44 +201,96 @@ class GLMBase(Model, abc.ABC):
         """
         mu = self.predict(X)
         res_dev_t = self._residual_deviance(mu, y)
-        resid_deviance = jnp.sum(res_dev_t ** 2)
+        resid_deviance = jnp.sum(res_dev_t**2)
 
         null_mu = jnp.ones(y.shape) * y.sum() / y.size
         null_dev_t = self._residual_deviance(null_mu, y)
-        null_deviance = jnp.sum(null_dev_t ** 2)
+        null_deviance = jnp.sum(null_dev_t**2)
 
         return (null_deviance - resid_deviance) / null_deviance
 
-
     def check_is_fit(self):
-        if not hasattr(self, "spike_basis_coeff_"):
+        if not hasattr(self, "basis_coeff_"):
             raise NotFittedError(
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def check_n_neurons(self, spike_data, bs):
-        if spike_data.shape[1] != bs.shape[0]:
+    @staticmethod
+    def check_n_neurons(params, *args):
+        n_neurons = params[0].shape[0]
+        if n_neurons != params[1].shape[0]:
             raise ValueError(
-                "Number of neurons must be the same during prediction and fitting! "
-                f"spike_data n_neurons: {spike_data.shape[1]}, "
-                f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
+                "Model parameters have inconsistent shapes."
+                "spike basis coefficients must be of shape (n_neurons, n_features), and"
+                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both!"
+                f"coefficients n_neurons: {params[0].shape[0]}, bias n_neurons: {params[1].shape[0]}"
+            )
+        for arg in args:
+            if arg.shape[1] != n_neurons:
+                raise ValueError(
+                    "The number of neuron in the model parameters and in the inputs"
+                    "must match."
+                    f"parameters has n_neurons: {n_neurons}, "
+                    f"the input provided has n_neurons: {arg.shape[1]}"
+                )
+
+    @staticmethod
+    def check_n_features(Ws, X):
+        if Ws.shape[1] != X.shape[2]:
+            raise ValueError(
+                "Inconsistent number of features. "
+                f"spike basis coefficients has {Ws.shape[1]} features, "
+                f"X has {X.shape[2]} features instead!"
             )
 
-    def check_n_features(self, spike_data, bs):
-        if spike_data.shape[1] != bs.shape[0]:
+    def check_params(
+        self, params: Tuple[NDArray, NDArray], X: NDArray, spike_data: NDArray
+    ):
+        """
+
+        Parameters
+        ----------
+        params
+        args
+
+        Returns
+        -------
+
+        """
+        if len(params) != 2:
+            raise ValueError("Params needs to be a JAX pytree of size two of NDArray.")
+
+        if params[0].ndim != 2:
             raise ValueError(
-                "Number of neurons must be the same during prediction and fitting! "
-                f"spike_data n_neurons: {spike_data.shape[1]}, "
-                f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
+                "Weights must be of shape (n_neurons, n_features), but"
+                f"params[0] has {params[0].ndim} dimensions!"
             )
+        if params[1].ndim != 1:
+            raise ValueError(
+                "params[1] term must be of shape (n_neurons,) but params[1] have"
+                f"{params[1].ndim} dimensions!"
+            )
+
+        # check that the neurons
+        self.check_n_neurons(params, X, spike_data)
+
+        if spike_data.ndim != 2:
+            raise ValueError(
+                "spike_data must be two-dimensional, with shape (n_timebins, n_neurons)"
+            )
+        if X.ndim != 3:
+            raise ValueError(
+                "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features)"
+            )
+        self.check_n_features(params[0], X)
 
     def predict(self, X: NDArray) -> jnp.ndarray:
         """Predict firing rates based on fit parameters, for checking against existing data.
 
         Parameters
         ----------
-        X : (n_time_bins, n_neurons, n_features)
-            The exogenous variables.
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
 
         Returns
         -------
@@ -289,7 +304,7 @@ class GLMBase(Model, abc.ABC):
         ValueError
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``).
+            self.baseline_link_fr_.shape[0]``).
 
         See Also
         --------
@@ -300,9 +315,10 @@ class GLMBase(Model, abc.ABC):
 
         """
         self.check_is_fit()
-        Ws = self.spike_basis_coeff_
-        bs = self.baseline_log_fr_
-        self.check_n_neurons(X, bs)
+        Ws = self.basis_coeff_
+        bs = self.baseline_link_fr_
+        self.check_n_neurons((Ws, bs), X)
+        self.check_n_features(Ws, X)
         return self._predict((Ws, bs), X)
 
     def score(self, X: NDArray, spike_data: NDArray) -> jnp.ndarray:
@@ -350,7 +366,7 @@ class GLMBase(Model, abc.ABC):
         ValueError
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``).
+            self.baseline_link_fr_.shape[0]``).
         UserWarning
             If there are any zeros in ``self.predict(spike_data)``, since this
             will likely lead to infinite log-likelihood values being returned.
@@ -367,27 +383,67 @@ class GLMBase(Model, abc.ABC):
         # ignore the last time point from predict, because that corresponds to
         # the next time step, which we have no observed data for
         self.check_is_fit()
-        Ws = self.spike_basis_coeff_
-        bs = self.baseline_log_fr_
-        self.check_n_neurons(spike_data, bs)
+        Ws = self.basis_coeff_
+        bs = self.baseline_link_fr_
+        self.check_n_neurons((Ws, bs), X, spike_data)
+        self.check_n_features(Ws, X)
         if self.score_type == "log-likelihood":
-            score = -(self._score(X, spike_data, (Ws, bs)) + jax.scipy.special.gammaln(spike_data + 1).mean())
+            score = -(
+                self._score(X, spike_data, (Ws, bs))
+                + jax.scipy.special.gammaln(spike_data + 1).mean()
+            )
         elif self.score_type == "pseudo-r2":
             score = self._pseudo_r2(X, spike_data)
         else:
             # this should happen only if one manually set score_type
-            raise NotImplementedError(f"Scoring method {self.score_type} not implemented!")
+            raise NotImplementedError(
+                f"Scoring method {self.score_type} not implemented!"
+            )
         return score
 
+    @abc.abstractmethod
+    def fit(
+        self,
+        X: NDArray,
+        spike_data: NDArray,
+        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+    ):
+        """Fit GLM to spiking data.
+
+        Following scikit-learn API, the solutions are stored as attributes
+        ``basis_coeff_`` and ``baseline_log_fr``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape (n_time_bins, n_neurons, n_features)
+        spike_data :
+            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
+        init_params :
+            Initial values for the spike basis coefficients and bias terms. If
+            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
+
+        Raises
+        ------
+        ValueError
+            If spike_data is not two-dimensional.
+        ValueError
+            If shapes of init_params are not correct.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
+            an invalid solution. Try tuning optimization hyperparameters.
+
+        """
+        pass
 
     def simulate(
-            self,
-            random_key: jax.random.PRNGKeyArray,
-            n_timesteps: int,
-            init_spikes: NDArray,
-            coupling_basis_matrix: NDArray,
-            feedforward_input: NDArray,
-            device: str = 'cpu'
+        self,
+        random_key: jax.random.PRNGKeyArray,
+        n_timesteps: int,
+        init_spikes: NDArray,
+        coupling_basis_matrix: NDArray,
+        feedforward_input: NDArray,
+        device: str = "cpu",
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate spike trains using GLM as a recurrent network.
@@ -435,12 +491,12 @@ class GLMBase(Model, abc.ABC):
 
         Notes
         -----
-        The sum of n_basis_input and n_basis_coupling should match `self.spike_basis_coeff_.shape[1]`.
+        The sum of n_basis_input and n_basis_coupling should match `self.basis_coeff_.shape[1]`.
         """
-        if device == 'cpu':
-            target_device = jax.devices('cpu')[0]
-        elif device == 'gpu':
-            target_device = jax.devices('gpu')[0]
+        if device == "cpu":
+            target_device = jax.devices("cpu")[0]
+        elif device == "gpu":
+            target_device = jax.devices("gpu")[0]
         else:
             raise ValueError(f"Invalid device: {device}. Choose 'cpu' or 'gpu'.")
 
@@ -451,17 +507,22 @@ class GLMBase(Model, abc.ABC):
 
         self.check_is_fit()
 
-        Ws = self.spike_basis_coeff_
-        bs = self.baseline_log_fr_
-        self.check_n_neurons(init_spikes, bs)
+        Ws = self.basis_coeff_
+        bs = self.baseline_link_fr_
+        self.check_n_neurons((Ws, bs), feedforward_input, init_spikes)
 
-        if feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0] != Ws.shape[1]:
-            raise ValueError("The number of feed forward input features"
-                             "and the number of recurrent features must add up to"
-                             "the overall model features."
-                             f"The total number of feature of the model is {Ws.shape[1]}. {feedforward_input.shape[1]} "
-                             f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
-                             f"provided instead.")
+        if (
+            feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
+            != Ws.shape[1]
+        ):
+            raise ValueError(
+                "The number of feed forward input features"
+                "and the number of recurrent features must add up to"
+                "the overall model features."
+                f"The total number of feature of the model is {Ws.shape[1]}. {feedforward_input.shape[1]} "
+                f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
+                f"provided instead."
+            )
 
         if init_spikes.shape[0] != coupling_basis_matrix.shape[0]:
             raise ValueError(
@@ -472,8 +533,9 @@ class GLMBase(Model, abc.ABC):
 
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
-        def scan_fn(data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray)\
-                -> Tuple[Tuple[NDArray, int], NDArray]:
+        def scan_fn(
+            data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray
+        ) -> Tuple[Tuple[NDArray, int], NDArray]:
             """Function to scan over time steps and simulate spikes and firing rates.
 
             This function simulates the spikes and firing rates for each time step
@@ -488,13 +550,13 @@ class GLMBase(Model, abc.ABC):
             input_slice = jax.lax.dynamic_slice(
                 feedforward_input,
                 (chunk, 0, 0),
-                (1, feedforward_input.shape[1], feedforward_input.shape[2])
+                (1, feedforward_input.shape[1], feedforward_input.shape[2]),
             )
 
             # Reshape the convolved spikes and concatenate with the input slice to form the model input
-            conv_spk = jnp.tile(conv_spk.reshape(conv_spk.shape[0], -1),
-                                conv_spk.shape[1]
-                                ).reshape(conv_spk.shape[0], conv_spk.shape[1], -1)
+            conv_spk = jnp.tile(
+                conv_spk.reshape(conv_spk.shape[0], -1), conv_spk.shape[1]
+            ).reshape(conv_spk.shape[0], conv_spk.shape[1], -1)
             X = jnp.concatenate([conv_spk, input_slice], axis=2)
 
             # Predict the firing rate using the model coefficients
@@ -511,19 +573,32 @@ class GLMBase(Model, abc.ABC):
         simulated_spikes, firing_rates = outputs
         return jnp.squeeze(simulated_spikes, axis=1), jnp.squeeze(firing_rates, axis=1)
 
-class GLM(GLMBase):
 
+class PoissonGLM(PoissonGLMBase):
+    def __init__(
+        self,
+        solver_name: str = "GradientDescent",
+        solver_kwargs: dict = dict(),
+        inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
+        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
+    ):
+        super().__init__(
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+            inverse_link_function=inverse_link_function,
+            score_type=score_type,
+        )
 
     def fit(
-            self,
-            X: NDArray,
-            spike_data: NDArray,
-            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        self,
+        X: NDArray,
+        spike_data: NDArray,
+        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ):
         """Fit GLM to spiking data.
 
         Following scikit-learn API, the solutions are stored as attributes
-        ``spike_basis_coeff_`` and ``baseline_log_fr``.
+        ``basis_coeff_`` and ``baseline_log_fr``.
 
         Parameters
         ----------
@@ -546,11 +621,6 @@ class GLM(GLMBase):
             an invalid solution. Try tuning optimization hyperparameters.
 
         """
-        if spike_data.ndim != 2:
-            raise ValueError(
-                "spike_data must be two-dimensional, with shape (n_neurons, n_timebins)"
-            )
-
         _, n_neurons = spike_data.shape
         n_features = X.shape[2]
 
@@ -560,35 +630,13 @@ class GLM(GLMBase):
             init_params = (
                 jnp.zeros((n_neurons, n_features)),
                 # bs, bias terms
-                jnp.log(jnp.mean(spike_data, axis=0))
+                jnp.log(jnp.mean(spike_data, axis=0)),
             )
 
-        if init_params[0].ndim != 2:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_features), but"
-                f" init_params[0] has {init_params[0].ndim} dimensions!"
-            )
-
-        if init_params[1].ndim != 1:
-            raise ValueError(
-                "bias terms must be of shape (n_neurons,) but init_params[0] have"
-                f"{init_params[1].ndim} dimensions!"
-            )
-        if init_params[0].shape[0] != init_params[1].shape[0]:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_features), and"
-                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both!"
-                f"init_params[0]: {init_params[0].shape[0]}, init_params[1]: {init_params[1].shape[0]}"
-            )
-        if init_params[0].shape[0] != spike_data.shape[1]:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_features), and "
-                "spike_data must be of shape (n_time_bins, n_neurons) but n_neurons doesn't look the same in both! "
-                f"init_params[0]: {init_params[0].shape[1]}, spike_data: {spike_data.shape[1]}"
-            )
+        self.check_params(init_params, X, spike_data)
 
         def loss(params, X, y):
-            return -self._score(X, y, params)
+            return self._score(X, y, params)
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
@@ -600,8 +648,8 @@ class GLM(GLMBase):
                 " Try tuning optimization hyperparameters."
             )
         # Store parameters
-        self.spike_basis_coeff_ = params[0]
-        self.baseline_log_fr_ = params[1]
+        self.basis_coeff_ = params[0]
+        self.baseline_link_fr_ = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error

@@ -25,8 +25,8 @@ def test_glm_fit():
     B = spike_basis.evaluate(onp.linspace(0, 1, ws)).T
 
     simulated_model = GLM(B)
-    simulated_model.spike_basis_coeff_ = jnp.array([0, 0, -1, -1, -1])[None, :, None]
-    simulated_model.baseline_log_fr_ = jnp.ones(nn) * .1
+    simulated_model.basis_coeff_ = jnp.array([0, 0, -1, -1, -1])[None, :, None]
+    simulated_model.baseline_link_fr_ = jnp.ones(nn) * .1
 
     init_spikes = jnp.zeros((nn, ws))
     spike_data = simulated_model.simulate(simulation_key, nt, init_spikes)
@@ -50,11 +50,11 @@ def test_glm_fit():
     
     fig, ax = plt.subplots(1, 1, sharey=True)
     ax.plot(
-        B.T @ simulated_model.spike_basis_coeff_[0, :, 0],
+        B.T @ simulated_model.basis_coeff_[0, :, 0],
         label="true"
     )
     ax.plot(
-        B.T @ fitted_model.spike_basis_coeff_[0, :, 0],
+        B.T @ fitted_model.basis_coeff_[0, :, 0],
         label="est"
     )
     ax.axhline(0, dashes=[2, 2], color='k')

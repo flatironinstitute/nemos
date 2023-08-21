@@ -3,11 +3,10 @@
 Inheriting this class will result in compatibility with sci-kit learn pipelines.
 """
 
-from collections import defaultdict
 import abc
-
 import inspect
 import warnings
+from collections import defaultdict
 from typing import Tuple
 
 import jax.numpy as jnp
@@ -88,9 +87,9 @@ class Model(abc.ABC):
             # but only if the user did not explicitly set a value for
             # "base_estimator".
             if (
-                    key == "base_estimator"
-                    and valid_params[key] == "deprecated"
-                    and self.__module__.startswith("sklearn.")
+                key == "base_estimator"
+                and valid_params[key] == "deprecated"
+                and self.__module__.startswith("sklearn.")
             ):
                 warnings.warn(
                     (
@@ -154,5 +153,10 @@ class Model(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _score(self, X: NDArray, y: NDArray, params: Tuple[jnp.ndarray, jnp.ndarray], ):
+    def _score(
+        self,
+        X: NDArray,
+        y: NDArray,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+    ):
         pass
