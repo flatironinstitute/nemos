@@ -34,7 +34,7 @@ def test_set_up_glm():
         n_basis_funcs=5
     )
 
-    B = spike_basis.evaluate(onp.linspace(0, 1, ws))
+    B = spike_basis.evaluate(onp.linspace(0, 1, ws)).T
 
     w0 = onp.array([-.1, -.1, -.2, -.2, -1])
     w1 = onp.array([0, .1, .5, .1, 0])
@@ -58,7 +58,7 @@ def test_fit_glm2():
         n_basis_funcs=5
     )
 
-    B = spike_basis.evaluate(onp.linspace(0, 1, ws))
+    B = spike_basis.evaluate(onp.linspace(0, 1, ws)).T
 
     w0 = onp.array([-.1, -.1, -.2, -.2, -1])
     w1 = onp.array([0, .1, .5, .1, 0])

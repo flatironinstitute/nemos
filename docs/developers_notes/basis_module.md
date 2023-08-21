@@ -44,9 +44,9 @@ The `evaluate_on_grid` method evaluates the basis set on a grid of equidistant s
 This method performs the following steps:
 
 1. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
-2. Calls the subclass-specific `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
+2. Calls `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
 3. Calls the `evaluate` method.
-4. Returns both the sample grid points of shape `(m1, ..., mN)`, and the evaluation output at each grid point of shape `(n_basis_funcs, m1, ..., mN)`, where `mi` is the number of sample points for the i-th axis of the grid.
+4. Returns both the sample grid points of shape `(m1, ..., mN)`, and the evaluation output at each grid point of shape `(m1, ..., mN, n_basis_funcs)`, where `mi` is the number of sample points for the i-th axis of the grid.
 
 ### Abstract Methods
 
@@ -64,4 +64,5 @@ To write a usable (i.e., concrete, non-abstract) basis object, you
 - **Must** define the `_evaluate` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/neurostatslib/basis/) for the specifics.
 - **Should not** overwrite the `evaluate` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
+- **May** reimplement the `_get_samples` method if your basis domain differs from `[0,1]`. However, we recommend mapping the specific basis domain to `[0,1]` whenever possible.
 
