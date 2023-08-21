@@ -20,7 +20,7 @@ __all__ = [
     "OrthExponentialBasis",
     "AdditiveBasis",
     "MultiplicativeBasis",
-    "BSplineBasis"
+    "BSplineBasis",
 ]
 
 
@@ -408,11 +408,11 @@ class SplineBasis(Basis, abc.ABC):
             raise ValueError("Spline order must be positive!")
 
     def _generate_knots(
-            self,
-            sample_pts: NDArray,
-            perc_low: float = 0.0,
-            perc_high: float = 1.0,
-            is_cyclic: bool = False,
+        self,
+        sample_pts: NDArray,
+        perc_low: float = 0.0,
+        perc_high: float = 1.0,
+        is_cyclic: bool = False,
     ) -> NDArray:
         """
         Generate knot locations for spline basis functions.
@@ -450,7 +450,7 @@ class SplineBasis(Basis, abc.ABC):
         # Spline basis have support on the semi-open [a, b)  interval, we add a small epsilon
         # to mx so that the so that basis_element(max(samples)) != 0
         mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
-        mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100)) + 10 ** -8
+        mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100)) + 10**-8
 
         self.knot_locs = np.concatenate(
             (
@@ -533,6 +533,218 @@ class MSplineBasis(SplineBasis):
             raise ValueError(
                 f"{self.__class__.__name__} `order` parameter cannot be larger "
                 "than `n_basis_funcs` parameter."
+            )
+
+
+class BSplineBasis(SplineBasis):
+    """
+    B-spline 1-dimensional basis functions.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        Number of basis functions.
+    order :
+        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+        The B-splines have (order-2) continuous derivatives at each interior knot.
+        The higher this number, the smoother the basis representation will be.
+
+    Attributes
+    ----------
+    order :
+        Spline order.
+
+    Methods
+    -------
+    _evaluate(x_tuple)
+       Evaluate the basis function at the samples x_tuple[0]. x_tuple must be of length 1 in order to pass the checks
+       of super().evaluate
+
+    References
+    ----------
+    ..[2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+
+    """
+
+    def __init__(self, n_basis_funcs: int, order: int = 2):
+        super().__init__(n_basis_funcs, order=order)
+
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Evaluate the B-spline basis functions with given sample points.
+
+        Parameters
+        ----------
+        sample_pts :
+            The sample points at which the B-spline is evaluated.
+
+        Returns
+        -------
+        NDArray
+            The basis function evaluated at the samples (Time points x number of basis)
+
+        Raises
+        ------
+        AssertionError
+            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
+
+        Notes
+        -----
+        This method evaluates the B-spline basis functions at the given sample points.
+        It requires the knots to be defined through the `_generate_knots` method.
+
+        The evaluation is performed by looping over each element and using `splev`
+        from SciPy to compute the basis values.
+        """
+        super()._check_samples_non_empty(sample_pts)
+
+        # add knots
+        self._generate_knots(sample_pts, 0.0, 1.0)
+
+        basis_eval = bspline(
+            sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=False
+        )
+
+        return basis_eval
+
+    def _check_n_basis_min(self) -> None:
+        """Check that the user required enough basis elements.
+
+        Check that BSplineBasis has at least as many basis as the order of the spline.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self.n_basis_funcs < self.order:
+            raise ValueError(
+                f"{self.__class__.__name__} `order` parameter cannot be larger "
+                "than `n_basis_funcs` parameter."
+            )
+
+
+class CyclicBSplineBasis(SplineBasis):
+    """
+    B-spline 1-dimensional basis functions for cyclic splines.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        Number of basis functions.
+    order :
+        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+        The B-splines have (order-2) continuous derivatives at each interior knot.
+        The higher this number, the smoother the basis representation will be.
+
+    Attributes
+    ----------
+    n_basis_funcs : int
+        Number of basis functions.
+    order : int
+        Order of the splines used in basis functions.
+
+    Methods
+    -------
+    _evaluate(sample_pts, der)
+        Evaluate the B-spline basis functions with given sample points.
+    """
+
+    def __init__(self, n_basis_funcs: int, order: int = 2):
+        super().__init__(n_basis_funcs, order=order)
+        if self.order < 2:
+            raise ValueError(
+                f"Order >= 2 required for cyclic B-spline, "
+                f"order {self.order} specified instead!"
+            )
+
+    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+        """
+        Evaluate the B-spline basis functions with given sample points.
+
+        Parameters
+        ----------
+        sample_pts :
+            The sample points at which the B-spline is evaluated. Must be a tuple of length 1.
+
+        Returns
+        -------
+        NDArray
+            The basis function evaluated at the samples (Time points x number of basis)
+
+        Raises
+        ------
+        AssertionError
+            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
+
+        Notes
+        -----
+        This method evaluates the B-spline basis functions at the given sample points.
+        It requires the knots to be defined through the `_generate_knots` method.
+
+        The evaluation is performed by looping over each element and using `splev` from
+        SciPy to compute the basis values.
+        """
+        super()._check_samples_non_empty(sample_pts)
+
+        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+
+        # for cyclic, do not repeat knots
+        self.knot_locs = np.unique(self.knot_locs)
+
+        knots_orig = self.knot_locs.copy()
+
+        nk = knots_orig.shape[0]
+
+        # make sure knots are sorted
+        knots_orig.sort()
+
+        # extend knots
+        xc = knots_orig[nk - 2 * self.order + 1]
+        knots = np.hstack(
+            (
+                self.knot_locs[0]
+                - self.knot_locs[-1]
+                + self.knot_locs[nk - self.order : nk - 1],
+                self.knot_locs,
+            )
+        )
+        ind = sample_pts > xc
+
+        # temporarily set the extended knots as attribute
+        self.knot_locs = knots
+
+        basis_eval = bspline(
+            sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=True
+        )
+        sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
+
+        if np.sum(ind):
+            basis_eval[ind] = basis_eval[ind] + bspline(
+                sample_pts[ind], self.knot_locs, order=self.order, outer_ok=True, der=0
+            )
+        # restore points
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
+        # restore the original knots
+        self.knot_locs = knots_orig
+
+        return basis_eval
+
+    def _check_n_basis_min(self) -> None:
+        """Check that the user required enough basis elements.
+
+        Check that Cuclic-BSplineBasis has at least as many basis as the order of the spline +2
+        and at least 2*order - 2 basis.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self.n_basis_funcs < max(self.order * 2 - 2, self.order + 2):
+            raise ValueError(
+                f"Insufficient basis elements for {self.__class__.__name__} instantiation."
             )
 
 
@@ -875,210 +1087,13 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray):
         )
 
 
-class BSplineBasis(SplineBasis):
-    """
-    B-spline 1-dimensional basis functions.
-
-    Parameters
-    ----------
-    n_basis_funcs :
-        Number of basis functions.
-    order :
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
-        The B-splines have (order-2) continuous derivatives at each interior knot.
-        The higher this number, the smoother the basis representation will be.
-
-    Attributes
-    ----------
-    order :
-        Spline order.
-
-    Methods
-    -------
-    _evaluate(x_tuple)
-       Evaluate the basis function at the samples x_tuple[0]. x_tuple must be of length 1 in order to pass the checks
-       of super().evaluate
-
-    References
-    ----------
-    ..[2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
-    Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
-
-    """
-
-    def __init__(self, n_basis_funcs: int, order: int = 2):
-        super().__init__(n_basis_funcs, order=order)
-
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
-        """
-        Evaluate the B-spline basis functions with given sample points.
-
-        Parameters
-        ----------
-        sample_pts :
-            The sample points at which the B-spline is evaluated.
-
-        Returns
-        -------
-        NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
-
-        Raises
-        ------
-        AssertionError
-            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
-
-        Notes
-        -----
-        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `_generate_knots` method.
-
-        The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
-        """
-        super()._check_samples_non_empty(sample_pts)
-
-        # add knots
-        self._generate_knots(sample_pts, 0.0, 1.0)
-
-        basis_eval = bspline(sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=False)
-
-        return basis_eval
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Check that BSplineBasis has at least as many basis as the order of the spline.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < self.order:
-            raise ValueError(
-                f"{self.__class__.__name__} `order` parameter cannot be larger "
-                "than `n_basis_funcs` parameter."
-            )
-
-
-class CyclicBSplineBasis(SplineBasis):
-    """
-    B-spline 1-dimensional basis functions for cyclic splines.
-
-    Parameters
-    ----------
-    n_basis_funcs :
-        Number of basis functions.
-    order :
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
-        The B-splines have (order-2) continuous derivatives at each interior knot.
-        The higher this number, the smoother the basis representation will be.
-
-    Attributes
-    ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    order : int
-        Order of the splines used in basis functions.
-
-    Methods
-    -------
-    _evaluate(sample_pts, der)
-        Evaluate the B-spline basis functions with given sample points.
-    """
-
-    def __init__(self, n_basis_funcs: int, order: int = 2):
-        super().__init__(n_basis_funcs, order=order)
-        if self.order < 2:
-            raise ValueError(f"Order >= 2 required for cyclic B-spline, "
-                             f"order {self.order} specified instead!")
-
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
-        """
-        Evaluate the B-spline basis functions with given sample points.
-
-        Parameters
-        ----------
-        sample_pts :
-            The sample points at which the B-spline is evaluated. Must be a tuple of length 1.
-
-        Returns
-        -------
-        NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
-
-        Raises
-        ------
-        AssertionError
-            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
-
-        Notes
-        -----
-        This method evaluates the B-spline basis functions at the given sample points. It requires the knots to be defined
-        through the `_generate_knots` method.
-
-        The evaluation is performed by looping over each element and using `splev` from SciPy to compute the basis values.
-        """
-        super()._check_samples_non_empty(sample_pts)
-
-        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
-
-        # for cyclic, do not repeat knots
-        self.knot_locs = np.unique(self.knot_locs)
-
-        knots_orig = self.knot_locs.copy()
-
-        nk = knots_orig.shape[0]
-
-        # make sure knots are sorted
-        knots_orig.sort()
-
-        # extend knots
-        xc = knots_orig[nk - 2 * self.order + 1]
-        knots = np.hstack(
-            (
-                self.knot_locs[0]
-                - self.knot_locs[-1]
-                + self.knot_locs[nk - self.order: nk - 1],
-                self.knot_locs,
-            )
-        )
-        ind = sample_pts > xc
-
-        # temporarily set the extended knots as attribute
-        self.knot_locs = knots
-
-        basis_eval = bspline(sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=True)
-        sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
-
-        if np.sum(ind):
-            basis_eval[ind] = basis_eval[ind] + bspline(sample_pts[ind], self.knot_locs, order=self.order,
-                                                              outer_ok=True, der=0)
-        # restore points
-        sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
-        # restore the original knots
-        self.knot_locs = knots_orig
-
-        return basis_eval
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Check that Cuclic-BSplineBasis has at least as many basis as the order of the spline +2
-        and at least 2*order - 2 basis.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < max(self.order * 2 - 2, self.order + 2):
-            raise ValueError(
-                f"Insufficient basis elements for {self.__class__.__name__} instantiation."
-            )
-
-
-def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, outer_ok: bool = False):
+def bspline(
+    sample_pts: NDArray,
+    knots: NDArray,
+    order: int = 4,
+    der: int = 0,
+    outer_ok: bool = False,
+):
     """
     Calculate and return the evaluation of B-spline basis.
 
@@ -1123,17 +1138,15 @@ def bspline(sample_pts: NDArray, knots: NDArray, order: int = 4, der: int = 0, o
         sample_pts > knots[nk - order]
     )
     assert (
-               not need_outer
-           ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
+        not need_outer
+    ) | outer_ok, 'sample points must lie within the B-spline knots range unless "outer_ok==True".'
 
     # select knots that are within the knots range (this takes care of eventual NaNs)
     in_sample = (sample_pts >= knots[0]) & (sample_pts <= knots[-1])
 
     if need_outer:
         reps = order - 1
-        knots = np.hstack(
-            (np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1])
-        )
+        knots = np.hstack((np.ones(reps) * knots[0], knots, np.ones(reps) * knots[-1]))
         nk = knots.shape[0]
     else:
         reps = 0
