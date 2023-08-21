@@ -4,7 +4,7 @@ import abc
 import inspect
 from typing import Callable, Literal, Optional, Tuple
 
-import jax
+import jax, jaxlib
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
@@ -66,6 +66,10 @@ class PoissonGLMBase(Model, abc.ABC):
             )
         self.score_type = score_type
         self.solver_kwargs = solver_kwargs
+
+        if not callable(inverse_link_function):
+            raise ValueError("inverse_link_function must be a callable!")
+
         self.inverse_link_function = inverse_link_function
         # set additional kwargs e.g. regularization hyperparameters and so on...
         super().__init__(**kwargs)
