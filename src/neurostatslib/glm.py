@@ -535,9 +535,10 @@ class PoissonGLMBase(Model, abc.ABC):
         Simulate spike trains using the GLM as a recurrent network.
 
         This function projects spike trains into the future, employing the fitted
-        parameters of the GLM. While the default computation device is the CPU,
-        users can opt for GPU; however, it may not provide substantial speed-up due
-        to the inherently sequential nature of certain computations.
+        parameters of the GLM. It is capable of simulating spike trains based on a combination
+        of historical spike activity and external feedforward inputs like convolved currents, light
+        intensities, etc.
+
 
         Parameters
         ----------
@@ -585,8 +586,11 @@ class PoissonGLMBase(Model, abc.ABC):
 
         Notes
         -----
-        The sum of n_basis_input and n_basis_coupling should equal `self.basis_coeff_.shape[1]` to ensure
+        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]` to ensure
         consistency in the model's input feature dimensionality.
+
+        The first `n_basis_coupling * n_neurons` in `self.basis_coeff_` are interpreted as the weights of
+        the coupling filters.
         """
         if device == "cpu":
             target_device = jax.devices("cpu")[0]
