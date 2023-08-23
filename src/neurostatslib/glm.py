@@ -553,8 +553,9 @@ class PoissonGLMBase(Model, abc.ABC):
             Basis matrix for coupling, representing inter-neuron effects
             and auto-correlations. Expected shape: (window_size, n_basis_coupling).
         feedforward_input :
-            External input matrix, representing factors like convolved currents,
-            light intensities, etc. Expected shape: (n_timesteps, n_neurons, n_basis_input).
+            External input matrix to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Expected shape: (n_timesteps, n_neurons, n_basis_input).
         device :
             Computation device to use ('cpu' or 'gpu'). Default is 'cpu'.
 
@@ -586,11 +587,13 @@ class PoissonGLMBase(Model, abc.ABC):
 
         Notes
         -----
-        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]` to ensure
-        consistency in the model's input feature dimensionality.
+        The model coefficients (`self.basis_coeff_`) are structured such that the first set of coefficients
+        (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
+        The remaining coefficients correspond to the weights for the feed-forward input.
 
-        The first `n_basis_coupling * n_neurons` in `self.basis_coeff_` are interpreted as the weights of
-        the coupling filters.
+
+        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
+        to ensure consistency in the model's input feature dimensionality.
         """
         if device == "cpu":
             target_device = jax.devices("cpu")[0]
