@@ -584,6 +584,8 @@ class PoissonGLMBase(Model, abc.ABC):
             target_device = jax.devices("gpu")[0]
         else:
             raise ValueError(f"Invalid device: {device}. Choose 'cpu' or 'gpu'.")
+        # check if the model is fit
+        self._check_is_fit()
 
         # Transfer data to the target device
         init_spikes = jax.device_put(init_spikes, target_device)
@@ -597,17 +599,10 @@ class PoissonGLMBase(Model, abc.ABC):
         if feedforward_input is None:
             feedforward_input = jnp.zeros((n_timesteps, n_neurons, 0), dtype=jnp.float32)
 
-
-
-        self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
         
         self._check_input_dimensionality(feedforward_input, init_spikes)
-        
-        self._check_input_and_params_consistency((Ws[:, n_basis_coupling*n_neurons:], bs),
-                                                 X=feedforward_input,
-                                                 spike_data=init_spikes)
 
         if (
                 feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
@@ -621,12 +616,17 @@ class PoissonGLMBase(Model, abc.ABC):
                 f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
                 f"provided instead."
             )
+        
+        self._check_input_and_params_consistency((Ws[:, n_basis_coupling*n_neurons:], bs),
+                                                 X=feedforward_input,
+                                                 spike_data=init_spikes)
 
         if init_spikes.shape[0] != coupling_basis_matrix.shape[0]:
             raise ValueError(
-                "init_spikes has the wrong number of time steps!"
-                f"init_spikes time steps: {init_spikes.shape[1]}, "
-                f"spike_basis_matrix window size: {coupling_basis_matrix.shape[1]}"
+                "`init_spikes` and `coupling_basis_matrix`"
+                " should have the same window size! "
+                f"`init_spikes` window size: {init_spikes.shape[1]}, "
+                f"`spike_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
             )
 
         if feedforward_input.shape[0] != n_timesteps:
