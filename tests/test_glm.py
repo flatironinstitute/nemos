@@ -1,10 +1,10 @@
-import pytest
+from typing import Callable, Literal
 
-from typing import Literal, Callable
-
-import jax, jaxopt
+import jax
 import jax.numpy as jnp
+import jaxopt
 import numpy as np
+import pytest
 import statsmodels.api as sm
 
 import neurostatslib as nsl
@@ -849,4 +849,3 @@ class TestPoissonGLM:
                                        model.basis_coeff_.flatten()))
         if not np.allclose(fit_params_sm, fit_params_model):
             raise ValueError("Fitted parameters do not match that of statsmodels!")
-
