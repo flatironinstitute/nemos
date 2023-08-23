@@ -2,12 +2,12 @@
 """
 import abc
 import inspect
-from typing import Callable, Literal, Optional, Tuple
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax, jaxlib
 import jax.numpy as jnp
 import jaxopt
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 from sklearn.exceptions import NotFittedError
 
 from .model_base import Model
@@ -39,12 +39,12 @@ class PoissonGLMBase(Model, abc.ABC):
     """
 
     def __init__(
-        self,
-        solver_name: str = "GradientDescent",
-        solver_kwargs: dict = dict(),
-        inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
-        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
-        **kwargs,
+            self,
+            solver_name: str = "GradientDescent",
+            solver_kwargs: dict = dict(),
+            inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
+            score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
+            **kwargs,
     ):
         self.solver_name = solver_name
         try:
@@ -78,7 +78,7 @@ class PoissonGLMBase(Model, abc.ABC):
         self.basis_coeff_ = None
 
     def _predict(
-        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
+            self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Predict firing rates given predictors and parameters.
@@ -99,10 +99,10 @@ class PoissonGLMBase(Model, abc.ABC):
         return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
 
     def _score(
-        self,
-        X: NDArray,
-        target_spikes: NDArray,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
+            self,
+            X: jnp.ndarray,
+            target_spikes: jnp.ndarray,
+            params: Tuple[jnp.ndarray, jnp.ndarray],
     ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
@@ -144,7 +144,7 @@ class PoissonGLMBase(Model, abc.ABC):
         """
         # Avoid the edge-case of 0*log(0), much faster than
         # where on large arrays.
-        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10**-10)
+        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10 ** -10)
         x = target_spikes * jnp.log(predicted_firing_rates)
         # see above for derivation of this.
         return jnp.mean(predicted_firing_rates - x)
@@ -180,7 +180,7 @@ class PoissonGLMBase(Model, abc.ABC):
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(y / predicted_rate, self.FLOAT_EPS, jnp.inf)
-        resid_dev = y * jnp.log(ratio) - (y - predicted_rate)
+        resid_dev = 2 * (y * jnp.log(ratio) - (y - predicted_rate))
         return resid_dev
 
     def _pseudo_r2(self, params, X, y):
@@ -207,69 +207,25 @@ class PoissonGLMBase(Model, abc.ABC):
         """
         mu = self._predict(params, X)
         res_dev_t = self._residual_deviance(mu, y)
-        resid_deviance = jnp.sum(res_dev_t**2)
+        resid_deviance = jnp.sum(res_dev_t ** 2)
 
-        null_mu = jnp.ones(y.shape) * y.sum() / y.size
+        null_mu = jnp.ones(y.shape, dtype=jnp.float32) * y.mean()
         null_dev_t = self._residual_deviance(null_mu, y)
-        null_deviance = jnp.sum(null_dev_t**2)
+        null_deviance = jnp.sum(null_dev_t ** 2)
 
         return (null_deviance - resid_deviance) / null_deviance
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
-        if self.basis_coeff_ is None:
+        if (self.basis_coeff_ is None) or (self.baseline_link_fr_ is None):
             raise NotFittedError(
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
     @staticmethod
-    def _check_n_neurons(params, *args):
-        """
-        Validate the number of neurons in model parameters and input arguments.
-
-        This function checks that the number of neurons is consistent across
-        the model parameters (`params`) and any additional inputs (`args`).
-        Specifically, it ensures that the spike basis coefficients and bias terms
-        have the same first dimension and that this dimension matches the second
-        dimension of all input matrices in `args`.
-
-        """
-        n_neurons = params[0].shape[0]
-        if n_neurons != params[1].shape[0]:
-            raise ValueError(
-                "Model parameters have inconsistent shapes."
-                "spike basis coefficients must be of shape (n_neurons, n_features), and"
-                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both!"
-                f"coefficients n_neurons: {params[0].shape[0]}, bias n_neurons: {params[1].shape[0]}"
-            )
-        for arg in args:
-            if arg.shape[1] != n_neurons:
-                raise ValueError(
-                    "The number of neuron in the model parameters and in the inputs"
-                    "must match."
-                    f"parameters has n_neurons: {n_neurons}, "
-                    f"the input provided has n_neurons: {arg.shape[1]}"
-                )
-
-    @staticmethod
-    def _check_n_features(Ws, X):
-        """
-        Validate the number of features between model coefficients and input data.
-
-        This function checks that the number of features in the spike basis
-        coefficients (`Ws`) matches the number of features in the input data (`X`).
-
-        """
-        if Ws.shape[1] != X.shape[2]:
-            raise ValueError(
-                "Inconsistent number of features. "
-                f"spike basis coefficients has {Ws.shape[1]} features, "
-                f"X has {X.shape[2]} features instead!"
-            )
-
-    def _check_params(
-        self, params: Tuple[NDArray, NDArray], X: NDArray, spike_data: NDArray
-    ):
+    def _check_and_convert_params(
+            params: ArrayLike
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
 
@@ -278,39 +234,104 @@ class PoissonGLMBase(Model, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
+        if not hasattr(params, "__getitem__"):
+            raise TypeError("Initial parameters must be array-like!")
+        try:
+            params = tuple(jnp.asarray(par, dtype=jnp.float32) for par in params)
+        except ValueError:
+            raise TypeError("Initial parameters must be array-like of array-like objects"
+                            "with numeric data-type!")
+
         if len(params) != 2:
-            raise ValueError("Params needs to be a JAX pytree of size two of NDArray.")
+            raise ValueError("Params needs to be array-like of length two.")
 
         if params[0].ndim != 2:
             raise ValueError(
-                "Weights must be of shape (n_neurons, n_features), but"
+                "params[0] term must be of shape (n_neurons, n_features), but"
                 f"params[0] has {params[0].ndim} dimensions!"
             )
         if params[1].ndim != 1:
             raise ValueError(
-                "params[1] term must be of shape (n_neurons,) but params[1] have"
-                f"{params[1].ndim} dimensions!"
+                "params[1] term must be of shape (n_neurons,) but "
+                f"params[1] has {params[1].ndim} dimensions!"
             )
+        return params
 
-        # check that the neurons
-        self._check_n_neurons(params, X, spike_data)
+    @staticmethod
+    def _check_input_dimensionality(X: Optional[jnp.ndarray] = None,
+                      spike_data: Optional[jnp.ndarray] = None):
+        if not (spike_data is None):
+            if spike_data.ndim != 2:
+                raise ValueError(
+                    "spike_data must be two-dimensional, with shape (n_timebins, n_neurons)"
+                )
+        if not (X is None):
+            if X.ndim != 3:
+                raise ValueError(
+                    "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features)"
+                )
 
-        if spike_data.ndim != 2:
+    @staticmethod
+    def _check_input_and_params_consistency(params: Tuple[jnp.ndarray, jnp.ndarray],
+                                            X: Optional[jnp.ndarray] = None,
+                                            spike_data: Optional[jnp.ndarray] = None):
+        """
+        Validate the number of neurons in model parameters and input arguments.
+
+        Raises:
+        ------
+            ValueError
+                - if the number of neurons is consistent across the model parameters (`params`) and
+                any additional inputs (`X` or `spike_data` when provided).
+                - if the number of features is inconsistent between params[1] and X (when provided).
+
+        """
+        n_neurons = params[0].shape[0]
+        if n_neurons != params[1].shape[0]:
             raise ValueError(
-                "spike_data must be two-dimensional, with shape (n_timebins, n_neurons)"
+                "Model parameters have inconsistent shapes. "
+                "Spike basis coefficients must be of shape (n_neurons, n_features), and "
+                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both! "
+                f"Coefficients n_neurons: {params[0].shape[0]}, bias n_neurons: {params[1].shape[0]}"
             )
-        if X.ndim != 3:
-            raise ValueError(
-                "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features)"
-            )
-        self._check_n_features(params[0], X)
 
-    def predict(self, X: NDArray) -> jnp.ndarray:
+        if spike_data is not None:
+            if spike_data.shape[1] != n_neurons:
+                raise ValueError(
+                    "The number of neuron in the model parameters and in the inputs"
+                    "must match."
+                    f"parameters has n_neurons: {n_neurons}, "
+                    f"the input provided has n_neurons: {spike_data.shape[1]}"
+                )
+
+        if X is not None:
+            if X.shape[1] != n_neurons:
+                raise ValueError(
+                    "The number of neuron in the model parameters and in the inputs"
+                    "must match."
+                    f"parameters has n_neurons: {n_neurons}, "
+                    f"the input provided has n_neurons: {X.shape[1]}"
+                )
+            if params[0].shape[1] != X.shape[2]:
+                raise ValueError(
+                    "Inconsistent number of features. "
+                    f"spike basis coefficients has {params[0].shape[1]} features, "
+                    f"X has {X.shape[2]} features instead!"
+                )
+
+    @staticmethod
+    def _check_input_n_timepoints(X: jnp.ndarray, spike_data:jnp.ndarray):
+        if X.shape[0] != spike_data.shape[0]:
+            raise ValueError("The number of time-points in X and spike_data must agree. "
+                             f"X has {X.shape[0]} time-points, "
+                             f"spike_data has {spike_data.shape[0]} instead!")
+
+    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         """Predict firing rates based on fit parameters.
 
         Parameters
         ----------
-        X : NDArray
+        X :
             The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
 
         Returns
@@ -336,16 +357,21 @@ class PoissonGLMBase(Model, abc.ABC):
         simulate
             Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
         """
+        # check that the model is fitted
         self._check_is_fit()
+        # extract model params
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
-        self._check_n_neurons((Ws, bs), X)
-        self._check_n_features(Ws, X)
+        # check input dimensionality
+        self._check_input_dimensionality(X=X)
+        # check consistency between X and params
+        self._check_input_and_params_consistency((Ws, bs), X=X)
+        X, = self._convert_to_jnp_ndarray(X, data_type=jnp.float32)
         return self._predict((Ws, bs), X)
 
     def score(self,
-              X: NDArray,
-              spike_data: NDArray,
+              X: Union[NDArray, jnp.ndarray],
+              spike_data: Union[NDArray, jnp.ndarray],
               score_type: Optional[Literal["log-likelihood", "pseudo-r2"]] = None) -> jnp.ndarray:
         r"""Score the predicted firing rates (based on fit) to the target spike counts.
 
@@ -377,20 +403,24 @@ class PoissonGLMBase(Model, abc.ABC):
 
         where $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is the deviance for
         the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the spike counts and the model predicted rate
-         of neuron $n$ at time-point $t$ respectively, and $\bar{\lambda}$ is the mean firing rate.
+         of neuron $n$ at time-point $t$ respectively, and $\bar{\lambda}$ is the mean firing rate. See [1].
 
         Parameters
         ----------
-        X : (n_time_bins, n_neurons, n_features)
-            The exogenous variables.
-        spike_data : (n_time_bins, n_neurons)
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features)
+        spike_data :
             Spike counts arranged in a matrix. n_neurons must be the same as
-            during the fitting of this GLM instance.
-
+            during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
+        score_type:
+            String indicating the type of scoring to return. Options are:
+                - `log-likelihood` for the model log-likelihood.
+                - `pseudo-r2` for the model pseudo-$R^2$.
+            Default is defined at class initialization.
         Returns
         -------
         score : (1,)
-            The Poisson log-likehood or the pseudo-$R^2$ of the current model.
+            The Poisson log-likelihood or the pseudo-$R^2$ of the current model.
 
         Raises
         ------
@@ -410,6 +440,12 @@ class PoissonGLMBase(Model, abc.ABC):
         The Pseudo-$R^2$ is not equivalent to the $R^2$ value in linear regression. While both provide a measure
         of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
         The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
+
+        References
+        ----------
+        [1] Cohen, Jacob, et al. Applied multiple regression/correlation analysis for the behavioral sciences.
+        Routledge, 2013.
+
         """
 
         # ignore the last time point from predict, because that corresponds to
@@ -417,19 +453,23 @@ class PoissonGLMBase(Model, abc.ABC):
         self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
-        self._check_n_neurons((Ws, bs), X, spike_data)
-        self._check_n_features(Ws, X)
+        self._check_input_dimensionality(X, spike_data)
+        self._check_input_n_timepoints(X, spike_data)
+        self._check_input_and_params_consistency((Ws, bs), X=X, spike_data=spike_data)
+
+        X, spike_data = self._convert_to_jnp_ndarray(X, spike_data,
+                                                     data_type=jnp.float32)
 
         if score_type is None:
             score_type = self.score_type
 
         if score_type == "log-likelihood":
             score = -(
-                self._score(X, spike_data, (Ws, bs))
-                + jax.scipy.special.gammaln(spike_data + 1).mean()
+                    self._score(X, spike_data, (Ws, bs))
+                    + jax.scipy.special.gammaln(spike_data + 1).mean()
             )
         elif score_type == "pseudo-r2":
-            score = self._pseudo_r2((Ws,bs), X, spike_data)
+            score = self._pseudo_r2((Ws, bs), X, spike_data)
         else:
             # this should happen only if one manually set score_type
             raise NotImplementedError(
@@ -439,10 +479,10 @@ class PoissonGLMBase(Model, abc.ABC):
 
     @abc.abstractmethod
     def fit(
-        self,
-        X: NDArray,
-        spike_data: NDArray,
-        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+            self,
+            X: Union[NDArray, jnp.ndarray],
+            spike_data: Union[NDArray, jnp.ndarray],
+            init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
     ):
         """Fit GLM to spiking data.
 
@@ -473,13 +513,13 @@ class PoissonGLMBase(Model, abc.ABC):
         pass
 
     def simulate(
-        self,
-        random_key: jax.random.PRNGKeyArray,
-        n_timesteps: int,
-        init_spikes: NDArray,
-        coupling_basis_matrix: NDArray,
-        feedforward_input: NDArray,
-        device: str = "cpu",
+            self,
+            random_key: jax.random.PRNGKeyArray,
+            n_timesteps: int,
+            init_spikes: Union[NDArray, jnp.ndarray],
+            coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+            feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
+            device: str = "cpu",
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate spike trains using the GLM as a recurrent network.
@@ -550,15 +590,28 @@ class PoissonGLMBase(Model, abc.ABC):
         coupling_basis_matrix = jax.device_put(coupling_basis_matrix, target_device)
         feedforward_input = jax.device_put(feedforward_input, target_device)
 
-        self._check_is_fit()
+        n_basis_coupling = coupling_basis_matrix.shape[1]
+        n_neurons = self.baseline_link_fr_.shape[0]
 
+        # add an empty input (simulate with coupling-only)
+        if feedforward_input is None:
+            feedforward_input = jnp.zeros((n_timesteps, n_neurons, 0), dtype=jnp.float32)
+
+
+
+        self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
-        self._check_n_neurons((Ws, bs), feedforward_input, init_spikes)
+        
+        self._check_input_dimensionality(feedforward_input, init_spikes)
+        
+        self._check_input_and_params_consistency((Ws[:, n_basis_coupling*n_neurons:], bs),
+                                                 X=feedforward_input,
+                                                 spike_data=init_spikes)
 
         if (
-            feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
-            != Ws.shape[1]
+                feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
+                != Ws.shape[1]
         ):
             raise ValueError(
                 "The number of feed forward input features"
@@ -576,10 +629,14 @@ class PoissonGLMBase(Model, abc.ABC):
                 f"spike_basis_matrix window size: {coupling_basis_matrix.shape[1]}"
             )
 
+        if feedforward_input.shape[0] != n_timesteps:
+            raise ValueError("`feedforward_input` must be of length `n_timesteps`. "
+                             f"`feedforward_input` has length {len(feedforward_input)}, "
+                             f"`n_timesteps` is {n_timesteps} instead!")
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(
-            data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray
+                data: Tuple[NDArray, int], key: jax.random.PRNGKeyArray
         ) -> Tuple[Tuple[NDArray, int], NDArray]:
             """Function to scan over time steps and simulate spikes and firing rates.
 
@@ -647,12 +704,13 @@ class PoissonGLM(PoissonGLMBase):
     baseline_log_fr : jnp.ndarray, (n_neurons,)
         Solutions for bias terms, set during ``fit()``
     """
+
     def __init__(
-        self,
-        solver_name: str = "GradientDescent",
-        solver_kwargs: dict = dict(),
-        inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
-        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
+            self,
+            solver_name: str = "GradientDescent",
+            solver_kwargs: dict = dict(),
+            inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
+            score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
     ):
         super().__init__(
             solver_name=solver_name,
@@ -662,10 +720,10 @@ class PoissonGLM(PoissonGLMBase):
         )
 
     def fit(
-        self,
-        X: NDArray,
-        spike_data: NDArray,
-        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+            self,
+            X: Union[NDArray, jnp.ndarray],
+            spike_data: Union[NDArray, jnp.ndarray],
+            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ):
         """Fit GLM to spiking data.
 
@@ -685,15 +743,26 @@ class PoissonGLM(PoissonGLMBase):
         Raises
         ------
         ValueError
-            - If `params` is not a JAX pytree of size two.
-            - If shapes of init_params are not correct.
+            - If `init_params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
             - If the number of neurons in the model parameters and in the inputs do not match.
             - If `X` is not three-dimensional.
             - If spike_data is not two-dimensional.
             - If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            - If `init_params` are not array-like
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
         """
+        # check input dimensionality
+        self._check_input_dimensionality(X, spike_data)
+        self._check_input_n_timepoints(X, spike_data)
+
+        # convert to jnp.ndarray of floats
+        X, spike_data = self._convert_to_jnp_ndarray(X, spike_data,
+                                                     data_type=jnp.float32)
+
         _, n_neurons = spike_data.shape
         n_features = X.shape[2]
 
@@ -705,8 +774,11 @@ class PoissonGLM(PoissonGLMBase):
                 # bs, bias terms
                 jnp.log(jnp.mean(spike_data, axis=0)),
             )
-
-        self._check_params(init_params, X, spike_data)
+        else:
+            # check parameter length, shape and dimensionality, convert to jnp.ndarray.
+            init_params = self._check_and_convert_params(init_params)
+        # check that the inputs and the parameters has consistent sizes
+        self._check_input_and_params_consistency(init_params, X, spike_data)
 
         def loss(params, X, y):
             return self._score(X, y, params)

@@ -7,7 +7,7 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Tuple, Any
+from typing import Tuple, Union
 
 import jax.numpy as jnp
 from numpy.typing import NDArray
@@ -137,15 +137,17 @@ class Model(abc.ABC):
         return sorted([p.name for p in parameters])
 
     @abc.abstractmethod
-    def fit(self, X: NDArray, y: NDArray):
+    def fit(self, X: Union[NDArray, jnp.ndarray],
+            y: Union[NDArray, jnp.ndarray]):
         pass
 
     @abc.abstractmethod
-    def predict(self, X: NDArray) -> jnp.ndarray:
+    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
-    def score(self, X: NDArray, y: NDArray) -> jnp.ndarray:
+    def score(self, X: Union[NDArray, jnp.ndarray],
+              y: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
@@ -155,8 +157,15 @@ class Model(abc.ABC):
     @abc.abstractmethod
     def _score(
         self,
-        X: NDArray,
-        y: NDArray,
+        X: jnp.ndarray,
+        y: jnp.ndarray,
         params: Tuple[jnp.ndarray, jnp.ndarray],
     ) -> jnp.ndarray:
         pass
+
+    @staticmethod
+    def _convert_to_jnp_ndarray(*args: Union[NDArray, jnp.ndarray],
+                               data_type: jnp.dtype = jnp.float32) \
+            -> Tuple[jnp.ndarray, ...]:
+        return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
+
