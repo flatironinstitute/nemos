@@ -1,10 +1,11 @@
-import pytest
+import inspect
+import os
 
-import yaml
 import jax
-
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
+import pytest
+import yaml
 
 import neurostatslib as nsl
 
@@ -22,8 +23,10 @@ def poissonGLM_model_instantiation():
 
 @pytest.fixture
 def poissonGLM_coupled_model_config_simulate():
-
-    with open("simulate_coupled_neurons_params.yml", "r") as fh:
+    current_file = inspect.getfile(inspect.currentframe())
+    test_dir = os.path.dirname(os.path.abspath(current_file))
+    with open(os.path.join(test_dir,
+                           "simulate_coupled_neurons_params.yml"), "r") as fh:
         config_dict = yaml.safe_load(fh)
 
     model = nsl.glm.PoissonGLM(inverse_link_function=jax.numpy.exp)

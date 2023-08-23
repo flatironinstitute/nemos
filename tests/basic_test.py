@@ -1,13 +1,12 @@
-from neurostatslib.glm import PoissonGLM
-from sklearn.linear_model import PoissonRegressor
-import numpy as np
-import matplotlib.pylab as plt
-from scipy.optimize import minimize
-from jax import grad
-import scipy.stats as sts
 import jax.numpy as jnp
+import matplotlib.pylab as plt
+import numpy as np
+import scipy.stats as sts
+from jax import grad
+from scipy.optimize import minimize
+from sklearn.linear_model import PoissonRegressor
 
-
+from neurostatslib.glm import PoissonGLM
 
 np.random.seed(100)
 

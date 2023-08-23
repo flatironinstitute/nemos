@@ -7,7 +7,6 @@ import utils_testing
 
 import neurostatslib.basis as basis
 
-
 # automatic define user accessible basis and check the methods
 
 
