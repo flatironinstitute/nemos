@@ -137,8 +137,7 @@ class Model(abc.ABC):
         return sorted([p.name for p in parameters])
 
     @abc.abstractmethod
-    def fit(self, X: Union[NDArray, jnp.ndarray],
-            y: Union[NDArray, jnp.ndarray]):
+    def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
         pass
 
     @abc.abstractmethod
@@ -146,12 +145,15 @@ class Model(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def score(self, X: Union[NDArray, jnp.ndarray],
-              y: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+    def score(
+        self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]
+    ) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
-    def _predict(self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray) -> jnp.ndarray:
+    def _predict(
+        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
+    ) -> jnp.ndarray:
         pass
 
     @abc.abstractmethod
@@ -164,8 +166,7 @@ class Model(abc.ABC):
         pass
 
     @staticmethod
-    def _convert_to_jnp_ndarray(*args: Union[NDArray, jnp.ndarray],
-                               data_type: jnp.dtype = jnp.float32) \
-            -> Tuple[jnp.ndarray, ...]:
+    def _convert_to_jnp_ndarray(
+        *args: Union[NDArray, jnp.ndarray], data_type: jnp.dtype = jnp.float32
+    ) -> Tuple[jnp.ndarray, ...]:
         return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
-
