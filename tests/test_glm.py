@@ -52,7 +52,7 @@ class TestPoissonGLM:
     @pytest.mark.parametrize("score_type", [1, "ll", "log-likelihood", "pseudo-r2"])
     def test_init_score_type(self, score_type: Literal["log-likelihood", "pseudo-r2"]):
         if score_type not in ["log-likelihood", "pseudo-r2"]:
-            with pytest.raises(NotImplementedError, match="Scoring method not implemented."):
+            with pytest.raises(NotImplementedError, match=f"Scoring method {score_type} not implemented"):
                 nsl.glm.PoissonGLM("BFGS", score_type=score_type)
         else:
             nsl.glm.PoissonGLM("BFGS", score_type=score_type)
@@ -81,6 +81,25 @@ class TestPoissonGLM:
                 model.fit(X, y, init_params=init_params)
         else:
             model.fit(X, y, init_params=init_params)
+
+    @pytest.mark.parametrize("add_entry", [0, np.nan, np.inf])
+    @pytest.mark.parametrize("add_to", ["X", "y"])
+    def test_fit_param_length(self, add_entry, add_to, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        if add_to == "X":
+            idx = np.unravel_index(np.random.choice(X.size), X.shape)
+            X[idx] = add_entry
+        elif add_to == "y":
+            idx = np.unravel_index(np.random.choice(y.size), y.shape)
+            y = np.asarray(y, dtype=np.float32)
+            y[idx] = add_entry
+
+        raise_exception = jnp.isnan(add_entry) or jnp.isinf(add_entry)
+        if raise_exception:
+            with pytest.raises(ValueError, match="Input (X|spike_data) contains a NaNs or Infs"):
+                model.fit(X, y, init_params=true_params)
+        else:
+            model.fit(X, y, init_params=true_params)
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     def test_fit_weights_dimensionality(self, dim_weights, poissonGLM_model_instantiation):
@@ -463,6 +482,19 @@ class TestPoissonGLM:
         else:
             model.score(X, y)
 
+    @pytest.mark.parametrize("score_type", ["pseudo-r2", "log-likelihood", "not-implemented"])
+    def test_score_type_r2(self, score_type, poissonGLM_model_instantiation):
+        raise_exception = score_type not in ["pseudo-r2", "log-likelihood"]
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.basis_coeff_ = true_params[0]
+        model.baseline_link_fr_ = true_params[1]
+
+        if raise_exception:
+            with pytest.raises(NotImplementedError, match=f"Scoring method {score_type} not implemented"):
+                model.score(X, y, score_type=score_type)
+        else:
+            model.score(X, y, score_type=score_type)
+
     def test_loglikelihood_against_scipy_stats(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set model coeff
@@ -818,6 +850,42 @@ class TestPoissonGLM:
                            feedforward_input=feedforward_input,
                            device="cpu")
 
+    @pytest.mark.parametrize("device_spec", ["cpu", "tpu", "gpu", "none"])
+    def test_simulate_device_tspec(self, device_spec,
+                                   poissonGLM_coupled_model_config_simulate):
+
+        raise_exception = not (device_spec in ["cpu", "tpu", "gpu"])
+        print(device_spec, raise_exception)
+        raise_warning = all(device_spec != device.device_kind.lower()
+                            for device in jax.local_devices())
+        raise_warning = raise_warning and (not raise_exception)
+
+        model, coupling_basis, feedforward_input, init_spikes, random_key = \
+            poissonGLM_coupled_model_config_simulate
+
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Invalid device specification: {device_spec}"):
+                model.simulate(random_key=random_key,
+                               n_timesteps=feedforward_input.shape[0],
+                               init_spikes=init_spikes,
+                               coupling_basis_matrix=coupling_basis,
+                               feedforward_input=feedforward_input,
+                               device=device_spec)
+        elif raise_warning:
+            with pytest.warns(UserWarning, match=f"No {device_spec.upper()} found"):
+                model.simulate(random_key=random_key,
+                               n_timesteps=feedforward_input.shape[0],
+                               init_spikes=init_spikes,
+                               coupling_basis_matrix=coupling_basis,
+                               feedforward_input=feedforward_input,
+                               device=device_spec)
+        else:
+            model.simulate(random_key=random_key,
+                           n_timesteps=feedforward_input.shape[0],
+                           init_spikes=init_spikes,
+                           coupling_basis_matrix=coupling_basis,
+                           feedforward_input=feedforward_input,
+                           device=device_spec)
     #######################################
     # Compare with standard implementation
     #######################################

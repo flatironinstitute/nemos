@@ -2,6 +2,7 @@
 """
 import abc
 import inspect
+import warnings
 from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
@@ -11,7 +12,7 @@ from numpy.typing import ArrayLike, NDArray
 from sklearn.exceptions import NotFittedError
 
 from .model_base import Model
-from .utils import convolve_1d_trials
+from .utils import convolve_1d_trials, has_local_device
 
 
 class PoissonGLMBase(Model, abc.ABC):
@@ -62,9 +63,8 @@ class PoissonGLMBase(Model, abc.ABC):
 
         if score_type not in ["log-likelihood", "pseudo-r2"]:
             raise NotImplementedError(
-                "Scoring method not implemented. "
-                f"score_type must be either 'log-likelihood', or 'pseudo-r2'."
-                f" {score_type} provided instead."
+                f"Scoring method {score_type} not implemented! "
+                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
             )
         self.score_type = score_type
         self.solver_kwargs = solver_kwargs
@@ -483,7 +483,8 @@ class PoissonGLMBase(Model, abc.ABC):
         else:
             # this should happen only if one manually set score_type
             raise NotImplementedError(
-                f"Scoring method {self.score_type} not implemented!"
+                f"Scoring method {score_type} not implemented! "
+                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
             )
         return score
 
@@ -492,7 +493,7 @@ class PoissonGLMBase(Model, abc.ABC):
         self,
         X: Union[NDArray, jnp.ndarray],
         spike_data: Union[NDArray, jnp.ndarray],
-        init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
+        init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None
     ):
         """Fit GLM to spiking data.
 
@@ -522,6 +523,48 @@ class PoissonGLMBase(Model, abc.ABC):
         """
         pass
 
+    def _preprocess_fit(
+            self,
+            X: Union[NDArray, jnp.ndarray],
+            spike_data: Union[NDArray, jnp.ndarray],
+            init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+
+        # check input dimensionality
+        self._check_input_dimensionality(X, spike_data)
+        self._check_input_n_timepoints(X, spike_data)
+
+        # convert to jnp.ndarray of floats
+        X, spike_data = self._convert_to_jnp_ndarray(
+            X, spike_data, data_type=jnp.float32
+        )
+
+        if self._has_invalid_entry(X):
+            raise ValueError("Input X contains a NaNs or Infs!")
+        elif self._has_invalid_entry(spike_data):
+            raise ValueError("Input spike_data contains a NaNs or Infs!")
+
+        _, n_neurons = spike_data.shape
+        n_features = X.shape[2]
+
+        # Initialize parameters
+        if init_params is None:
+            # Ws, spike basis coeffs
+            init_params = (
+                jnp.zeros((n_neurons, n_features)),
+                # bs, bias terms
+                jnp.log(jnp.mean(spike_data, axis=0)),
+            )
+        else:
+            # check parameter length, shape and dimensionality, convert to jnp.ndarray.
+            init_params = self._check_and_convert_params(init_params)
+
+        # check that the inputs and the parameters has consistent sizes
+        self._check_input_and_params_consistency(init_params, X, spike_data)
+
+        return X, spike_data, init_params
+
+
     def simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
@@ -529,7 +572,7 @@ class PoissonGLMBase(Model, abc.ABC):
         init_spikes: Union[NDArray, jnp.ndarray],
         coupling_basis_matrix: Union[NDArray, jnp.ndarray],
         feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
-        device: str = "cpu",
+        device: Literal["cpu", "gpu", "tpu"] = "cpu",
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate spike trains using the GLM as a recurrent network.
@@ -596,11 +639,16 @@ class PoissonGLMBase(Model, abc.ABC):
         to ensure consistency in the model's input feature dimensionality.
         """
         if device == "cpu":
-            target_device = jax.devices("cpu")[0]
-        elif device == "gpu":
-            target_device = jax.devices("gpu")[0]
+            target_device = jax.devices(device)[0]
+        elif (device == "gpu") or (device == "tpu"):
+            if has_local_device(device):
+                # assume for now 1 gpu/tpu (no further parallelization)
+                target_device = jax.devices(device)[0]
+            else:
+                warnings.warn(f"No {device.upper()} found! Falling back to CPU")
+                target_device = jax.devices("cpu")[0]
         else:
-            raise ValueError(f"Invalid device: {device}. Choose 'cpu' or 'gpu'.")
+            raise ValueError(f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`.")
         # check if the model is fit
         self._check_is_fit()
 
@@ -778,31 +826,8 @@ class PoissonGLM(PoissonGLMBase):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
         """
-        # check input dimensionality
-        self._check_input_dimensionality(X, spike_data)
-        self._check_input_n_timepoints(X, spike_data)
 
-        # convert to jnp.ndarray of floats
-        X, spike_data = self._convert_to_jnp_ndarray(
-            X, spike_data, data_type=jnp.float32
-        )
-
-        _, n_neurons = spike_data.shape
-        n_features = X.shape[2]
-
-        # Initialize parameters
-        if init_params is None:
-            # Ws, spike basis coeffs
-            init_params = (
-                jnp.zeros((n_neurons, n_features)),
-                # bs, bias terms
-                jnp.log(jnp.mean(spike_data, axis=0)),
-            )
-        else:
-            # check parameter length, shape and dimensionality, convert to jnp.ndarray.
-            init_params = self._check_and_convert_params(init_params)
-        # check that the inputs and the parameters has consistent sizes
-        self._check_input_and_params_consistency(init_params, X, spike_data)
+        X, spike_data, init_params = self._preprocess_fit(X, spike_data, init_params)
 
         def loss(params, X, y):
             return self._score(X, y, params)

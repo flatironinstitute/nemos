@@ -170,3 +170,18 @@ class Model(abc.ABC):
         *args: Union[NDArray, jnp.ndarray], data_type: jnp.dtype = jnp.float32
     ) -> Tuple[jnp.ndarray, ...]:
         return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
+    @staticmethod
+    def _has_invalid_entry(array: jnp.ndarray) -> bool:
+        """Check if the array has nans or infs.
+
+        Parameters
+        ----------
+        array:
+            The array to be checked.
+
+        Returns
+        -------
+            True if a nan or an inf is present, False otherwise
+
+        """
+        return (jnp.isinf(array) | jnp.isnan(array)).any()
