@@ -17,6 +17,7 @@ class Model(abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     def __init__(self, **kwargs):
+        self._kwargs_keys = list(kwargs.keys())
         for key in kwargs:
             setattr(self, key, kwargs[key])
 
@@ -38,6 +39,9 @@ class Model(abc.ABC):
                 deep_items = value.get_params().items()
                 out.update((key + "__" + k, val) for k, val in deep_items)
             out[key] = value
+        # add kwargs
+        for key in self._kwargs_keys:
+            out[key] = getattr(self, key)
         return out
 
     def set_params(self, **params):
@@ -62,7 +66,6 @@ class Model(abc.ABC):
             # Simple optimization to gain speed (inspect is slow)
             return self
         valid_params = self.get_params(deep=True)
-
         nested_params = defaultdict(dict)  # grouped by prefix
         for key, value in params.items():
             key, delim, sub_key = key.partition("__")
@@ -133,8 +136,19 @@ class Model(abc.ABC):
                     " %s with constructor %s doesn't "
                     " follow this convention." % (cls, init_signature)
                 )
+
+        # Consider the constructor parameters excluding 'self'
+        parameters = [
+            p.name
+            for p in init_signature.parameters.values()
+            if p.name != "self"
+        ]
+
+        # remove kwargs
+        if 'kwargs' in parameters:
+            parameters.remove('kwargs')
         # Extract and sort argument names excluding 'self'
-        return sorted([p.name for p in parameters])
+        return sorted(parameters)
 
     @abc.abstractmethod
     def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
