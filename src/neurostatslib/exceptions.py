@@ -6,14 +6,14 @@ class NotFittedError(ValueError, AttributeError):
 
     Examples
     --------
-    >>> from sklearn.svm import LinearSVC
-    >>> from sklearn.exceptions import NotFittedError
+    >>> from neurostatslib.glm import PoissonGLM
+    >>> from neurostatslib.exceptions import NotFittedError
     >>> try:
-    ...     PoissonGLM().predict([[1, 2], [2, 3], [3, 4]])
+    ...     PoissonGLM().predict([[[1, 2], [2, 3], [3, 4]]])
     ... except NotFittedError as e:
     ...     print(repr(e))
-    NotFittedError("This LinearSVC instance is not fitted yet. Call 'fit' with
-    appropriate arguments before using this estimator."...)
+    NotFittedError("This GLM instance is not fitted yet. Call 'fit' with
+    appropriate arguments.")
 
     .. versionchanged:: 0.18
        Moved from sklearn.utils.validation.

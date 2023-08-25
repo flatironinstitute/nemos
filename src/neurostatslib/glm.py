@@ -844,8 +844,6 @@ class PoissonGLM(GLMBase):
         ------
         NotFittedError
             If the model hasn't been fitted prior to calling this method.
-        Raises
-        ------
         ValueError
             - If the instance has not been previously fitted.
             - If there's an inconsistency between the number of neurons in model parameters.
