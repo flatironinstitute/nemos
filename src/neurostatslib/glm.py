@@ -101,7 +101,7 @@ class GLMBase(BaseRegressor, abc.ABC):
         return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
 
     @abc.abstractmethod
-    def _residual_deviance(self, predicted_rate, y):
+    def residual_deviance(self, predicted_rate, y):
         r"""Compute the residual deviance for a GLM model.
 
         Parameters
@@ -154,11 +154,11 @@ class GLMBase(BaseRegressor, abc.ABC):
 
         """
         mu = self._predict(params, X)
-        res_dev_t = self._residual_deviance(mu, y)
+        res_dev_t = self.residual_deviance(mu, y)
         resid_deviance = jnp.sum(res_dev_t**2)
 
         null_mu = jnp.ones(y.shape, dtype=jnp.float32) * y.mean()
-        null_dev_t = self._residual_deviance(null_mu, y)
+        null_dev_t = self.residual_deviance(null_mu, y)
         null_deviance = jnp.sum(null_dev_t**2)
 
         return (null_deviance - resid_deviance) / null_deviance
@@ -604,7 +604,7 @@ class PoissonGLM(GLMBase):
         # see above for derivation of this.
         return jnp.mean(predicted_firing_rates - x)
 
-    def _residual_deviance(
+    def residual_deviance(
         self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Poisson model.
