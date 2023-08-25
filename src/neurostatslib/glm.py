@@ -11,11 +11,11 @@ import jaxopt
 from numpy.typing import ArrayLike, NDArray
 from sklearn.exceptions import NotFittedError
 
-from .model_base import Model
+from .base_class import BaseRegressor
 from .utils import convolve_1d_trials, has_local_device
 
 
-class PoissonGLMBase(Model, abc.ABC):
+class PoissonGLMBase(BaseRegressor, abc.ABC):
     """Abstract base class for Poisson GLMs.
 
     Provides methods for score computation, simulation, and prediction.

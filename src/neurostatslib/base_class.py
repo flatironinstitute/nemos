@@ -7,15 +7,13 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional, Literal
 
+import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-
-class Model(abc.ABC):
-    FLOAT_EPS = jnp.finfo(jnp.float32).eps
-
+class _Base(abc.ABC):
     def __init__(self, **kwargs):
         self._kwargs_keys = list(kwargs.keys())
         for key in kwargs:
@@ -150,6 +148,10 @@ class Model(abc.ABC):
         # Extract and sort argument names excluding 'self'
         return sorted(parameters)
 
+
+class BaseRegressor(_Base, abc.ABC):
+    FLOAT_EPS = jnp.finfo(jnp.float32).eps
+
     @abc.abstractmethod
     def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
         pass
@@ -165,18 +167,15 @@ class Model(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _predict(
-        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: NDArray
-    ) -> jnp.ndarray:
-        pass
-
-    @abc.abstractmethod
-    def _score(
-        self,
-        X: jnp.ndarray,
-        y: jnp.ndarray,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-    ) -> jnp.ndarray:
+    def simulate(
+            self,
+            random_key: jax.random.PRNGKeyArray,
+            n_timesteps: int,
+            init_spikes: Union[NDArray, jnp.ndarray],
+            coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+            feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
+            device: Literal["cpu", "gpu", "tpu"] = "cpu",
+    ):
         pass
 
     @staticmethod
@@ -184,6 +183,7 @@ class Model(abc.ABC):
         *args: Union[NDArray, jnp.ndarray], data_type: jnp.dtype = jnp.float32
     ) -> Tuple[jnp.ndarray, ...]:
         return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
+
     @staticmethod
     def _has_invalid_entry(array: jnp.ndarray) -> bool:
         """Check if the array has nans or infs.

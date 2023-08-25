@@ -1,9 +1,20 @@
-# The PoissonGLMBase Class
+# The `glm` Module
 
 ## Introduction
 
-The `PoissonGLMBase` class serves as the foundation for implementing Poisson Generalized Linear Models (GLMs). These models are essential for analyzing neural data and other related time-series data. The class encapsulates various functionalities required for model definition, fitting, prediction, and scoring, all of which are crucial aspects of modeling neural activity.
+The `neurostatslib.glm` basis module implements variations of Generalized Linear Models (GLMs) classes. 
 
+At stage, the module consists of two classes:
+
+1. The abstract class `PoissonGLMBase`.
+2. The concrete class `PoissonGLM`.
+
+We followed the `scikit-learn` api, making the concrete GLM model classes compatible with the powerful `scikit-learn` pipeline and cross-validation modules.
+
+The `PoissonGLMBase` serves as the foundation for implementing Poisson Generalized Linear Models (GLMs).
+It designed to follow the `scikit-learn` api in order to guarantee compatibility with `scikit-learn` pipelines. 
+It inherits `Model` (see the ["ModuleBase Module"](base_class.md)) and implements the public methods `predict`, `score` , `simulate`.
+`predict` generates Poisson means based on the current parameter estimate, `score` evaluates the performance of the model, and `simulate` generates simulated spike trains taking into account recurrent connectivity and feedforward inputs.
 The core features of this class are centered around abstract methods that must be implemented by any concrete subclasses, ensuring a standardized interface for all types of Poisson GLM models.
 
 ## The Class `PoissonGLMBase`

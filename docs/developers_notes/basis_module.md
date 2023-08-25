@@ -1,4 +1,4 @@
-# The Basis Module
+# The `basis` Module
 
 ## Introduction
 
