@@ -7,11 +7,11 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Tuple, Union, Optional, Literal, Callable, Sequence
+from typing import Callable, Literal, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray, ArrayLike, DTypeLike
+from numpy.typing import ArrayLike, DTypeLike, NDArray
 
 
 class _Base(abc.ABC):
@@ -138,14 +138,12 @@ class _Base(abc.ABC):
 
         # Consider the constructor parameters excluding 'self'
         parameters = [
-            p.name
-            for p in init_signature.parameters.values()
-            if p.name != "self"
+            p.name for p in init_signature.parameters.values() if p.name != "self"
         ]
 
         # remove kwargs
-        if 'kwargs' in parameters:
-            parameters.remove('kwargs')
+        if "kwargs" in parameters:
+            parameters.remove("kwargs")
         # Extract and sort argument names excluding 'self'
         return sorted(parameters)
 
@@ -169,13 +167,13 @@ class BaseRegressor(_Base, abc.ABC):
 
     @abc.abstractmethod
     def simulate(
-            self,
-            random_key: jax.random.PRNGKeyArray,
-            n_timesteps: int,
-            init_spikes: Union[NDArray, jnp.ndarray],
-            coupling_basis_matrix: Union[NDArray, jnp.ndarray],
-            feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
-            device: Literal["cpu", "gpu", "tpu"] = "cpu"
+        self,
+        random_key: jax.random.PRNGKeyArray,
+        n_timesteps: int,
+        init_spikes: Union[NDArray, jnp.ndarray],
+        coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+        feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
+        device: Literal["cpu", "gpu", "tpu"] = "cpu",
     ):
         pass
 
@@ -238,7 +236,7 @@ class BaseRegressor(_Base, abc.ABC):
 
     @staticmethod
     def _check_input_dimensionality(
-            X: Optional[jnp.ndarray] = None, y: Optional[jnp.ndarray] = None
+        X: Optional[jnp.ndarray] = None, y: Optional[jnp.ndarray] = None
     ):
         if not (y is None):
             if y.ndim != 2:
@@ -253,9 +251,9 @@ class BaseRegressor(_Base, abc.ABC):
 
     @staticmethod
     def _check_input_and_params_consistency(
-            params: Tuple[jnp.ndarray, jnp.ndarray],
-            X: Optional[jnp.ndarray] = None,
-            y: Optional[jnp.ndarray] = None,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        X: Optional[jnp.ndarray] = None,
+        y: Optional[jnp.ndarray] = None,
     ):
         """
         Validate the number of neurons in model parameters and input arguments.
@@ -311,20 +309,17 @@ class BaseRegressor(_Base, abc.ABC):
             )
 
     def _preprocess_fit(
-            self,
-            X: Union[NDArray, jnp.ndarray],
-            y: Union[NDArray, jnp.ndarray],
-            init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
-
         # check input dimensionality
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
         # convert to jnp.ndarray of floats
-        X, y = self._convert_to_jnp_ndarray(
-            X, y, data_type=jnp.float32
-        )
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
 
         if self._has_invalid_entry(X):
             raise ValueError("Input X contains a NaNs or Infs!")

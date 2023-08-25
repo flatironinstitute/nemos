@@ -1,3 +1,3 @@
 #!/usr/bin/env python3
 
-from . import basis, glm, sample_points, utils, exceptions
+from . import basis, exceptions, glm, sample_points, utils

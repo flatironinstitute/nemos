@@ -11,8 +11,8 @@ import jaxopt
 from numpy.typing import ArrayLike, NDArray
 
 from .base_class import BaseRegressor
-from .utils import convolve_1d_trials, has_local_device
 from .exceptions import NotFittedError
+from .utils import convolve_1d_trials, has_local_device
 
 
 class GLMBase(BaseRegressor, abc.ABC):
@@ -170,10 +170,7 @@ class GLMBase(BaseRegressor, abc.ABC):
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def predict(
-        self,
-        X: Union[NDArray, jnp.ndarray]
-    ) -> jnp.ndarray:
+    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         """Predict firing rates based on fit parameters.
 
         Parameters
@@ -218,8 +215,10 @@ class GLMBase(BaseRegressor, abc.ABC):
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
-        score_func: Callable[[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]],jnp.ndarray],
-        score_type: Optional[Literal["log-likelihood", "pseudo-r2"]] = None
+        score_func: Callable[
+            [jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]], jnp.ndarray
+        ],
+        score_type: Optional[Literal["log-likelihood", "pseudo-r2"]] = None,
     ) -> jnp.ndarray:
         r"""Score the predicted firing rates (based on fit) to the target spike counts.
 
@@ -294,17 +293,13 @@ class GLMBase(BaseRegressor, abc.ABC):
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
 
-        X, y = self._convert_to_jnp_ndarray(
-            X, y, data_type=jnp.float32
-        )
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
 
         if score_type is None:
             score_type = self.score_type
 
         if score_type == "log-likelihood":
-            score = -(
-                score_func(X, y, (Ws, bs))
-            )
+            score = -(score_func(X, y, (Ws, bs)))
         elif score_type == "pseudo-r2":
             score = self._pseudo_r2((Ws, bs), X, y)
         else:
@@ -321,10 +316,9 @@ class GLMBase(BaseRegressor, abc.ABC):
         n_timesteps: int,
         init_y: Union[NDArray, jnp.ndarray],
         coupling_basis_matrix: Union[NDArray, jnp.ndarray],
-        random_function: Callable[
-                [jax.random.PRNGKeyArray, ArrayLike], jnp.ndarray],
+        random_function: Callable[[jax.random.PRNGKeyArray, ArrayLike], jnp.ndarray],
         feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
-        device: Literal["cpu", "gpu", "tpu"] = "cpu"
+        device: Literal["cpu", "gpu", "tpu"] = "cpu",
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate spike trains using the GLM as a recurrent network.
@@ -402,7 +396,9 @@ class GLMBase(BaseRegressor, abc.ABC):
                 warnings.warn(f"No {device.upper()} found! Falling back to CPU")
                 target_device = jax.devices("cpu")[0]
         else:
-            raise ValueError(f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`.")
+            raise ValueError(
+                f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`."
+            )
         # check if the model is fit
         self._check_is_fit()
 
@@ -461,8 +457,7 @@ class GLMBase(BaseRegressor, abc.ABC):
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(
-            data: Tuple[jnp.ndarray, int],
-            key: jax.random.PRNGKeyArray
+            data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
         ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
             """Function to scan over time steps and simulate spikes and firing rates.
 
@@ -549,8 +544,8 @@ class PoissonGLM(GLMBase):
         self,
         X: jnp.ndarray,
         target_spikes: jnp.ndarray,
-        params: Tuple[jnp.ndarray, jnp.ndarray]
-        ) -> jnp.ndarray:
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+    ) -> jnp.ndarray:
         """Score the predicted firing rates against target spike counts.
 
         This computes the Poisson negative log-likelihood up to a constant.
@@ -604,15 +599,13 @@ class PoissonGLM(GLMBase):
         """
         # Avoid the edge-case of 0*log(0), much faster than
         # where on large arrays.
-        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10 ** -10)
+        predicted_firing_rates = jnp.clip(self._predict(params, X), a_min=10**-10)
         x = target_spikes * jnp.log(predicted_firing_rates)
         # see above for derivation of this.
         return jnp.mean(predicted_firing_rates - x)
 
     def _residual_deviance(
-        self,
-        predicted_rate: jnp.ndarray,
-        spike_counts: jnp.ndarray
+        self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Poisson model.
 
@@ -644,14 +637,16 @@ class PoissonGLM(GLMBase):
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(spike_counts / predicted_rate, self.FLOAT_EPS, jnp.inf)
-        resid_dev = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
+        resid_dev = 2 * (
+            spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate)
+        )
         return resid_dev
 
     def score(
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
-        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood"
+        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
     ) -> jnp.ndarray:
         r"""Score the predicted firing rates (based on fit) to the target spike counts.
 
@@ -728,11 +723,10 @@ class PoissonGLM(GLMBase):
 
         """
         norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-        return super()._safe_score(X=X,
-                                   y=y,
-                                   score_type=score_type,
-                                   score_func=self._score
-                                   ) - norm_constant
+        return (
+            super()._safe_score(X=X, y=y, score_type=score_type, score_func=self._score)
+            - norm_constant
+        )
 
     def fit(
         self,
@@ -801,7 +795,7 @@ class PoissonGLM(GLMBase):
         init_y: Union[NDArray, jnp.ndarray],
         coupling_basis_matrix: Union[NDArray, jnp.ndarray],
         feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
-        device: Literal["cpu", "gpu", "tpu"] = "cpu"
+        device: Literal["cpu", "gpu", "tpu"] = "cpu",
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Simulate spike trains using the  Poisson-GLM as a recurrent network.
@@ -865,14 +859,13 @@ class PoissonGLM(GLMBase):
         The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
-        simulated_spikes, firing_rates = super()._safe_simulate(random_key=random_key,
-                                                                n_timesteps=n_timesteps,
-                                                                init_y=init_y,
-                                                                coupling_basis_matrix=coupling_basis_matrix,
-                                                                random_function=jax.random.poisson,
-                                                                feedforward_input=feedforward_input,
-                                                                device=device
-                                                                )
+        simulated_spikes, firing_rates = super()._safe_simulate(
+            random_key=random_key,
+            n_timesteps=n_timesteps,
+            init_y=init_y,
+            coupling_basis_matrix=coupling_basis_matrix,
+            random_function=jax.random.poisson,
+            feedforward_input=feedforward_input,
+            device=device,
+        )
         return simulated_spikes, firing_rates
-
-

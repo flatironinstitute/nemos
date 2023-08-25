@@ -384,6 +384,7 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
 
     return K
 
+
 def has_local_device(device_type: str) -> bool:
     """
     Scan for local device availability.
@@ -397,4 +398,6 @@ def has_local_device(device_type: str) -> bool:
         True if the jax finds the device, False otherwise.
 
     """
-    return any(device_type in device.device_kind.lower() for device in jax.local_devices())
+    return any(
+        device_type in device.device_kind.lower() for device in jax.local_devices()
+    )
