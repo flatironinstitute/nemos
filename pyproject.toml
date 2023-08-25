@@ -54,7 +54,8 @@ dev = [
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
-    "statsmodels"                   # Used to compare model pseudo-r2 in testing
+    "statsmodels",                  # Used to compare model pseudo-r2 in testing
+    "scikit-learn"                  # Testing compatibility with CV & pipelines
 ]
 docs = [
     "mkdocs",                       # Documentation generator

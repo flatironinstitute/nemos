@@ -6,6 +6,7 @@ import jaxopt
 import numpy as np
 import pytest
 import statsmodels.api as sm
+from sklearn.model_selection import GridSearchCV
 
 import neurostatslib as nsl
 
@@ -122,7 +123,7 @@ class TestPoissonGLM:
 
         raise_exception = jnp.isnan(add_entry) or jnp.isinf(add_entry)
         if raise_exception:
-            with pytest.raises(ValueError, match="Input (X|spike_data) contains a NaNs or Infs"):
+            with pytest.raises(ValueError, match="Input (X|y) contains a NaNs or Infs"):
                 model.fit(X, y, init_params=true_params)
         else:
             model.fit(X, y, init_params=true_params)
@@ -316,7 +317,7 @@ class TestPoissonGLM:
             y = np.zeros((n_samples, n_neurons, 1))
 
         if raise_exception:
-            with pytest.raises(ValueError, match="spike_data must be two-dimensional"):
+            with pytest.raises(ValueError, match="y must be two-dimensional"):
                 model.fit(X, y, init_params=(init_w, init_b))
         else:
             model.fit(X, y, init_params=(init_w, init_b))
@@ -377,7 +378,7 @@ class TestPoissonGLM:
         init_b = jnp.zeros((n_neurons,))
         X = jnp.zeros((X.shape[0] + delta_tp, ) + X.shape[1:])
         if raise_exception:
-            with pytest.raises(ValueError, match="The number of time-points in X and spike_data"):
+            with pytest.raises(ValueError, match="The number of time-points in X and y"):
                 model.fit(X, y, init_params=(init_w, init_b))
         else:
             model.fit(X, y, init_params=(init_w, init_b))
@@ -385,7 +386,7 @@ class TestPoissonGLM:
     @pytest.mark.parametrize("delta_tp", [-1, 0, 1])
     def test_fit_time_points_y(self, delta_tp, poissonGLM_model_instantiation):
         """
-        Test the `fit` method for inconsistencies in time-points in spike_data. Ensure the correct number of time-points.
+        Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
         """
         raise_exception = delta_tp != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
@@ -394,7 +395,7 @@ class TestPoissonGLM:
         init_b = jnp.zeros((n_neurons,))
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         if raise_exception:
-            with pytest.raises(ValueError, match="The number of time-points in X and spike_data"):
+            with pytest.raises(ValueError, match="The number of time-points in X and y"):
                 model.fit(X, y, init_params=(init_w, init_b))
         else:
             model.fit(X, y, init_params=(init_w, init_b))
@@ -423,7 +424,7 @@ class TestPoissonGLM:
     @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
     def test_score_n_neuron_match_y(self, delta_n_neuron, poissonGLM_model_instantiation):
         """
-        Test the `score` method when the number of neurons in spike_data differs. Ensure the correct number of neurons.
+        Test the `score` method when the number of neurons in y differs. Ensure the correct number of neurons.
         """
         raise_exception = delta_n_neuron != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
@@ -466,8 +467,8 @@ class TestPoissonGLM:
     @pytest.mark.parametrize("delta_dim", [-1, 0, 1])
     def test_score_y_dimensionality(self, delta_dim, poissonGLM_model_instantiation):
         """
-        Test the `score` method with spike_data of different dimensionalities.
-        Ensure correct dimensionality for spike_data.
+        Test the `score` method with y of different dimensionalities.
+        Ensure correct dimensionality for y.
         """
         raise_exception = delta_dim != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
@@ -484,7 +485,7 @@ class TestPoissonGLM:
             y = np.zeros((n_samples, n_neurons, 1))
 
         if raise_exception:
-            with pytest.raises(ValueError, match="spike_data must be two-dimensional"):
+            with pytest.raises(ValueError, match="y must be two-dimensional"):
                 model.score(X, y)
         else:
             model.score(X, y)
@@ -535,7 +536,7 @@ class TestPoissonGLM:
     def test_score_time_points_x(self, delta_tp, poissonGLM_model_instantiation):
         """
         Test the `score` method for inconsistencies in time-points in X.
-        Ensure that the number of time-points in X and spike_data matches.
+        Ensure that the number of time-points in X and y matches.
         """
         raise_exception = delta_tp != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
@@ -544,7 +545,7 @@ class TestPoissonGLM:
 
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         if raise_exception:
-            with pytest.raises(ValueError, match="The number of time-points in X and spike_data"):
+            with pytest.raises(ValueError, match="The number of time-points in X and y"):
                 model.score(X, y)
         else:
             model.score(X, y)
@@ -552,8 +553,8 @@ class TestPoissonGLM:
     @pytest.mark.parametrize("delta_tp", [-1, 0, 1])
     def test_score_time_points_y(self, delta_tp, poissonGLM_model_instantiation):
         """
-        Test the `score` method for inconsistencies in time-points in spike_data.
-        Ensure that the number of time-points in X and spike_data matches.
+        Test the `score` method for inconsistencies in time-points in y.
+        Ensure that the number of time-points in X and y matches.
         """
         raise_exception = delta_tp != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
@@ -562,7 +563,7 @@ class TestPoissonGLM:
 
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         if raise_exception:
-            with pytest.raises(ValueError, match="The number of time-points in X and spike_data"):
+            with pytest.raises(ValueError, match="The number of time-points in X and y"):
                 model.score(X, y)
         else:
             model.score(X, y)
@@ -610,7 +611,7 @@ class TestPoissonGLM:
     def test_predict_n_neuron_match_x(self, delta_n_neuron, poissonGLM_model_instantiation):
         """
         Test the `predict` method when the number of neurons in X differs.
-        Ensure that the number of neurons in X, spike_data and params matches.
+        Ensure that the number of neurons in X, y and params matches.
         """
         raise_exception = delta_n_neuron != 0
         X, _, model, true_params, _ = poissonGLM_model_instantiation
@@ -712,14 +713,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="The number of neuron in the model parameters"):
                 model.simulate(random_key=random_key,
                                n_timesteps=n_time_points,
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=n_time_points,
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -746,14 +747,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="X must be three-dimensional"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -777,17 +778,17 @@ class TestPoissonGLM:
             init_spikes = np.zeros((n_samples, n_neurons, 1))
 
         if raise_exception:
-            with pytest.raises(ValueError, match="spike_data must be two-dimensional"):
+            with pytest.raises(ValueError, match="y must be two-dimensional"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -809,14 +810,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="The number of neuron in the model parameters"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -838,14 +839,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="This GLM instance is not fitted yet"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -854,7 +855,7 @@ class TestPoissonGLM:
     def test_simulate_time_point_match_y(self, delta_tp,
                              poissonGLM_coupled_model_config_simulate):
         """
-        Test the `simulate` method to ensure that the time points in init_spikes
+        Test the `simulate` method to ensure that the time points in init_y
         are consistent with the coupling_basis window size (they must be equal).
         """
         raise_exception = delta_tp != 0
@@ -865,17 +866,17 @@ class TestPoissonGLM:
                                      init_spikes.shape[1]))
 
         if raise_exception:
-            with pytest.raises(ValueError, match="`init_spikes` and `coupling_basis_matrix`"):
+            with pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -895,17 +896,17 @@ class TestPoissonGLM:
                                    coupling_basis.shape[1:])
 
         if raise_exception:
-            with pytest.raises(ValueError, match="`init_spikes` and `coupling_basis_matrix`"):
+            with pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -932,14 +933,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="The number of feed forward input features"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -965,14 +966,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="The number of feed forward input features"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -996,14 +997,14 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match="`feedforward_input` must be of length"):
                 model.simulate(random_key=random_key,
                                n_timesteps=n_timesteps,
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device="cpu")
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=n_timesteps,
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device="cpu")
@@ -1029,7 +1030,7 @@ class TestPoissonGLM:
             with pytest.raises(ValueError, match=f"Invalid device specification: {device_spec}"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device=device_spec)
@@ -1037,14 +1038,14 @@ class TestPoissonGLM:
             with pytest.warns(UserWarning, match=f"No {device_spec.upper()} found"):
                 model.simulate(random_key=random_key,
                                n_timesteps=feedforward_input.shape[0],
-                               init_spikes=init_spikes,
+                               init_y=init_spikes,
                                coupling_basis_matrix=coupling_basis,
                                feedforward_input=feedforward_input,
                                device=device_spec)
         else:
             model.simulate(random_key=random_key,
                            n_timesteps=feedforward_input.shape[0],
-                           init_spikes=init_spikes,
+                           init_y=init_spikes,
                            coupling_basis_matrix=coupling_basis,
                            feedforward_input=feedforward_input,
                            device=device_spec)
@@ -1083,3 +1084,8 @@ class TestPoissonGLM:
                                        model.basis_coeff_.flatten()))
         if not np.allclose(fit_params_sm, fit_params_model):
             raise ValueError("Fitted parameters do not match that of statsmodels!")
+
+    def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
+        GridSearchCV(model, param_grid).fit(X, y)

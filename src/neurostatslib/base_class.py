@@ -7,11 +7,12 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Tuple, Union, Optional, Literal
+from typing import Tuple, Union, Optional, Literal, Callable, Sequence
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike, DTypeLike
+
 
 class _Base(abc.ABC):
     def __init__(self, **kwargs):
@@ -174,7 +175,7 @@ class BaseRegressor(_Base, abc.ABC):
             init_spikes: Union[NDArray, jnp.ndarray],
             coupling_basis_matrix: Union[NDArray, jnp.ndarray],
             feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
-            device: Literal["cpu", "gpu", "tpu"] = "cpu",
+            device: Literal["cpu", "gpu", "tpu"] = "cpu"
     ):
         pass
 
@@ -199,3 +200,153 @@ class BaseRegressor(_Base, abc.ABC):
 
         """
         return (jnp.isinf(array) | jnp.isnan(array)).any()
+
+    @staticmethod
+    def _check_and_convert_params(params: ArrayLike) -> Tuple[jnp.ndarray, ...]:
+        """
+        Validate the dimensions and consistency of parameters and data.
+
+        This function checks the consistency of shapes and dimensions for model
+        parameters.
+        It ensures that the parameters and data are compatible for the model.
+
+        """
+        if not hasattr(params, "__getitem__"):
+            raise TypeError("Initial parameters must be array-like!")
+        try:
+            params = tuple(jnp.asarray(par, dtype=jnp.float32) for par in params)
+        except ValueError:
+            raise TypeError(
+                "Initial parameters must be array-like of array-like objects"
+                "with numeric data-type!"
+            )
+
+        if len(params) != 2:
+            raise ValueError("Params needs to be array-like of length two.")
+
+        if params[0].ndim != 2:
+            raise ValueError(
+                "params[0] term must be of shape (n_neurons, n_features), but"
+                f"params[0] has {params[0].ndim} dimensions!"
+            )
+        if params[1].ndim != 1:
+            raise ValueError(
+                "params[1] term must be of shape (n_neurons,) but "
+                f"params[1] has {params[1].ndim} dimensions!"
+            )
+        return params
+
+    @staticmethod
+    def _check_input_dimensionality(
+            X: Optional[jnp.ndarray] = None, y: Optional[jnp.ndarray] = None
+    ):
+        if not (y is None):
+            if y.ndim != 2:
+                raise ValueError(
+                    "y must be two-dimensional, with shape (n_timebins, n_neurons)"
+                )
+        if not (X is None):
+            if X.ndim != 3:
+                raise ValueError(
+                    "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features)"
+                )
+
+    @staticmethod
+    def _check_input_and_params_consistency(
+            params: Tuple[jnp.ndarray, jnp.ndarray],
+            X: Optional[jnp.ndarray] = None,
+            y: Optional[jnp.ndarray] = None,
+    ):
+        """
+        Validate the number of neurons in model parameters and input arguments.
+
+        Raises:
+        ------
+            ValueError
+                - if the number of neurons is consistent across the model parameters (`params`) and
+                any additional inputs (`X` or `y` when provided).
+                - if the number of features is inconsistent between params[1] and X (when provided).
+
+        """
+        n_neurons = params[0].shape[0]
+        if n_neurons != params[1].shape[0]:
+            raise ValueError(
+                "Model parameters have inconsistent shapes. "
+                "Spike basis coefficients must be of shape (n_neurons, n_features), and "
+                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both! "
+                f"Coefficients n_neurons: {params[0].shape[0]}, bias n_neurons: {params[1].shape[0]}"
+            )
+
+        if y is not None:
+            if y.shape[1] != n_neurons:
+                raise ValueError(
+                    "The number of neuron in the model parameters and in the inputs"
+                    "must match."
+                    f"parameters has n_neurons: {n_neurons}, "
+                    f"the input provided has n_neurons: {y.shape[1]}"
+                )
+
+        if X is not None:
+            if X.shape[1] != n_neurons:
+                raise ValueError(
+                    "The number of neuron in the model parameters and in the inputs"
+                    "must match."
+                    f"parameters has n_neurons: {n_neurons}, "
+                    f"the input provided has n_neurons: {X.shape[1]}"
+                )
+            if params[0].shape[1] != X.shape[2]:
+                raise ValueError(
+                    "Inconsistent number of features. "
+                    f"spike basis coefficients has {params[0].shape[1]} features, "
+                    f"X has {X.shape[2]} features instead!"
+                )
+
+    @staticmethod
+    def _check_input_n_timepoints(X: jnp.ndarray, y: jnp.ndarray):
+        if X.shape[0] != y.shape[0]:
+            raise ValueError(
+                "The number of time-points in X and y must agree. "
+                f"X has {X.shape[0]} time-points, "
+                f"y has {y.shape[0]} instead!"
+            )
+
+    def _preprocess_fit(
+            self,
+            X: Union[NDArray, jnp.ndarray],
+            y: Union[NDArray, jnp.ndarray],
+            init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+
+        # check input dimensionality
+        self._check_input_dimensionality(X, y)
+        self._check_input_n_timepoints(X, y)
+
+        # convert to jnp.ndarray of floats
+        X, y = self._convert_to_jnp_ndarray(
+            X, y, data_type=jnp.float32
+        )
+
+        if self._has_invalid_entry(X):
+            raise ValueError("Input X contains a NaNs or Infs!")
+        elif self._has_invalid_entry(y):
+            raise ValueError("Input y contains a NaNs or Infs!")
+
+        _, n_neurons = y.shape
+        n_features = X.shape[2]
+
+        # Initialize parameters
+        if init_params is None:
+            # Ws, spike basis coeffs
+            init_params = (
+                jnp.zeros((n_neurons, n_features)),
+                # bs, bias terms
+                jnp.log(jnp.mean(y, axis=0)),
+            )
+        else:
+            # check parameter length, shape and dimensionality, convert to jnp.ndarray.
+            init_params = self._check_and_convert_params(init_params)
+
+        # check that the inputs and the parameters has consistent sizes
+        self._check_input_and_params_consistency(init_params, X, y)
+
+        return X, y, init_params

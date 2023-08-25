@@ -1,5 +1,5 @@
 import pytest
-from typing import Union, Tuple
+from typing import Union
 import jax.numpy as jnp
 from numpy.typing import NDArray
 from neurostatslib.base_class import BaseRegressor  # Adjust this import to your module name
@@ -35,6 +35,7 @@ class MockBaseRegressor(BaseRegressor):
             device="cpu"
     ) -> jnp.ndarray:
         pass
+
 
 class MockBaseRegressor_Invalid(BaseRegressor):
     """
@@ -77,7 +78,6 @@ def set_params():
     model.set_params(std_param=1)
     assert model.param1 == "changed"
     assert model.std_param == 1
-
 
 def test_invalid_set_params():
     """Test invalid parameter setting using the set_params method."""
