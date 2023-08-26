@@ -1,20 +1,18 @@
 """Abstract class for models.
-
-Inheriting this class will result in compatibility with sci-kit learn pipelines.
 """
 
 import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Callable, Literal, Optional, Sequence, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike, DTypeLike, NDArray
+from numpy.typing import ArrayLike, NDArray
 
 
-class _Base(abc.ABC):
+class Base(abc.ABC):
     def __init__(self, **kwargs):
         self._kwargs_keys = list(kwargs.keys())
         for key in kwargs:
@@ -148,7 +146,7 @@ class _Base(abc.ABC):
         return sorted(parameters)
 
 
-class _BaseRegressor(_Base, abc.ABC):
+class _BaseRegressor(Base, abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     @abc.abstractmethod
