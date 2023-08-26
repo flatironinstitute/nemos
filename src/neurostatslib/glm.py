@@ -10,12 +10,12 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike, NDArray
 
-from .base_class import BaseRegressor
+from .base_class import _BaseRegressor
 from .exceptions import NotFittedError
 from .utils import convolve_1d_trials, has_local_device
 
 
-class GLMBase(BaseRegressor, abc.ABC):
+class _BaseGLM(_BaseRegressor, abc.ABC):
     """Abstract base class for Poisson GLMs.
 
     Provides methods for score computation, simulation, and prediction.
@@ -497,7 +497,7 @@ class GLMBase(BaseRegressor, abc.ABC):
         return jnp.squeeze(simulated_spikes, axis=1), jnp.squeeze(firing_rates, axis=1)
 
 
-class PoissonGLM(GLMBase):
+class PoissonGLM(_BaseGLM):
     """Un-regularized Poisson-GLM.
 
     The class fits the un-penalized maximum likelihood Poisson GLM parameter estimate.
@@ -577,7 +577,7 @@ class PoissonGLM(GLMBase):
 
         Returns
         -------
-        jnp.ndarray
+        :
             The Poisson negative log-likehood. Shape (1,).
 
         Notes
@@ -618,6 +618,7 @@ class PoissonGLM(GLMBase):
 
         Returns
         -------
+        :
             The residual deviance of the model.
 
         Notes
@@ -627,8 +628,8 @@ class PoissonGLM(GLMBase):
 
         $$
         \begin{aligned}
-            D(y, \hat{y}) &= 2 \sum \left[ y \log\left(\frac{y}{\hat{y}}\right) - (y - \hat{y}) \right]\\\
-            &= -2 \left( \text{LL}\left(y | \hat{y}\right) - \text{LL}\left(y | y\right)\right)
+            D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right) - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
+            &= -2 \left( \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right) - \text{LL}\left(y\_{tn} | y\_{tn}\right)\right)
         \end{aligned}
         $$
         where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
@@ -694,7 +695,7 @@ class PoissonGLM(GLMBase):
             Default is defined at class initialization.
         Returns
         -------
-        score : (1,)
+        score :
             The Poisson log-likelihood or the pseudo-$R^2$ of the current model.
 
         Raises

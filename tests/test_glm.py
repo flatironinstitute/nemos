@@ -1064,7 +1064,7 @@ class TestPoissonGLM:
         model.set_params(inverse_link_function=jnp.exp)
         # get the rate
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model._residual_deviance(firing_rate, y).sum()
+        dev_model = model.residual_deviance(firing_rate, y).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 

@@ -26,6 +26,8 @@ plugins:
             docstring_style: numpy         
             show_source: true
             members_order: source
+          filters:
+          - "!neurostatslib.glm.GLMBase.residual_deviance"
 
 extra_javascript:
   - javascripts/katex.js

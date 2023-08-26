@@ -148,7 +148,7 @@ class _Base(abc.ABC):
         return sorted(parameters)
 
 
-class BaseRegressor(_Base, abc.ABC):
+class _BaseRegressor(_Base, abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     @abc.abstractmethod
