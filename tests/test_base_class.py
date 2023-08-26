@@ -2,11 +2,11 @@ import pytest
 from typing import Union
 import jax.numpy as jnp
 from numpy.typing import NDArray
-from neurostatslib.base_class import BaseRegressor  # Adjust this import to your module name
+from neurostatslib.base_class import _BaseRegressor
 
 
 # Sample subclass to test instantiation and methods
-class MockBaseRegressor(BaseRegressor):
+class MockBaseRegressor(_BaseRegressor):
     """
     Mock implementation of the BaseRegressor abstract class for testing purposes.
     Implements all required abstract methods as empty methods.
@@ -37,7 +37,7 @@ class MockBaseRegressor(BaseRegressor):
         pass
 
 
-class MockBaseRegressor_Invalid(BaseRegressor):
+class MockBaseRegressor_Invalid(_BaseRegressor):
     """
     Mock model that intentionally doesn't implement all the required abstract methods.
     Used for testing the instantiation of incomplete concrete classes.
@@ -96,7 +96,7 @@ def test_get_param_names():
 def test_convert_to_jnp_ndarray():
     """Test data conversion to JAX NumPy arrays."""
     data = [1, 2, 3]
-    jnp_data, = BaseRegressor._convert_to_jnp_ndarray(data)
+    jnp_data, = _BaseRegressor._convert_to_jnp_ndarray(data)
     assert isinstance(jnp_data, jnp.ndarray)
     assert jnp.all(jnp_data == jnp.array(data, dtype=jnp.float32))
 
@@ -105,15 +105,15 @@ def test_has_invalid_entry():
     """Test validation of data arrays."""
     valid_data = jnp.array([1, 2, 3])
     invalid_data = jnp.array([1, 2, jnp.nan])
-    assert not BaseRegressor._has_invalid_entry(valid_data)
-    assert BaseRegressor._has_invalid_entry(invalid_data)
+    assert not _BaseRegressor._has_invalid_entry(valid_data)
+    assert _BaseRegressor._has_invalid_entry(invalid_data)
 
 
 # To ensure abstract methods aren't callable
 def test_abstract_class():
     """Ensure that abstract methods aren't callable."""
     with pytest.raises(TypeError, match="Can't instantiate abstract"):
-        BaseRegressor()
+        _BaseRegressor()
 
 def test_invalid_concrete_class():
     """Ensure that classes missing implementation of required abstract methods raise errors."""

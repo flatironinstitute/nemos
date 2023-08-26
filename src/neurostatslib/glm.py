@@ -628,7 +628,8 @@ class PoissonGLM(_BaseGLM):
 
         $$
         \begin{aligned}
-            D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right) - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
+            D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right)
+            - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
             &= -2 \left( \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right) - \text{LL}\left(y\_{tn} | y\_{tn}\right)\right)
         \end{aligned}
         $$
