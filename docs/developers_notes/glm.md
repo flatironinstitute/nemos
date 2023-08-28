@@ -6,67 +6,58 @@ The `neurostatslib.glm` basis module implements variations of Generalized Linear
 
 At stage, the module consists of two classes:
 
-1. The abstract class `PoissonGLMBase`.
-2. The concrete class `PoissonGLM`.
+1. **`_BaseGLM`:** An abstract class serving as the backbone for building GLM variations.
+2. **`PoissonGLM`:** A concrete implementation of the GLM for Poisson-distributed data.
 
 We followed the `scikit-learn` api, making the concrete GLM model classes compatible with the powerful `scikit-learn` pipeline and cross-validation modules.
 
-The `PoissonGLMBase` serves as the foundation for implementing Poisson Generalized Linear Models (GLMs).
-It designed to follow the `scikit-learn` api in order to guarantee compatibility with `scikit-learn` pipelines. 
-It inherits `Model` (see the ["ModuleBase Module"](base_class.md)) and implements the public methods `predict`, `score` , `simulate`.
-`predict` generates Poisson means based on the current parameter estimate, `score` evaluates the performance of the model, and `simulate` generates simulated spike trains taking into account recurrent connectivity and feedforward inputs.
-The core features of this class are centered around abstract methods that must be implemented by any concrete subclasses, ensuring a standardized interface for all types of Poisson GLM models.
+## The class `_BaseGLM`
 
-## The Class `PoissonGLMBase`
+The class `_BaseGLM` is designed to follow the `scikit-learn` api in order to guarantee compatibility with the `scikit-learn` pipelines, as well as to implement all the computation that is shared by the different `GLM` subclasses. 
 
-### Initialization and Configuration
+### Inheritance
 
-The `PoissonGLMBase` class's constructor initializes various parameters and settings essential for the model's behavior. These include:
+`_BaseGLM` inherits from the `_BaseRegressor` (detailed in the [`base_class` module](base_class.md)).  This inheritance provides `_BaseGLM` with a suite of auxiliary methods for handling and validating model inputs. Through abstraction mechanism inherited from `_BaseRegressor`, any GLM subclass is compelled to reimplement the `fit`, `predict`, `score`, and `simulate` methods facilitating compatibility with `scikit-learn`.
 
-- `solver_name`: The name of the optimization solver to be used.
-- `solver_kwargs`: Additional keyword arguments for the chosen solver.
-- `inverse_link_function`: The callable function for the inverse link transformation.
-- `score_type`: The type of scoring method, either "log-likelihood" or "pseudo-r2".
+### Attributes
 
-### Method `fit`
+- **solver_name**: Name of the solver to use when fitting the GLM. It should be an attribute of `jaxopt`.
+- **solver_kwargs**: Dictionary containing keyword arguments for initializing the solver.
+- **inverse_link_function**: The link function of the GLM. It must be callable and return non-negative values.
+- **kwargs**: Other keyword arguments, like regularization hyperparameters.
 
-The `fit` method is an abstract method that needs to be implemented by subclasses. It is used to train the Poisson GLM model using input data `X` and spike data. The method performs the model fitting process by optimizing the provided loss function.
 
-### Method `predict`
+### Public Methods
 
-The `predict` method takes input data `X` and predicts firing rates using the trained Poisson GLM model. It leverages the inverse link function to transform the model's internal parameters into meaningful predictions.
+1. **`predict`**: This method checks that the model is fit and validates input consistency and dimensions, and computes mean rates based on the current parameter estimates through the `_predict` method.
 
-### Method `score`
+!!! note
+     `_BaseGLM` lacks concrete implementations for methods like `score`, `fit`, and `simulate`. This is because the specifics of these methods depend on the chosen emission probability. For instance, the scoring method for a Poisson GLM will differ from a Gamma GLM, given their distinct likelihood functions.
 
-The `score` method evaluates the performance of the Poisson GLM model. It computes a score based on the model's predictions and the true spike data. The score can be either the negative log-likelihood or a pseudo-R2 score, depending on the specified `score_type`.
+### Private Methods
 
-### Internal Methods
+1. **`_check_is_fit`**: Ensures the instance has been fitted. This check is implemented here and not in `_BaseRegressor` because the model parameter names are likely to be GLM specific.
+2. **`_predict`**: Predicts firing rates given predictors and parameters.
+3. **`_pseudo_r2`**: Computes the Pseudo-$R^2$ for a GLM, giving insight into the model's fit relative to a null model.
+4. **`_safe_score`**: Scores the predicted firing rates against target spike counts. Can compute either the GLM mean log-likelihood or the pseudo-$R^2$.
+5. **`_safe_simulate`**: Simulates spike trains using the GLM as a recurrent network. It projects neural activity into the future using the fitted parameters of the GLM. The function can simulate activity based on both historical spike activity and external feedforward inputs, such as convolved currents, light intensities, etc.
 
-The class defines several internal methods that aid in the implementation of its functionalities:
 
-- `_predict`: A specialized prediction method that calculates firing rates using model parameters and input data.
-- `_score`: A specialized scoring method that computes a score based on predicted firing rates, true spike data, and model parameters.
-- `_residual_deviance`: Calculates the residual deviance of the model's predictions.
-- `_pseudo_r2`: Computes the pseudo-R2 score based on the model's predictions, true spike data, and model parameters.
-- `_check_is_fit`: Ensures that the instance has been fitted before making predictions or scoring.
-- `_check_and_convert_params`: Validates and converts initial parameters to the appropriate format.
-- `_check_input_dimensionality`: Checks the dimensionality of input data and spike data to ensure consistency.
-- `_check_input_and_params_consistency`: Validates the consistency between input data, spike data, and model parameters.
-- `_check_input_n_timepoints`: Verifies that the number of time points in input data and spike data match.
-- `_preprocess_fit`: Prepares input data, spike data, and initial parameters for the fitting process.
+!!! note
+    The introduction of `_safe_score` and `_safe_simulate` offers notable benefits:
 
-### Method `simulate`
+    1. It eliminates the need for subclasses to redo checks in their `score` and `simulate` methods, leading to concise code.
+    2. The methods `score` and `simulate` must be defined by subclasses due to their abstract nature in `_BaseRegressor`. This mandates alignment with the `scikit-learn` API and ensures subclass-specific docstrings.
 
-The `simulate` method generates simulated spike data using the trained Poisson GLM model. It takes into account various parameters, including random keys, coupling basis matrix, and feedforward input. The simulated data can be generated for different devices, such as CPU, GPU, or TPU.
+### Abstract Methods
+On top of the abstract methods inherited from `_BaseRegressor`, `_BaseGLM` implements,
 
-## The Class `PoissonGLM`
+1. **`residual_deviance`**: Computes the residual deviance for a GLM model. The deviance, on par with the likelihood, is model specific.
 
-### Initialization
+!!! note
+    The residual deviance can be written as a function of the log-likelihood. This allows for a concrete implementation of it in the `_BaseGLM`, however the subclass specific implementation can be more robust and/or efficient.
 
-The `PoissonGLM` class extends the `PoissonGLMBase` class and provides a concrete implementation. It inherits the constructor from its parent class and allows additional customization through the specified parameters.
+## The Concrete Class `PoissonGLM`
 
-### Method `fit`
+The class `PoissonGLM` implements an un-regularized Poisson GLM model. 
 
-The `fit` method is implemented in the `PoissonGLM` class to perform the model fitting process using the provided input data and spike data. It leverages optimization solvers and loss functions to update the model's internal parameters.
-
-This script defines a powerful framework for creating and training Poisson Generalized Linear Models, essential for analyzing and understanding neural activity patterns.

@@ -204,11 +204,14 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         # extract model params
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
+
+        (X,) = self._convert_to_jnp_ndarray(X, data_type=jnp.float32)
+
         # check input dimensionality
         self._check_input_dimensionality(X=X)
         # check consistency between X and params
         self._check_input_and_params_consistency((Ws, bs), X=X)
-        (X, ) = self._convert_to_jnp_ndarray(X, data_type=jnp.float32)
+
         return self._predict((Ws, bs), X)
 
     def _safe_score(
