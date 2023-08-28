@@ -426,8 +426,8 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
             != Ws.shape[1]
         ):
             raise ValueError(
-                "The number of feed forward input features"
-                "and the number of recurrent features must add up to"
+                "The number of feed forward input features "
+                "and the number of recurrent features must add up to "
                 "the overall model features."
                 f"The total number of feature of the model is {Ws.shape[1]}. {feedforward_input.shape[1]} "
                 f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "

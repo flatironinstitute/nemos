@@ -1089,3 +1089,57 @@ class TestPoissonGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
+
+    def test_end_to_end_fit_and_simulate(self,
+                                   poissonGLM_coupled_model_config_simulate):
+        model, coupling_basis, feedforward_input, init_spikes, random_key = \
+            poissonGLM_coupled_model_config_simulate
+        window_size = coupling_basis.shape[0]
+        n_neurons = init_spikes.shape[1]
+        n_trials = 1
+        n_timepoints = feedforward_input.shape[0]
+
+        # generate spike trains
+        spikes, _ = model.simulate(random_key=random_key,
+                       n_timesteps=feedforward_input.shape[0],
+                       init_y=init_spikes,
+                       coupling_basis_matrix=coupling_basis,
+                       feedforward_input=feedforward_input,
+                       device="cpu")
+
+        # convolve basis and spikes
+        # (n_trials, n_timepoints - ws + 1, n_neurons, n_coupling_basis)
+        conv_spikes = jnp.asarray(
+            nsl.utils.convolve_1d_trials(coupling_basis, [spikes]),
+            dtype=jnp.float32
+        )
+
+        # create an individual neuron predictor by stacking the
+        # two convolved spike trains in a single feature vector
+        # and concatenate the trials.
+        conv_spikes = conv_spikes.reshape(n_trials * (n_timepoints - window_size + 1), -1)
+
+        # replicate for each neuron,
+        # (n_trials * (n_timepoints - ws + 1), n_neurons, n_neurons * n_coupling_basis)
+        conv_spikes = jnp.tile(conv_spikes, n_neurons).reshape(conv_spikes.shape[0],
+                                                               n_neurons,
+                                                               conv_spikes.shape[1])
+
+        # add the feed-forward input to the predictors
+        X = jnp.concatenate((conv_spikes[1:],
+                             feedforward_input[:-window_size]),
+                            axis=2)
+
+        # fit the model
+        model.fit(X, spikes[:-window_size])
+
+        # simulate
+        model.simulate(random_key=random_key,
+                       n_timesteps=feedforward_input.shape[0],
+                       init_y=init_spikes,
+                       coupling_basis_matrix=coupling_basis,
+                       feedforward_input=feedforward_input,
+                       device="cpu")
+
+
+
