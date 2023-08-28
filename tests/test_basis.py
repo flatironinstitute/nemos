@@ -681,7 +681,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         raise_exception = sample_size <= 0
         if raise_exception:
             with pytest.raises(ValueError, match=r"Number of samples, .+, must be non-negative\.|"
-                                                 r"Empty sample array provided\. At least one sample is required for"):
+                                                 r"Invalid input data"):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
