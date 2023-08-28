@@ -583,7 +583,7 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         NDArray
-            The basis function evaluated at the samples (Time points x number of basis)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
         Raises
         ------
