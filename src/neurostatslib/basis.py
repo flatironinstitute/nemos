@@ -94,6 +94,11 @@ class Basis(abc.ABC):
         -------
         :
             The generated basis functions.
+        Raises
+        ------
+        ValueError
+            - If the time point number is inconsistent between inputs.
+            - If the number of inputs doesn't match what the Basis object requires.
         """
         # checks on input and outputs
         self._check_samples_consistency(*xi)
@@ -555,11 +560,6 @@ class BSplineBasis(SplineBasis):
     order :
         Spline order.
 
-    Methods
-    -------
-    _evaluate(x_tuple)
-       Evaluate the basis function at the samples x_tuple[0]. x_tuple must be of length 1 in order to pass the checks
-       of super().evaluate
 
     References
     ----------
@@ -592,13 +592,10 @@ class BSplineBasis(SplineBasis):
 
         Notes
         -----
-        This method evaluates the B-spline basis functions at the given sample points.
-        It requires the knots to be defined through the `_generate_knots` method.
-
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        super()._check_samples_non_empty(sample_pts)
+        #super()._check_samples_non_empty(sample_pts)
 
         # add knots
         self._generate_knots(sample_pts, 0.0, 1.0)
@@ -681,9 +678,6 @@ class CyclicBSplineBasis(SplineBasis):
 
         Notes
         -----
-        This method evaluates the B-spline basis functions at the given sample points.
-        It requires the knots to be defined through the `_generate_knots` method.
-
         The evaluation is performed by looping over each element and using `splev` from
         SciPy to compute the basis values.
         """
