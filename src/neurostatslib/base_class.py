@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
 
-class Base(abc.ABC):
+class _Base:
     def __init__(self, **kwargs):
         self._kwargs_keys = list(kwargs.keys())
         for key in kwargs:
@@ -146,7 +146,7 @@ class Base(abc.ABC):
         return sorted(parameters)
 
 
-class _BaseRegressor(Base, abc.ABC):
+class _BaseRegressor(_Base, abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     @abc.abstractmethod
@@ -179,6 +179,20 @@ class _BaseRegressor(Base, abc.ABC):
     def _convert_to_jnp_ndarray(
         *args: Union[NDArray, jnp.ndarray], data_type: jnp.dtype = jnp.float32
     ) -> Tuple[jnp.ndarray, ...]:
+        """Convert provided arrays to jnp.ndarray of specified type.
+
+        Parameters
+        ----------
+        *args :
+            Input arrays to convert.
+        data_type :
+            Data type to convert to. Default is jnp.float32.
+
+        Returns
+        -------
+        :
+            Converted arrays.
+        """
         return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
 
     @staticmethod
@@ -312,12 +326,41 @@ class _BaseRegressor(Base, abc.ABC):
         y: Union[NDArray, jnp.ndarray],
         init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+        """Preprocess input data and initial parameters for the fit method.
+
+        This method carries out the following preprocessing steps:
+        - Convert input data `X` and `y` to `jnp.ndarray` of type float32.
+        - Check the dimensionality of the inputs.
+        - Check for any NaNs or Infs in the inputs.
+        - If `init_params` is not provided, initialize it with default values.
+        - Validate the consistency of input dimensions with the initial parameters.
+
+        Parameters
+        ----------
+        X :
+            Input data, expected to be of shape (n_timebins, n_neurons, n_features).
+        y :
+            Target values, expected to be of shape (n_timebins, n_neurons).
+        init_params :
+            Initial parameters for the model. If None, they are initialized with default values.
+
+        Returns
+        -------
+        :
+            Preprocessed input data `X`, target values `y`, and initialized parameters.
+
+        Raises
+        ------
+        ValueError
+            If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
+        """
+
+        # convert to jnp.ndarray of float32
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
+
         # check input dimensionality
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
-
-        # convert to jnp.ndarray of floats
-        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
 
         if self._has_invalid_entry(X):
             raise ValueError("Input X contains a NaNs or Infs!")

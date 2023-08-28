@@ -208,7 +208,7 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         self._check_input_dimensionality(X=X)
         # check consistency between X and params
         self._check_input_and_params_consistency((Ws, bs), X=X)
-        (X,) = self._convert_to_jnp_ndarray(X, data_type=jnp.float32)
+        (X, ) = self._convert_to_jnp_ndarray(X, data_type=jnp.float32)
         return self._predict((Ws, bs), X)
 
     def _safe_score(
@@ -289,11 +289,12 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
+
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
+
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
-
-        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
 
         if score_type is None:
             score_type = self.score_type
