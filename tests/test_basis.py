@@ -665,8 +665,8 @@ class TestBSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         raise_exception = sample_size <= 0
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Empty sample array provided\. At least one sample is required|"
-                                                 r"Number of samples, .+, must be non-negative\."):
+            with pytest.raises(ValueError, match=r"Invalid input data|"
+                                                 rf"Number of samples, {sample_size}, must be non-negative."):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
@@ -748,10 +748,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
-        raise_exception = (order < 2) | (n_basis_funcs < max(order * 2 - 2, order + 2))
+        raise_exception = (order < 2) | (order > n_basis_funcs)
         if raise_exception:
             with pytest.raises(ValueError, match=r"Spline order must be positive!|"
-                                                 r"Insufficient basis elements for|"
+                                                 rf"{self.cls.__name__} `order` parameter cannot be larger|"
                                                  r"Order >= 2 required for cyclic B-spline"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
                 basis_obj.evaluate(np.linspace(0, 1, 10))

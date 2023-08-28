@@ -474,6 +474,22 @@ class SplineBasis(Basis, abc.ABC):
                 "Empty sample array provided. At least one sample is required for evaluation!"
             )
 
+    def _check_n_basis_min(self) -> None:
+        """Check that the user required enough basis elements.
+
+        Check that the spline-basis has at least as many basis as the order.
+
+        Raises
+        ------
+        ValueError
+            If an insufficient number of basis element is requested for the basis type
+        """
+        if self.n_basis_funcs < self.order:
+            raise ValueError(
+                f"{self.__class__.__name__} `order` parameter cannot be larger "
+                "than `n_basis_funcs` parameter."
+            )
+
 
 class MSplineBasis(SplineBasis):
     """M-spline 1-dimensional basis functions.
@@ -524,22 +540,6 @@ class MSplineBasis(SplineBasis):
             ],
             axis=1,
         )
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Check that MSplineBasis has at least as many basis as the order of the spline.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < self.order:
-            raise ValueError(
-                f"{self.__class__.__name__} `order` parameter cannot be larger "
-                "than `n_basis_funcs` parameter."
-            )
 
 
 class BSplineBasis(SplineBasis):
@@ -595,7 +595,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        #super()._check_samples_non_empty(sample_pts)
+        # super()._check_samples_non_empty(sample_pts)
 
         # add knots
         self._generate_knots(sample_pts, 0.0, 1.0)
@@ -605,22 +605,6 @@ class BSplineBasis(SplineBasis):
         )
 
         return basis_eval
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Check that BSplineBasis has at least as many basis as the order of the spline.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < self.order:
-            raise ValueError(
-                f"{self.__class__.__name__} `order` parameter cannot be larger "
-                "than `n_basis_funcs` parameter."
-            )
 
 
 class CyclicBSplineBasis(SplineBasis):
@@ -632,7 +616,7 @@ class CyclicBSplineBasis(SplineBasis):
     n_basis_funcs :
         Number of basis functions.
     order :
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+        Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
 
@@ -642,11 +626,6 @@ class CyclicBSplineBasis(SplineBasis):
         Number of basis functions.
     order : int
         Order of the splines used in basis functions.
-
-    Methods
-    -------
-    _evaluate(sample_pts, der)
-        Evaluate the B-spline basis functions with given sample points.
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2):
@@ -696,7 +675,7 @@ class CyclicBSplineBasis(SplineBasis):
         knots_orig.sort()
 
         # extend knots
-        xc = knots_orig[nk - 2 * self.order + 1]
+        xc = knots_orig[nk - self.order]
         knots = np.hstack(
             (
                 self.knot_locs[0]
@@ -725,22 +704,6 @@ class CyclicBSplineBasis(SplineBasis):
         self.knot_locs = knots_orig
 
         return basis_eval
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Check that Cuclic-BSplineBasis has at least as many basis as the order of the spline +2
-        and at least 2*order - 2 basis.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < max(self.order * 2 - 2, self.order + 2):
-            raise ValueError(
-                f"Insufficient basis elements for {self.__class__.__name__} instantiation."
-            )
 
 
 class RaisedCosineBasis(Basis, abc.ABC):
