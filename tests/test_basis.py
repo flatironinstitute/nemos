@@ -617,16 +617,31 @@ class TestBSplineBasis(BasisFuncsTesting):
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
-    @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
+    @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
     def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, order):
         """
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
-        raise_exception = (order < 1) | (n_basis_funcs < 1) | (order > n_basis_funcs)
+        raise_exception = order > n_basis_funcs
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Spline order must be positive!|"
-                                                 rf"{self.cls.__name__} `order` parameter cannot be larger than"):
+            with pytest.raises(ValueError, match=rf"{self.cls.__name__} `order` parameter cannot be larger than"):
+                basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+                basis_obj.evaluate(np.linspace(0, 1, 10))
+        else:
+            basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj.evaluate(np.linspace(0, 1, 10))
+
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
+    def test_order_is_positive(self, n_basis_funcs, order):
+        """
+        Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
+        order < #basis are enforced.
+        """
+        raise_exception = order < 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
                 basis_obj.evaluate(np.linspace(0, 1, 10))
         else:
@@ -741,18 +756,65 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
             )
 
+    # @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
+    # @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
+    # def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, order):
+    #     """
+    #     Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
+    #     order < #basis are enforced.
+    #     """
+    #     raise_exception = (order < 2) | (order > n_basis_funcs)
+    #     if raise_exception:
+    #         with pytest.raises(ValueError, match=r"Spline order must be positive!|"
+    #                                              rf"{self.cls.__name__} `order` parameter cannot be larger|"
+    #                                              r"Order >= 2 required for cyclic B-spline"):
+    #             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+    #             basis_obj.evaluate(np.linspace(0, 1, 10))
+    #     else:
+    #         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+    #         basis_obj.evaluate(np.linspace(0, 1, 10))
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
-    @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
+    @pytest.mark.parametrize("order", [2, 3, 4, 5])
     def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, order):
         """
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
-        raise_exception = (order < 2) | (order > n_basis_funcs)
+        raise_exception = order > n_basis_funcs
         if raise_exception:
-            with pytest.raises(ValueError, match=r"Spline order must be positive!|"
-                                                 rf"{self.cls.__name__} `order` parameter cannot be larger|"
-                                                 r"Order >= 2 required for cyclic B-spline"):
+            with pytest.raises(ValueError, match=rf"{self.cls.__name__} `order` parameter cannot be larger than"):
+                basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+                basis_obj.evaluate(np.linspace(0, 1, 10))
+        else:
+            basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj.evaluate(np.linspace(0, 1, 10))
+
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [-1, 0, 2, 3])
+    def test_order_is_positive(self, n_basis_funcs, order):
+        """
+        Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
+        order < #basis are enforced.
+        """
+        raise_exception = order < 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
+                basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+                basis_obj.evaluate(np.linspace(0, 1, 10))
+        else:
+            basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj.evaluate(np.linspace(0, 1, 10))
+
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [1, 2, 3])
+    def test_order_1_invalid(self, n_basis_funcs, order):
+        """
+        Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
+        order < #basis are enforced.
+        """
+        raise_exception = order == 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Order >= 2 required for cyclic B-spline"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
                 basis_obj.evaluate(np.linspace(0, 1, 10))
         else:

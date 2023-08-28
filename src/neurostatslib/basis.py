@@ -458,14 +458,14 @@ class SplineBasis(Basis, abc.ABC):
         mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
         mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100)) + 10**-8
 
-        self.knot_locs = np.concatenate(
+        knot_locs = np.concatenate(
             (
                 mn * np.ones(self.order - 1),
                 np.linspace(mn, mx, num_interior_knots + 2),
                 mx * np.ones(self.order - 1),
             )
         )
-        return self.knot_locs
+        return knot_locs
 
     @staticmethod
     def _check_samples_non_empty(sample_pts):
@@ -531,11 +531,13 @@ class MSplineBasis(SplineBasis):
 
         """
         # add knots if not passed
-        self._generate_knots(sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False)
+        knot_locs = self._generate_knots(
+            sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
+        )
 
         return np.stack(
             [
-                mspline(sample_pts, self.order, i, self.knot_locs)
+                mspline(sample_pts, self.order, i, knot_locs)
                 for i in range(self.n_basis_funcs)
             ],
             axis=1,
@@ -598,10 +600,10 @@ class BSplineBasis(SplineBasis):
         # super()._check_samples_non_empty(sample_pts)
 
         # add knots
-        self._generate_knots(sample_pts, 0.0, 1.0)
+        knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
         basis_eval = bspline(
-            sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=False
+            sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
 
         return basis_eval
@@ -662,46 +664,35 @@ class CyclicBSplineBasis(SplineBasis):
         """
         super()._check_samples_non_empty(sample_pts)
 
-        self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+        knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
-        self.knot_locs = np.unique(self.knot_locs)
+        knot_locs = np.unique(knot_locs)
 
-        knots_orig = self.knot_locs.copy()
-
-        nk = knots_orig.shape[0]
+        nk = knot_locs.shape[0]
 
         # make sure knots are sorted
-        knots_orig.sort()
+        knot_locs.sort()
 
         # extend knots
-        xc = knots_orig[nk - self.order]
+        xc = knot_locs[nk - self.order]
         knots = np.hstack(
             (
-                self.knot_locs[0]
-                - self.knot_locs[-1]
-                + self.knot_locs[nk - self.order : nk - 1],
-                self.knot_locs,
+                knot_locs[0] - knot_locs[-1] + knot_locs[nk - self.order : nk - 1],
+                knot_locs,
             )
         )
         ind = sample_pts > xc
 
-        # temporarily set the extended knots as attribute
-        self.knot_locs = knots
-
-        basis_eval = bspline(
-            sample_pts, self.knot_locs, order=self.order, der=0, outer_ok=True
-        )
-        sample_pts[ind] = sample_pts[ind] - knots.max() + knots_orig[0]
+        basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
+        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
 
         if np.sum(ind):
             basis_eval[ind] = basis_eval[ind] + bspline(
-                sample_pts[ind], self.knot_locs, order=self.order, outer_ok=True, der=0
+                sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
             )
         # restore points
-        sample_pts[ind] = sample_pts[ind] + knots.max() - knots_orig[0]
-        # restore the original knots
-        self.knot_locs = knots_orig
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
 
         return basis_eval
 
@@ -1065,9 +1056,9 @@ def bspline(
     knots :
         An array containing knots for the B-spline basis. The knots are sorted in ascending order.
     order :
-        The order of the B-spline basis. Default is 4.
+        The order of the B-spline basis.
     der :
-        The derivative of the B-spline basis to be evaluated. Default is 0.
+        The derivative of the B-spline basis to be evaluated.
     outer_ok :
         If True, allows for evaluation at points outside the range of knots.
         Default is False, in which case an assertion error is raised when
