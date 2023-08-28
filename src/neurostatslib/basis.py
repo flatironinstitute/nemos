@@ -729,7 +729,7 @@ class CyclicBSplineBasis(SplineBasis):
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
-        Check that Cuclic-BSplineBasis has at least as many basis as the order of the spline +2
+        Check that Cyclic-BSplineBasis has at least as many basis as the order of the spline +2
         and at least 2*order - 2 basis.
 
         Raises
