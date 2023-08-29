@@ -3,7 +3,7 @@
 import abc
 import inspect
 import warnings
-from typing import Callable, Literal, Optional, Tuple, Union, Any
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -315,13 +315,14 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         return score
 
     def _safe_fit(
-            self,
-            X: Union[NDArray, jnp.ndarray],
-            y: Union[NDArray, jnp.ndarray],
-            loss: Callable[[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.float32],
-            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        loss: Callable[
+            [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.float32
+        ],
+        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ):
-
         # convert to jnp.ndarray & perform checks
         X, y, init_params = self._preprocess_fit(X, y, init_params)
 
