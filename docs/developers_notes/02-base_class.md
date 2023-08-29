@@ -8,8 +8,37 @@ The `_Base` class is envisioned as the foundational component for any model type
 
 Designed to be compatible with the `scikit-learn` API, the class structure aims to facilitate access to `scikit-learn`'s robust pipeline and cross-validation modules. This is achieved while leveraging the accelerated computational capabilities of `jax` and `jaxopt` in the backend, which is essential for analyzing extensive neural recordings and fitting large models.
 
+Below a scheme of how we envision the architecture of the `neurostatslib` models.
+
+```
+Class _Base
+|
+└─ Abstract Subclass _BaseRegressor
+│   │
+│   └─ Abstract Subclass _BaseGLM
+│       │
+│       ├─ Concrete Subclass PoissonGLM
+│       │   │
+│       │   └─ Concrete Subclass RidgePoissonGLM *(not implemented yet)
+│       │   │
+│       │   └─ Concrete Subclass LassoPoissonGLM *(not implemented yet)
+│       │   │
+│       │   ...
+│       │
+│       ├─ Concrete Subclass GammaGLM *(not implemented yet)
+│       │   │
+│       │   ...
+│       │
+│       ...
+│
+├─ Abstract Subclass _BaseManifold *(not implemented yet)
+...
+```
+
 !!! Example
-    The current package version includes a concrete class named `neurostatslib.glm.PoissonGLM`. This class inherits from `_BaseRegressor`, since it falls under the "regression" category. As any `_BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
+    The current package version includes a concrete class named `neurostatslib.glm.PoissonGLM`. This class inherits from `_BaseGLM` <- `_BaseRegressor` <- `_Base`, since it falls under the " GLM regression" category. 
+    As any `_BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
+
 
 ## The Class `model_base._Base`
 
@@ -20,13 +49,10 @@ For a detailed understanding, consult the [`scikit-learn` API Reference](https:/
 !!! Note
     We've intentionally omitted the `get_metadata_routing` method. Given its current experimental status and its lack of relevance to the `GLM` class, this method was excluded. Should future needs arise around parameter routing, consider directly inheriting from `sklearn.BaseEstimator`. More information can be found [here](https://scikit-learn.org/stable/metadata_routing.html#metadata-routing).
 
-### The Public Method `get_params`
+### Public methods
 
-The `get_params` method retrieves parameters set during model instance initialization. Opting for a deep inspection allows the method to assess nested object parameters, resulting in a comprehensive parameter dictionary.
-
-### The Public Method `set_params`
-
-The `set_params` method offers a mechanism to adjust or set an estimator's parameters. It's versatile, accommodating both individual estimators and more complex nested structures like pipelines. Feeding an unrecognized parameter will raise a `ValueError`.
+- **`get_params`**: The `get_params` method retrieves parameters set during model instance initialization. Opting for a deep inspection allows the method to assess nested object parameters, resulting in a comprehensive parameter dictionary.
+- **`set_params`**: The `set_params` method offers a mechanism to adjust or set an estimator's parameters. It's versatile, accommodating both individual estimators and more complex nested structures like pipelines. Feeding an unrecognized parameter will raise a `ValueError`.
 
 ## The Abstract Class `model_base._BaseRegressor`
 
@@ -52,9 +78,9 @@ and a number of other methods for checking input consistency.
 
 ### Implementing Model Subclasses
 
-When devising a new model subclass based on the `BaseRegressor` abstract class, adhere to the subsequent guidelines:
+When devising a new model subclass based on the `_BaseRegressor` abstract class, adhere to the subsequent guidelines:
 
-- **Must** inherit the `BaseRegressor` abstract superclass.
-- **Must** realize the abstract methods: `fit`, `predict`, and `score`.
+- **Must** inherit the `_BaseRegressor` abstract superclass.
+- **Must** realize the abstract methods: `fit`, `predict`, `score`, and `simulate`.
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `_Base`.
 - **May** introduce auxiliary methods such as `_convert_to_jnp_ndarray` for added utility.

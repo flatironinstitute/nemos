@@ -3,7 +3,7 @@
 import abc
 import inspect
 import warnings
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union, Any
 
 import jax
 import jax.numpy as jnp
@@ -314,6 +314,36 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
             )
         return score
 
+    def _safe_fit(
+            self,
+            X: Union[NDArray, jnp.ndarray],
+            y: Union[NDArray, jnp.ndarray],
+            loss: Callable[[Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.float32],
+            init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+    ):
+
+        # convert to jnp.ndarray & perform checks
+        X, y, init_params = self._preprocess_fit(X, y, init_params)
+
+        # Run optimization
+        solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
+        params, state = solver.run(init_params, X=X, y=y)
+
+        if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
+            raise ValueError(
+                "Solver returned at least one NaN parameter, so solution is invalid!"
+                " Try tuning optimization hyperparameters."
+            )
+
+        # Store parameters
+        self.basis_coeff_ = params[0]
+        self.baseline_link_fr_ = params[1]
+        # note that this will include an error value, which is not the same as
+        # the output of loss. I believe it's the output of
+        # solver.l2_optimality_error
+        self.solver_state = state
+        self.solver = solver
+
     def _safe_simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
@@ -526,7 +556,7 @@ class PoissonGLM(_BaseGLM):
         state of the solver, set during ``fit()``
     basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
         Solutions for the spike basis coefficients, set during ``fit()``
-    baseline_log_fr : jnp.ndarray, (n_neurons,)
+    baseline_link_fr : jnp.ndarray, (n_neurons,)
         Solutions for bias terms, set during ``fit()``
     """
 
@@ -743,7 +773,7 @@ class PoissonGLM(_BaseGLM):
         """Fit GLM to spiking data.
 
         Following scikit-learn API, the solutions are stored as attributes
-        ``basis_coeff_`` and ``baseline_log_fr``.
+        ``basis_coeff_`` and ``baseline_link_fr``.
 
         Parameters
         ----------
@@ -771,28 +801,10 @@ class PoissonGLM(_BaseGLM):
 
         """
 
-        X, y, init_params = self._preprocess_fit(X, y, init_params)
-
         def loss(params, X, y):
             return self._score(X, y, params)
 
-        # Run optimization
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
-        params, state = solver.run(init_params, X=X, y=y)
-
-        if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
-            raise ValueError(
-                "Solver returned at least one NaN parameter, so solution is invalid!"
-                " Try tuning optimization hyperparameters."
-            )
-        # Store parameters
-        self.basis_coeff_ = params[0]
-        self.baseline_link_fr_ = params[1]
-        # note that this will include an error value, which is not the same as
-        # the output of loss. I believe it's the output of
-        # solver.l2_optimality_error
-        self.solver_state = state
-        self.solver = solver
+        self._safe_fit(X=X, y=y, loss=loss, init_params=init_params)
 
     def simulate(
         self,
