@@ -14,6 +14,7 @@ Our design aligns with the `scikit-learn` API. This ensures that our GLM classes
 ## The class `_BaseGLM`
 
 Designed with `scikit-learn` compatibility in mind, `_BaseGLM` provides the common computations and functionalities needed by the diverse `GLM` subclasses.
+
 ### Inheritance
 
 The `_BaseGLM` inherits attributes and methods from the `_BaseRegressor`, as detailed in the [`base_class` module](02-base_class.md). This grants `_BaseGLM` a toolkit for managing and verifying model inputs. Leveraging the inherited abstraction, all GLM subclasses must explicitly define the `fit`, `predict`, `score`, and `simulate` methods, ensuring alignment with the `scikit-learn` framework.

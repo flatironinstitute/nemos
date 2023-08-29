@@ -705,7 +705,7 @@ class PoissonGLM(_BaseGLM):
 
         See Also
         --------
-        score
+        [score](../glm/#neurostatslib.glm.PoissonGLM.score)
             Score predicted firing rates against target spike counts.
         """
         return self._safe_predict(X)
@@ -897,7 +897,7 @@ class PoissonGLM(_BaseGLM):
 
         See Also
         --------
-        predict : Method to predict firing rates based on the model's parameters.
+        [predict](../glm/#neurostatslib.glm.PoissonGLM.predict) : Method to predict firing rates based on the model's parameters.
 
         Notes
         -----
