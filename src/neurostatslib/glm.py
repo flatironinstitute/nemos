@@ -835,14 +835,14 @@ class PoissonGLM(_BaseGLM):
             Initial spike counts matrix that kickstarts the simulation.
             Expected shape: (window_size, n_neurons).
         coupling_basis_matrix :
-            Basis matrix for coupling, representing inter-neuron effects
+            Basis matrix for coupling, representing between-neuron couplings
             and auto-correlations. Expected shape: (window_size, n_basis_coupling).
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
             Expected shape: (n_timesteps, n_neurons, n_basis_input).
         device :
-            Computation device to use ('cpu' or 'gpu'). Default is 'cpu'.
+            Computation device to use ('cpu', 'gpu' or 'tpu'). Default is 'cpu'.
 
         Returns
         -------
