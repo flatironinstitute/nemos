@@ -373,17 +373,17 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
             Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
             Expected shape: (window_size, n_neurons).
         coupling_basis_matrix :
-            Basis matrix for coupling, representing inter-neuron effects
+            Basis matrix for coupling, representing between-neuron couplings
             and auto-correlations. Expected shape: (window_size, n_basis_coupling).
         random_function :
-            A random function, like jax.random.poisson, which takes as input a random.PRNGKeyArray
+            A probability emission function, like jax.random.poisson, which takes as input a random.PRNGKeyArray
             and the mean rate, and samples observations, (spike counts for a poisson)..
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
             Expected shape: (n_timesteps, n_neurons, n_basis_input).
         device :
-            Computation device to use ('cpu' or 'gpu'). Default is 'cpu'.
+            Computation device to use ('cpu', 'gpu', or 'tpu'). Default is 'cpu'.
 
         Returns
         -------
