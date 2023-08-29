@@ -897,7 +897,8 @@ class PoissonGLM(_BaseGLM):
 
         See Also
         --------
-        [predict](../glm/#neurostatslib.glm.PoissonGLM.predict) : Method to predict firing rates based on the model's parameters.
+        [predict](../glm/#neurostatslib.glm.PoissonGLM.predict) : Method to predict firing rates based on
+        the model's parameters.
 
         Notes
         -----
