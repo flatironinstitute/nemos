@@ -27,33 +27,29 @@ The `_BaseGLM` inherits attributes and methods from the `_BaseRegressor`, as det
 - **`kwargs`**: Other keyword arguments, like regularization hyperparameters.
 
 
-### Public Methods
-
-1. **`predict`**: Validates the model's fit status and input consistency before calculating mean rates using the `_predict` method.
-
-!!! note
-     `_BaseGLM` lacks concrete implementations for methods like `score`, `fit`, and `simulate` since the specific behaviors of these methods are contingent upon their emission probability. For instance, the scoring method for a Poisson GLM will differ from a Gamma GLM, given their distinct likelihood functions.
-
 ### Private Methods
 
-1. **`_check_is_fit`**: Ensures the instance has been fitted. This check is implemented here and not in `_BaseRegressor` because the model parameters are likely to be GLM specific.
-2. **`_predict`**: Forecasts firing rates based on predictors and parameters.
-3. **`_pseudo_r2`**: Computes the Pseudo-$R^2$ for a GLM, giving insight into the model's fit relative to a null model.
-4. **`_safe_score`**: Scores the predicted firing rates against target spike counts. Can compute either the GLM mean log-likelihood or the pseudo-$R^2$.
-5. **`_safe_fit`**: Fit the GLM to the neural activity. Verifies input conformity, then leverages the `jaxopt` optimizer on the designated loss function (provided by the concrete GLM subclass).
-6. **`_safe_simulate`**: Simulates spike trains using the GLM as a recurrent network. It projects neural activity into the future using the fitted parameters of the GLM. The function can simulate activity based on both historical spike activity and external feedforward inputs, such as convolved currents, light intensities, etc.
+- **`_check_is_fit`**: Ensures the instance has been fitted. This check is implemented here and not in `_BaseRegressor` because the model parameters are likely to be GLM specific.
+- **`_predict`**: Forecasts firing rates based on predictors and parameters.
+- **`_pseudo_r2`**: Computes the Pseudo-$R^2$ for a GLM, giving insight into the model's fit relative to a null model.
+- **`_safe_predict`**: Validates the model's fit status and input consistency before calculating mean rates using the `_predict` method.
+- **`_safe_score`**: Scores the predicted firing rates against target spike counts. Can compute either the GLM mean log-likelihood or the pseudo-$R^2$.
+- **`_safe_fit`**: Fit the GLM to the neural activity. Verifies input conformity, then leverages the `jaxopt` optimizer on the designated loss function (provided by the concrete GLM subclass).
+- **`_safe_simulate`**: Simulates spike trains using the GLM as a recurrent network. It projects neural activity into the future using the fitted parameters of the GLM. The function can simulate activity based on both historical spike activity and external feedforward inputs, such as convolved currents, light intensities, etc.
 
 
 !!! note
-    The introduction of `_safe_score` and `_safe_simulate` offers notable benefits:
+    The introduction of `_safe_predict`, `_safe_fit`, `_safe_score` and `_safe_simulate` offers the following benefits:
 
-    1. It eliminates the need for subclasses to redo checks in their `score` and `simulate` methods, leading to concise code.
-    2. The methods `score` and `simulate` must be defined by subclasses due to their abstract nature in `_BaseRegressor`. This ensures subclass-specific docstrings for public methods.
+    1. It eliminates the need for subclasses to redo checks in their `fit`, `score` and `simulate` methods, leading to concise code.
+    2. The methods `predict`, `score`, `fit`,  and `simulate` must be defined by subclasses due to their abstract nature in `_BaseRegressor`. This ensures subclass-specific docstrings for public methods.
+
+    While `predict` is common to any GLM, we explicitly omit its implementation in `_BaseGLM` so that the method will be documented in the `Code References` under each concrete class. 
 
 ### Abstract Methods
 Besides the methods acquired from `_BaseRegressor`, `_BaseGLM` introduces:
 
-1. **`residual_deviance`**: Computes a GLM's residual deviance. The deviance, on par with the likelihood, is model specific.
+- **`residual_deviance`**: Computes a GLM's residual deviance. The deviance, on par with the likelihood, is model specific.
 
 !!! note
     The residual deviance can be formulated as a function of log-likelihood. Although a concrete `_BaseGLM` implementation is feasible, subclass-specific implementations might offer increased robustness or efficiency.
@@ -76,6 +72,7 @@ The class `PoissonGLM` is a concrete implementation of the un-regularized Poisso
 
 ### Public Methods
 
+- **`predict`**: Calculates mean rates by invoking the `_safe_predict` method of `_BaseGLM`.
 - **`score`**: Scores the Poisson GLM using either log-likelihood or pseudo-$R^2$. It invokes the parent `_safe_score` method to validate input and parameters.
 - **`fit`**: Fits the Poisson GLM to align with spike train data by invoking `_safe_fit` and setting Poisson negative log-likelihood as the loss function.
 - **`residual_deviance`**: Computes the residual deviance for each Poisson model observation, given predicted rates and spike counts.

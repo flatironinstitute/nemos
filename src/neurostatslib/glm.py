@@ -170,7 +170,7 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
 
-    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+    def _safe_predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         """Predict firing rates based on fit parameters.
 
         Parameters
@@ -678,6 +678,37 @@ class PoissonGLM(_BaseGLM):
             spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate)
         )
         return resid_dev
+
+    def predict(self, X: Union[NDArray, jnp.ndarray]):
+        """Predict firing rates based on fit parameters.
+
+        Parameters
+        ----------
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+
+        Returns
+        -------
+        predicted_firing_rates : jnp.ndarray
+            The predicted firing rates with shape (n_neurons, n_time_bins).
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            - If `params` is not a JAX pytree of size two.
+            - If weights and bias terms in `params` don't have the expected dimensions.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If there's an inconsistent number of features between spike basis coefficients and `X`.
+
+        See Also
+        --------
+        score
+            Score predicted firing rates against target spike counts.
+        """
+        return self._safe_predict(X)
 
     def score(
         self,
