@@ -5,11 +5,14 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Literal, Optional, Tuple, Union
+from typing import Any, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jax._src.lib import xla_client
 from numpy.typing import ArrayLike, NDArray
+
+from .utils import has_local_device
 
 
 class _Base:
@@ -104,6 +107,59 @@ class _Base:
             valid_params[key].set_params(**sub_params)
 
         return self
+
+    @staticmethod
+    def select_target_device(device: Literal["cpu", "tpu", "gpu"]) -> xla_client.Device:
+        """Select a device
+
+        Parameters
+        ----------
+        device
+            A device between "cpu", "gpu" or "tpu". Rolls back to "cpu" if device is not found.
+
+        Returns
+        -------
+            The selected device.
+        """
+        if device == "cpu":
+            target_device = jax.devices(device)[0]
+        elif (device == "gpu") or (device == "tpu"):
+            if has_local_device(device):
+                # assume for now 1 gpu/tpu (no further parallelization)
+                target_device = jax.devices(device)[0]
+            else:
+                warnings.warn(f"No {device.upper()} found! Falling back to CPU")
+                target_device = jax.devices("cpu")[0]
+        else:
+            raise ValueError(
+                f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`."
+            )
+        return target_device
+
+    @staticmethod
+    def device_put(
+        *args: jnp.ndarray, device: xla_client.Device
+    ) -> Union[Any, jnp.ndarray]:
+        """Send arrays to device.
+
+        This function sends the arrays to the target devices, if the arrays are
+        not already there.
+
+        Parameters
+        ----------
+        *args:
+            NDArray
+        device:
+            A target device, such as that returned by `select_target_device`.
+        Returns
+        -------
+        :
+            The arrays on the desired device.
+        """
+        return tuple(
+            jax.device_put(arg, device) if arg.device_buffer.device() != device else arg
+            for arg in args
+        )
 
     @classmethod
     def _get_param_names(cls):

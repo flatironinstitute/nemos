@@ -2,7 +2,6 @@
 """
 import abc
 import inspect
-import warnings
 from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
@@ -12,7 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .base_class import _BaseRegressor
 from .exceptions import NotFittedError
-from .utils import convolve_1d_trials, has_local_device
+from .utils import convolve_1d_trials
 
 
 class _BaseGLM(_BaseRegressor, abc.ABC):
@@ -322,9 +321,47 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
             [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.float32
         ],
         init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        device: Literal["cpu", "gpu", "tpu"] = "gpu",
     ):
+        """Fit GLM to neuroal activity.
+
+        Following scikit-learn API, the solutions are stored as attributes
+        ``basis_coeff_`` and ``baseline_link_fr``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape (n_time_bins, n_neurons, n_features)
+        y :
+            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
+        loss:
+            The loss function to be minimized.
+        init_params :
+            Initial values for the spike basis coefficients and bias terms. If
+            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
+        device:
+            Device used for optimizing model parameters.
+        Raises
+        ------
+        ValueError
+            - If `init_params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If spike_data is not two-dimensional.
+            - If solver returns at least one NaN parameter, which means it found
+              an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            - If `init_params` are not array-like
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+        """
         # convert to jnp.ndarray & perform checks
         X, y, init_params = self._preprocess_fit(X, y, init_params)
+
+        # send to device
+        target_device = self.select_target_device(device)
+        X, y = self.device_put(X, y, device=target_device)
+        init_params = self.device_put(*init_params, device=target_device)
 
         # Run optimization
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
@@ -421,26 +458,19 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
-        if device == "cpu":
-            target_device = jax.devices(device)[0]
-        elif (device == "gpu") or (device == "tpu"):
-            if has_local_device(device):
-                # assume for now 1 gpu/tpu (no further parallelization)
-                target_device = jax.devices(device)[0]
-            else:
-                warnings.warn(f"No {device.upper()} found! Falling back to CPU")
-                target_device = jax.devices("cpu")[0]
-        else:
-            raise ValueError(
-                f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`."
-            )
+        target_device = self.select_target_device(device)
         # check if the model is fit
         self._check_is_fit()
 
+        # convert to jnp.ndarray
+        init_y, coupling_basis_matrix, feedforward_input = self._convert_to_jnp_ndarray(
+            init_y, coupling_basis_matrix, feedforward_input, data_type=jnp.float32
+        )
+
         # Transfer data to the target device
-        init_y = jax.device_put(init_y, target_device)
-        coupling_basis_matrix = jax.device_put(coupling_basis_matrix, target_device)
-        feedforward_input = jax.device_put(feedforward_input, target_device)
+        init_y, coupling_basis_matrix, feedforward_input = self.device_put(
+            init_y, coupling_basis_matrix, feedforward_input, device=target_device
+        )
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.baseline_link_fr_.shape[0]
@@ -801,6 +831,7 @@ class PoissonGLM(_BaseGLM):
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
         init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        device: Literal["cpu", "gpu", "tpu"] = "gpu",
     ):
         """Fit GLM to spiking data.
 
@@ -816,7 +847,8 @@ class PoissonGLM(_BaseGLM):
         init_params :
             Initial values for the spike basis coefficients and bias terms. If
             None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
-
+        device:
+            Device used for optimizing model parameters.
         Raises
         ------
         ValueError
@@ -836,7 +868,7 @@ class PoissonGLM(_BaseGLM):
         def loss(params, X, y):
             return self._score(X, y, params)
 
-        self._safe_fit(X=X, y=y, loss=loss, init_params=init_params)
+        self._safe_fit(X=X, y=y, loss=loss, init_params=init_params, device=device)
 
     def simulate(
         self,

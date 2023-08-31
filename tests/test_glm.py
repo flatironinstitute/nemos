@@ -400,6 +400,32 @@ class TestPoissonGLM:
         else:
             model.fit(X, y, init_params=(init_w, init_b))
 
+    @pytest.mark.parametrize("device_spec", ["cpu", "tpu", "gpu", "none", 1])
+    def test_fit_device_spec(self, device_spec,
+                                   poissonGLM_model_instantiation):
+        """
+        Test `simulate` across different device specifications.
+        Validates if unsupported or absent devices raise exception
+        or warning respectively.
+        """
+        raise_exception = not (device_spec in ["cpu", "tpu", "gpu"])
+        raise_warning = all(device_spec != device.device_kind.lower()
+                            for device in jax.local_devices())
+        raise_warning = raise_warning and (not raise_exception)
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        n_samples, n_neurons, n_features = X.shape
+        init_w = jnp.zeros((n_neurons, n_features))
+        init_b = jnp.zeros((n_neurons,))
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Invalid device specification: {device_spec}"):
+                model.fit(X, y, init_params=(init_w, init_b), device=device_spec)
+        elif raise_warning:
+            with pytest.warns(UserWarning, match=f"No {device_spec.upper()} found"):
+                model.fit(X, y, init_params=(init_w, init_b), device=device_spec)
+        else:
+            model.fit(X, y, init_params=(init_w, init_b), device=device_spec)
+
     #######################
     # Test model.score
     #######################
@@ -1009,8 +1035,8 @@ class TestPoissonGLM:
                            feedforward_input=feedforward_input,
                            device="cpu")
 
-    @pytest.mark.parametrize("device_spec", ["cpu", "tpu", "gpu", "none"])
-    def test_simulate_device_tspec(self, device_spec,
+    @pytest.mark.parametrize("device_spec", ["cpu", "tpu", "gpu", "none", 1])
+    def test_simulate_device_spec(self, device_spec,
                                    poissonGLM_coupled_model_config_simulate):
         """
         Test `simulate` across different device specifications.

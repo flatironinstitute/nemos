@@ -53,6 +53,8 @@ For a detailed understanding, consult the [`scikit-learn` API Reference](https:/
 
 - **`get_params`**: The `get_params` method retrieves parameters set during model instance initialization. Opting for a deep inspection allows the method to assess nested object parameters, resulting in a comprehensive parameter dictionary.
 - **`set_params`**: The `set_params` method offers a mechanism to adjust or set an estimator's parameters. It's versatile, accommodating both individual estimators and more complex nested structures like pipelines. Feeding an unrecognized parameter will raise a `ValueError`.
+- **`select_target_device`**: Selects either "cpu", "gpu" or "tpu" as the device. If not found, rolls back to "cpu".
+- **`device_put`**: Sends arrays to device, if not on device already.
 
 ## The Abstract Class `model_base._BaseRegressor`
 
