@@ -66,7 +66,7 @@ For subclasses derived from `_BaseRegressor` to function correctly, they must im
 
 1. `fit`: Adapt the model using input data `X` and corresponding observations `y`.
 2. `predict`: Provide predictions based on the trained model and input data `X`.
-3. `score`: Gauge the accuracy of model predictions using input data `X` against the actual observations `y`.
+3. `score`: Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. `simulate`: Simulate data based on the trained regression model.
 
 Moreover, `_BaseRegressor` incorporates auxiliary methods such as `_convert_to_jnp_ndarray`, `_has_invalid_entry` 
