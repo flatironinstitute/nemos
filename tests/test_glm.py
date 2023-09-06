@@ -147,7 +147,7 @@ class TestPoissonGLM:
         init_b = jnp.log(y.mean(axis=0))
         raise_exception = dim_weights != 2
         if raise_exception:
-            with pytest.raises(ValueError, match="params\[0\] term must be of shape \(n_neurons, n_features\)"):
+            with pytest.raises(ValueError, match="params\[0\] must be of shape \(n_neurons, n_features\)"):
                 model.fit(X, y, init_params=(init_w, init_b))
         else:
             model.fit(X, y, init_params=(init_w, init_b))
@@ -164,7 +164,7 @@ class TestPoissonGLM:
         init_w = jnp.zeros((n_neurons, n_features))
         raise_exception = dim_intercepts != 1
         if raise_exception:
-            with pytest.raises(ValueError, match="params\[1\] term must be of shape"):
+            with pytest.raises(ValueError, match="params\[1\] must be of shape"):
                 model.fit(X, y, init_params=(init_w, init_b))
         else:
             model.fit(X, y, init_params=(init_w, init_b))

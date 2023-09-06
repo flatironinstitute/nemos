@@ -292,12 +292,12 @@ class _BaseRegressor(_Base, abc.ABC):
 
         if params[0].ndim != 2:
             raise ValueError(
-                "params[0] term must be of shape (n_neurons, n_features), but"
+                "params[0] must be of shape (n_neurons, n_features), but"
                 f"params[0] has {params[0].ndim} dimensions!"
             )
         if params[1].ndim != 1:
             raise ValueError(
-                "params[1] term must be of shape (n_neurons,) but "
+                "params[1] must be of shape (n_neurons,) but "
                 f"params[1] has {params[1].ndim} dimensions!"
             )
         return params
