@@ -1,5 +1,4 @@
-"""Abstract class for models.
-"""
+"""Abstract class for models."""
 
 import abc
 import inspect
@@ -23,14 +22,17 @@ class _Base:
 
     def get_params(self, deep=True):
         """
-        from scikit-learn, get parameters by inspecting init
+        From scikit-learn, get parameters by inspecting init.
+
         Parameters
         ----------
         deep
 
         Returns
         -------
-
+            out:
+                A dictionary containing the parameters. Key is the parameter
+                name, value is the parameter value.
         """
         out = dict()
         for key in self._get_param_names():
@@ -110,7 +112,7 @@ class _Base:
 
     @staticmethod
     def select_target_device(device: Literal["cpu", "tpu", "gpu"]) -> xla_client.Device:
-        """Select a device
+        """Select a device.
 
         Parameters
         ----------
@@ -151,6 +153,7 @@ class _Base:
             NDArray
         device:
             A target device, such as that returned by `select_target_device`.
+
         Returns
         -------
         :
@@ -163,7 +166,7 @@ class _Base:
 
     @classmethod
     def _get_param_names(cls):
-        """Get parameter names for the estimator"""
+        """Get parameter names for the estimator."""
         # fetch the constructor or the original constructor before
         # deprecation wrapping if any
         init = getattr(cls.__init__, "deprecated_original", cls.__init__)
@@ -328,7 +331,7 @@ class _BaseRegressor(_Base, abc.ABC):
         """
         Validate the number of neurons in model parameters and input arguments.
 
-        Raises:
+        Raises
         ------
             ValueError
                 - if the number of neurons is consistent across the model parameters (`params`) and
@@ -404,6 +407,7 @@ class _BaseRegressor(_Base, abc.ABC):
             Initial parameters for the model. If None, they are initialized with default values.
         data_type :
             Data type to convert to. Default is jnp.float32.
+
         Returns
         -------
         X :
@@ -418,7 +422,6 @@ class _BaseRegressor(_Base, abc.ABC):
         ValueError
             If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
         """
-
         # convert to jnp.ndarray of float32
         X, y = self._convert_to_jnp_ndarray(X, y, data_type=data_type)
 

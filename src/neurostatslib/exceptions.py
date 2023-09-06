@@ -1,3 +1,6 @@
+"""Model specific exceptions."""
+
+
 class NotFittedError(ValueError, AttributeError):
     """Exception class to raise if estimator is used before fitting.
 
@@ -12,6 +15,7 @@ class NotFittedError(ValueError, AttributeError):
     ...     PoissonGLM().predict([[[1, 2], [2, 3], [3, 4]]])
     ... except NotFittedError as e:
     ...     print(repr(e))
+
     NotFittedError("This GLM instance is not fitted yet. Call 'fit' with
     appropriate arguments.")
 

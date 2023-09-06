@@ -1,5 +1,4 @@
-"""Utility functions for data pre-processing
-"""
+"""Utility functions for data pre-processing."""
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
@@ -52,8 +51,7 @@ def convolve_1d_trials(
     basis_matrix: ArrayLike,
     time_series: Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray],
 ) -> List[jnp.ndarray]:
-    """
-    Convolve trial time series with a basis matrix.
+    """Convolve trial time series with a basis matrix.
 
     This function checks if all trials have the same duration. If they do, it uses a fast method
     to convolve all trials with the basis matrix at once. If they do not, it falls back to convolving
@@ -82,7 +80,6 @@ def convolve_1d_trials(
         - If trials_time_series contains empty trials.
         - If the number of time points in each trial is less than the window size.
     """
-
     basis_matrix = jnp.asarray(basis_matrix)
     # check input size
     if basis_matrix.ndim != 2:
@@ -143,6 +140,7 @@ def _pad_dimension(
     Add padding to the last dimension of an array based on the convolution type.
 
     This is a helper function used by `nan_pad_conv`, which is the function we expect the user will interact with.
+
     Parameters
     ----------
     array:
@@ -218,6 +216,7 @@ def nan_pad_conv(
     ValueError
         If the window_size is not a positive integer, or if the filter_type is not one of 'causal',
         'acausal', or 'anti-causal'. Also raises ValueError if the dimensionality of conv_trials is not as expected.
+
     """
     if not isinstance(window_size, int) or window_size <= 0:
         raise ValueError(
@@ -340,9 +339,10 @@ def plot_spike_raster(
 
 
 def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.array:
-    """
-    Compute the row-wise Kronecker product between two matrices using JAX. See [1]
-    for more details on the Kronecker product.
+    """Compute the row-wise Kronecker product.
+
+    Compute the row-wise Kronecker product between two matrices using JAX.
+    See [1] for more details on the Kronecker product.
 
     Parameters
     ----------
@@ -367,8 +367,8 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
 
     .. [1] Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
        Technical University of Denmark 7.15 (2008): 510.
-    """
 
+    """
     if transpose:
         A = A.T
         C = C.T
@@ -386,15 +386,19 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
 
 
 def has_local_device(device_type: str) -> bool:
-    """
-    Scan for local device availability.
+    """Scan for local device availability.
+
+    Looks for local device availability and returns True if the specified
+    type of device (e.g., GPU, TPU) is available.
 
     Parameters
     ----------
     device_type:
         The the device type in lower-case, e.g. `gpu`, `tpu`...
+
     Returns
     -------
+    :
         True if the jax finds the device, False otherwise.
 
     """

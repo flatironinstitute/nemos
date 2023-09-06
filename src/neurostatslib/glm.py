@@ -1,5 +1,4 @@
-"""GLM core module
-"""
+"""GLM core module."""
 import abc
 import inspect
 from typing import Callable, Literal, Optional, Tuple, Union
@@ -253,6 +252,7 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
                 - `log-likelihood` for the model log-likelihood.
                 - `pseudo-r2` for the model pseudo-$R^2$.
             Default is defined at class initialization.
+
         Returns
         -------
         score : (1,)
@@ -285,7 +285,6 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         Routledge, 2013.
 
         """
-
         # ignore the last time point from predict, because that corresponds to
         # the next time step, which we have no observed data for
         self._check_is_fit()
@@ -341,6 +340,7 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
             None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
         device:
             Device used for optimizing model parameters.
+
         Raises
         ------
         ValueError
@@ -435,8 +435,6 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         ------
         NotFittedError
             If the model hasn't been fitted prior to calling this method.
-        Raises
-        ------
         ValueError
             - If the instance has not been previously fitted.
             - If there's an inconsistency between the number of neurons in model parameters.
@@ -524,7 +522,7 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         def scan_fn(
             data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
         ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
-            """Function to scan over time steps and simulate spikes and firing rates.
+            """Scan over time steps and simulate spikes and firing rates.
 
             This function simulates the spikes and firing rates for each time step
             based on the previous spike data, feedforward input, and model coefficients.
@@ -611,7 +609,7 @@ class PoissonGLM(_BaseGLM):
         target_spikes: jnp.ndarray,
         params: Tuple[jnp.ndarray, jnp.ndarray],
     ) -> jnp.ndarray:
-        """Score the predicted firing rates against target spike counts.
+        r"""Score the predicted firing rates against target spike counts.
 
         This computes the Poisson negative log-likelihood up to a constant.
 
@@ -790,6 +788,7 @@ class PoissonGLM(_BaseGLM):
                 - `log-likelihood` for the model log-likelihood.
                 - `pseudo-r2` for the model pseudo-$R^2$.
             Default is defined at class initialization.
+
         Returns
         -------
         score :
@@ -849,6 +848,7 @@ class PoissonGLM(_BaseGLM):
             None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
         device:
             Device used for optimizing model parameters.
+
         Raises
         ------
         ValueError

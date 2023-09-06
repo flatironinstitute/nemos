@@ -1,5 +1,4 @@
-"""Helper functions for generating arrays of sample points, for basis functions.
-"""
+"""Helper functions for generating arrays of sample points, for basis functions."""
 
 import numpy as np
 from numpy.typing import NDArray
@@ -39,7 +38,7 @@ def raised_cosine_log(n_basis_funcs: int, window_size: int) -> NDArray:
 
 
 def raised_cosine_linear(n_basis_funcs: int, window_size: int) -> NDArray:
-    """Generate linear-spaced sample points for RaisedCosineBasis
+    """Generate linear-spaced sample points for RaisedCosineBasis.
 
     When used with the RaisedCosineBasis, results in evenly (linear) spaced
     cosine bumps.
