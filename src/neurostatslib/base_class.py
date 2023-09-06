@@ -383,7 +383,7 @@ class _BaseRegressor(_Base, abc.ABC):
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
         init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
-        data_type: jnp.dtype = jnp.float32
+        data_type: jnp.dtype = jnp.float32,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
         """Preprocess input data and initial parameters for the fit method.
 
