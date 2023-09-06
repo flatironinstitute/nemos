@@ -268,9 +268,9 @@ class _BaseRegressor(_Base, abc.ABC):
         return (jnp.isinf(array) | jnp.isnan(array)).any()
 
     @staticmethod
-    def _check_and_convert_params(params: ArrayLike,
-                                  data_type: jnp.dtype = jnp.float32
-                                  ) -> Tuple[jnp.ndarray, ...]:
+    def _check_and_convert_params(
+        params: ArrayLike, data_type: jnp.dtype = jnp.float32
+    ) -> Tuple[jnp.ndarray, ...]:
         """
         Validate the dimensions and consistency of parameters and data.
 
