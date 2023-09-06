@@ -414,7 +414,7 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
             and auto-correlations. Expected shape: (window_size, n_basis_coupling).
         random_function :
             A probability emission function, like jax.random.poisson, which takes as input a random.PRNGKeyArray
-            and the mean rate, and samples observations, (spike counts for a poisson)..
+            and the mean rate, and samples observations, (spike counts for a poisson).
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
