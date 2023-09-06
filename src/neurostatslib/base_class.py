@@ -406,8 +406,12 @@ class _BaseRegressor(_Base, abc.ABC):
             Data type to convert to. Default is jnp.float32.
         Returns
         -------
-        :
-            Preprocessed input data `X`, target values `y`, and initialized parameters.
+        X :
+            Preprocessed input data `X` converted to jnp.ndarray with the desired floating point precision.
+        y :
+            Target values `y` converted to jnp.ndarray with the desired floating point precision
+        init_params :
+            Initialized parameters converted to jnp.ndarray with the desired floating point precision.
 
         Raises
         ------
