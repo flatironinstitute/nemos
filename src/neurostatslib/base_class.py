@@ -383,6 +383,7 @@ class _BaseRegressor(_Base, abc.ABC):
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
         init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
+        data_type: jnp.dtype = jnp.float32
     ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
         """Preprocess input data and initial parameters for the fit method.
 
@@ -401,7 +402,8 @@ class _BaseRegressor(_Base, abc.ABC):
             Target values, expected to be of shape (n_timebins, n_neurons).
         init_params :
             Initial parameters for the model. If None, they are initialized with default values.
-
+        data_type :
+            Data type to convert to. Default is jnp.float32.
         Returns
         -------
         :
@@ -414,7 +416,7 @@ class _BaseRegressor(_Base, abc.ABC):
         """
 
         # convert to jnp.ndarray of float32
-        X, y = self._convert_to_jnp_ndarray(X, y, data_type=jnp.float32)
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=data_type)
 
         # check input dimensionality
         self._check_input_dimensionality(X, y)
