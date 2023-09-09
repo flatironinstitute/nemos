@@ -104,3 +104,43 @@ def jaxopt_solvers():
         "LBFGSB",
         "ProximalGradient"
     ]
+
+@pytest.fixture
+def group_sparse_poisson_glm_model_instantiation():
+    """Set up a Poisson GLM for testing purposes with group sparse weights.
+
+    This fixture initializes a Poisson GLM with random, group sparse, parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nsl.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 1, 5))
+    b_true = np.zeros((1, ))
+    w_true = np.random.normal(size=(1, 5))
+    w_true[0, 1:4] = 0.
+    noise_model = nsl.observation_noise.PoissonNoiseModel(jnp.exp)
+    solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
+    model = nsl.glm.GLM(noise_model, solver, score_type="log-likelihood")
+    rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
+    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+
+@pytest.fixture
+def example_data_prox_operator():
+    n_neurons = 3
+    n_features = 4
+    n_groups = 2
+
+    params = (jnp.ones((n_neurons, n_features)), jnp.zeros(n_neurons))
+    alpha = 0.1
+    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    scaling = 0.5
+
+    return params, alpha, mask, scaling

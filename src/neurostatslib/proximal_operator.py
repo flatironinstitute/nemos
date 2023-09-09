@@ -63,25 +63,7 @@ def prox_group_lasso(
     l2_norm = _vmap_norm2_masked_2(weights, mask)
     factor = 1 - alpha * scaling / l2_norm
     factor = jax.nn.relu(factor)
-    return weights * (factor @ mask), intercepts
-
-
-def prox_lasso(x: Any,
-               l1reg: Optional[Any] = None,
-               scaling: float = 1.0) -> Any:
-
-    def fun(u, v): return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
-
-    if l1reg is None:
-        l1reg = 1.0
-
-    if isinstance(x, tuple):
-
-        l1reg = tuple(l1reg for _ in x)
-
-        return tuple(fun(u, v) for u, v in zip(x, l1reg))
-
-    else:
-        if isinstance(l1reg, float):
-            l1reg = l1reg * jnp.ones_like(x)
-        return fun(x, l1reg)
+    # Avoid shrinkage of features that do not belong to any group
+    # by setting the shrinkage factor to 1.
+    not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
+    return weights * (factor @ mask + not_regularized), intercepts

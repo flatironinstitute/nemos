@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jaxopt
 
 from .base_class import _Base
-from .proximal_operator import prox_group_lasso, prox_lasso
+from .proximal_operator import prox_group_lasso
 
 
 class Solver(_Base, abc.ABC):
@@ -204,9 +204,7 @@ class LassoSolver(ProxGradientSolver):
         scaling: float = 1.0,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         Ws, bs = params
-
         return jaxopt.prox.prox_lasso(Ws, l1reg=alpha, scaling=scaling), bs
-
 
 
 class GroupLassoSolver(ProxGradientSolver):
@@ -220,10 +218,29 @@ class GroupLassoSolver(ProxGradientSolver):
         super().__init__(
             solver_name, solver_kwargs=solver_kwargs, alpha=alpha, mask=mask
         )
-        if not jnp.all((mask == 1) | (mask == 0)):
-            raise ValueError("mask must be an jnp.ndarray of 0s and 1s!")
-        if jnp.any(jnp.sum(mask, axis=0) != 1):
-            raise ValueError("Each feature must be assigned to a group!")
+        self._check_mask()
+
+    def _check_mask(self):
+        if self.mask.ndim != 2:
+            raise ValueError("`mask` must be 2-dimensional. "
+                             f"{self.mask.ndim} dimensional mask provided instead!")
+
+        if self.mask.shape[0] == 0:
+            raise ValueError(f"Empty mask provided! Mask has shape {self.mask.shape}.")
+
+        if jnp.any((self.mask != 1) & (self.mask != 0)):
+            raise ValueError("Mask elements be 0s and 1s!")
+
+        if self.mask.sum() == 0:
+            raise ValueError("Empty mask provided!")
+
+        if jnp.any(self.mask.sum(axis=0) > 1):
+            raise ValueError("Incorrect group assignment. Some of the features are assigned "
+                             "to more then one group.")
+
+        if not jnp.issubdtype(self.mask.dtype, jnp.floating):
+            raise ValueError("Mask should be a floating point jnp.ndarray. "
+                             f"Data type {self.mask.dtype} provided instead!")
 
     def prox_operator(
         self,
