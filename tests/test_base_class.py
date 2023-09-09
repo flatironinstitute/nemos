@@ -1,7 +1,9 @@
-import pytest
 from typing import Union
+
 import jax.numpy as jnp
+import pytest
 from numpy.typing import NDArray
+
 from neurostatslib.base_class import _BaseRegressor
 
 

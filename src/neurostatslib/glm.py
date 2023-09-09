@@ -1,7 +1,7 @@
 """GLM core module."""
 import abc
 import inspect
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -10,7 +10,463 @@ from numpy.typing import ArrayLike, NDArray
 
 from .base_class import _BaseRegressor
 from .exceptions import NotFittedError
+from .observation_noise import NoiseModel, PoissonNoiseModel
+from .solver import Solver
 from .utils import convolve_1d_trials
+
+
+class GLM(_BaseRegressor):
+    def __init__(
+        self,
+        noise_model: NoiseModel,
+        solver: Solver,
+        score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
+        data_type: Union[Type[jnp.float32], Type[jnp.float64]] = jnp.float32
+    ):
+        super().__init__()
+        self.noise_model = noise_model
+        self.solver = solver
+        self.inverse_link_function = noise_model.inverse_link_function
+
+        if score_type not in ["log-likelihood", "pseudo-r2"]:
+            raise NotImplementedError(
+                f"Scoring method {score_type} not implemented! "
+                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
+            )
+
+        if not jax.config.values["jax_enable_x64"] and (data_type == jnp.float64):
+            raise TypeError("JAX is currently not set up to support `jnp.float64`. "
+                            "To enable 64-bit precision, use "
+                            "`jax.config.update(\"jax_enable_x64\", True)` "
+                            "before your computations.")
+        self.data_type = data_type
+        self.score_type = score_type
+        self.baseline_link_fr_ = None
+        self.basis_coeff_ = None
+        # scale parameter (=1 for poisson and Gaussian, needs to be estimated for Gamma)
+        # the estimate of scale does not affect the ML estimate of the other parameter
+        self.scale = 1.0
+        self.solver_state = None
+
+    def _check_is_fit(self):
+        """Ensure the instance has been fitted."""
+        if (self.basis_coeff_ is None) or (self.baseline_link_fr_ is None):
+            raise NotFittedError(
+                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
+            )
+
+    def _predict(
+        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
+    ) -> jnp.ndarray:
+        """
+        Predict firing rates given predictors and parameters.
+
+        Parameters
+        ----------
+        params :
+            Tuple containing the spike basis coefficients and bias terms.
+        X :
+            Predictors. Shape (n_time_bins, n_neurons, n_features).
+
+        Returns
+        -------
+        jnp.ndarray
+            The predicted firing rates. Shape (n_time_bins, n_neurons).
+        """
+        Ws, bs = params
+        return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
+
+    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+        """Predict firing rates based on fit parameters.
+
+        Parameters
+        ----------
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+
+        Returns
+        -------
+        predicted_firing_rates : jnp.ndarray
+            The predicted firing rates with shape (n_neurons, n_time_bins).
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            - If `params` is not a JAX pytree of size two.
+            - If weights and bias terms in `params` don't have the expected dimensions.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If there's an inconsistent number of features between spike basis coefficients and `X`.
+
+        See Also
+        --------
+        [score](../glm/#neurostatslib.glm.PoissonGLM.score)
+            Score predicted firing rates against target spike counts.
+        """
+        # check that the model is fitted
+        self._check_is_fit()
+        # extract model params
+        Ws = self.basis_coeff_
+        bs = self.baseline_link_fr_
+
+        (X,) = self._convert_to_jnp_ndarray(X, data_type=self.data_type)
+
+        # check input dimensionality
+        self._check_input_dimensionality(X=X)
+        # check consistency between X and params
+        self._check_input_and_params_consistency((Ws, bs), X=X)
+        return self._predict((Ws, bs), X)
+
+    def _score(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        X: jnp.ndarray,
+        target_activity: jnp.ndarray
+    ) -> jnp.ndarray:
+        r"""Score the predicted firing rates against target neural activity.
+
+        This computes the negative log-likelihood up to a constant term.
+
+        Note that you can end up with infinities in here if there are zeros in
+        ``predicted_firing_rates``. We raise a warning in that case.
+
+        Parameters
+        ----------
+        params :
+            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+        target_activity :
+            The target activity to compare against. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The Poisson negative log-likehood. Shape (1,).
+
+        """
+        predicted_rate = self._predict(params, X)
+        return self.noise_model.negative_log_likelihood(predicted_rate, target_activity)
+
+    def score(
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+    ) -> jnp.ndarray:
+        r"""Score the predicted firing rates (based on fit) to the target spike counts.
+
+        This computes the GLM mean log-likelihood or the pseudo-$R^2$, thus the higher the
+        number the better.
+
+        The pseudo-$R^2$ can be computed as follows,
+
+        $$
+        \begin{aligned}
+            R^2_{\text{pseudo}} &= \frac{D_{\text{null}} - D_{\text{model}}}{D_{\text{null}}} \\\
+            &= \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
+            - \log \text{LL}(\bar{\lambda}| y)},
+        \end{aligned}
+        $$
+
+        where LL is the log-likelihood, $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is
+        the deviance for the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the observed activity and the model
+        predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate. See [1].
+
+        Parameters
+        ----------
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features)
+        y :
+            Neural activity arranged in a matrix. n_neurons must be the same as
+            during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        score : (1,)
+            The Poisson log-likelihood or the pseudo-$R^2$ of the current model.
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            If attempting to simulate a different number of neurons than were
+            present during fitting (i.e., if ``init_y.shape[0] !=
+            self.baseline_link_fr_.shape[0]``).
+
+        Notes
+        -----
+        The log-likelihood is not on a standard scale, its value is influenced by many factors,
+        among which the number of model parameters. The log-likelihood can assume both positive
+        and negative values.
+
+        The Pseudo-$R^2$ is not equivalent to the $R^2$ value in linear regression. While both provide a measure
+        of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
+        The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
+
+        Refer to the concrete subclass docstrings `_score` for the specific likelihood equations.
+
+        References
+        ----------
+        [1] Cohen, Jacob, et al. Applied multiple regression/correlation analysis for the behavioral sciences.
+        Routledge, 2013.
+
+        """
+        # ignore the last time point from predict, because that corresponds to
+        # the next time step, which we have no observed data for
+        self._check_is_fit()
+        Ws = self.basis_coeff_
+        bs = self.baseline_link_fr_
+
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=self.data_type)
+
+        self._check_input_dimensionality(X, y)
+        self._check_input_n_timepoints(X, y)
+        self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
+        if self.score_type == "log-likelihood":
+            norm_constant = jax.scipy.special.gammaln(y + 1).mean()
+            score = -self._score((Ws, bs), X, y) - norm_constant
+        else:
+            score = self.noise_model.pseudo_r2(self._predict((Ws, bs), X), y)
+
+        return score
+
+    def fit(
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        device: Literal["cpu", "gpu", "tpu"] = "cpu",
+    ):
+        """Fit GLM to neural activity.
+
+        Following scikit-learn API, the solutions are stored as attributes
+        ``basis_coeff_`` and ``baseline_link_fr``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape (n_time_bins, n_neurons, n_features)
+        y :
+            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
+        init_params :
+            Initial values for the spike basis coefficients and bias terms. If
+            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
+        device:
+            Device used for optimizing model parameters.
+
+        Raises
+        ------
+        ValueError
+            - If `init_params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If spike_data is not two-dimensional.
+            - If solver returns at least one NaN parameter, which means it found
+              an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            - If `init_params` are not array-like
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+        """
+        # convert to jnp.ndarray & perform checks
+        X, y, init_params = self._preprocess_fit(X, y, init_params, data_type=self.data_type)
+
+        # send to device
+        X, y = self.device_put(X, y, device=device)
+        init_params = self.device_put(*init_params, device=device)
+
+        # Run optimization
+        runner = self.solver.instantiate_solver(self._score)
+        params, state = runner(init_params, X, y)
+
+        if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
+            raise ValueError(
+                "Solver returned at least one NaN parameter, so solution is invalid!"
+                " Try tuning optimization hyperparameters."
+            )
+
+        # Store parameters
+        self.basis_coeff_ = params[0]
+        self.baseline_link_fr_ = params[1]
+        # note that this will include an error value, which is not the same as
+        # the output of loss. I believe it's the output of
+        # solver.l2_optimality_error
+        self.solver_state = state
+
+    def simulate(
+        self,
+        random_key: jax.random.PRNGKeyArray,
+        n_timesteps: int,
+        init_y: Union[NDArray, jnp.ndarray],
+        coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+        feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
+        device: Literal["cpu", "gpu", "tpu"] = "cpu",
+    ):
+        """
+        Simulate spike trains using the GLM as a recurrent network.
+
+        This function projects neural activity into the future, employing the fitted
+        parameters of the GLM. It is capable of simulating activity based on a combination
+        of historical spike activity and external feedforward inputs like convolved currents, light
+        intensities, etc.
+
+        Parameters
+        ----------
+        random_key :
+            PRNGKey for seeding the simulation.
+        n_timesteps :
+            Duration of the simulation in terms of time steps.
+        init_y :
+            Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
+            Expected shape: (window_size, n_neurons).
+        coupling_basis_matrix :
+            Basis matrix for coupling, representing between-neuron couplings
+            and auto-correlations. Expected shape: (window_size, n_basis_coupling).
+        feedforward_input :
+            External input matrix to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Expected shape: (n_timesteps, n_neurons, n_basis_input).
+        device :
+            Computation device to use ('cpu', 'gpu', or 'tpu'). Default is 'cpu'.
+
+        Returns
+        -------
+        simulated_obs :
+            Simulated observations (spike counts for PoissonGLMs) for each neuron over time.
+            Shape: (n_neurons, n_timesteps).
+        firing_rates :
+            Simulated firing rates for each neuron over time.
+            Shape: (n_neurons, n_timesteps).
+
+        Raises
+        ------
+        NotFittedError
+            If the model hasn't been fitted prior to calling this method.
+        ValueError
+            - If the instance has not been previously fitted.
+            - If there's an inconsistency between the number of neurons in model parameters.
+            - If the number of neurons in input arguments doesn't match with model parameters.
+            - For an invalid computational device selection.
+
+
+        See Also
+        --------
+        predict : Method to predict firing rates based on the model's parameters.
+
+        Notes
+        -----
+        The model coefficients (`self.basis_coeff_`) are structured such that the first set of coefficients
+        (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
+        The remaining coefficients correspond to the weights for the feed-forward input.
+
+
+        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
+        to ensure consistency in the model's input feature dimensionality.
+        """
+        # check if the model is fit
+        self._check_is_fit()
+
+        # convert to jnp.ndarray
+        init_y, coupling_basis_matrix, feedforward_input = self._convert_to_jnp_ndarray(
+            init_y, coupling_basis_matrix, feedforward_input, data_type=jnp.float32
+        )
+
+        # Transfer data to the target device
+        init_y, coupling_basis_matrix, feedforward_input = self.device_put(
+            init_y, coupling_basis_matrix, feedforward_input, device=device
+        )
+
+        n_basis_coupling = coupling_basis_matrix.shape[1]
+        n_neurons = self.baseline_link_fr_.shape[0]
+
+        # add an empty input (simulate with coupling-only)
+        if feedforward_input is None:
+            feedforward_input = jnp.zeros(
+                (n_timesteps, n_neurons, 0), dtype=jnp.float32
+            )
+
+        Ws = self.basis_coeff_
+        bs = self.baseline_link_fr_
+
+        self._check_input_dimensionality(feedforward_input, init_y)
+
+        if (
+                feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
+                != Ws.shape[1]
+        ):
+            raise ValueError(
+                "The number of feed forward input features "
+                "and the number of recurrent features must add up to "
+                "the overall model features."
+                f"The total number of feature of the model is {Ws.shape[1]}. {feedforward_input.shape[1]} "
+                f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
+                f"provided instead."
+            )
+
+        self._check_input_and_params_consistency(
+            (Ws[:, n_basis_coupling * n_neurons:], bs),
+            X=feedforward_input,
+            y=init_y,
+        )
+
+        if init_y.shape[0] != coupling_basis_matrix.shape[0]:
+            raise ValueError(
+                "`init_y` and `coupling_basis_matrix`"
+                " should have the same window size! "
+                f"`init_y` window size: {init_y.shape[1]}, "
+                f"`spike_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
+            )
+
+        if feedforward_input.shape[0] != n_timesteps:
+            raise ValueError(
+                "`feedforward_input` must be of length `n_timesteps`. "
+                f"`feedforward_input` has length {len(feedforward_input)}, "
+                f"`n_timesteps` is {n_timesteps} instead!"
+            )
+        subkeys = jax.random.split(random_key, num=n_timesteps)
+
+        def scan_fn(
+                data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
+        ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
+            """Scan over time steps and simulate spikes and firing rates.
+
+            This function simulates the spikes and firing rates for each time step
+            based on the previous spike data, feedforward input, and model coefficients.
+            """
+            spikes, chunk = data
+
+            # Convolve the spike data with the coupling basis matrix
+            conv_spk = convolve_1d_trials(coupling_basis_matrix, spikes[None, :, :])[0]
+
+            # Extract the corresponding slice of the feedforward input for the current time step
+            input_slice = jax.lax.dynamic_slice(
+                feedforward_input,
+                (chunk, 0, 0),
+                (1, feedforward_input.shape[1], feedforward_input.shape[2]),
+            )
+
+            # Reshape the convolved spikes and concatenate with the input slice to form the model input
+            conv_spk = jnp.tile(
+                conv_spk.reshape(conv_spk.shape[0], -1), conv_spk.shape[1]
+            ).reshape(conv_spk.shape[0], conv_spk.shape[1], -1)
+            X = jnp.concatenate([conv_spk, input_slice], axis=2)
+
+            # Predict the firing rate using the model coefficients
+            firing_rate = self._predict((Ws, bs), X)
+
+            # Simulate activity based on the predicted firing rate
+            new_spikes = self.noise_model.emission_probability(key, firing_rate)
+
+            # Prepare the spikes for the next iteration (keeping the most recent spikes)
+            concat_spikes = jnp.row_stack((spikes[1:], new_spikes)), chunk + 1
+            return concat_spikes, (new_spikes, firing_rate)
+
+        _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+        simulated_spikes, firing_rates = outputs
+        return jnp.squeeze(simulated_spikes, axis=1), jnp.squeeze(firing_rates, axis=1)
 
 
 class _BaseGLM(_BaseRegressor, abc.ABC):
@@ -244,8 +700,8 @@ class _BaseGLM(_BaseRegressor, abc.ABC):
         ----------
         X :
             The exogenous variables. Shape (n_time_bins, n_neurons, n_features)
-        spike_data :
-            Spike counts arranged in a matrix. n_neurons must be the same as
+        y :
+            Neural activity arranged in a matrix. n_neurons must be the same as
             during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
         score_type:
             String indicating the type of scoring to return. Options are:

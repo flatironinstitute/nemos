@@ -55,7 +55,9 @@ def poissonGLM_model_instantiation():
     X = np.random.normal(size=(100, 1, 5))
     b_true = np.zeros((1, ))
     w_true = np.random.normal(size=(1, 5))
-    model = nsl.glm.PoissonGLM(inverse_link_function=jax.numpy.exp)
+    noise_model = nsl.observation_noise.PoissonNoiseModel(jnp.exp)
+    solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
+    model = nsl.glm.GLM(noise_model, solver, score_type="log-likelihood")
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
 
@@ -89,3 +91,16 @@ def poissonGLM_coupled_model_config_simulate():
     init_spikes = jnp.asarray(config_dict["init_spikes"])
 
     return model, coupling_basis, feedforward_input, init_spikes, jax.random.PRNGKey(123)
+
+@pytest.fixture
+def jaxopt_solvers():
+    return [
+        "GradientDescent",
+        "BFGS",
+        "LBFGS",
+        "ScipyMinimize",
+        "NonlinearCG",
+        "ScipyBoundedMinimize",
+        "LBFGSB",
+        "ProximalGradient"
+    ]

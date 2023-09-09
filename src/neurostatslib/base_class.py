@@ -138,9 +138,9 @@ class _Base:
             )
         return target_device
 
-    @staticmethod
     def device_put(
-        *args: jnp.ndarray, device: xla_client.Device
+        self,
+        *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
     ) -> Union[Any, jnp.ndarray]:
         """Send arrays to device.
 
@@ -152,13 +152,14 @@ class _Base:
         *args:
             NDArray
         device:
-            A target device, such as that returned by `select_target_device`.
+            A target device between "cpu", "tpu", "gpu".
 
         Returns
         -------
         :
             The arrays on the desired device.
         """
+        device = self.select_target_device(device)
         return tuple(
             jax.device_put(arg, device) if arg.device_buffer.device() != device else arg
             for arg in args
