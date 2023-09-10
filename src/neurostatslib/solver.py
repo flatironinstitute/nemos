@@ -1,9 +1,10 @@
 import abc
 import inspect
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
+from numpy.typing import NDArray
 
 from .base_class import _Base
 from .proximal_operator import prox_group_lasso
@@ -145,7 +146,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         solver_name: str,
         solver_kwargs: Optional[dict] = None,
         alpha: float = 1.0,
-        mask: Optional[jnp.ndarray] = None,
+        mask: Optional[Union[NDArray, jnp.ndarray]] = None,
     ):
         super().__init__(solver_name, solver_kwargs=solver_kwargs, alpha=alpha)
         self.mask = mask
@@ -191,7 +192,7 @@ class LassoSolver(ProxGradientSolver):
         solver_name: str,
         solver_kwargs: Optional[dict] = None,
         alpha: float = 1.0,
-        mask: Optional[jnp.ndarray] = None,
+        mask:  Optional[Union[NDArray, jnp.ndarray]] = None,
     ):
         super().__init__(
             solver_name, solver_kwargs=solver_kwargs, alpha=alpha, mask=mask
@@ -211,7 +212,7 @@ class GroupLassoSolver(ProxGradientSolver):
     def __init__(
         self,
         solver_name: str,
-        mask: jnp.ndarray,
+        mask: Union[jnp.ndarray, NDArray],
         solver_kwargs: Optional[dict] = None,
         alpha: float = 1.0,
     ):
@@ -221,6 +222,7 @@ class GroupLassoSolver(ProxGradientSolver):
         self._check_mask()
 
     def _check_mask(self):
+        self.mask = jnp.asarray(self.mask)
         if self.mask.ndim != 2:
             raise ValueError("`mask` must be 2-dimensional. "
                              f"{self.mask.ndim} dimensional mask provided instead!")

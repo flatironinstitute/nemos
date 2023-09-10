@@ -1,7 +1,7 @@
 """GLM core module."""
 import abc
 import inspect
-from typing import Callable, Literal, Optional, Tuple, Type, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,8 @@ class GLM(_BaseRegressor):
         noise_model: NoiseModel,
         solver: Solver,
         score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
-        data_type: Union[Type[jnp.float32], Type[jnp.float64]] = jnp.float32
+        data_type: Union[Type[jnp.float32], Type[jnp.float64]] = jnp.float32,
+        **kwargs: Any
     ):
         super().__init__()
         self.noise_model = noise_model
@@ -39,6 +40,7 @@ class GLM(_BaseRegressor):
                             "To enable 64-bit precision, use "
                             "`jax.config.update(\"jax_enable_x64\", True)` "
                             "before your computations.")
+
         self.data_type = data_type
         self.score_type = score_type
         self.baseline_link_fr_ = None
@@ -144,7 +146,7 @@ class GLM(_BaseRegressor):
         Returns
         -------
         :
-            The Poisson negative log-likehood. Shape (1,).
+            The model negative log-likehood. Shape (1,).
 
         """
         predicted_rate = self._predict(params, X)
@@ -185,7 +187,7 @@ class GLM(_BaseRegressor):
         Returns
         -------
         score : (1,)
-            The Poisson log-likelihood or the pseudo-$R^2$ of the current model.
+            The log-likelihood or the pseudo-$R^2$ of the current model.
 
         Raises
         ------
@@ -206,7 +208,8 @@ class GLM(_BaseRegressor):
         of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
         The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
 
-        Refer to the concrete subclass docstrings `_score` for the specific likelihood equations.
+        Refer to the `nsl.observation_noise.NoiseModel` concrete subclasses for the specific likelihood equations.
+
 
         References
         ----------

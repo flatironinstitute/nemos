@@ -46,7 +46,7 @@ class _Base:
             out[key] = getattr(self, key)
         return out
 
-    def set_params(self, **params):
+    def set_params(self, **params: Any):
         """Set the parameters of this estimator.
 
         The method works on simple estimators as well as on nested objects
