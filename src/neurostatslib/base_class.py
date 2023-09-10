@@ -139,8 +139,7 @@ class _Base:
         return target_device
 
     def device_put(
-        self,
-        *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
+        self, *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
     ) -> Union[Any, jnp.ndarray]:
         """Send arrays to device.
 

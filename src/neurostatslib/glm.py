@@ -10,8 +10,8 @@ from numpy.typing import ArrayLike, NDArray
 
 from .base_class import _BaseRegressor
 from .exceptions import NotFittedError
-from .observation_noise import NoiseModel, PoissonNoiseModel
-from .solver import Solver, GroupLassoSolver
+from .observation_noise import NoiseModel
+from .solver import GroupLassoSolver, Solver
 from .utils import convolve_1d_trials
 
 
@@ -22,7 +22,7 @@ class GLM(_BaseRegressor):
         solver: Solver,
         score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
         data_type: Optional[Union[Type[jnp.float32], Type[jnp.float64]]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         super().__init__()
         self.noise_model = noise_model
@@ -36,19 +36,21 @@ class GLM(_BaseRegressor):
             )
 
         if not jax.config.values["jax_enable_x64"] and (data_type == jnp.float64):
-            raise TypeError("JAX is currently not set up to support `jnp.float64`. "
-                            "To enable 64-bit precision, use "
-                            "`jax.config.update(\"jax_enable_x64\", True)` "
-                            "before your computations.")
+            raise TypeError(
+                "JAX is currently not set up to support `jnp.float64`. "
+                "To enable 64-bit precision, use "
+                '`jax.config.update("jax_enable_x64", True)` '
+                "before your computations."
+            )
 
         if data_type is None:
             # set to jnp.float64, if float64 are enabled
             if jax.config.jax_enable_x64:
-                self._data_type = jnp.float64
+                self.data_type = jnp.float64
             else:
-                self._data_type = jnp.float32
+                self.data_type = jnp.float32
         else:
-            self._data_type = data_type
+            self.data_type = data_type
 
         self.score_type = score_type
         self.baseline_link_fr_ = None
@@ -121,7 +123,7 @@ class GLM(_BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        (X,) = self._convert_to_jnp_ndarray(X, data_type=self._data_type)
+        (X,) = self._convert_to_jnp_ndarray(X, data_type=self.data_type)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -133,7 +135,7 @@ class GLM(_BaseRegressor):
         self,
         params: Tuple[jnp.ndarray, jnp.ndarray],
         X: jnp.ndarray,
-        target_activity: jnp.ndarray
+        y: jnp.ndarray,
     ) -> jnp.ndarray:
         r"""Score the predicted firing rates against target neural activity.
 
@@ -148,7 +150,7 @@ class GLM(_BaseRegressor):
             Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
         X :
             The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
-        target_activity :
+        y :
             The target activity to compare against. Shape (n_time_bins, n_neurons).
 
         Returns
@@ -158,7 +160,7 @@ class GLM(_BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self.noise_model.negative_log_likelihood(predicted_rate, target_activity)
+        return self.noise_model.negative_log_likelihood(predicted_rate, y)
 
     def score(
         self,
@@ -231,7 +233,7 @@ class GLM(_BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        X, y = self._convert_to_jnp_ndarray(X, y, data_type=self._data_type)
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=self.data_type)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -283,7 +285,9 @@ class GLM(_BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
         """
         # convert to jnp.ndarray & perform checks
-        X, y, init_params = self._preprocess_fit(X, y, init_params, data_type=self._data_type)
+        X, y, init_params = self._preprocess_fit(
+            X, y, init_params, data_type=self.data_type
+        )
 
         # send to device
         X, y = self.device_put(X, y, device=device)
@@ -292,8 +296,8 @@ class GLM(_BaseRegressor):
         # Make sure mask is of the same floating type,
         # and put to the correct device.
         if isinstance(self.solver, GroupLassoSolver):
-            self.solver.mask = jnp.asarray(self.solver.mask, dtype=self._data_type)
-            self.solver.mask = self.device_put(self.solver.mask, device=device)
+            self.solver.mask = jnp.asarray(self.solver.mask, dtype=self.data_type)
+            self.solver.mask = self.device_put(self.solver.mask, device=device)[0]
 
         # Run optimization
         runner = self.solver.instantiate_solver(self._score)
@@ -411,8 +415,8 @@ class GLM(_BaseRegressor):
         self._check_input_dimensionality(feedforward_input, init_y)
 
         if (
-                feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
-                != Ws.shape[1]
+            feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
+            != Ws.shape[1]
         ):
             raise ValueError(
                 "The number of feed forward input features "
@@ -424,7 +428,7 @@ class GLM(_BaseRegressor):
             )
 
         self._check_input_and_params_consistency(
-            (Ws[:, n_basis_coupling * n_neurons:], bs),
+            (Ws[:, n_basis_coupling * n_neurons :], bs),
             X=feedforward_input,
             y=init_y,
         )
@@ -446,7 +450,7 @@ class GLM(_BaseRegressor):
         subkeys = jax.random.split(random_key, num=n_timesteps)
 
         def scan_fn(
-                data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
+            data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
         ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
             """Scan over time steps and simulate spikes and firing rates.
 

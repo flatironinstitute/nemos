@@ -63,6 +63,22 @@ class Solver(_Base, abc.ABC):
     ]:
         pass
 
+    def get_runner(
+        self,
+        solver_kwargs: dict,
+        run_kwargs: dict,
+    ) -> Callable[
+        [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
+    ]:
+        solver = getattr(jaxopt, self.solver_name)(**solver_kwargs)
+
+        def solver_run(
+            init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
+        ) -> jaxopt.OptStep:
+            return solver.run(init_params, X=X, y=y, **run_kwargs)
+
+        return solver_run
+
 
 class UnRegularizedSolver(Solver):
     allowed_solvers = [
@@ -86,15 +102,9 @@ class UnRegularizedSolver(Solver):
     ) -> Callable[
         [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
     ]:
-        self._check_is_callable(loss)
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
-
-        def solver_run(
-            init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
-        ) -> jaxopt.OptStep:
-            return solver.run(init_params, X=X, y=y)
-
-        return solver_run
+        solver_kwargs = self.solver_kwargs.copy()
+        solver_kwargs["fun"] = loss
+        return self.get_runner(solver_kwargs, {})
 
 
 class RidgeSolver(Solver):
@@ -120,22 +130,18 @@ class RidgeSolver(Solver):
         self,
         loss: Callable[
             [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.ndarray
-        ]
+        ],
     ) -> Callable[
         [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
     ]:
         self._check_is_callable(loss)
+
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self.penalization(params)
 
-        solver = getattr(jaxopt, self.solver_name)(fun=penalized_loss, **self.solver_kwargs)
-
-        def solver_run(
-            init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
-        ) -> jaxopt.OptStep:
-            return solver.run(init_params, X=X, y=y)
-
-        return solver_run
+        solver_kwargs = self.solver_kwargs.copy()
+        solver_kwargs["fun"] = penalized_loss
+        return self.get_runner(solver_kwargs, {})
 
 
 class ProxGradientSolver(Solver, abc.ABC):
@@ -152,12 +158,11 @@ class ProxGradientSolver(Solver, abc.ABC):
         self.mask = mask
 
     @abc.abstractmethod
-    def prox_operator(
+    def get_prox_operator(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        l2reg: float,
-        scaling: float = 1.0,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> Callable[
+        [Tuple[jnp.ndarray, jnp.ndarray], float, float], Tuple[jnp.ndarray, jnp.ndarray]
+    ]:
         pass
 
     def instantiate_solver(
@@ -168,22 +173,15 @@ class ProxGradientSolver(Solver, abc.ABC):
     ) -> Callable[
         [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
     ]:
-
         self._check_is_callable(loss)
 
-        def loss_kwarg(params, X=jnp.zeros(1), y=jnp.zeros(1)):
-            return loss(params, X, y)
+        solver_kwargs = self.solver_kwargs.copy()
+        solver_kwargs["fun"] = loss
+        solver_kwargs["prox"] = self.get_prox_operator()
 
-        solver = getattr(jaxopt, self.solver_name)(
-            fun=loss_kwarg, prox=self.prox_operator, **self.solver_kwargs
-        )
+        run_kwargs = dict(hyperparams_prox=self.alpha)
 
-        def solver_run(
-            init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
-        ) -> jaxopt.OptStep:
-            return solver.run(init_params, X=X, y=y, hyperparams_prox=self.alpha)
-
-        return solver_run
+        return self.get_runner(solver_kwargs, run_kwargs)
 
 
 class LassoSolver(ProxGradientSolver):
@@ -192,20 +190,22 @@ class LassoSolver(ProxGradientSolver):
         solver_name: str,
         solver_kwargs: Optional[dict] = None,
         alpha: float = 1.0,
-        mask:  Optional[Union[NDArray, jnp.ndarray]] = None,
+        mask: Optional[Union[NDArray, jnp.ndarray]] = None,
     ):
         super().__init__(
             solver_name, solver_kwargs=solver_kwargs, alpha=alpha, mask=mask
         )
 
-    def prox_operator(
+    def get_prox_operator(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        alpha: float,
-        scaling: float = 1.0,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        Ws, bs = params
-        return jaxopt.prox.prox_lasso(Ws, l1reg=alpha, scaling=scaling), bs
+    ) -> Callable[
+        [Tuple[jnp.ndarray, jnp.ndarray], float, float], Tuple[jnp.ndarray, jnp.ndarray]
+    ]:
+        def prox_op(params, l1reg, scaling=1.0):
+            Ws, bs = params
+            return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
+
+        return prox_op
 
 
 class GroupLassoSolver(ProxGradientSolver):
@@ -223,8 +223,10 @@ class GroupLassoSolver(ProxGradientSolver):
 
     def _check_mask(self):
         if self.mask.ndim != 2:
-            raise ValueError("`mask` must be 2-dimensional. "
-                             f"{self.mask.ndim} dimensional mask provided instead!")
+            raise ValueError(
+                "`mask` must be 2-dimensional. "
+                f"{self.mask.ndim} dimensional mask provided instead!"
+            )
 
         if self.mask.shape[0] == 0:
             raise ValueError(f"Empty mask provided! Mask has shape {self.mask.shape}.")
@@ -236,17 +238,23 @@ class GroupLassoSolver(ProxGradientSolver):
             raise ValueError("Empty mask provided!")
 
         if jnp.any(self.mask.sum(axis=0) > 1):
-            raise ValueError("Incorrect group assignment. Some of the features are assigned "
-                             "to more then one group.")
+            raise ValueError(
+                "Incorrect group assignment. Some of the features are assigned "
+                "to more then one group."
+            )
 
         if not jnp.issubdtype(self.mask.dtype, jnp.floating):
-            raise ValueError("Mask should be a floating point jnp.ndarray. "
-                             f"Data type {self.mask.dtype} provided instead!")
+            raise ValueError(
+                "Mask should be a floating point jnp.ndarray. "
+                f"Data type {self.mask.dtype} provided instead!"
+            )
 
-    def prox_operator(
+    def get_prox_operator(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        alpha: float,
-        scaling: float = 1.0,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        return prox_group_lasso(params, alpha=alpha, mask=self.mask, scaling=scaling)
+    ) -> Callable[
+        [Tuple[jnp.ndarray, jnp.ndarray], float, float], Tuple[jnp.ndarray, jnp.ndarray]
+    ]:
+        def prox_op(params, alpha, scaling=1.0):
+            return prox_group_lasso(params, alpha, mask=self.mask, scaling=scaling)
+
+        return prox_op
