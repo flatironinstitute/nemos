@@ -21,7 +21,7 @@ class GLM(_BaseRegressor):
         noise_model: NoiseModel,
         solver: Solver,
         score_type: Literal["log-likelihood", "pseudo-r2"] = "log-likelihood",
-        data_type: Union[Type[jnp.float32], Type[jnp.float64]] = jnp.float32,
+        data_type: Optional[Union[Type[jnp.float32], Type[jnp.float64]]] = None,
         **kwargs: Any
     ):
         super().__init__()
@@ -41,7 +41,15 @@ class GLM(_BaseRegressor):
                             "`jax.config.update(\"jax_enable_x64\", True)` "
                             "before your computations.")
 
-        self.data_type = data_type
+        if data_type is None:
+            # set to jnp.float64, if float64 are enabled
+            if jax.config.jax_enable_x64:
+                self.data_type = jnp.float64
+            else:
+                self.data_type = jnp.float32
+        else:
+            self.data_type = data_type
+
         self.score_type = score_type
         self.baseline_link_fr_ = None
         self.basis_coeff_ = None
