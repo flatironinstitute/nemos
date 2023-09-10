@@ -11,7 +11,7 @@ from numpy.typing import ArrayLike, NDArray
 from .base_class import _BaseRegressor
 from .exceptions import NotFittedError
 from .observation_noise import NoiseModel, PoissonNoiseModel
-from .solver import Solver
+from .solver import Solver, GroupLassoSolver
 from .utils import convolve_1d_trials
 
 
@@ -44,11 +44,11 @@ class GLM(_BaseRegressor):
         if data_type is None:
             # set to jnp.float64, if float64 are enabled
             if jax.config.jax_enable_x64:
-                self.data_type = jnp.float64
+                self._data_type = jnp.float64
             else:
-                self.data_type = jnp.float32
+                self._data_type = jnp.float32
         else:
-            self.data_type = data_type
+            self._data_type = data_type
 
         self.score_type = score_type
         self.baseline_link_fr_ = None
@@ -121,7 +121,7 @@ class GLM(_BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        (X,) = self._convert_to_jnp_ndarray(X, data_type=self.data_type)
+        (X,) = self._convert_to_jnp_ndarray(X, data_type=self._data_type)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -231,7 +231,7 @@ class GLM(_BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        X, y = self._convert_to_jnp_ndarray(X, y, data_type=self.data_type)
+        X, y = self._convert_to_jnp_ndarray(X, y, data_type=self._data_type)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -283,11 +283,17 @@ class GLM(_BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
         """
         # convert to jnp.ndarray & perform checks
-        X, y, init_params = self._preprocess_fit(X, y, init_params, data_type=self.data_type)
+        X, y, init_params = self._preprocess_fit(X, y, init_params, data_type=self._data_type)
 
         # send to device
         X, y = self.device_put(X, y, device=device)
         init_params = self.device_put(*init_params, device=device)
+
+        # Make sure mask is of the same floating type,
+        # and put to the correct device.
+        if isinstance(self.solver, GroupLassoSolver):
+            self.solver.mask = jnp.asarray(self.solver.mask, dtype=self._data_type)
+            self.solver.mask = self.device_put(self.solver.mask, device=device)
 
         # Run optimization
         runner = self.solver.instantiate_solver(self._score)

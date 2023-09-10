@@ -222,7 +222,6 @@ class GroupLassoSolver(ProxGradientSolver):
         self._check_mask()
 
     def _check_mask(self):
-        self.mask = jnp.asarray(self.mask)
         if self.mask.ndim != 2:
             raise ValueError("`mask` must be 2-dimensional. "
                              f"{self.mask.ndim} dimensional mask provided instead!")
