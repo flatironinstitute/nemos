@@ -5,7 +5,7 @@ from . import (
     basis,
     exceptions,
     glm,
-    observation_noise,
+    noise_model,
     sample_points,
     solver,
     utils,

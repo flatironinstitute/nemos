@@ -9,6 +9,12 @@ from numpy.typing import NDArray
 from .base_class import _Base
 from .proximal_operator import prox_group_lasso
 
+__all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
+
+
+def __dir__() -> list[str]:
+    return __all__
+
 
 class Solver(_Base, abc.ABC):
     allowed_solvers = []
@@ -91,7 +97,9 @@ class UnRegularizedSolver(Solver):
         "LBFGSB",
     ]
 
-    def __init__(self, solver_name: str, solver_kwargs: Optional[dict] = None):
+    def __init__(
+        self, solver_name: str = "GradientDescent", solver_kwargs: Optional[dict] = None
+    ):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
 
     def instantiate_solver(
@@ -119,7 +127,10 @@ class RidgeSolver(Solver):
     ]
 
     def __init__(
-        self, solver_name: str, solver_kwargs: Optional[dict] = None, alpha: float = 1.0
+        self,
+        solver_name: str = "GradientDescent",
+        solver_kwargs: Optional[dict] = None,
+        alpha: float = 1.0,
     ):
         super().__init__(solver_name, solver_kwargs=solver_kwargs, alpha=alpha)
 
@@ -187,7 +198,7 @@ class ProxGradientSolver(Solver, abc.ABC):
 class LassoSolver(ProxGradientSolver):
     def __init__(
         self,
-        solver_name: str,
+        solver_name: str = "ProximalGradient",
         solver_kwargs: Optional[dict] = None,
         alpha: float = 1.0,
         mask: Optional[Union[NDArray, jnp.ndarray]] = None,

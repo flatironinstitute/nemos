@@ -218,7 +218,11 @@ class _BaseRegressor(_Base, abc.ABC):
 
     @abc.abstractmethod
     def score(
-        self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        # may include score_type or other additional model dependent kwargs
+        **kwargs,
     ) -> jnp.ndarray:
         pass
 
@@ -226,11 +230,10 @@ class _BaseRegressor(_Base, abc.ABC):
     def simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
-        n_timesteps: int,
-        init_spikes: Union[NDArray, jnp.ndarray],
-        coupling_basis_matrix: Union[NDArray, jnp.ndarray],
-        feedforward_input: Optional[Union[NDArray, jnp.ndarray]] = None,
+        feed_forward_input: Union[NDArray, jnp.ndarray],
         device: Literal["cpu", "gpu", "tpu"] = "cpu",
+        # feed-forward input and/coupling basis
+        **kwargs,
     ):
         pass
 
@@ -431,7 +434,7 @@ class _BaseRegressor(_Base, abc.ABC):
 
         if self._has_invalid_entry(X):
             raise ValueError("Input X contains a NaNs or Infs!")
-        elif self._has_invalid_entry(y):
+        if self._has_invalid_entry(y):
             raise ValueError("Input y contains a NaNs or Infs!")
 
         _, n_neurons = y.shape
@@ -453,3 +456,26 @@ class _BaseRegressor(_Base, abc.ABC):
         self._check_input_and_params_consistency(init_params, X, y)
 
         return X, y, init_params
+
+    def _preprocess_simulate(
+        self,
+        feedforward_input: Union[NDArray, jnp.ndarray],
+        params_f: Tuple[jnp.ndarray, jnp.ndarray],
+        init_y: Optional[jnp.ndarray] = None,
+        params_r: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        data_type: jnp.dtype = jnp.float32,
+    ) -> Tuple[jnp.ndarray, ...]:
+        (feedforward_input,) = self._convert_to_jnp_ndarray(
+            feedforward_input, data_type=data_type
+        )
+        self._check_input_dimensionality(X=feedforward_input)
+        self._check_input_and_params_consistency(params_f, X=feedforward_input)
+
+        if self._has_invalid_entry(feedforward_input):
+            raise ValueError("feedforward_input contains a NaNs or Infs!")
+        if init_y is not None:
+            self._check_input_dimensionality(y=init_y)
+            self._check_input_and_params_consistency(params_r, y=init_y)
+            return feedforward_input, init_y
+
+        return (feedforward_input,)

@@ -9,7 +9,7 @@ import neurostatslib as nsl
 
 
 class TestPoissonNoiseModel:
-    cls = nsl.observation_noise.PoissonNoiseModel
+    cls = nsl.noise_model.PoissonNoiseModel
 
     @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
     def test_initialization(self, link_function):

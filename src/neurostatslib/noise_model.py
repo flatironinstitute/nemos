@@ -8,6 +8,12 @@ from .base_class import _Base
 
 KeyArray = Union[jnp.ndarray, jax.random.PRNGKeyArray]
 
+__all__ = ["PoissonNoiseModel"]
+
+
+def __dir__():
+    return __all__
+
 
 class NoiseModel(_Base, abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
@@ -17,6 +23,7 @@ class NoiseModel(_Base, abc.ABC):
         if not callable(inverse_link_function):
             raise ValueError("inverse_link_function must be a callable!")
         self.inverse_link_function = inverse_link_function
+        self._scale = None
 
     @abc.abstractmethod
     def negative_log_likelihood(self, firing_rate, y):
@@ -64,8 +71,9 @@ class NoiseModel(_Base, abc.ABC):
 
 
 class PoissonNoiseModel(NoiseModel):
-    def __init__(self, inverse_link_function):
+    def __init__(self, inverse_link_function=jnp.exp):
         super().__init__(inverse_link_function=inverse_link_function)
+        self._scale = 1
 
     def negative_log_likelihood(
         self,
