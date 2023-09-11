@@ -9,10 +9,10 @@ class NotFittedError(ValueError, AttributeError):
 
     Examples
     --------
-    >>> from neurostatslib.glm import PoissonGLM
+    >>> from neurostatslib.glm import GLM
     >>> from neurostatslib.exceptions import NotFittedError
     >>> try:
-    ...     PoissonGLM().predict([[[1, 2], [2, 3], [3, 4]]])
+    ...     GLM().predict([[[1, 2], [2, 3], [3, 4]]])
     ... except NotFittedError as e:
     ...     print(repr(e))
 
