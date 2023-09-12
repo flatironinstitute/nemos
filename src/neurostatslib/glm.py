@@ -85,13 +85,13 @@ class GLM(_BaseRegressor):
         Returns
         -------
         jnp.ndarray
-            The predicted firing rates. Shape (n_time_bins, n_neurons).
+            The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
         return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
 
     def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
-        """Predict firing rates based on fit parameters.
+        """Predict rates based on fit parameters.
 
         Parameters
         ----------
@@ -100,8 +100,8 @@ class GLM(_BaseRegressor):
 
         Returns
         -------
-        predicted_firing_rates : jnp.ndarray
-            The predicted firing rates with shape (n_neurons, n_time_bins).
+        :
+            The predicted rates with shape (n_neurons, n_time_bins).
 
         Raises
         ------
@@ -116,8 +116,13 @@ class GLM(_BaseRegressor):
 
         See Also
         --------
-        [score](../glm/#neurostatslib.glm.PoissonGLM.score)
-            Score predicted firing rates against target spike counts.
+        - [score](./#neurostatslib.glm.GLM.score)
+            Score predicted rates against target spike counts.
+        - [simulate (feed-forward only)](../glm/#neurostatslib.glm.GLM.simulate)
+            Simulate neural activity in response to a feed-forward input .
+        - [simulate (feed-forward + coupling)](../glm/#neurostatslib.glm.GLMRecurrent.simulate)
+            Simulate neural activity in response to a feed-forward input
+            using the GLM as a recurrent network.
         """
         # check that the model is fitted
         self._check_is_fit()
@@ -139,12 +144,12 @@ class GLM(_BaseRegressor):
         X: jnp.ndarray,
         y: jnp.ndarray,
     ) -> jnp.ndarray:
-        r"""Score the predicted firing rates against target neural activity.
+        r"""Score the predicted rates against target neural activity.
 
         This computes the negative log-likelihood up to a constant term.
 
         Note that you can end up with infinities in here if there are zeros in
-        ``predicted_firing_rates``. We raise a warning in that case.
+        ``predicted_rates``. We raise a warning in that case.
 
         Parameters
         ----------
@@ -201,7 +206,7 @@ class GLM(_BaseRegressor):
 
         Returns
         -------
-        score : (1,)
+        score :
             The log-likelihood or the pseudo-$R^2$ of the current model.
 
         Raises
@@ -273,9 +278,9 @@ class GLM(_BaseRegressor):
         X :
             Predictors, shape (n_time_bins, n_neurons, n_features)
         y :
-            Spike counts arranged in a matrix, shape (n_time_bins, n_neurons).
+            Neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
         init_params :
-            Initial values for the spike basis coefficients and bias terms. If
+            Initial values for the activity basis coefficients and bias terms. If
             None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
         device:
             Device used for optimizing model parameters.
@@ -287,7 +292,7 @@ class GLM(_BaseRegressor):
             - If dimensionality of `init_params` are not correct.
             - If the number of neurons in the model parameters and in the inputs do not match.
             - If `X` is not three-dimensional.
-            - If spike_data is not two-dimensional.
+            - If `y` is not two-dimensional.
             - If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
         TypeError
@@ -338,6 +343,19 @@ class GLM(_BaseRegressor):
         # feed-forward input and/coupling basis
         **kwargs,
     ):
+        """Simulate neural activity in response to a feed-forward input.
+
+        Parameters
+        ----------
+        random_key
+        feedforward_input
+        device
+        kwargs
+
+        Returns
+        -------
+
+        """
         # check if the model is fit
         self._check_is_fit()
         Ws, bs = self.basis_coeff_, self.baseline_link_fr_
@@ -368,34 +386,33 @@ class GLMRecurrent(GLM):
         init_y: Union[NDArray, jnp.ndarray] = None,
     ):
         """
-        Simulate spike trains using the GLM as a recurrent network.
+        Simulate neural activity using the GLM as a recurrent network.
 
         This function projects neural activity into the future, employing the fitted
         parameters of the GLM. It is capable of simulating activity based on a combination
-        of historical spike activity and external feedforward inputs like convolved currents, light
+        of historical activity and external feedforward inputs like convolved currents, light
         intensities, etc.
 
         Parameters
         ----------
         random_key :
             PRNGKey for seeding the simulation.
-
+        feedforward_input :
+            External input matrix to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Expected shape: (n_timesteps, n_neurons, n_basis_input).
         init_y :
             Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
             Expected shape: (window_size, n_neurons).
         coupling_basis_matrix :
             Basis matrix for coupling, representing between-neuron couplings
             and auto-correlations. Expected shape: (window_size, n_basis_coupling).
-        feedforward_input :
-            External input matrix to the model, representing factors like convolved currents,
-            light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_timesteps, n_neurons, n_basis_input).
         device :
             Computation device to use ('cpu', 'gpu', or 'tpu'). Default is 'cpu'.
 
         Returns
         -------
-        simulated_obs :
+        simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
             Shape: (n_neurons, n_timesteps).
         firing_rates :
@@ -415,7 +432,8 @@ class GLMRecurrent(GLM):
 
         See Also
         --------
-        predict : Method to predict firing rates based on the model's parameters.
+        [predict](./#neurostatslib.glm.GLM.predict) :
+        Method to predict rates based on the model's parameters.
 
         Notes
         -----
@@ -431,7 +449,7 @@ class GLMRecurrent(GLM):
         if coupling_basis_matrix is None:
             raise ValueError(
                 "GLMRecurrent simulate method requires a coupling basis"
-                " matrix in order to generate spikes!"
+                " matrix in order to generate neural activity!"
             )
         if init_y is None:
             raise ValueError(
@@ -488,7 +506,7 @@ class GLMRecurrent(GLM):
                 "`init_y` and `coupling_basis_matrix`"
                 " should have the same window size! "
                 f"`init_y` window size: {init_y.shape[1]}, "
-                f"`spike_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
+                f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
             )
 
         subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
@@ -498,15 +516,15 @@ class GLMRecurrent(GLM):
         def scan_fn(
             data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
         ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
-            """Scan over time steps and simulate spikes and firing rates.
+            """Scan over time steps and simulate activity and rates.
 
-            This function simulates the spikes and firing rates for each time step
-            based on the previous spike data, feedforward input, and model coefficients.
+            This function simulates the neural activity and firing rates for each time step
+            based on the previous activity, feedforward input, and model coefficients.
             """
-            spikes, chunk = data
+            activity, chunk = data
 
-            # Convolve the spike data with the coupling basis matrix
-            conv_spk = convolve_1d_trials(coupling_basis_matrix, spikes[None, :, :])[0]
+            # Convolve the neural activity with the coupling basis matrix
+            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None, :, :])[0]
 
             # Extract the corresponding slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
@@ -515,28 +533,28 @@ class GLMRecurrent(GLM):
                 (1, feed_forward_contrib.shape[1]),
             )
 
-            # Reshape the convolved spikes and concatenate with the input slice to form the model input
-            conv_spk = jnp.tile(
-                conv_spk.reshape(conv_spk.shape[0], -1), conv_spk.shape[1]
-            ).reshape(conv_spk.shape[0], conv_spk.shape[1], -1)
+            # Reshape the convolved activity and concatenate with the input slice to form the model input
+            conv_act = jnp.tile(
+                conv_act.reshape(conv_act.shape[0], -1), conv_act.shape[1]
+            ).reshape(conv_act.shape[0], conv_act.shape[1], -1)
 
             # Predict the firing rate using the model coefficients
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
             firing_rate = self.inverse_link_function(
-                jnp.einsum("ik,tik->ti", Wr, conv_spk) + input_slice + bs[None, :]
+                jnp.einsum("ik,tik->ti", Wr, conv_act) + input_slice + bs[None, :]
             )
 
             # Simulate activity based on the predicted firing rate
-            new_spikes = self.noise_model.emission_probability(key, firing_rate)
+            new_act = self.noise_model.emission_probability(key, firing_rate)
 
             # Prepare the spikes for the next iteration (keeping the most recent spikes)
-            concat_spikes = jnp.row_stack((spikes[1:], new_spikes)), chunk + 1
-            return concat_spikes, (new_spikes, firing_rate)
+            concat_act = jnp.row_stack((activity[1:], new_act)), chunk + 1
+            return concat_act, (new_act, firing_rate)
 
         _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
-        simulated_spikes, firing_rates = outputs
-        return jnp.squeeze(simulated_spikes, axis=1), jnp.squeeze(firing_rates, axis=1)
+        simulated_activity, firing_rates = outputs
+        return jnp.squeeze(simulated_activity, axis=1), jnp.squeeze(firing_rates, axis=1)
 
 
 # class _BaseGLM(_BaseRegressor, abc.ABC):
