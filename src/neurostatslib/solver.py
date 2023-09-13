@@ -17,7 +17,7 @@ def __dir__() -> list[str]:
 
 
 class Solver(_Base, abc.ABC):
-    allowed_solvers = []
+    allowed_optimizers = []
 
     def __init__(
         self,
@@ -37,11 +37,11 @@ class Solver(_Base, abc.ABC):
         self._check_solver_kwargs(self.solver_name, self.solver_kwargs)
 
     def _check_solver(self, solver_name: str):
-        if solver_name not in self.allowed_solvers:
+        if solver_name not in self.allowed_optimizers:
             raise ValueError(
                 f"Solver `{solver_name}` not allowed for "
                 f"{self.__class__} regularization. "
-                f"Allowed solvers are {self.allowed_solvers}."
+                f"Allowed solvers are {self.allowed_optimizers}."
             )
 
     @staticmethod
@@ -87,7 +87,7 @@ class Solver(_Base, abc.ABC):
 
 
 class UnRegularizedSolver(Solver):
-    allowed_solvers = [
+    allowed_optimizers = [
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -116,7 +116,7 @@ class UnRegularizedSolver(Solver):
 
 
 class RidgeSolver(Solver):
-    allowed_solvers = [
+    allowed_optimizers = [
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -156,7 +156,7 @@ class RidgeSolver(Solver):
 
 
 class ProxGradientSolver(Solver, abc.ABC):
-    allowed_solvers = ["ProximalGradient"]
+    allowed_optimizers = ["ProximalGradient"]
 
     def __init__(
         self,

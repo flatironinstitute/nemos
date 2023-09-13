@@ -8,93 +8,121 @@ from sklearn.model_selection import GridSearchCV
 import neurostatslib as nsl
 
 
+def _test_class_initialization(cls, kwargs, error, match_str):
+    if error:
+        with pytest.raises(error, match=match_str):
+            cls(**kwargs)
+    else:
+        cls(**kwargs)
+
+
+def _test_class_method(cls, method_name, args, kwargs, error, match_str):
+    if error:
+        with pytest.raises(error, match=match_str):
+            getattr(cls, method_name)(*args, **kwargs)
+    else:
+        getattr(cls, method_name)(*args, **kwargs)
+
+
 class TestGLM:
     """
     Unit tests for the PoissonGLM class.
     """
+    cls = nsl.glm.GLM
+
     #######################
     # Test model.__init__
     #######################
-    @pytest.mark.parametrize("solver", [nsl.solver.RidgeSolver("BFGS"), nsl.solver.Solver, 1])
-    def test_init_solver_type(self, solver: nsl.solver.Solver, poisson_noise_model):
+    @pytest.mark.parametrize(
+        "solver, error, match_str",
+        [
+            (nsl.solver.RidgeSolver("BFGS"), None, None),
+            (nsl.solver.Solver, TypeError, "The provided `solver` should be one of the implemented"),
+            (1, TypeError, "The provided `solver` should be one of the implemented")
+        ]
+    )
+    def test_init_solver_type(self, solver, error, match_str, poisson_noise_model):
         """
         Test initialization with different solver names. Check if an appropriate exception is raised
         when the solver name is not present in jaxopt.
         """
-        raise_exception = solver.__class__.__name__ not in nsl.solver.__all__
-        if raise_exception:
-            with pytest.raises(TypeError, match="The provided `solver` should be one of the implemented"):
-                nsl.glm.GLM(solver=solver, noise_model=poisson_noise_model)
-        else:
-            nsl.glm.GLM(solver=solver, noise_model=poisson_noise_model)
+        _test_class_initialization(self.cls, {'solver': solver, 'noise_model': poisson_noise_model}, error, match_str)
 
-    @pytest.mark.parametrize("noise", [nsl.noise_model.PoissonNoiseModel(), nsl.solver.Solver, 1])
-    def test_init_noise_type(self, noise: nsl.noise_model.NoiseModel, ridge_solver):
+    @pytest.mark.parametrize(
+        "noise, error, match_str",
+        [
+            (nsl.noise_model.PoissonNoiseModel(), None, None),
+            (nsl.solver.Solver, TypeError, "The provided `noise_model` should be one of the implemented"),
+            (1, TypeError, "The provided `noise_model` should be one of the implemented")
+        ]
+    )
+    def test_init_noise_type(self, noise, error, match_str, ridge_solver):
         """
         Test initialization with different solver names. Check if an appropriate exception is raised
         when the solver name is not present in jaxopt.
         """
-        raise_exception = noise.__class__.__name__ not in nsl.noise_model.__all__
-        if raise_exception:
-            with pytest.raises(TypeError, match="The provided `noise_model` should be one of the implemented"):
-                nsl.glm.GLM(solver=ridge_solver, noise_model=noise)
-        else:
-            nsl.glm.GLM(solver=ridge_solver, noise_model=noise)
+        _test_class_initialization(self.cls, {'solver': ridge_solver, 'noise_model': noise}, error, match_str)
 
 
     #######################
     # Test model.fit
     #######################
-    @pytest.mark.parametrize("n_params", [0, 1, 2, 3])
-    def test_fit_param_length(self, n_params, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("n_params, error, match_str", [
+        (0, ValueError, "Params needs to be array-like of length two."),
+        (1, ValueError, "Params needs to be array-like of length two."),
+        (2, None, None),
+        (3, ValueError, "Params needs to be array-like of length two."),
+    ])
+    def test_fit_param_length(self, n_params, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with different numbers of initial parameters.
         Check for correct number of parameters.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.log(y.mean(axis=0))
         if n_params == 0:
             init_params = tuple()
         elif n_params == 1:
-            init_params = (init_w,)
-        elif n_params == 2:
-            init_params = (init_w, init_b)
+            init_params = (true_params[0],)
         else:
-            init_params = (init_w, init_b) + (init_w,) * (n_params - 2)
+            init_params = true_params + (true_params[0],) * (n_params - 2)
+        _test_class_method(model, "fit",
+                           [X, y],
+                           {"init_params": init_params},
+                           error, match_str)
 
-        raise_exception = n_params != 2
-        if raise_exception:
-            with pytest.raises(ValueError, match="Params needs to be array-like of length two."):
-                model.fit(X, y, init_params=init_params)
-        else:
-            model.fit(X, y, init_params=init_params)
-
-    @pytest.mark.parametrize("add_entry", [0, np.nan, np.inf])
-    @pytest.mark.parametrize("add_to", ["X", "y"])
-    def test_fit_param_values(self, add_entry, add_to, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("add_entry, add_to, error, match_str", [
+        (0, "X", None, None),
+        (np.nan, "X", ValueError, "Input X contains a NaNs or Infs"),
+        (np.inf, "X", ValueError, "Input X contains a NaNs or Infs"),
+        (0, "y", None, None),
+        (np.nan, "y", ValueError, "Input y contains a NaNs or Infs"),
+        (np.inf, "y", ValueError, "Input y contains a NaNs or Infs"),
+    ])
+    def test_fit_param_values(self, add_entry, add_to, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if add_to == "X":
+            # get an index to be edited
             idx = np.unravel_index(np.random.choice(X.size), X.shape)
             X[idx] = add_entry
         elif add_to == "y":
             idx = np.unravel_index(np.random.choice(y.size), y.shape)
             y = np.asarray(y, dtype=np.float32)
             y[idx] = add_entry
+        _test_class_method(model, "fit",
+                           [X, y],
+                           {"init_params": true_params},
+                           error, match_str)
 
-        raise_exception = jnp.isnan(add_entry) or jnp.isinf(add_entry)
-        if raise_exception:
-            with pytest.raises(ValueError, match="Input (X|y) contains a NaNs or Infs"):
-                model.fit(X, y, init_params=true_params)
-        else:
-            model.fit(X, y, init_params=true_params)
-
-    @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
-    def test_fit_weights_dimensionality(self, dim_weights, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("dim_weights, error, match_str", [
+        (0, ValueError, "params\[0\] must be of shape \(n_neurons, n_features\)"),
+        (1, ValueError, "params\[0\] must be of shape \(n_neurons, n_features\)"),
+        (2, None, None),
+        (3, ValueError, "params\[0\] must be of shape \(n_neurons, n_features\)")
+    ])
+    def test_fit_weights_dimensionality(self, dim_weights, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with weight matrices of different dimensionalities.
         Check for correct dimensionality.
@@ -109,16 +137,15 @@ class TestGLM:
             init_w = jnp.zeros((n_neurons, n_features))
         else:
             init_w = jnp.zeros((n_neurons, n_features) + (1,) * (dim_weights - 2))
-        init_b = jnp.log(y.mean(axis=0))
-        raise_exception = dim_weights != 2
-        if raise_exception:
-            with pytest.raises(ValueError, match="params\[0\] must be of shape \(n_neurons, n_features\)"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": (init_w, true_params[1])}, error, match_str)
 
-    @pytest.mark.parametrize("dim_intercepts", [0, 1, 2, 3])
-    def test_fit_intercepts_dimensionality(self, dim_intercepts, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("dim_intercepts, error, match_str", [
+        (0, ValueError, "params\[1\] must be of shape"),
+        (1, None, None),
+        (2, ValueError, "params\[1\] must be of shape"),
+        (3, ValueError, "params\[1\] must be of shape")
+    ])
+    def test_fit_intercepts_dimensionality(self, dim_intercepts, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
         """
@@ -127,44 +154,36 @@ class TestGLM:
 
         init_b = jnp.zeros((n_neurons,) * dim_intercepts)
         init_w = jnp.zeros((n_neurons, n_features))
-        raise_exception = dim_intercepts != 1
-        if raise_exception:
-            with pytest.raises(ValueError, match="params\[1\] must be of shape"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": (init_w, init_b)}, error, match_str)
 
-    @pytest.mark.parametrize("init_params",
-                             [dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))),
-                              [jnp.zeros((1, 5)), jnp.zeros((1,))],
-                              dict(p1=jnp.zeros((1, 5)), p2=np.zeros((1,), dtype='U10')),
-                              0,
-                              {0, 1},
-                              iter([jnp.zeros((1, 5)), jnp.zeros((1,))]),
-                              [jnp.zeros((1, 5)), ""],
-                              ["", jnp.zeros((1,))]])
-    def test_fit_init_params_type(self, init_params, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize(
+        "init_params, error, match_str",
+        [
+            ([jnp.zeros((1, 5)), jnp.zeros((1,))], None, None),
+            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), TypeError, "Initial parameters must be array-like"),
+            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), TypeError, "Initial parameters must be array-like"),
+            (0, TypeError, "Initial parameters must be array-like"),
+            ({0, 1}, TypeError, "Initial parameters must be array-like"),
+            ([jnp.zeros((1, 5)), ""], TypeError, "Initial parameters must be array-like"),
+            (["", jnp.zeros((1,))], TypeError, "Initial parameters must be array-like")
+        ]
+    )
+    def test_fit_init_params_type(self, init_params, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
         are array-like.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        # check if parameter can be converted
-        try:
-            tuple(jnp.asarray(par, dtype=jnp.float32) for par in init_params)
-            # ensure that it's an array-like (for example excluding sets and iterators)
-            raise_exception = not hasattr(init_params, "__getitem__")
-        except(TypeError, ValueError):
-            raise_exception = True
+        _test_class_method(model, "fit", [X, y], {"init_params": init_params}, error, match_str)
 
-        if raise_exception:
-            with pytest.raises(TypeError, match="Initial parameters must be array-like"):
-                model.fit(X, y, init_params=init_params)
-        else:
-            model.fit(X, y, init_params=init_params)
 
-    @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
-    def test_fit_n_neuron_match_weights(self, delta_n_neuron, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
+                             [
+                                 (-1, ValueError, "Model parameters have inconsistent shapes"),
+                                 (0, None, None),
+                                 (1, ValueError, "Model parameters have inconsistent shapes")
+                              ])
+    def test_fit_n_neuron_match_weights(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method ensuring the number of neurons in the weights matches the expected number.
         """
@@ -172,38 +191,25 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         init_w = jnp.zeros((n_neurons + delta_n_neuron, n_features))
-        init_b = jnp.zeros((n_neurons, ))
-        # model.basis_coeff_ = init_w
-        # model.baseline_link_fr_ = init_b
-        if raise_exception:
-            with pytest.raises(ValueError, match="Model parameters have inconsistent shapes"):
-                model.fit(X, y, init_params=(init_w, init_b))
-            # with pytest.raises(ValueError, match="Model parameters have inconsistent shapes"):
-            #     model.predict(X)
-            # with pytest.raises(ValueError, match="Model parameters have inconsistent shapes"):
-            #     model.score(X, y)
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
-            # model.predict(X)
-            # model.score(X, y)
+        _test_class_method(model, "fit", [X, y], {"init_params": (init_w, true_params[1])}, error, match_str)
 
-    @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
-    def test_fit_n_neuron_match_baseline_rate(self, delta_n_neuron, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
+                             [
+                                 (-1, ValueError, "Model parameters have inconsistent shapes"),
+                                 (0, None, None),
+                                 (1, ValueError, "Model parameters have inconsistent shapes")
+                             ])
+    def test_fit_n_neuron_match_baseline_rate(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method ensuring the number of neurons in the baseline rate matches the expected number.
         """
         raise_exception = delta_n_neuron != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
         init_b = jnp.zeros((n_neurons + delta_n_neuron,))
+        _test_class_method(model, "fit", [X, y], {"init_params": (true_params[0], init_b)}, error, match_str)
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="Model parameters have inconsistent shapes"):
-                model.fit(X, y, init_params=(init_w, init_b))
 
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
     def test_fit_n_neuron_match_x(self, delta_n_neuron, poissonGLM_model_instantiation):
