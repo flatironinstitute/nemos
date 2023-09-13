@@ -209,52 +209,52 @@ class TestGLM:
         init_b = jnp.zeros((n_neurons + delta_n_neuron,))
         _test_class_method(model, "fit", [X, y], {"init_params": (true_params[0], init_b)}, error, match_str)
 
-
-
-    @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
-    def test_fit_n_neuron_match_x(self, delta_n_neuron, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
+                             [
+                                 (-1, ValueError, "The number of neuron in the model parameters"),
+                                 (0, None, None),
+                                 (1, ValueError, "The number of neuron in the model parameters")
+                             ]
+                             )
+    def test_fit_n_neuron_match_x(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method ensuring the number of neurons in X matches the number of neurons in the model.
         """
         raise_exception = delta_n_neuron != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
+        n_neurons = X.shape[1]
         X = jnp.repeat(X, n_neurons + delta_n_neuron, axis=1)
-        if raise_exception:
-            with pytest.raises(ValueError, match="The number of neuron in the model parameters"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
-    def test_fit_n_neuron_match_y(self, delta_n_neuron, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
+                             [
+                                 (-1, ValueError, "The number of neuron in the model parameters"),
+                                 (0, None, None),
+                                 (1, ValueError, "The number of neuron in the model parameters")
+                             ]
+                             )
+    def test_fit_n_neuron_match_y(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method ensuring the number of neurons in y matches the number of neurons in the model.
         """
-        raise_exception = delta_n_neuron != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
+        n_neurons = X.shape[1]
         y = jnp.repeat(y, n_neurons + delta_n_neuron, axis=1)
-        if raise_exception:
-            with pytest.raises(ValueError, match="The number of neuron in the model parameters"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("delta_dim", [-1, 0, 1])
-    def test_fit_x_dimensionality(self, delta_dim, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_dim, error, match_str",
+                             [
+                                 (-1, ValueError, "X must be three-dimensional"),
+                                 (0, None, None),
+                                 (1, ValueError, "X must be three-dimensional")
+                             ]
+                             )
+    def test_fit_x_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
         """
-        raise_exception = delta_dim != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
 
         if delta_dim == -1:
             # remove a dimension
@@ -263,22 +263,21 @@ class TestGLM:
             # add a dimension
             X = np.zeros((n_samples, n_neurons, n_features, 1))
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="X must be three-dimensional"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("delta_dim", [-1, 0, 1])
-    def test_fit_y_dimensionality(self, delta_dim, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_dim, error, match_str",
+                             [
+                                 (-1, ValueError, "y must be two-dimensional"),
+                                 (0, None, None),
+                                 (1, ValueError, "y must be two-dimensional")
+                             ]
+                             )
+    def test_fit_y_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
         """
-        raise_exception = delta_dim != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
 
         if delta_dim == -1:
             # remove a dimension
@@ -287,42 +286,41 @@ class TestGLM:
             # add a dimension
             y = np.zeros((n_samples, n_neurons, 1))
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="y must be two-dimensional"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("delta_n_features", [-1, 0, 1])
-    def test_fit_n_feature_consistency_weights(self, delta_n_features, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_features, error, match_str",
+                             [
+                                 (-1, ValueError, "Inconsistent number of features"),
+                                 (0, None, None),
+                                 (1, ValueError, "Inconsistent number of features")
+                             ]
+                             )
+    def test_fit_n_feature_consistency_weights(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method for inconsistencies between data features and initial weights provided.
         Ensure the number of features align.
         """
-        raise_exception = delta_n_features != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         # add/remove a feature from weights
         init_w = jnp.zeros((n_neurons, n_features + delta_n_features))
         init_b = jnp.zeros((n_neurons,))
+        _test_class_method(model, "fit", [X, y], {"init_params": (init_w,init_b)}, error, match_str)
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="Inconsistent number of features"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
-
-    @pytest.mark.parametrize("delta_n_features", [-1, 0, 1])
-    def test_fit_n_feature_consistency_x(self, delta_n_features, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_features, error, match_str",
+                             [
+                                 (-1, ValueError, "Inconsistent number of features"),
+                                 (0, None, None),
+                                 (1, ValueError, "Inconsistent number of features")
+                             ]
+                             )
+    def test_fit_n_feature_consistency_x(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method for inconsistencies between data features and model's expectations.
         Ensure the number of features in X aligns.
         """
         raise_exception = delta_n_features != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
 
         if delta_n_features == 1:
             # add a feature
@@ -331,117 +329,121 @@ class TestGLM:
             # remove a feature
             X = X[..., :-1]
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="Inconsistent number of features"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("delta_tp", [-1, 0, 1])
-    def test_fit_time_points_x(self, delta_tp, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_tp, error, match_str",
+                             [
+                                 (-1, ValueError, "The number of time-points in X and y"),
+                                 (0, None, None),
+                                 (1, ValueError, "The number of time-points in X and y")
+                             ]
+                             )
+    def test_fit_time_points_x(self, delta_tp, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
         """
-        raise_exception = delta_tp != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
         X = jnp.zeros((X.shape[0] + delta_tp, ) + X.shape[1:])
-        if raise_exception:
-            with pytest.raises(ValueError, match="The number of time-points in X and y"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("delta_tp", [-1, 0, 1])
-    def test_fit_time_points_y(self, delta_tp, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_tp, error, match_str",
+                             [
+                                 (-1, ValueError, "The number of time-points in X and y"),
+                                 (0, None, None),
+                                 (1, ValueError, "The number of time-points in X and y")
+                             ]
+                             )
+    def test_fit_time_points_y(self, delta_tp, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `fit` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
         """
-        raise_exception = delta_tp != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
-        if raise_exception:
-            with pytest.raises(ValueError, match="The number of time-points in X and y"):
-                model.fit(X, y, init_params=(init_w, init_b))
-        else:
-            model.fit(X, y, init_params=(init_w, init_b))
+        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("device_spec", ["cpu", "tpu", "gpu", "none", 1])
-    def test_fit_device_spec(self, device_spec,
+    @pytest.mark.parametrize("device_spec, error, match_str",
+                             [
+                                 ("cpu", None, None),
+                                 ("tpu", None, None),
+                                 ("gpu", None, None),
+                                 ("none", ValueError, "Invalid device specification: %s"),
+                                 (1, ValueError, "Invalid device specification: %s")
+                             ]
+                             )
+    def test_fit_device_spec(self, device_spec, error, match_str,
                                    poissonGLM_model_instantiation):
         """
         Test `simulate` across different device specifications.
         Validates if unsupported or absent devices raise exception
         or warning respectively.
         """
-        raise_exception = not (device_spec in ["cpu", "tpu", "gpu"])
+        if match_str is not None:
+            match_str = match_str % str(device_spec)
         raise_warning = all(device_spec != device.device_kind.lower()
                             for device in jax.local_devices())
-        raise_warning = raise_warning and (not raise_exception)
-
+        raise_warning = raise_warning and (error is not ValueError)
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_w = jnp.zeros((n_neurons, n_features))
-        init_b = jnp.zeros((n_neurons,))
-        if raise_exception:
-            with pytest.raises(ValueError, match=f"Invalid device specification: {device_spec}"):
-                model.fit(X, y, init_params=(init_w, init_b), device=device_spec)
-        elif raise_warning:
+        if raise_warning:
             with pytest.warns(UserWarning, match=f"No {device_spec.upper()} found"):
-                model.fit(X, y, init_params=(init_w, init_b), device=device_spec)
+                model.fit(X, y, init_params=true_params, device=device_spec)
         else:
-            model.fit(X, y, init_params=(init_w, init_b), device=device_spec)
+            _test_class_method(model, "fit", [X, y], {"init_params": true_params, "device":device_spec},
+                               error, match_str)
 
     #######################
     # Test model.score
     #######################
-    @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
-    def test_score_n_neuron_match_x(self, delta_n_neuron, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
+                             [
+                                 (-1, ValueError, "The number of neuron in the model parameters"),
+                                 (0, None, None),
+                                 (1, ValueError, "The number of neuron in the model parameters")
+                             ]
+                             )
+    def test_score_n_neuron_match_x(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `score` method when the number of neurons in X differs. Ensure the correct number of neurons.
         """
-        raise_exception = delta_n_neuron != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
+        n_neurons = X.shape[1]
         # set model coeff
         model.basis_coeff_ = true_params[0]
         model.baseline_link_fr_ = true_params[1]
         X = jnp.repeat(X, n_neurons + delta_n_neuron, axis=1)
-        if raise_exception:
-            with pytest.raises(ValueError, match="The number of neuron in the model parameters"):
-                model.score(X, y)
-        else:
-            model.score(X, y)
+        _test_class_method(model, "score", [X, y], {}, error, match_str)
 
-    @pytest.mark.parametrize("delta_n_neuron", [-1, 0, 1])
-    def test_score_n_neuron_match_y(self, delta_n_neuron, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
+                             [
+                                 (-1, ValueError, "The number of neuron in the model parameters"),
+                                 (0, None, None),
+                                 (1, ValueError, "The number of neuron in the model parameters")
+                             ]
+                             )
+    def test_score_n_neuron_match_y(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `score` method when the number of neurons in y differs. Ensure the correct number of neurons.
         """
         raise_exception = delta_n_neuron != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
+        n_neurons = X.shape[1]
         # set model coeff
         model.basis_coeff_ = true_params[0]
         model.baseline_link_fr_ = true_params[1]
         y = jnp.repeat(y, n_neurons + delta_n_neuron, axis=1)
-        if raise_exception:
-            with pytest.raises(ValueError, match="The number of neuron in the model parameters"):
-                model.score(X, y)
-        else:
-            model.score(X, y)
+        _test_class_method(model, "score", [X, y], {}, error, match_str)
 
-    @pytest.mark.parametrize("delta_dim", [-1, 0, 1])
-    def test_score_x_dimensionality(self, delta_dim, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_dim, error, match_str",
+                             [
+                                 (-1, ValueError, "X must be three-dimensional"),
+                                 (0, None, None),
+                                 (1, ValueError, "X must be three-dimensional")
+                             ]
+                             )
+    def test_score_x_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `score` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
         """
-        raise_exception = delta_dim != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         # set model coeff
@@ -454,20 +456,20 @@ class TestGLM:
         elif delta_dim == 1:
             # add a dimension
             X = np.zeros((n_samples, n_neurons, n_features, 1))
+        _test_class_method(model, "score", [X, y], {}, error, match_str)
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="X must be three-dimensional"):
-                model.score(X, y)
-        else:
-            model.score(X, y)
-
-    @pytest.mark.parametrize("delta_dim", [-1, 0, 1])
-    def test_score_y_dimensionality(self, delta_dim, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_dim, error, match_str",
+                             [
+                                 (-1, ValueError, "y must be two-dimensional, with shape"),
+                                 (0, None, None),
+                                 (1, ValueError, "y must be two-dimensional, with shape")
+                             ]
+                             )
+    def test_score_y_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `score` method with y of different dimensionalities.
         Ensure correct dimensionality for y.
         """
-        raise_exception = delta_dim != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, _ = X.shape
         # set model coeff
@@ -481,19 +483,20 @@ class TestGLM:
             # add a dimension
             y = np.zeros((n_samples, n_neurons, 1))
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="y must be two-dimensional"):
-                model.score(X, y)
-        else:
-            model.score(X, y)
+        _test_class_method(model, "score", [X, y], {}, error, match_str)
 
-    @pytest.mark.parametrize("delta_n_features", [-1, 0, 1])
-    def test_score_n_feature_consistency_x(self, delta_n_features, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_features, error, match_str",
+                             [
+                                 (-1, ValueError, "Inconsistent number of features"),
+                                 (0, None, None),
+                                 (1, ValueError, "Inconsistent number of features")
+                             ]
+                             )
+    def test_score_n_feature_consistency_x(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `score` method for inconsistencies in features of X.
         Ensure the number of features in X aligns with the model params.
         """
-        raise_exception = delta_n_features != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set model coeff
         model.basis_coeff_ = true_params[0]
@@ -505,14 +508,15 @@ class TestGLM:
             # remove a feature
             X = X[..., :-1]
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="Inconsistent number of features"):
-                model.score(X, y)
-        else:
-            model.score(X, y)
+        _test_class_method(model, "score", [X, y], {}, error, match_str)
 
-    @pytest.mark.parametrize("is_fit", [True, False])
-    def test_score_is_fit(self, is_fit, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("is_fit, error, match_str",
+                             [
+                                 (True, None, None),
+                                 (False, ValueError, "This GLM instance is not fitted yet")
+                             ]
+                             )
+    def test_score_is_fit(self, is_fit, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `score` method on models based on their fit status.
         Ensure scoring is only possible on fitted models.
@@ -521,14 +525,9 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if is_fit:
             model.fit(X, y)
+        _test_class_method(model, "score", [X, y], {}, error, match_str)
 
-        if raise_exception:
-            with pytest.raises(ValueError, match="This GLM instance is not fitted yet"):
-                model.score(X, y)
-        else:
-            model.score(X, y)
-
-
+    #<<<<<<<<<<<<<<<<<<<<<< REFRACTOR UNTIL HERE
     @pytest.mark.parametrize("delta_tp", [-1, 0, 1])
     def test_score_time_points_x(self, delta_tp, poissonGLM_model_instantiation):
         """
