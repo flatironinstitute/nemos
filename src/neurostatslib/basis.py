@@ -94,6 +94,7 @@ class Basis(abc.ABC):
         -------
         :
             The generated basis functions.
+
         Raises
         ------
         ValueError
@@ -597,7 +598,6 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        # super()._check_samples_non_empty(sample_pts)
 
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
