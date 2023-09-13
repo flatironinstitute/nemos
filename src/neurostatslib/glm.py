@@ -36,7 +36,6 @@ class GLM(_BaseRegressor):
 
         self.noise_model = noise_model
         self.solver = solver
-        self.inverse_link_function = noise_model.inverse_link_function
 
         if not jax.config.values["jax_enable_x64"] and (data_type == jnp.float64):
             raise TypeError(
@@ -88,7 +87,7 @@ class GLM(_BaseRegressor):
             The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
-        return self.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
+        return self.noise_model.inverse_link_function(jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :])
 
     def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         """Predict rates based on fit parameters.
@@ -342,7 +341,7 @@ class GLM(_BaseRegressor):
         device: Literal["cpu", "gpu", "tpu"] = "cpu",
         # feed-forward input and/coupling basis
         **kwargs,
-    ):
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
         Parameters
@@ -362,10 +361,10 @@ class GLM(_BaseRegressor):
         (feedforward_input,) = self._preprocess_simulate(
             feedforward_input, params_f=(Ws, bs)
         )
-
+        predicted_rate = self._predict((Ws, bs), feedforward_input)
         return self.noise_model.emission_probability(
-            key=random_key, predicted_rate=self._predict((Ws, bs), feedforward_input)
-        )
+            key=random_key, predicted_rate=predicted_rate
+        ), predicted_rate
 
 
 class GLMRecurrent(GLM):
@@ -541,7 +540,7 @@ class GLMRecurrent(GLM):
             # Predict the firing rate using the model coefficients
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
-            firing_rate = self.inverse_link_function(
+            firing_rate = self.noise_model.inverse_link_function(
                 jnp.einsum("ik,tik->ti", Wr, conv_act) + input_slice + bs[None, :]
             )
 

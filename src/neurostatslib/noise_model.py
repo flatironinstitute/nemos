@@ -32,7 +32,7 @@ class NoiseModel(_Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def emission_probability(
-        key: KeyArray, firing_rate: jnp.ndarray, **kwargs
+        key: KeyArray, predicted_rate: jnp.ndarray, **kwargs
     ) -> jnp.ndarray:
         pass
 

@@ -20,8 +20,9 @@ Before digging into the GLM module, let's first import the packages
 """
 import jax
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
-import sklearn.model_selection as slkearn_model_selection
+import sklearn.model_selection as sklearn_model_selection
 import yaml
 
 import neurostatslib as nsl
@@ -37,7 +38,7 @@ X = 0.5*np.random.normal(size=(100, 1, 5))
 b_true = np.zeros((1, ))
 w_true = np.random.normal(size=(1, 5))
 
-# sparsify rates
+# sparsify weights
 w_true[0, 1:4] = 0.
 
 # generate counts
@@ -71,14 +72,16 @@ print("Noise model type:",type(model.noise_model))
 # One could visualize the model hyperparameters by calling `get_params` method.
 
 # Get the glm model parameters only
-print("\nGLM model parameters only:")
+print("\nGLM model parameters:")
 for key, value in model.get_params(deep=False).items():
     print(f"\t- {key}: {value}")
 
 # Get the glm model parameters, including the all the
 # attributes
-print("\nAll parameters:")
+print("\nNested parameters:")
 for key, value in model.get_params(deep=True).items():
+    if key in model.get_params(deep=False):
+        continue
     print(f"\t- {key}: {value}")
 
 # %%
@@ -145,14 +148,14 @@ print("Recovered weights: ", model.basis_coeff_)
 # ## K-fold Cross Validation with `sklearn`
 # Our implementation follows the `scikit-learn` api,  this enables us
 # to take advantage of the `scikit-learn` tool-box seamlessly, while at the same time
-# we take advantage of the `jax` GPU accelerat# **Lasso**ion and auto-differentiation in the
+# we take advantage of the `jax` GPU acceleration and auto-differentiation in the
 # back-end.
 #
 # Here is an example of how we can perform 5-fold cross-validation via `scikit-learn`.
 # **Ridge**
 
 parameter_grid = {"solver__alpha": np.logspace(-1.5, 1.5, 6)}
-cls = slkearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
+cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
 print("Ridge results        ")
@@ -162,10 +165,11 @@ print("Recovered weights: ", cls.best_estimator_.basis_coeff_)
 
 # %%
 # We can compare the Ridge cross-validated results with other solvers.
+#
 # **Lasso**
 
 model.set_params(solver=nsl.solver.LassoSolver())
-cls = slkearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
+cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
 print("Lasso results        ")
@@ -183,7 +187,7 @@ mask[1, 1:-1] = 1
 
 solver = nsl.solver.GroupLassoSolver("ProximalGradient", mask=mask)
 model.set_params(solver=solver)
-cls = slkearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
+cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
 print("\nGroup Lasso results")
@@ -194,17 +198,20 @@ print("True weights:      ", w_true)
 print("Recovered weights: ", cls.best_estimator_.basis_coeff_)
 
 # %%
-# ## Simulate spikes
-# Spikes in response to a feedforward-stimuli can be generated
+# ## Simulate Spikes
+# We can generate spikes in response to a feedforward-stimuli
 # through the `model.simulate` method.
 
+# here we are creating a new data input, of 20 timepoints (arbitrary)
+# with the same number of neurons and features (mandatory)
 Xnew = np.random.normal(size=(20, ) + X.shape[1:])
-# generate a ranodm key given a seed
+# generate a random key given a seed
 random_key = jax.random.PRNGKey(123)
-spikes = model.simulate(random_key, Xnew)
+spikes, rates = model.simulate(random_key, Xnew)
 
 plt.figure()
 plt.eventplot(np.where(spikes)[0])
+
 
 # %%
 # ## Recurrently Coupled GLM.
@@ -216,7 +223,10 @@ with open("coupled_neurons_params.yml", "r") as fh:
     config_dict = yaml.safe_load(fh)
 
 # basis weights & intercept for the GLM (both coupling and feedforward)
-basis_coeff = np.asarray(config_dict["basis_coeff_"])
+basis_coeff = np.asarray(config_dict["basis_coeff_"])[:, :-1]
+
+# Only neuron 1 gets
+basis_coeff[:, 40:] = np.abs(basis_coeff[:, 40:]) * np.array([[1.], [0.]])
 baseline_log_fr = np.asarray(config_dict["baseline_link_fr_"])
 
 # basis function, inputs and initial spikes
@@ -224,41 +234,106 @@ coupling_basis = jax.numpy.asarray(config_dict["coupling_basis"])
 feedforward_input = jax.numpy.asarray(config_dict["feedforward_input"])
 init_spikes = jax.numpy.asarray(config_dict["init_spikes"])
 
-# plot coupling functions
-n_basis_coupling = coupling_basis.shape[1]
-fig, axs = plt.subplots(2,2)
-plt.suptitle("Coupling filters")
-for neu_i in range(2):
-    for neu_j in range(2):
-        axs[neu_i,neu_j].set_title(f"neu {neu_j} -> neu {neu_i}")
-        coeff = basis_coeff[neu_i, neu_j*n_basis_coupling: (neu_j+1)*n_basis_coupling]
-        axs[neu_i, neu_j].plot(np.dot(coupling_basis, coeff))
-plt.tight_layout()
 
-fig, axs = plt.subplots(1,1)
-plt.title("Feedforward inputs")
-plt.plot(feedforward_input[:, 0])
 
-# %%
-# We can now generate spikes from the model by defining a Recurrent GLM,
-# setting the parameters and calling the simulate method
+#######################
+# test stim
+#######################
 
-# define the model and set the parameters
 model = nsl.glm.GLMRecurrent()
 model.basis_coeff_ = jax.numpy.asarray(basis_coeff)
-model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr)
+model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr -1)
 
-# call simulate, with both the reccurrent coupling
+
+stim_step = np.zeros((1000, 2, 1))
+stim_step[200:500] = 2.5
+
+# call simulate, with both the recurrent coupling
 # and the input
-sim_spikes, sim_rates = model.simulate(
+spikes, rates = model.simulate(
     random_key,
-    feedforward_input=feedforward_input,
+    feedforward_input=stim_step,
     coupling_basis_matrix=coupling_basis,
     init_y=init_spikes
 )
 
-plt.figure()
-spike_ind, spike_neu = np.where(sim_spikes)
-plt.eventplot([spike_ind[spike_neu == 0], spike_ind[spike_neu == 1]])
-plt.yticks([0, 1], ["neu 0", "neu 1"])
 
+plt.figure()
+ax = plt.subplot(111)
+
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+patch = Rectangle((200, -0.011), 300, 0.15,  alpha=0.2, color="grey")
+
+p0, = plt.plot(rates[:, 0])
+p1, = plt.plot(rates[:, 1])
+
+plt.vlines(np.where(spikes[:, 0])[0], 0.00, 0.01, color=p0.get_color(), label="neu 0")
+plt.vlines(np.where(spikes[:, 1])[0], -0.01, 0.00, color=p1.get_color(), label="neu 1")
+plt.plot(np.exp(basis_coeff[0,-1] * stim_step[:, 0, 0] + baseline_log_fr[0]-1), color='k', lw=0.8, label="stimulus")
+ax.add_patch(patch)
+plt.ylim(-0.011, .13)
+plt.legend()
+
+model.set_params(noise_model__inverse_link_function=jax.nn.softplus)
+spikes_sp, rates_sp = model.simulate(
+    random_key,
+    feedforward_input=stim_step,
+    coupling_basis_matrix=coupling_basis,
+    init_y=init_spikes
+)
+
+linkr = basis_coeff[0,-1] * stim_step[:, 0, 0] + baseline_log_fr[0]-1
+
+plt.figure()
+plt.plot(rates[:, 0])
+plt.plot(rates_sp[:, 0])
+
+
+
+# # plot coupling functions
+# n_basis_coupling = coupling_basis.shape[1]
+# fig, axs = plt.subplots(2,2)
+# plt.suptitle("Coupling filters")
+# for neu_i in range(2):
+#     for neu_j in range(2):
+#         axs[neu_i,neu_j].set_title(f"neu {neu_j} -> neu {neu_i}")
+#         coeff = basis_coeff[neu_i, neu_j*n_basis_coupling: (neu_j+1)*n_basis_coupling]
+#         axs[neu_i, neu_j].plot(np.dot(coupling_basis, coeff))
+# plt.tight_layout()
+#
+# fig, axs = plt.subplots(1,1)
+# plt.title("Feedforward inputs")
+# plt.plot(feedforward_input[:, 0])
+#
+# # %%
+# # We can now generate spikes from the model by defining a Recurrent GLM,
+# # setting the parameters and calling the simulate method
+#
+# # define the model and set the parameters
+# model = nsl.glm.GLMRecurrent()
+# model.basis_coeff_ = jax.numpy.asarray(basis_coeff)
+# model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr)
+#
+# # call simulate, with both the recurrent coupling
+# # and the input
+# spikes, rates = model.simulate(
+#     random_key,
+#     feedforward_input=feedforward_input,
+#     coupling_basis_matrix=coupling_basis,
+#     init_y=init_spikes
+# )
+#
+# plt.figure()
+# plt.subplot(121)
+# plt.title("Rate")
+# plt.plot(rates[:, 0], label="neu 0")
+# plt.plot(rates[:, 1], label="neu 1")
+#
+# plt.subplot(122)
+# plt.title("Spikes")
+# spike_ind, spike_neu = np.where(spikes)
+# plt.eventplot([spike_ind[spike_neu == 0], spike_ind[spike_neu == 1]])
+# plt.yticks([0, 1], ["neu 0", "neu 1"])
+#
