@@ -214,19 +214,25 @@ plt.eventplot(np.where(spikes)[0])
 
 
 # %%
-# ## Recurrently Coupled GLM.
-# Defining a recurrent model follows the same syntax. Here
-# we will import some configuration parameters to simplify the data generation process.
+# ## Recurrently Coupled GLM
+# Defining a recurrent model follows the same syntax. In this example
+# we will simulate two coupled neurons. and we will inject a transient
+# input driving the rate of one of the neurons.
+#
+# For brevity, we will import the model parameters instead of generating
+# them on the fly.
 
 # load parameters
 with open("coupled_neurons_params.yml", "r") as fh:
     config_dict = yaml.safe_load(fh)
 
 # basis weights & intercept for the GLM (both coupling and feedforward)
+# (the last coefficient is the weight of the feedforward input)
 basis_coeff = np.asarray(config_dict["basis_coeff_"])[:, :-1]
 
-# Only neuron 1 gets
+# Mask the weights so that only the first neuron receives the imput
 basis_coeff[:, 40:] = np.abs(basis_coeff[:, 40:]) * np.array([[1.], [0.]])
+
 baseline_log_fr = np.asarray(config_dict["baseline_link_fr_"])
 
 # basis function, inputs and initial spikes
@@ -234,30 +240,46 @@ coupling_basis = jax.numpy.asarray(config_dict["coupling_basis"])
 feedforward_input = jax.numpy.asarray(config_dict["feedforward_input"])
 init_spikes = jax.numpy.asarray(config_dict["init_spikes"])
 
+# %%
+# We can explore visualize the coupling filters and the input.
+
+# plot coupling functions
+n_basis_coupling = coupling_basis.shape[1]
+fig, axs = plt.subplots(2,2)
+plt.suptitle("Coupling filters")
+for neu_i in range(2):
+    for neu_j in range(2):
+        axs[neu_i,neu_j].set_title(f"neu {neu_j} -> neu {neu_i}")
+        coeff = basis_coeff[neu_i, neu_j*n_basis_coupling: (neu_j+1)*n_basis_coupling]
+        axs[neu_i, neu_j].plot(np.dot(coupling_basis, coeff))
+plt.tight_layout()
+
+fig, axs = plt.subplots(1,1)
+plt.title("Feedforward inputs")
+plt.plot(feedforward_input[:, 0])
 
 
-#######################
-# test stim
-#######################
+# %%
+# We can now simulate spikes by calling the `simulate` method.
 
 model = nsl.glm.GLMRecurrent()
 model.basis_coeff_ = jax.numpy.asarray(basis_coeff)
-model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr -1)
+model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr)
 
-
-stim_step = np.zeros((1000, 2, 1))
-stim_step[200:500] = 2.5
 
 # call simulate, with both the recurrent coupling
 # and the input
 spikes, rates = model.simulate(
     random_key,
-    feedforward_input=stim_step,
+    feedforward_input=feedforward_input,
     coupling_basis_matrix=coupling_basis,
     init_y=init_spikes
 )
 
+# %%
+# And finally plot the results for both neurons.
 
+# mkdocs_gallery_thumbnail_number = 4
 plt.figure()
 ax = plt.subplot(111)
 
@@ -271,69 +293,10 @@ p1, = plt.plot(rates[:, 1])
 
 plt.vlines(np.where(spikes[:, 0])[0], 0.00, 0.01, color=p0.get_color(), label="neu 0")
 plt.vlines(np.where(spikes[:, 1])[0], -0.01, 0.00, color=p1.get_color(), label="neu 1")
-plt.plot(np.exp(basis_coeff[0,-1] * stim_step[:, 0, 0] + baseline_log_fr[0]-1), color='k', lw=0.8, label="stimulus")
+plt.plot(np.exp(basis_coeff[0, -1] * feedforward_input[:, 0, 0] + baseline_log_fr[0]), color='k', lw=0.8, label="stimulus")
 ax.add_patch(patch)
 plt.ylim(-0.011, .13)
+plt.ylabel("count/bin")
 plt.legend()
 
-model.set_params(noise_model__inverse_link_function=jax.nn.softplus)
-spikes_sp, rates_sp = model.simulate(
-    random_key,
-    feedforward_input=stim_step,
-    coupling_basis_matrix=coupling_basis,
-    init_y=init_spikes
-)
 
-linkr = basis_coeff[0,-1] * stim_step[:, 0, 0] + baseline_log_fr[0]-1
-
-plt.figure()
-plt.plot(rates[:, 0])
-plt.plot(rates_sp[:, 0])
-
-
-
-# # plot coupling functions
-# n_basis_coupling = coupling_basis.shape[1]
-# fig, axs = plt.subplots(2,2)
-# plt.suptitle("Coupling filters")
-# for neu_i in range(2):
-#     for neu_j in range(2):
-#         axs[neu_i,neu_j].set_title(f"neu {neu_j} -> neu {neu_i}")
-#         coeff = basis_coeff[neu_i, neu_j*n_basis_coupling: (neu_j+1)*n_basis_coupling]
-#         axs[neu_i, neu_j].plot(np.dot(coupling_basis, coeff))
-# plt.tight_layout()
-#
-# fig, axs = plt.subplots(1,1)
-# plt.title("Feedforward inputs")
-# plt.plot(feedforward_input[:, 0])
-#
-# # %%
-# # We can now generate spikes from the model by defining a Recurrent GLM,
-# # setting the parameters and calling the simulate method
-#
-# # define the model and set the parameters
-# model = nsl.glm.GLMRecurrent()
-# model.basis_coeff_ = jax.numpy.asarray(basis_coeff)
-# model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr)
-#
-# # call simulate, with both the recurrent coupling
-# # and the input
-# spikes, rates = model.simulate(
-#     random_key,
-#     feedforward_input=feedforward_input,
-#     coupling_basis_matrix=coupling_basis,
-#     init_y=init_spikes
-# )
-#
-# plt.figure()
-# plt.subplot(121)
-# plt.title("Rate")
-# plt.plot(rates[:, 0], label="neu 0")
-# plt.plot(rates[:, 1], label="neu 1")
-#
-# plt.subplot(122)
-# plt.title("Spikes")
-# spike_ind, spike_neu = np.where(spikes)
-# plt.eventplot([spike_ind[spike_neu == 0], spike_ind[spike_neu == 1]])
-# plt.yticks([0, 1], ["neu 0", "neu 1"])
-#
