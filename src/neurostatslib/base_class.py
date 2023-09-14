@@ -354,7 +354,7 @@ class _BaseRegressor(_Base, abc.ABC):
         if y is not None:
             if y.shape[1] != n_neurons:
                 raise ValueError(
-                    "The number of neuron in the model parameters and in the inputs"
+                    "The number of neurons in the model parameters and in the inputs"
                     "must match."
                     f"parameters has n_neurons: {n_neurons}, "
                     f"the input provided has n_neurons: {y.shape[1]}"
@@ -363,7 +363,7 @@ class _BaseRegressor(_Base, abc.ABC):
         if X is not None:
             if X.shape[1] != n_neurons:
                 raise ValueError(
-                    "The number of neuron in the model parameters and in the inputs"
+                    "The number of neurons in the model parameters and in the inputs"
                     "must match."
                     f"parameters has n_neurons: {n_neurons}, "
                     f"the input provided has n_neurons: {X.shape[1]}"
