@@ -6,9 +6,10 @@ from __future__ import annotations
 import abc
 from typing import Generator, Tuple
 
+import jax.numpy
 import numpy as np
 import scipy.linalg
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
 from neurostatslib.utils import row_wise_kron
@@ -81,7 +82,7 @@ class Basis(abc.ABC):
         """
         return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
 
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis set at the given samples x[0],...,x[n] using the subclass-specific "_evaluate" method.
 
@@ -101,6 +102,19 @@ class Basis(abc.ABC):
             - If the time point number is inconsistent between inputs.
             - If the number of inputs doesn't match what the Basis object requires.
         """
+        # check that the input is array-like
+        if any(
+            not isinstance(x, (list, tuple, np.ndarray, jax.numpy.ndarray)) for x in xi
+        ):
+            raise TypeError("Input samples must be array-like!")
+
+        # convert to numpy.array of floats
+        xi = tuple(np.asarray(x, dtype=float) for x in xi)
+
+        # check for non-empty samples
+        if self._has_zero_samples(tuple(len(x) for x in xi)):
+            raise ValueError("All sample provided must be non empty.")
+
         # checks on input and outputs
         self._check_samples_consistency(*xi)
         self._check_input_dimensionality(xi)
@@ -148,6 +162,9 @@ class Basis(abc.ABC):
         """
         self._check_input_dimensionality(n_samples)
 
+        if self._has_zero_samples(n_samples):
+            raise ValueError("All sample counts provided must be greater than zero.")
+
         # get the samples
         sample_tuple = self._get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
@@ -158,6 +175,10 @@ class Basis(abc.ABC):
         )
 
         return *Xs, Y
+
+    @staticmethod
+    def _has_zero_samples(n_samples: Tuple[int]) -> bool:
+        return any([n <= 0 for n in n_samples])
 
     def _check_input_dimensionality(self, xi: Tuple) -> None:
         """
@@ -468,13 +489,6 @@ class SplineBasis(Basis, abc.ABC):
         )
         return knot_locs
 
-    @staticmethod
-    def _check_samples_non_empty(sample_pts):
-        if sample_pts.shape[0] == 0:
-            raise ValueError(
-                "Empty sample array provided. At least one sample is required for evaluation!"
-            )
-
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
@@ -662,7 +676,6 @@ class CyclicBSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev` from
         SciPy to compute the basis values.
         """
-        super()._check_samples_non_empty(sample_pts)
 
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
