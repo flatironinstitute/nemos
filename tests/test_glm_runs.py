@@ -12,6 +12,7 @@ class DimensionMismatchError(Exception):
         self.message = message
         super().__init__(self.message)
 
+
 def test_setup_msplinebasis():
     """
     Minimal test for MSplineBasis definition.
@@ -32,25 +33,27 @@ def test_setup_msplinebasis():
     """
     n_basis = 6
     window = 100
-    for order in range(1,6):
+    for order in range(1, 6):
         spike_basis = MSplineBasis(n_basis_funcs=n_basis, order=order)
         spike_basis_matrix = spike_basis.evaluate(np.arange(window)).T
         if spike_basis_matrix.shape[0] != n_basis:
-            raise DimensionMismatchError(f"The output basis matrix has {spike_basis_matrix.shape[1]} time points, while the number of basis specified is {n_basis}. They must agree.")
-
+            raise DimensionMismatchError(
+                f"The output basis matrix has {spike_basis_matrix.shape[1]} time points, while the number of basis specified is {n_basis}. They must agree."
+            )
 
         if spike_basis_matrix.shape[1] != window:
-            raise DimensionMismatchError(f"The output basis basis matrix has {spike_basis_matrix.shape[1]} window size, while the window size specified is {window}. They must agree.")
+            raise DimensionMismatchError(
+                f"The output basis basis matrix has {spike_basis_matrix.shape[1]} window size, while the window size specified is {window}. They must agree."
+            )
 
-    
 
 def test_run_end_to_end_glm():
     nn, nt = 10, 1000
     key = jax.random.PRNGKey(123)
     key, subkey = jax.random.split(key)
-    spike_data = jax.random.bernoulli(
-        subkey, jax.numpy.ones((nn, nt))*.5
-    ).astype("int64")
+    spike_data = jax.random.bernoulli(subkey, jax.numpy.ones((nn, nt)) * 0.5).astype(
+        "int64"
+    )
 
     spike_basis = MSplineBasis(n_basis_funcs=6, order=3)
     spike_basis_matrix = spike_basis.evaluate(np.arange(100)).T
@@ -60,4 +63,3 @@ def test_run_end_to_end_glm():
     model.predict(spike_data)
     key, subkey = jax.random.split(key)
     X = model.simulate(subkey, 20, spike_data[:, :100])
-    
