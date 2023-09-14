@@ -101,6 +101,7 @@ class Basis(abc.ABC):
         ValueError
             - If the time point number is inconsistent between inputs.
             - If the number of inputs doesn't match what the Basis object requires.
+            - At least one of the samples is empty.
         """
         # check that the input is array-like
         if any(
@@ -145,12 +146,12 @@ class Basis(abc.ABC):
             The basis function evaluated at the samples,
             shape (n_samples[0], ... , n_samples[n], number of basis).
 
-
         Raises
         ------
         ValueError
-            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            - If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
             the Basis object requires.
+            - If one of the n_samples is <= 0.
 
         Notes
         -----
