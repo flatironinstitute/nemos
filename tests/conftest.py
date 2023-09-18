@@ -84,7 +84,7 @@ def poissonGLM_coupled_model_config_simulate():
         config_dict = yaml.safe_load(fh)
 
     noise = nsl.noise_model.PoissonNoiseModel(jnp.exp)
-    solver = nsl.solver.RidgeSolver("BFGS", alpha=0.1)
+    solver = nsl.solver.RidgeSolver("BFGS", regularizer_strength=0.1)
     model = nsl.glm.GLMRecurrent(noise_model=noise, solver=solver)
     model.basis_coeff_ = jnp.asarray(config_dict["basis_coeff_"])
     model.baseline_link_fr_ = jnp.asarray(config_dict["baseline_link_fr_"])
@@ -141,11 +141,11 @@ def example_data_prox_operator():
     n_features = 4
 
     params = (jnp.ones((n_neurons, n_features)), jnp.zeros(n_neurons))
-    alpha = 0.1
+    regularizer_strength = 0.1
     mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
     scaling = 0.5
 
-    return params, alpha, mask, scaling
+    return params, regularizer_strength, mask, scaling
 
 @pytest.fixture
 def poisson_noise_model():
@@ -154,12 +154,12 @@ def poisson_noise_model():
 
 @pytest.fixture
 def ridge_solver():
-    return nsl.solver.RidgeSolver(solver_name="LBFGS", alpha=0.1)
+    return nsl.solver.RidgeSolver(solver_name="LBFGS", regularizer_strength=0.1)
 
 
 @pytest.fixture
 def lasso_solver():
-    return nsl.solver.LassoSolver(solver_name="ProximalGradient", alpha=0.1)
+    return nsl.solver.LassoSolver(solver_name="ProximalGradient", regularizer_strength=0.1)
 
 
 @pytest.fixture
@@ -167,4 +167,9 @@ def group_lasso_2groups_5features_solver():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nsl.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask, alpha=0.1)
+    return nsl.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1)
+
+
+@pytest.fixture
+def mock_data():
+    return jnp.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), jnp.array([[1, 2], [3, 4]])

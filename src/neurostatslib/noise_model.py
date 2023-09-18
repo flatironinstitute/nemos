@@ -29,10 +29,9 @@ class NoiseModel(_Base, abc.ABC):
     def negative_log_likelihood(self, firing_rate, y):
         pass
 
-    @staticmethod
     @abc.abstractmethod
     def emission_probability(
-        key: KeyArray, predicted_rate: jnp.ndarray, **kwargs
+        self, key: KeyArray, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
         pass
 
@@ -49,9 +48,9 @@ class NoiseModel(_Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The mean neural activity.
+            The mean neural activity. Expected shape: (n_time_bins, n_neurons)
         y:
-            The neural activity.
+            The neural activity. Expected shape: (n_time_bins, n_neurons)
 
         Returns
         -------
@@ -79,16 +78,70 @@ class PoissonNoiseModel(NoiseModel):
         self,
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
-    ):
+    ) -> jnp.ndarray:
+        r"""Compute the Poisson negative log-likelihood.
+
+        This computes the Poisson negative log-likelihood of the predicted rates
+        for the observed spike counts up to a constant.
+
+        The formula for the Poisson mean log-likelihood is the following,
+
+        $$
+        \begin{aligned}
+        \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+        [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
+        \hat{\lambda}\_{tn} - \Gamma({y\_{tn}+1})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
+        \hat{\lambda}\_{tn}] + \\text{const}
+        \end{aligned}
+        $$
+
+        Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for example.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
+        y :
+            The target spikes to compare against. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The Poisson negative log-likehood. Shape (1,).
+
+        Notes
+        -----
+        The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
+        when computing the loss-function. This is why we incorporated it into the `const` term.
+        """
         predicted_firing_rates = jnp.clip(predicted_rate, a_min=self.FLOAT_EPS)
         x = y * jnp.log(predicted_firing_rates)
         # see above for derivation of this.
         return jnp.mean(predicted_firing_rates - x)
 
-    @staticmethod
     def emission_probability(
-        key: KeyArray, predicted_rate: jnp.ndarray, **kwargs
+        self, key: KeyArray, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
+        """
+        Calculate the emission probability using a Poisson distribution.
+
+        This method generates random numbers from a Poisson distribution based on the given
+        `predicted_rate`.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the Poisson distribution based on the `predicted_rate`.
+        """
         return jax.random.poisson(key, predicted_rate)
 
     def residual_deviance(
@@ -99,9 +152,9 @@ class PoissonNoiseModel(NoiseModel):
         Parameters
         ----------
         predicted_rate:
-            The predicted firing rates.
+            The predicted firing rates. Shape (n_time_bins, n_neurons).
         spike_counts:
-            The spike counts.
+            The spike counts. Shape (n_time_bins, n_neurons).
 
         Returns
         -------

@@ -362,35 +362,6 @@ class TestGLM:
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
 
-    @pytest.mark.parametrize("device_spec, error, match_str",
-                             [
-                                 ("cpu", None, None),
-                                 ("tpu", None, None),
-                                 ("gpu", None, None),
-                                 ("none", ValueError, "Invalid device specification: %s"),
-                                 (1, ValueError, "Invalid device specification: %s")
-                             ]
-                             )
-    def test_fit_device_spec(self, device_spec, error, match_str,
-                                   poissonGLM_model_instantiation):
-        """
-        Test `simulate` across different device specifications.
-        Validates if unsupported or absent devices raise exception
-        or warning respectively.
-        """
-        if match_str is not None:
-            match_str = match_str % str(device_spec)
-        raise_warning = all(device_spec != device.device_kind.lower()
-                            for device in jax.local_devices())
-        raise_warning = raise_warning and (error is not ValueError)
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        if raise_warning:
-            with pytest.warns(UserWarning, match=f"No {device_spec.upper()} found"):
-                model.fit(X, y, init_params=true_params, device=device_spec)
-        else:
-            _test_class_method(model, "fit", [X, y], {"init_params": true_params, "device":device_spec},
-                               error, match_str)
-
     #######################
     # Test model.score
     #######################
@@ -717,9 +688,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
@@ -755,8 +724,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
+                "feedforward_input": feedforward_input
 
             },
             error,
@@ -795,8 +763,6 @@ class TestGLM:
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
                 "feedforward_input": feedforward_input,
-                "device": "cpu"
-
             },
             error,
             match_str
@@ -828,9 +794,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
@@ -860,9 +824,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
@@ -895,9 +857,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
@@ -930,9 +890,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
@@ -971,9 +929,7 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
@@ -1010,63 +966,11 @@ class TestGLM:
                 "random_key": random_key,
                 "init_y": init_spikes,
                 "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-                "device": "cpu"
-
+                "feedforward_input": feedforward_input
             },
             error,
             match_str
         )
-
-    @pytest.mark.parametrize("device_spec, error, match_str",
-                             [
-                                 ("cpu", None, None),
-                                 ("tpu", None, None),
-                                 ("gpu", None, None),
-                                 ("none", ValueError, "Invalid device specification: %s"),
-                                 (1, ValueError, "Invalid device specification: %s")
-                             ]
-                             )
-    def test_simulate_device_spec(self, device_spec, error, match_str,
-                                   poissonGLM_coupled_model_config_simulate):
-        """
-        Test `simulate` across different device specifications.
-        Validates if unsupported or absent devices raise exception
-        or warning respectively.
-        """
-        if match_str is not None:
-            match_str = match_str % str(device_spec)
-
-        raise_warning = all(device_spec != device.device_kind.lower()
-                            for device in jax.local_devices())
-        raise_warning = raise_warning and (error is None)
-
-        model, coupling_basis, feedforward_input, init_spikes, random_key = \
-            poissonGLM_coupled_model_config_simulate
-
-        if raise_warning:
-            with pytest.warns(UserWarning, match=f"No {device_spec.upper()} found"):
-                model.simulate(random_key=random_key,
-                               init_y=init_spikes,
-                               coupling_basis_matrix=coupling_basis,
-                               feedforward_input=feedforward_input,
-                               device=device_spec)
-        else:
-            _test_class_method(
-                model,
-                "simulate",
-                [],
-                {
-                    "random_key": random_key,
-                    "init_y": init_spikes,
-                    "coupling_basis_matrix": coupling_basis,
-                    "feedforward_input": feedforward_input,
-                    "device": device_spec
-
-                },
-                error,
-                match_str
-            )
 
     #######################################
     # Compare with standard implementation
@@ -1121,8 +1025,7 @@ class TestGLM:
         spikes, _ = model.simulate(random_key=random_key,
                        init_y=init_spikes,
                        coupling_basis_matrix=coupling_basis,
-                       feedforward_input=feedforward_input,
-                       device="cpu")
+                       feedforward_input=feedforward_input)
 
         # convolve basis and spikes
         # (n_trials, n_timepoints - ws + 1, n_neurons, n_coupling_basis)
@@ -1154,8 +1057,7 @@ class TestGLM:
         model.simulate(random_key=random_key,
                        init_y=init_spikes,
                        coupling_basis_matrix=coupling_basis,
-                       feedforward_input=feedforward_input,
-                       device="cpu")
+                       feedforward_input=feedforward_input)
 
 
 

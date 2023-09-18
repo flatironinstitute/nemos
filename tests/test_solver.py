@@ -49,12 +49,24 @@ class TestRidgeSolver:
         else:
             self.cls(solver_name, solver_kwargs=solver_kwargs)
 
-    @pytest.mark.parametrize("loss", [jnp.exp, np.exp, 1, None, {}])
-    def test_loss_callable(self, loss):
+    @pytest.mark.parametrize("loss", [jnp.exp, 1, None, {}])
+    def test_loss_is_callable(self, loss):
         """Test that the loss function is a callable"""
         raise_exception = not callable(loss)
         if raise_exception:
             with pytest.raises(TypeError, match="The loss function must a Callable"):
+                self.cls("GradientDescent").instantiate_solver(loss)
+        else:
+            self.cls("GradientDescent").instantiate_solver(loss)
+
+    @pytest.mark.parametrize("loss", [jnp.exp, np.exp, nsl.glm.GLM()._score])
+    def test_loss_type_jax_or_glm(self, loss):
+        """Test that the loss function is a callable"""
+        raise_exception = (not hasattr(loss, "__module__")) or \
+                          (not (loss.__module__.startswith("jax.") or
+                                loss.__module__.startswith("neurostatslib.glm")))
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"The function {loss.__name__} is not from the jax namespace."):
                 self.cls("GradientDescent").instantiate_solver(loss)
         else:
             self.cls("GradientDescent").instantiate_solver(loss)
@@ -96,7 +108,7 @@ class TestRidgeSolver:
         solver = self.cls("GradientDescent", {"tol": 10**-12})
         runner_bfgs = solver.instantiate_solver(model._score)
         weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
-        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=solver.alpha)
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=solver.regularizer_strength)
         model_skl.fit(X[:,0], y[:, 0])
 
         match_weights = np.allclose(model_skl.coef_, weights_bfgs.flatten())
@@ -164,7 +176,7 @@ class TestLassoSolver:
                         family=sm.families.Poisson())
 
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[2] + 1) * solver.alpha
+        alpha_sm = np.ones(X.shape[2] + 1) * solver.regularizer_strength
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1

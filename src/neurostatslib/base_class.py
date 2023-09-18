@@ -15,6 +15,31 @@ from .utils import has_local_device
 
 
 class _Base:
+    """Base class for neurostatslib estimators.
+
+    A base class for estimators with utilities for getting and setting parameters,
+    and for interacting with specific devices like CPU, GPU, and TPU.
+
+    This class provides utilities for:
+    - Getting and setting parameters using introspection.
+    - Sending arrays to target devices (CPU, GPU, TPU).
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments.
+
+    Attributes
+    ----------
+    _kwargs_keys : list
+        List of keyword arguments provided during the initialization.
+
+    Notes
+    -----
+    The class provides helper methods mimicking scikit-learn's get_params and set_params.
+    Additionally, it has methods for selecting target devices and sending arrays to them.
+    """
+
     def __init__(self, **kwargs):
         self._kwargs_keys = list(kwargs.keys())
         for key in kwargs:
@@ -122,6 +147,11 @@ class _Base:
         Returns
         -------
             The selected device.
+
+        Raises
+        ------
+            ValueError
+                If the an invalid device name is provided.
         """
         if device == "cpu":
             target_device = jax.devices(device)[0]
@@ -143,7 +173,7 @@ class _Base:
     ) -> Union[Any, jnp.ndarray]:
         """Send arrays to device.
 
-        This function sends the arrays to the target devices, if the arrays are
+        This function sends the arrays to the target device, if the arrays are
         not already there.
 
         Parameters
@@ -205,7 +235,7 @@ class _Base:
         return sorted(parameters)
 
 
-class _BaseRegressor(_Base, abc.ABC):
+class BaseRegressor(_Base, abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     @abc.abstractmethod
@@ -231,7 +261,6 @@ class _BaseRegressor(_Base, abc.ABC):
         self,
         random_key: jax.random.PRNGKeyArray,
         feed_forward_input: Union[NDArray, jnp.ndarray],
-        device: Literal["cpu", "gpu", "tpu"] = "cpu",
         # feed-forward input and/coupling basis
         **kwargs,
     ):
@@ -239,7 +268,7 @@ class _BaseRegressor(_Base, abc.ABC):
 
     @staticmethod
     def _convert_to_jnp_ndarray(
-        *args: Union[NDArray, jnp.ndarray], data_type: jnp.dtype = jnp.float32
+        *args: Union[NDArray, jnp.ndarray], data_type: Optional[jnp.dtype] = None
     ) -> Tuple[jnp.ndarray, ...]:
         """Convert provided arrays to jnp.ndarray of specified type.
 
@@ -248,7 +277,8 @@ class _BaseRegressor(_Base, abc.ABC):
         *args :
             Input arrays to convert.
         data_type :
-            Data type to convert to. Default is jnp.float32.
+            Data type to convert to. Default is None, which means that the data-type
+            is inferred from the input.
 
         Returns
         -------
@@ -275,7 +305,7 @@ class _BaseRegressor(_Base, abc.ABC):
 
     @staticmethod
     def _check_and_convert_params(
-        params: ArrayLike, data_type: jnp.dtype = jnp.float32
+        params: ArrayLike, data_type: Optional[jnp.dtype] = None
     ) -> Tuple[jnp.ndarray, ...]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -289,7 +319,7 @@ class _BaseRegressor(_Base, abc.ABC):
             raise TypeError("Initial parameters must be array-like!")
         try:
             params = tuple(jnp.asarray(par, dtype=data_type) for par in params)
-        except ValueError:
+        except (ValueError, TypeError):
             raise TypeError(
                 "Initial parameters must be array-like of array-like objects"
                 "with numeric data-type!"
@@ -384,20 +414,24 @@ class _BaseRegressor(_Base, abc.ABC):
                 f"y has {y.shape[0]} instead!"
             )
 
-    def _preprocess_fit(
+    def preprocess_fit(
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
         init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
-        data_type: jnp.dtype = jnp.float32,
     ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
         """Preprocess input data and initial parameters for the fit method.
 
         This method carries out the following preprocessing steps:
-        - Convert input data `X` and `y` to `jnp.ndarray` of type float32.
+
+        - Convert to jax.numpy.ndarray
+
         - Check the dimensionality of the inputs.
+
         - Check for any NaNs or Infs in the inputs.
+
         - If `init_params` is not provided, initialize it with default values.
+
         - Validate the consistency of input dimensions with the initial parameters.
 
         Parameters
@@ -408,25 +442,22 @@ class _BaseRegressor(_Base, abc.ABC):
             Target values, expected to be of shape (n_timebins, n_neurons).
         init_params :
             Initial parameters for the model. If None, they are initialized with default values.
-        data_type :
-            Data type to convert to. Default is jnp.float32.
 
         Returns
         -------
         X :
-            Preprocessed input data `X` converted to jnp.ndarray with the desired floating point precision.
+            Preprocessed input data `X` converted to jnp.ndarray.
         y :
-            Target values `y` converted to jnp.ndarray with the desired floating point precision
-        init_params :
-            Initialized parameters converted to jnp.ndarray with the desired floating point precision.
+            Target values `y` converted to jnp.ndarray.
+        init_param :
+            Initialized parameters converted to jnp.ndarray.
 
         Raises
         ------
         ValueError
             If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
         """
-        # convert to jnp.ndarray of float32
-        X, y = self._convert_to_jnp_ndarray(X, y, data_type=data_type)
+        X, y = self._convert_to_jnp_ndarray(X, y)
 
         # check input dimensionality
         self._check_input_dimensionality(X, y)
@@ -457,23 +488,53 @@ class _BaseRegressor(_Base, abc.ABC):
 
         return X, y, init_params
 
-    def _preprocess_simulate(
+    def preprocess_simulate(
         self,
         feedforward_input: Union[NDArray, jnp.ndarray],
         params_f: Tuple[jnp.ndarray, jnp.ndarray],
-        init_y: Optional[jnp.ndarray] = None,
+        init_y: Optional[Union[NDArray, jnp.ndarray]] = None,
         params_r: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
-        data_type: jnp.dtype = jnp.float32,
     ) -> Tuple[jnp.ndarray, ...]:
-        (feedforward_input,) = self._convert_to_jnp_ndarray(
-            feedforward_input, data_type=data_type
-        )
+        """
+        Preprocess the input data and parameters for simulation.
+
+        This method handles the conversion of the input data to `jnp.ndarray`, checks the
+        input's dimensionality, and ensures the input's consistency with the provided parameters.
+        It also verifies that the feedforward input does not have any invalid entries (NaNs or Infs).
+
+        Parameters
+        ----------
+        feedforward_input :
+            Input data for the feedforward process. Expected shape: (n_timesteps, n_neurons, n_basis_input).
+        params_f :
+            Parameters corresponding to the feedforward input. Expected shape: (n_neurons, n_basis_input).
+        init_y :
+            Initial values for the feedback process. If provided, its dimensionality and consistency
+            with params_r will be checked. Expected shape if provided: (window_size, n_neurons).
+        params_r :
+            Parameters corresponding to the feedback input (init_y). Required if init_y is provided.
+            Expected shape if provided: (window_size, n_basis_coupling)
+
+        Returns
+        -------
+        :
+            Preprocessed input data, optionally with the initial values for feedback if provided.
+
+        Raises
+        ------
+        ValueError
+            If the feedforward_input contains NaNs or Infs.
+            If the dimensionality or consistency checks fail for the provided data and parameters.
+        """
+        (feedforward_input,) = self._convert_to_jnp_ndarray(feedforward_input)
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(params_f, X=feedforward_input)
 
         if self._has_invalid_entry(feedforward_input):
             raise ValueError("feedforward_input contains a NaNs or Infs!")
+
         if init_y is not None:
+            (init_y,) = self._convert_to_jnp_ndarray(init_y)
             self._check_input_dimensionality(y=init_y)
             self._check_input_and_params_consistency(params_r, y=init_y)
             return feedforward_input, init_y
