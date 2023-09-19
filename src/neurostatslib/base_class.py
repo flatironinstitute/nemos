@@ -13,7 +13,6 @@ from numpy.typing import ArrayLike, NDArray
 
 from .utils import has_local_device
 
-
 class _Base:
     """Base class for neurostatslib estimators.
 
@@ -153,15 +152,13 @@ class _Base:
             ValueError
                 If the an invalid device name is provided.
         """
-        if device == "cpu":
-            target_device = jax.devices(device)[0]
-        elif (device == "gpu") or (device == "tpu"):
+        if device in ["cpu", "gpu", "tpu"]:
             if has_local_device(device):
-                # assume for now 1 gpu/tpu (no further parallelization)
                 target_device = jax.devices(device)[0]
             else:
-                warnings.warn(f"No {device.upper()} found! Falling back to CPU")
-                target_device = jax.devices("cpu")[0]
+                raise RuntimeError(f"Unknown backend: '{device}' requested, but no "
+                        f"platforms that are instances of {device} are present.")
+
         else:
             raise ValueError(
                 f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`."

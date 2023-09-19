@@ -268,7 +268,7 @@ class TestGroupLassoSolver:
                                   group_sparse_poisson_glm_model_instantiation):
         """Test that mask assigns at most 1 group to each weight."""
         raise_exception = n_groups_assign > 1
-        X, y, model, true_params, firing_rate = group_sparse_poisson_glm_model_instantiation
+        X, y, model, true_params, firing_rate, _ = group_sparse_poisson_glm_model_instantiation
 
         # create a valid mask
         mask = np.zeros((2, X.shape[2]))
@@ -364,7 +364,7 @@ class TestGroupLassoSolver:
 
     def test_group_sparsity_enforcement(self, group_sparse_poisson_glm_model_instantiation):
         """Test that group lasso works on a simple dataset."""
-        X, y, model, true_params, firing_rate = group_sparse_poisson_glm_model_instantiation
+        X, y, model, true_params, firing_rate, _ = group_sparse_poisson_glm_model_instantiation
         zeros_true = true_params[0].flatten() == 0
         mask = np.zeros((2, X.shape[2]))
         mask[0, zeros_true] = 1

@@ -466,20 +466,6 @@ class GLMRecurrent(GLM):
             feedforward_input, params_f=(Wf, bs), init_y=init_y, params_r=(Wr, bs)
         )
 
-        if (
-            feedforward_input.shape[2] + coupling_basis_matrix.shape[1] * bs.shape[0]
-            != self.basis_coeff_.shape[1]
-        ):
-            raise ValueError(
-                "The number of feed forward input features "
-                "and the number of recurrent features must add up to "
-                "the overall model features."
-                f"The total number of feature of the model is {self.basis_coeff_.shape[1]}."
-                f" {feedforward_input.shape[1]} "
-                f"feedforward features and {coupling_basis_matrix.shape[1]} recurrent features "
-                f"provided instead."
-            )
-
         self._check_input_and_params_consistency(
             (Wr, bs),
             y=init_y,

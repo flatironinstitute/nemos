@@ -5,11 +5,15 @@ import jax
 import pytest
 from numpy.typing import NDArray
 
-from neurostatslib.base_class import BaseRegressor
+from neurostatslib.base_class import BaseRegressor, _Base
+
+import neurostatslib as nsl
+
 
 @pytest.fixture
 def mock_regressor():
     return MockBaseRegressor()
+
 
 # Sample subclass to test instantiation and methods
 class MockBaseRegressor(BaseRegressor):
@@ -62,6 +66,12 @@ class MockBaseRegressor_Invalid(BaseRegressor):
         pass
 
 
+class BadEstimator(_Base):
+    def __init__(self, param1, *args):
+        super().__init__()
+        pass
+
+
 def test_init():
     """Test the initialization of the MockBaseRegressor class."""
     model = MockBaseRegressor(param1="test", param2=2)
@@ -91,7 +101,7 @@ def set_params():
 def test_invalid_set_params():
     """Test invalid parameter setting using the set_params method."""
     model = MockBaseRegressor()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid parameter 'invalid_param' for estimator"):
         model.set_params(invalid_param="invalid")
 
 
@@ -275,3 +285,52 @@ def test_preprocess_simulate_invalid_init_y(mock_regressor):
     params_r = (jnp.array([[1]]),)
     with pytest.raises(ValueError, match="y must be two-dimensional"):
         mock_regressor.preprocess_simulate(feedforward_input, params_f, init_y, params_r)
+
+def test_preprocess_simulate_feedforward(mock_regressor):
+    """Test that the preprocessing works."""
+    feedforward_input = jnp.array([[[1]]])
+    params_f = (jnp.array([[1]]), jnp.array([1]))
+    ff, = mock_regressor.preprocess_simulate(feedforward_input, params_f)
+    assert(jnp.all(ff == feedforward_input))
+
+def test_empty_set(mock_regressor):
+    """Check that an empty set_params returns self.
+    """
+    assert mock_regressor.set_params() is mock_regressor
+
+@pytest.mark.parametrize("device_name", [1, "none"])
+def test_target_device_invalid_device_name(device_name, mock_regressor):
+    with pytest.raises(ValueError, match="Invalid device specification"):
+        mock_regressor.select_target_device(device_name)
+
+@pytest.mark.parametrize("device_name", ["cpu", "gpu", "tpu"])
+def test_target_device_availability(device_name, mock_regressor):
+    raise_exception = not nsl.utils.has_local_device(device_name)
+    if raise_exception:
+        with pytest.raises(RuntimeError, match=f"Unknown backend: '{device_name}' requested, but no "):
+            mock_regressor.select_target_device(device_name)
+    else:
+        mock_regressor.select_target_device(device_name)
+
+@pytest.mark.parametrize("device_name", ["cpu", "gpu", "tpu"])
+def test_target_device_put(device_name, mock_regressor):
+    """Test that put works.
+
+    Put array to device and checks that the device is matched after put, if device is found.
+    Raise error otherwise.
+    """
+    raise_exception = not nsl.utils.has_local_device(device_name)
+    x = jnp.array([1])
+    if raise_exception:
+        with pytest.raises(RuntimeError, match=f"Unknown backend: '{device_name}' requested, but no "):
+            mock_regressor.device_put(x, device=device_name)
+    else:
+        x, = mock_regressor.device_put(x, device=device_name)
+        assert x.device().device_kind == device_name
+
+
+def test_glm_varargs_error():
+    """Test that variable number of argument in __init__ is not allowed."""
+    bad_estimator = BadEstimator(1)
+    with pytest.raises(RuntimeError, match="GLM estimators should always specify their parameters"):
+        bad_estimator._get_param_names()

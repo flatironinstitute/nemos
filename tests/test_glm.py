@@ -63,7 +63,6 @@ class TestGLM:
         """
         _test_class_initialization(self.cls, {'solver': ridge_solver, 'noise_model': noise}, error, match_str)
 
-
     #######################
     # Test model.fit
     #######################
@@ -319,7 +318,6 @@ class TestGLM:
         Test the `fit` method for inconsistencies between data features and model's expectations.
         Ensure the number of features in X aligns.
         """
-        raise_exception = delta_n_features != 0
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         if delta_n_features == 1:
@@ -361,6 +359,12 @@ class TestGLM:
         n_samples, n_neurons, n_features = X.shape
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
+
+    def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
+        """Test that the group lasso fit goes through"""
+        X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
+        model.set_params(solver=nsl.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask))
+        model.fit(X, y)
 
     #######################
     # Test model.score
@@ -971,6 +975,29 @@ class TestGLM:
             error,
             match_str
         )
+
+    def test_simulate_feedforward_GLM_not_fit(self, poissonGLM_model_instantiation):
+        X, y, model, params, rate = poissonGLM_model_instantiation
+        with pytest.raises(nsl.exceptions.NotFittedError,
+                           match="This GLM instance is not fitted yet"):
+            model.simulate(jax.random.PRNGKey(123), X)
+
+    def test_simulate_feedforward_GLM(self, poissonGLM_model_instantiation):
+        """Test that simulate goes through"""
+        X, y, model, params, rate = poissonGLM_model_instantiation
+        model.basis_coeff_ = params[0]
+        model.baseline_link_fr_ = params[1]
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        # check that the expected dimensionality is returned
+        assert ysim.ndim == 2
+        assert ratesim.ndim == 2
+        # check that the rates and spikes has the same shape
+        assert ratesim.shape[0] == ysim.shape[0]
+        assert ratesim.shape[1] == ysim.shape[1]
+        # check the time point number is that expected (same as the input)
+        assert ysim.shape[0] == X.shape[0]
+        # check that the number if neurons is respected
+        assert ysim.shape[1] == y.shape[1]
 
     #######################################
     # Compare with standard implementation

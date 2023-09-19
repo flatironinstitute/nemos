@@ -128,11 +128,14 @@ def group_sparse_poisson_glm_model_instantiation():
     b_true = np.zeros((1, ))
     w_true = np.random.normal(size=(1, 5))
     w_true[0, 1:4] = 0.
+    mask = np.zeros((2, 5))
+    mask[0, 1:4] = 1
+    mask[1, [0,4]] = 1
     noise_model = nsl.noise_model.PoissonNoiseModel(jnp.exp)
     solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
     model = nsl.glm.GLM(noise_model, solver, score_type="log-likelihood")
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
-    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+    return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
 
 @pytest.fixture
