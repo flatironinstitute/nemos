@@ -15,6 +15,128 @@ class TestSolver:
         with pytest.raises(TypeError, match="Can't instantiate abstract class Solver"):
             self.cls("GradientDescent")
 
+class TestUnRegularizedSolver:
+    cls = nsl.solver.UnRegularizedSolver
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    def test_init_solver_name(self, solver_name):
+        """Test UnRegularizedSolver acceptable solvers."""
+        acceptable_solvers = [
+            "GradientDescent",
+            "BFGS",
+            "LBFGS",
+            "ScipyMinimize",
+            "NonlinearCG",
+            "ScipyBoundedMinimize",
+            "LBFGSB"
+        ]
+        raise_exception = solver_name not in acceptable_solvers
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+                self.cls(solver_name)
+        else:
+            self.cls(solver_name)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    def test_set_solver_name_allowed(self, solver_name):
+        """Test UnRegularizedSolver acceptable solvers."""
+        acceptable_solvers = [
+            "GradientDescent",
+            "BFGS",
+            "LBFGS",
+            "ScipyMinimize",
+            "NonlinearCG",
+            "ScipyBoundedMinimize",
+            "LBFGSB"
+        ]
+        solver = self.cls("GradientDescent")
+        raise_exception = solver_name not in acceptable_solvers
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+                solver.set_params(solver_name=solver_name)
+        else:
+            solver.set_params(solver_name=solver_name)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
+    @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
+    def test_init_solver_kwargs(self, solver_name, solver_kwargs):
+        """Test RidgeSolver acceptable kwargs."""
+
+        raise_exception = "tols" in list(solver_kwargs.keys())
+        if raise_exception:
+            with pytest.raises(NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"):
+                self.cls(solver_name, solver_kwargs=solver_kwargs)
+        else:
+            self.cls(solver_name, solver_kwargs=solver_kwargs)
+
+    @pytest.mark.parametrize("loss", [jnp.exp, 1, None, {}])
+    def test_loss_is_callable(self, loss):
+        """Test that the loss function is a callable"""
+        raise_exception = not callable(loss)
+        if raise_exception:
+            with pytest.raises(TypeError, match="The loss function must a Callable"):
+                self.cls("GradientDescent").instantiate_solver(loss)
+        else:
+            self.cls("GradientDescent").instantiate_solver(loss)
+
+    @pytest.mark.parametrize("loss", [jnp.exp, np.exp, nsl.glm.GLM()._score])
+    def test_loss_type_jax_or_glm(self, loss):
+        """Test that the loss function is a callable"""
+        raise_exception = (not hasattr(loss, "__module__")) or \
+                          (not (loss.__module__.startswith("jax.") or
+                                loss.__module__.startswith("neurostatslib.glm")))
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"The function {loss.__name__} is not from the jax namespace."):
+                self.cls("GradientDescent").instantiate_solver(loss)
+        else:
+            self.cls("GradientDescent").instantiate_solver(loss)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
+    def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
+        """Test that the solver runs."""
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        runner = self.cls("GradientDescent").instantiate_solver(model._score)
+        runner((true_params[0]*0., true_params[1]), X, y)
+
+    def test_solver_output_match(self, poissonGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(model._score)
+        runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(model._score)
+        runner_scipy = self.cls("ScipyMinimize", {"method": "BFGS", "tol": 10**-12}).instantiate_solver(model._score)
+        weights_gd, intercepts_gd = runner_gd((true_params[0] * 0., true_params[1]), X, y)[0]
+        weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
+        weights_scipy, intercepts_scipy = runner_scipy((true_params[0] * 0., true_params[1]), X, y)[0]
+
+        match_weights = np.allclose(weights_gd, weights_bfgs) and \
+                        np.allclose(weights_gd, weights_scipy)
+        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs) and \
+                           np.allclose(intercepts_gd, intercepts_scipy)
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("Convex estimators should converge to the same numerical value.")
+
+    def test_solver_match_sklearn(self, poissonGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        solver = self.cls("GradientDescent", {"tol": 10**-12})
+        runner_bfgs = solver.instantiate_solver(model._score)
+        weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.)
+        model_skl.fit(X[:,0], y[:, 0])
+
+        match_weights = np.allclose(model_skl.coef_, weights_bfgs.flatten())
+        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs.flatten())
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("Ridge GLM solver estimate does not match sklearn!")
+
+
 class TestRidgeSolver:
     cls = nsl.solver.RidgeSolver
 
@@ -142,7 +264,7 @@ class TestLassoSolver:
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
-        """Test RidgeSolver acceptable solvers."""
+        """Test LassoSolver acceptable solvers."""
         acceptable_solvers = [
             "ProximalGradient"
         ]
@@ -155,7 +277,7 @@ class TestLassoSolver:
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_set_solver_name_allowed(self, solver_name):
-        """Test RidgeSolver acceptable solvers."""
+        """Test LassoSolver acceptable solvers."""
         acceptable_solvers = [
             "ProximalGradient"
         ]
@@ -169,7 +291,7 @@ class TestLassoSolver:
 
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_kwargs):
-        """Test RidgeSolver acceptable kwargs."""
+        """Test LassoSolver acceptable kwargs."""
         raise_exception = "tols" in list(solver_kwargs.keys())
         if raise_exception:
             with pytest.raises(NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"):
@@ -230,7 +352,7 @@ class TestGroupLassoSolver:
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
-        """Test RidgeSolver acceptable solvers."""
+        """Test GroupLassoSolver acceptable solvers."""
         acceptable_solvers = [
             "ProximalGradient"
         ]
@@ -250,7 +372,7 @@ class TestGroupLassoSolver:
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_set_solver_name_allowed(self, solver_name):
-        """Test RidgeSolver acceptable solvers."""
+        """Test GroupLassoSolver acceptable solvers."""
         acceptable_solvers = [
             "ProximalGradient"
         ]
@@ -269,7 +391,7 @@ class TestGroupLassoSolver:
 
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_kwargs):
-        """Test RidgeSolver acceptable kwargs."""
+        """Test GroupLassoSolver acceptable kwargs."""
         raise_exception = "tols" in list(solver_kwargs.keys())
 
         # create a valid mask

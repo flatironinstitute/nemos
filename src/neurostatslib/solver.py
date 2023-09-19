@@ -228,6 +228,7 @@ class UnRegularizedSolver(Solver):
     ) -> Callable[
         [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
     ]:
+        self._check_is_callable_from_jax(loss)
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = loss
         return self.get_runner(solver_kwargs, {})

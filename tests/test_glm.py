@@ -1017,22 +1017,6 @@ class TestGLM:
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
-    def test_compare_fit_estimate_to_statsmodels(self, poissonGLM_model_instantiation):
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        glm_sm = sm.GLM(endog=y[:, 0],
-                        exog=sm.add_constant(X[:, 0]),
-                        family=sm.families.Poisson())
-        res_sm = glm_sm.fit()
-        fit_params_sm = res_sm.params
-        # use a second order method for precision, match non-linearity
-        model.set_params(noise_model__inverse_link_function=jnp.exp,
-                         solver__solver_name="BFGS",
-                         solver__solver_kwargs={"tol": 10**-8})
-        model.fit(X, y)
-        fit_params_model = jnp.hstack((model.baseline_link_fr_,
-                                       model.basis_coeff_.flatten()))
-        if not np.allclose(fit_params_sm, fit_params_model):
-            raise ValueError("Fitted parameters do not match that of statsmodels!")
 
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation

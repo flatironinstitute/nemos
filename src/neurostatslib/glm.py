@@ -282,10 +282,6 @@ class GLM(BaseRegressor):
         # convert to jnp.ndarray & perform checks
         X, y, init_params = self.preprocess_fit(X, y, init_params)
 
-        # Make sure mask is of floating type
-        if isinstance(self.solver, slv.GroupLassoSolver):
-            self.solver.mask = jnp.asarray(self.solver.mask, dtype=float)
-
         # Run optimization
         runner = self.solver.instantiate_solver(self._score)
         params, state = runner(init_params, X, y)
