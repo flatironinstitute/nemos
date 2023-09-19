@@ -225,7 +225,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         raise_exception = n_basis_funcs < 1
         if raise_exception:
             with pytest.raises(ValueError, match=f"Object class {self.cls.__name__} "
-                                                 "requires >= 1 basis elements\."):
+                                                 r"requires >= 1 basis elements\."):
                 self.cls(n_basis_funcs=n_basis_funcs)
         else:
             self.cls(n_basis_funcs=n_basis_funcs)

@@ -11,7 +11,7 @@ class Test1DConvolution:
         vec = np.ones(trial_count_shape)
         raise_exception = any(k == 0 for k in basis_matrix.shape)
         if raise_exception:
-            with pytest.raises(ValueError, match="Empty basis_matrix provided\. "
+            with pytest.raises(ValueError, match=r"Empty basis_matrix provided\. "
                                                  r"The shape of basis_matrix is \(0, 0\)!"):
                 utils.convolve_1d_trials(basis_matrix, vec)
         else:
