@@ -37,6 +37,26 @@ class TestRidgeSolver:
         else:
             self.cls(solver_name)
 
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    def test_set_solver_name_allowed(self, solver_name):
+        """Test RidgeSolver acceptable solvers."""
+        acceptable_solvers = [
+            "GradientDescent",
+            "BFGS",
+            "LBFGS",
+            "ScipyMinimize",
+            "NonlinearCG",
+            "ScipyBoundedMinimize",
+            "LBFGSB"
+        ]
+        solver = self.cls("GradientDescent")
+        raise_exception = solver_name not in acceptable_solvers
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+                solver.set_params(solver_name=solver_name)
+        else:
+            solver.set_params(solver_name=solver_name)
+
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_name, solver_kwargs):
@@ -133,6 +153,20 @@ class TestLassoSolver:
         else:
             self.cls(solver_name)
 
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    def test_set_solver_name_allowed(self, solver_name):
+        """Test RidgeSolver acceptable solvers."""
+        acceptable_solvers = [
+            "ProximalGradient"
+        ]
+        solver = self.cls("ProximalGradient")
+        raise_exception = solver_name not in acceptable_solvers
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+                solver.set_params(solver_name=solver_name)
+        else:
+            solver.set_params(solver_name=solver_name)
+
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_kwargs):
         """Test RidgeSolver acceptable kwargs."""
@@ -213,6 +247,25 @@ class TestGroupLassoSolver:
                 self.cls(solver_name, mask)
         else:
             self.cls(solver_name, mask)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    def test_set_solver_name_allowed(self, solver_name):
+        """Test RidgeSolver acceptable solvers."""
+        acceptable_solvers = [
+            "ProximalGradient"
+        ]
+        # create a valid mask
+        mask = np.zeros((2, 10))
+        mask[0, :5] = 1
+        mask[1, 5:] = 1
+        mask = jnp.asarray(mask)
+        solver = self.cls("ProximalGradient", mask=mask)
+        raise_exception = solver_name not in acceptable_solvers
+        if raise_exception:
+            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+                solver.set_params(solver_name=solver_name)
+        else:
+            solver.set_params(solver_name=solver_name)
 
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_kwargs):
@@ -377,5 +430,119 @@ class TestGroupLassoSolver:
         zeros_est = params[0] == 0
         if not np.all(zeros_est == zeros_true):
             raise ValueError("GroupLasso failed to zero-out the parameter group!")
+
+
+    ###########
+    # Test mask from set_params
+    ###########
+    @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
+    def test_mask_validity_groups_set_params(self,
+                                  n_groups_assign,
+                                  group_sparse_poisson_glm_model_instantiation):
+        """Test that mask assigns at most 1 group to each weight."""
+        raise_exception = n_groups_assign > 1
+        X, y, model, true_params, firing_rate, _ = group_sparse_poisson_glm_model_instantiation
+
+        # create a valid mask
+        mask = np.zeros((2, X.shape[2]))
+        mask[0, :2] = 1
+        mask[1, 2:] = 1
+        solver = self.cls("ProximalGradient", mask)
+
+        # change assignment
+        if n_groups_assign == 0:
+            mask[:, 3] = 0
+        elif n_groups_assign == 2:
+            mask[:, 3] = 1
+
+        mask = jnp.asarray(mask)
+
+        if raise_exception:
+            with pytest.raises(ValueError, match="Incorrect group assignment. "
+                                                 "Some of the features"):
+                solver.set_params(mask=mask)
+        else:
+            solver.set_params(mask=mask)
+
+    @pytest.mark.parametrize("set_entry", [0, 1, -1, 2, 2.5])
+    def test_mask_validity_entries_set_params(self, set_entry, poissonGLM_model_instantiation):
+        """Test that mask is composed of 0s and 1s."""
+        raise_exception = set_entry not in {0, 1}
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # create a valid mask
+        mask = np.zeros((2, X.shape[2]))
+        mask[0, :2] = 1
+        mask[1, 2:] = 1
+        solver = self.cls("ProximalGradient", mask)
+
+        # assign an entry
+        mask[1, 2] = set_entry
+        mask = jnp.asarray(mask, dtype=jnp.float32)
+
+        if raise_exception:
+            with pytest.raises(ValueError, match="Mask elements be 0s and 1s"):
+                solver.set_params(mask=mask)
+        else:
+            solver.set_params(mask=mask)
+
+    @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
+    def test_mask_dimension(self, n_dim, poissonGLM_model_instantiation):
+        """Test that mask is composed of 0s and 1s."""
+
+        raise_exception = n_dim != 2
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        valid_mask = np.zeros((2, X.shape[2]))
+        valid_mask[0, :1] = 1
+        valid_mask[1, 1:] = 1
+        solver = self.cls("ProximalGradient", valid_mask)
+
+        # create a mask
+        if n_dim == 0:
+            mask = np.array([])
+        elif n_dim == 1:
+            mask = np.ones((1,))
+        elif n_dim == 2:
+            mask = np.zeros((2, X.shape[2]))
+            mask[0, :2] = 1
+            mask[1, 2:] = 1
+        else:
+            mask = np.zeros((2, X.shape[2]) + (1,) * (n_dim - 2))
+            mask[0, :2] = 1
+            mask[1, 2:] = 1
+
+        mask = jnp.asarray(mask, dtype=jnp.float32)
+
+        if raise_exception:
+            with pytest.raises(ValueError, match="`mask` must be 2-dimensional"):
+                solver.set_params(mask=mask)
+        else:
+            solver.set_params(mask=mask)
+
+    @pytest.mark.parametrize("n_groups", [0, 1, 2])
+    def test_mask_n_groups_set_params(self, n_groups, poissonGLM_model_instantiation):
+        """Test that mask has at least 1 group."""
+        raise_exception = n_groups < 1
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        valid_mask = np.zeros((2, X.shape[2]))
+        valid_mask[0, :1] = 1
+        valid_mask[1, 1:] = 1
+        solver = self.cls("ProximalGradient", valid_mask)
+
+        # create a mask
+        mask = np.zeros((n_groups, X.shape[2]))
+        if n_groups > 0:
+            for i in range(n_groups - 1):
+                mask[i, i: i + 1] = 1
+            mask[-1, n_groups - 1:] = 1
+
+        mask = jnp.asarray(mask, dtype=jnp.float32)
+
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Empty mask provided! Mask has "):
+                solver.set_params(mask=mask)
+        else:
+            solver.set_params(mask=mask)
 
 

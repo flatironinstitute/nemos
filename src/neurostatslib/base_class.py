@@ -13,6 +13,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from .utils import has_local_device
 
+
 class _Base:
     """Base class for neurostatslib estimators.
 
@@ -156,8 +157,10 @@ class _Base:
             if has_local_device(device):
                 target_device = jax.devices(device)[0]
             else:
-                raise RuntimeError(f"Unknown backend: '{device}' requested, but no "
-                        f"platforms that are instances of {device} are present.")
+                raise RuntimeError(
+                    f"Unknown backend: '{device}' requested, but no "
+                    f"platforms that are instances of {device} are present."
+                )
 
         else:
             raise ValueError(

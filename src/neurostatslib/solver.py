@@ -55,12 +55,30 @@ class Solver(_Base, abc.ABC):
         super().__init__(**kwargs)
         self._check_solver(solver_name)
         self.regularizer_strength = regularizer_strength
-        self.solver_name = solver_name
+        self._solver_name = solver_name
         if solver_kwargs is None:
-            self.solver_kwargs = dict()
+            self._solver_kwargs = dict()
         else:
-            self.solver_kwargs = solver_kwargs
+            self._solver_kwargs = solver_kwargs
         self._check_solver_kwargs(self.solver_name, self.solver_kwargs)
+
+    @property
+    def solver_name(self):
+        return self._solver_name
+
+    @solver_name.setter
+    def solver_name(self, solver_name: str):
+        self._check_solver(solver_name)
+        self._solver_name = solver_name
+
+    @property
+    def solver_kwargs(self):
+        return self._solver_kwargs
+
+    @solver_kwargs.setter
+    def solver_kwargs(self, solver_kwargs: dict):
+        self._check_solver_kwargs(self.solver_name, solver_kwargs)
+        return self._solver_kwargs
 
     def _check_solver(self, solver_name: str):
         """
@@ -331,7 +349,60 @@ class ProxGradientSolver(Solver, abc.ABC):
             solver_kwargs=solver_kwargs,
             regularizer_strength=regularizer_strength,
         )
-        self.mask = mask
+        self._mask = mask
+
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, mask: jnp.ndarray):
+        self._check_mask(mask)
+        self._mask = mask
+
+    @staticmethod
+    def _check_mask(mask: Optional[jnp.ndarray] = None):
+        """
+        Validate the mask array.
+
+        This method ensures the mask adheres to requirements:
+        - It should be 2-dimensional.
+        - Each element must be either 0 or 1.
+        - Each feature should belong to only one group.
+        - The mask should not be empty.
+        - The mask is an array of float type.
+
+        Raises
+        ------
+        ValueError
+            If any of the above conditions are not met.
+        """
+        if mask.ndim != 2:
+            raise ValueError(
+                "`mask` must be 2-dimensional. "
+                f"{mask.ndim} dimensional mask provided instead!"
+            )
+
+        if mask.shape[0] == 0:
+            raise ValueError(f"Empty mask provided! Mask has shape {mask.shape}.")
+
+        if jnp.any((mask != 1) & (mask != 0)):
+            raise ValueError("Mask elements be 0s and 1s!")
+
+        if mask.sum() == 0:
+            raise ValueError("Empty mask provided!")
+
+        if jnp.any(mask.sum(axis=0) > 1):
+            raise ValueError(
+                "Incorrect group assignment. Some of the features are assigned "
+                "to more then one group."
+            )
+
+        if not jnp.issubdtype(mask.dtype, jnp.floating):
+            raise ValueError(
+                "Mask should be a floating point jnp.ndarray. "
+                f"Data type {mask.dtype} provided instead!"
+            )
 
     @abc.abstractmethod
     def get_prox_operator(
@@ -462,50 +533,7 @@ class GroupLassoSolver(ProxGradientSolver):
             regularizer_strength=regularizer_strength,
             mask=mask,
         )
-        self._check_mask()
-
-    def _check_mask(self):
-        """
-        Validate the mask array.
-
-        This method ensures the mask adheres to requirements:
-        - It should be 2-dimensional.
-        - Each element must be either 0 or 1.
-        - Each feature should belong to only one group.
-        - The mask should not be empty.
-        - The mask is an array of float type.
-
-        Raises
-        ------
-        ValueError
-            If any of the above conditions are not met.
-        """
-        if self.mask.ndim != 2:
-            raise ValueError(
-                "`mask` must be 2-dimensional. "
-                f"{self.mask.ndim} dimensional mask provided instead!"
-            )
-
-        if self.mask.shape[0] == 0:
-            raise ValueError(f"Empty mask provided! Mask has shape {self.mask.shape}.")
-
-        if jnp.any((self.mask != 1) & (self.mask != 0)):
-            raise ValueError("Mask elements be 0s and 1s!")
-
-        if self.mask.sum() == 0:
-            raise ValueError("Empty mask provided!")
-
-        if jnp.any(self.mask.sum(axis=0) > 1):
-            raise ValueError(
-                "Incorrect group assignment. Some of the features are assigned "
-                "to more then one group."
-            )
-
-        if not jnp.issubdtype(self.mask.dtype, jnp.floating):
-            raise ValueError(
-                "Mask should be a floating point jnp.ndarray. "
-                f"Data type {self.mask.dtype} provided instead!"
-            )
+        self._check_mask(mask)
 
     def get_prox_operator(
         self,
