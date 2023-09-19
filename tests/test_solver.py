@@ -15,6 +15,7 @@ class TestSolver:
         with pytest.raises(TypeError, match="Can't instantiate abstract class Solver"):
             self.cls("GradientDescent")
 
+
 class TestUnRegularizedSolver:
     cls = nsl.solver.UnRegularizedSolver
 

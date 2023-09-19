@@ -139,10 +139,10 @@ class TestGLM:
         _test_class_method(model, "fit", [X, y], {"init_params": (init_w, true_params[1])}, error, match_str)
 
     @pytest.mark.parametrize("dim_intercepts, error, match_str", [
-        (0, ValueError, "params\[1\] must be of shape"),
+        (0, ValueError, r"params\[1\] must be of shape"),
         (1, None, None),
-        (2, ValueError, "params\[1\] must be of shape"),
-        (3, ValueError, "params\[1\] must be of shape")
+        (2, ValueError, r"params\[1\] must be of shape"),
+        (3, ValueError, r"params\[1\] must be of shape")
     ])
     def test_fit_intercepts_dimensionality(self, dim_intercepts, error, match_str, poissonGLM_model_instantiation):
         """
