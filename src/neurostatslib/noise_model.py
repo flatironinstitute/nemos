@@ -1,5 +1,5 @@
 import abc
-from typing import Union
+from typing import Union, Callable
 
 import jax
 import jax.numpy as jnp
@@ -18,12 +18,30 @@ def __dir__():
 class NoiseModel(_Base, abc.ABC):
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
-    def __init__(self, inverse_link_function, **kwargs):
+    def __init__(self, inverse_link_function: Callable, **kwargs):
         super().__init__(**kwargs)
-        if not callable(inverse_link_function):
-            raise ValueError("inverse_link_function must be a callable!")
-        self.inverse_link_function = inverse_link_function
+        self._check_inverse_link_function(inverse_link_function)
+        self._inverse_link_function = inverse_link_function
         self._scale = None
+
+    @property
+    def inverse_link_function(self):
+        return self._inverse_link_function
+
+    @inverse_link_function.setter
+    def inverse_link_function(self, inverse_link_function: Callable):
+        self._check_inverse_link_function(inverse_link_function)
+        self._inverse_link_function = inverse_link_function
+
+    @staticmethod
+    def _check_inverse_link_function(inverse_link_function):
+        if not callable(inverse_link_function):
+            raise TypeError("The `inverse_link_function` function must be a Callable!")
+        # check that the callable is in the jax namespace
+        if not hasattr(inverse_link_function, "__module__"):
+            raise TypeError("The `inverse_link_function` must be from the `jax` namespace!")
+        elif not getattr(inverse_link_function, "__module__").startswith("jax."):
+            raise TypeError("The `inverse_link_function` must be from the `jax` namespace!")
 
     @abc.abstractmethod
     def negative_log_likelihood(self, firing_rate, y):

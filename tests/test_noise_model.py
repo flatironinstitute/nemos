@@ -12,14 +12,48 @@ class TestPoissonNoiseModel:
     cls = nsl.noise_model.PoissonNoiseModel
 
     @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
-    def test_initialization(self, link_function):
+    def test_initialization_link_is_callable(self, link_function):
         """Check that the noise model initializes when a callable is passed."""
         raise_exception = not callable(link_function)
         if raise_exception:
-            with pytest.raises(ValueError, match="inverse_link_function must be a callable"):
+            with pytest.raises(TypeError, match="The `inverse_link_function` function must be a Callable"):
                 self.cls(link_function)
         else:
             self.cls(link_function)
+
+    @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x:x, sm.families.links.log])
+    def test_initialization_link_is_jax(self, link_function):
+        """Check that the noise model initializes when a callable is passed."""
+        raise_exception = (not hasattr(link_function, "__module__")) or \
+                          (not getattr(link_function, "__module__").startswith("jax"))
+        if raise_exception:
+            with pytest.raises(TypeError, match="The `inverse_link_function` must be from the `jax` namespace"):
+                self.cls(link_function)
+        else:
+            self.cls(link_function)
+
+    @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
+    def test_initialization_link_is_callable_set_params(self, link_function):
+        """Check that the noise model initializes when a callable is passed."""
+        noise_model = self.cls()
+        raise_exception = not callable(link_function)
+        if raise_exception:
+            with pytest.raises(TypeError, match="The `inverse_link_function` function must be a Callable"):
+                noise_model.set_params(inverse_link_function=link_function)
+        else:
+            noise_model.set_params(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log])
+    def test_initialization_link_is_jax_set_params(self, link_function):
+        """Check that the noise model initializes when a callable is passed."""
+        raise_exception = (not hasattr(link_function, "__module__")) or \
+                          (not getattr(link_function, "__module__").startswith("jax"))
+        noise_model = self.cls()
+        if raise_exception:
+            with pytest.raises(TypeError, match="The `inverse_link_function` must be from the `jax` namespace"):
+                noise_model.set_params(inverse_link_function=link_function)
+        else:
+            noise_model.set_params(inverse_link_function=link_function)
 
     def test_deviance_against_statsmodels(self, poissonGLM_model_instantiation):
         """
