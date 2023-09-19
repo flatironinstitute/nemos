@@ -42,7 +42,7 @@ class NoiseModel(_Base, abc.ABC):
             raise TypeError(
                 "The `inverse_link_function` must be from the `jax` namespace!"
             )
-        elif not getattr(inverse_link_function, "__module__").startswith("jax."):
+        elif not getattr(inverse_link_function, "__module__").startswith("jax"):
             raise TypeError(
                 "The `inverse_link_function` must be from the `jax` namespace!"
             )

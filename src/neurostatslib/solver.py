@@ -151,7 +151,7 @@ class Solver(_Base, abc.ABC):
 
         if (not hasattr(func, "__module__")) or (
             not (
-                func.__module__.startswith("jax.")
+                func.__module__.startswith("jax")
                 or func.__module__.startswith("neurostatslib.glm")
             )
         ):
