@@ -263,7 +263,7 @@ class BaseRegressor(_Base, abc.ABC):
         random_key: jax.random.PRNGKeyArray,
         feed_forward_input: Union[NDArray, jnp.ndarray],
         # feed-forward input and/coupling basis
-        **kwargs,
+        **kwargs: Any,
     ):
         pass
 

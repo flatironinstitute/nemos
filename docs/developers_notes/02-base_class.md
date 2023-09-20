@@ -2,9 +2,9 @@
 
 ## Introduction
 
-The `base_class` module introduces the `_Base` class and abstract classes defining broad model categories. These abstract classes **must** inherit from `_Base`. Currently, the sole abstract class available is `_BaseRegressor`.
+The `base_class` module introduces the `_Base` class and abstract classes defining broad model categories. These abstract classes **must** inherit from `_Base`. Currently, the sole abstract class available is `BaseRegressor`.
 
-The `_Base` class is envisioned as the foundational component for any model type (e.g., regression, dimensionality reduction, clustering, etc.). In contrast, abstract classes derived from `_Base` define overarching model categories (e.g., `_BaseRegressor` is building block for GLMs, GAMS, etc.).
+The `_Base` class is envisioned as the foundational component for any object type (e.g., regression, dimensionality reduction, clustering, noise models, solvers etc.). In contrast, abstract classes derived from `_Base` define overarching object categories (e.g., `BaseRegressor` is building block for GLMs, GAMS, etc. while `NoiseModel` is the building block for the Poisson noise, Gamma noise, ... etc.).
 
 Designed to be compatible with the `scikit-learn` API, the class structure aims to facilitate access to `scikit-learn`'s robust pipeline and cross-validation modules. This is achieved while leveraging the accelerated computational capabilities of `jax` and `jaxopt` in the backend, which is essential for analyzing extensive neural recordings and fitting large models.
 
@@ -12,32 +12,37 @@ Below a scheme of how we envision the architecture of the `neurostatslib` models
 
 ```
 Class _Base
-|
-└─ Abstract Subclass _BaseRegressor
-│   │
-│   └─ Abstract Subclass _BaseGLM
-│       │
-│       ├─ Concrete Subclass PoissonGLM
-│       │   │
-│       │   └─ Concrete Subclass RidgePoissonGLM *(not implemented yet)
-│       │   │
-│       │   └─ Concrete Subclass LassoPoissonGLM *(not implemented yet)
-│       │   │
-│       │   ...
-│       │
-│       ├─ Concrete Subclass GammaGLM *(not implemented yet)
-│       │   │
-│       │   ...
-│       │
-│       ...
 │
-├─ Abstract Subclass _BaseManifold *(not implemented yet)
+├─ Abstract Subclass BaseRegressor
+│   │
+│   └─ Concrete Subclass GLM
+│       │
+│       └─ Concrete Subclass RecurrentGLM
+│
+├─ Abstract Subclass BaseManifold *(not implemented yet)
+│   │
+│   ...
+│
+├─ Abstract Subclass Sovler
+│   │
+│   ├─ Concrete Subclass UnRegularizedSolver
+│   │
+│   ├─ Concrete Subclass RidgeSolver
+│   ... 
+│
+├─ Abstract Subclass NoiseModel
+│   │
+│   ├─ Concrete Subclass PoissonNoiseModel
+│   │
+│   ├─ Concrete Subclass GammaNoiseModel *(not implemented yet)
+│   ... 
+│
 ...
 ```
 
 !!! Example
-    The current package version includes a concrete class named `neurostatslib.glm.PoissonGLM`. This class inherits from `_BaseGLM` <- `_BaseRegressor` <- `_Base`, since it falls under the " GLM regression" category. 
-    As any `_BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
+    The current package version includes a concrete class named `neurostatslib.glm.GLM`. This class inherits from `BaseRegressor` <- `_Base`, since it falls under the " GLM regression" category. 
+    As any `BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
 
 
 ## The Class `model_base._Base`
@@ -53,23 +58,32 @@ For a detailed understanding, consult the [`scikit-learn` API Reference](https:/
 
 - **`get_params`**: The `get_params` method retrieves parameters set during model instance initialization. Opting for a deep inspection allows the method to assess nested object parameters, resulting in a comprehensive parameter dictionary.
 - **`set_params`**: The `set_params` method offers a mechanism to adjust or set an estimator's parameters. It's versatile, accommodating both individual estimators and more complex nested structures like pipelines. Feeding an unrecognized parameter will raise a `ValueError`.
-- **`select_target_device`**: Selects either "cpu", "gpu" or "tpu" as the device. If not found, rolls back to "cpu".
+- **`select_target_device`**: Selects either "cpu", "gpu" or "tpu" as the device.
 - **`device_put`**: Sends arrays to device, if not on device already.
 
-## The Abstract Class `model_base._BaseRegressor`
+## The Abstract Class `model_base.BaseRegressor`
 
-`_BaseRegressor` is an abstract class that inherits from `_Base`, stipulating the implementation of abstract methods: `fit`, `predict`, `score`, and `simulate`. This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
+`BaseRegressor` is an abstract class that inherits from `_Base`, stipulating the implementation of abstract methods: `fit`, `predict`, `score`, and `simulate`. This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
 
 ### Abstract Methods
 
-For subclasses derived from `_BaseRegressor` to function correctly, they must implement the following:
+For subclasses derived from `BaseRegressor` to function correctly, they must implement the following:
 
 1. `fit`: Adapt the model using input data `X` and corresponding observations `y`.
 2. `predict`: Provide predictions based on the trained model and input data `X`.
 3. `score`: Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. `simulate`: Simulate data based on the trained regression model.
 
-Moreover, `_BaseRegressor` incorporates auxiliary methods such as `_convert_to_jnp_ndarray`, `_has_invalid_entry` 
+### Public Methods
+
+To ensure the consistency and conformity of input data, the `BaseRegressor` introduces two public preprocessing methods:
+
+1. `preprocess_fit`: Assesses and converts the input for the `fit` method into the desired `jax.ndarray` format. If necessary, this method can initialize model parameters using default values.
+2. `preprocess_simulate`: Validates and converts inputs for the `simulate` method. This method confirms the integrity of the feedforward input and, when provided, the initial values for feedback.
+
+### Auxiliary Methods
+
+Moreover, `BaseRegressor` incorporates auxiliary methods such as `_convert_to_jnp_ndarray`, `_has_invalid_entry` 
 and a number of other methods for checking input consistency.
 
 !!! Tip
@@ -80,9 +94,9 @@ and a number of other methods for checking input consistency.
 
 ### Implementing Model Subclasses
 
-When devising a new model subclass based on the `_BaseRegressor` abstract class, adhere to the subsequent guidelines:
+When devising a new model subclass based on the `BaseRegressor` abstract class, adhere to the subsequent guidelines:
 
-- **Must** inherit the `_BaseRegressor` abstract superclass.
+- **Must** inherit the `BaseRegressor` abstract superclass.
 - **Must** realize the abstract methods: `fit`, `predict`, `score`, and `simulate`.
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `_Base`.
 - **May** introduce auxiliary methods such as `_convert_to_jnp_ndarray` for added utility.

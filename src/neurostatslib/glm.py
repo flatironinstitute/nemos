@@ -344,8 +344,8 @@ class GLM(BaseRegressor):
             )
 
         # Store parameters
-        self.basis_coeff_ = params[0]
-        self.baseline_link_fr_ = params[1]
+        self.basis_coeff_: jnp.ndarray = params[0]
+        self.baseline_link_fr_: jnp.ndarray = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
@@ -356,7 +356,7 @@ class GLM(BaseRegressor):
         random_key: jax.random.PRNGKeyArray,
         feedforward_input: Union[NDArray, jnp.ndarray],
         # feed-forward input and/coupling basis
-        **kwargs,
+        **kwargs: Any,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
@@ -465,8 +465,8 @@ class GLMRecurrent(GLM):
         self,
         random_key: jax.random.PRNGKeyArray,
         feedforward_input: Union[NDArray, jnp.ndarray],
-        coupling_basis_matrix: Union[NDArray, jnp.ndarray] = None,
-        init_y: Union[NDArray, jnp.ndarray] = None,
+        coupling_basis_matrix: Optional[Union[NDArray, jnp.ndarray]] = None,
+        init_y: Union[NDArray, Optional[jnp.ndarray]] = None,
     ):
         """
         Simulate neural activity using the GLM as a recurrent network.
@@ -475,6 +475,9 @@ class GLMRecurrent(GLM):
         parameters of the GLM. It is capable of simulating activity based on a combination
         of historical activity and external feedforward inputs like convolved currents, light
         intensities, etc.
+
+        If no `coupling_basis_matrix` is provided, the spikes will be generated in response to
+        the feedforward input only.
 
         Parameters
         ----------
@@ -526,15 +529,7 @@ class GLMRecurrent(GLM):
         to ensure consistency in the model's input feature dimensionality.
         """
         if coupling_basis_matrix is None:
-            raise ValueError(
-                "GLMRecurrent simulate method requires a coupling basis"
-                " matrix in order to generate neural activity!"
-            )
-        if init_y is None:
-            raise ValueError(
-                "GLMRecurrent simulate method requires the initial activity "
-                "init_y to start-off the simulation!"
-            )
+            return super().simulate(random_key, feedforward_input)
 
         # check if the model is fit
         self._check_is_fit()
@@ -545,7 +540,9 @@ class GLMRecurrent(GLM):
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.baseline_link_fr_.shape[0]
 
-        # split weights in recurrent and feed-forward
+        if init_y is None:
+            init_y = jnp.zeros((coupling_basis_matrix.shape[0], n_neurons))
+
         Wf = self.basis_coeff_[:, n_basis_coupling * n_neurons :]
         Wr = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
         bs = self.baseline_link_fr_
