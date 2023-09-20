@@ -2,95 +2,74 @@
 
 ## Introduction
 
-The `neurostatslib.glm` module implements variations of Generalized Linear Models (GLMs) classes. 
-
-At this stage, the module consists of two primary classes:
-
-1. **`_BaseGLM`:** An abstract class serving as the backbone for building GLMs.
-2. **`PoissonGLM`:** A concrete implementation of the GLM for Poisson-distributed data.
-
-Our design aligns with the `scikit-learn` API. This ensures that our GLM classes integrate seamlessly with the robust `scikit-learn` pipeline and its cross-validation capabilities.
-
-## The class `_BaseGLM`
-
-Designed with `scikit-learn` compatibility in mind, `_BaseGLM` provides the common computations and functionalities needed by the diverse `GLM` subclasses.
-
-### Inheritance
-
-The `_BaseGLM` inherits attributes and methods from the `_BaseRegressor`, as detailed in the [`base_class` module](02-base_class.md). This grants `_BaseGLM` a toolkit for managing and verifying model inputs. Leveraging the inherited abstraction, all GLM subclasses must explicitly define the `fit`, `predict`, `score`, and `simulate` methods, ensuring alignment with the `scikit-learn` framework.
-
-### Attributes
-
-- **`solver`**: The optimization solver from jaxopt.
-- **`solver_state`**: Represents the current state of the solver.
-- **`basis_coeff_`**: Holds the solution for spike basis coefficients after the model has been fitted. Initialized to `None` at class instantiation.
-- **`baseline_link_fr`**: Contains the bias terms' solutions after fitting. Initialized to `None` at class instantiation.
-- **`kwargs`**: Other keyword arguments, like regularization hyperparameters.
 
 
-### Private Methods
+Generalized Linear Models (GLM) provide a flexible framework for modeling a variety of data types while establishing a relationship between multiple predictors and a response variable. A GLM extends the traditional linear regression by allowing for response variables that have error distribution models other than a normal distribution, such as binomial or Poisson distributions.
 
-- **`_check_is_fit`**: Ensures the instance has been fitted. This check is implemented here and not in `_BaseRegressor` because the model parameters are likely to be GLM specific.
-- **`_predict`**: Forecasts firing rates based on predictors and parameters.
-- **`_pseudo_r2`**: Computes the Pseudo-$R^2$ for a GLM, giving insight into the model's fit relative to a null model.
-- **`_safe_predict`**: Validates the model's fit status and input consistency before calculating mean rates using the `_predict` method.
-- **`_safe_score`**: Scores the predicted firing rates against target spike counts. Can compute either the GLM mean log-likelihood or the pseudo-$R^2$.
-- **`_safe_fit`**: Fit the GLM to the neural activity. Verifies input conformity, then leverages the `jaxopt` optimizer on the designated loss function (provided by the concrete GLM subclass).
-- **`_safe_simulate`**: Simulates spike trains using the GLM as a recurrent network. It projects neural activity into the future using the fitted parameters of the GLM. The function can simulate activity based on both historical spike activity and external feedforward inputs, such as convolved currents, light intensities, etc.
+The `neurostatslib.glm` module currently  offers implementations of two GLM classes:
+
+1. **`GLM`:** A direct implementation of a feedforward GLM.
+2. **`RecurrentGLM`:** An implementation of a recurrent GLM. This class inherits from `GLM` and redefines the `simulate` method to generate spikes akin to a recurrent neural network.
+
+Our design is harmonized with the `scikit-learn` API, facilitating seamless integration of our GLM classes with the well-established `scikit-learn` pipeline and its cross-validation tools.
+
+The classes provided here are modular by design offering a standard foundation for any GLM variant. 
+
+Instantiating a specific GLM simply requires providing an observation noise model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization.
+
+![Title](GLM_scheme.jpg){ width="512" }
+<figure markdown>
+    <figcaption>Schematic of the module interactions.</figcaption>
+</figure>
 
 
-!!! note
-    The introduction of `_safe_predict`, `_safe_fit`, `_safe_score` and `_safe_simulate` offers the following benefits:
 
-    1. It eliminates the need for subclasses to redo checks in their `fit`, `score` and `simulate` methods, leading to concise code.
-    2. The methods `predict`, `score`, `fit`,  and `simulate` must be defined by subclasses due to their abstract nature in `_BaseRegressor`. This ensures subclass-specific docstrings for public methods.
+## The Concrete Class `GLM`
 
-    While `predict` is common to any GLM, we explicitly omit its implementation in `_BaseGLM` so that the method will be documented in the `Code References` under each concrete class. 
-
-### Abstract Methods
-Besides the methods acquired from `_BaseRegressor`, `_BaseGLM` introduces:
-
-- **`residual_deviance`**: Computes a GLM's residual deviance. The deviance, on par with the likelihood, is model specific.
-
-!!! note
-    The residual deviance can be formulated as a function of log-likelihood. Although a concrete `_BaseGLM` implementation is feasible, subclass-specific implementations might offer increased robustness or efficiency.
-
-## The Concrete Class `PoissonGLM`
-
-The class `PoissonGLM` is a concrete implementation of the un-regularized Poisson GLM model. 
+The `GLM` class provides a direct implementation of the GLM model and is designed with `scikit-learn` compatibility in mind.
 
 ### Inheritance
 
-`PoissonGLM` inherits from `_BaseGLM`, which provides methods for predicting firing rates and "safe" methods to score and simulate spike trains. Inheritance enforces the concrete implementation of `fit`, `score`, `simulate`, and `residual_deviance`.
+`GLM` inherits from `BaseRegressor`. This inheritance mandates the direct implementation of methods like `predict`, `fit`, `score`, and `simulate`.
 
 ### Attributes
 
-- **`solver`**: The optimization solver from jaxopt.
-- **`solver_state`**: Represents the current state of the solver.
-- **`basis_coeff_`**: Holds the solution for spike basis coefficients after the model has been fitted. Initialized to `None` at class instantiation.
-- **`baseline_link_fr`**: Contains the bias terms' solutions after fitting. Initialized to `None` at class instantiation.
-
+- **`solver`**: Refers to the optimization solver - an object of the `neurostatslib.solver.Solver` type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
+- **`noise_model`**: Represents the GLM noise model, which is an object of the `neurostatlib.noise_model.NoiseModel` type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
+- **`basis_coeff_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
+- **`baseline_link_fr_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
+- **`solver_state`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
 
 ### Public Methods
 
-- **`predict`**: Calculates mean rates by invoking the `_safe_predict` method of `_BaseGLM`.
-- **`score`**: Scores the Poisson GLM using either log-likelihood or pseudo-$R^2$. It invokes the parent `_safe_score` method to validate input and parameters.
-- **`fit`**: Fits the Poisson GLM to align with spike train data by invoking `_safe_fit` and setting Poisson negative log-likelihood as the loss function.
-- **`residual_deviance`**: Computes the residual deviance for each Poisson model observation, given predicted rates and spike counts.
-- **`simulate`**: Simulates spike trains using the GLM as a recurrent network, invoking `_safe_simulate` and setting `jax.random.poisson` as the emission probability mechanism.
+- **`predict`**: Validates input and computes the mean rates of the `GLM` by invoking the inverse-link function of the `noise_model` attribute.
+- **`score`**: Validates input and assesses the Poisson GLM using either log-likelihood or pseudo-$R^2$. This method uses the `noise_model` to determine log-likelihood or pseudo-$R^2$.
+- **`fit`**: Validates input and aligns the Poisson GLM with spike train data. It leverages the `noise_model` and `solver` to define the model's loss function and instantiate the solver.
+- **`simulate`**: Simulates spike trains using the GLM as a feedforward network, invoking the `noise_model.emission_probability` method for emission probability.
 
 ### Private Methods
 
-- **`_score`**: Computes the Poisson negative log-likelihood up to a normalization constant. This method is used to define the optimization loss function for the model.
+- **`_predict`**: Forecasts rates based on current model parameters and the inverse-link function of the `noise_model`.
+- **`_score`**: Determines the Poisson negative log-likelihood, excluding normalization constants.
+- **`_check_is_fit`**: Validates whether the model has been appropriately fit by ensuring model parameters are set. If not, a `NotFittedError` is raised.
+
+
+## The Concrete Class `RecurrentGLM`
+
+The `RecurrentGLM` class is an extension of the `GLM`, designed to simulate models with recurrent connections. It inherits the `predict`, `fit`, and `score` methods from `GLM`, but provides its own implementation for the `simulate` method.
+
+### Overridden Methods
+
+- **`simulate`**: This method simulates spike trains, treating the GLM as a recurrent neural network. It utilizes the `noise_model.emission_probability` method to determine the emission probability.
 
 ## Contributor Guidelines
 
 ### Implementing Model Subclasses
 
-To write a usable (i.e. concrete) GLM class you
+When crafting a functional (i.e., concrete) GLM class:
 
-- **Must** inherit `_BaseGLM` or any of its subclasses.
-- **Must** implement the `fit`, `score`, `simulate`, and `residual_deviance` methods, either directly or through inheritance.
-- **Should** invoke `_safe_fit`, `_safe_score`, and `_safe_simulate` within the `fit`, `score`, and `simulate` methods, respectively.
-- **Should not** override `_safe_fit`, `_safe_score`, or `_safe_simulate`.
-- **May** integrate supplementary parameter and input checks if mandated by the GLM subclass.
+- **Must** inherit from `BaseRegressor` or one of its derivatives.
+- **Must** realize the `predict`, `fit`, `score`, and `simulate` methods, either directly or through inheritance.
+- **Should** incorporate a `noise_model` attribute of type `neurostatslib.noise_model.NoiseModel` to specify the link-function, emission probability, and likelihood.
+- **Should** include a `solver` attribute of type `neurostatslib.solver.Solver` to establish the solver based on penalization type.
+- **May** embed additional parameter and input checks if required by the specific GLM subclass.

@@ -45,7 +45,7 @@ class NoiseModel(_Base, abc.ABC):
         super().__init__(**kwargs)
         self._check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
-        self._scale = None
+        self._scale = 1.
 
     @property
     def inverse_link_function(self):
@@ -57,6 +57,18 @@ class NoiseModel(_Base, abc.ABC):
         """Setter for the inverse link function for the model."""
         self._check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
+
+    @property
+    def scale(self):
+        """Getter for the scale parameter of the model."""
+        return self._scale
+
+    @scale.setter
+    def scale(self, value: Union[int, float]):
+        """Setter for the scale parameter of the model."""
+        if not isinstance(value, (int, float)):
+            raise ValueError("The `scale` parameter must be of numeric type.")
+        self._scale = value
 
     @staticmethod
     def _check_inverse_link_function(inverse_link_function):
@@ -73,7 +85,7 @@ class NoiseModel(_Base, abc.ABC):
             )
 
     @abc.abstractmethod
-    def negative_log_likelihood(self, firing_rate, y):
+    def negative_log_likelihood(self, predicted_rate, y):
         r"""Compute the noise model negative log-likelihood.
 
         This computes the negative log-likelihood of the predicted rates
@@ -134,6 +146,11 @@ class NoiseModel(_Base, abc.ABC):
         :
             The residual deviance of the model.
         """
+        pass
+
+    @abc.abstractmethod
+    def estimate_scale(self, predicted_rate: jnp.ndarray) -> float:
+        """Estimate the scale parameter for the model."""
         pass
 
     def pseudo_r2(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
@@ -297,3 +314,8 @@ class PoissonNoiseModel(NoiseModel):
             spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate)
         )
         return resid_dev
+
+    def estimate_scale(self, predicted_rate: jnp.ndarray):
+        """Assign 1 to the scale parameter of the Poisson model."""
+        self.scale = 1.
+

@@ -7,6 +7,9 @@ theme:
     primary: 'light blue'                   # The primary color palette for the theme
     features:
       - navigation.tabs                    # Enable navigation tabs feature for the theme
+  markdown_extensions:
+    - md_in_html
+    - admonition
 
 plugins:
   - search

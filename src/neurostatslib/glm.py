@@ -1,5 +1,5 @@
 """GLM core module."""
-from typing import Any, Literal, Optional, Tuple, Type, Union
+from typing import Any, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -29,8 +29,6 @@ class GLM(BaseRegressor):
     solver : Solver
         Solver to use for model optimization. Defines the optimization algorithm and related parameters.
         Default is Ridge regression with gradient descent.
-    **kwargs : Any
-        Additional keyword arguments.
 
     Attributes
     ----------
@@ -42,8 +40,6 @@ class GLM(BaseRegressor):
         Model baseline link firing rate parameters after fitting.
     basis_coeff_ : jnp.ndarray or None
         Basis coefficients for the model after fitting.
-    scale : float
-        Scale parameter for the noise model. It's 1.0 for Poisson and Gaussian.
     solver_state : Any
         State of the solver after fitting. May include details like optimization error.
 
@@ -65,7 +61,6 @@ class GLM(BaseRegressor):
         self,
         noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
         solver: slv.Solver = slv.RidgeSolver("GradientDescent"),
-        **kwargs: Any,
     ):
         super().__init__()
 
@@ -84,14 +79,12 @@ class GLM(BaseRegressor):
         self.noise_model = noise_model
         self.solver = solver
 
+        # initialize to None fit output
         self.baseline_link_fr_ = None
         self.basis_coeff_ = None
-        # scale parameter (=1 for poisson and Gaussian, needs to be estimated for Gamma)
-        # the estimate of scale does not affect the ML estimate of the other parameter
-        self.scale = 1.0
         self.solver_state = None
 
-    def _check_is_fit(self):  # check scale.
+    def _check_is_fit(self):
         """Ensure the instance has been fitted."""
         if (self.basis_coeff_ is None) or (self.baseline_link_fr_ is None):
             raise NotFittedError(
@@ -430,20 +423,18 @@ class GLMRecurrent(GLM):
         The numerical data type for internal calculations. If not provided, it will be inferred
         from the data during fitting.
 
-    Attributes
-    ----------
-    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and might include
-      coefficients, fitted status, and other model-related attributes.
-
     See Also
     --------
     [GLM](../glm/#neurostatslib.glm.GLM) : Base class for the generalized linear model.
 
     Notes
     -----
-    The recurrent GLM assumes that neural activity can be influenced by both feedforward
+    - The recurrent GLM assumes that neural activity can be influenced by both feedforward
     inputs and the past activity of the same and other neurons. This makes it particularly
     powerful for capturing the dynamics of neural networks where neurons are interconnected.
+
+    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and might include
+    coefficients, fitted status, and other model-related attributes.
 
     Examples
     --------
@@ -457,7 +448,6 @@ class GLMRecurrent(GLM):
         self,
         noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
         solver: slv.Solver = slv.RidgeSolver(),
-        data_type: Optional[Union[Type[jnp.float32], Type[jnp.float64]]] = None,
     ):
         super().__init__(noise_model=noise_model, solver=solver)
 
