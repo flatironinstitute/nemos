@@ -1,4 +1,5 @@
-"""Abstract class for models."""
+"""## Abstract class for estimators.
+"""
 
 import abc
 import inspect

@@ -1,3 +1,5 @@
+"""Noise model classes for GLMs."""
+
 import abc
 from typing import Callable, Union
 
@@ -16,6 +18,27 @@ def __dir__():
 
 
 class NoiseModel(_Base, abc.ABC):
+    """
+    Abstract noise model class for neural data processing.
+
+    This is an abstract base class used to implement noise models for neural data.
+    Specific noise models that inherit from this class should define their versions
+    of the abstract methods: negative_log_likelihood, emission_probability, and
+    residual_deviance.
+
+    Attributes
+    ----------
+    FLOAT_EPS :
+        A small value used to ensure numerical stability. Set to the machine epsilon for float32.
+    inverse_link_function :
+        A function that transforms a set of predictors to the domain of the model parameter.
+
+    See Also
+    --------
+    [PoissonNoiseModel](./#neurostatslib.noise_model.PoissonNoiseModel) : A specific implementation of a
+    noise model using the Poisson distribution.
+    """
+
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
@@ -26,10 +49,12 @@ class NoiseModel(_Base, abc.ABC):
 
     @property
     def inverse_link_function(self):
+        """Getter for the inverse link function for the model."""
         return self._inverse_link_function
 
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
+        """Setter for the inverse link function for the model."""
         self._check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
 
@@ -49,16 +74,66 @@ class NoiseModel(_Base, abc.ABC):
 
     @abc.abstractmethod
     def negative_log_likelihood(self, firing_rate, y):
+        r"""Compute the noise model negative log-likelihood.
+
+        This computes the negative log-likelihood of the predicted rates
+        for the observed neural activity up to a constant.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
+        y :
+            The target activity to compare against. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The Poisson negative log-likehood. Shape (1,).
+        """
         pass
 
     @abc.abstractmethod
     def emission_probability(
         self, key: KeyArray, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
+        """
+        Calculate the emission of the noise model.
+
+        This method generates random numbers from the desired distribution based on the given
+        `predicted_rate`.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate of the distribution. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the desired distribution based on the `predicted_rate` scale parameter
+            if needed.
+        """
         pass
 
     @abc.abstractmethod
     def residual_deviance(self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray):
+        r"""Compute the residual deviance for a Poisson model.
+
+        Parameters
+        ----------
+        predicted_rate:
+            The predicted firing rates. Shape (n_time_bins, n_neurons).
+        spike_counts:
+            The spike counts. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The residual deviance of the model.
+        """
         pass
 
     def pseudo_r2(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
@@ -92,6 +167,23 @@ class NoiseModel(_Base, abc.ABC):
 
 
 class PoissonNoiseModel(NoiseModel):
+    """
+    Poisson Noise Model class for spike count data.
+
+    The PoissonNoiseModel is designed to model the observed spike counts based on a Poisson distribution
+    with a given rate. It provides methods for computing the negative log-likelihood, emission probability,
+    and residual deviance for the given spike count data.
+
+    Attributes
+    ----------
+    inverse_link_function :
+        A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to jnp.exp.
+
+    See Also
+    --------
+    [NoiseModel](./#neurostatslib.noise_model.NoiseModel) : Base class for noise models.
+    """
+
     def __init__(self, inverse_link_function=jnp.exp):
         super().__init__(inverse_link_function=inverse_link_function)
         self._scale = 1

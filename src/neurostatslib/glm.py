@@ -13,6 +13,54 @@ from .utils import convolve_1d_trials
 
 
 class GLM(BaseRegressor):
+    """
+    Generalized Linear Model (GLM) for neural activity data.
+
+    This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
+    (like convolved currents or light intensities) and a choice of noise model. It is suitable for scenarios where
+    the relationship between predictors and the response variable might be non-linear, and the residuals
+    don't follow a normal distribution.
+
+    Parameters
+    ----------
+    noise_model : NoiseModel
+        Noise model to use. The model describes the noise distribution of the neural activity.
+        Default is Poisson noise model.
+    solver : Solver
+        Solver to use for model optimization. Defines the optimization algorithm and related parameters.
+        Default is Ridge regression with gradient descent.
+    **kwargs : Any
+        Additional keyword arguments.
+
+    Attributes
+    ----------
+    noise_model : NoiseModel
+        Noise model being used.
+    solver : Solver
+        Solver being used.
+    baseline_link_fr_ : jnp.ndarray or None
+        Model baseline link firing rate parameters after fitting.
+    basis_coeff_ : jnp.ndarray or None
+        Basis coefficients for the model after fitting.
+    scale : float
+        Scale parameter for the noise model. It's 1.0 for Poisson and Gaussian.
+    solver_state : Any
+        State of the solver after fitting. May include details like optimization error.
+
+    Raises
+    ------
+    TypeError
+        If provided `solver` or `noise_model` are not valid or implemented in `neurostatslib.solver` and
+        `neurostatslib.noise_model` respectively.
+
+    Notes
+    -----
+    The GLM aims to model the relationship between several predictor variables and a response variable.
+    In this neural context, the predictors might represent external inputs or other neurons' activity, while
+    the response variable is the neuron's activity being modeled. The noise model captures the statistical properties
+    of the neural activity, while the solver determines how the model parameters are estimated.
+    """
+
     def __init__(
         self,
         noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
@@ -361,6 +409,50 @@ class GLM(BaseRegressor):
 
 
 class GLMRecurrent(GLM):
+    """
+    A Generalized Linear Model (GLM) with recurrent dynamics.
+
+    This class extends the basic GLM to capture recurrent dynamics between neurons,
+    making it more suitable for simulating the activity of interconnected neural populations.
+    The recurrent GLM combines both feedforward inputs (like sensory stimuli) and past
+    neural activity to simulate or predict future neural activity.
+
+    Parameters
+    ----------
+    noise_model : nsm.NoiseModel, default=nsm.PoissonNoiseModel()
+        The noise model to use for the GLM. This defines how neural activity is generated
+        based on the underlying firing rate. Common choices include Poisson and Gaussian models.
+
+    solver : slv.Solver, default=slv.RidgeSolver()
+        The optimization solver to use for fitting the GLM parameters.
+
+    data_type : {jnp.float32, jnp.float64}, optional
+        The numerical data type for internal calculations. If not provided, it will be inferred
+        from the data during fitting.
+
+    Attributes
+    ----------
+    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and might include
+      coefficients, fitted status, and other model-related attributes.
+
+    See Also
+    --------
+    [GLM](../glm/#neurostatslib.glm.GLM) : Base class for the generalized linear model.
+
+    Notes
+    -----
+    The recurrent GLM assumes that neural activity can be influenced by both feedforward
+    inputs and the past activity of the same and other neurons. This makes it particularly
+    powerful for capturing the dynamics of neural networks where neurons are interconnected.
+
+    Examples
+    --------
+    >>> # Initialize the recurrent GLM with default parameters
+    >>> model = GLMRecurrent()
+    >>> # ... your code for training and simulating using the model ...
+
+    """
+
     def __init__(
         self,
         noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),

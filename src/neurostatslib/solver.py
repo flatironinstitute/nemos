@@ -1,3 +1,10 @@
+"""
+## A Module for Optimization with Various Regularizations.
+
+This module provides a series of classes that facilitate the optimization of models
+with different types of regularizations. Each solver class in this module interfaces
+with various optimization methods, and they can be applied depending on the model's requirements.
+"""
 import abc
 import inspect
 from typing import Callable, Optional, Tuple, Union
@@ -205,6 +212,28 @@ class Solver(_Base, abc.ABC):
 
 
 class UnRegularizedSolver(Solver):
+    """
+    Solver class for optimizing unregularized models.
+
+    This class provides an interface to various optimization methods for models that
+    do not involve regularization. The optimization methods that are allowed for this
+    class are defined in the `allowed_optimizers` attribute.
+
+    Attributes
+    ----------
+    allowed_optimizers : list of str
+        List of optimizer names that are allowed for this solver class.
+
+    Methods
+    -------
+    instantiate_solver(loss)
+        Instantiates the optimization algorithm with the given loss function.
+
+    See Also
+    --------
+    [Solver](./#neurostatslib.solver.Solver) : Base solver class from which this class inherits.
+    """
+
     allowed_optimizers = [
         "GradientDescent",
         "BFGS",
@@ -228,6 +257,20 @@ class UnRegularizedSolver(Solver):
     ) -> Callable[
         [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
     ]:
+        """
+        Instantiate the optimization algorithm for a given loss function.
+
+        Parameters
+        ----------
+        loss :
+            The loss function that needs to be minimized.
+
+        Returns
+        -------
+        :
+            A runner function that uses the specified optimization algorithm
+            to minimize the given loss function.
+        """
         self._check_is_callable_from_jax(loss)
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = loss
