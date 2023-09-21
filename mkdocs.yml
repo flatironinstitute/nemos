@@ -11,6 +11,12 @@ theme:
     - md_in_html
     - admonition
 
+# if footnotes is degined in theme doesn't work
+# If md_in_html is defined outside theme, it also results in
+# an error when building the docs.
+markdown_extensions:
+  - footnotes
+
 plugins:
   - search
   - gallery:
