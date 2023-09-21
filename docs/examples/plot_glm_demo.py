@@ -94,7 +94,7 @@ noise_model = nsl.noise_model.PoissonNoiseModel(jax.nn.softplus)
 # Observation noise
 solver = nsl.solver.RidgeSolver(
     solver_name="LBFGS",
-    alpha=0.1,
+    regularizer_strength=0.1,
     solver_kwargs={"tol":10**-10}
 )
 
@@ -102,7 +102,6 @@ solver = nsl.solver.RidgeSolver(
 model = nsl.glm.GLM(
     noise_model=noise_model,
     solver=solver,
-    data_type=jax.numpy.float64
 )
 
 print("Solver type:     ", type(model.solver))
@@ -137,7 +136,7 @@ print("Updated NL: ", model.noise_model.inverse_link_function)
 
 # Fit a ridge regression Poisson GLM
 model = nsl.glm.GLM()
-model.set_params(solver__alpha=0.1)
+model.set_params(solver__regularizer_strength=0.1)
 model.fit(X, spikes)
 
 print("Ridge results")
@@ -154,7 +153,7 @@ print("Recovered weights: ", model.basis_coeff_)
 # Here is an example of how we can perform 5-fold cross-validation via `scikit-learn`.
 # **Ridge**
 
-parameter_grid = {"solver__alpha": np.logspace(-1.5, 1.5, 6)}
+parameter_grid = {"solver__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 

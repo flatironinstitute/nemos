@@ -18,8 +18,8 @@ The classes provided here are modular by design offering a standard foundation f
 Instantiating a specific GLM simply requires providing an observation noise model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the `neurostatslib.noise_model.NoiseModel` and `neurostatslib.solver.Solver` objects, respectively.
 
 
-![Title](GLM_scheme.jpg){ width="512" }
 <figure markdown>
+    <img src="../GLM_scheme.jpg"/>
     <figcaption>Schematic of the module interactions.</figcaption>
 </figure>
 
