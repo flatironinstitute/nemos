@@ -15,7 +15,8 @@ Our design is harmonized with the `scikit-learn` API, facilitating seamless inte
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant. 
 
-Instantiating a specific GLM simply requires providing an observation noise model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization.
+Instantiating a specific GLM simply requires providing an observation noise model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the `neurostatslib.noise_model.NoiseModel` and `neurostatslib.solver.Solver` objects, respectively.
+
 
 ![Title](GLM_scheme.jpg){ width="512" }
 <figure markdown>
