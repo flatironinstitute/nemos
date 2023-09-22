@@ -2,9 +2,9 @@
 
 ## Introduction
 
-The `base_class` module introduces the `_Base` class and abstract classes defining broad model categories. These abstract classes **must** inherit from `_Base`. Currently, the sole abstract class available is `BaseRegressor`.
+The `base_class` module introduces the `_Base` class and abstract classes defining broad model categories. These abstract classes **must** inherit from `_Base`.
 
-The `_Base` class is envisioned as the foundational component for any object type (e.g., regression, dimensionality reduction, clustering, noise models, solvers etc.). In contrast, abstract classes derived from `_Base` define overarching object categories (e.g., `BaseRegressor` is building block for GLMs, GAMS, etc. while `NoiseModel` is the building block for the Poisson noise, Gamma noise, ... etc.).
+The `_Base` class is envisioned as the foundational component for any object type (e.g., regression, dimensionality reduction, clustering, noise models, solvers etc.). In contrast, abstract classes derived from `_Base` define overarching object categories (e.g., `base_class.BaseRegressor` is building block for GLMs, GAMS, etc. while `noise_model.NoiseModel` is the building block for the Poisson noise, Gamma noise, ... etc.).
 
 Designed to be compatible with the `scikit-learn` API, the class structure aims to facilitate access to `scikit-learn`'s robust pipeline and cross-validation modules. This is achieved while leveraging the accelerated computational capabilities of `jax` and `jaxopt` in the backend, which is essential for analyzing extensive neural recordings and fitting large models.
 
@@ -47,7 +47,7 @@ Class _Base
 
 ## The Class `model_base._Base`
 
-The `_Base` class aligns with the `scikit-learn` API for `base.BaseEstimator`. This alignment is achieved by implementing the `get_params` and `set_params` methods, essential for `scikit-learn` compatibility and foundational for all model implementations.
+The `_Base` class aligns with the `scikit-learn` API for `base.BaseEstimator`. This alignment is achieved by implementing the `get_params` and `set_params` methods, essential for `scikit-learn` compatibility and foundational for all model implementations. dditionally, the class provides auxiliary helper methods to identify available computational devices (such as GPUs and TPUs) and to facilitate data transfer to these devices.
 
 For a detailed understanding, consult the [`scikit-learn` API Reference](https://scikit-learn.org/stable/modules/classes.html) and [`BaseEstimator`](https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html).
 

@@ -4,7 +4,7 @@
 
 The `noise_model` module provides objects representing the observation noise of GLM-like models.
 
-The abstract class `NoiseModel` defines the structure of the subclasses which specify observation noise types, such as Poisson, Gamma, etc. These objects serve as attributes of the `neurostatslib.glm.GLM` class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
+The abstract class `NoiseModel` defines the structure of the subclasses which specify observation noise types, such as Poisson, Gamma, etc. These objects serve as attributes of the [`neurostatslib.glm.GLM`](../03-glm/#the-concrete-class-glm) class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
 
 ## The Abstract class `NoiseModel`
 
@@ -16,7 +16,7 @@ For subclasses derived from `NoiseModel` to function correctly, they must implem
 
 - **negative_log_likelihood**: Computes the negative-log likelihood of the model up to a normalization constant. This method is usually part of the objective function used to learn GLM parameters.
   
-- **emission_probability**: Returns the random emission probability function. This typically invokes `jax.random` emission probability, provided some sufficient statistics. For distributions in the exponential family, the sufficient statistics are the canonical parameter and the scale. In GLMs, the canonical parameter is entirely specified by the model's weights, while the scale is either fixed (i.e., Poisson) or needs to be estimated (i.e., Gamma).
+- **emission_probability**: Returns the random emission probability function. This typically invokes `jax.random` emission probability, provided some sufficient statistics[^1]. For distributions in the exponential family, the sufficient statistics are the canonical parameter and the scale. In GLMs, the canonical parameter is entirely specified by the model's weights, while the scale is either fixed (i.e., Poisson) or needs to be estimated (i.e., Gamma).
   
 - **residual_deviance**: Computes the residual deviance based on the model's estimated rates and observations.
 
@@ -24,7 +24,7 @@ For subclasses derived from `NoiseModel` to function correctly, they must implem
 
 ### Public Methods
 
-- **pseudo_r2**: Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Choen at al. 2003[^1]. 
+- **pseudo_r2**: Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Choen at al. 2003[^2]. 
 
 
 ### Auxiliary Methods
@@ -55,8 +55,10 @@ To implement a noise model class you
 
 - **Should not** reimplement the `pseudo_r2` method as well as the `_check_inverse_link_function` auxiliary method.
 
-
-[^1]:
+[^1]: 
+    In statistics, a statistic is sufficient with respect to a statistical model and its associated unknown parameters if "no other statistic that can be calculated from the same sample provides any additional information as to the value of the parameters", adapted from Fisher R. A.
+    1922. On the mathematical foundations of theoretical statistics. *Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character* 222:309–368. http://doi.org/10.1098/rsta.1922.0009.
+[^2]:
     Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken. 
     *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*. 
     3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)

@@ -11,11 +11,11 @@ The `neurostatslib.glm` module currently  offers implementations of two GLM clas
 1. **`GLM`:** A direct implementation of a feedforward GLM.
 2. **`RecurrentGLM`:** An implementation of a recurrent GLM. This class inherits from `GLM` and redefines the `simulate` method to generate spikes akin to a recurrent neural network.
 
-Our design is harmonized with the `scikit-learn` API, facilitating seamless integration of our GLM classes with the well-established `scikit-learn` pipeline and its cross-validation tools.
+Our design aligns with the `scikit-learn` API, facilitating seamless integration of our GLM classes with the well-established `scikit-learn` pipeline and its cross-validation tools.
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant. 
 
-Instantiating a specific GLM simply requires providing an observation noise model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the `neurostatslib.noise_model.NoiseModel` and `neurostatslib.solver.Solver` objects, respectively.
+Instantiating a specific GLM simply requires providing an observation noise model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the [`neurostatslib.noise_model.NoiseModel`](../04-noise_model/#the-abstract-class-noisemodel) and [`neurostatslib.solver.Solver`](../05-solver/#the-abstract-class-solver) objects, respectively.
 
 
 <figure markdown>
@@ -31,12 +31,12 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 ### Inheritance
 
-`GLM` inherits from `BaseRegressor`. This inheritance mandates the direct implementation of methods like `predict`, `fit`, `score`, and `simulate`.
+`GLM` inherits from [`BaseRegressor`](../02-base_class/#the-abstract-class-baseregressor). This inheritance mandates the direct implementation of methods like `predict`, `fit`, `score`, and `simulate`.
 
 ### Attributes
 
-- **`solver`**: Refers to the optimization solver - an object of the `neurostatslib.solver.Solver` type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
-- **`noise_model`**: Represents the GLM noise model, which is an object of the `neurostatlib.noise_model.NoiseModel` type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
+- **`solver`**: Refers to the optimization solver - an object of the [`neurostatslib.solver.Solver`](../05-solver/#the-abstract-class-solver) type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
+- **`noise_model`**: Represents the GLM noise model, which is an object of the [`neurostatslib.noise_model.NoiseModel`](../04-noise_model/#the-abstract-class-noisemodel) type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
 - **`basis_coeff_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`baseline_link_fr_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`solver_state`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
@@ -65,7 +65,7 @@ The `RecurrentGLM` class is an extension of the `GLM`, designed to simulate mode
 
 ## Contributor Guidelines
 
-### Implementing Model Subclasses
+### Implementing GLM Subclasses
 
 When crafting a functional (i.e., concrete) GLM class:
 

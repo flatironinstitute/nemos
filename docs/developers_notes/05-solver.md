@@ -4,12 +4,26 @@
 
 The `solver` module introduces an archetype class `Solver` which provides the structural components for each concrete sub-class.
 
-Objects of type `Solver` provide methods to define an optimization objective, and instantiate a solver for it.
+Objects of type `Solver` provide methods to define an optimization objective, and instantiate a solver for it. These objects serve as attribute of the [`neurostatslib.glm.GLM`](../03-glm/#the-concrete-class-glm), equipping the glm with a solver for learning model parameters. 
 
 Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run` and `update` method with the appropriate input/output types).
-We choose `jaxopt` as dependency because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX.
+We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable.
 
 Each solver object defines a set of allowed optimizers, which in turn depends on the loss function characteristics (smooth vs non-smooth) and/or the optimization type (constrained, un-constrained, batched, etc.).
+
+```
+Abstract Class Solver
+|
+├─ Concrete Class UnRegularizedSolver
+|
+├─ Concrete Class RidgeSolver
+|
+└─ Abstract Class ProximalGradientSolver
+    |
+    ├─ Concrete Class LassoSolver
+    |
+    └─ Concrete Class GroupLassoSolver
+```
 
 !!! note
     If we need advanced adaptive optimizers (e.g., Adam, LAMB etc.) in the future, we should consider adding [`Optax`](https://optax.readthedocs.io/en/latest/) as a dependency, which is compatible with `jaxopt`, see [here](https://jaxopt.github.io/stable/_autosummary/jaxopt.OptaxSolver.html#jaxopt.OptaxSolver).
@@ -137,6 +151,22 @@ group_lasso_solver = GroupLassoSolver(solver_name="ProximalGradient", mask=group
 runner = group_lasso_solver.instantiate_solver(loss_function)
 optim_results = runner(init_params, exog_vars, endog_vars)
 ```
+
+## Contributor Guidelines
+
+### Implementing Solver Subclasses
+
+When developing a functional (i.e., concrete) Solver class:
+
+- **Must** inherit from `Solver` or one of its derivatives.
+- **Must** implement the `instantiate_solver` method to tailor the solver instantiation based on the provided loss function.
+- For any Proximal Gradient method, **must** include a `get_prox_operator` method to define the proximal operator.
+- **Must** possess an `allowed_optimizers` attribute to list the optimizer names that are permissible to be used with this solver.
+- **May** embed additional attributes and methods such as `mask` and `_check_mask` if required by the specific Solver subclass for handling special optimization scenarios.
+- **May** include a `regularizer_strength` attribute to control the strength of the regularization in scenarios where regularization is applicable.
+- **May** rely on a custom solver implementation for specific optimization problems, but the implementation **must** adhere to the `jaxopt` API.
+
+These guidelines ensure that each Solver subclass adheres to a consistent structure and behavior, facilitating ease of extension and maintenance.
 
 ## Glossary
 
