@@ -53,7 +53,7 @@ To implement a noise model class you
 
 - **Must** provide a concrete implementation of `negative_log_likelihood`, `emission_probability`, `residual_deviance`, and `estimate_scale`.
 
-- **Should not** reimplement the `pseudo_r2` method as well as the `_check_inverse_link_function`
+- **Should not** reimplement the `pseudo_r2` method as well as the `_check_inverse_link_function` auxiliary method.
 
 
 [^1]:
