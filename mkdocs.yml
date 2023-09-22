@@ -10,6 +10,7 @@ theme:
   markdown_extensions:
     - md_in_html
     - admonition
+    - tables
 
 # if footnotes is degined in theme doesn't work
 # If md_in_html is defined outside theme, it also results in

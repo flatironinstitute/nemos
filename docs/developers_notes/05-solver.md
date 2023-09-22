@@ -7,6 +7,7 @@ The `solver` module introduces an archetype class `Solver` which provides the st
 Objects of type `Solver` provide methods to define an optimization objective, and instantiate a solver for it.
 
 Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run` and `update` method with the appropriate input/output types).
+We choose `jaxopt` as dependency because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX.
 
 Each solver object defines a set of allowed optimizers, which in turn depends on the loss function characteristics (smooth vs non-smooth) and/or the optimization type (constrained, un-constrained, batched, etc.).
 
@@ -36,3 +37,12 @@ Additionally, the class provides auxiliary methods for checking that the solver 
 - **`_check_solver_kwargs`**: This method checks if the provided keyword arguments are valid for the specified solver. This helps in catching and preventing potential errors in solver configuration.
 
 - **`_check_is_callable_from_jax`**: This method checks if the provided function is callable and whether it belongs to the `jax` or `neurostatslib` namespace, ensuring compatibility and safety when using jax-based operations.
+
+## Glossary
+
+|  Term   | Description |
+|--------------------| ----------- |
+| **Regularization** | Regularization is a technique used to prevent overfitting by adding a penalty to the loss function, which discourages complex models. Common regularization techniques include L1 (Lasso) and L2 (Ridge) regularization. |
+| **Optimization**   | Optimization refers to the process of minimizing (or maximizing) a function by systematically choosing the values of the variables within an allowable set. In machine learning, optimization aims to minimize the loss function to train models. |
+| **Solver**         | A solver is an algorithm or a set of algorithms used for solving optimization problems. In the given module, solvers are used to find the parameters that minimize the loss function, potentially subject to some constraints. |
+| **Runner**         | A runner in this context refers to a callable function configured to execute the solver with the specified parameters and data. It acts as an interface to the solver, simplifying the process of running optimization tasks. |
