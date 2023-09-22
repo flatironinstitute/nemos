@@ -259,7 +259,7 @@ plt.plot(feedforward_input[:, 0])
 
 
 # %%
-# We can now simulate spikes by calling the `simulate` method.
+# We can now simulate spikes by calling the `simulate_recurrent` method.
 
 model = nsl.glm.GLMRecurrent()
 model.basis_coeff_ = jax.numpy.asarray(basis_coeff)
@@ -268,7 +268,7 @@ model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr)
 
 # call simulate, with both the recurrent coupling
 # and the input
-spikes, rates = model.simulate(
+spikes, rates = model.simulate_recurrent(
     random_key,
     feedforward_input=feedforward_input,
     coupling_basis_matrix=coupling_basis,
