@@ -38,6 +38,106 @@ Additionally, the class provides auxiliary methods for checking that the solver 
 
 - **`_check_is_callable_from_jax`**: This method checks if the provided function is callable and whether it belongs to the `jax` or `neurostatslib` namespace, ensuring compatibility and safety when using jax-based operations.
 
+## The `UnRegularizedSolver` Class
+
+The `UnRegularizedSolver` class extends the base `Solver` class and is designed specifically for optimizing unregularized models. This means that this solver class does not add any regularization penalty to the loss function during the optimization process.
+
+### Attributes
+
+- **`allowed_optimizers`**: A list of string identifiers for the optimization algorithms that can be used with this solver class. The optimization methods listed here are specifically suitable for unregularized optimization problems.
+
+### Methods
+
+- **`__init__`**: The constructor method for this class which initializes a new `UnRegularizedSolver` object. It accepts the name of the solver algorithm to use (`solver_name`) and an optional dictionary of additional keyword arguments (`solver_kwargs`) for the solver.
+
+- **`instantiate_solver`**: A method which prepares and returns a runner function for the specified loss function. This method ensures that the loss function is callable and prepares the necessary keyword arguments for calling the `get_runner` method from the base `Solver` class.
+
+### Example Usage
+
+```python
+unreg_solver = UnRegularizedSolver(solver_name="GradientDescent")
+runner = unreg_solver.instantiate_solver(loss_function)
+optim_results = runner(init_params, exog_vars, endog_vars)
+```
+
+## The `RidgeSolver` Class
+
+The `RidgeSolver` class extends the `Solver` class to handle optimization problems with Ridge regularization. Ridge regularization adds a penalty to the loss function, proportional to the sum of squares of the model parameters, to prevent overfitting and stabilize the optimization.
+
+### Attributes
+
+- **`allowed_optimizers`**: A list containing string identifiers of optimization algorithms compatible with Ridge regularization.
+  
+- **`regularizer_strength`**: A floating-point value determining the strength of the Ridge regularization. Higher values correspond to stronger regularization which tends to drive the model parameters towards zero.
+
+### Methods
+
+- **`__init__`**: The constructor method for the `RidgeSolver` class. It accepts the name of the solver algorithm (`solver_name`), an optional dictionary of additional keyword arguments (`solver_kwargs`) for the solver, and the regularization strength (`regularizer_strength`).
+
+- **`penalization`**: A method to compute the Ridge regularization penalty for a given set of model parameters.
+
+- **`instantiate_solver`**: A method that prepares and returns a runner function with a penalized loss function for Ridge regularization. This method modifies the original loss function to include the Ridge penalty, ensures the loss function is callable, and prepares the necessary keyword arguments for calling the `get_runner` method from the base `Solver` class.
+
+### Example Usage
+
+```python
+ridge_solver = RidgeSolver(solver_name="LBFGS", regularizer_strength=1.0)
+runner = ridge_solver.instantiate_solver(loss_function)
+optim_results = runner(init_params, exog_vars, endog_vars)
+```
+
+## `ProxGradientSolver` Class
+
+`ProxGradientSolver` class extends the `Solver` class to utilize the Proximal Gradient method for optimization. It leverages the `jaxopt` library's Proximal Gradient optimizer, introducing the functionality of a proximal operator.
+
+### Attributes:
+- **`allowed_optimizers`**: A list containing string identifiers of optimization algorithms compatible with this solver, specifically the "ProximalGradient".
+  
+- **`mask`**: An optional mask array for element-wise operations with shape (n_groups, n_features).
+
+### Methods:
+- **`__init__`**: The constructor method for the `ProxGradientSolver` class. It accepts the name of the solver algorithm (`solver_name`), an optional dictionary of additional keyword arguments (`solver_kwargs`) for the solver, the regularization strength (`regularizer_strength`), and an optional mask array (`mask`).
+  
+- **`mask`**: Property method to get or set the mask array.
+  
+- **`_check_mask`**: Static method to validate the mask array adhering to specific requirements.
+  
+- **`get_prox_operator`**: Abstract method to retrieve the proximal operator for this solver.
+  
+- **`instantiate_solver`**: Method to prepare and return a runner function for optimization with a provided loss function and proximal operator.
+
+## `LassoSolver` Class
+
+`LassoSolver` class extends `ProxGradientSolver` to specialize in optimization using the Lasso (L1 regularization) method with Proximal Gradient.
+
+### Methods:
+- **`__init__`**: Constructor method similar to `ProxGradientSolver` but defaults `solver_name` to "ProximalGradient".
+  
+- **`get_prox_operator`**: Method to retrieve the proximal operator for Lasso regularization (L1 penalty).
+
+## `GroupLassoSolver` Class
+
+`GroupLassoSolver` class extends `ProxGradientSolver` to specialize in optimization using the Group Lasso regularization method with Proximal Gradient. It induces sparsity on groups of features rather than individual features.
+
+### Attributes:
+- **`mask`**: A mask array indicating groups of features for regularization.
+
+### Methods:
+- **`__init__`**: Constructor method similar to `ProxGradientSolver`, but additionally requires a `mask` array to identify groups of features.
+   
+- **`get_prox_operator`**: Method to retrieve the proximal operator for Group Lasso regularization.
+
+### Example Usage
+```python
+lasso_solver = LassoSolver(regularizer_strength=1.0)
+runner = lasso_solver.instantiate_solver(loss_function)
+optim_results = runner(init_params, exog_vars, endog_vars)
+
+group_lasso_solver = GroupLassoSolver(solver_name="ProximalGradient", mask=group_mask, regularizer_strength=1.0)
+runner = group_lasso_solver.instantiate_solver(loss_function)
+optim_results = runner(init_params, exog_vars, endog_vars)
+```
+
 ## Glossary
 
 |  Term   | Description |
