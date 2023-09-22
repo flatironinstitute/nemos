@@ -241,10 +241,12 @@ class BaseRegressor(_Base, abc.ABC):
 
     @abc.abstractmethod
     def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
+        """Fit the model to neural activity."""
         pass
 
     @abc.abstractmethod
     def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+        """Predict rates based on fit parameters."""
         pass
 
     @abc.abstractmethod
@@ -255,6 +257,7 @@ class BaseRegressor(_Base, abc.ABC):
         # may include score_type or other additional model dependent kwargs
         **kwargs,
     ) -> jnp.ndarray:
+        """Score the predicted firing rates (based on fit) to the target neural activity."""
         pass
 
     @abc.abstractmethod
@@ -265,6 +268,7 @@ class BaseRegressor(_Base, abc.ABC):
         # feed-forward input and/coupling basis
         **kwargs: Any,
     ):
+        """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
 
     @staticmethod

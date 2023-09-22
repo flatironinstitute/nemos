@@ -1,3 +1,4 @@
+"""Collection of proximal operators."""
 from typing import Tuple
 
 import jax
@@ -19,6 +20,7 @@ def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
     -------
     :
         The norm of the weight vector corresponding to the feature in mask.
+
     Notes
     -----
         The proximal gradient operator is described in article [1], Proposition 1.
