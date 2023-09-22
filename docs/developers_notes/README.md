@@ -6,7 +6,7 @@ Welcome to the Developer Notes of the `neurostatslib` project. These notes aim t
 
 #### - [The `basis` Module](01-basis_module.md)
 #### - [The `base_class` Module](02-base_class.md)
-#### - [The `glm` Module](03-glm.md)
+#### - [The `glm` Module](05-glm.md)
 
 ## Intended Audience
 
