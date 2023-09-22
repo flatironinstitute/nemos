@@ -116,10 +116,10 @@ class TestGLM:
                            error, match_str)
 
     @pytest.mark.parametrize("dim_weights, error, match_str", [
-        (0, ValueError, "params\[0\] must be of shape \(n_neurons, n_features\)"),
-        (1, ValueError, "params\[0\] must be of shape \(n_neurons, n_features\)"),
+        (0, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)"),
+        (1, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)"),
         (2, None, None),
-        (3, ValueError, "params\[0\] must be of shape \(n_neurons, n_features\)")
+        (3, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)")
     ])
     def test_fit_weights_dimensionality(self, dim_weights, error, match_str, poissonGLM_model_instantiation):
         """
@@ -686,7 +686,7 @@ class TestGLM:
             feedforward_input = np.zeros((n_time_points, n_neurons+delta_n_neuron, n_basis_input))
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -722,7 +722,7 @@ class TestGLM:
 
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -760,7 +760,7 @@ class TestGLM:
 
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -792,7 +792,7 @@ class TestGLM:
         init_spikes = jnp.zeros((init_spikes.shape[0], n_neurons + delta_n_neuron))
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -822,7 +822,7 @@ class TestGLM:
             model.baseline_link_fr_ = None
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -855,7 +855,7 @@ class TestGLM:
                                      init_spikes.shape[1]))
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -888,7 +888,7 @@ class TestGLM:
                                    coupling_basis.shape[1:])
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -927,7 +927,7 @@ class TestGLM:
                                        feedforward_input.shape[2] + delta_features))
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -964,7 +964,7 @@ class TestGLM:
                                     coupling_basis.shape[1] + delta_features))
         _test_class_method(
             model,
-            "simulate",
+            "simulate_recurrent",
             [],
             {
                 "random_key": random_key,
@@ -1033,7 +1033,7 @@ class TestGLM:
         n_timepoints = feedforward_input.shape[0]
 
         # generate spike trains
-        spikes, _ = model.simulate(random_key=random_key,
+        spikes, _ = model.simulate_recurrent(random_key=random_key,
                        init_y=init_spikes,
                        coupling_basis_matrix=coupling_basis,
                        feedforward_input=feedforward_input)
@@ -1065,7 +1065,7 @@ class TestGLM:
         model.fit(X, spikes[:-window_size])
 
         # simulate
-        model.simulate(random_key=random_key,
+        model.simulate_recurrent(random_key=random_key,
                        init_y=init_spikes,
                        coupling_basis_matrix=coupling_basis,
                        feedforward_input=feedforward_input)

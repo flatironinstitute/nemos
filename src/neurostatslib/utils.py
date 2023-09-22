@@ -405,3 +405,12 @@ def has_local_device(device_type: str) -> bool:
     return any(
         device_type in device.device_kind.lower() for device in jax.local_devices()
     )
+
+
+def is_sequence(obj) -> bool:
+    """Check if an object is a sequence."""
+    return (
+        hasattr(obj, "__iter__")
+        and hasattr(obj, "__getitem__")
+        and not isinstance(obj, (str, bytes, dict))
+    )

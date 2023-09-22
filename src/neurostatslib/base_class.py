@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from jax._src.lib import xla_client
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import has_local_device
+from .utils import has_local_device, is_sequence
 
 
 class _Base:
@@ -93,7 +93,7 @@ class _Base:
             # Simple optimization to gain speed (inspect is slow)
             return self
         valid_params = self.get_params(deep=True)
-        nested_params = defaultdict(dict)  # grouped by prefix
+        nested_params: defaultdict = defaultdict(dict)  # grouped by prefix
         for key, value in params.items():
             key, delim, sub_key = key.partition("__")
             if key not in valid_params:
@@ -188,9 +188,11 @@ class _Base:
         :
             The arrays on the desired device.
         """
-        device = self.select_target_device(device)
+        device_obj = self.select_target_device(device)
         return tuple(
-            jax.device_put(arg, device) if arg.device_buffer.device() != device else arg
+            jax.device_put(arg, device_obj)
+            if arg.device_buffer.device() != device_obj
+            else arg
             for arg in args
         )
 
@@ -285,8 +287,6 @@ class BaseRegressor(_Base, abc.ABC):
         self,
         random_key: jax.random.PRNGKeyArray,
         feed_forward_input: Union[NDArray, jnp.ndarray],
-        # feed-forward input and/coupling basis
-        **kwargs: Any,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
@@ -330,8 +330,8 @@ class BaseRegressor(_Base, abc.ABC):
 
     @staticmethod
     def _check_and_convert_params(
-        params: ArrayLike, data_type: Optional[jnp.dtype] = None
-    ) -> Tuple[jnp.ndarray, ...]:
+        params: Tuple[ArrayLike, ArrayLike], data_type: Optional[jnp.dtype] = None
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
 
@@ -340,18 +340,21 @@ class BaseRegressor(_Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        if not hasattr(params, "__getitem__"):
+        if not is_sequence(params):
             raise TypeError("Initial parameters must be array-like!")
+
+        if len(params) != 2:
+            raise ValueError("Params needs to be array-like of length two.")
+
         try:
-            params = tuple(jnp.asarray(par, dtype=data_type) for par in params)
+            params = jnp.asarray(params[0], dtype=data_type), jnp.asarray(
+                params[1], dtype=data_type
+            )
         except (ValueError, TypeError):
             raise TypeError(
                 "Initial parameters must be array-like of array-like objects"
                 "with numeric data-type!"
             )
-
-        if len(params) != 2:
-            raise ValueError("Params needs to be array-like of length two.")
 
         if params[0].ndim != 2:
             raise ValueError(
@@ -509,7 +512,7 @@ class BaseRegressor(_Base, abc.ABC):
             init_params = self._check_and_convert_params(init_params)
 
         # check that the inputs and the parameters has consistent sizes
-        self._check_input_and_params_consistency(init_params, X, y)
+        self._check_input_and_params_consistency(init_params, X=X, y=y)
 
         return X, y, init_params
 
@@ -558,8 +561,16 @@ class BaseRegressor(_Base, abc.ABC):
         if self._has_invalid_entry(feedforward_input):
             raise ValueError("feedforward_input contains a NaNs or Infs!")
 
-        if init_y is not None:
-            (init_y,) = self._convert_to_jnp_ndarray(init_y)
+        # Ensure that both or neither of `init_y` and `params_r` are provided
+        if (init_y is None) != (params_r is None):
+            raise ValueError(
+                "Both `init_y` and `params_r` should be provided, or neither should be provided."
+            )
+        # If both are provided, perform checks and conversions
+        elif init_y is not None and params_r is not None:
+            init_y = self._convert_to_jnp_ndarray(init_y)[
+                0
+            ]  # Assume this method returns a tuple
             self._check_input_dimensionality(y=init_y)
             self._check_input_and_params_consistency(params_r, y=init_y)
             return feedforward_input, init_y

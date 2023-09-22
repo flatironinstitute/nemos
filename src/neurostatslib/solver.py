@@ -7,7 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 import abc
 import inspect
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
@@ -35,8 +35,6 @@ class Solver(_Base, abc.ABC):
     ----------
     allowed_optimizers :
         List of optimizer names that are allowed for use with this solver.
-    regularizer_strength :
-        Strength of the regularization to be applied.
     solver_name :
         Name of the solver being used.
     solver_kwargs :
@@ -50,18 +48,16 @@ class Solver(_Base, abc.ABC):
         Get the solver runner with provided arguments.
     """
 
-    allowed_optimizers = []
+    allowed_optimizers: List[str] = []
 
     def __init__(
         self,
         solver_name: str,
         solver_kwargs: Optional[dict] = None,
-        regularizer_strength: Optional[float] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self._check_solver(solver_name)
-        self.regularizer_strength = regularizer_strength
         self._solver_name = solver_name
         if solver_kwargs is None:
             self._solver_kwargs = dict()
@@ -306,11 +302,8 @@ class RidgeSolver(Solver):
         solver_kwargs: Optional[dict] = None,
         regularizer_strength: float = 1.0,
     ):
-        super().__init__(
-            solver_name,
-            solver_kwargs=solver_kwargs,
-            regularizer_strength=regularizer_strength,
-        )
+        super().__init__(solver_name, solver_kwargs=solver_kwargs)
+        self.regularizer_strength = regularizer_strength
 
     def penalization(self, params: Tuple[jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """
@@ -388,12 +381,9 @@ class ProxGradientSolver(Solver, abc.ABC):
         regularizer_strength: float = 1.0,
         mask: Optional[Union[NDArray, jnp.ndarray]] = None,
     ):
-        super().__init__(
-            solver_name,
-            solver_kwargs=solver_kwargs,
-            regularizer_strength=regularizer_strength,
-        )
+        super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self._mask = mask
+        self.regularizer_strength = regularizer_strength
 
     @property
     def mask(self):
@@ -405,7 +395,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         self._mask = mask
 
     @staticmethod
-    def _check_mask(mask: Optional[jnp.ndarray] = None):
+    def _check_mask(mask: jnp.ndarray):
         """
         Validate the mask array.
 
@@ -514,9 +504,9 @@ class LassoSolver(ProxGradientSolver):
         super().__init__(
             solver_name,
             solver_kwargs=solver_kwargs,
-            regularizer_strength=regularizer_strength,
             mask=mask,
         )
+        self.regularizer_strength = regularizer_strength
 
     def get_prox_operator(
         self,
@@ -567,16 +557,17 @@ class GroupLassoSolver(ProxGradientSolver):
     def __init__(
         self,
         solver_name: str,
-        mask: Union[jnp.ndarray, NDArray],
+        mask: Union[NDArray, jnp.ndarray],
         solver_kwargs: Optional[dict] = None,
         regularizer_strength: float = 1.0,
     ):
         super().__init__(
             solver_name,
             solver_kwargs=solver_kwargs,
-            regularizer_strength=regularizer_strength,
             mask=mask,
         )
+        self.regularizer_strength = regularizer_strength
+        mask = jnp.asarray(mask)
         self._check_mask(mask)
 
     def get_prox_operator(

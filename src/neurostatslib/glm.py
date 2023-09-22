@@ -1,5 +1,5 @@
 """GLM core module."""
-from typing import Any, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -348,8 +348,6 @@ class GLM(BaseRegressor):
         self,
         random_key: jax.random.PRNGKeyArray,
         feedforward_input: Union[NDArray, jnp.ndarray],
-        # feed-forward input and/coupling basis
-        **kwargs: Any,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
@@ -451,12 +449,12 @@ class GLMRecurrent(GLM):
     ):
         super().__init__(noise_model=noise_model, solver=solver)
 
-    def simulate(
+    def simulate_recurrent(
         self,
         random_key: jax.random.PRNGKeyArray,
         feedforward_input: Union[NDArray, jnp.ndarray],
-        coupling_basis_matrix: Optional[Union[NDArray, jnp.ndarray]] = None,
-        init_y: Union[NDArray, Optional[jnp.ndarray]] = None,
+        coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+        init_y: Union[NDArray, jnp.ndarray],
     ):
         """
         Simulate neural activity using the GLM as a recurrent network.
@@ -465,9 +463,6 @@ class GLMRecurrent(GLM):
         parameters of the GLM. It is capable of simulating activity based on a combination
         of historical activity and external feedforward inputs like convolved currents, light
         intensities, etc.
-
-        If no `coupling_basis_matrix` is provided, the spikes will be generated in response to
-        the feedforward input only.
 
         Parameters
         ----------
@@ -518,9 +513,6 @@ class GLMRecurrent(GLM):
         The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
-        if coupling_basis_matrix is None:
-            return super().simulate(random_key, feedforward_input)
-
         # check if the model is fit
         self._check_is_fit()
 

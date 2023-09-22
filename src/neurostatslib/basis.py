@@ -60,7 +60,7 @@ class Basis(abc.ABC):
         pass
 
     @staticmethod
-    def _get_samples(*n_samples: int) -> Generator[NDArray, ...]:
+    def _get_samples(*n_samples: int) -> Generator[NDArray, None, None]:
         """Get equi-spaced samples for all the input dimensions.
 
         This will be used to evaluate the basis on a grid of
