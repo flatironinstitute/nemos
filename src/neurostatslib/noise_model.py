@@ -45,7 +45,7 @@ class NoiseModel(_Base, abc.ABC):
         super().__init__(**kwargs)
         self._check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
-        self._scale = 1.
+        self._scale = 1.0
 
     @property
     def inverse_link_function(self):
@@ -317,5 +317,4 @@ class PoissonNoiseModel(NoiseModel):
 
     def estimate_scale(self, predicted_rate: jnp.ndarray):
         """Assign 1 to the scale parameter of the Poisson model."""
-        self.scale = 1.
-
+        self.scale = 1.0
