@@ -36,6 +36,7 @@ plugins:
             docstring_style: numpy         
             show_source: true
             members_order: source
+            inherited_members: true
           filters:
           - "!neurostatslib.glm.GLMBase.residual_deviance"
 
