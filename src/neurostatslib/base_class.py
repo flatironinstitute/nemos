@@ -236,6 +236,27 @@ class _Base:
 
 
 class BaseRegressor(_Base, abc.ABC):
+    """Abstract base class for GLM regression models.
+
+    This class encapsulates the common functionality for Generalized Linear Models (GLM)
+    regression models. It provides an abstraction for fitting the model, making predictions,
+    scoring the model, simulating responses, and preprocessing data. Concrete classes
+    are expected to provide specific implementations of the abstract methods defined here.
+
+    Attributes
+    ----------
+    FLOAT_EPS : float
+        A small float representing machine epsilon for float32, used to handle numerical
+        stability issues.
+
+    See Also
+    --------
+    Concrete models:
+
+    - [`GLM`](../glm/#neurostatslib.glm.GLM): A feed-forward GLM implementation.
+    - [`GLMRecurrent`](../glm/#neurostatslib.glm.GLMRecurrent): A recurrent GLM implementation.
+    """
+
     FLOAT_EPS = jnp.finfo(jnp.float32).eps
 
     @abc.abstractmethod
