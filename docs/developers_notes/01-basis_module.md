@@ -25,7 +25,9 @@ Abstract Class Basis
 │   │
 │   └─ Concrete Subclass RaisedCosineBasisLog
 │
-└─ Concrete Subclass OrthExponentialBasis
+├─ Concrete Subclass OrthExponentialBasis
+│
+└─ Concrete Subclass FourierBasis
 ```
 
 The super-class `Basis` provides two public methods, [`evaluate`](#the-public-method-evaluate) and [`evaluate_on_grid`](#the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the private abstract method `_evaluate` that is specific for each concrete class. See below for more details.
