@@ -21,6 +21,7 @@ markdown_extensions:
 plugins:
   - search
   - gallery:
+        conf_script: docs/gallery_conf.py
         examples_dirs: docs/examples
         gallery_dirs: docs/generated/gallery
   - gen-files:
