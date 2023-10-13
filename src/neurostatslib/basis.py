@@ -23,7 +23,7 @@ __all__ = [
     "OrthExponentialBasis",
     "AdditiveBasis",
     "MultiplicativeBasis",
-    "FourierBasis"
+    "FourierBasis",
 ]
 
 
@@ -1090,62 +1090,6 @@ class FourierBasis(Basis):
         # create the basis
         angles = np.einsum("i,j->ij", sample_pts, self._frequencies)
         return np.concatenate([np.cos(angles), -np.sin(angles[:, 1:])], axis=1)
-
-
-class BernsteinPolyBasis(Basis):
-    """Set of 1D Bernstein Polynomial basis.
-
-    Parameters
-    ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    """
-
-    def __init__(self, n_basis_funcs: int):
-        super().__init__(n_basis_funcs=n_basis_funcs)
-        self._n_input_dimensionality = 1
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Checks that the number of basis is at least 1.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < 1:
-            raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
-                f"{self.n_basis_funcs} basis elements specified instead"
-            )
-
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
-        """Generate basis functions with given spacing.
-
-        Parameters
-        ----------
-        sample_pts
-            Spacing for basis functions.
-
-        Returns
-        -------
-        :
-            Evaluated Bernstein polynomial basis, shape (n_samples, n_basis_funcs).
-
-        Examples
-        --------
-        >>> import neurostatslib as nsl
-        >>> import numpy as np
-        >>> bernstein_basis = BernsteinPolyBasis(n_basis_funcs=5)
-        >>> sample_pts = np.linspace(0, 1, 10)
-        >>> basis_funcs = bernstein_basis._evaluate(sample_pts)
-        >>> basis_funcs.shape
-        (10, 5)
-
-        """
-        return bernstein_poly(sample_pts, self.n_basis_funcs, der=0)
 
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
