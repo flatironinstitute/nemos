@@ -774,7 +774,7 @@ class RaisedCosineBasisLinear(Basis):
             - No overlap between bumps (alpha < 1).
             - Oscillatory behavior when summing the basis elements (2*alpha not integer).
         """
-        if alpha < 1 or (not np.isclose(alpha * 2, round(2*alpha))):
+        if alpha < 1 or (not np.isclose(alpha * 2, round(2 * alpha))):
             raise ValueError(
                 f"Invalid raised cosine width. "
                 f"2*alpha must be a positive integer, 2*alpha = {2*alpha} instead!"
@@ -869,7 +869,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
     """
 
-    def __init__(self, n_basis_funcs: int, alpha: float = 1.0, extend_and_trim_last: bool = True) -> None:
+    def __init__(
+        self, n_basis_funcs: int, alpha: float = 1.0, extend_and_trim_last: bool = True
+    ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
 
