@@ -56,7 +56,6 @@ dev = [
     "pytest-cov",                   # Test coverage plugin for pytest
     "statsmodels",                  # Used to compare model pseudo-r2 in testing
     "scikit-learn",                 # Testing compatibility with CV & pipelines
-    "PyYAML"                          # Load GLM params for testing
 ]
 docs = [
     "mkdocs",                       # Documentation generator

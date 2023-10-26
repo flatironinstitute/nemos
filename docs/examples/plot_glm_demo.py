@@ -18,12 +18,13 @@ Before digging into the GLM module, let's first import the packages
  data.
 
 """
+import json
+
 import jax
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 import numpy as np
 import sklearn.model_selection as sklearn_model_selection
-import yaml
+from matplotlib.patches import Rectangle
 
 import neurostatslib as nsl
 
@@ -222,8 +223,8 @@ plt.eventplot(np.where(spikes)[0])
 # them on the fly.
 
 # load parameters
-with open("coupled_neurons_params.yml", "r") as fh:
-    config_dict = yaml.safe_load(fh)
+with open("coupled_neurons_params.json", "r") as fh:
+    config_dict = json.load(fh)
 
 # basis weights & intercept for the GLM (both coupling and feedforward)
 # (the last coefficient is the weight of the feedforward input)
