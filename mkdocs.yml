@@ -37,8 +37,6 @@ plugins:
             show_source: true
             members_order: source
             inherited_members: true
-          filters:
-          - "!neurostatslib.glm.GLMBase.residual_deviance"
 
 extra_javascript:
   - javascripts/katex.js
