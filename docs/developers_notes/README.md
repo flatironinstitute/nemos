@@ -2,13 +2,6 @@
 
 Welcome to the Developer Notes of the `neurostatslib` project. These notes aim to provide detailed technical information about the various modules, classes, and functions that make up this library, as well as guidelines on how to write code that integrates nicely with our package. They are intended to help current and future developers understand the design decisions, structure, and functioning of the library, and to provide guidance on how to modify, extend, and maintain the codebase.
 
-## Index
-
-#### - [The `basis` Module](01-basis_module.md)
-#### - [The `base_class` Module](02-base_class.md)
-#### - [The `noise_model` Module](03-noise_model.md)
-#### - [The `solver` Module](04-solver.md)
-#### - [The `glm` Module](05-glm.md)
 
 ## Intended Audience
 
