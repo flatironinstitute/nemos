@@ -41,7 +41,7 @@ Abstract Class _Base
 ```
 
 !!! Example
-    The current package version includes a concrete class named `neurostatslib.glm.GLM`. This class inherits from `BaseRegressor` <- `_Base`, since it falls under the " GLM regression" category. 
+    The current package version includes a concrete class named `neurostatslib.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `_Base`, since it falls under the " GLM regression" category. 
     As any `BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
 
 
