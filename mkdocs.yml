@@ -12,7 +12,7 @@ theme:
     - admonition
     - tables
 
-# if footnotes is degined in theme doesn't work
+# if footnotes is defined in theme doesn't work
 # If md_in_html is defined outside theme, it also results in
 # an error when building the docs.
 markdown_extensions:
