@@ -11,7 +11,7 @@ Designed to be compatible with the `scikit-learn` API, the class structure aims 
 Below a scheme of how we envision the architecture of the `neurostatslib` models.
 
 ```
-Class _Base
+Abstract Class _Base
 │
 ├─ Abstract Subclass BaseRegressor
 │   │
