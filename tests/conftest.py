@@ -9,13 +9,13 @@ Dependencies:
     - jax.numpy: JAX's version of NumPy, used for matrix operations.
     - numpy: Standard Python numerical computing library.
     - pytest: Testing framework.
-    - yaml: For parsing and loading YAML configuration files.
+    - json: For parsing and loading json configuration files.
 
 Functions:
     - poissonGLM_model_instantiation: Sets up a Poisson GLM, instantiating its parameters
       with random values and returning a set of test data and expected output.
 
-    - poissonGLM_coupled_model_config_simulate: Reads from a YAML configuration file,
+    - poissonGLM_coupled_model_config_simulate: Reads from a json configuration file,
       sets up a Poisson GLM with predefined parameters, and returns the initialized model
       along with other related parameters.
 
@@ -24,13 +24,13 @@ Note:
     and loading predefined parameters for testing various functionalities of the `neurostatslib` library.
 """
 import inspect
+import json
 import os
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import yaml
 
 import neurostatslib as nsl
 
@@ -64,9 +64,9 @@ def poissonGLM_model_instantiation():
 
 @pytest.fixture
 def poissonGLM_coupled_model_config_simulate():
-    """Set up a Poisson GLM from a predefined configuration in a YAML file.
+    """Set up a Poisson GLM from a predefined configuration in a json file.
 
-    This fixture reads parameters for a Poisson GLM from a YAML configuration file, initializes
+    This fixture reads parameters for a Poisson GLM from a json configuration file, initializes
     the model accordingly, and returns the model instance with other related parameters.
 
     Returns:
@@ -80,8 +80,8 @@ def poissonGLM_coupled_model_config_simulate():
     current_file = inspect.getfile(inspect.currentframe())
     test_dir = os.path.dirname(os.path.abspath(current_file))
     with open(os.path.join(test_dir,
-                           "simulate_coupled_neurons_params.yml"), "r") as fh:
-        config_dict = yaml.safe_load(fh)
+                           "simulate_coupled_neurons_params.json"), "r") as fh:
+        config_dict = json.load(fh)
 
     noise = nsl.noise_model.PoissonNoiseModel(jnp.exp)
     solver = nsl.solver.RidgeSolver("BFGS", regularizer_strength=0.1)

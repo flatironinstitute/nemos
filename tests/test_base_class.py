@@ -1,13 +1,12 @@
 from typing import Union
 
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
 import pytest
 from numpy.typing import NDArray
 
-from neurostatslib.base_class import BaseRegressor, _Base
-
 import neurostatslib as nsl
+from neurostatslib.base_class import BaseRegressor, _Base
 
 
 @pytest.fixture
