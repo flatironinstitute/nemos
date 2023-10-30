@@ -4,21 +4,6 @@ Testing configurations for the `neurostatslib` library.
 This module contains test fixtures required to set up and verify the functionality
 of the modules of the `neurostatslib` library.
 
-Dependencies:
-    - jax: Used for efficient numerical computing.
-    - jax.numpy: JAX's version of NumPy, used for matrix operations.
-    - numpy: Standard Python numerical computing library.
-    - pytest: Testing framework.
-    - json: For parsing and loading json configuration files.
-
-Functions:
-    - poissonGLM_model_instantiation: Sets up a Poisson GLM, instantiating its parameters
-      with random values and returning a set of test data and expected output.
-
-    - poissonGLM_coupled_model_config_simulate: Reads from a json configuration file,
-      sets up a Poisson GLM with predefined parameters, and returns the initialized model
-      along with other related parameters.
-
 Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
     and loading predefined parameters for testing various functionalities of the `neurostatslib` library.

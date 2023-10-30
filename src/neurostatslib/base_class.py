@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from jax._src.lib import xla_client
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import has_local_device, is_sequence
+from .utils import has_local_device, is_list_like
 
 
 class _Base:
@@ -340,7 +340,7 @@ class BaseRegressor(_Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        if not is_sequence(params):
+        if not is_list_like(params):
             raise TypeError("Initial parameters must be array-like!")
 
         if len(params) != 2:

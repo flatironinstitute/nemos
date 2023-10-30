@@ -394,7 +394,7 @@ def has_local_device(device_type: str) -> bool:
     Parameters
     ----------
     device_type:
-        The the device type in lower-case, e.g. `gpu`, `tpu`...
+        The device type in lower-case, e.g. `gpu`, `tpu`...
 
     Returns
     -------
@@ -407,8 +407,9 @@ def has_local_device(device_type: str) -> bool:
     )
 
 
-def is_sequence(obj) -> bool:
-    """Check if an object is a sequence."""
+def is_list_like(obj) -> bool:
+    """Check if the object is an iterable (not including strings or bytes)
+    that supports item retrieval by index but isn't a dictionary."""
     return (
         hasattr(obj, "__iter__")
         and hasattr(obj, "__getitem__")
