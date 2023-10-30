@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Iterable, List, Literal, Optional, Union
+from typing import Iterable, List, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -415,3 +415,24 @@ def is_list_like(obj) -> bool:
         and hasattr(obj, "__getitem__")
         and not isinstance(obj, (str, bytes, dict))
     )
+
+
+def convert_to_jnp_ndarray(
+    *args: Union[NDArray, jnp.ndarray], data_type: Optional[jnp.dtype] = None
+) -> Tuple[jnp.ndarray, ...]:
+    """Convert provided arrays to jnp.ndarray of specified type.
+
+    Parameters
+    ----------
+    *args :
+        Input arrays to convert.
+    data_type :
+        Data type to convert to. Default is None, which means that the data-type
+        is inferred from the input.
+
+    Returns
+    -------
+    :
+        Converted arrays.
+    """
+    return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)

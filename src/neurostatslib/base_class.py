@@ -8,10 +8,9 @@ from typing import Any, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from jax._src.lib import xla_client
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import has_local_device, is_list_like
+from .utils import convert_to_jnp_ndarray, is_list_like
 
 
 class Base:
@@ -222,7 +221,7 @@ class BaseRegressor(Base, abc.ABC):
     - [`GLMRecurrent`](../glm/#neurostatslib.glm.GLMRecurrent): A recurrent GLM implementation.
     """
 
-    FLOAT_EPS = jnp.finfo(jnp.float32).eps
+    FLOAT_EPS = jnp.finfo(float).eps
 
     @abc.abstractmethod
     def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
@@ -253,27 +252,6 @@ class BaseRegressor(Base, abc.ABC):
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
-
-    @staticmethod
-    def _convert_to_jnp_ndarray(
-        *args: Union[NDArray, jnp.ndarray], data_type: Optional[jnp.dtype] = None
-    ) -> Tuple[jnp.ndarray, ...]:
-        """Convert provided arrays to jnp.ndarray of specified type.
-
-        Parameters
-        ----------
-        *args :
-            Input arrays to convert.
-        data_type :
-            Data type to convert to. Default is None, which means that the data-type
-            is inferred from the input.
-
-        Returns
-        -------
-        :
-            Converted arrays.
-        """
-        return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
 
     @staticmethod
     def _has_invalid_entry(array: jnp.ndarray) -> bool:
@@ -448,7 +426,7 @@ class BaseRegressor(Base, abc.ABC):
         ValueError
             If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
         """
-        X, y = self._convert_to_jnp_ndarray(X, y)
+        X, y = convert_to_jnp_ndarray(X, y)
 
         # check input dimensionality
         self._check_input_dimensionality(X, y)
@@ -517,7 +495,7 @@ class BaseRegressor(Base, abc.ABC):
             If the feedforward_input contains NaNs or Infs.
             If the dimensionality or consistency checks fail for the provided data and parameters.
         """
-        (feedforward_input,) = self._convert_to_jnp_ndarray(feedforward_input)
+        (feedforward_input,) = convert_to_jnp_ndarray(feedforward_input)
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(params_f, X=feedforward_input)
 
@@ -531,7 +509,7 @@ class BaseRegressor(Base, abc.ABC):
             )
         # If both are provided, perform checks and conversions
         elif init_y is not None and params_r is not None:
-            init_y = self._convert_to_jnp_ndarray(init_y)[
+            init_y = convert_to_jnp_ndarray(init_y)[
                 0
             ]  # Assume this method returns a tuple
             self._check_input_dimensionality(y=init_y)

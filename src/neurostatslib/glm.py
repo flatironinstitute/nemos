@@ -9,7 +9,7 @@ from . import noise_model as nsm
 from . import solver as slv
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
-from .utils import convolve_1d_trials
+from .utils import convert_to_jnp_ndarray, convolve_1d_trials
 
 
 class GLM(BaseRegressor):
@@ -154,7 +154,7 @@ class GLM(BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        (X,) = self._convert_to_jnp_ndarray(X)
+        (X,) = convert_to_jnp_ndarray(X)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -272,7 +272,7 @@ class GLM(BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        X, y = self._convert_to_jnp_ndarray(X, y)
+        X, y = convert_to_jnp_ndarray(X, y)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -517,7 +517,7 @@ class GLMRecurrent(GLM):
         self._check_is_fit()
 
         # convert to jnp.ndarray
-        (coupling_basis_matrix,) = self._convert_to_jnp_ndarray(coupling_basis_matrix)
+        (coupling_basis_matrix,) = convert_to_jnp_ndarray(coupling_basis_matrix)
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.baseline_link_fr_.shape[0]

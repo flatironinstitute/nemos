@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 
 import neurostatslib as nsl
 from neurostatslib.base_class import BaseRegressor, Base
+from neurostatslib.utils import convert_to_jnp_ndarray
 
 
 @pytest.fixture
@@ -114,7 +115,7 @@ def test_get_param_names():
 def test_convert_to_jnp_ndarray():
     """Test data conversion to JAX NumPy arrays."""
     data = [1, 2, 3]
-    jnp_data, = BaseRegressor._convert_to_jnp_ndarray(data)
+    jnp_data, = convert_to_jnp_ndarray(data)
     assert isinstance(jnp_data, jnp.ndarray)
     assert jnp.all(jnp_data == jnp.array(data, dtype=jnp.float32))
 
