@@ -6,7 +6,7 @@ from typing import Callable, Union
 import jax
 import jax.numpy as jnp
 
-from .base_class import _Base
+from .base_class import Base
 
 KeyArray = Union[jnp.ndarray, jax.random.PRNGKeyArray]
 
@@ -17,7 +17,7 @@ def __dir__():
     return __all__
 
 
-class NoiseModel(_Base, abc.ABC):
+class NoiseModel(Base, abc.ABC):
     """
     Abstract noise model class for neural data processing.
 

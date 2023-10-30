@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from .utils import has_local_device, is_list_like
 
 
-class _Base:
+class Base:
     """Base class for neurostatslib estimators.
 
     A base class for estimators with utilities for getting and setting parameters,
@@ -237,7 +237,7 @@ class _Base:
         return sorted(parameters)
 
 
-class BaseRegressor(_Base, abc.ABC):
+class BaseRegressor(Base, abc.ABC):
     """Abstract base class for GLM regression models.
 
     This class encapsulates the common functionality for Generalized Linear Models (GLM)

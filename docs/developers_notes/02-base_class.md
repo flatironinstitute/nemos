@@ -2,16 +2,16 @@
 
 ## Introduction
 
-The `base_class` module introduces the `_Base` class and abstract classes defining broad model categories. These abstract classes **must** inherit from `_Base`.
+The `base_class` module introduces the `Base` class and abstract classes defining broad model categories. These abstract classes **must** inherit from `Base`.
 
-The `_Base` class is envisioned as the foundational component for any object type (e.g., regression, dimensionality reduction, clustering, noise models, solvers etc.). In contrast, abstract classes derived from `_Base` define overarching object categories (e.g., `base_class.BaseRegressor` is building block for GLMs, GAMS, etc. while `noise_model.NoiseModel` is the building block for the Poisson noise, Gamma noise, ... etc.).
+The `Base` class is envisioned as the foundational component for any object type (e.g., regression, dimensionality reduction, clustering, noise models, solvers etc.). In contrast, abstract classes derived from `Base` define overarching object categories (e.g., `base_class.BaseRegressor` is building block for GLMs, GAMS, etc. while `noise_model.NoiseModel` is the building block for the Poisson noise, Gamma noise, ... etc.).
 
 Designed to be compatible with the `scikit-learn` API, the class structure aims to facilitate access to `scikit-learn`'s robust pipeline and cross-validation modules. This is achieved while leveraging the accelerated computational capabilities of `jax` and `jaxopt` in the backend, which is essential for analyzing extensive neural recordings and fitting large models.
 
 Below a scheme of how we envision the architecture of the `neurostatslib` models.
 
 ```
-Abstract Class _Base
+Abstract Class Base
 │
 ├─ Abstract Subclass BaseRegressor
 │   │
@@ -41,13 +41,13 @@ Abstract Class _Base
 ```
 
 !!! Example
-    The current package version includes a concrete class named `neurostatslib.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `_Base`, since it falls under the " GLM regression" category. 
+    The current package version includes a concrete class named `neurostatslib.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the " GLM regression" category. 
     As any `BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
 
 
-## The Class `model_base._Base`
+## The Class `model_base.Base`
 
-The `_Base` class aligns with the `scikit-learn` API for `base.BaseEstimator`. This alignment is achieved by implementing the `get_params` and `set_params` methods, essential for `scikit-learn` compatibility and foundational for all model implementations. dditionally, the class provides auxiliary helper methods to identify available computational devices (such as GPUs and TPUs) and to facilitate data transfer to these devices.
+The `Base` class aligns with the `scikit-learn` API for `base.BaseEstimator`. This alignment is achieved by implementing the `get_params` and `set_params` methods, essential for `scikit-learn` compatibility and foundational for all model implementations. dditionally, the class provides auxiliary helper methods to identify available computational devices (such as GPUs and TPUs) and to facilitate data transfer to these devices.
 
 For a detailed understanding, consult the [`scikit-learn` API Reference](https://scikit-learn.org/stable/modules/classes.html) and [`BaseEstimator`](https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html).
 
@@ -63,7 +63,7 @@ For a detailed understanding, consult the [`scikit-learn` API Reference](https:/
 
 ## The Abstract Class `model_base.BaseRegressor`
 
-`BaseRegressor` is an abstract class that inherits from `_Base`, stipulating the implementation of abstract methods: `fit`, `predict`, `score`, and `simulate`. This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
+`BaseRegressor` is an abstract class that inherits from `Base`, stipulating the implementation of abstract methods: `fit`, `predict`, `score`, and `simulate`. This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
 
 ### Abstract Methods
 
@@ -87,7 +87,7 @@ Moreover, `BaseRegressor` incorporates auxiliary methods such as `_convert_to_jn
 and a number of other methods for checking input consistency.
 
 !!! Tip
-    Deciding between concrete and abstract methods in a superclass can be nuanced. As a general guideline: any method that's expected in all subclasses and isn't subclass-specific should be concretely implemented in the superclass. Conversely, methods essential for a subclass's expected behavior, but vary based on the subclass, should be abstract in the superclass. For instance, compatibility with the `sklearn.cross_validation` module demands `score`, `fit`, `get_params`, and `set_params` methods. Given their specificity to individual models, `score` and `fit` are abstract in `BaseRegressor`. Conversely, as `get_params` and `set_params` are consistent across model classes, they're inherited from `_Base`. This approach typifies our general implementation strategy. However, it's important to note that while these are sound guidelines, exceptions exist based on various factors like future extensibility, clarity, and maintainability.
+    Deciding between concrete and abstract methods in a superclass can be nuanced. As a general guideline: any method that's expected in all subclasses and isn't subclass-specific should be concretely implemented in the superclass. Conversely, methods essential for a subclass's expected behavior, but vary based on the subclass, should be abstract in the superclass. For instance, compatibility with the `sklearn.cross_validation` module demands `score`, `fit`, `get_params`, and `set_params` methods. Given their specificity to individual models, `score` and `fit` are abstract in `BaseRegressor`. Conversely, as `get_params` and `set_params` are consistent across model classes, they're inherited from `Base`. This approach typifies our general implementation strategy. However, it's important to note that while these are sound guidelines, exceptions exist based on various factors like future extensibility, clarity, and maintainability.
 
 
 ## Contributor Guidelines
@@ -98,5 +98,5 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 
 - **Must** inherit the `BaseRegressor` abstract superclass.
 - **Must** realize the abstract methods: `fit`, `predict`, `score`, and `simulate`.
-- **Should not** overwrite the `get_params` and `set_params` methods, inherited from `_Base`.
+- **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods such as `_convert_to_jnp_ndarray` for added utility.

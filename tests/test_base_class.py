@@ -6,7 +6,7 @@ import pytest
 from numpy.typing import NDArray
 
 import neurostatslib as nsl
-from neurostatslib.base_class import BaseRegressor, _Base
+from neurostatslib.base_class import BaseRegressor, Base
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ class MockBaseRegressor_Invalid(BaseRegressor):
         pass
 
 
-class BadEstimator(_Base):
+class BadEstimator(Base):
     def __init__(self, param1, *args):
         super().__init__()
         pass

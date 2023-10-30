@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
-from .base_class import _Base
+from .base_class import Base
 from .proximal_operator import prox_group_lasso
 
 __all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
@@ -23,7 +23,7 @@ def __dir__() -> list[str]:
     return __all__
 
 
-class Solver(_Base, abc.ABC):
+class Solver(Base, abc.ABC):
     """
     Abstract base class for optimization solvers.
 
