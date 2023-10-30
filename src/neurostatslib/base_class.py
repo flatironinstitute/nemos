@@ -29,11 +29,6 @@ class Base:
     **kwargs : dict
         Arbitrary keyword arguments.
 
-    Attributes
-    ----------
-    _kwargs_keys : list
-        List of keyword arguments provided during the initialization.
-
     Notes
     -----
     The class provides helper methods mimicking scikit-learn's get_params and set_params.
