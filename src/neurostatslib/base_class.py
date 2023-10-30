@@ -131,40 +131,8 @@ class Base:
         return self
 
     @staticmethod
-    def select_target_device(device: Literal["cpu", "tpu", "gpu"]) -> xla_client.Device:
-        """Select a device.
-
-        Parameters
-        ----------
-        device
-            A device between "cpu", "gpu" or "tpu". Rolls back to "cpu" if device is not found.
-
-        Returns
-        -------
-            The selected device.
-
-        Raises
-        ------
-            ValueError
-                If the an invalid device name is provided.
-        """
-        if device in ["cpu", "gpu", "tpu"]:
-            if has_local_device(device):
-                target_device = jax.devices(device)[0]
-            else:
-                raise RuntimeError(
-                    f"Unknown backend: '{device}' requested, but no "
-                    f"platforms that are instances of {device} are present."
-                )
-
-        else:
-            raise ValueError(
-                f"Invalid device specification: {device}. Choose `cpu`, `gpu` or `tpu`."
-            )
-        return target_device
-
     def device_put(
-        self, *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
+        *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
     ) -> Union[Any, jnp.ndarray]:
         """Send arrays to device.
 
@@ -183,7 +151,7 @@ class Base:
         :
             The arrays on the desired device.
         """
-        device_obj = self.select_target_device(device)
+        device_obj = jax.devices(device)[0]
         return tuple(
             jax.device_put(arg, device_obj)
             if arg.device_buffer.device() != device_obj

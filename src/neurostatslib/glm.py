@@ -561,7 +561,7 @@ class GLMRecurrent(GLM):
             activity, chunk = data
 
             # Convolve the neural activity with the coupling basis matrix
-            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None, :, :])[
+            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None])[
                 0
             ]
 

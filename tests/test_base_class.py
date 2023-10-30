@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -297,22 +297,9 @@ def test_empty_set(mock_regressor):
     """
     assert mock_regressor.set_params() is mock_regressor
 
-@pytest.mark.parametrize("device_name", [1, "none"])
-def test_target_device_invalid_device_name(device_name, mock_regressor):
-    with pytest.raises(ValueError, match="Invalid device specification"):
-        mock_regressor.select_target_device(device_name)
 
-@pytest.mark.parametrize("device_name", ["cpu", "gpu", "tpu"])
-def test_target_device_availability(device_name, mock_regressor):
-    raise_exception = not nsl.utils.has_local_device(device_name)
-    if raise_exception:
-        with pytest.raises(RuntimeError, match=f"Unknown backend: '{device_name}' requested, but no "):
-            mock_regressor.select_target_device(device_name)
-    else:
-        mock_regressor.select_target_device(device_name)
-
-@pytest.mark.parametrize("device_name", ["cpu", "gpu", "tpu"])
-def test_target_device_put(device_name, mock_regressor):
+@pytest.mark.parametrize("device_name", ["cpu", "gpu", "tpu", "unknown"])
+def test_target_device_put(device_name: Literal["cpu", "gpu", "tpu"], mock_regressor):
     """Test that put works.
 
     Put array to device and checks that the device is matched after put, if device is found.
@@ -321,8 +308,12 @@ def test_target_device_put(device_name, mock_regressor):
     raise_exception = not nsl.utils.has_local_device(device_name)
     x = jnp.array([1])
     if raise_exception:
-        with pytest.raises(RuntimeError, match=f"Unknown backend: '{device_name}' requested, but no "):
-            mock_regressor.device_put(x, device=device_name)
+        if device_name != "tpu":
+            with pytest.raises(RuntimeError, match=f"Unknown backend"):
+                mock_regressor.device_put(x, device=device_name)
+        else:
+            with pytest.raises(RuntimeError, match=f"Backend '{device_name}' failed to initialize: "):
+                mock_regressor.device_put(x, device=device_name)
     else:
         x, = mock_regressor.device_put(x, device=device_name)
         assert x.device().device_kind == device_name
