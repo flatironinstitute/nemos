@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import convert_to_jnp_ndarray, check_invalid_entry, is_list_like
+from .utils import check_invalid_entry, convert_to_jnp_ndarray, is_list_like
 
 
 class Base:

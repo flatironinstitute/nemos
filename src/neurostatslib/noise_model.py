@@ -43,9 +43,8 @@ class NoiseModel(Base, abc.ABC):
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
         super().__init__(**kwargs)
-        self._check_inverse_link_function(inverse_link_function)
-        self._inverse_link_function = inverse_link_function
-        self._scale = 1.0
+        self.inverse_link_function = inverse_link_function
+        self.scale = 1.0
 
     @property
     def inverse_link_function(self):
@@ -97,7 +96,7 @@ class NoiseModel(Base, abc.ABC):
             raise TypeError("The `inverse_link_function` function must be a Callable!")
 
         # check if the function returns a jax array for a 1D array
-        array_out = inverse_link_function(jnp.array([1., 2., 3.]))
+        array_out = inverse_link_function(jnp.array([1.0, 2.0, 3.0]))
         if not isinstance(array_out, jnp.ndarray):
             raise TypeError(
                 "The `inverse_link_function` must return a jax.numpy.ndarray!"
@@ -185,8 +184,26 @@ class NoiseModel(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def estimate_scale(self, predicted_rate: jnp.ndarray) -> float:
-        """Estimate the scale parameter for the model."""
+    def estimate_scale(self, predicted_rate: jnp.ndarray) -> None:
+        r"""Estimate the scale parameter for the model.
+
+        This method estimates the scale parameter, often denoted as $\phi$, which determines the dispersion
+        of an exponential family distribution. The probability density function (pdf) for such a distribution
+        is generally expressed as
+        $f(x; \theta, \phi) \propto \exp \left(a(\phi)\left(  y\theta - \mathcal{k}(\theta) \right)\right)$.
+
+        The relationship between variance and the scale parameter is given by:
+        $$
+        \text{var}(Y) = \frac{V(\mu)}{a(\phi)}.
+        $$
+
+        The scale parameter, $\phi$, is necessary for capturing the variance of the data accurately.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate values.
+        """
         pass
 
     def pseudo_r2(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
@@ -351,6 +368,22 @@ class PoissonNoiseModel(NoiseModel):
         )
         return resid_dev
 
-    def estimate_scale(self, predicted_rate: jnp.ndarray):
-        """Assign 1 to the scale parameter of the Poisson model."""
+    def estimate_scale(self, predicted_rate: jnp.ndarray) -> None:
+        r"""
+        Assign 1 to the scale parameter of the Poisson model.
+
+        For the Poisson exponential family distribution, the scale parameter $\phi$ is always 1.
+        This property is consistent with the fact that the variance equals the mean in a Poisson distribution.
+        As given in the general exponential family expression:
+        $$
+        \text{var}(Y) = \frac{V(\mu)}{a(\phi)},
+        $$
+        for the Poisson family, it simplifies to $\text{var}(Y) = \mu$ since $a(\phi) = 1$ and $V(\mu) = \mu$.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate values. This is not used in the Poisson model for estimating scale,
+            but is retained for compatibility with the abstract method signature.
+        """
         self.scale = 1.0
