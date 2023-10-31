@@ -388,7 +388,7 @@ class GLM(BaseRegressor):
         self._check_is_fit()
         Ws, bs = self.basis_coeff_, self.baseline_link_fr_
         (feedforward_input,) = self._preprocess_simulate(
-            feedforward_input, params_f=(Ws, bs)
+            feedforward_input, params_feedforward=(Ws, bs)
         )
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
@@ -530,7 +530,7 @@ class GLMRecurrent(GLM):
         bs = self.baseline_link_fr_
 
         feedforward_input, init_y = self._preprocess_simulate(
-            feedforward_input, params_f=(Wf, bs), init_y=init_y, params_r=(Wr, bs)
+            feedforward_input, params_feedforward=(Wf, bs), init_y=init_y, params_recurrent=(Wr, bs)
         )
 
         self._check_input_and_params_consistency(

@@ -434,9 +434,9 @@ class BaseRegressor(Base, abc.ABC):
     def _preprocess_simulate(
         self,
         feedforward_input: Union[NDArray, jnp.ndarray],
-        params_f: Tuple[jnp.ndarray, jnp.ndarray],
+        params_feedforward: Tuple[jnp.ndarray, jnp.ndarray],
         init_y: Optional[Union[NDArray, jnp.ndarray]] = None,
-        params_r: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        params_recurrent: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ) -> Tuple[jnp.ndarray, ...]:
         """
         Preprocess the input data and parameters for simulation.
@@ -449,12 +449,12 @@ class BaseRegressor(Base, abc.ABC):
         ----------
         feedforward_input :
             Input data for the feedforward process. Expected shape: (n_timesteps, n_neurons, n_basis_input).
-        params_f :
+        params_feedforward :
             Parameters corresponding to the feedforward input. Expected shape: (n_neurons, n_basis_input).
         init_y :
             Initial values for the feedback process. If provided, its dimensionality and consistency
             with params_r will be checked. Expected shape if provided: (window_size, n_neurons).
-        params_r :
+        params_recurrent :
             Parameters corresponding to the feedback input (init_y). Required if init_y is provided.
             Expected shape if provided: (window_size, n_basis_coupling)
 
@@ -471,22 +471,22 @@ class BaseRegressor(Base, abc.ABC):
         """
         (feedforward_input,) = convert_to_jnp_ndarray(feedforward_input)
         self._check_input_dimensionality(X=feedforward_input)
-        self._check_input_and_params_consistency(params_f, X=feedforward_input)
+        self._check_input_and_params_consistency(params_feedforward, X=feedforward_input)
 
         check_invalid_entry(feedforward_input)
 
         # Ensure that both or neither of `init_y` and `params_r` are provided
-        if (init_y is None) != (params_r is None):
+        if (init_y is None) != (params_recurrent is None):
             raise ValueError(
                 "Both `init_y` and `params_r` should be provided, or neither should be provided."
             )
         # If both are provided, perform checks and conversions
-        elif init_y is not None and params_r is not None:
+        elif init_y is not None and params_recurrent is not None:
             init_y = convert_to_jnp_ndarray(init_y)[
                 0
             ]  # Assume this method returns a tuple
             self._check_input_dimensionality(y=init_y)
-            self._check_input_and_params_consistency(params_r, y=init_y)
+            self._check_input_and_params_consistency(params_recurrent, y=init_y)
             return feedforward_input, init_y
 
         return (feedforward_input,)
