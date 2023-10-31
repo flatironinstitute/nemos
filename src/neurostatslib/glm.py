@@ -561,11 +561,9 @@ class GLMRecurrent(GLM):
             activity, chunk = data
 
             # Convolve the neural activity with the coupling basis matrix
-            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None])[
-                0
-            ]
+            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None])[0]
 
-            # Extract the corresponding slice of the feedforward input for the current time step
+            # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
                 feed_forward_contrib,
                 (chunk, 0),

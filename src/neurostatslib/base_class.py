@@ -272,8 +272,9 @@ class BaseRegressor(Base, abc.ABC):
             raise ValueError("Params needs to be array-like of length two.")
 
         try:
-            params = jnp.asarray(params[0], dtype=data_type), jnp.asarray(
-                params[1], dtype=data_type
+            params = (
+                jnp.asarray(params[0], dtype=data_type),
+                jnp.asarray(params[1], dtype=data_type),
             )
         except (ValueError, TypeError):
             raise TypeError(
