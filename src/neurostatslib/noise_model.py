@@ -124,9 +124,8 @@ class NoiseModel(Base, abc.ABC):
 
         Returns
         -------
-        jnp.ndarray
-            Random numbers generated from the desired distribution based on the `predicted_rate` scale parameter
-            if needed.
+        :
+            Random numbers generated from the noise model with `predicted_rate`.
         """
         pass
 
