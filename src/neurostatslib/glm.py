@@ -392,7 +392,7 @@ class GLM(BaseRegressor):
         )
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
-            self.noise_model.emission_probability(
+            self.noise_model.sample_generator(
                 key=random_key, predicted_rate=predicted_rate
             ),
             predicted_rate,
@@ -586,7 +586,7 @@ class GLMRecurrent(GLM):
             )
 
             # Simulate activity based on the predicted firing rate
-            new_act = self.noise_model.emission_probability(key, firing_rate)
+            new_act = self.noise_model.sample_generator(key, firing_rate)
 
             # Prepare the spikes for the next iteration (keeping the most recent spikes)
             concat_act = jnp.row_stack((activity[1:], new_act)), chunk + 1

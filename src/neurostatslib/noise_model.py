@@ -141,11 +141,11 @@ class NoiseModel(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def emission_probability(
+    def sample_generator(
         self, key: KeyArray, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
         """
-        Calculate the emission of the noise model.
+        Sample from the estimated distribution.
 
         This method generates random numbers from the desired distribution based on the given
         `predicted_rate`.
@@ -304,11 +304,11 @@ class PoissonNoiseModel(NoiseModel):
         # see above for derivation of this.
         return jnp.mean(predicted_firing_rates - x)
 
-    def emission_probability(
+    def sample_generator(
         self, key: KeyArray, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
         """
-        Calculate the emission probability using a Poisson distribution.
+        Sample from the Poisson distribution.
 
         This method generates random numbers from a Poisson distribution based on the given
         `predicted_rate`.

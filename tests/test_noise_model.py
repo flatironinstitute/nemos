@@ -118,6 +118,6 @@ class TestPoissonNoiseModel:
         """
         _, _, model, _, _ = poissonGLM_model_instantiation
         key_array = jax.random.PRNGKey(123)
-        counts = model.noise_model.emission_probability(key_array, np.arange(1, 11))
+        counts = model.noise_model.sample_generator(key_array, np.arange(1, 11))
         if not jnp.all(counts == jax.random.poisson(key_array, np.arange(1, 11))):
             raise ValueError("The emission probability should output the results of a call to jax.random.poisson.")
