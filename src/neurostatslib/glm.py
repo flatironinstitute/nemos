@@ -565,7 +565,7 @@ class GLMRecurrent(GLM):
                 0
             ]
 
-            # Extract the corresponding slice of the feedforward input for the current time step
+            # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
                 feed_forward_contrib,
                 (chunk, 0),
