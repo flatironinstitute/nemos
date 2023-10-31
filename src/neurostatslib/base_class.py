@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import convert_to_jnp_ndarray, is_list_like
+from .utils import convert_to_jnp_ndarray, has_invalid_entry, is_list_like
 
 
 class Base:
@@ -254,22 +254,6 @@ class BaseRegressor(Base, abc.ABC):
         pass
 
     @staticmethod
-    def _has_invalid_entry(array: jnp.ndarray) -> bool:
-        """Check if the array has nans or infs.
-
-        Parameters
-        ----------
-        array:
-            The array to be checked.
-
-        Returns
-        -------
-            True if a nan or an inf is present, False otherwise
-
-        """
-        return (jnp.isinf(array) | jnp.isnan(array)).any()
-
-    @staticmethod
     def _check_and_convert_params(
         params: Tuple[ArrayLike, ArrayLike], data_type: Optional[jnp.dtype] = None
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -432,9 +416,9 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
-        if self._has_invalid_entry(X):
+        if has_invalid_entry(X):
             raise ValueError("Input X contains a NaNs or Infs!")
-        if self._has_invalid_entry(y):
+        if has_invalid_entry(y):
             raise ValueError("Input y contains a NaNs or Infs!")
 
         _, n_neurons = y.shape
@@ -499,7 +483,7 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(params_f, X=feedforward_input)
 
-        if self._has_invalid_entry(feedforward_input):
+        if has_invalid_entry(feedforward_input):
             raise ValueError("feedforward_input contains a NaNs or Infs!")
 
         # Ensure that both or neither of `init_y` and `params_r` are provided

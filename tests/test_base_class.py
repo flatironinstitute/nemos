@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 import neurostatslib as nsl
 from neurostatslib.base_class import BaseRegressor, Base
-from neurostatslib.utils import convert_to_jnp_ndarray
+from neurostatslib.utils import convert_to_jnp_ndarray, has_invalid_entry
 
 
 @pytest.fixture
@@ -124,8 +124,8 @@ def test_has_invalid_entry():
     """Test validation of data arrays."""
     valid_data = jnp.array([1, 2, 3])
     invalid_data = jnp.array([1, 2, jnp.nan])
-    assert not BaseRegressor._has_invalid_entry(valid_data)
-    assert BaseRegressor._has_invalid_entry(invalid_data)
+    assert not has_invalid_entry(valid_data)
+    assert has_invalid_entry(invalid_data)
 
 
 # To ensure abstract methods aren't callable

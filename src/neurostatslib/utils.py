@@ -436,3 +436,19 @@ def convert_to_jnp_ndarray(
         Converted arrays.
     """
     return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
+
+
+def has_invalid_entry(array: jnp.ndarray) -> jnp.ndarray:
+    """Check if the array has nans or infs.
+
+    Parameters
+    ----------
+    array:
+        The array to be checked.
+
+    Returns
+    -------
+        True if a nan or an inf is present, False otherwise
+
+    """
+    return jnp.any(jnp.isinf(array) | jnp.isnan(array))
