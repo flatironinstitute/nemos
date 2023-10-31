@@ -131,7 +131,7 @@ class NoiseModel(Base, abc.ABC):
 
     @abc.abstractmethod
     def residual_deviance(self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray):
-        r"""Compute the residual deviance for a Poisson model.
+        r"""Compute the residual deviance for the noise model.
 
         Parameters
         ----------
