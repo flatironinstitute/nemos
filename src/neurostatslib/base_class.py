@@ -33,6 +33,7 @@ class Base:
     The class provides helper methods mimicking scikit-learn's get_params and set_params.
     Additionally, it has methods for selecting target devices and sending arrays to them.
     """
+
     def get_params(self, deep=True):
         """
         From scikit-learn, get parameters by inspecting init.
@@ -471,7 +472,9 @@ class BaseRegressor(Base, abc.ABC):
         """
         (feedforward_input,) = convert_to_jnp_ndarray(feedforward_input)
         self._check_input_dimensionality(X=feedforward_input)
-        self._check_input_and_params_consistency(params_feedforward, X=feedforward_input)
+        self._check_input_and_params_consistency(
+            params_feedforward, X=feedforward_input
+        )
 
         check_invalid_entry(feedforward_input)
 

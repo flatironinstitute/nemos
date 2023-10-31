@@ -39,7 +39,7 @@ class NoiseModel(Base, abc.ABC):
     noise model using the Poisson distribution.
     """
 
-    FLOAT_EPS = jnp.finfo(jnp.float32).eps
+    FLOAT_EPS = jnp.finfo(float).eps
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
         super().__init__(**kwargs)
@@ -71,17 +71,53 @@ class NoiseModel(Base, abc.ABC):
         self._scale = value
 
     @staticmethod
-    def _check_inverse_link_function(inverse_link_function):
+    def _check_inverse_link_function(inverse_link_function: Callable):
+        """
+        Check if the provided inverse_link_function is usable.
+
+        This function verifies if the inverse link function:
+        1. Is callable
+        2. Returns a jax.numpy.ndarray
+        3. Is differentiable (via jax)
+
+        Parameters
+        ----------
+        inverse_link_function :
+            The function to be checked.
+
+        Raises
+        ------
+        TypeError
+            If the function is not callable, does not return a jax.numpy.ndarray,
+            or is not differentiable.
+        """
+
+        # check that it's callable
         if not callable(inverse_link_function):
             raise TypeError("The `inverse_link_function` function must be a Callable!")
-        # check that the callable is in the jax namespace
-        if not hasattr(inverse_link_function, "__module__"):
+
+        # check if the function returns a jax array for a 1D array
+        array_out = inverse_link_function(jnp.array([1, 2, 3]))
+        if not isinstance(array_out, jnp.ndarray):
             raise TypeError(
-                "The `inverse_link_function` must be from the `jax` namespace!"
+                "The `inverse_link_function` must return a jax.numpy.ndarray!"
             )
-        elif not getattr(inverse_link_function, "__module__").startswith("jax"):
+
+        # Optionally: Check for scalar input
+        scalar_out = inverse_link_function(1.0)
+        if not isinstance(scalar_out, (jnp.ndarray, float, int)):
             raise TypeError(
-                "The `inverse_link_function` must be from the `jax` namespace!"
+                "The `inverse_link_function` must handle scalar inputs correctly and return a scalar or a "
+                "jax.numpy.ndarray!"
+            )
+
+        # check for autodiff
+        try:
+            gradient_fn = jax.grad(inverse_link_function)
+            gradient_fn(jnp.array([1, 2, 3]))
+        except Exception as e:
+            raise TypeError(
+                f"The `inverse_link_function` function cannot be differentiated. Error: {e}"
             )
 
     @abc.abstractmethod
@@ -101,7 +137,7 @@ class NoiseModel(Base, abc.ABC):
         Returns
         -------
         :
-            The Poisson negative log-likehood. Shape (1,).
+            The negative log-likehood. Shape (1,).
         """
         pass
 

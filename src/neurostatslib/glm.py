@@ -530,7 +530,10 @@ class GLMRecurrent(GLM):
         bs = self.baseline_link_fr_
 
         feedforward_input, init_y = self._preprocess_simulate(
-            feedforward_input, params_feedforward=(Wf, bs), init_y=init_y, params_recurrent=(Wr, bs)
+            feedforward_input,
+            params_feedforward=(Wf, bs),
+            init_y=init_y,
+            params_recurrent=(Wr, bs),
         )
 
         self._check_input_and_params_consistency(
