@@ -482,9 +482,7 @@ class BaseRegressor(Base, abc.ABC):
             )
         # If both are provided, perform checks and conversions
         elif init_y is not None and params_recurrent is not None:
-            init_y = convert_to_jnp_ndarray(init_y)[
-                0
-            ]  # Assume this method returns a tuple
+            init_y = convert_to_jnp_ndarray(init_y)[0]
             self._check_input_dimensionality(y=init_y)
             self._check_input_and_params_consistency(params_recurrent, y=init_y)
             return feedforward_input, init_y
