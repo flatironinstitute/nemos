@@ -312,7 +312,7 @@ class BaseRegressor(Base, abc.ABC):
         Raises
         ------
             ValueError
-                - if the number of neurons is consistent across the model parameters (`params`) and
+                - if the number of neurons is inconsistent across the model parameters (`params`) and
                 any additional inputs (`X` or `y` when provided).
                 - if the number of features is inconsistent between params[1] and X (when provided).
 
