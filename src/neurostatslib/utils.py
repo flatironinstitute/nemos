@@ -438,7 +438,7 @@ def convert_to_jnp_ndarray(
     return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
 
 
-def has_invalid_entry(array: jnp.ndarray) -> jnp.ndarray:
+def check_invalid_entry(array: jnp.ndarray) -> None:
     """Check if the array has nans or infs.
 
     Parameters
@@ -446,9 +446,12 @@ def has_invalid_entry(array: jnp.ndarray) -> jnp.ndarray:
     array:
         The array to be checked.
 
-    Returns
-    -------
-        True if a nan or an inf is present, False otherwise
+    Raises
+    ------
+        - ValueError: If any entry of `array` is either NaN or inf.
 
     """
-    return jnp.any(jnp.isinf(array) | jnp.isnan(array))
+    if jnp.any(jnp.isinf(array)):
+        raise ValueError("Input array contains Infs!")
+    elif jnp.any(jnp.isnan(array)):
+        raise ValueError("Input array contains NaNs!")

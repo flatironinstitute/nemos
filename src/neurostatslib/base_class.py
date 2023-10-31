@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import convert_to_jnp_ndarray, has_invalid_entry, is_list_like
+from .utils import convert_to_jnp_ndarray, check_invalid_entry, is_list_like
 
 
 class Base:
@@ -408,10 +408,8 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
-        if has_invalid_entry(X):
-            raise ValueError("Input X contains a NaNs or Infs!")
-        if has_invalid_entry(y):
-            raise ValueError("Input y contains a NaNs or Infs!")
+        check_invalid_entry(X)
+        check_invalid_entry(y)
 
         _, n_neurons = y.shape
         n_features = X.shape[2]
@@ -475,8 +473,7 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(params_f, X=feedforward_input)
 
-        if has_invalid_entry(feedforward_input):
-            raise ValueError("feedforward_input contains a NaNs or Infs!")
+        check_invalid_entry(feedforward_input)
 
         # Ensure that both or neither of `init_y` and `params_r` are provided
         if (init_y is None) != (params_r is None):

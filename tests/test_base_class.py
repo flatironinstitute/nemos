@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 import neurostatslib as nsl
 from neurostatslib.base_class import Base, BaseRegressor
-from neurostatslib.utils import convert_to_jnp_ndarray, has_invalid_entry
+from neurostatslib.utils import check_invalid_entry, convert_to_jnp_ndarray
 
 
 @pytest.fixture
@@ -126,12 +126,16 @@ def test_convert_to_jnp_ndarray():
     assert jnp.all(jnp_data == jnp.array(data, dtype=jnp.float32))
 
 
-def test_has_invalid_entry():
+def test_check_invalid_entry():
     """Test validation of data arrays."""
     valid_data = jnp.array([1, 2, 3])
-    invalid_data = jnp.array([1, 2, jnp.nan])
-    assert not has_invalid_entry(valid_data)
-    assert has_invalid_entry(invalid_data)
+    invalid_data_nan = jnp.array([1, 2, jnp.nan])
+    invalid_data_inf = jnp.array([1, jnp.inf, 2])
+    check_invalid_entry(valid_data)
+    with pytest.raises(ValueError, match="Input array contains NaN"):
+        check_invalid_entry(invalid_data_nan)
+    with pytest.raises(ValueError, match="Input array contains Inf"):
+        check_invalid_entry(invalid_data_inf)
 
 
 # To ensure abstract methods aren't callable
@@ -183,7 +187,7 @@ def test_preprocess_fit_with_nan_in_X(mock_regressor):
     """Test behavior with NaN values in data."""
     X = jnp.array([[[1, 2], [jnp.nan, 4]]])
     y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input X contains a NaNs or Infs"):
+    with pytest.raises(ValueError, match="Input array contains"):
         mock_regressor.preprocess_fit(X, y)
 
 
@@ -191,7 +195,7 @@ def test_preprocess_fit_with_inf_in_X(mock_regressor):
     """Test behavior with inf values in data."""
     X = jnp.array([[[1, 2], [jnp.inf, 4]]])
     y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input X contains a NaNs or Infs"):
+    with pytest.raises(ValueError, match="Input array contains"):
         mock_regressor.preprocess_fit(X, y)
 
 
@@ -199,7 +203,7 @@ def test_preprocess_fit_with_nan_in_y(mock_regressor):
     """Test behavior with NaN values in data."""
     X = jnp.array([[[1, 2], [2, 4]]])
     y = jnp.array([[1, jnp.nan]])
-    with pytest.raises(ValueError, match="Input y contains a NaNs or Infs"):
+    with pytest.raises(ValueError, match="Input array contains"):
         mock_regressor.preprocess_fit(X, y)
 
 
@@ -207,7 +211,7 @@ def test_preprocess_fit_with_inf_in_y(mock_regressor):
     """Test behavior with inf values in data."""
     X = jnp.array([[[1, 2], [2, 4]]])
     y = jnp.array([[1, jnp.inf]])
-    with pytest.raises(ValueError, match="Input y contains a NaNs or Infs"):
+    with pytest.raises(ValueError, match="Input array contains"):
         mock_regressor.preprocess_fit(X, y)
 
 
@@ -267,7 +271,7 @@ def test_preprocess_simulate_with_nan(mock_regressor):
     """Test behavior with NaN values in feedforward_input."""
     feedforward_input = jnp.array([[[jnp.nan]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="feedforward_input contains a NaNs or Infs!"):
+    with pytest.raises(ValueError, match="Input array contains"):
         mock_regressor.preprocess_simulate(feedforward_input, params_f)
 
 
@@ -275,7 +279,7 @@ def test_preprocess_simulate_with_inf(mock_regressor):
     """Test behavior with infinite values in feedforward_input."""
     feedforward_input = jnp.array([[[jnp.inf]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="feedforward_input contains a NaNs or Infs!"):
+    with pytest.raises(ValueError, match="Input array contains"):
         mock_regressor.preprocess_simulate(feedforward_input, params_f)
 
 
