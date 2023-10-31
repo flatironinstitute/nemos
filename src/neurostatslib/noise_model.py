@@ -97,7 +97,7 @@ class NoiseModel(Base, abc.ABC):
             raise TypeError("The `inverse_link_function` function must be a Callable!")
 
         # check if the function returns a jax array for a 1D array
-        array_out = inverse_link_function(jnp.array([1, 2, 3]))
+        array_out = inverse_link_function(jnp.array([1., 2., 3.]))
         if not isinstance(array_out, jnp.ndarray):
             raise TypeError(
                 "The `inverse_link_function` must return a jax.numpy.ndarray!"
@@ -114,7 +114,7 @@ class NoiseModel(Base, abc.ABC):
         # check for autodiff
         try:
             gradient_fn = jax.grad(inverse_link_function)
-            gradient_fn(jnp.array([1, 2, 3]))
+            gradient_fn(1.0)
         except Exception as e:
             raise TypeError(
                 f"The `inverse_link_function` function cannot be differentiated. Error: {e}"

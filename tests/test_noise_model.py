@@ -21,13 +21,12 @@ class TestPoissonNoiseModel:
         else:
             self.cls(link_function)
 
-    @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x:x, sm.families.links.log])
+    @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x:x, sm.families.links.log()])
     def test_initialization_link_is_jax(self, link_function):
         """Check that the noise model initializes when a callable is passed."""
-        raise_exception = (not hasattr(link_function, "__module__")) or \
-                          (not getattr(link_function, "__module__").startswith("jax"))
+        raise_exception = isinstance(link_function, np.ufunc) | isinstance(link_function, sm.families.links.Link)
         if raise_exception:
-            with pytest.raises(TypeError, match="The `inverse_link_function` must be from the `jax` namespace"):
+            with pytest.raises(TypeError, match="The `inverse_link_function` must return a jax.numpy.ndarray"):
                 self.cls(link_function)
         else:
             self.cls(link_function)
@@ -43,14 +42,27 @@ class TestPoissonNoiseModel:
         else:
             noise_model.set_params(inverse_link_function=link_function)
 
-    @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log])
+    @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log()])
     def test_initialization_link_is_jax_set_params(self, link_function):
         """Check that the noise model initializes when a callable is passed."""
-        raise_exception = (not hasattr(link_function, "__module__")) or \
-                          (not getattr(link_function, "__module__").startswith("jax"))
+        raise_exception = isinstance(link_function, np.ufunc) | isinstance(link_function, sm.families.links.Link)
         noise_model = self.cls()
         if raise_exception:
-            with pytest.raises(TypeError, match="The `inverse_link_function` must be from the `jax` namespace"):
+            with pytest.raises(TypeError, match="The `inverse_link_function` must return a jax.numpy.ndarray!"):
+                noise_model.set_params(inverse_link_function=link_function)
+        else:
+            noise_model.set_params(inverse_link_function=link_function)
+
+    @pytest.mark.parametrize("link_function", [
+        jnp.exp,
+        lambda x: jnp.exp(x) if isinstance(x, jnp.ndarray) else "not a number"
+    ])
+    def test_initialization_link_returns_scalar(self, link_function):
+        """Check that the noise model initializes when a callable is passed."""
+        raise_exception = not isinstance(link_function(1.), (jnp.ndarray, float))
+        noise_model = self.cls()
+        if raise_exception:
+            with pytest.raises(TypeError, match="The `inverse_link_function` must handle scalar inputs correctly"):
                 noise_model.set_params(inverse_link_function=link_function)
         else:
             noise_model.set_params(inverse_link_function=link_function)
