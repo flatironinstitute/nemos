@@ -33,12 +33,6 @@ class Base:
     The class provides helper methods mimicking scikit-learn's get_params and set_params.
     Additionally, it has methods for selecting target devices and sending arrays to them.
     """
-
-    def __init__(self, **kwargs):
-        self._kwargs_keys = list(kwargs.keys())
-        for key in kwargs:
-            setattr(self, key, kwargs[key])
-
     def get_params(self, deep=True):
         """
         From scikit-learn, get parameters by inspecting init.
@@ -60,9 +54,6 @@ class Base:
                 deep_items = value.get_params().items()
                 out.update((key + "__" + k, val) for k, val in deep_items)
             out[key] = value
-        # add kwargs
-        for key in self._kwargs_keys:
-            out[key] = getattr(self, key)
         return out
 
     def set_params(self, **params: Any):
