@@ -359,7 +359,7 @@ class BaseRegressor(Base, abc.ABC):
                 f"y has {y.shape[0]} instead!"
             )
 
-    def preprocess_fit(
+    def _preprocess_fit(
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
@@ -431,7 +431,7 @@ class BaseRegressor(Base, abc.ABC):
 
         return X, y, init_params
 
-    def preprocess_simulate(
+    def _preprocess_simulate(
         self,
         feedforward_input: Union[NDArray, jnp.ndarray],
         params_f: Tuple[jnp.ndarray, jnp.ndarray],

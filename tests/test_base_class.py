@@ -153,7 +153,7 @@ def test_invalid_concrete_class():
 
 def test_preprocess_fit(mock_data, mock_regressor):
     X, y = mock_data
-    X_out, y_out, params_out = mock_regressor.preprocess_fit(X, y)
+    X_out, y_out, params_out = mock_regressor._preprocess_fit(X, y)
     assert X_out.shape == X.shape
     assert y_out.shape == y.shape
     assert params_out[0].shape == (2, 2)  # Mock data shapes
@@ -164,7 +164,7 @@ def test_preprocess_fit_empty_data(mock_regressor):
     """Test behavior with empty data input."""
     X, y = jnp.array([[]]), jnp.array([])
     with pytest.raises(ValueError):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_mismatched_shapes(mock_regressor):
@@ -172,7 +172,7 @@ def test_preprocess_fit_mismatched_shapes(mock_regressor):
     X = jnp.array([[1, 2], [3, 4]])
     y = jnp.array([1, 2, 3])
     with pytest.raises(ValueError):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_invalid_datatypes(mock_regressor):
@@ -180,7 +180,7 @@ def test_preprocess_fit_invalid_datatypes(mock_regressor):
     X = "invalid_data_type"
     y = "invalid_data_type"
     with pytest.raises(TypeError):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_nan_in_X(mock_regressor):
@@ -188,7 +188,7 @@ def test_preprocess_fit_with_nan_in_X(mock_regressor):
     X = jnp.array([[[1, 2], [jnp.nan, 4]]])
     y = jnp.array([[1, 2]])
     with pytest.raises(ValueError, match="Input array contains"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_inf_in_X(mock_regressor):
@@ -196,7 +196,7 @@ def test_preprocess_fit_with_inf_in_X(mock_regressor):
     X = jnp.array([[[1, 2], [jnp.inf, 4]]])
     y = jnp.array([[1, 2]])
     with pytest.raises(ValueError, match="Input array contains"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_nan_in_y(mock_regressor):
@@ -204,7 +204,7 @@ def test_preprocess_fit_with_nan_in_y(mock_regressor):
     X = jnp.array([[[1, 2], [2, 4]]])
     y = jnp.array([[1, jnp.nan]])
     with pytest.raises(ValueError, match="Input array contains"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_inf_in_y(mock_regressor):
@@ -212,7 +212,7 @@ def test_preprocess_fit_with_inf_in_y(mock_regressor):
     X = jnp.array([[[1, 2], [2, 4]]])
     y = jnp.array([[1, jnp.inf]])
     with pytest.raises(ValueError, match="Input array contains"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_higher_dimensional_data_X(mock_regressor):
@@ -220,7 +220,7 @@ def test_preprocess_fit_higher_dimensional_data_X(mock_regressor):
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([[1, 2]])
     with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_higher_dimensional_data_y(mock_regressor):
@@ -228,7 +228,7 @@ def test_preprocess_fit_higher_dimensional_data_y(mock_regressor):
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([[[1, 2]]])
     with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_lower_dimensional_data_X(mock_regressor):
@@ -236,7 +236,7 @@ def test_preprocess_fit_lower_dimensional_data_X(mock_regressor):
     X = jnp.array([[1, 2], [3, 4]])
     y = jnp.array([[1, 2]])
     with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_lower_dimensional_data_y(mock_regressor):
@@ -244,7 +244,7 @@ def test_preprocess_fit_lower_dimensional_data_y(mock_regressor):
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([1, 2])
     with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_regressor.preprocess_fit(X, y)
+        mock_regressor._preprocess_fit(X, y)
 
 
 # Preprocess Simulate Tests
@@ -253,7 +253,7 @@ def test_preprocess_simulate_empty_data(mock_regressor):
     feedforward_input = jnp.array([[[]]])
     params_f = (jnp.array([[]]), jnp.array([]))
     with pytest.raises(ValueError, match="Model parameters have inconsistent shapes."):
-        mock_regressor.preprocess_simulate(feedforward_input, params_f)
+        mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
 def test_preprocess_simulate_invalid_datatypes(mock_regressor):
@@ -264,7 +264,7 @@ def test_preprocess_simulate_invalid_datatypes(mock_regressor):
         TypeError,
         match="Value 'invalid_data_type' with dtype .+ is not a valid JAX array type.",
     ):
-        mock_regressor.preprocess_simulate(feedforward_input, params_f)
+        mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
 def test_preprocess_simulate_with_nan(mock_regressor):
@@ -272,7 +272,7 @@ def test_preprocess_simulate_with_nan(mock_regressor):
     feedforward_input = jnp.array([[[jnp.nan]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
     with pytest.raises(ValueError, match="Input array contains"):
-        mock_regressor.preprocess_simulate(feedforward_input, params_f)
+        mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
 def test_preprocess_simulate_with_inf(mock_regressor):
@@ -280,7 +280,7 @@ def test_preprocess_simulate_with_inf(mock_regressor):
     feedforward_input = jnp.array([[[jnp.inf]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
     with pytest.raises(ValueError, match="Input array contains"):
-        mock_regressor.preprocess_simulate(feedforward_input, params_f)
+        mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
 def test_preprocess_simulate_higher_dimensional_data(mock_regressor):
@@ -288,7 +288,7 @@ def test_preprocess_simulate_higher_dimensional_data(mock_regressor):
     feedforward_input = jnp.array([[[[1]]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
     with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_regressor.preprocess_simulate(feedforward_input, params_f)
+        mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
 def test_preprocess_simulate_invalid_init_y(mock_regressor):
@@ -298,7 +298,7 @@ def test_preprocess_simulate_invalid_init_y(mock_regressor):
     init_y = jnp.array([[[1]]])
     params_r = (jnp.array([[1]]),)
     with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_regressor.preprocess_simulate(
+        mock_regressor._preprocess_simulate(
             feedforward_input, params_f, init_y, params_r
         )
 
@@ -307,7 +307,7 @@ def test_preprocess_simulate_feedforward(mock_regressor):
     """Test that the preprocessing works."""
     feedforward_input = jnp.array([[[1]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    (ff,) = mock_regressor.preprocess_simulate(feedforward_input, params_f)
+    (ff,) = mock_regressor._preprocess_simulate(feedforward_input, params_f)
     assert jnp.all(ff == feedforward_input)
 
 

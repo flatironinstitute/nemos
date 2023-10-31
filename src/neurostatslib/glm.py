@@ -321,7 +321,7 @@ class GLM(BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
         """
         # convert to jnp.ndarray & perform checks
-        X, y, init_params = self.preprocess_fit(X, y, init_params)
+        X, y, init_params = self._preprocess_fit(X, y, init_params)
 
         # Run optimization
         runner = self.solver.instantiate_solver(self._score)
@@ -387,7 +387,7 @@ class GLM(BaseRegressor):
         # check if the model is fit
         self._check_is_fit()
         Ws, bs = self.basis_coeff_, self.baseline_link_fr_
-        (feedforward_input,) = self.preprocess_simulate(
+        (feedforward_input,) = self._preprocess_simulate(
             feedforward_input, params_f=(Ws, bs)
         )
         predicted_rate = self._predict((Ws, bs), feedforward_input)
@@ -529,7 +529,7 @@ class GLMRecurrent(GLM):
         Wr = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
         bs = self.baseline_link_fr_
 
-        feedforward_input, init_y = self.preprocess_simulate(
+        feedforward_input, init_y = self._preprocess_simulate(
             feedforward_input, params_f=(Wf, bs), init_y=init_y, params_r=(Wr, bs)
         )
 
