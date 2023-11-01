@@ -204,19 +204,6 @@ class GLM(BaseRegressor):
         This computes the GLM pseudo-$R^2$ or the mean log-likelihood, thus the higher the
         number the better.
 
-        The pseudo-$R^2$ can be computed as follows,
-
-        $$
-        \begin{aligned}
-            R^2_{\text{pseudo}} &= \frac{D_{\text{null}} - D_{\text{model}}}{D_{\text{null}}} \\\
-            &= \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
-            - \log \text{LL}(\bar{\lambda}| y)},
-        \end{aligned}
-        $$
-
-        where LL is the log-likelihood, $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is
-        the deviance for the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the observed activity and the model
-        predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate. See [1].
 
         Parameters
         ----------
@@ -252,12 +239,27 @@ class GLM(BaseRegressor):
         of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
         The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
 
+        The pseudo-$R^2$ can be computed as follows,
+
+        $$
+        \begin{aligned}
+            R^2_{\text{pseudo}} &= \frac{D_{\text{null}} - D_{\text{model}}}{D_{\text{null}}} \\\
+            &= \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
+            - \log \text{LL}(\bar{\lambda}| y)},
+        \end{aligned}
+        $$
+
+        where LL is the log-likelihood, $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is
+        the deviance for the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the observed activity and the model
+        predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate,
+        see references[$^1$](#--references).
+
         Refer to the `nsl.noise_model.NoiseModel` concrete subclasses for the specific likelihood equations.
 
 
         References
         ----------
-        [1] Cohen, Jacob, et al. Applied multiple regression/correlation analysis for the behavioral sciences.
+        1. Cohen, Jacob, et al. Applied multiple regression/correlation analysis for the behavioral sciences.
         Routledge, 2013.
 
         """

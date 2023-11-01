@@ -206,10 +206,13 @@ class NoiseModel(Base, abc.ABC):
         pass
 
     def pseudo_r2(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
-        r"""Pseudo-R^2 calculation for a GLM.
+        r"""Pseudo-$R^2$ calculation for a GLM.
 
-        The Pseudo-R^2 metric gives a sense of how well the model fits the data,
-        relative to a null (or baseline) model.
+        Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002)[$^1$](#--references).
+
+        This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
+        constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
+        it can yield negative values on out-of-sample data, indicating potential overfitting.
 
         Parameters
         ----------
@@ -224,6 +227,31 @@ class NoiseModel(Base, abc.ABC):
             The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
 
+        Notes
+        -----
+        The pseudo-$R^2$ score is calculated as follows,
+
+        $$
+        \begin{aligned}
+        R_{\text{pseudo}}^2 &= \frac{LL(\bm{y}| \bm{\hat{\mu}}) - LL(\bm{y}|  \bm{\mu_0})}{LL(\bm{y}| \bm{y}) -
+        LL(\bm{y}|  \bm{\mu_0})}\\
+        &= \frac{D(\bm{y}; \bm{\mu_0}) - D(\bm{y}; \bm{\hat{\mu}})}{D(\bm{y}; \bm{\mu_0})},
+        \end{aligned}
+        $$
+
+        where $\bm{y}=[y_1,\dots, y_T]$, $\bm{\hat{\mu}} = \left[\hat{\mu}_1, \dots, \hat{\mu}_T \right]$ and,
+        $\bm{\mu_0} = \left[\mu_0, \dots, \mu_0 \right]$ are the counts, the model predicted rate and the average
+        firing rates respectively, $LL$ is the log-likelihood averaged over the samples, and
+        $D(\cdot\; ;\cdot)$ is the deviance averaged over samples,
+        $$
+        D(\bm{y}; \bm{\mu}) = 2 \left( LL(\bm{y}| \bm{y}) - LL(\bm{y}| \bm{\mu}) \right).
+        $$
+
+        References
+        ----------
+        1. Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+        *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
+        3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
         res_dev_t = self.residual_deviance(predicted_rate, y)
         resid_deviance = jnp.sum(res_dev_t**2)
@@ -255,7 +283,7 @@ class PoissonNoiseModel(NoiseModel):
 
     def __init__(self, inverse_link_function=jnp.exp):
         super().__init__(inverse_link_function=inverse_link_function)
-        self._scale = 1
+        self.scale = 1
 
     def negative_log_likelihood(
         self,
@@ -266,6 +294,21 @@ class PoissonNoiseModel(NoiseModel):
 
         This computes the Poisson negative log-likelihood of the predicted rates
         for the observed spike counts up to a constant.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
+        y :
+            The target spikes to compare against. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The Poisson negative log-likehood. Shape (1,).
+
+        Notes
+        -----
 
         The formula for the Poisson mean log-likelihood is the following,
 
@@ -282,27 +325,13 @@ class PoissonNoiseModel(NoiseModel):
 
         Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for explanation.
 
-        Parameters
-        ----------
-        predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
-        y :
-            The target spikes to compare against. Shape (n_time_bins, n_neurons).
-
-        Returns
-        -------
-        :
-            The Poisson negative log-likehood. Shape (1,).
-
-        Notes
-        -----
         The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        predicted_firing_rates = jnp.clip(predicted_rate, a_min=self.FLOAT_EPS)
-        x = y * jnp.log(predicted_firing_rates)
+        predicted_rate = jnp.clip(predicted_rate, a_min=self.FLOAT_EPS)
+        x = y * jnp.log(predicted_rate)
         # see above for derivation of this.
-        return jnp.mean(predicted_firing_rates - x)
+        return jnp.mean(predicted_rate - x)
 
     def sample_generator(
         self, key: KeyArray, predicted_rate: jnp.ndarray
@@ -346,19 +375,19 @@ class PoissonNoiseModel(NoiseModel):
 
         Notes
         -----
-        Deviance is a measure of the goodness of fit of a statistical model.
+        The deviance is a measure of the goodness of fit of a statistical model.
         For a Poisson model, the residual deviance is computed as:
 
         $$
         \begin{aligned}
             D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right)
             - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
-            &= -2 \left( \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right) - \text{LL}\left(y\_{tn} | y\_{tn}\right)\right)
+            &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right)\right)
         \end{aligned}
         $$
+
         where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
         log-likelihood. Lower values of deviance indicate a better fit.
-
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(spike_counts / predicted_rate, self.FLOAT_EPS, jnp.inf)
