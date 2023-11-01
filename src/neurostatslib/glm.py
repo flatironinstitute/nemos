@@ -162,7 +162,7 @@ class GLM(BaseRegressor):
         self._check_input_and_params_consistency((Ws, bs), X=X)
         return self._predict((Ws, bs), X)
 
-    def _score(  # call _negative_log_likelihood
+    def _score(
         self,
         params: Tuple[jnp.ndarray, jnp.ndarray],
         X: jnp.ndarray,
