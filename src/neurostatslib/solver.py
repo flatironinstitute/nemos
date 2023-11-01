@@ -382,7 +382,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         mask: Optional[Union[NDArray, jnp.ndarray]] = None,
     ):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
-        self._mask = mask
+        self.mask = mask
         self.regularizer_strength = regularizer_strength
 
     @property
