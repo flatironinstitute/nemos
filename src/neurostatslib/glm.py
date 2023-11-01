@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from . import noise_model as nsm
+from . import observation_models as nsm
 from . import solver as slv
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
@@ -17,49 +17,49 @@ class GLM(BaseRegressor):
     Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
-    (like convolved currents or light intensities) and a choice of noise model. It is suitable for scenarios where
+    (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
 
     Parameters
     ----------
-    noise_model : NoiseModel
-        Noise model to use. The model describes the noise distribution of the neural activity.
-        Default is Poisson noise model.
-    solver : Solver
+    observation_model :
+        Observation model to use. The model describes the distribution of the neural activity.
+        Default is the Poisson model.
+    solver :
         Solver to use for model optimization. Defines the optimization algorithm and related parameters.
         Default is Ridge regression with gradient descent.
 
     Attributes
     ----------
-    noise_model : NoiseModel
-        Noise model being used.
-    solver : Solver
+    observation_model :
+        Observation model being used.
+    solver :
         Solver being used.
-    baseline_link_fr_ : jnp.ndarray or None
+    baseline_link_fr_ :
         Model baseline link firing rate parameters.
-    basis_coeff_ : jnp.ndarray or None
+    basis_coeff_ :
         Basis coefficients for the model.
-    solver_state : Any
+    solver_state :
         State of the solver after fitting. May include details like optimization error.
 
     Raises
     ------
     TypeError
-        If provided `solver` or `noise_model` are not valid or implemented in `neurostatslib.solver` and
-        `neurostatslib.noise_model` respectively.
+        If provided `solver` or `observation_model` are not valid or implemented in `neurostatslib.solver` and
+        `neurostatslib.observation_models` respectively.
 
     Notes
     -----
     The GLM aims to model the relationship between several predictor variables and a response variable.
     In this neural context, the predictors might represent external inputs or other neurons' activity, while
-    the response variable is the neuron's activity being modeled. The noise model captures the statistical properties
-    of the neural activity, while the solver determines how the model parameters are estimated.
+    the response variable is the neuron's activity being modeled. The observation model captures the statistical
+    properties of the neural activity, while the solver determines how the model parameters are estimated.
     """
 
     def __init__(
         self,
-        noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
+        observation_model: nsm.Observations = nsm.PoissonObservations(),
         solver: slv.Solver = slv.RidgeSolver("GradientDescent"),
     ):
         super().__init__()
@@ -70,13 +70,14 @@ class GLM(BaseRegressor):
                 f"Available options are: {slv.__all__}."
             )
 
-        if noise_model.__class__.__name__ not in nsm.__all__:
+        if observation_model.__class__.__name__ not in nsm.__all__:
             raise TypeError(
-                "The provided `noise_model` should be one of the implemented models in `neurostatslib.noise_model`. "
+                "The provided `observation_model` should be one of the implemented models in "
+                "`neurostatslib.observation_models`. "
                 f"Available options are: {nsm.__all__}."
             )
 
-        self.noise_model = noise_model
+        self.observation_model = observation_model
         self.solver = solver
 
         # initialize to None fit output
@@ -110,7 +111,7 @@ class GLM(BaseRegressor):
             The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
-        return self.noise_model.inverse_link_function(
+        return self.observation_model.inverse_link_function(
             jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
         )
 
@@ -191,7 +192,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self.noise_model.negative_log_likelihood(predicted_rate, y)
+        return self.observation_model.negative_log_likelihood(predicted_rate, y)
 
     def score(
         self,
@@ -254,7 +255,7 @@ class GLM(BaseRegressor):
         predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate,
         see references[$^1$](#--references).
 
-        Refer to the `nsl.noise_model.NoiseModel` concrete subclasses for the specific likelihood equations.
+        Refer to the `nsl.observation_models.Observations` concrete subclasses for the specific likelihood equations.
 
 
         References
@@ -283,7 +284,7 @@ class GLM(BaseRegressor):
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
             score = -self._score((Ws, bs), X, y) - norm_constant
         else:
-            score = self.noise_model.pseudo_r2(self._predict((Ws, bs), X), y)
+            score = self.observation_model.pseudo_r2(self._predict((Ws, bs), X), y)
 
         return score
 
@@ -328,9 +329,9 @@ class GLM(BaseRegressor):
         # Run optimization
         runner = self.solver.instantiate_solver(self._score)
         params, state = runner(init_params, X, y)
-        # if any noise model other than Poisson are used
+        # if any observation model other than Poisson are used
         # one should set the scale parameter too.
-        # self.noise_model.set_scale(params)
+        # self.observation_model.set_scale(params)
 
         if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
             raise ValueError(
@@ -394,7 +395,7 @@ class GLM(BaseRegressor):
         )
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
-            self.noise_model.sample_generator(
+            self.observation_model.sample_generator(
                 key=random_key, predicted_rate=predicted_rate
             ),
             predicted_rate,
@@ -412,8 +413,8 @@ class GLMRecurrent(GLM):
 
     Parameters
     ----------
-    noise_model :
-        The noise model to use for the GLM. This defines how neural activity is generated
+    observation_model :
+        The observation model to use for the GLM. This defines how neural activity is generated
         based on the underlying firing rate. Common choices include Poisson and Gaussian models.
     solver :
         The optimization solver to use for fitting the GLM parameters.
@@ -441,10 +442,10 @@ class GLMRecurrent(GLM):
 
     def __init__(
         self,
-        noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
+        observation_model: nsm.Observations = nsm.PoissonObservations(),
         solver: slv.Solver = slv.RidgeSolver(),
     ):
-        super().__init__(noise_model=noise_model, solver=solver)
+        super().__init__(observation_model=observation_model, solver=solver)
 
     def simulate_recurrent(
         self,
@@ -578,12 +579,12 @@ class GLMRecurrent(GLM):
             # Predict the firing rate using the model coefficients
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
-            firing_rate = self.noise_model.inverse_link_function(
+            firing_rate = self.observation_model.inverse_link_function(
                 jnp.einsum("ik,tik->ti", Wr, conv_act) + input_slice + bs[None, :]
             )
 
             # Simulate activity based on the predicted firing rate
-            new_act = self.noise_model.sample_generator(key, firing_rate)
+            new_act = self.observation_model.sample_generator(key, firing_rate)
 
             # Prepare the spikes for the next iteration (keeping the most recent spikes)
             concat_act = jnp.row_stack((activity[1:], new_act)), chunk + 1

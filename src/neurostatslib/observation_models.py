@@ -1,4 +1,4 @@
-"""Noise model classes for GLMs."""
+"""Observation model classes for GLMs."""
 
 import abc
 from typing import Callable, Union
@@ -10,19 +10,19 @@ from .base_class import Base
 
 KeyArray = Union[jnp.ndarray, jax.random.PRNGKeyArray]
 
-__all__ = ["PoissonNoiseModel"]
+__all__ = ["PoissonObservations"]
 
 
 def __dir__():
     return __all__
 
 
-class NoiseModel(Base, abc.ABC):
+class Observations(Base, abc.ABC):
     """
-    Abstract noise model class for neural data processing.
+    Abstract observation model class for neural data processing.
 
-    This is an abstract base class used to implement noise models for neural data.
-    Specific noise models that inherit from this class should define their versions
+    This is an abstract base class used to implement observation models for neural data.
+    Specific observation models that inherit from this class should define their versions
     of the abstract methods: negative_log_likelihood, emission_probability, and
     residual_deviance.
 
@@ -35,8 +35,8 @@ class NoiseModel(Base, abc.ABC):
 
     See Also
     --------
-    [PoissonNoiseModel](./#neurostatslib.noise_model.PoissonNoiseModel) : A specific implementation of a
-    noise model using the Poisson distribution.
+    [PoissonObservations](./#neurostatslib.observation_models.PoissonObservations) : A specific implementation of a
+    observation model using the Poisson distribution.
     """
 
     FLOAT_EPS = jnp.finfo(float).eps
@@ -121,7 +121,7 @@ class NoiseModel(Base, abc.ABC):
 
     @abc.abstractmethod
     def negative_log_likelihood(self, predicted_rate, y):
-        r"""Compute the noise model negative log-likelihood.
+        r"""Compute the observation model negative log-likelihood.
 
         This computes the negative log-likelihood of the predicted rates
         for the observed neural activity up to a constant.
@@ -160,13 +160,13 @@ class NoiseModel(Base, abc.ABC):
         Returns
         -------
         :
-            Random numbers generated from the noise model with `predicted_rate`.
+            Random numbers generated from the observation model with `predicted_rate`.
         """
         pass
 
     @abc.abstractmethod
     def residual_deviance(self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray):
-        r"""Compute the residual deviance for the noise model.
+        r"""Compute the residual deviance for the observation model.
 
         Parameters
         ----------
@@ -263,13 +263,13 @@ class NoiseModel(Base, abc.ABC):
         return (null_deviance - resid_deviance) / null_deviance
 
 
-class PoissonNoiseModel(NoiseModel):
+class PoissonObservations(Observations):
     """
-    Poisson Noise Model class for spike count data.
+    Model observations as Poisson random variables.
 
-    The PoissonNoiseModel is designed to model the observed spike counts based on a Poisson distribution
-    with a given rate. It provides methods for computing the negative log-likelihood, emission probability,
-    and residual deviance for the given spike count data.
+    The PoissonObservations is designed to model the observed spike counts based on a Poisson distribution
+    with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
+    and computing the residual deviance for the given spike count data.
 
     Attributes
     ----------
@@ -278,7 +278,7 @@ class PoissonNoiseModel(NoiseModel):
 
     See Also
     --------
-    [NoiseModel](./#neurostatslib.noise_model.NoiseModel) : Base class for noise models.
+    [Observations](./#neurostatslib.observation_models.Observations) : Base class for observation models.
     """
 
     def __init__(self, inverse_link_function=jnp.exp):

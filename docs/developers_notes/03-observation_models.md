@@ -1,22 +1,22 @@
-# The `noise_model` Module
+# The `observation_models` Module
 
 ## Introduction
 
-The `noise_model` module provides objects representing the observation noise of GLM-like models.
+The `observation_models` module provides objects representing the observations of GLM-like models.
 
-The abstract class `NoiseModel` defines the structure of the subclasses which specify observation noise types, such as Poisson, Gamma, etc. These objects serve as attributes of the [`neurostatslib.glm.GLM`](../03-glm/#the-concrete-class-glm) class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
+The abstract class `Observations` defines the structure of the subclasses which specify observation types, such as Poisson, Gamma, etc. These objects serve as attributes of the [`neurostatslib.glm.GLM`](../03-glm/#the-concrete-class-glm) class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
 
-## The Abstract class `NoiseModel`
+## The Abstract class `Observations`
 
-The abstract class `NoiseModel` is the backbone of any noise model. Any class inheriting `NoiseModel` must reimplement the `negative_log_likelihood`, `emission_probability`, `residual_deviance`, and `estimate_scale` methods.
+The abstract class `Observations` is the backbone of any observation model. Any class inheriting `Observations` must reimplement the `negative_log_likelihood`, `sample_generator`, `residual_deviance`, and `estimate_scale` methods.
 
 ### Abstract Methods
 
-For subclasses derived from `NoiseModel` to function correctly, they must implement the following:
+For subclasses derived from `Observations` to function correctly, they must implement the following:
 
 - **negative_log_likelihood**: Computes the negative-log likelihood of the model up to a normalization constant. This method is usually part of the objective function used to learn GLM parameters.
   
-- **emission_probability**: Returns the random emission probability function. This typically invokes `jax.random` emission probability, provided some sufficient statistics[^1]. For distributions in the exponential family, the sufficient statistics are the canonical parameter and the scale. In GLMs, the canonical parameter is entirely specified by the model's weights, while the scale is either fixed (i.e., Poisson) or needs to be estimated (i.e., Gamma).
+- **sample_generator**: Returns the random emission probability function. This typically invokes `jax.random` emission probability, provided some sufficient statistics[^1]. For distributions in the exponential family, the sufficient statistics are the canonical parameter and the scale. In GLMs, the canonical parameter is entirely specified by the model's weights, while the scale is either fixed (i.e., Poisson) or needs to be estimated (i.e., Gamma).
   
 - **residual_deviance**: Computes the residual deviance based on the model's estimated rates and observations.
 
@@ -31,15 +31,15 @@ For subclasses derived from `NoiseModel` to function correctly, they must implem
 
 - **_check_inverse_link_function**: Check that the provided link function is a `Callable` of the `jax` namespace.
 
-## Concrete `PoissonNoiseModel` class
+## Concrete `PoissonObservations` class
 
-The `PoissonNoiseModel` class extends the abstract `NoiseModel` class to provide functionalities specific to the Poisson noise model. It is designed for modeling observed spike counts based on a Poisson distribution with a given rate.
+The `PoissonObservations` class extends the abstract `Observations` class to provide functionalities specific to the Poisson observation model. It is designed for modeling observed spike counts based on a Poisson distribution with a given rate.
 
 ### Overridden Methods
 
 - **negative_log_likelihood**: This method computes the Poisson negative log-likelihood of the predicted rates for the observed spike counts.
   
-- **emission_probability**: Generates random numbers from a Poisson distribution based on the given `predicted_rate`.
+- **sample_generator**: Generates random numbers from a Poisson distribution based on the given `predicted_rate`.
   
 - **residual_deviance**: Calculates the residual deviance for a Poisson model.
   
@@ -47,11 +47,11 @@ The `PoissonNoiseModel` class extends the abstract `NoiseModel` class to provide
 
 ## Contributor Guidelines 
 
-To implement a noise model class you
+To implement an observation model class you
 
-- **Must** inherit from `NoiseModel`
+- **Must** inherit from `Observations`
 
-- **Must** provide a concrete implementation of `negative_log_likelihood`, `emission_probability`, `residual_deviance`, and `estimate_scale`.
+- **Must** provide a concrete implementation of `negative_log_likelihood`, `sample_generator`, `residual_deviance`, and `estimate_scale`.
 
 - **Should not** reimplement the `pseudo_r2` method as well as the `_check_inverse_link_function` auxiliary method.
 

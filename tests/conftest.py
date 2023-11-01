@@ -40,9 +40,9 @@ def poissonGLM_model_instantiation():
     X = np.random.normal(size=(100, 1, 5))
     b_true = np.zeros((1, ))
     w_true = np.random.normal(size=(1, 5))
-    noise_model = nsl.noise_model.PoissonNoiseModel(jnp.exp)
+    observation_model = nsl.observation_models.PoissonObservations(jnp.exp)
     solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
-    model = nsl.glm.GLM(noise_model, solver)
+    model = nsl.glm.GLM(observation_model, solver)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
 
@@ -68,9 +68,9 @@ def poissonGLM_coupled_model_config_simulate():
                            "simulate_coupled_neurons_params.json"), "r") as fh:
         config_dict = json.load(fh)
 
-    noise = nsl.noise_model.PoissonNoiseModel(jnp.exp)
+    observations = nsl.observation_models.PoissonObservations(jnp.exp)
     solver = nsl.solver.RidgeSolver("BFGS", regularizer_strength=0.1)
-    model = nsl.glm.GLMRecurrent(noise_model=noise, solver=solver)
+    model = nsl.glm.GLMRecurrent(observation_model=observations, solver=solver)
     model.basis_coeff_ = jnp.asarray(config_dict["basis_coeff_"])
     model.baseline_link_fr_ = jnp.asarray(config_dict["baseline_link_fr_"])
     coupling_basis = jnp.asarray(config_dict["coupling_basis"])
@@ -116,9 +116,9 @@ def group_sparse_poisson_glm_model_instantiation():
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
     mask[1, [0,4]] = 1
-    noise_model = nsl.noise_model.PoissonNoiseModel(jnp.exp)
+    observation_model = nsl.observation_models.PoissonObservations(jnp.exp)
     solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
-    model = nsl.glm.GLM(noise_model, solver)
+    model = nsl.glm.GLM(observation_model, solver)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
@@ -136,8 +136,8 @@ def example_data_prox_operator():
     return params, regularizer_strength, mask, scaling
 
 @pytest.fixture
-def poisson_noise_model():
-    return nsl.noise_model.PoissonNoiseModel(jnp.exp)
+def poisson_observation_model():
+    return nsl.observation_models.PoissonObservations(jnp.exp)
 
 
 @pytest.fixture

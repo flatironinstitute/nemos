@@ -53,20 +53,20 @@ spikes = np.random.poisson(rate)
 # The class implementing the  feed-forward GLM is `neurostatslib.glm.GLM`.
 # In order to define the class, one **must** provide:
 #
-# - **Noise Model**: The noise model for the GLM, e.g. an object of the class of type
-# `neurostatslib.noise_model.NoiseModel`. So far, only the `PoissonNoiseModel` noise
+# - **Observation Model**: The observation model for the GLM, e.g. an object of the class of type
+# `neurostatslib.observation_models.Observations`. So far, only the `PoissonObservations`
 # model has been implemented.
 # - **Solver**: The desired solver, e.g. an object of the `neurostatslib.solver.Solver` class.
 # Currently, we implemented the un-regulrized, Ridge, Lasso, and Group-Lasso solver.
 #
-# The default for the GLM class is the `PoissonNoiseModel` with log-link function with a Ridge solver.
+# The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge solver.
 # Here is how to define the model.
 
-# default Poisson GLM with Ridge solver and Poisson noise model.
+# default Poisson GLM with Ridge solver and Poisson observation model.
 model = nsl.glm.GLM()
 
 print("Solver type:     ", type(model.solver))
-print("Noise model type:",type(model.noise_model))
+print("Observation model:", type(model.observation_model))
 
 # %%
 # ### Model Configuration
@@ -89,10 +89,10 @@ for key, value in model.get_params(deep=True).items():
 # These parameters can be configured at initialization and/or
 # set after the model is initialized with the following syntax:
 
-# Poisson noise model with soft-plus NL
-noise_model = nsl.noise_model.PoissonNoiseModel(jax.nn.softplus)
+# Poisson observation model with soft-plus NL
+observation_models = nsl.observation_models.PoissonObservations(jax.nn.softplus)
 
-# Observation noise
+# Observation model
 solver = nsl.solver.RidgeSolver(
     solver_name="LBFGS",
     regularizer_strength=0.1,
@@ -101,23 +101,23 @@ solver = nsl.solver.RidgeSolver(
 
 # define the GLM
 model = nsl.glm.GLM(
-    noise_model=noise_model,
+    observation_model=observation_models,
     solver=solver,
 )
 
-print("Solver type:     ", type(model.solver))
-print("Noise model type:",type(model.noise_model))
+print("Solver type:      ", type(model.solver))
+print("Observation model:", type(model.observation_model))
 
 # %%
 # Hyperparameters can be set at any moment via the `set_params` method.
 
 model.set_params(
     solver=nsl.solver.LassoSolver(),
-    noise_model__inverse_link_function=jax.numpy.exp
+    observation_model__inverse_link_function=jax.numpy.exp
 )
 
 print("Updated solver: ", model.solver)
-print("Updated NL: ", model.noise_model.inverse_link_function)
+print("Updated NL: ", model.observation_model.inverse_link_function)
 
 # %%
 # !!! warning

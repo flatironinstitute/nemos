@@ -41,27 +41,27 @@ class TestGLM:
             (1, TypeError, "The provided `solver` should be one of the implemented")
         ]
     )
-    def test_init_solver_type(self, solver, error, match_str, poisson_noise_model):
+    def test_init_solver_type(self, solver, error, match_str, poisson_observation_model):
         """
         Test initialization with different solver names. Check if an appropriate exception is raised
         when the solver name is not present in jaxopt.
         """
-        _test_class_initialization(self.cls, {'solver': solver, 'noise_model': poisson_noise_model}, error, match_str)
+        _test_class_initialization(self.cls, {'solver': solver, 'observation_model': poisson_observation_model}, error, match_str)
 
     @pytest.mark.parametrize(
-        "noise, error, match_str",
+        "observation, error, match_str",
         [
-            (nsl.noise_model.PoissonNoiseModel(), None, None),
-            (nsl.solver.Solver, TypeError, "The provided `noise_model` should be one of the implemented"),
-            (1, TypeError, "The provided `noise_model` should be one of the implemented")
+            (nsl.observation_models.PoissonObservations(), None, None),
+            (nsl.solver.Solver, TypeError, "The provided `observation_model` should be one of the implemented"),
+            (1, TypeError, "The provided `observation_model` should be one of the implemented")
         ]
     )
-    def test_init_noise_type(self, noise, error, match_str, ridge_solver):
+    def test_init_observation_type(self, observation, error, match_str, ridge_solver):
         """
         Test initialization with different solver names. Check if an appropriate exception is raised
         when the solver name is not present in jaxopt.
         """
-        _test_class_initialization(self.cls, {'solver': ridge_solver, 'noise_model': noise}, error, match_str)
+        _test_class_initialization(self.cls, {'solver': ridge_solver, 'observation_model': observation}, error, match_str)
 
     #######################
     # Test model.fit
@@ -1013,7 +1013,7 @@ class TestGLM:
         model.baseline_link_fr_ = true_params[1]
         # get the rate
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model.noise_model.residual_deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.residual_deviance(firing_rate, y).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
