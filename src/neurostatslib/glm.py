@@ -162,7 +162,7 @@ class GLM(BaseRegressor):
         self._check_input_and_params_consistency((Ws, bs), X=X)
         return self._predict((Ws, bs), X)
 
-    def _score(  # call _negative_log_likelihood
+    def _score(
         self,
         params: Tuple[jnp.ndarray, jnp.ndarray],
         X: jnp.ndarray,
@@ -410,20 +410,15 @@ class GLMRecurrent(GLM):
 
     Parameters
     ----------
-    noise_model : nsm.NoiseModel, default=nsm.PoissonNoiseModel()
+    noise_model : 
         The noise model to use for the GLM. This defines how neural activity is generated
         based on the underlying firing rate. Common choices include Poisson and Gaussian models.
-
-    solver : slv.Solver, default=slv.RidgeSolver()
+    solver : 
         The optimization solver to use for fitting the GLM parameters.
-
-    data_type : {jnp.float32, jnp.float64}, optional
-        The numerical data type for internal calculations. If not provided, it will be inferred
-        from the data during fitting.
 
     See Also
     --------
-    [GLM](../glm/#neurostatslib.glm.GLM) : Base class for the generalized linear model.
+    [GLM](./#neurostatslib.glm.GLM) : Base class for the generalized linear model.
 
     Notes
     -----
