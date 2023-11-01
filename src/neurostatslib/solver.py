@@ -377,7 +377,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         solver_name: str,
         solver_kwargs: Optional[dict] = None,
         regularizer_strength: float = 1.0,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
@@ -444,10 +444,7 @@ class LassoSolver(ProxGradientSolver):
         solver_kwargs: Optional[dict] = None,
         regularizer_strength: float = 1.0,
     ):
-        super().__init__(
-            solver_name,
-            solver_kwargs=solver_kwargs
-        )
+        super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
     def get_prox_operator(
