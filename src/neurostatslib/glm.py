@@ -37,9 +37,9 @@ class GLM(BaseRegressor):
     solver : Solver
         Solver being used.
     baseline_link_fr_ : jnp.ndarray or None
-        Model baseline link firing rate parameters after fitting.
+        Model baseline link firing rate parameters.
     basis_coeff_ : jnp.ndarray or None
-        Basis coefficients for the model after fitting.
+        Basis coefficients for the model.
     solver_state : Any
         State of the solver after fitting. May include details like optimization error.
 
