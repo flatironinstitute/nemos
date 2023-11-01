@@ -280,7 +280,7 @@ class PoissonNoiseModel(NoiseModel):
         \end{aligned}
         $$
 
-        Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for example.
+        Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for explanation.
 
         Parameters
         ----------
