@@ -410,10 +410,10 @@ class GLMRecurrent(GLM):
 
     Parameters
     ----------
-    noise_model : 
+    noise_model :
         The noise model to use for the GLM. This defines how neural activity is generated
         based on the underlying firing rate. Common choices include Poisson and Gaussian models.
-    solver : 
+    solver :
         The optimization solver to use for fitting the GLM parameters.
 
     See Also
