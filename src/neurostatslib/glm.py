@@ -418,7 +418,7 @@ class GLMRecurrent(GLM):
 
     See Also
     --------
-    [GLM](../glm/#neurostatslib.glm.GLM) : Base class for the generalized linear model.
+    [GLM](./#neurostatslib.glm.GLM) : Base class for the generalized linear model.
 
     Notes
     -----
