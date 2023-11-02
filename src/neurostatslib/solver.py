@@ -129,13 +129,13 @@ class Solver(Base, abc.ABC):
             )
 
     @staticmethod
-    def _check_is_callable_from_jax(func: Callable):
+    def _check_loss(func: Callable):
         """
-        Check if the provided function is callable and from the jax namespace.
+        Check if the provided loss function is callable with 3 arguments.
 
-        Ensures that the given function is not only callable, but also belongs to
-        the `jax` namespace, ensuring compatibility and safety when using jax-based
-        operations.
+        Ensures that the given function is not only callable, but also that it
+        requires 3 arguments, excluding uniquely keyword arguments, and uniquely positional
+        arguments.
 
         Parameters
         ----------
@@ -145,9 +145,8 @@ class Solver(Base, abc.ABC):
         Raises
         ------
         TypeError
-            If the provided function is not callable.
-        ValueError
-            If the function does not belong to the `jax` or `neurostatslib.glm` namespaces.
+            - If the provided loss is not callable.
+            - If the loss does not require 3 arguments.
         """
         if not callable(func):
             raise TypeError("The loss function must be a Callable!")
@@ -162,8 +161,12 @@ class Solver(Base, abc.ABC):
         )
         if count_params != 3:
             raise TypeError(
-                "The loss function must require 3 inputs, usually (params, X, y)."
-                "Valid loss definitions will look like: `def loss(params, X, y, *args, **kwargs):`"
+                "The loss function must require 3 inputs, usually (params, X, y).\n"
+                "Valid loss definitions are of the type:\n"
+                "1. `def loss(var_1, var_2, var_3):`\n"
+                "2. `def loss(var_1, var_2, var_3, *args):`\n"
+                "3. `def loss(var_1, var_2, var_3, **kwargs):`\n"
+                "4. `def loss(var_1, var_2, var_3, *args,  **kwargs):`"
             )
 
     @abc.abstractmethod
@@ -200,11 +203,13 @@ class Solver(Base, abc.ABC):
         :
             The solver runner.
         """
-        solver = getattr(jaxopt, self.solver_name)(**solver_kwargs)
-
+        # get the arguments
         input_name, output_name = list(
             inspect.signature(solver_kwargs["fun"]).parameters
-        )[1:]
+        )[1:3]
+
+        solver = getattr(jaxopt, self.solver_name)(**solver_kwargs)
+
 
         def solver_run(
             init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
@@ -275,9 +280,11 @@ class UnRegularizedSolver(Solver):
             A runner function that uses the specified optimization algorithm
             to minimize the given loss function.
         """
-        self._check_is_callable_from_jax(loss)
+        # check the loss (including the number of arguments)
+        self._check_loss(loss)
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = loss
+
         return self.get_runner(solver_kwargs, {})
 
 
@@ -355,7 +362,8 @@ class RidgeSolver(Solver):
         Callable
             A function that runs the solver with the penalized loss.
         """
-        self._check_is_callable_from_jax(loss)
+        # check the loss (including the number of arguments)
+        self._check_loss(loss)
 
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self.penalization(params)
@@ -427,7 +435,8 @@ class ProxGradientSolver(Solver, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-        self._check_is_callable_from_jax(loss)
+        # check the loss (including the number of arguments)
+        self._check_loss(loss)
 
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = loss
