@@ -60,8 +60,8 @@ class GLM(BaseRegressor):
             )
 
         # this catches the corner case of users passing classes before instantiation. Example,
-        # `sovler = nsl.solver.RidgeSolver` instead of `sovler = nsl.solver.RidgeSolver()`.
-        # It also catches solvers that do not respect the api of having a single loss function as input.
+        # `solver = nsl.solver.RidgeSolver` instead of `solver = nsl.solver.RidgeSolver()`.
+        # It also catches solvers that requires multiple arguments, the loss function should be the only input.
         if len(inspect.signature(solver.instantiate_solver).parameters) != 1:
             raise TypeError(
                 "The `instantiate_solver` method of `solver` must accept a single parameter, the loss function"
