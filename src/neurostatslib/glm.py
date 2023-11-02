@@ -1,6 +1,5 @@
 """GLM core module."""
 import inspect
-
 from typing import Literal, Optional, Tuple, Union
 
 import jax
