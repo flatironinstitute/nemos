@@ -37,8 +37,8 @@ class TestGLM:
         "solver, error, match_str",
         [
             (nsl.solver.RidgeSolver("BFGS"), None, None),
-            (nsl.solver.Solver, TypeError, "The provided `solver` should be one of the implemented"),
-            (1, TypeError, "The provided `solver` should be one of the implemented")
+            (nsl.solver.Solver, TypeError, "The `instantiate_solver` method of `solver` must accept"),
+            (1, TypeError, "The provided `solver` does not implements the")
         ]
     )
     def test_init_solver_type(self, solver, error, match_str, poisson_observation_model):

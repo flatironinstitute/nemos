@@ -1,4 +1,6 @@
 """GLM core module."""
+import inspect
+
 from typing import Literal, Optional, Tuple, Union
 
 import jax
@@ -32,10 +34,6 @@ class GLM(BaseRegressor):
 
     Attributes
     ----------
-    observation_model :
-        Observation model being used.
-    solver :
-        Solver being used.
     baseline_link_fr_ :
         Model baseline link firing rate parameters.
     basis_coeff_ :
@@ -48,13 +46,6 @@ class GLM(BaseRegressor):
     TypeError
         If provided `solver` or `observation_model` are not valid or implemented in `neurostatslib.solver` and
         `neurostatslib.observation_models` respectively.
-
-    Notes
-    -----
-    The GLM aims to model the relationship between several predictor variables and a response variable.
-    In this neural context, the predictors might represent external inputs or other neurons' activity, while
-    the response variable is the neuron's activity being modeled. The observation model captures the statistical
-    properties of the neural activity, while the solver determines how the model parameters are estimated.
     """
 
     def __init__(
@@ -64,10 +55,18 @@ class GLM(BaseRegressor):
     ):
         super().__init__()
 
-        if solver.__class__.__name__ not in slv.__all__:
+        if not hasattr(solver, "instantiate_solver"):
             raise TypeError(
-                "The provided `solver` should be one of the implemented solvers in `neurostatslib.solver`. "
-                f"Available options are: {slv.__all__}."
+                "The provided `solver` does not implements the `instantiate_solver` method."
+            )
+
+        # this catches the corner case of users passing classes before instantiation. Example,
+        # `sovler = nsl.solver.RidgeSolver` instead of `sovler = nsl.solver.RidgeSolver()`.
+        # It also catches solvers that do not respect the api of having a single loss function as input.
+        if len(inspect.signature(solver.instantiate_solver).parameters) != 1:
+            raise TypeError(
+                "The `instantiate_solver` method of `solver` must accept a single parameter, the loss function"
+                "Have you instantiate the class?"
             )
 
         if observation_model.__class__.__name__ not in nsm.__all__:
@@ -107,7 +106,7 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        jnp.ndarray
+        :
             The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
@@ -369,8 +368,7 @@ class GLM(BaseRegressor):
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
             Shape: (n_neurons, n_timesteps).
         firing_rates :
-            Simulated rates for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Simulated rates for each neuron over time. Shape, (n_neurons, n_timesteps).
 
         Raises
         ------
@@ -481,10 +479,9 @@ class GLMRecurrent(GLM):
         -------
         simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Shape, (n_neurons, n_timesteps).
         firing_rates :
-            Simulated rates for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Simulated rates for each neuron over time. Shape, (n_neurons, n_timesteps).
 
         Raises
         ------

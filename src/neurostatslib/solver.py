@@ -150,17 +150,20 @@ class Solver(Base, abc.ABC):
             If the function does not belong to the `jax` or `neurostatslib.glm` namespaces.
         """
         if not callable(func):
-            raise TypeError("The loss function must a Callable!")
+            raise TypeError("The loss function must be a Callable!")
 
-        if (not hasattr(func, "__module__")) or (
-            not (
-                func.__module__.startswith("jax")
-                or func.__module__.startswith("neurostatslib.glm")
-            )
-        ):
-            raise ValueError(
-                f"The function {func.__name__} is not from the jax namespace. "
-                "Only functions from the jax namespace are allowed."
+        # count parameters of type POSITIONAL_OR_KEYWORD.
+        # In other words, exclude positional and keyword (*args, **kwargs)
+        count_params = sum(
+            1
+            for param in inspect.signature(func).parameters.values()
+            if param.kind
+            not in [inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD]
+        )
+        if count_params != 3:
+            raise TypeError(
+                "The loss function must require 3 inputs, usually (params, X, y)."
+                "Valid loss definitions will look like: `def loss(params, X, y, *args, **kwargs):`"
             )
 
     @abc.abstractmethod
@@ -199,10 +202,15 @@ class Solver(Base, abc.ABC):
         """
         solver = getattr(jaxopt, self.solver_name)(**solver_kwargs)
 
+        input_name, output_name = list(
+            inspect.signature(solver_kwargs["fun"]).parameters
+        )[1:]
+
         def solver_run(
             init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
         ) -> jaxopt.OptStep:
-            return solver.run(init_params, X=X, y=y, **run_kwargs)
+            kwargs = {input_name: X, output_name: y}
+            return solver.run(init_params, **kwargs, **run_kwargs)
 
         return solver_run
 

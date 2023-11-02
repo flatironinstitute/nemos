@@ -70,24 +70,12 @@ class TestUnRegularizedSolver:
         else:
             self.cls(solver_name, solver_kwargs=solver_kwargs)
 
-    @pytest.mark.parametrize("loss", [jnp.exp, 1, None, {}])
+    @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_is_callable(self, loss):
         """Test that the loss function is a callable"""
         raise_exception = not callable(loss)
         if raise_exception:
-            with pytest.raises(TypeError, match="The loss function must a Callable"):
-                self.cls("GradientDescent").instantiate_solver(loss)
-        else:
-            self.cls("GradientDescent").instantiate_solver(loss)
-
-    @pytest.mark.parametrize("loss", [jnp.exp, np.exp, nsl.glm.GLM()._score])
-    def test_loss_type_jax_or_glm(self, loss):
-        """Test that the loss function is a callable"""
-        raise_exception = (not hasattr(loss, "__module__")) or \
-                          (not (loss.__module__.startswith("jax.") or
-                                loss.__module__.startswith("neurostatslib.glm")))
-        if raise_exception:
-            with pytest.raises(ValueError, match=f"The function {loss.__name__} is not from the jax namespace."):
+            with pytest.raises(TypeError, match="The loss function must be a Callable"):
                 self.cls("GradientDescent").instantiate_solver(loss)
         else:
             self.cls("GradientDescent").instantiate_solver(loss)
@@ -192,24 +180,30 @@ class TestRidgeSolver:
         else:
             self.cls(solver_name, solver_kwargs=solver_kwargs)
 
-    @pytest.mark.parametrize("loss", [jnp.exp, 1, None, {}])
+    @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_is_callable(self, loss):
         """Test that the loss function is a callable"""
         raise_exception = not callable(loss)
         if raise_exception:
-            with pytest.raises(TypeError, match="The loss function must a Callable"):
+            with pytest.raises(TypeError, match="The loss function must be a Callable"):
                 self.cls("GradientDescent").instantiate_solver(loss)
         else:
             self.cls("GradientDescent").instantiate_solver(loss)
 
-    @pytest.mark.parametrize("loss", [jnp.exp, np.exp, nsl.glm.GLM()._score])
-    def test_loss_type_jax_or_glm(self, loss):
+    @pytest.mark.parametrize("loss, raise_exception", [
+        (lambda a, b, c: 0, False),
+        (lambda a, b: 0, True),
+        (lambda a, b, c, d: 0, True),
+        (lambda a, b, c, *d: 0, False),
+        (lambda a, b, c, **d: 0, False),
+        (lambda a, b, c, *d, **e: 0, False)
+        ]
+    )
+    def test_loss_has_three_parameter_callable(self, loss, raise_exception):
         """Test that the loss function is a callable"""
-        raise_exception = (not hasattr(loss, "__module__")) or \
-                          (not (loss.__module__.startswith("jax.") or
-                                loss.__module__.startswith("neurostatslib.glm")))
+        pass
         if raise_exception:
-            with pytest.raises(ValueError, match=f"The function {loss.__name__} is not from the jax namespace."):
+            with pytest.raises(TypeError, match="The loss function must require 3 inputs"):
                 self.cls("GradientDescent").instantiate_solver(loss)
         else:
             self.cls("GradientDescent").instantiate_solver(loss)
@@ -300,12 +294,12 @@ class TestLassoSolver:
         else:
             self.cls("ProximalGradient", solver_kwargs=solver_kwargs)
 
-    @pytest.mark.parametrize("loss", [jnp.exp, jax.nn.relu, 1, None, {}])
+    @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_callable(self, loss):
         """Test that the loss function is a callable"""
         raise_exception = not callable(loss)
         if raise_exception:
-            with pytest.raises(TypeError, match="The loss function must a Callable"):
+            with pytest.raises(TypeError, match="The loss function must be a Callable"):
                 self.cls("ProximalGradient").instantiate_solver(loss)
         else:
             self.cls("ProximalGradient").instantiate_solver(loss)
@@ -407,7 +401,7 @@ class TestGroupLassoSolver:
         else:
             self.cls("ProximalGradient", mask, solver_kwargs=solver_kwargs)
 
-    @pytest.mark.parametrize("loss", [jnp.exp, jax.nn.relu, 1, None, {}])
+    @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_callable(self, loss):
         """Test that the loss function is a callable"""
         raise_exception = not callable(loss)
@@ -419,7 +413,7 @@ class TestGroupLassoSolver:
         mask = jnp.asarray(mask)
 
         if raise_exception:
-            with pytest.raises(TypeError, match="The loss function must a Callable"):
+            with pytest.raises(TypeError, match="The loss function must be a Callable"):
                 self.cls("ProximalGradient", mask).instantiate_solver(loss)
         else:
             self.cls("ProximalGradient", mask).instantiate_solver(loss)
