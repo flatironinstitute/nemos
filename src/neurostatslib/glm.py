@@ -250,9 +250,31 @@ class GLM(BaseRegressor):
         among which the number of model parameters. The log-likelihood can assume both positive
         and negative values.
 
-        The Pseudo-$R^2$ is not equivalent to the $R^2$ value in linear regression. While both provide a measure
-        of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
-        The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
+        The Pseudo-$ R^2 $ is not equivalent to the $ R^2 $ value in linear regression. While both
+        provide a measure of model fit, and assume values in the [0,1] range, the methods and
+        interpretations can differ. The Pseudo-$ R^2 $ is particularly useful for generalized linear
+        models when the interpretation of the $ R^2 $ as explained variance does not apply
+        (i.e., when the observations are not Gaussian distributed).
+
+        Why does the traditional $R^2$ is usually a poor measure of performance in GLMs?
+
+        1.  In the context of GLMs the variance and the mean of the observations are related.
+        Ignoring the relation between them can result in underestimating the model
+        performance; for instance, when we model a Poisson variable with large mean we expect an
+        equally large variance. In this scenario, even if our model perfectly captures the mean,
+        the high-variance  will result in large residuals and low $R^2$.
+        Additionally, when the mean of the observations varies, the variance will vary too. This
+        violates the "homoschedasticity" assumption, necessary  for interpreting the $R^2$ as
+        variance explained.
+        2. The $R^2$ capture the variance explained when the relationship between the observations and
+        the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
+        and the mean of the observations, compromising the interpretation of the $R^2$.
+
+        Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
+        to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
+        deviates substantially from normality for counting data with low mean (common for spike counts).
+        Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
+        for GLM modeling counting data.
 
         The pseudo-$R^2$ can be computed as follows,
 
@@ -283,8 +305,6 @@ class GLM(BaseRegressor):
                 f"Scoring method {score_type} not implemented! "
                 f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
             )
-        # ignore the last time point from predict, because that corresponds to
-        # the next time step, which we have no observed data for
         self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_

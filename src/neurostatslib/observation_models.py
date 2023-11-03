@@ -395,6 +395,7 @@ class PoissonObservations(Observations):
         resid_dev = 2 * (
             spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate)
         )
+        resid_dev = jnp.sign(spike_counts - predicted_rate) * jnp.sqrt(jnp.clip(resid_dev, 0., jnp.inf))
         return resid_dev
 
     def estimate_scale(self, predicted_rate: jnp.ndarray) -> None:
