@@ -38,7 +38,7 @@ class TestGLM:
         [
             (nsl.solver.RidgeSolver("BFGS"), None, None),
             (None, AttributeError, "'NoneType' object has no attribute 'instantiate_solver'"),
-            (nsl.solver.RidgeSolver, TypeError, "RidgeSolver.instantiate_solver() missing 1 required")
+            (nsl.solver.RidgeSolver, TypeError, r"RidgeSolver.instantiate_solver\(\) missing 1")
         ]
     )
     def test_solver_type(self, solver, error, match_str, poissonGLM_model_instantiation):

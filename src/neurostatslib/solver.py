@@ -144,7 +144,7 @@ class Solver(Base, abc.ABC):
 
     def get_runner(
         self,
-        solver_kwargs: dict,
+        loss: Callable,
         *run_args: Any,
         **run_kwargs: dict,
     ) -> Callable[
@@ -155,8 +155,8 @@ class Solver(Base, abc.ABC):
 
         Parameters
         ----------
-        solver_kwargs :
-            Additional keyword arguments for the solver instantiation.
+        loss :
+            The loss funciton.
         run_kwargs :
             Additional keyword arguments for the solver run.
 
@@ -165,8 +165,10 @@ class Solver(Base, abc.ABC):
         :
             The solver runner.
         """
-        # get the arguments
-        solver = getattr(jaxopt, self.solver_name)(**solver_kwargs)
+        # get the solver with given arguments.
+        # The "fun" argument is not always the first one, but it is always KEYWORD
+        # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
+        solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
 
         def solver_run(
             init_params: Tuple[jnp.ndarray, jnp.ndarray], *args: jnp.ndarray
@@ -237,11 +239,7 @@ class UnRegularizedSolver(Solver):
             A runner function that uses the specified optimization algorithm
             to minimize the given loss function.
         """
-        # check the loss (including the number of arguments)
-        solver_kwargs = self.solver_kwargs.copy()
-        solver_kwargs["fun"] = loss
-
-        return self.get_runner(solver_kwargs)
+        return self.get_runner(loss)
 
 
 class RidgeSolver(Solver):
@@ -320,10 +318,7 @@ class RidgeSolver(Solver):
         """
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self.penalization(params)
-
-        solver_kwargs = self.solver_kwargs.copy()
-        solver_kwargs["fun"] = penalized_loss
-        return self.get_runner(solver_kwargs)
+        return self.get_runner(penalized_loss)
 
 
 class ProxGradientSolver(Solver, abc.ABC):
@@ -388,12 +383,8 @@ class ProxGradientSolver(Solver, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-
-        solver_kwargs = self.solver_kwargs.copy()
-        solver_kwargs["fun"] = loss
-        solver_kwargs["prox"] = self.get_prox_operator()
-
-        return self.get_runner(solver_kwargs, self.regularizer_strength)
+        self.solver_kwargs["prox"] = self.get_prox_operator()
+        return self.get_runner(loss, self.regularizer_strength)
 
 
 class LassoSolver(ProxGradientSolver):
