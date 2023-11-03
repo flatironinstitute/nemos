@@ -74,7 +74,7 @@ class TestPoissonObservations:
         """
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model.observation_model.residual_deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.deviance(firing_rate, y).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 

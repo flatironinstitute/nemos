@@ -1,5 +1,4 @@
 """GLM core module."""
-import inspect
 from typing import Literal, Optional, Tuple, Union
 
 import jax
@@ -77,8 +76,8 @@ class GLM(BaseRegressor):
             solver.instantiate_solver(self._score)
         except Exception:
             raise TypeError(
-                f"The provided `solver` cannot be instantiated on "
-                f"the GLM log-likelihood."
+                "The provided `solver` cannot be instantiated on "
+                "the GLM log-likelihood."
             )
         self._solver = solver
 

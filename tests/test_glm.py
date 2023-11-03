@@ -52,8 +52,8 @@ class TestGLM:
         "observation, error, match_str",
         [
             (nsl.observation_models.PoissonObservations(), None, None),
-            (nsl.solver.Solver, TypeError, "The provided `observation_model` should be one of the implemented"),
-            (1, TypeError, "The provided `observation_model` should be one of the implemented")
+            (nsl.solver.Solver, AttributeError, "The provided object does not have the required"),
+            (1, AttributeError, "The provided object does not have the required")
         ]
     )
     def test_init_observation_type(self, observation, error, match_str, ridge_solver):
@@ -1013,7 +1013,7 @@ class TestGLM:
         model.baseline_link_fr_ = true_params[1]
         # get the rate
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model.observation_model.residual_deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.deviance(firing_rate, y).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 

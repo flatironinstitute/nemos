@@ -166,7 +166,7 @@ class Observations(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def residual_deviance(self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray):
+    def deviance(self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray):
         r"""Compute the residual deviance for the observation model.
 
         Parameters
@@ -254,11 +254,11 @@ class Observations(Base, abc.ABC):
         *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
         3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
-        res_dev_t = self.residual_deviance(predicted_rate, y)
+        res_dev_t = self.deviance(predicted_rate, y)
         resid_deviance = jnp.sum(res_dev_t**2)
 
         null_mu = jnp.ones(y.shape, dtype=jnp.float32) * y.mean()
-        null_dev_t = self.residual_deviance(null_mu, y)
+        null_dev_t = self.deviance(null_mu, y)
         null_deviance = jnp.sum(null_dev_t**2)
 
         return (null_deviance - resid_deviance) / null_deviance
@@ -357,7 +357,7 @@ class PoissonObservations(Observations):
         """
         return jax.random.poisson(key, predicted_rate)
 
-    def residual_deviance(
+    def deviance(
         self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Poisson model.
@@ -392,11 +392,8 @@ class PoissonObservations(Observations):
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(spike_counts / predicted_rate, self.FLOAT_EPS, jnp.inf)
-        resid_dev = 2 * (
-            spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate)
-        )
-        resid_dev = jnp.sign(spike_counts - predicted_rate) * jnp.sqrt(jnp.clip(resid_dev, 0., jnp.inf))
-        return resid_dev
+        deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
+        return deviance
 
     def estimate_scale(self, predicted_rate: jnp.ndarray) -> None:
         r"""
@@ -449,9 +446,11 @@ def check_observation_model(observation_model):
     ...     def inverse_link_function(self, x):
     ...         return jax.scipy.special.expit(x)
     ...     def negative_log_likelihood(self, params, y_true):
-    ...         return -jnp.sum(y_true * jax.scipy.special.logit(params) + (1 - y_true) * jax.scipy.special.logit(1 - params))
+    ...         return -jnp.sum(y_true * jax.scipy.special.logit(params) + \
+    ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
     ...     def pseudo_r2(self, params, y_true):
-    ...         return 1 - self.negative_log_likelihood(params, y_true) / jnp.sum((y_true - y_true.mean()) ** 2)
+    ...         return 1 - (self.negative_log_likelihood(params, y_true) /
+    ...                     jnp.sum((y_true - y_true.mean()) ** 2))
     ...     def sample_generator(self, key, params):
     ...         return jax.random.bernoulli(key, params)
     >>> model = MyObservationModel()
