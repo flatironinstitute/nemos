@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from functools import partial
-from typing import Callable, Iterable, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, List, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -494,28 +494,55 @@ def count_positional_params(func: Callable) -> int:
     )
 
 
-def check_loss(func: Callable):
-    """
-    Check if the provided loss function is callable with 3 arguments.
+def assert_has_attribute(obj: Any, attr_name: str):
+    """Ensure the object has the given attribute."""
+    if not hasattr(obj, attr_name):
+        raise AttributeError(
+            f"The provided object does not have the required `{attr_name}` attribute!"
+        )
 
-    Ensures that the given function is not only callable, but also that it
-    requires 3 positinal arguments.
 
-    Parameters
-    ----------
-    func :
-        The function to check.
-
-    Raises
-    ------
-    TypeError
-        - If the provided loss is not callable.
-        - If the loss does not require 3 arguments.
-    """
+def assert_is_callable(func: Callable, func_name: str):
+    """Ensure the provided function is callable."""
     if not callable(func):
-        raise TypeError("The loss function must be a Callable!")
+        raise TypeError(f"The `{func_name}` must be a Callable!")
 
-    if count_positional_params(func) != 3:
+
+def assert_returns_ndarray(
+    func: Callable, inputs: Union[List[jnp.ndarray], List[float]], func_name: str
+):
+    """Ensure the function returns a jax.numpy.ndarray."""
+    array_out = func(*inputs)
+    if not isinstance(array_out, jnp.ndarray):
+        raise TypeError(f"The `{func_name}` must return a jax.numpy.ndarray!")
+
+
+def assert_differentiable(func: Callable, func_name: str):
+    """Ensure the function is differentiable."""
+    try:
+        gradient_fn = jax.grad(func)
+        gradient_fn(jnp.array(1.0))
+    except Exception as e:
+        raise TypeError(f"The `{func_name}` is not differentiable. Error: {str(e)}")
+
+
+def assert_preserve_shape(
+    func: Callable, inputs: List[jnp.ndarray], func_name: str, input_index: int
+):
+    """Check that the function preserve the input shape."""
+    result = func(*inputs)
+    if not result.shape == inputs[input_index].shape:
+        raise ValueError(f"The `{func_name}` must preserve the input array shape!")
+
+
+def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str):
+    """Check that `func` return an array containing a single scalar."""
+    assert_returns_ndarray(func, inputs, func_name)
+    array_out = func(*inputs)
+    try:
+        float(array_out)
+    except TypeError:
         raise TypeError(
-            "The loss function must require 3 positional inputs, usually (params, X, y)."
+            f"The `{func_name}` should return a scalar! "
+            f"Array of shape {array_out.shape} returned instead!"
         )

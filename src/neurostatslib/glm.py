@@ -8,9 +8,9 @@ from numpy.typing import NDArray
 
 from . import observation_models as obs
 from . import solver as slv
+from . import utils
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
-from .utils import convert_to_jnp_ndarray, convolve_1d_trials
 
 
 class GLM(BaseRegressor):
@@ -88,12 +88,9 @@ class GLM(BaseRegressor):
 
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
-        if observation.__class__.__name__ not in obs.__all__:
-            raise TypeError(
-                "The provided `observation_model` should be one of the implemented models in "
-                "`neurostatslib.observation_models`. "
-                f"Available options are: {obs.__all__}."
-            )
+        # check that the model has the required attributes
+        # and that the attribute can be called
+        obs.check_observation_model(observation)
         self._observation_model = observation
 
     def _check_is_fit(self):
@@ -122,7 +119,7 @@ class GLM(BaseRegressor):
             The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
-        return self.observation_model.inverse_link_function(
+        return self._observation_model.inverse_link_function(
             jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
         )
 
@@ -166,7 +163,7 @@ class GLM(BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        (X,) = convert_to_jnp_ndarray(X)
+        (X,) = utils.convert_to_jnp_ndarray(X)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -203,7 +200,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self.observation_model.negative_log_likelihood(predicted_rate, y)
+        return self._observation_model.negative_log_likelihood(predicted_rate, y)
 
     def score(
         self,
@@ -286,7 +283,7 @@ class GLM(BaseRegressor):
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
 
-        X, y = convert_to_jnp_ndarray(X, y)
+        X, y = utils.convert_to_jnp_ndarray(X, y)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -295,7 +292,7 @@ class GLM(BaseRegressor):
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
             score = -self._score((Ws, bs), X, y) - norm_constant
         else:
-            score = self.observation_model.pseudo_r2(self._predict((Ws, bs), X), y)
+            score = self._observation_model.pseudo_r2(self._predict((Ws, bs), X), y)
 
         return score
 
@@ -405,7 +402,7 @@ class GLM(BaseRegressor):
         )
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
-            self.observation_model.sample_generator(
+            self._observation_model.sample_generator(
                 key=random_key, predicted_rate=predicted_rate
             ),
             predicted_rate,
@@ -524,7 +521,7 @@ class GLMRecurrent(GLM):
         self._check_is_fit()
 
         # convert to jnp.ndarray
-        (coupling_basis_matrix,) = convert_to_jnp_ndarray(coupling_basis_matrix)
+        (coupling_basis_matrix,) = utils.convert_to_jnp_ndarray(coupling_basis_matrix)
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.baseline_link_fr_.shape[0]
@@ -571,7 +568,9 @@ class GLMRecurrent(GLM):
             activity, chunk = data
 
             # Convolve the neural activity with the coupling basis matrix
-            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None])[0]
+            conv_act = utils.convolve_1d_trials(coupling_basis_matrix, activity[None])[
+                0
+            ]
 
             # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
@@ -588,12 +587,12 @@ class GLMRecurrent(GLM):
             # Predict the firing rate using the model coefficients
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
-            firing_rate = self.observation_model.inverse_link_function(
+            firing_rate = self._observation_model.inverse_link_function(
                 jnp.einsum("ik,tik->ti", Wr, conv_act) + input_slice + bs[None, :]
             )
 
             # Simulate activity based on the predicted firing rate
-            new_act = self.observation_model.sample_generator(key, firing_rate)
+            new_act = self._observation_model.sample_generator(key, firing_rate)
 
             # Prepare the spikes for the next iteration (keeping the most recent spikes)
             concat_act = jnp.row_stack((activity[1:], new_act)), chunk + 1

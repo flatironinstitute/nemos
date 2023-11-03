@@ -6,6 +6,7 @@ from typing import Callable, Union
 import jax
 import jax.numpy as jnp
 
+from . import utils
 from .base_class import Base
 
 KeyArray = Union[jnp.ndarray, jax.random.PRNGKeyArray]
@@ -54,7 +55,7 @@ class Observations(Base, abc.ABC):
     @inverse_link_function.setter
     def inverse_link_function(self, inverse_link_function: Callable):
         """Setter for the inverse link function for the model."""
-        self._check_inverse_link_function(inverse_link_function)
+        self.check_inverse_link_function(inverse_link_function)
         self._inverse_link_function = inverse_link_function
 
     @property
@@ -70,7 +71,7 @@ class Observations(Base, abc.ABC):
         self._scale = value
 
     @staticmethod
-    def _check_inverse_link_function(inverse_link_function: Callable):
+    def check_inverse_link_function(inverse_link_function: Callable):
         """
         Check if the provided inverse_link_function is usable.
 
@@ -415,3 +416,87 @@ class PoissonObservations(Observations):
             but is retained for compatibility with the abstract method signature.
         """
         self.scale = 1.0
+
+
+def check_observation_model(observation_model):
+    """
+    Check the attributes of an observation model for compliance.
+
+    This function ensures that the observation model has the required attributes and that each
+    attribute is a callable function. Additionally, it checks if these functions return
+    jax.numpy.ndarray objects, and in the case of 'inverse_link_function', whether it is
+    differentiable.
+
+    Parameters
+    ----------
+    observation_model : object
+        An instance of an observation model that should have specific attributes.
+
+    Raises
+    ------
+    AttributeError
+        If the `observation_model` does not have one of the required attributes.
+
+    TypeError
+        - If an attribute is not a callable function.
+        - If a function does not return a jax.numpy.ndarray.
+        - If 'inverse_link_function' is not differentiable.
+
+    Examples
+    --------
+    >>> class MyObservationModel:
+    ...     def inverse_link_function(self, x):
+    ...         return jax.scipy.special.expit(x)
+    ...     def negative_log_likelihood(self, params, y_true):
+    ...         return -jnp.sum(y_true * jax.scipy.special.logit(params) + (1 - y_true) * jax.scipy.special.logit(1 - params))
+    ...     def pseudo_r2(self, params, y_true):
+    ...         return 1 - self.negative_log_likelihood(params, y_true) / jnp.sum((y_true - y_true.mean()) ** 2)
+    ...     def sample_generator(self, key, params):
+    ...         return jax.random.bernoulli(key, params)
+    >>> model = MyObservationModel()
+    >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
+    """
+    # Define the checks to be made on each attribute
+    checks = {
+        "inverse_link_function": {
+            "input": [jnp.array([1.0, 1.0, 1.0])],
+            "test_differentiable": True,
+            "test_preserve_shape": 0,
+        },
+        "negative_log_likelihood": {
+            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
+            "test_scalar_func": True,
+        },
+        "pseudo_r2": {
+            "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
+            "test_scalar_func": True,
+        },
+        "sample_generator": {
+            "input": [jax.random.PRNGKey(123), 0.5 * jnp.array([1.0, 1.0, 1.0])],
+            "test_preserve_shape": 1,
+        },
+    }
+
+    # Perform checks for each attribute
+    for attr_name, check_info in checks.items():
+        # check if the observation model has the attribute
+        utils.assert_has_attribute(observation_model, attr_name)
+
+        # check if the attribute is a callable
+        func = getattr(observation_model, attr_name)
+        utils.assert_is_callable(func, attr_name)
+
+        # check that the callable returns an array
+        utils.assert_returns_ndarray(func, check_info["input"], attr_name)
+
+        if check_info.get("test_differentiable"):
+            utils.assert_differentiable(func, attr_name)
+
+        if "test_preserve_shape" in check_info:
+            index = check_info["test_preserve_shape"]
+            utils.assert_preserve_shape(
+                func, check_info["input"], attr_name, input_index=index
+            )
+
+        if check_info.get("test_scalar_func"):
+            utils.assert_scalar_func(func, check_info["input"], attr_name)
