@@ -128,7 +128,6 @@ class Solver(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
             )
 
-
     @abc.abstractmethod
     def instantiate_solver(
         self,
@@ -315,8 +314,10 @@ class RidgeSolver(Solver):
         Callable
             A function that runs the solver with the penalized loss.
         """
+
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self.penalization(params)
+
         return self.get_runner(penalized_loss)
 
 

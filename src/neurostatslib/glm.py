@@ -76,9 +76,10 @@ class GLM(BaseRegressor):
         try:
             solver.instantiate_solver(self._score)
         except Exception:
-            raise ValueError(f"The provided `solver` cannot be instantiated on "
-                             f"the GLM log-likelihood.")
-
+            raise TypeError(
+                f"The provided `solver` cannot be instantiated on "
+                f"the GLM log-likelihood."
+            )
         self._solver = solver
 
     @property
