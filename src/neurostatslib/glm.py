@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from . import observation_models as nsm
+from . import observation_models as obs
 from . import solver as slv
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
@@ -49,17 +49,10 @@ class GLM(BaseRegressor):
 
     def __init__(
         self,
-        observation_model: nsm.Observations = nsm.PoissonObservations(),
+        observation_model: obs.Observations = obs.PoissonObservations(),
         solver: slv.Solver = slv.RidgeSolver("GradientDescent"),
     ):
         super().__init__()
-
-        if observation_model.__class__.__name__ not in nsm.__all__:
-            raise TypeError(
-                "The provided `observation_model` should be one of the implemented models in "
-                "`neurostatslib.observation_models`. "
-                f"Available options are: {nsm.__all__}."
-            )
 
         self.observation_model = observation_model
         self.solver = solver
@@ -68,6 +61,39 @@ class GLM(BaseRegressor):
         self.baseline_link_fr_ = None
         self.basis_coeff_ = None
         self.solver_state = None
+
+    @property
+    def solver(self):
+        return self._solver
+
+    @solver.setter
+    def solver(self, solver: slv.Solver):
+        if not hasattr(solver, "instantiate_solver"):
+            raise AttributeError(
+                "The provided `solver` doesn't implement the `instantiate_sovler` method."
+            )
+        # test solver instantiation on the GLM loss
+        try:
+            solver.instantiate_solver(self._score)
+        except Exception:
+            raise ValueError(f"The provided `solver` cannot be instantiated on "
+                             f"the GLM log-likelihood.")
+
+        self._solver = solver
+
+    @property
+    def observation_model(self):
+        return self._observation_model
+
+    @observation_model.setter
+    def observation_model(self, observation: obs.Observations):
+        if observation.__class__.__name__ not in obs.__all__:
+            raise TypeError(
+                "The provided `observation_model` should be one of the implemented models in "
+                "`neurostatslib.observation_models`. "
+                f"Available options are: {obs.__all__}."
+            )
+        self._observation_model = observation
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
@@ -425,7 +451,7 @@ class GLMRecurrent(GLM):
 
     def __init__(
         self,
-        observation_model: nsm.Observations = nsm.PoissonObservations(),
+        observation_model: obs.Observations = obs.PoissonObservations(),
         solver: slv.Solver = slv.RidgeSolver(),
     ):
         super().__init__(observation_model=observation_model, solver=solver)

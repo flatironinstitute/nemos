@@ -37,20 +37,16 @@ class TestGLM:
         "solver, error, match_str",
         [
             (nsl.solver.RidgeSolver("BFGS"), None, None),
-            (None, AttributeError, "'NoneType' object has no attribute 'instantiate_solver'"),
-            (nsl.solver.RidgeSolver, TypeError, r"RidgeSolver.instantiate_solver\(\) missing 1")
+            (None, AttributeError, "The provided `solver` doesn't implement "),
+            (nsl.solver.RidgeSolver, TypeError, "The provided `solver` cannot be instantiated")
         ]
     )
     def test_solver_type(self, solver, error, match_str, poissonGLM_model_instantiation):
         """
         Test that an error is raised if a non-compatible solver is passed.
         """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.solver = solver
-        _test_class_method(model, "fit",
-                           [X, y],
-                           {"init_params": true_params},
-                           error, match_str)
+        _test_class_initialization(self.cls, {'solver': solver}, error, match_str)
+
 
     @pytest.mark.parametrize(
         "observation, error, match_str",

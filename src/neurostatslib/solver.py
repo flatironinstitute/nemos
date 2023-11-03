@@ -15,7 +15,6 @@ from numpy.typing import NDArray
 
 from .base_class import Base
 from .proximal_operator import prox_group_lasso
-from.utils import check_loss
 
 __all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
 
@@ -82,7 +81,7 @@ class Solver(Base, abc.ABC):
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         self._check_solver_kwargs(self.solver_name, solver_kwargs)
-        return self._solver_kwargs
+        self._solver_kwargs = solver_kwargs
 
     def _check_solver(self, solver_name: str):
         """
