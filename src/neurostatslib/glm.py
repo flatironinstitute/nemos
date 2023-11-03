@@ -54,20 +54,6 @@ class GLM(BaseRegressor):
     ):
         super().__init__()
 
-        if not hasattr(solver, "instantiate_solver"):
-            raise TypeError(
-                "The provided `solver` does not implements the `instantiate_solver` method."
-            )
-
-        # this catches the corner case of users passing classes before instantiation. Example,
-        # `solver = nsl.solver.RidgeSolver` instead of `solver = nsl.solver.RidgeSolver()`.
-        # It also catches solvers that requires multiple arguments, the loss function should be the only input.
-        if len(inspect.signature(solver.instantiate_solver).parameters) != 1:
-            raise TypeError(
-                "The `instantiate_solver` method of `solver` must accept a single parameter, the loss function"
-                "Have you instantiate the class?"
-            )
-
         if observation_model.__class__.__name__ not in nsm.__all__:
             raise TypeError(
                 "The provided `observation_model` should be one of the implemented models in "

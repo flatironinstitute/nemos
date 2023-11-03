@@ -7,7 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 import abc
 import inspect
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 
 from .base_class import Base
 from .proximal_operator import prox_group_lasso
+from.utils import check_loss
 
 __all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
 
@@ -128,46 +129,6 @@ class Solver(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
             )
 
-    @staticmethod
-    def _check_loss(func: Callable):
-        """
-        Check if the provided loss function is callable with 3 arguments.
-
-        Ensures that the given function is not only callable, but also that it
-        requires 3 arguments, excluding uniquely keyword arguments, and uniquely positional
-        arguments.
-
-        Parameters
-        ----------
-        func :
-            The function to check.
-
-        Raises
-        ------
-        TypeError
-            - If the provided loss is not callable.
-            - If the loss does not require 3 arguments.
-        """
-        if not callable(func):
-            raise TypeError("The loss function must be a Callable!")
-
-        # count parameters of type POSITIONAL_OR_KEYWORD.
-        # In other words, exclude positional and keyword (*args, **kwargs)
-        count_params = sum(
-            1
-            for param in inspect.signature(func).parameters.values()
-            if param.kind
-            not in [inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD]
-        )
-        if count_params != 3:
-            raise TypeError(
-                "The loss function must require 3 inputs, usually (params, X, y).\n"
-                "Valid loss definitions are of the type:\n"
-                "1. `def loss(var_1, var_2, var_3):`\n"
-                "2. `def loss(var_1, var_2, var_3, *args):`\n"
-                "3. `def loss(var_1, var_2, var_3, **kwargs):`\n"
-                "4. `def loss(var_1, var_2, var_3, *args,  **kwargs):`"
-            )
 
     @abc.abstractmethod
     def instantiate_solver(
@@ -184,7 +145,8 @@ class Solver(Base, abc.ABC):
     def get_runner(
         self,
         solver_kwargs: dict,
-        run_kwargs: dict,
+        *run_args: Any,
+        **run_kwargs: dict,
     ) -> Callable[
         [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
     ]:
@@ -204,18 +166,13 @@ class Solver(Base, abc.ABC):
             The solver runner.
         """
         # get the arguments
-        input_name, output_name = list(
-            inspect.signature(solver_kwargs["fun"]).parameters
-        )[1:3]
-
         solver = getattr(jaxopt, self.solver_name)(**solver_kwargs)
 
-
         def solver_run(
-            init_params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray, y: jnp.ndarray
+            init_params: Tuple[jnp.ndarray, jnp.ndarray], *args: jnp.ndarray
         ) -> jaxopt.OptStep:
-            kwargs = {input_name: X, output_name: y}
-            return solver.run(init_params, **kwargs, **run_kwargs)
+            args = (*run_args, *args)
+            return solver.run(init_params, *args, **run_kwargs)
 
         return solver_run
 
@@ -281,11 +238,10 @@ class UnRegularizedSolver(Solver):
             to minimize the given loss function.
         """
         # check the loss (including the number of arguments)
-        self._check_loss(loss)
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = loss
 
-        return self.get_runner(solver_kwargs, {})
+        return self.get_runner(solver_kwargs)
 
 
 class RidgeSolver(Solver):
@@ -362,15 +318,12 @@ class RidgeSolver(Solver):
         Callable
             A function that runs the solver with the penalized loss.
         """
-        # check the loss (including the number of arguments)
-        self._check_loss(loss)
-
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self.penalization(params)
 
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = penalized_loss
-        return self.get_runner(solver_kwargs, {})
+        return self.get_runner(solver_kwargs)
 
 
 class ProxGradientSolver(Solver, abc.ABC):
@@ -435,16 +388,12 @@ class ProxGradientSolver(Solver, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-        # check the loss (including the number of arguments)
-        self._check_loss(loss)
 
         solver_kwargs = self.solver_kwargs.copy()
         solver_kwargs["fun"] = loss
         solver_kwargs["prox"] = self.get_prox_operator()
 
-        run_kwargs = dict(hyperparams_prox=self.regularizer_strength)
-
-        return self.get_runner(solver_kwargs, run_kwargs)
+        return self.get_runner(solver_kwargs, self.regularizer_strength)
 
 
 class LassoSolver(ProxGradientSolver):

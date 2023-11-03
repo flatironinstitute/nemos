@@ -2,8 +2,9 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
+import inspect
 from functools import partial
-from typing import Iterable, List, Literal, Optional, Tuple, Union
+from typing import Callable, Iterable, List, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -455,3 +456,66 @@ def check_invalid_entry(array: jnp.ndarray) -> None:
         raise ValueError("Input array contains Infs!")
     elif jnp.any(jnp.isnan(array)):
         raise ValueError("Input array contains NaNs!")
+
+
+def count_positional_params(func: Callable) -> int:
+    """
+    Count the number of positional parameters a function accepts.
+
+    This function counts the number of POSITIONAL_OR_KEYWORD and POSITIONAL_ONLY parameters.
+
+    For example, all the following callable will return a count of two:
+
+        - `def func(x, y, *args)`, since x and y are POSITIONAL_OR_KEYWORD, *args is VAR_POSITIONAL
+        - `def func(x, y, *args, z)`, since x and y are POSITIONAL_OR_KEYWORD,
+         *args is VAR_POSITIONAL, z is KEYWORD_ONLY
+        - `def func(x, y, *args, z, **kwargs)`, since x and y are POSITIONAL_OR_KEYWORD,
+         *args is VAR_POSITIONAL, z is KEYWORD_ONLY,
+        **kwargs is VAR_KEYWORD
+        - `def func(x, /, y, *args, z, **kwargs)`, since x  POSITIONAL_ONLY, y are POSITIONAL_OR_KEYWORD,
+        *args is VAR_POSITIONAL, z is KEYWORD_ONLY, **kwargs is VAR_KEYWORD
+
+    Parameters
+    ----------
+    func :
+        The function whose signature is to be inspected.
+
+    Returns
+    -------
+    :
+        The count of POSITIONAL_OR_KEYWORD parameters for the given function.
+    """
+    # Count parameters excluding any *args or **kwargs
+    return sum(
+        1
+        for param in inspect.signature(func).parameters.values()
+        if param.kind
+        in [inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.POSITIONAL_ONLY]
+    )
+
+
+def check_loss(func: Callable):
+    """
+    Check if the provided loss function is callable with 3 arguments.
+
+    Ensures that the given function is not only callable, but also that it
+    requires 3 positinal arguments.
+
+    Parameters
+    ----------
+    func :
+        The function to check.
+
+    Raises
+    ------
+    TypeError
+        - If the provided loss is not callable.
+        - If the loss does not require 3 arguments.
+    """
+    if not callable(func):
+        raise TypeError("The loss function must be a Callable!")
+
+    if count_positional_params(func) != 3:
+        raise TypeError(
+            "The loss function must require 3 positional inputs, usually (params, X, y)."
+        )

@@ -37,16 +37,20 @@ class TestGLM:
         "solver, error, match_str",
         [
             (nsl.solver.RidgeSolver("BFGS"), None, None),
-            (nsl.solver.Solver, TypeError, "The `instantiate_solver` method of `solver` must accept"),
-            (1, TypeError, "The provided `solver` does not implements the")
+            (None, AttributeError, "'NoneType' object has no attribute 'instantiate_solver'"),
+            (nsl.solver.RidgeSolver, TypeError, "RidgeSolver.instantiate_solver() missing 1 required")
         ]
     )
-    def test_init_solver_type(self, solver, error, match_str, poisson_observation_model):
+    def test_solver_type(self, solver, error, match_str, poissonGLM_model_instantiation):
         """
-        Test initialization with different solver names. Check if an appropriate exception is raised
-        when the solver name is not present in jaxopt.
+        Test that an error is raised if a non-compatible solver is passed.
         """
-        _test_class_initialization(self.cls, {'solver': solver, 'observation_model': poisson_observation_model}, error, match_str)
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.solver = solver
+        _test_class_method(model, "fit",
+                           [X, y],
+                           {"init_params": true_params},
+                           error, match_str)
 
     @pytest.mark.parametrize(
         "observation, error, match_str",
