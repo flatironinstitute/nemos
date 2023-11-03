@@ -104,7 +104,13 @@ class GLM(BaseRegressor):
         self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
-        Predict firing rates given predictors and parameters.
+        Predicts firing rates based on given parameters and design matrix.
+
+        This function computes the predicted firing rates using the provided parameters
+        and model design matrix `X`. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the `GLM.predict`
+        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+
 
         Parameters
         ----------
@@ -181,9 +187,6 @@ class GLM(BaseRegressor):
 
         This computes the negative log-likelihood up to a constant term.
 
-        Note that you can end up with infinities in here if there are zeros in
-        ``predicted_rates``. We raise a warning in that case.
-
         Parameters
         ----------
         params :
@@ -208,10 +211,13 @@ class GLM(BaseRegressor):
         y: Union[NDArray, jnp.ndarray],
         score_type: Literal["log-likelihood", "pseudo-r2"] = "pseudo-r2",
     ) -> jnp.ndarray:
-        r"""Score the predicted firing rates (based on fit) to the target spike counts.
+        r"""Evaluates the goodness-of-fit of the model to the observed neural data.
 
-        This computes the GLM pseudo-$R^2$ or the mean log-likelihood, thus the higher the
-        number the better.
+        This method computes the goodness-of-fit score, which can either be the mean
+        log-likelihood or the pseudo-R^2. The scoring process includes validation of
+        input compatibility with the model's parameters, ensuring that the model
+        has been previously fitted and the input data are appropriate for scoring. A
+        higher score indicates a better fit of the model to the observed data.
 
 
         Parameters
