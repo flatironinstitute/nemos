@@ -343,6 +343,10 @@ class ProxGradientSolver(Solver, abc.ABC):
         regularizer_strength: float = 1.0,
         **kwargs,
     ):
+        if solver_kwargs is None:
+            solver_kwargs = dict(prox=self.get_prox_operator())
+        else:
+            solver_kwargs["prox"] = self.get_prox_operator()
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
@@ -383,7 +387,6 @@ class ProxGradientSolver(Solver, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-        self.solver_kwargs["prox"] = self.get_prox_operator()
         return self.get_runner(loss, self.regularizer_strength)
 
 
