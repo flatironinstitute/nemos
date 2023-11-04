@@ -329,7 +329,7 @@ class GLM(BaseRegressor):
     ):
         """Fit GLM to neural activity.
 
-        Following scikit-learn API, the solutions are stored as attributes
+        Fit and store the model parameters as attributes
         ``basis_coeff_`` and ``baseline_link_fr``.
 
         Parameters
@@ -362,9 +362,9 @@ class GLM(BaseRegressor):
         # Run optimization
         runner = self.solver.instantiate_solver(self._score)
         params, state = runner(init_params, X, y)
-        # if any observation model other than Poisson are used
-        # one should set the scale parameter too.
-        # self.observation_model.set_scale(params)
+
+        # estimate the GLM scale
+        self.observation_model.estimate_scale(self._predict(params, X))
 
         if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
             raise ValueError(
@@ -438,10 +438,10 @@ class GLMRecurrent(GLM):
     """
     A Generalized Linear Model (GLM) with recurrent dynamics.
 
-    This class extends the basic GLM to capture recurrent dynamics between neurons,
-    making it more suitable for simulating the activity of interconnected neural populations.
-    The recurrent GLM combines both feedforward inputs (like sensory stimuli) and past
-    neural activity to simulate or predict future neural activity.
+    This class extends the basic GLM to capture recurrent dynamics between neurons and
+    self-connectivity, making it more suitable for simulating the activity of interconnected
+    neural populations. The recurrent GLM combines both feedforward inputs (like sensory
+    stimuli) and past neural activity to simulate or predict future neural activity.
 
     Parameters
     ----------
@@ -461,15 +461,8 @@ class GLMRecurrent(GLM):
     inputs and the past activity of the same and other neurons. This makes it particularly
     powerful for capturing the dynamics of neural networks where neurons are interconnected.
 
-    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and might include
+    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and include
     coefficients, fitted status, and other model-related attributes.
-
-    Examples
-    --------
-    >>> # Initialize the recurrent GLM with default parameters
-    >>> model = GLMRecurrent()
-    >>> # ... your code for training and simulating using the model ...
-
     """
 
     def __init__(
@@ -546,27 +539,27 @@ class GLMRecurrent(GLM):
         self._check_is_fit()
 
         # convert to jnp.ndarray
-        (coupling_basis_matrix,) = utils.convert_to_jnp_ndarray(coupling_basis_matrix)
+        (coupling_basis_matrix,) = utils.convert_to_jnp_ndarray(
+            coupling_basis_matrix,
+            data_type=jnp.float_
+        )
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.baseline_link_fr_.shape[0]
 
-        if init_y is None:
-            init_y = jnp.zeros((coupling_basis_matrix.shape[0], n_neurons))
-
-        Wf = self.basis_coeff_[:, n_basis_coupling * n_neurons :]
-        Wr = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
+        w_feedforward = self.basis_coeff_[:, n_basis_coupling * n_neurons:]
+        w_recurrent = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
         bs = self.baseline_link_fr_
 
         feedforward_input, init_y = self._preprocess_simulate(
             feedforward_input,
-            params_feedforward=(Wf, bs),
+            params_feedforward=(w_feedforward, bs),
             init_y=init_y,
-            params_recurrent=(Wr, bs),
+            params_recurrent=(w_recurrent, bs),
         )
 
         self._check_input_and_params_consistency(
-            (Wr, bs),
+            (w_recurrent, bs),
             y=init_y,
         )
 
@@ -580,7 +573,7 @@ class GLMRecurrent(GLM):
 
         subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
         # (n_samples, n_neurons)
-        feed_forward_contrib = jnp.einsum("ik,tik->ti", Wf, feedforward_input)
+        feed_forward_contrib = jnp.einsum("ik,tik->ti", w_feedforward, feedforward_input)
 
         def scan_fn(
             data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
@@ -604,7 +597,11 @@ class GLMRecurrent(GLM):
                 (1, feed_forward_contrib.shape[1]),
             )
 
-            # Reshape the convolved activity and concatenate with the input slice to form the model input
+            # Repeat the convolutoin `n_neuron` times with the following steps
+            # 1) Initial convolution output shape (1, n_neuron, n_basis_coupling)
+            # 2) Reshape that to (1, n_neuron * n_basis_coupling)
+            # 3) Tile it n_neuron times, shape (1, n_neurons**2 * n_basis_coupling)
+            # 4) Reshape it to (1, n_neurons, n_neuron * n_basis_coupling)
             conv_act = jnp.tile(
                 conv_act.reshape(conv_act.shape[0], -1), conv_act.shape[1]
             ).reshape(conv_act.shape[0], conv_act.shape[1], -1)
@@ -613,7 +610,7 @@ class GLMRecurrent(GLM):
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
             firing_rate = self._observation_model.inverse_link_function(
-                jnp.einsum("ik,tik->ti", Wr, conv_act) + input_slice + bs[None, :]
+                jnp.einsum("ik,tik->ti", w_recurrent, conv_act) + input_slice + bs[None, :]
             )
 
             # Simulate activity based on the predicted firing rate
