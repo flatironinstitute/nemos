@@ -299,11 +299,6 @@ class GLM(BaseRegressor):
         Routledge, 2013.
 
         """
-        if score_type not in ["log-likelihood", "pseudo-r2"]:
-            raise NotImplementedError(
-                f"Scoring method {score_type} not implemented! "
-                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
-            )
         self._check_is_fit()
         Ws = self.basis_coeff_
         bs = self.baseline_link_fr_
@@ -313,12 +308,17 @@ class GLM(BaseRegressor):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
+
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
             score = -self._score((Ws, bs), X, y) - norm_constant
-        else:
+        elif score_type == "pseudo-r2":
             score = self._observation_model.pseudo_r2(self._predict((Ws, bs), X), y)
-
+        else:
+            raise NotImplementedError(
+                f"Scoring method {score_type} not implemented! "
+                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
+            )
         return score
 
     def fit(
