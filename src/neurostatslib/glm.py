@@ -540,14 +540,13 @@ class GLMRecurrent(GLM):
 
         # convert to jnp.ndarray
         (coupling_basis_matrix,) = utils.convert_to_jnp_ndarray(
-            coupling_basis_matrix,
-            data_type=jnp.float_
+            coupling_basis_matrix, data_type=jnp.float_
         )
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.baseline_link_fr_.shape[0]
 
-        w_feedforward = self.basis_coeff_[:, n_basis_coupling * n_neurons:]
+        w_feedforward = self.basis_coeff_[:, n_basis_coupling * n_neurons :]
         w_recurrent = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
         bs = self.baseline_link_fr_
 
@@ -573,7 +572,9 @@ class GLMRecurrent(GLM):
 
         subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
         # (n_samples, n_neurons)
-        feed_forward_contrib = jnp.einsum("ik,tik->ti", w_feedforward, feedforward_input)
+        feed_forward_contrib = jnp.einsum(
+            "ik,tik->ti", w_feedforward, feedforward_input
+        )
 
         def scan_fn(
             data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
@@ -583,45 +584,46 @@ class GLMRecurrent(GLM):
             This function simulates the neural activity and firing rates for each time step
             based on the previous activity, feedforward input, and model coefficients.
             """
-            activity, chunk = data
+            activity, t_sample = data
 
             # Convolve the neural activity with the coupling basis matrix
-            conv_act = utils.convolve_1d_trials(coupling_basis_matrix, activity[None])[
-                0
-            ]
+            # squeeze the first dimension (time) because by construction
+            # is going to be 1 time sample
+            conv_act = utils.convolve_1d_trials(
+                coupling_basis_matrix,
+                activity[None]
+            )[0].squeeze(axis=0)
+
+            # Initial convolution output shape (n_neuron, n_basis_coupling)
+            # Flatten to (n_neuron * n_basis_coupling, )
+            conv_act = conv_act.flatten()
 
             # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
                 feed_forward_contrib,
-                (chunk, 0),
+                (t_sample, 0),
                 (1, feed_forward_contrib.shape[1]),
-            )
-
-            # Repeat the convolutoin `n_neuron` times with the following steps
-            # 1) Initial convolution output shape (1, n_neuron, n_basis_coupling)
-            # 2) Reshape that to (1, n_neuron * n_basis_coupling)
-            # 3) Tile it n_neuron times, shape (1, n_neurons**2 * n_basis_coupling)
-            # 4) Reshape it to (1, n_neurons, n_neuron * n_basis_coupling)
-            conv_act = jnp.tile(
-                conv_act.reshape(conv_act.shape[0], -1), conv_act.shape[1]
-            ).reshape(conv_act.shape[0], conv_act.shape[1], -1)
+            ).squeeze(axis=0)
 
             # Predict the firing rate using the model coefficients
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
             firing_rate = self._observation_model.inverse_link_function(
-                jnp.einsum("ik,tik->ti", w_recurrent, conv_act) + input_slice + bs[None, :]
+                w_recurrent.dot(conv_act)
+                + input_slice
+                + bs
             )
 
             # Simulate activity based on the predicted firing rate
             new_act = self._observation_model.sample_generator(key, firing_rate)
 
-            # Prepare the spikes for the next iteration (keeping the most recent spikes)
-            concat_act = jnp.row_stack((activity[1:], new_act)), chunk + 1
-            return concat_act, (new_act, firing_rate)
-
-        _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+            # Shift of one sample the spike count window
+            # for the next iteration (i.e. remove the first counts, and
+            # stack the newly generated sample)
+            # Increase the t_sample by one
+            carry = jnp.row_stack((activity[1:], new_act)), t_sample + 1
+            return carry, (new_act, firing_rate)
+        with jax.disable_jit(True):
+            _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
         simulated_activity, firing_rates = outputs
-        return jnp.squeeze(simulated_activity, axis=1), jnp.squeeze(
-            firing_rates, axis=1
-        )
+        return simulated_activity, firing_rates
