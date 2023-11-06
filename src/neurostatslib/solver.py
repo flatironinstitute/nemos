@@ -13,24 +13,30 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
+from . import utils
 from .base_class import Base
 from .proximal_operator import prox_group_lasso
-from . import utils
 
 SolverRunner = Callable[
-        [
-            Tuple[jnp.ndarray, jnp.ndarray],    # Model parameters (for now tuple, eventually pytree)
-            jnp.ndarray,                        # Predictors (i.e. model design for GLM)
-            jnp.ndarray],                       # Output (neural activity)
-        jaxopt.OptStep
-    ]
+    [
+        Tuple[
+            jnp.ndarray, jnp.ndarray
+        ],  # Model parameters (for now tuple, eventually pytree)
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    jaxopt.OptStep,
+]
 
 ProximalOperator = Callable[
-        [
-            Tuple[jnp.ndarray, jnp.ndarray],    # Model parameters (for now tuple, eventually pytree)
-            float,                              # Regularizer strength (for now float, eventually pytree)
-            float],                             # Step-size for optimization (must be a float)
-        Tuple[jnp.ndarray, jnp.ndarray]
+    [
+        Tuple[
+            jnp.ndarray, jnp.ndarray
+        ],  # Model parameters (for now tuple, eventually pytree)
+        float,  # Regularizer strength (for now float, eventually pytree)
+        float,
+    ],  # Step-size for optimization (must be a float)
+    Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
 __all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
@@ -56,13 +62,6 @@ class Solver(Base, abc.ABC):
         Name of the solver being used.
     solver_kwargs :
         Additional keyword arguments to be passed to the solver during instantiation.
-
-    Methods
-    -------
-    instantiate_solver(loss) :
-        Abstract method to instantiate a solver with a given loss function.
-    get_runner(solver_kwargs, run_kwargs) :
-        Get the solver runner with provided arguments.
     """
 
     allowed_algorithms: List[str] = []
@@ -206,11 +205,6 @@ class UnRegularizedSolver(Solver):
     allowed_optimizers : list of str
         List of optimizer names that are allowed for this solver class.
 
-    Methods
-    -------
-    instantiate_solver(loss)
-        Instantiates the optimization algorithm with the given loss function.
-
     See Also
     --------
     [Solver](./#neurostatslib.solver.Solver) : Base solver class from which this class inherits.
@@ -286,7 +280,7 @@ class RidgeSolver(Solver):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
-    def penalization(self, params: Tuple[jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
+    def _penalization(self, params: Tuple[jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
 
@@ -328,7 +322,7 @@ class RidgeSolver(Solver):
         utils.assert_is_callable(loss, "loss")
 
         def penalized_loss(params, X, y):
-            return loss(params, X, y) + self.penalization(params)
+            return loss(params, X, y) + self._penalization(params)
 
         return self.get_runner(penalized_loss)
 
@@ -450,13 +444,6 @@ class GroupLassoSolver(ProxGradientSolver):
         Each row represents a group of features.
         Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
         to the group, and a value of 0 indicates it doesn't.
-
-    Methods
-    -------
-    _check_mask():
-        Validate the mask array to ensure it meets the requirements for Group Lasso regularization.
-    get_prox_operator():
-        Retrieve the proximal operator for Group Lasso regularization.
     """
 
     def __init__(

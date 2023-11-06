@@ -591,10 +591,9 @@ class GLMRecurrent(GLM):
             # 1. The first dimension is time, and 1 is by construction since we are simulating 1
             #    sample
             # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-            conv_act = utils.convolve_1d_trials(
-                coupling_basis_matrix,
-                activity[None]
-            )[0].flatten()
+            conv_act = utils.convolve_1d_trials(coupling_basis_matrix, activity[None])[
+                0
+            ].flatten()
 
             # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
@@ -607,9 +606,7 @@ class GLMRecurrent(GLM):
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
             firing_rate = self._observation_model.inverse_link_function(
-                w_recurrent.dot(conv_act)
-                + input_slice
-                + bs
+                w_recurrent.dot(conv_act) + input_slice + bs
             )
 
             # Simulate activity based on the predicted firing rate
@@ -621,6 +618,7 @@ class GLMRecurrent(GLM):
             # Increase the t_sample by one
             carry = jnp.row_stack((activity[1:], new_act)), t_sample + 1
             return carry, (new_act, firing_rate)
+
         with jax.disable_jit(True):
             _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
         simulated_activity, firing_rates = outputs
