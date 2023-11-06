@@ -587,16 +587,14 @@ class GLMRecurrent(GLM):
             activity, t_sample = data
 
             # Convolve the neural activity with the coupling basis matrix
-            # squeeze the first dimension (time) because by construction
-            # is going to be 1 time sample
+            # Output of shape (1, n_neuron, n_basis_coupling)
+            # 1. The first dimension is time, and 1 is by construction since we are simulating 1
+            #    sample
+            # 2. Flatten to shape (n_neuron * n_basis_coupling, )
             conv_act = utils.convolve_1d_trials(
                 coupling_basis_matrix,
                 activity[None]
-            )[0].squeeze(axis=0)
-
-            # Initial convolution output shape (n_neuron, n_basis_coupling)
-            # Flatten to (n_neuron * n_basis_coupling, )
-            conv_act = conv_act.flatten()
+            )[0].flatten()
 
             # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
