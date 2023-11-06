@@ -1,5 +1,5 @@
 """
-## A Module for Optimization with Various Regularizations.
+A Module for Optimization with Various Regularizations.
 
 This module provides a series of classes that facilitate the optimization of models
 with different types of regularizations. Each solver class in this module interfaces
@@ -15,6 +15,23 @@ from numpy.typing import NDArray
 
 from .base_class import Base
 from .proximal_operator import prox_group_lasso
+from . import utils
+
+SolverRunner = Callable[
+        [
+            Tuple[jnp.ndarray, jnp.ndarray],    # Model parameters (for now tuple, eventually pytree)
+            jnp.ndarray,                        # Predictors (i.e. model design for GLM)
+            jnp.ndarray],                       # Output (neural activity)
+        jaxopt.OptStep
+    ]
+
+ProximalOperator = Callable[
+        [
+            Tuple[jnp.ndarray, jnp.ndarray],    # Model parameters (for now tuple, eventually pytree)
+            float,                              # Regularizer strength (for now float, eventually pytree)
+            float],                             # Step-size for optimization (must be a float)
+        Tuple[jnp.ndarray, jnp.ndarray]
+]
 
 __all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
 
@@ -33,7 +50,7 @@ class Solver(Base, abc.ABC):
 
     Attributes
     ----------
-    allowed_optimizers :
+    allowed_algorithms :
         List of optimizer names that are allowed for use with this solver.
     solver_name :
         Name of the solver being used.
@@ -48,7 +65,7 @@ class Solver(Base, abc.ABC):
         Get the solver runner with provided arguments.
     """
 
-    allowed_optimizers: List[str] = []
+    allowed_algorithms: List[str] = []
 
     def __init__(
         self,
@@ -97,11 +114,11 @@ class Solver(Base, abc.ABC):
         ValueError
             If the provided solver name is not in the list of allowed optimizers.
         """
-        if solver_name not in self.allowed_optimizers:
+        if solver_name not in self.allowed_algorithms:
             raise ValueError(
                 f"Solver `{solver_name}` not allowed for "
                 f"{self.__class__} regularization. "
-                f"Allowed solvers are {self.allowed_optimizers}."
+                f"Allowed solvers are {self.allowed_algorithms}."
             )
 
     @staticmethod
@@ -131,12 +148,8 @@ class Solver(Base, abc.ABC):
     @abc.abstractmethod
     def instantiate_solver(
         self,
-        loss: Callable[
-            [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.ndarray
-        ],
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
-    ]:
+        loss: Callable,
+    ) -> SolverRunner:
         """Abstract method to instantiate a solver with a given loss function."""
         pass
 
@@ -145,9 +158,7 @@ class Solver(Base, abc.ABC):
         loss: Callable,
         *run_args: Any,
         **run_kwargs: dict,
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
-    ]:
+    ) -> SolverRunner:
         """
         Get the solver runner with provided arguments.
 
@@ -162,6 +173,11 @@ class Solver(Base, abc.ABC):
         -------
         :
             The solver runner.
+
+        Raises
+        ------
+        TypeError
+            If the loss function is not a callable.
         """
         # get the solver with given arguments.
         # The "fun" argument is not always the first one, but it is always KEYWORD
@@ -200,7 +216,7 @@ class UnRegularizedSolver(Solver):
     [Solver](./#neurostatslib.solver.Solver) : Base solver class from which this class inherits.
     """
 
-    allowed_optimizers = [
+    allowed_algorithms = [
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -217,12 +233,8 @@ class UnRegularizedSolver(Solver):
 
     def instantiate_solver(
         self,
-        loss: Callable[
-            [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.ndarray
-        ],
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
-    ]:
+        loss: Callable,
+    ) -> SolverRunner:
         """
         Instantiate the optimization algorithm for a given loss function.
 
@@ -237,6 +249,8 @@ class UnRegularizedSolver(Solver):
             A runner function that uses the specified optimization algorithm
             to minimize the given loss function.
         """
+        # check that the loss is Callable
+        utils.assert_is_callable(loss, "loss")
         return self.get_runner(loss)
 
 
@@ -253,7 +267,7 @@ class RidgeSolver(Solver):
         A list of optimizer names that are allowed to be used with this solver.
     """
 
-    allowed_optimizers = [
+    allowed_algorithms = [
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -295,12 +309,8 @@ class RidgeSolver(Solver):
 
     def instantiate_solver(
         self,
-        loss: Callable[
-            [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.ndarray
-        ],
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
-    ]:
+        loss: Callable,
+    ) -> SolverRunner:
         """
         Instantiate the solver with a penalized loss function.
 
@@ -314,6 +324,8 @@ class RidgeSolver(Solver):
         Callable
             A function that runs the solver with the penalized loss.
         """
+        # check that the loss is Callable
+        utils.assert_is_callable(loss, "loss")
 
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self.penalization(params)
@@ -334,7 +346,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         A list of optimizer names that are allowed to be used with this solver.
     """
 
-    allowed_optimizers = ["ProximalGradient"]
+    allowed_algorithms = ["ProximalGradient"]
 
     def __init__(
         self,
@@ -353,9 +365,7 @@ class ProxGradientSolver(Solver, abc.ABC):
     @abc.abstractmethod
     def get_prox_operator(
         self,
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], float, float], Tuple[jnp.ndarray, jnp.ndarray]
-    ]:
+    ) -> ProximalOperator:
         """
         Abstract method to retrieve the proximal operator for this solver.
 
@@ -368,12 +378,8 @@ class ProxGradientSolver(Solver, abc.ABC):
 
     def instantiate_solver(
         self,
-        loss: Callable[
-            [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jnp.ndarray
-        ],
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], jnp.ndarray, jnp.ndarray], jaxopt.OptStep
-    ]:
+        loss: Callable,
+    ) -> SolverRunner:
         """
         Instantiate the solver with the provided loss function and proximal operator.
 
@@ -387,6 +393,8 @@ class ProxGradientSolver(Solver, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
+        # check that the loss is Callable
+        utils.assert_is_callable(loss, "loss")
         return self.get_runner(loss, self.regularizer_strength)
 
 
@@ -409,9 +417,7 @@ class LassoSolver(ProxGradientSolver):
 
     def get_prox_operator(
         self,
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], float, float], Tuple[jnp.ndarray, jnp.ndarray]
-    ]:
+    ) -> ProximalOperator:
         """
         Retrieve the proximal operator for Lasso regularization (L1 penalty).
 
@@ -522,9 +528,7 @@ class GroupLassoSolver(ProxGradientSolver):
 
     def get_prox_operator(
         self,
-    ) -> Callable[
-        [Tuple[jnp.ndarray, jnp.ndarray], float, float], Tuple[jnp.ndarray, jnp.ndarray]
-    ]:
+    ) -> ProximalOperator:
         """
         Retrieve the proximal operator for Group Lasso regularization.
 
