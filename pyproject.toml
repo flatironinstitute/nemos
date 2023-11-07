@@ -54,8 +54,8 @@ dev = [
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
-    "statsmodels",
-    "scikit-learn"
+    "statsmodels",                  # Used to compare model pseudo-r2 in testing
+    "scikit-learn",                 # Testing compatibility with CV & pipelines
 ]
 docs = [
     "mkdocs",                       # Documentation generator
@@ -99,8 +99,8 @@ profile = "black"
 
 # Configure pytest
 [tool.pytest.ini_options]
-addopts = "--cov=nemos"   # Additional options to pass to pytest, enabling coverage for the 'nemos' package
 testpaths = ["tests"]             # Specify the directory where test files are located
+addopts = "--cov=src"
 
 [tool.coverage.report]
 exclude_lines = [
