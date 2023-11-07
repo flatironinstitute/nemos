@@ -43,8 +43,8 @@ class GLM(BaseRegressor):
     Raises
     ------
     TypeError
-        If provided `solver` or `observation_model` are not valid or implemented in `neurostatslib.solver` and
-        `neurostatslib.observation_models` respectively.
+        If provided `solver` or `observation_model` are not valid or implemented in `generalized-linear-models.solver` and
+        `generalized-linear-models.observation_models` respectively.
     """
 
     def __init__(
@@ -155,11 +155,11 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        - [score](./#neurostatslib.glm.GLM.score)
+        - [score](./#generalized-linear-models.glm.GLM.score)
             Score predicted rates against target spike counts.
-        - [simulate (feed-forward only)](../glm/#neurostatslib.glm.GLM.simulate)
+        - [simulate (feed-forward only)](../glm/#generalized-linear-models.glm.GLM.simulate)
             Simulate neural activity in response to a feed-forward input .
-        - [simulate (feed-forward + coupling)](../glm/#neurostatslib.glm.GLMRecurrent.simulate)
+        - [simulate (feed-forward + coupling)](../glm/#generalized-linear-models.glm.GLMRecurrent.simulate)
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network.
         """
@@ -291,7 +291,7 @@ class GLM(BaseRegressor):
         predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate,
         see references[$^1$](#--references).
 
-        Refer to the `nsl.observation_models.Observations` concrete subclasses for the specific likelihood equations.
+        Refer to the `nmo.observation_models.Observations` concrete subclasses for the specific likelihood equations.
 
 
         References
@@ -417,7 +417,7 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        [predict](./#neurostatslib.glm.GLM.predict) :
+        [predict](./#generalized-linear-models.glm.GLM.predict) :
         Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
@@ -454,7 +454,7 @@ class GLMRecurrent(GLM):
 
     See Also
     --------
-    [GLM](./#neurostatslib.glm.GLM) : Base class for the generalized linear model.
+    [GLM](./#generalized-linear-models.glm.GLM) : Base class for the generalized linear model.
 
     Notes
     -----
@@ -523,7 +523,7 @@ class GLMRecurrent(GLM):
 
         See Also
         --------
-        [predict](./#neurostatslib.glm.GLM.predict) :
+        [predict](./#generalized-linear-models.glm.GLM.predict) :
         Method to predict rates based on the model's parameters.
 
         Notes

@@ -6,7 +6,7 @@
 
 Generalized Linear Models (GLM) provide a flexible framework for modeling a variety of data types while establishing a relationship between multiple predictors and a response variable. A GLM extends the traditional linear regression by allowing for response variables that have error distribution models other than a normal distribution, such as binomial or Poisson distributions.
 
-The `neurostatslib.glm` module currently  offers implementations of two GLM classes:
+The `nemos.glm` module currently  offers implementations of two GLM classes:
 
 1. **`GLM`:** A direct implementation of a feedforward GLM.
 2. **`RecurrentGLM`:** An implementation of a recurrent GLM. This class inherits from `GLM` and redefines the `simulate` method to generate spikes akin to a recurrent neural network.
@@ -15,7 +15,7 @@ Our design aligns with the `scikit-learn` API, facilitating seamless integration
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant. 
 
-Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the [`neurostatslib.observation_models.Observations`](../04-observation_models/#the-abstract-class-observations) and [`neurostatslib.solver.Solver`](../05-solver/#the-abstract-class-solver) objects, respectively.
+Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the [`nemos.observation_models.Observations`](../04-observation_models/#the-abstract-class-observations) and [`nemos.solver.Solver`](../05-solver/#the-abstract-class-solver) objects, respectively.
 
 
 <figure markdown>
@@ -35,8 +35,8 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 ### Attributes
 
-- **`solver`**: Refers to the optimization solver - an object of the [`neurostatslib.solver.Solver`](../05-solver/#the-abstract-class-solver) type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
-- **`observation_models`**: Represents the GLM observation model, which is an object of the [`neurostatslib.observation_models.Observations`](../04-observation_models/#the-abstract-class-observations) type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
+- **`solver`**: Refers to the optimization solver - an object of the [`nemos.solver.Solver`](../05-solver/#the-abstract-class-solver) type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
+- **`observation_models`**: Represents the GLM observation model, which is an object of the [`nemos.observation_models.Observations`](../04-observation_models/#the-abstract-class-observations) type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
 - **`coef_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`solver_state`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
@@ -71,6 +71,6 @@ When crafting a functional (i.e., concrete) GLM class:
 
 - **Must** inherit from `BaseRegressor` or one of its derivatives.
 - **Must** realize the `predict`, `fit`, `score`, and `simulate` methods, either directly or through inheritance.
-- **Should** incorporate a `observation_models` attribute of type `neurostatslib.observation_models.Observations` to specify the link-function, emission probability, and likelihood.
-- **Should** include a `solver` attribute of type `neurostatslib.solver.Solver` to establish the solver based on penalization type.
+- **Should** incorporate a `observation_models` attribute of type `nemos.observation_models.Observations` to specify the link-function, emission probability, and likelihood.
+- **Should** include a `solver` attribute of type `nemos.solver.Solver` to establish the solver based on penalization type.
 - **May** embed additional parameter and input checks if required by the specific GLM subclass.

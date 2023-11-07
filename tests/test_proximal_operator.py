@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 
-from neurostatslib.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso
+from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso
 
 
 def test_prox_group_lasso_returns_tuple(example_data_prox_operator):

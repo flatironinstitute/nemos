@@ -8,7 +8,7 @@ The `Base` class is envisioned as the foundational component for any object type
 
 Designed to be compatible with the `scikit-learn` API, the class structure aims to facilitate access to `scikit-learn`'s robust pipeline and cross-validation modules. This is achieved while leveraging the accelerated computational capabilities of `jax` and `jaxopt` in the backend, which is essential for analyzing extensive neural recordings and fitting large models.
 
-Below a scheme of how we envision the architecture of the `neurostatslib` models.
+Below a scheme of how we envision the architecture of the `nemos` models.
 
 ```
 Abstract Class Base
@@ -41,7 +41,7 @@ Abstract Class Base
 ```
 
 !!! Example
-    The current package version includes a concrete class named `neurostatslib.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the " GLM regression" category. 
+    The current package version includes a concrete class named `nemos.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the " GLM regression" category. 
     As any `BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
 
 

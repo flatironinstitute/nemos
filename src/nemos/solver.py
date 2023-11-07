@@ -207,7 +207,7 @@ class UnRegularizedSolver(Solver):
 
     See Also
     --------
-    [Solver](./#neurostatslib.solver.Solver) : Base solver class from which this class inherits.
+    [Solver](./#generalized-linear-models.solver.Solver) : Base solver class from which this class inherits.
     """
 
     allowed_algorithms = [

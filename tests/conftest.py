@@ -1,12 +1,12 @@
 """
-Testing configurations for the `neurostatslib` library.
+Testing configurations for the `generalized-linear-models` library.
 
 This module contains test fixtures required to set up and verify the functionality
-of the modules of the `neurostatslib` library.
+of the modules of the `generalized-linear-models` library.
 
 Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
-    and loading predefined parameters for testing various functionalities of the `neurostatslib` library.
+    and loading predefined parameters for testing various functionalities of the `generalized-linear-models` library.
 """
 import inspect
 import json
@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import neurostatslib as nsl
+import nemos as nmo
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def poissonGLM_model_instantiation():
         tuple: A tuple containing:
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
-            - model (nsl.glm.PoissonGLM): Initialized model instance.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
             - (w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
@@ -40,9 +40,9 @@ def poissonGLM_model_instantiation():
     X = np.random.normal(size=(100, 1, 5))
     b_true = np.zeros((1, ))
     w_true = np.random.normal(size=(1, 5))
-    observation_model = nsl.observation_models.PoissonObservations(jnp.exp)
-    solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
-    model = nsl.glm.GLM(observation_model, solver)
+    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    solver = nmo.solver.UnRegularizedSolver('GradientDescent', {})
+    model = nmo.glm.GLM(observation_model, solver)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
 
@@ -56,7 +56,7 @@ def poissonGLM_coupled_model_config_simulate():
 
     Returns:
         tuple: A tuple containing:
-            - model (nsl.glm.PoissonGLM): Initialized model instance.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
             - coupling_basis (jax.numpy.ndarray): Coupling basis values from the config.
             - feedforward_input (jax.numpy.ndarray): Feedforward input values from the config.
             - init_spikes (jax.numpy.ndarray): Initial spike values from the config.
@@ -68,9 +68,9 @@ def poissonGLM_coupled_model_config_simulate():
                            "simulate_coupled_neurons_params.json"), "r") as fh:
         config_dict = json.load(fh)
 
-    observations = nsl.observation_models.PoissonObservations(jnp.exp)
-    solver = nsl.solver.RidgeSolver("BFGS", regularizer_strength=0.1)
-    model = nsl.glm.GLMRecurrent(observation_model=observations, solver=solver)
+    observations = nmo.observation_models.PoissonObservations(jnp.exp)
+    solver = nmo.solver.RidgeSolver("BFGS", regularizer_strength=0.1)
+    model = nmo.glm.GLMRecurrent(observation_model=observations, solver=solver)
     model.coef_ = jnp.asarray(config_dict["coef_"])
     model.intercept_ = jnp.asarray(config_dict["intercept_"])
     coupling_basis = jnp.asarray(config_dict["coupling_basis"])
@@ -104,7 +104,7 @@ def group_sparse_poisson_glm_model_instantiation():
         tuple: A tuple containing:
             - X (numpy.ndarray): Simulated input data.
             - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
-            - model (nsl.glm.PoissonGLM): Initialized model instance.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
             - (w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
@@ -116,9 +116,9 @@ def group_sparse_poisson_glm_model_instantiation():
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
     mask[1, [0,4]] = 1
-    observation_model = nsl.observation_models.PoissonObservations(jnp.exp)
-    solver = nsl.solver.UnRegularizedSolver('GradientDescent', {})
-    model = nsl.glm.GLM(observation_model, solver)
+    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    solver = nmo.solver.UnRegularizedSolver('GradientDescent', {})
+    model = nmo.glm.GLM(observation_model, solver)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
@@ -137,17 +137,17 @@ def example_data_prox_operator():
 
 @pytest.fixture
 def poisson_observation_model():
-    return nsl.observation_models.PoissonObservations(jnp.exp)
+    return nmo.observation_models.PoissonObservations(jnp.exp)
 
 
 @pytest.fixture
 def ridge_solver():
-    return nsl.solver.RidgeSolver(solver_name="LBFGS", regularizer_strength=0.1)
+    return nmo.solver.RidgeSolver(solver_name="LBFGS", regularizer_strength=0.1)
 
 
 @pytest.fixture
 def lasso_solver():
-    return nsl.solver.LassoSolver(solver_name="ProximalGradient", regularizer_strength=0.1)
+    return nmo.solver.LassoSolver(solver_name="ProximalGradient", regularizer_strength=0.1)
 
 
 @pytest.fixture
@@ -155,7 +155,7 @@ def group_lasso_2groups_5features_solver():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nsl.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1)
+    return nmo.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1)
 
 
 @pytest.fixture

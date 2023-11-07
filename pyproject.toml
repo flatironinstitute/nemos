@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "neurostatslib"
+name = "nemos"
 version = "0.1.0"
 authors = [
     {name = "Edoardo Balzani", email = "ebalzani@flatironinstitute.org"},
@@ -11,7 +11,7 @@ authors = [
     {name = "Guillaume Vejo", email = "gviejo@flatironinstitute.org"},
     {name = "Alex Williams", email = "alex.h.williams@nyu.edu"}
 ]
-description = "Toolbox for basic Generalized Linear Models (GLMs) for neural data analysis"
+description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
 requires-python = ">=3.8"
 keywords = ["neuroscience", "Poisson-GLM"]
@@ -41,7 +41,7 @@ dependencies = [
 # Configure package discovery for setuptools
 [tool.setuptools.packages.find]
 where = ["src"]             # The directory where package modules are located
-include = ["neurostatslib"] # The specific package(s) to include in the distribution
+include = ["nemos"] # The specific package(s) to include in the distribution
 
 
 # Define optional dependencies for the project
@@ -54,8 +54,6 @@ dev = [
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
-    "statsmodels",                  # Used to compare model pseudo-r2 in testing
-    "scikit-learn",                 # Testing compatibility with CV & pipelines
 ]
 docs = [
     "mkdocs",                       # Documentation generator
@@ -99,8 +97,8 @@ profile = "black"
 
 # Configure pytest
 [tool.pytest.ini_options]
+addopts = "--cov=nemos"   # Additional options to pass to pytest, enabling coverage for the 'generalized-linear-models' package
 testpaths = ["tests"]             # Specify the directory where test files are located
-addopts = "--cov=src"
 
 [tool.coverage.report]
 exclude_lines = [
