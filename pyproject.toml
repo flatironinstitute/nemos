@@ -54,6 +54,8 @@ dev = [
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
+    "statsmodels",
+    "scikit-learn"
 ]
 docs = [
     "mkdocs",                       # Documentation generator
