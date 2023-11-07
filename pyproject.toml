@@ -97,7 +97,7 @@ profile = "black"
 
 # Configure pytest
 [tool.pytest.ini_options]
-addopts = "--cov=nemos"   # Additional options to pass to pytest, enabling coverage for the 'generalized-linear-models' package
+addopts = "--cov=nemos"   # Additional options to pass to pytest, enabling coverage for the 'nemos' package
 testpaths = ["tests"]             # Specify the directory where test files are located
 
 [tool.coverage.report]
