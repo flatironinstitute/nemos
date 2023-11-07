@@ -1,8 +1,8 @@
 import jax
 import numpy as np
 
-from neurostatslib.basis import MSplineBasis
-from neurostatslib.glm import GLM
+from nemos.basis import MSplineBasis
+from nemos.glm import GLM
 
 
 class DimensionMismatchError(Exception):

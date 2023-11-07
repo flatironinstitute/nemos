@@ -1,6 +1,6 @@
 ![LOGO](CCN-logo-wText.png)
 
-# neurostatslib
+# nemos
 A toolbox of statistical analysis for neuroscience. 
 
 ## Setup

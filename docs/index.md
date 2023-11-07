@@ -1,4 +1,4 @@
-# neurostatslib 
+# nemos 
 A toolbox of statistical analysis for neuroscience. 
 
 ## Disclaimer

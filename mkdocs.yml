@@ -1,4 +1,4 @@
-site_name: neurostatslib
+site_name: nemos
 repo_url: https://github.com/flatironinstitute/generalized-linear-models
 
 theme:

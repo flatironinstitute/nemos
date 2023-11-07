@@ -9,9 +9,9 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as onp
 
-import neurostatslib as nsl
-from neurostatslib.basis import RaisedCosineBasisLinear
-from neurostatslib.glm import GLM
+import nemos as nmo
+from nemos.basis import RaisedCosineBasisLinear
+from nemos.glm import GLM
 
 
 def test_set_up_glm():

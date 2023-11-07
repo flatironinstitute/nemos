@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "neurostatslib"
+name = "nemos"
 version = "0.1.0"
 authors = [
     {name = "Edoardo Balzani", email = "ebalzani@flatironinstitute.org"},
@@ -41,7 +41,7 @@ dependencies = [
 # Configure package discovery for setuptools
 [tool.setuptools.packages.find]
 where = ["src"]             # The directory where package modules are located
-include = ["neurostatslib"] # The specific package(s) to include in the distribution
+include = ["nemos"] # The specific package(s) to include in the distribution
 
 
 # Define optional dependencies for the project
@@ -96,7 +96,7 @@ profile = "black"
 
 # Configure pytest
 [tool.pytest.ini_options]
-addopts = "--cov=neurostatslib"   # Additional options to pass to pytest, enabling coverage for the 'neurostatslib' package
+addopts = "--cov=nemos"   # Additional options to pass to pytest, enabling coverage for the 'nemos' package
 testpaths = ["tests"]             # Specify the directory where test files are located
 
 [tool.coverage.report]
