@@ -207,7 +207,7 @@ class UnRegularizedSolver(Solver):
 
     See Also
     --------
-    [Solver](./#generalized-linear-models.solver.Solver) : Base solver class from which this class inherits.
+    [Solver](./#nemos.solver.Solver) : Base solver class from which this class inherits.
     """
 
     allowed_algorithms = [

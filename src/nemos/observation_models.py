@@ -279,7 +279,7 @@ class PoissonObservations(Observations):
 
     See Also
     --------
-    [Observations](./#generalized-linear-models.observation_models.Observations) : Base class for observation models.
+    [Observations](./#nemos.observation_models.Observations) : Base class for observation models.
     """
 
     def __init__(self, inverse_link_function=jnp.exp):

@@ -63,8 +63,8 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 # $$
 # Here, we simply add two basis objects, `a_basis` and `b_basis`, together to define the additive basis.
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 import nemos as nmo
 

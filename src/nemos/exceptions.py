@@ -9,8 +9,8 @@ class NotFittedError(ValueError, AttributeError):
 
     Examples
     --------
-    >>> from generalized-linear-models.glm import GLM
-    >>> from generalized-linear-models.exceptions import NotFittedError
+    >>> from nemos.glm import GLM
+    >>> from nemos.exceptions import NotFittedError
     >>> try:
     ...     GLM().predict([[[1, 2], [2, 3], [3, 4]]])
     ... except NotFittedError as e:

@@ -1,12 +1,12 @@
 """
-Testing configurations for the `generalized-linear-models` library.
+Testing configurations for the `nemos` library.
 
 This module contains test fixtures required to set up and verify the functionality
-of the modules of the `generalized-linear-models` library.
+of the modules of the `nemos` library.
 
 Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
-    and loading predefined parameters for testing various functionalities of the `generalized-linear-models` library.
+    and loading predefined parameters for testing various functionalities of the `nemos` library.
 """
 import inspect
 import json

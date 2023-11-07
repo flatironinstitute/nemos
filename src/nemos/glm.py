@@ -155,11 +155,11 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        - [score](./#generalized-linear-models.glm.GLM.score)
+        - [score](./#nemos.glm.GLM.score)
             Score predicted rates against target spike counts.
-        - [simulate (feed-forward only)](../glm/#generalized-linear-models.glm.GLM.simulate)
+        - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
             Simulate neural activity in response to a feed-forward input .
-        - [simulate (feed-forward + coupling)](../glm/#generalized-linear-models.glm.GLMRecurrent.simulate)
+        - [simulate (feed-forward + coupling)](../glm/#nemos.glm.GLMRecurrent.simulate)
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network.
         """
@@ -417,7 +417,7 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        [predict](./#generalized-linear-models.glm.GLM.predict) :
+        [predict](./#nemos.glm.GLM.predict) :
         Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
@@ -454,7 +454,7 @@ class GLMRecurrent(GLM):
 
     See Also
     --------
-    [GLM](./#generalized-linear-models.glm.GLM) : Base class for the generalized linear model.
+    [GLM](./#nemos.glm.GLM) : Base class for the generalized linear model.
 
     Notes
     -----
@@ -523,7 +523,7 @@ class GLMRecurrent(GLM):
 
         See Also
         --------
-        [predict](./#generalized-linear-models.glm.GLM.predict) :
+        [predict](./#nemos.glm.GLM.predict) :
         Method to predict rates based on the model's parameters.
 
         Notes

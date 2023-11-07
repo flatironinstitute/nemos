@@ -56,13 +56,13 @@ spikes = np.random.poisson(rate)
 # ## The Feed-Forward GLM
 #
 # ### Model Definition
-# The class implementing the  feed-forward GLM is `generalized-linear-models.glm.GLM`.
+# The class implementing the  feed-forward GLM is `nemos.glm.GLM`.
 # In order to define the class, one **must** provide:
 #
 # - **Observation Model**: The observation model for the GLM, e.g. an object of the class of type
-# `generalized-linear-models.observation_models.Observations`. So far, only the `PoissonObservations`
+# `nemos.observation_models.Observations`. So far, only the `PoissonObservations`
 # model has been implemented.
-# - **Solver**: The desired solver, e.g. an object of the `generalized-linear-models.solver.Solver` class.
+# - **Solver**: The desired solver, e.g. an object of the `nemos.solver.Solver` class.
 # Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso solver.
 #
 # The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge solver.

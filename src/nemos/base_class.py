@@ -14,7 +14,7 @@ from .utils import check_invalid_entry, convert_to_jnp_ndarray, is_list_like
 
 
 class Base:
-    """Base class for generalized-linear-models estimators.
+    """Base class for nemos estimators.
 
     A base class for estimators with utilities for getting and setting parameters,
     and for interacting with specific devices like CPU, GPU, and TPU.
@@ -209,8 +209,8 @@ class BaseRegressor(Base, abc.ABC):
     --------
     Concrete models:
 
-    - [`GLM`](../glm/#generalized-linear-models.glm.GLM): A feed-forward GLM implementation.
-    - [`GLMRecurrent`](../glm/#generalized-linear-models.glm.GLMRecurrent): A recurrent GLM implementation.
+    - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
+    - [`GLMRecurrent`](../glm/#nemos.glm.GLMRecurrent): A recurrent GLM implementation.
     """
 
     FLOAT_EPS = jnp.finfo(float).eps
