@@ -5,9 +5,9 @@ import jax.numpy as jnp
 import pytest
 from numpy.typing import NDArray
 
-import neurostatslib as nsl
-from neurostatslib.base_class import Base, BaseRegressor
-from neurostatslib.utils import check_invalid_entry, convert_to_jnp_ndarray
+import nemos as nmo
+from nemos.base_class import Base, BaseRegressor
+from nemos.utils import check_invalid_entry, convert_to_jnp_ndarray
 
 
 @pytest.fixture
@@ -323,7 +323,7 @@ def test_target_device_put(device_name: Literal["cpu", "gpu", "tpu"], mock_regre
     Put array to device and checks that the device is matched after put, if device is found.
     Raise error otherwise.
     """
-    raise_exception = not nsl.utils.has_local_device(device_name)
+    raise_exception = not nmo.utils.has_local_device(device_name)
     x = jnp.array([1])
     if raise_exception:
         if device_name != "tpu":

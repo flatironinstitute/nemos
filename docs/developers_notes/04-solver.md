@@ -4,7 +4,7 @@
 
 The `solver` module introduces an archetype class `Solver` which provides the structural components for each concrete sub-class.
 
-Objects of type `Solver` provide methods to define an optimization objective, and instantiate a solver for it. These objects serve as attribute of the [`neurostatslib.glm.GLM`](../03-glm/#the-concrete-class-glm), equipping the glm with a solver for learning model parameters. 
+Objects of type `Solver` provide methods to define an optimization objective, and instantiate a solver for it. These objects serve as attribute of the [`nemos.glm.GLM`](../03-glm/#the-concrete-class-glm), equipping the glm with a solver for learning model parameters. 
 
 Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run` and `update` method with the appropriate input/output types).
 We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable.
@@ -38,7 +38,7 @@ Additionally, the class provides auxiliary methods for checking that the solver 
 
 `Solver` objects define the following abstract method:
 
-- **`instantiate_solver`**: Instantiate a solver runner for a provided loss function. The loss function must be a `Callable` from either the `jax` or the `neurostatslib` namespace. In particular, this method prepares the arguments, calls, and returns the output of the `get_runner` public method, see **Public Methods** below.
+- **`instantiate_solver`**: Instantiate a solver runner for a provided loss function. The loss function must be a `Callable` from either the `jax` or the `nemos` namespace. In particular, this method prepares the arguments, calls, and returns the output of the `get_runner` public method, see **Public Methods** below.
 
 ### Public Methods
 
@@ -50,7 +50,7 @@ Additionally, the class provides auxiliary methods for checking that the solver 
 
 - **`_check_solver_kwargs`**: This method checks if the provided keyword arguments are valid for the specified solver. This helps in catching and preventing potential errors in solver configuration.
 
-- **`_check_is_callable_from_jax`**: This method checks if the provided function is callable and whether it belongs to the `jax` or `neurostatslib` namespace, ensuring compatibility and safety when using jax-based operations.
+- **`_check_is_callable_from_jax`**: This method checks if the provided function is callable and whether it belongs to the `jax` or `nemos` namespace, ensuring compatibility and safety when using jax-based operations.
 
 ## The `UnRegularizedSolver` Class
 

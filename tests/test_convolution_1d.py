@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-import neurostatslib.utils as utils
+import nemos.utils as utils
 
 
 class Test1DConvolution:

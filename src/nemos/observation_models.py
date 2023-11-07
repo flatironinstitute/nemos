@@ -36,7 +36,7 @@ class Observations(Base, abc.ABC):
 
     See Also
     --------
-    [PoissonObservations](./#neurostatslib.observation_models.PoissonObservations) : A specific implementation of a
+    [PoissonObservations](./#generalized-linear-models.observation_models.PoissonObservations) : A specific implementation of a
     observation model using the Poisson distribution.
     """
 
@@ -279,7 +279,7 @@ class PoissonObservations(Observations):
 
     See Also
     --------
-    [Observations](./#neurostatslib.observation_models.Observations) : Base class for observation models.
+    [Observations](./#generalized-linear-models.observation_models.Observations) : Base class for observation models.
     """
 
     def __init__(self, inverse_link_function=jnp.exp):

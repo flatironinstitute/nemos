@@ -63,14 +63,14 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 # $$
 # Here, we simply add two basis objects, `a_basis` and `b_basis`, together to define the additive basis.
 
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
-import neurostatslib as nsl
+import nemos as nmo
 
 # Define 1D basis objects
-a_basis = nsl.basis.MSplineBasis(n_basis_funcs=15, order=3)
-b_basis = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=14)
+a_basis = nmo.basis.MSplineBasis(n_basis_funcs=15, order=3)
+b_basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=14)
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
@@ -239,9 +239,9 @@ plt.tight_layout()
 T = 10
 n_basis = 8
 
-a_basis = nsl.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
-b_basis = nsl.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
-c_basis = nsl.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+a_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+b_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+c_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
 
 prod_basis_3 = a_basis * b_basis * c_basis
 samples = np.linspace(0, 1, T)

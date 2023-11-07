@@ -12,7 +12,7 @@ import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
-from neurostatslib.utils import row_wise_kron
+from .utils import row_wise_kron
 
 __all__ = [
     "MSplineBasis",
@@ -734,8 +734,8 @@ class RaisedCosineBasis(Basis, abc.ABC):
         sample_pts : (number of samples,)
             Spacing for basis functions, holding elements on interval [0,
             1). A good default is
-            ``nsl.sample_points.raised_cosine_log`` for log spacing (as used in
-            [2]_) or ``nsl.sample_points.raised_cosine_linear`` for linear
+            ``nmo.sample_points.raised_cosine_log`` for log spacing (as used in
+            [2]_) or ``nmo.sample_points.raised_cosine_linear`` for linear
             spacing.
 
         Returns

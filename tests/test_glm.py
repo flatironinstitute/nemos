@@ -5,7 +5,7 @@ import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
 
-import neurostatslib as nsl
+import nemos as nmo
 
 
 def _test_class_initialization(cls, kwargs, error, match_str):
@@ -28,7 +28,7 @@ class TestGLM:
     """
     Unit tests for the PoissonGLM class.
     """
-    cls = nsl.glm.GLM
+    cls = nmo.glm.GLM
 
     #######################
     # Test model.__init__
@@ -36,9 +36,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "solver, error, match_str",
         [
-            (nsl.solver.RidgeSolver("BFGS"), None, None),
+            (nmo.solver.RidgeSolver("BFGS"), None, None),
             (None, AttributeError, "The provided `solver` doesn't implement "),
-            (nsl.solver.RidgeSolver, TypeError, "The provided `solver` cannot be instantiated")
+            (nmo.solver.RidgeSolver, TypeError, "The provided `solver` cannot be instantiated")
         ]
     )
     def test_solver_type(self, solver, error, match_str, poissonGLM_model_instantiation):
@@ -51,8 +51,8 @@ class TestGLM:
     @pytest.mark.parametrize(
         "observation, error, match_str",
         [
-            (nsl.observation_models.PoissonObservations(), None, None),
-            (nsl.solver.Solver, AttributeError, "The provided object does not have the required"),
+            (nmo.observation_models.PoissonObservations(), None, None),
+            (nmo.solver.Solver, AttributeError, "The provided object does not have the required"),
             (1, AttributeError, "The provided object does not have the required")
         ]
     )
@@ -363,7 +363,7 @@ class TestGLM:
     def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
-        model.set_params(solver=nsl.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask))
+        model.set_params(solver=nmo.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask))
         model.fit(X, y)
 
     #######################
@@ -978,7 +978,7 @@ class TestGLM:
 
     def test_simulate_feedforward_GLM_not_fit(self, poissonGLM_model_instantiation):
         X, y, model, params, rate = poissonGLM_model_instantiation
-        with pytest.raises(nsl.exceptions.NotFittedError,
+        with pytest.raises(nmo.exceptions.NotFittedError,
                            match="This GLM instance is not fitted yet"):
             model.simulate(jax.random.PRNGKey(123), X)
 
@@ -1041,7 +1041,7 @@ class TestGLM:
         # convolve basis and spikes
         # (n_trials, n_timepoints - ws + 1, n_neurons, n_coupling_basis)
         conv_spikes = jnp.asarray(
-            nsl.utils.convolve_1d_trials(coupling_basis, [spikes]),
+            nmo.utils.convolve_1d_trials(coupling_basis, [spikes]),
             dtype=jnp.float32
         )
 

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import utils_testing
 
-import neurostatslib.basis as basis
+import nemos.basis as basis
 
 # automatic define user accessible basis and check the methods
 

@@ -32,7 +32,7 @@ import numpy as np
 import sklearn.model_selection as sklearn_model_selection
 from matplotlib.patches import Rectangle
 
-import neurostatslib as nsl
+import nemos as nmo
 
 # Enable float64 precision (optional)
 jax.config.update("jax_enable_x64", True)
@@ -56,20 +56,20 @@ spikes = np.random.poisson(rate)
 # ## The Feed-Forward GLM
 #
 # ### Model Definition
-# The class implementing the  feed-forward GLM is `neurostatslib.glm.GLM`.
+# The class implementing the  feed-forward GLM is `generalized-linear-models.glm.GLM`.
 # In order to define the class, one **must** provide:
 #
 # - **Observation Model**: The observation model for the GLM, e.g. an object of the class of type
-# `neurostatslib.observation_models.Observations`. So far, only the `PoissonObservations`
+# `generalized-linear-models.observation_models.Observations`. So far, only the `PoissonObservations`
 # model has been implemented.
-# - **Solver**: The desired solver, e.g. an object of the `neurostatslib.solver.Solver` class.
+# - **Solver**: The desired solver, e.g. an object of the `generalized-linear-models.solver.Solver` class.
 # Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso solver.
 #
 # The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge solver.
 # Here is how to define the model.
 
 # default Poisson GLM with Ridge solver and Poisson observation model.
-model = nsl.glm.GLM()
+model = nmo.glm.GLM()
 
 print("Solver type:     ", type(model.solver))
 print("Observation model:", type(model.observation_model))
@@ -96,17 +96,17 @@ for key, value in model.get_params(deep=True).items():
 # set after the model is initialized with the following syntax:
 
 # Poisson observation model with soft-plus NL
-observation_models = nsl.observation_models.PoissonObservations(jax.nn.softplus)
+observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
 
 # Observation model
-solver = nsl.solver.RidgeSolver(
+solver = nmo.solver.RidgeSolver(
     solver_name="LBFGS",
     regularizer_strength=0.1,
     solver_kwargs={"tol":10**-10}
 )
 
 # define the GLM
-model = nsl.glm.GLM(
+model = nmo.glm.GLM(
     observation_model=observation_models,
     solver=solver,
 )
@@ -118,7 +118,7 @@ print("Observation model:", type(model.observation_model))
 # Hyperparameters can be set at any moment via the `set_params` method.
 
 model.set_params(
-    solver=nsl.solver.LassoSolver(),
+    solver=nmo.solver.LassoSolver(),
     observation_model__inverse_link_function=jax.numpy.exp
 )
 
@@ -142,7 +142,7 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 # The same exact syntax works for any configuration.
 
 # Fit a ridge regression Poisson GLM
-model = nsl.glm.GLM()
+model = nmo.glm.GLM()
 model.set_params(solver__regularizer_strength=0.1)
 model.fit(X, spikes)
 
@@ -174,7 +174,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 #
 # **Lasso**
 
-model.set_params(solver=nsl.solver.LassoSolver())
+model.set_params(solver=nmo.solver.LassoSolver())
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
@@ -191,7 +191,7 @@ mask = np.zeros((2, 5))
 mask[0, [0, -1]] = 1
 mask[1, 1:-1] = 1
 
-solver = nsl.solver.GroupLassoSolver("ProximalGradient", mask=mask)
+solver = nmo.solver.GroupLassoSolver("ProximalGradient", mask=mask)
 model.set_params(solver=solver)
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
@@ -268,7 +268,7 @@ plt.plot(feedforward_input[:, 0])
 # %%
 # We can now simulate spikes by calling the `simulate_recurrent` method.
 
-model = nsl.glm.GLMRecurrent()
+model = nmo.glm.GLMRecurrent()
 model.coef_ = jax.numpy.asarray(basis_coeff)
 model.intercept_ = jax.numpy.asarray(intercept)
 

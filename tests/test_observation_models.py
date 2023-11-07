@@ -5,11 +5,11 @@ import pytest
 import scipy.stats as sts
 import statsmodels.api as sm
 
-import neurostatslib as nsl
+import nemos as nmo
 
 
 class TestPoissonObservations:
-    cls = nsl.observation_models.PoissonObservations
+    cls = nmo.observation_models.PoissonObservations
 
     @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
     def test_initialization_link_is_callable(self, link_function):

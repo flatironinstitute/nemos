@@ -5,11 +5,11 @@ import pytest
 import statsmodels.api as sm
 from sklearn.linear_model import PoissonRegressor
 
-import neurostatslib as nsl
+import nemos as nmo
 
 
 class TestUnRegularizedSolver:
-    cls = nsl.solver.UnRegularizedSolver
+    cls = nmo.solver.UnRegularizedSolver
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
@@ -119,7 +119,7 @@ class TestUnRegularizedSolver:
 
 
 class TestRidgeSolver:
-    cls = nsl.solver.RidgeSolver
+    cls = nmo.solver.RidgeSolver
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
@@ -229,7 +229,7 @@ class TestRidgeSolver:
 
 
 class TestLassoSolver:
-    cls = nsl.solver.LassoSolver
+    cls = nmo.solver.LassoSolver
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
@@ -317,7 +317,7 @@ class TestLassoSolver:
 
 
 class TestGroupLassoSolver:
-    cls = nsl.solver.GroupLassoSolver
+    cls = nmo.solver.GroupLassoSolver
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
