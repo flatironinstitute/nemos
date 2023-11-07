@@ -43,8 +43,8 @@ class GLM(BaseRegressor):
     Raises
     ------
     TypeError
-        If provided `solver` or `observation_model` are not valid or implemented in `generalized-linear-models.solver` and
-        `generalized-linear-models.observation_models` respectively.
+        If provided `solver` or `observation_model` are not valid or implemented in `nemos.solver` and
+        `nemos.observation_models` respectively.
     """
 
     def __init__(

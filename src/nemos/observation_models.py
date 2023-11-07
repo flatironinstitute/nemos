@@ -36,7 +36,7 @@ class Observations(Base, abc.ABC):
 
     See Also
     --------
-    [PoissonObservations](./#generalized-linear-models.observation_models.PoissonObservations) : A specific implementation of a
+    [PoissonObservations](./#nemos.observation_models.PoissonObservations) : A specific implementation of a
     observation model using the Poisson distribution.
     """
 
