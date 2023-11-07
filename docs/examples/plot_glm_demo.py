@@ -1,6 +1,12 @@
 """
 # GLM Demo: Toy Model Examples
 
+!!! warning
+    This demonstration is currently in its alpha stage. It presents various regularization techniques on
+    GLMs trained on a Gaussian noise stimuli, and a minimal example of fitting and simulating a pair of coupled
+    neurons. More work needs to be done to properly compare the performance of the regularization strategies on
+    realistic simulations and real neural recordings.
+
 ## Introduction
 
 In this demo we will work through two toy example of a Poisson-GLM on synthetic data: a purely feed-forward input model
