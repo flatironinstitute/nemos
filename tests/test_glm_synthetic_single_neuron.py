@@ -7,9 +7,9 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as onp
 
-import neurostatslib as nsl
-from neurostatslib.basis import RaisedCosineBasisLog
-from neurostatslib.glm import GLM
+import nemos as nmo
+from nemos.basis import RaisedCosineBasisLog
+from nemos.glm import GLM
 
 
 def test_glm_fit():
