@@ -1,7 +1,10 @@
 ![LOGO](CCN-logo-wText.png)
 
 # nemos
-A toolbox of statistical models for neuroscience. 
+NEural MOdelS, a statistical modeling framework for neuroscience.
+
+## Disclaimer
+This is an alpha version, the code is in active development and the API is subject to change.
 
 ## Setup
 
