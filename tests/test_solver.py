@@ -8,14 +8,6 @@ from sklearn.linear_model import PoissonRegressor
 import neurostatslib as nsl
 
 
-class TestSolver:
-    cls = nsl.solver.Solver
-    def test_abstract_nature_of_solver(self):
-        """Test that Solver can't be instantiated."""
-        with pytest.raises(TypeError, match="Can't instantiate abstract class Solver"):
-            self.cls("GradientDescent")
-
-
 class TestUnRegularizedSolver:
     cls = nsl.solver.UnRegularizedSolver
 

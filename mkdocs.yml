@@ -49,5 +49,7 @@ extra_css:
 nav:
     - Home: index.md                        # Link to the index.md file (home page)
     - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
+    - Theory:
+        - Proximal Methods: theory/proximal_operators.md
     - For Developers: developers_notes/     # Link to the developers notes
     - Code References: reference/           # Link to the reference/ directory

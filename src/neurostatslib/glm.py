@@ -619,7 +619,6 @@ class GLMRecurrent(GLM):
             carry = jnp.row_stack((activity[1:], new_act)), t_sample + 1
             return carry, (new_act, firing_rate)
 
-        with jax.disable_jit(True):
-            _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+        _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
         simulated_activity, firing_rates = outputs
         return simulated_activity, firing_rates

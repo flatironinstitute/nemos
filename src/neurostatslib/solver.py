@@ -144,13 +144,13 @@ class Solver(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
             )
 
-    @abc.abstractmethod
     def instantiate_solver(
-        self,
-        loss: Callable,
+        self, loss: Callable, *args: Any, **kwargs: Any
     ) -> SolverRunner:
         """Abstract method to instantiate a solver with a given loss function."""
-        pass
+        # check that the loss is Callable
+        utils.assert_is_callable(loss, "loss")
+        return self.get_runner(loss, *args, **kwargs)
 
     def get_runner(
         self,
@@ -225,28 +225,6 @@ class UnRegularizedSolver(Solver):
     ):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
 
-    def instantiate_solver(
-        self,
-        loss: Callable,
-    ) -> SolverRunner:
-        """
-        Instantiate the optimization algorithm for a given loss function.
-
-        Parameters
-        ----------
-        loss :
-            The loss function that needs to be minimized.
-
-        Returns
-        -------
-        :
-            A runner function that uses the specified optimization algorithm
-            to minimize the given loss function.
-        """
-        # check that the loss is Callable
-        utils.assert_is_callable(loss, "loss")
-        return self.get_runner(loss)
-
 
 class RidgeSolver(Solver):
     """
@@ -302,8 +280,7 @@ class RidgeSolver(Solver):
         )
 
     def instantiate_solver(
-        self,
-        loss: Callable,
+        self, loss: Callable, *args: Any, **kwargs: Any
     ) -> SolverRunner:
         """
         Instantiate the solver with a penalized loss function.
@@ -318,7 +295,8 @@ class RidgeSolver(Solver):
         Callable
             A function that runs the solver with the penalized loss.
         """
-        # check that the loss is Callable
+        # this check has be performed here because the penalized loss will
+        # always be a callable independently of which loss is passed!
         utils.assert_is_callable(loss, "loss")
 
         def penalized_loss(params, X, y):
@@ -350,14 +328,14 @@ class ProxGradientSolver(Solver, abc.ABC):
         **kwargs,
     ):
         if solver_kwargs is None:
-            solver_kwargs = dict(prox=self.get_prox_operator())
+            solver_kwargs = dict(prox=self._get_proximal_operator())
         else:
-            solver_kwargs["prox"] = self.get_prox_operator()
+            solver_kwargs["prox"] = self._get_proximal_operator()
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
     @abc.abstractmethod
-    def get_prox_operator(
+    def _get_proximal_operator(
         self,
     ) -> ProximalOperator:
         """
@@ -371,8 +349,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         pass
 
     def instantiate_solver(
-        self,
-        loss: Callable,
+        self, loss: Callable, *args: Any, **kwargs: Any
     ) -> SolverRunner:
         """
         Instantiate the solver with the provided loss function and proximal operator.
@@ -387,9 +364,7 @@ class ProxGradientSolver(Solver, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-        # check that the loss is Callable
-        utils.assert_is_callable(loss, "loss")
-        return self.get_runner(loss, self.regularizer_strength)
+        return super().instantiate_solver(loss, self.regularizer_strength)
 
 
 class LassoSolver(ProxGradientSolver):
@@ -409,7 +384,7 @@ class LassoSolver(ProxGradientSolver):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
-    def get_prox_operator(
+    def _get_proximal_operator(
         self,
     ) -> ProximalOperator:
         """
@@ -513,7 +488,7 @@ class GroupLassoSolver(ProxGradientSolver):
                 f"Data type {mask.dtype} provided instead!"
             )
 
-    def get_prox_operator(
+    def _get_proximal_operator(
         self,
     ) -> ProximalOperator:
         """
