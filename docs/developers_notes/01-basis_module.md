@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The `neurostatslib.basis` module provides objects that allow users to construct and evaluate basis functions of various types. The classes are hierarchically organized as follows:
+The `nemos.basis` module provides objects that allow users to construct and evaluate basis functions of various types. The classes are hierarchically organized as follows:
 
 ```
 Abstract Class Basis
@@ -30,7 +30,7 @@ Abstract Class Basis
 
 The super-class `Basis` provides two public methods, [`evaluate`](#the-public-method-evaluate) and [`evaluate_on_grid`](#the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the private abstract method `_evaluate` that is specific for each concrete class. See below for more details.
 
-## The Class `neurostatslib.basis.Basis`
+## The Class `nemos.basis.Basis`
 
 ### The Public Method `evaluate`
 
@@ -54,7 +54,7 @@ This method performs the following steps:
 
 ### Abstract Methods
 
-The `neurostatslib.basis.Basis` class has the following abstract methods, which every concrete subclass must implement:
+The `nemos.basis.Basis` class has the following abstract methods, which every concrete subclass must implement:
 
 1. `_evaluate`: Evaluates a basis over some specified samples.
 2. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
@@ -65,7 +65,7 @@ The `neurostatslib.basis.Basis` class has the following abstract methods, which 
 To write a usable (i.e., concrete, non-abstract) basis object, you
 
 - **Must** inherit the abstract superclass `Basis`
-- **Must** define the `_evaluate` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/neurostatslib/basis/) for the specifics.
+- **Must** define the `_evaluate` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/nemos/basis/) for the specifics.
 - **Should not** overwrite the `evaluate` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 - **May** reimplement the `_get_samples` method if your basis domain differs from `[0,1]`. However, we recommend mapping the specific basis domain to `[0,1]` whenever possible.
