@@ -547,7 +547,7 @@ class GLMRecurrent(GLM):
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.intercept_.shape[0]
 
-        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons:]
+        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons :]
         w_recurrent = self.coef_[:, : n_basis_coupling * n_neurons]
         bs = self.intercept_
 
