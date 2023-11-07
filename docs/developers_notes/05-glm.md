@@ -37,8 +37,8 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 - **`solver`**: Refers to the optimization solver - an object of the [`neurostatslib.solver.Solver`](../05-solver/#the-abstract-class-solver) type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
 - **`observation_models`**: Represents the GLM observation model, which is an object of the [`neurostatslib.observation_models.Observations`](../04-observation_models/#the-abstract-class-observations) type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
-- **`basis_coeff_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
-- **`baseline_link_fr_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
+- **`coef_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
+- **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`solver_state`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
 
 ### Public Methods

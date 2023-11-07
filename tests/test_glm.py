@@ -383,8 +383,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_neurons = X.shape[1]
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         X = jnp.repeat(X, n_neurons + delta_n_neuron, axis=1)
         _test_class_method(model, "score", [X, y], {}, error, match_str)
 
@@ -403,8 +403,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_neurons = X.shape[1]
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         y = jnp.repeat(y, n_neurons + delta_n_neuron, axis=1)
         _test_class_method(model, "score", [X, y], {}, error, match_str)
 
@@ -422,8 +422,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
 
         if delta_dim == -1:
             # remove a dimension
@@ -448,8 +448,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, _ = X.shape
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
 
         if delta_dim == -1:
             # remove a dimension
@@ -474,8 +474,8 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         if delta_n_features == 1:
             # add a feature
             X = jnp.concatenate((X, jnp.zeros((100, 1, 1))), axis=2)
@@ -516,8 +516,8 @@ class TestGLM:
         Ensure that the number of time-points in X and y matches.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
 
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         _test_class_method(model, "score", [X, y], {}, error, match_str)
@@ -536,8 +536,8 @@ class TestGLM:
         Ensure that the number of time-points in X and y matches.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
 
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         _test_class_method(model, "score", [X, y], {}, error, match_str)
@@ -555,8 +555,8 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         match_str = match_str % score_type if type(match_str) is str else None
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         _test_class_method(model, "score", [X, y], {"score_type": score_type}, error, match_str)
 
     def test_loglikelihood_against_scipy_stats(self, poissonGLM_model_instantiation):
@@ -566,8 +566,8 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
@@ -595,8 +595,8 @@ class TestGLM:
         X, _, model, true_params, _ = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         X = jnp.repeat(X, n_neurons + delta_n_neuron, axis=1)
         _test_class_method(model, "predict", [X], {}, error, match_str)
 
@@ -614,8 +614,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         if delta_dim == -1:
             # remove a dimension
             X = np.zeros((n_samples, n_neurons))
@@ -633,12 +633,12 @@ class TestGLM:
     def test_predict_n_feature_consistency_x(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
         """
         Test the `predict` method ensuring the number of features in x input data
-        is consistent with the model's `model.`basis_coeff_`.
+        is consistent with the model's `model.coef_`.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         if delta_n_features == 1:
             # add a feature
             X = jnp.concatenate((X, jnp.zeros((100, 1, 1))), axis=2)
@@ -680,7 +680,7 @@ class TestGLM:
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
             poissonGLM_coupled_model_config_simulate
-        n_neurons, n_features = model.basis_coeff_.shape
+        n_neurons, n_features = model.coef_.shape
         n_time_points, _, n_basis_input = feedforward_input.shape
         if delta_n_neuron != 0:
             feedforward_input = np.zeros((n_time_points, n_neurons+delta_n_neuron, n_basis_input))
@@ -819,7 +819,7 @@ class TestGLM:
             poissonGLM_coupled_model_config_simulate
 
         if not is_fit:
-            model.baseline_link_fr_ = None
+            model.intercept_ = None
         _test_class_method(
             model,
             "simulate_recurrent",
@@ -917,7 +917,7 @@ class TestGLM:
 
         Notes
         -----
-        The total feature number `model.basis_coeff_.shape[1]` must be equal to
+        The total feature number `model.coef_.shape[1]` must be equal to
         `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
@@ -955,7 +955,7 @@ class TestGLM:
 
         Notes
         -----
-        The total feature number `model.basis_coeff_.shape[1]` must be equal to
+        The total feature number `model.coef_.shape[1]` must be equal to
         `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
@@ -985,8 +985,8 @@ class TestGLM:
     def test_simulate_feedforward_GLM(self, poissonGLM_model_instantiation):
         """Test that simulate goes through"""
         X, y, model, params, rate = poissonGLM_model_instantiation
-        model.basis_coeff_ = params[0]
-        model.baseline_link_fr_ = params[1]
+        model.coef_ = params[0]
+        model.intercept_ = params[1]
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         # check that the expected dimensionality is returned
         assert ysim.ndim == 2
@@ -1009,8 +1009,8 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set model coeff
-        model.basis_coeff_ = true_params[0]
-        model.baseline_link_fr_ = true_params[1]
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         # get the rate
         dev = sm.families.Poisson().deviance(y, firing_rate)
         dev_model = model.observation_model.deviance(firing_rate, y).sum()

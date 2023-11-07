@@ -32,9 +32,10 @@ class GLM(BaseRegressor):
 
     Attributes
     ----------
-    baseline_link_fr_ :
-        Model baseline link firing rate parameters.
-    basis_coeff_ :
+    intercept_ :
+        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
+        firing rate will be `jnp.exp(model.intercept_)`.
+    coef_ :
         Basis coefficients for the model.
     solver_state :
         State of the solver after fitting. May include details like optimization error.
@@ -57,8 +58,8 @@ class GLM(BaseRegressor):
         self.solver = solver
 
         # initialize to None fit output
-        self.baseline_link_fr_ = None
-        self.basis_coeff_ = None
+        self.intercept_ = None
+        self.coef_ = None
         self.solver_state = None
 
     @property
@@ -94,7 +95,7 @@ class GLM(BaseRegressor):
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
-        if (self.basis_coeff_ is None) or (self.baseline_link_fr_ is None):
+        if (self.coef_ is None) or (self.intercept_ is None):
             raise NotFittedError(
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
@@ -165,8 +166,8 @@ class GLM(BaseRegressor):
         # check that the model is fitted
         self._check_is_fit()
         # extract model params
-        Ws = self.basis_coeff_
-        bs = self.baseline_link_fr_
+        Ws = self.coef_
+        bs = self.intercept_
 
         (X,) = utils.convert_to_jnp_ndarray(X)
 
@@ -241,7 +242,7 @@ class GLM(BaseRegressor):
         ValueError
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_y.shape[0] !=
-            self.baseline_link_fr_.shape[0]``).
+            self.intercept_.shape[0]``).
 
         Notes
         -----
@@ -300,8 +301,8 @@ class GLM(BaseRegressor):
 
         """
         self._check_is_fit()
-        Ws = self.basis_coeff_
-        bs = self.baseline_link_fr_
+        Ws = self.coef_
+        bs = self.intercept_
 
         X, y = utils.convert_to_jnp_ndarray(X, y)
 
@@ -330,7 +331,7 @@ class GLM(BaseRegressor):
         """Fit GLM to neural activity.
 
         Fit and store the model parameters as attributes
-        ``basis_coeff_`` and ``baseline_link_fr``.
+        ``coef_`` and ``coef_``.
 
         Parameters
         ----------
@@ -373,8 +374,8 @@ class GLM(BaseRegressor):
             )
 
         # Store parameters
-        self.basis_coeff_: jnp.ndarray = params[0]
-        self.baseline_link_fr_: jnp.ndarray = params[1]
+        self.coef_: jnp.ndarray = params[0]
+        self.intercept_: jnp.ndarray = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
@@ -421,7 +422,7 @@ class GLM(BaseRegressor):
         """
         # check if the model is fit
         self._check_is_fit()
-        Ws, bs = self.basis_coeff_, self.baseline_link_fr_
+        Ws, bs = self.coef_, self.intercept_
         (feedforward_input,) = self._preprocess_simulate(
             feedforward_input, params_feedforward=(Ws, bs)
         )
@@ -527,12 +528,12 @@ class GLMRecurrent(GLM):
 
         Notes
         -----
-        The model coefficients (`self.basis_coeff_`) are structured such that the first set of coefficients
+        The model coefficients (`self.coef_`) are structured such that the first set of coefficients
         (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
         The remaining coefficients correspond to the weights for the feed-forward input.
 
 
-        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
+        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
         # check if the model is fit
@@ -544,11 +545,11 @@ class GLMRecurrent(GLM):
         )
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
-        n_neurons = self.baseline_link_fr_.shape[0]
+        n_neurons = self.intercept_.shape[0]
 
-        w_feedforward = self.basis_coeff_[:, n_basis_coupling * n_neurons :]
-        w_recurrent = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
-        bs = self.baseline_link_fr_
+        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons:]
+        w_recurrent = self.coef_[:, : n_basis_coupling * n_neurons]
+        bs = self.intercept_
 
         feedforward_input, init_y = self._preprocess_simulate(
             feedforward_input,

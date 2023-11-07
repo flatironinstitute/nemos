@@ -57,7 +57,7 @@ spikes = np.random.poisson(rate)
 # `neurostatslib.observation_models.Observations`. So far, only the `PoissonObservations`
 # model has been implemented.
 # - **Solver**: The desired solver, e.g. an object of the `neurostatslib.solver.Solver` class.
-# Currently, we implemented the un-regulrized, Ridge, Lasso, and Group-Lasso solver.
+# Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso solver.
 #
 # The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge solver.
 # Here is how to define the model.
@@ -142,7 +142,7 @@ model.fit(X, spikes)
 
 print("Ridge results")
 print("True weights:      ", w_true)
-print("Recovered weights: ", model.basis_coeff_)
+print("Recovered weights: ", model.coef_)
 
 # %%
 # ## K-fold Cross Validation with `sklearn`
@@ -161,7 +161,7 @@ cls.fit(X, spikes)
 print("Ridge results        ")
 print("Best hyperparameter: ", cls.best_params_)
 print("True weights:      ", w_true)
-print("Recovered weights: ", cls.best_estimator_.basis_coeff_)
+print("Recovered weights: ", cls.best_estimator_.coef_)
 
 # %%
 # We can compare the Ridge cross-validated results with other solvers.
@@ -175,7 +175,7 @@ cls.fit(X, spikes)
 print("Lasso results        ")
 print("Best hyperparameter: ", cls.best_params_)
 print("True weights:      ", w_true)
-print("Recovered weights: ", cls.best_estimator_.basis_coeff_)
+print("Recovered weights: ", cls.best_estimator_.coef_)
 
 # %%
 # **Group Lasso**
@@ -195,7 +195,7 @@ print("Group mask:          :")
 print(mask)
 print("Best hyperparameter: ", cls.best_params_)
 print("True weights:      ", w_true)
-print("Recovered weights: ", cls.best_estimator_.basis_coeff_)
+print("Recovered weights: ", cls.best_estimator_.coef_)
 
 # %%
 # ## Simulate Spikes
@@ -228,12 +228,12 @@ with open("coupled_neurons_params.json", "r") as fh:
 
 # basis weights & intercept for the GLM (both coupling and feedforward)
 # (the last coefficient is the weight of the feedforward input)
-basis_coeff = np.asarray(config_dict["basis_coeff_"])[:, :-1]
+basis_coeff = np.asarray(config_dict["coef_"])[:, :-1]
 
 # Mask the weights so that only the first neuron receives the imput
 basis_coeff[:, 40:] = np.abs(basis_coeff[:, 40:]) * np.array([[1.], [0.]])
 
-baseline_log_fr = np.asarray(config_dict["baseline_link_fr_"])
+intercept = np.asarray(config_dict["intercept_"])
 
 # basis function, inputs and initial spikes
 coupling_basis = jax.numpy.asarray(config_dict["coupling_basis"])
@@ -263,8 +263,8 @@ plt.plot(feedforward_input[:, 0])
 # We can now simulate spikes by calling the `simulate_recurrent` method.
 
 model = nsl.glm.GLMRecurrent()
-model.basis_coeff_ = jax.numpy.asarray(basis_coeff)
-model.baseline_link_fr_ = jax.numpy.asarray(baseline_log_fr)
+model.coef_ = jax.numpy.asarray(basis_coeff)
+model.intercept_ = jax.numpy.asarray(intercept)
 
 
 # call simulate, with both the recurrent coupling
@@ -293,7 +293,7 @@ p1, = plt.plot(rates[:, 1])
 
 plt.vlines(np.where(spikes[:, 0])[0], 0.00, 0.01, color=p0.get_color(), label="neu 0")
 plt.vlines(np.where(spikes[:, 1])[0], -0.01, 0.00, color=p1.get_color(), label="neu 1")
-plt.plot(np.exp(basis_coeff[0, -1] * feedforward_input[:, 0, 0] + baseline_log_fr[0]), color='k', lw=0.8, label="stimulus")
+plt.plot(np.exp(basis_coeff[0, -1] * feedforward_input[:, 0, 0] + intercept[0]), color='k', lw=0.8, label="stimulus")
 ax.add_patch(patch)
 plt.ylim(-0.011, .13)
 plt.ylabel("count/bin")
