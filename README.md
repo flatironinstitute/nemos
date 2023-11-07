@@ -1,7 +1,7 @@
 ![LOGO](CCN-logo-wText.png)
 
 # nemos
-A toolbox of statistical analysis for neuroscience. 
+A toolbox of statistical models for neuroscience. 
 
 ## Setup
 
