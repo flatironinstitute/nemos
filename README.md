@@ -11,8 +11,8 @@ This is an alpha version, the code is in active development and the API is subje
 To install, clone this repo and install using `pip`:
 
 ``` sh
-git clone git@github.com:flatironinstitute/generalized-linear-models.git
-cd generalized-linear-models/
+git clone git@github.com:flatironinstitute/nemos.git
+cd nemos/
 pip install -e .
 ```
 

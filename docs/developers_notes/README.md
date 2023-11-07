@@ -26,9 +26,9 @@ The Developer Notes are divided into sections, each focusing on a different modu
 
 ## Interact with us
 
-If you're considering contributing to the library, first of all, welcome aboard! As a first step, we recommend that you read the [`CONTRIBUTING.md`](https://github.com/flatironinstitute/generalized-linear-models/blob/main/CONTRIBUTING.md) guidelines. These will help you understand how to interact with other contributors and how to submit your changes.
+If you're considering contributing to the library, first of all, welcome aboard! As a first step, we recommend that you read the [`CONTRIBUTING.md`](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md) guidelines. These will help you understand how to interact with other contributors and how to submit your changes.
 
-If you have any questions or need further clarification on any of the topics covered in these notes, please don't hesitate to reach out to us. You can do so via the [discussion](https://github.com/flatironinstitute/generalized-linear-models/discussions/landing) forum on GitHub.
+If you have any questions or need further clarification on any of the topics covered in these notes, please don't hesitate to reach out to us. You can do so via the [discussion](https://github.com/flatironinstitute/nemos/discussions/landing) forum on GitHub.
 
 We're looking forward to your contributions and to answering any queries you might have!
 
