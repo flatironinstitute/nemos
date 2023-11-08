@@ -140,7 +140,7 @@ class GLM(BaseRegressor):
         Returns
         -------
         :
-            The predicted rates with shape (n_neurons, n_time_bins).
+            The predicted rates with shape (n_time_bins, n_neurons).
 
         Raises
         ------
@@ -395,15 +395,15 @@ class GLM(BaseRegressor):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_timesteps, n_neurons, n_basis_input).
+            Expected shape: (n_time_bins, n_neurons, n_basis_input).
 
         Returns
         -------
         simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Shape: (n_time_bins, n_neurons).
         firing_rates :
-            Simulated rates for each neuron over time. Shape, (n_neurons, n_timesteps).
+            Simulated rates for each neuron over time. Shape, (n_neurons, n_time_bins).
 
         Raises
         ------
@@ -495,7 +495,7 @@ class GLMRecurrent(GLM):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_timesteps, n_neurons, n_basis_input).
+            Expected shape: (n_time_bins, n_neurons, n_basis_input).
         init_y :
             Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
             Expected shape: (window_size, n_neurons).
@@ -507,9 +507,9 @@ class GLMRecurrent(GLM):
         -------
         simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape, (n_neurons, n_timesteps).
+            Shape, (n_time_bins, n_neurons).
         firing_rates :
-            Simulated rates for each neuron over time. Shape, (n_neurons, n_timesteps).
+            Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
 
         Raises
         ------
