@@ -158,6 +158,7 @@ print("Recovered weights: ", model.coef_)
 # back-end.
 #
 # Here is an example of how we can perform 5-fold cross-validation via `scikit-learn`.
+#
 # **Ridge**
 
 parameter_grid = {"solver__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
@@ -253,11 +254,11 @@ init_spikes = jax.numpy.asarray(config_dict["init_spikes"])
 n_basis_coupling = coupling_basis.shape[1]
 fig, axs = plt.subplots(2,2)
 plt.suptitle("Coupling filters")
-for neu_i in range(2):
-    for neu_j in range(2):
-        axs[neu_i,neu_j].set_title(f"neu {neu_j} -> neu {neu_i}")
-        coeff = basis_coeff[neu_i, neu_j*n_basis_coupling: (neu_j+1)*n_basis_coupling]
-        axs[neu_i, neu_j].plot(np.dot(coupling_basis, coeff))
+for unit_i in range(2):
+    for unit_j in range(2):
+        axs[unit_i,unit_j].set_title(f"unit {unit_j} -> unit {unit_i}")
+        coeff = basis_coeff[unit_i, unit_j * n_basis_coupling: (unit_j + 1) * n_basis_coupling]
+        axs[unit_i, unit_j].plot(np.dot(coupling_basis, coeff))
 plt.tight_layout()
 
 fig, axs = plt.subplots(1,1)
