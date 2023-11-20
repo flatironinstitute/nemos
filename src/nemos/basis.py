@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 from typing import Generator, Tuple
 
-import jax.numpy
 import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
