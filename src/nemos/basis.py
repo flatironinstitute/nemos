@@ -542,7 +542,7 @@ class MSplineBasis(SplineBasis):
             Evaluated spline basis functions, shape (n_samples, n_basis_funcs).
 
         """
-        sample_pts, = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -574,6 +574,7 @@ class MSplineBasis(SplineBasis):
 
         """
         return super().evaluate_on_grid(n_samples)
+
 
 class BSplineBasis(SplineBasis):
     """
@@ -628,7 +629,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        sample_pts, = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
 
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
@@ -712,7 +713,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
-        sample_pts, = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
 
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
@@ -769,6 +770,7 @@ class CyclicBSplineBasis(SplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
+
 class RaisedCosineBasis(Basis, abc.ABC):
     def __init__(self, n_basis_funcs: int) -> None:
         super().__init__(n_basis_funcs)
@@ -809,7 +811,7 @@ class RaisedCosineBasis(Basis, abc.ABC):
             If the sample provided do not lie in [0,1].
 
         """
-        sample_pts, = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         if any(sample_pts < 0) or any(sample_pts > 1):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
@@ -1079,7 +1081,7 @@ class OrthExponentialBasis(Basis):
             orthogonalized, shape (n_samples, n_basis_funcs)
 
         """
-        sample_pts, = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
