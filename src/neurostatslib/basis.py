@@ -875,7 +875,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         n_basis_funcs: int,
         alpha: float = 1.0,
         extend_and_trim_last: bool = True,
-        clip_first: bool = True
+        clip_first: bool = False
     ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
@@ -937,6 +937,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         if self._clip_first:
             idx = np.argmin(np.abs(eval_basis[:, 0] - 1))
             eval_basis[:idx, 0] = 1
+
         return eval_basis
 
 
