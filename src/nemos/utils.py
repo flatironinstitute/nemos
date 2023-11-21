@@ -387,13 +387,15 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def check_invalid_entry(array: jnp.ndarray) -> None:
+def check_invalid_entry(array: jnp.ndarray, array_name: str) -> None:
     """Check if the array has nans or infs.
 
     Parameters
     ----------
     array:
         The array to be checked.
+    array_name:
+        The array name.
 
     Raises
     ------
@@ -401,9 +403,9 @@ def check_invalid_entry(array: jnp.ndarray) -> None:
 
     """
     if jnp.any(jnp.isinf(array)):
-        raise ValueError("Input array contains Infs!")
+        raise ValueError(f"Input array '{array_name}' contains Infs!")
     elif jnp.any(jnp.isnan(array)):
-        raise ValueError("Input array contains NaNs!")
+        raise ValueError(f"Input array '{array_name}' contains NaNs!")
 
 
 def assert_has_attribute(obj: Any, attr_name: str):

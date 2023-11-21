@@ -406,8 +406,8 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
-        check_invalid_entry(X)
-        check_invalid_entry(y)
+        check_invalid_entry(X, "X")
+        check_invalid_entry(y, "y")
 
         _, n_neurons = y.shape
         n_features = X.shape[2]
@@ -473,7 +473,7 @@ class BaseRegressor(Base, abc.ABC):
             params_feedforward, X=feedforward_input
         )
 
-        check_invalid_entry(feedforward_input)
+        check_invalid_entry(feedforward_input, "feedforward_input")
 
         # Ensure that both or neither of `init_y` and `params_r` are provided
         if (init_y is None) != (params_recurrent is None):

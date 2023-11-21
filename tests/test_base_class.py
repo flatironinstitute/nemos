@@ -123,11 +123,11 @@ def test_check_invalid_entry():
     valid_data = jnp.array([1, 2, 3])
     invalid_data_nan = jnp.array([1, 2, jnp.nan])
     invalid_data_inf = jnp.array([1, jnp.inf, 2])
-    check_invalid_entry(valid_data)
-    with pytest.raises(ValueError, match="Input array contains NaN"):
-        check_invalid_entry(invalid_data_nan)
-    with pytest.raises(ValueError, match="Input array contains Inf"):
-        check_invalid_entry(invalid_data_inf)
+    check_invalid_entry(valid_data, "valid_data")
+    with pytest.raises(ValueError, match="Input array 'invalid_data_nan' contains NaN"):
+        check_invalid_entry(invalid_data_nan, "invalid_data_nan")
+    with pytest.raises(ValueError, match="Input array 'invalid_data_inf' contains Inf"):
+        check_invalid_entry(invalid_data_inf, "invalid_data_inf")
 
 
 # To ensure abstract methods aren't callable
@@ -263,7 +263,7 @@ def test_preprocess_simulate_with_nan(mock_regressor):
     """Test behavior with NaN values in feedforward_input."""
     feedforward_input = jnp.array([[[jnp.nan]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="Input array contains"):
+    with pytest.raises(ValueError, match="Input array .+ contains"):
         mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
@@ -271,7 +271,7 @@ def test_preprocess_simulate_with_inf(mock_regressor):
     """Test behavior with infinite values in feedforward_input."""
     feedforward_input = jnp.array([[[jnp.inf]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="Input array contains"):
+    with pytest.raises(ValueError, match="Input array .+ contains"):
         mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
