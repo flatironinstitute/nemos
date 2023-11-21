@@ -746,6 +746,7 @@ class RaisedCosineBasisLinear(Basis):
         self._check_alpha(alpha)
         self._alpha = alpha
 
+
     @property
     def alpha(self):
         """Return width of the raised cosine."""
@@ -870,10 +871,15 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     """
 
     def __init__(
-        self, n_basis_funcs: int, alpha: float = 1.0, extend_and_trim_last: bool = True
+        self,
+        n_basis_funcs: int,
+        alpha: float = 1.0,
+        extend_and_trim_last: bool = True,
+        clip_first: bool = True
     ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
+        self._clip_first = clip_first
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
@@ -928,6 +934,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             eval_basis = super()._evaluate(self._transform_samples(sample_pts))[:, ::-1]
             eval_basis = eval_basis[..., :-1]
             self.n_basis_funcs -= 1
+        if self._clip_first:
+            idx = np.argmin(np.abs(eval_basis[:, 0] - 1))
+            eval_basis[:idx, 0] = 1
         return eval_basis
 
 
