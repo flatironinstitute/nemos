@@ -159,10 +159,10 @@ class TestGLM:
         "init_params, error, match_str",
         [
             ([jnp.zeros((1, 5)), jnp.zeros((1,))], None, None),
-            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), TypeError, "Initial parameters must be array-like"),
+            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), None, None),
             (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), TypeError, "Initial parameters must be array-like"),
             (0, TypeError, "Initial parameters must be array-like"),
-            ({0, 1}, TypeError, "Initial parameters must be array-like"),
+            ({0, 1}, ValueError, r"params\[0\] must be of shape"),
             ([jnp.zeros((1, 5)), ""], TypeError, "Initial parameters must be array-like"),
             (["", jnp.zeros((1,))], TypeError, "Initial parameters must be array-like")
         ]

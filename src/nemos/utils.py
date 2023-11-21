@@ -387,16 +387,6 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def is_list_like(obj) -> bool:
-    """Check if the object is an iterable (not including strings or bytes)
-    that supports item retrieval by index but isn't a dictionary."""
-    return (
-        hasattr(obj, "__iter__")
-        and hasattr(obj, "__getitem__")
-        and not isinstance(obj, (str, bytes, dict))
-    )
-
-
 def convert_to_jnp_ndarray(
     *args: Union[NDArray, jnp.ndarray], data_type: Optional[jnp.dtype] = None
 ) -> Tuple[jnp.ndarray, ...]:

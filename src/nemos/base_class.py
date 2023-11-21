@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from .utils import check_invalid_entry, convert_to_jnp_ndarray, is_list_like
+from .utils import check_invalid_entry, convert_to_jnp_ndarray
 
 
 class Base:
@@ -257,26 +257,24 @@ class BaseRegressor(Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        if not is_list_like(params):
-            raise TypeError("Initial parameters must be array-like!")
+        try:
+            params = tuple(
+                jnp.asarray(par, dtype=data_type)
+                for par in params
+            )
+        except (ValueError, TypeError):
+            raise TypeError(
+                "Initial parameters must be array-like of array-like objects "
+                "with numeric data-type!"
+            )
 
         if len(params) != 2:
             raise ValueError("Params needs to be array-like of length two.")
 
-        try:
-            params = (
-                jnp.asarray(params[0], dtype=data_type),
-                jnp.asarray(params[1], dtype=data_type),
-            )
-        except (ValueError, TypeError):
-            raise TypeError(
-                "Initial parameters must be array-like of array-like objects"
-                "with numeric data-type!"
-            )
 
         if params[0].ndim != 2:
             raise ValueError(
-                "params[0] must be of shape (n_neurons, n_features), but"
+                "params[0] must be of shape (n_neurons, n_features), but "
                 f"params[0] has {params[0].ndim} dimensions!"
             )
         if params[1].ndim != 1:
