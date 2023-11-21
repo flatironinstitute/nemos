@@ -179,7 +179,7 @@ def test_preprocess_fit_with_nan_in_X(mock_regressor):
     """Test behavior with NaN values in data."""
     X = jnp.array([[[1, 2], [jnp.nan, 4]]])
     y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input array contains"):
+    with pytest.raises(ValueError, match="Input array .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
@@ -187,7 +187,7 @@ def test_preprocess_fit_with_inf_in_X(mock_regressor):
     """Test behavior with inf values in data."""
     X = jnp.array([[[1, 2], [jnp.inf, 4]]])
     y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input array contains"):
+    with pytest.raises(ValueError, match="Input array .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
@@ -195,7 +195,7 @@ def test_preprocess_fit_with_nan_in_y(mock_regressor):
     """Test behavior with NaN values in data."""
     X = jnp.array([[[1, 2], [2, 4]]])
     y = jnp.array([[1, jnp.nan]])
-    with pytest.raises(ValueError, match="Input array contains"):
+    with pytest.raises(ValueError, match="Input array .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
@@ -203,7 +203,7 @@ def test_preprocess_fit_with_inf_in_y(mock_regressor):
     """Test behavior with inf values in data."""
     X = jnp.array([[[1, 2], [2, 4]]])
     y = jnp.array([[1, jnp.inf]])
-    with pytest.raises(ValueError, match="Input array contains"):
+    with pytest.raises(ValueError, match="Input array .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
