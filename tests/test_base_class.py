@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 import nemos as nmo
 from nemos.base_class import Base, BaseRegressor
-from nemos.utils import check_invalid_entry, convert_to_jnp_ndarray
+from nemos.utils import check_invalid_entry
 
 
 @pytest.fixture
@@ -171,7 +171,7 @@ def test_preprocess_fit_invalid_datatypes(mock_regressor):
     """Test behavior with invalid data types."""
     X = "invalid_data_type"
     y = "invalid_data_type"
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         mock_regressor._preprocess_fit(X, y)
 
 
@@ -253,8 +253,8 @@ def test_preprocess_simulate_invalid_datatypes(mock_regressor):
     feedforward_input = "invalid_data_type"
     params_f = (jnp.array([[]]),)
     with pytest.raises(
-        TypeError,
-        match="Value 'invalid_data_type' with dtype .+ is not a valid JAX array type.",
+        ValueError,
+        match="could not convert string",
     ):
         mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
