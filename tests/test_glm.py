@@ -91,11 +91,11 @@ class TestGLM:
 
     @pytest.mark.parametrize("add_entry, add_to, error, match_str", [
         (0, "X", None, None),
-        (np.nan, "X", ValueError, "Input array contains"),
-        (np.inf, "X", ValueError, "Input array contains"),
+        (np.nan, "X", ValueError, "Input array .+ contains"),
+        (np.inf, "X", ValueError, "Input array .+ contains"),
         (0, "y", None, None),
-        (np.nan, "y", ValueError, "Input array contains"),
-        (np.inf, "y", ValueError, "Input array contains"),
+        (np.nan, "y", ValueError, "Input array .+ contains"),
+        (np.inf, "y", ValueError, "Input array .+ contains"),
     ])
     def test_fit_param_values(self, add_entry, add_to, error, match_str, poissonGLM_model_instantiation):
         """
