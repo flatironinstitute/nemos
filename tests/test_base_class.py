@@ -323,7 +323,9 @@ def test_target_device_put(device_name: Literal["cpu", "gpu", "tpu"], mock_regre
     Put array to device and checks that the device is matched after put, if device is found.
     Raise error otherwise.
     """
-    raise_exception = not nmo.utils.has_local_device(device_name)
+    raise_exception = not any(
+        device_name in device.device_kind.lower() for device in jax.local_devices()
+    )
     x = jnp.array([1])
     if raise_exception:
         if device_name != "tpu":

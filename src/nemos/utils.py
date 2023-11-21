@@ -387,28 +387,6 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def has_local_device(device_type: str) -> bool:
-    """Scan for local device availability.
-
-    Looks for local device availability and returns True if the specified
-    type of device (e.g., GPU, TPU) is available.
-
-    Parameters
-    ----------
-    device_type:
-        The device type in lower-case, e.g. `gpu`, `tpu`...
-
-    Returns
-    -------
-    :
-        True if the jax finds the device, False otherwise.
-
-    """
-    return any(
-        device_type in device.device_kind.lower() for device in jax.local_devices()
-    )
-
-
 def is_list_like(obj) -> bool:
     """Check if the object is an iterable (not including strings or bytes)
     that supports item retrieval by index but isn't a dictionary."""
@@ -457,42 +435,6 @@ def check_invalid_entry(array: jnp.ndarray) -> None:
         raise ValueError("Input array contains Infs!")
     elif jnp.any(jnp.isnan(array)):
         raise ValueError("Input array contains NaNs!")
-
-
-def count_positional_params(func: Callable) -> int:
-    """
-    Count the number of positional parameters a function accepts.
-
-    This function counts the number of POSITIONAL_OR_KEYWORD and POSITIONAL_ONLY parameters.
-
-    For example, all the following callable will return a count of two:
-
-        - `def func(x, y, *args)`, since x and y are POSITIONAL_OR_KEYWORD, *args is VAR_POSITIONAL
-        - `def func(x, y, *args, z)`, since x and y are POSITIONAL_OR_KEYWORD,
-         *args is VAR_POSITIONAL, z is KEYWORD_ONLY
-        - `def func(x, y, *args, z, **kwargs)`, since x and y are POSITIONAL_OR_KEYWORD,
-         *args is VAR_POSITIONAL, z is KEYWORD_ONLY,
-        **kwargs is VAR_KEYWORD
-        - `def func(x, /, y, *args, z, **kwargs)`, since x  POSITIONAL_ONLY, y are POSITIONAL_OR_KEYWORD,
-        *args is VAR_POSITIONAL, z is KEYWORD_ONLY, **kwargs is VAR_KEYWORD
-
-    Parameters
-    ----------
-    func :
-        The function whose signature is to be inspected.
-
-    Returns
-    -------
-    :
-        The count of POSITIONAL_OR_KEYWORD parameters for the given function.
-    """
-    # Count parameters excluding any *args or **kwargs
-    return sum(
-        1
-        for param in inspect.signature(func).parameters.values()
-        if param.kind
-        in [inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.POSITIONAL_ONLY]
-    )
 
 
 def assert_has_attribute(obj: Any, attr_name: str):
