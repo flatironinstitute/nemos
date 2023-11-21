@@ -271,10 +271,9 @@ class BaseRegressor(Base, abc.ABC):
         if len(params) != 2:
             raise ValueError("Params needs to be array-like of length two.")
 
-
         if params[0].ndim != 2:
             raise ValueError(
-                "params[0] must be of shape (n_neurons, n_features), but "
+                "params[0] must be of shape (n_neurons, n_features), but"
                 f"params[0] has {params[0].ndim} dimensions!"
             )
         if params[1].ndim != 1:
@@ -401,7 +400,7 @@ class BaseRegressor(Base, abc.ABC):
         ValueError
             If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
         """
-        X, y = convert_to_jnp_ndarray(X, y)
+        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
 
         # check input dimensionality
         self._check_input_dimensionality(X, y)
@@ -468,7 +467,7 @@ class BaseRegressor(Base, abc.ABC):
             If the feedforward_input contains NaNs or Infs.
             If the dimensionality or consistency checks fail for the provided data and parameters.
         """
-        (feedforward_input,) = convert_to_jnp_ndarray(feedforward_input)
+        feedforward_input = jnp.asarray(feedforward_input, dtype=float)
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(
             params_feedforward, X=feedforward_input
@@ -483,7 +482,7 @@ class BaseRegressor(Base, abc.ABC):
             )
         # If both are provided, perform checks and conversions
         elif init_y is not None and params_recurrent is not None:
-            init_y = convert_to_jnp_ndarray(init_y)[0]
+            init_y =  jnp.asarray(init_y, dtype=float)
             self._check_input_dimensionality(y=init_y)
             self._check_input_and_params_consistency(params_recurrent, y=init_y)
             return feedforward_input, init_y

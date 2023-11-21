@@ -169,7 +169,7 @@ class GLM(BaseRegressor):
         Ws = self.coef_
         bs = self.intercept_
 
-        (X,) = utils.convert_to_jnp_ndarray(X)
+        X = jnp.asarray(X, dtype=float)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -304,7 +304,7 @@ class GLM(BaseRegressor):
         Ws = self.coef_
         bs = self.intercept_
 
-        X, y = utils.convert_to_jnp_ndarray(X, y)
+        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -540,8 +540,8 @@ class GLMRecurrent(GLM):
         self._check_is_fit()
 
         # convert to jnp.ndarray
-        (coupling_basis_matrix,) = utils.convert_to_jnp_ndarray(
-            coupling_basis_matrix, data_type=jnp.float_
+        coupling_basis_matrix = jnp.asarray(
+            coupling_basis_matrix, dtype=float
         )
 
         n_basis_coupling = coupling_basis_matrix.shape[1]

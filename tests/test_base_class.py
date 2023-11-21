@@ -118,14 +118,6 @@ def test_get_param_names():
     assert "std_param" in param_names
 
 
-def test_convert_to_jnp_ndarray():
-    """Test data conversion to JAX NumPy arrays."""
-    data = [1, 2, 3]
-    (jnp_data,) = convert_to_jnp_ndarray(data)
-    assert isinstance(jnp_data, jnp.ndarray)
-    assert jnp.all(jnp_data == jnp.array(data, dtype=jnp.float32))
-
-
 def test_check_invalid_entry():
     """Test validation of data arrays."""
     valid_data = jnp.array([1, 2, 3])

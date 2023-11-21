@@ -387,27 +387,6 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def convert_to_jnp_ndarray(
-    *args: Union[NDArray, jnp.ndarray], data_type: Optional[jnp.dtype] = None
-) -> Tuple[jnp.ndarray, ...]:
-    """Convert provided arrays to jnp.ndarray of specified type.
-
-    Parameters
-    ----------
-    *args :
-        Input arrays to convert.
-    data_type :
-        Data type to convert to. Default is None, which means that the data-type
-        is inferred from the input.
-
-    Returns
-    -------
-    :
-        Converted arrays.
-    """
-    return tuple(jnp.asarray(arg, dtype=data_type) for arg in args)
-
-
 def check_invalid_entry(array: jnp.ndarray) -> None:
     """Check if the array has nans or infs.
 
