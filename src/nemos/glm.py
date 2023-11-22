@@ -185,7 +185,9 @@ class GLM(BaseRegressor):
     ) -> jnp.ndarray:
         r"""Score the predicted rates against target neural activity.
 
-        This computes the negative log-likelihood up to a constant term.
+        This method computes the negative log-likelihood up to a constant term. Unlike `score`,
+        it does not conduct parameter checks prior to evaluation. Passed directly to the solver,
+        it serves to establish the optimization objective for learning the model parameters.
 
         Parameters
         ----------
