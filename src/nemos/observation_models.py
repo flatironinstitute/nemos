@@ -209,7 +209,7 @@ class Observations(Base, abc.ABC):
     def pseudo_r2(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
         r"""Pseudo-$R^2$ calculation for a GLM.
 
-        Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002)[$^1$](#--references).
+        Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002)[$^1$](#references).
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
