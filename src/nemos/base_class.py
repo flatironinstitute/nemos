@@ -258,10 +258,7 @@ class BaseRegressor(Base, abc.ABC):
 
         """
         try:
-            params = tuple(
-                jnp.asarray(par, dtype=data_type)
-                for par in params
-            )
+            params = tuple(jnp.asarray(par, dtype=data_type) for par in params)
         except (ValueError, TypeError):
             raise TypeError(
                 "Initial parameters must be array-like of array-like objects "
@@ -482,7 +479,7 @@ class BaseRegressor(Base, abc.ABC):
             )
         # If both are provided, perform checks and conversions
         elif init_y is not None and params_recurrent is not None:
-            init_y =  jnp.asarray(init_y, dtype=float)
+            init_y = jnp.asarray(init_y, dtype=float)
             self._check_input_dimensionality(y=init_y)
             self._check_input_and_params_consistency(params_recurrent, y=init_y)
             return feedforward_input, init_y

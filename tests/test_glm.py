@@ -543,7 +543,8 @@ class TestGLM:
         _test_class_method(model, "score", [X, y], {}, error, match_str)
 
     @pytest.mark.parametrize("score_type, error, match_str", [
-        ("pseudo-r2", None, None),
+        ("pseudo-r2-McFadden", None, None),
+        ("pseudo-r2-Choen", None, None),
         ("log-likelihood", None, None),
         ("not-implemented", NotImplementedError, "Scoring method %s not implemented")
     ]

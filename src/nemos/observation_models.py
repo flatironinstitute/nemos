@@ -1,7 +1,7 @@
 """Observation model classes for GLMs."""
 
 import abc
-from typing import Callable, Union
+from typing import Callable, Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -206,14 +206,75 @@ class Observations(Base, abc.ABC):
         """
         pass
 
-    def pseudo_r2(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
+    def pseudo_r2(
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        score_type: Literal["pseudo-r2-McFadden", "pseudo-r2-Choen"] = "pseudo-r2-McFadden",
+    ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
-        Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002)[$^1$](#references).
+        Compute the pseudo-$R^2$ metric for the GLM.
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
-        it can yield negative values on out-of-sample data, indicating potential overfitting.
+        it can yield negative values on out-of-sample data, indicating potential over-fitting.
+
+        Parameters
+        ----------
+        predicted_rate:
+            The mean neural activity. Expected shape: (n_time_bins, n_neurons)
+        y:
+            The neural activity. Expected shape: (n_time_bins, n_neurons)
+        score_type:
+            The pseudo-R$^2$ type.
+
+        Returns
+        -------
+        :
+            The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
+            whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
+
+        Notes
+        -----
+        - The McFadden pseudo-$R^2$ is given by:
+            $$
+                R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}
+            $$
+        - The Choen pseudo-$R^2$ is given by:
+            $$
+               \begin{aligned}
+               R^2_{\text{Choen}} &= \frac{D_0 - D_M}{D_0} \\\
+               &= 1 - \frac{\log(L_s) - \log(L_M)}{\log(L_s)-\log(L_0)},
+               \end{aligned}
+            $$
+        where $L_M$, $L_0$ and $L_s$ are the likelihood of the fitted model, the null model (a
+        model with only the intercept term), and the saturated model (a model with one parameter per
+         sample, i.e. the maximum value that the likelihood could possibly achieve). $D_M$ and $D_0$ are
+         the model and the null deviance, $D_i = -2 \left[ \log(L_s) - \log(L_i) \right]$ for $i=M,0$.
+
+
+        References
+        ----------
+        1. McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318). London: Croom Helm.
+        2. Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+        *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
+        3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
+        """
+
+        if score_type == "pseudo-r2-McFadden":
+            pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y)
+        elif score_type == "pseudo-r2-Choen":
+            pseudo_r2 = self._pseudo_r2_choen(predicted_rate, y)
+        else:
+            raise NotImplementedError(f"Score {score_type} not implemented!")
+        return pseudo_r2
+
+    def _pseudo_r2_choen(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
+        r"""Choen's pseudo-$R^2$.
+
+        Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002). See
+        [`pseudo_r2`](#pseudo_r2) for additional information.
 
         Parameters
         ----------
@@ -227,41 +288,40 @@ class Observations(Base, abc.ABC):
         :
             The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
-
-        Notes
-        -----
-        The pseudo-$R^2$ score is calculated as follows,
-
-        $$
-        \begin{aligned}
-        R_{\text{pseudo}}^2 &= \frac{LL(\bm{y}| \bm{\hat{\mu}}) - LL(\bm{y}|  \bm{\mu_0})}{LL(\bm{y}| \bm{y}) -
-        LL(\bm{y}|  \bm{\mu_0})}\\
-        &= \frac{D(\bm{y}; \bm{\mu_0}) - D(\bm{y}; \bm{\hat{\mu}})}{D(\bm{y}; \bm{\mu_0})},
-        \end{aligned}
-        $$
-
-        where $\bm{y}=[y_1,\dots, y_T]$, $\bm{\hat{\mu}} = \left[\hat{\mu}_1, \dots, \hat{\mu}_T \right]$ and,
-        $\bm{\mu_0} = \left[\mu_0, \dots, \mu_0 \right]$ are the counts, the model predicted rate and the average
-        firing rates respectively, $LL$ is the log-likelihood averaged over the samples, and
-        $D(\cdot\; ;\cdot)$ is the deviance averaged over samples,
-        $$
-        D(\bm{y}; \bm{\mu}) = 2 \left( LL(\bm{y}| \bm{y}) - LL(\bm{y}| \bm{\mu}) \right).
-        $$
-
-        References
-        ----------
-        1. Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
-        *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
-        3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
-        res_dev_t = self.deviance(predicted_rate, y)
-        resid_deviance = jnp.sum(res_dev_t**2)
+        model_dev_t = self.deviance(predicted_rate, y)
+        model_deviance = jnp.sum(model_dev_t)
 
         null_mu = jnp.ones(y.shape, dtype=jnp.float32) * y.mean()
         null_dev_t = self.deviance(null_mu, y)
-        null_deviance = jnp.sum(null_dev_t**2)
+        null_deviance = jnp.sum(null_dev_t)
+        return (null_deviance - model_deviance) / null_deviance
 
-        return (null_deviance - resid_deviance) / null_deviance
+    def _pseudo_r2_mcfadden(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
+        """
+        McFadden's pseudo-$R^2$.
+
+        Compute the pseudo-$R^2$ metric as defined by McFadden et al. (1979). See
+        [`pseudo_r2`](#pseudo_r2) for additional information.
+
+        Parameters
+        ----------
+        predicted_rate:
+            The mean neural activity. Expected shape: (n_time_bins, n_neurons)
+        y:
+            The neural activity. Expected shape: (n_time_bins, n_neurons)
+
+        Returns
+        -------
+        :
+            The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
+            whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
+        """
+        norm = -jax.scipy.special.gammaln(y + 1).mean()
+        mean_y = jnp.ones(y.shape) * y.mean(axis=0)
+        ll_null = -self.negative_log_likelihood(mean_y, y) + norm
+        ll_model = -self.negative_log_likelihood(predicted_rate, y) + norm
+        return 1 - ll_model / ll_null
 
 
 class PoissonObservations(Observations):

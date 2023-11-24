@@ -211,7 +211,8 @@ class GLM(BaseRegressor):
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
-        score_type: Literal["log-likelihood", "pseudo-r2"] = "pseudo-r2",
+        score_type: Literal["log-likelihood", "pseudo-r2"] = "pseudo-r2-McFadden",
+        pseudo_r2_type: Literal["McFadden", "Cox"] = "McFadden",
     ) -> jnp.ndarray:
         r"""Evaluates the goodness-of-fit of the model to the observed neural data.
 
@@ -231,6 +232,8 @@ class GLM(BaseRegressor):
             during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
         score_type :
             Type of scoring: either log-likelihood or pseudo-r2.
+        pseudo_r2_type :
+            Type of pseudo-r2 to be reported.
 
         Returns
         -------
@@ -278,28 +281,8 @@ class GLM(BaseRegressor):
         Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
         for GLM modeling counting data.
 
-        The pseudo-$R^2$ can be computed as follows,
-
-        $$
-        \begin{aligned}
-            R^2_{\text{pseudo}} &= \frac{D_{\text{null}} - D_{\text{model}}}{D_{\text{null}}} \\\
-            &= \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
-            - \log \text{LL}(\bar{\lambda}| y)},
-        \end{aligned}
-        $$
-
-        where LL is the log-likelihood, $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is
-        the deviance for the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the observed activity and the model
-        predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate,
-        see references[$^1$](#--references).
-
-        Refer to the `nmo.observation_models.Observations` concrete subclasses for the specific likelihood equations.
-
-
-        References
-        ----------
-        1. Cohen, Jacob, et al. Applied multiple regression/correlation analysis for the behavioral sciences.
-        Routledge, 2013.
+        Refer to the `nmo.observation_models.Observations` concrete subclasses for the likelihood and
+        pseudo-$R^2$ equations.
 
         """
         self._check_is_fit()
@@ -315,12 +298,15 @@ class GLM(BaseRegressor):
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
             score = -self._score((Ws, bs), X, y) - norm_constant
-        elif score_type == "pseudo-r2":
-            score = self._observation_model.pseudo_r2(self._predict((Ws, bs), X), y)
+        elif score_type.startswith("pseudo-r2"):
+            score = self._observation_model.pseudo_r2(
+                self._predict((Ws, bs), X), y, score_type=score_type
+            )
         else:
             raise NotImplementedError(
                 f"Scoring method {score_type} not implemented! "
-                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
+                "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
+                "or 'pseudo-r2-Choen'."
             )
         return score
 
@@ -542,9 +528,7 @@ class GLMRecurrent(GLM):
         self._check_is_fit()
 
         # convert to jnp.ndarray
-        coupling_basis_matrix = jnp.asarray(
-            coupling_basis_matrix, dtype=float
-        )
+        coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.intercept_.shape[0]
