@@ -23,11 +23,11 @@ Abstract Class Base
 │   │
 │   ...
 │
-├─ Abstract Subclass Solver
+├─ Abstract Subclass Regularizer
 │   │
-│   ├─ Concrete Subclass UnRegularizedSolver
+│   ├─ Concrete Subclass UnRegularized
 │   │
-│   ├─ Concrete Subclass RidgeSolver
+│   ├─ Concrete Subclass Ridge
 │   ... 
 │
 ├─ Abstract Subclass Observations

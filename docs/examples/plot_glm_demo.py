@@ -62,8 +62,8 @@ spikes = np.random.poisson(rate)
 # - **Observation Model**: The observation model for the GLM, e.g. an object of the class of type
 # `nemos.observation_models.Observations`. So far, only the `PoissonObservations`
 # model has been implemented.
-# - **Solver**: The desired solver, e.g. an object of the `nemos.solver.Solver` class.
-# Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso solver.
+# - **Regularizer**: The desired regularizer, e.g. an object of the `nemos.solver.Regularizer` class.
+# Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso regularization.
 #
 # The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge solver.
 # Here is how to define the model.
