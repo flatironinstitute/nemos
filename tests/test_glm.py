@@ -56,12 +56,12 @@ class TestGLM:
             (1, AttributeError, "The provided object does not have the required")
         ]
     )
-    def test_init_observation_type(self, observation, error, match_str, ridge_solver):
+    def test_init_observation_type(self, observation, error, match_str, ridge_regularizer):
         """
         Test initialization with different solver names. Check if an appropriate exception is raised
         when the solver name is not present in jaxopt.
         """
-        _test_class_initialization(self.cls, {'solver': ridge_solver, 'observation_model': observation}, error, match_str)
+        _test_class_initialization(self.cls, {'solver': ridge_regularizer, 'observation_model': observation}, error, match_str)
 
     #######################
     # Test model.fit

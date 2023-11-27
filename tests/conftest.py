@@ -69,7 +69,7 @@ def poissonGLM_coupled_model_config_simulate():
         config_dict = json.load(fh)
 
     observations = nmo.observation_models.PoissonObservations(jnp.exp)
-    solver = nmo.solver.RidgeSolver("BFGS", regularizer_strength=0.1)
+    solver = nmo.solver.Ridge("BFGS", regularizer_strength=0.1)
     model = nmo.glm.GLMRecurrent(observation_model=observations, solver=solver)
     model.coef_ = jnp.asarray(config_dict["coef_"])
     model.intercept_ = jnp.asarray(config_dict["intercept_"])
@@ -141,21 +141,21 @@ def poisson_observation_model():
 
 
 @pytest.fixture
-def ridge_solver():
-    return nmo.solver.RidgeSolver(solver_name="LBFGS", regularizer_strength=0.1)
+def ridge_regularizer():
+    return nmo.solver.Ridge(solver_name="LBFGS", regularizer_strength=0.1)
 
 
 @pytest.fixture
-def lasso_solver():
-    return nmo.solver.LassoSolver(solver_name="ProximalGradient", regularizer_strength=0.1)
+def lasso_regularizer():
+    return nmo.solver.Lasso(solver_name="ProximalGradient", regularizer_strength=0.1)
 
 
 @pytest.fixture
-def group_lasso_2groups_5features_solver():
+def group_lasso_2groups_5features_regularizer():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nmo.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1)
+    return nmo.solver.GroupLasso(solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1)
 
 
 @pytest.fixture
