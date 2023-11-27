@@ -199,12 +199,6 @@ class BaseRegressor(Base, abc.ABC):
     scoring the model, simulating responses, and preprocessing data. Concrete classes
     are expected to provide specific implementations of the abstract methods defined here.
 
-    Attributes
-    ----------
-    FLOAT_EPS : float
-        A small float representing machine epsilon for float32, used to handle numerical
-        stability issues.
-
     See Also
     --------
     Concrete models:
@@ -212,9 +206,6 @@ class BaseRegressor(Base, abc.ABC):
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`GLMRecurrent`](../glm/#nemos.glm.GLMRecurrent): A recurrent GLM implementation.
     """
-
-    FLOAT_EPS = jnp.finfo(float).eps
-
     @abc.abstractmethod
     def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
         """Fit the model to neural activity."""

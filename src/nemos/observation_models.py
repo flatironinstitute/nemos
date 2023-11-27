@@ -29,8 +29,6 @@ class Observations(Base, abc.ABC):
 
     Attributes
     ----------
-    FLOAT_EPS :
-        A small value used to ensure numerical stability. Set to the machine epsilon for float32.
     inverse_link_function :
         A function that transforms a set of predictors to the domain of the model parameter.
 
@@ -39,8 +37,6 @@ class Observations(Base, abc.ABC):
     [PoissonObservations](./#nemos.observation_models.PoissonObservations) : A specific implementation of a
     observation model using the Poisson distribution.
     """
-
-    FLOAT_EPS = jnp.finfo(float).eps
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
         super().__init__(**kwargs)
@@ -389,7 +385,7 @@ class PoissonObservations(Observations):
         The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        predicted_rate = jnp.clip(predicted_rate, a_min=self.FLOAT_EPS)
+        predicted_rate = jnp.clip(predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps)
         x = y * jnp.log(predicted_rate)
         # see above for derivation of this.
         return jnp.mean(predicted_rate - x)
@@ -451,7 +447,7 @@ class PoissonObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
         """
         # this takes care of 0s in the log
-        ratio = jnp.clip(spike_counts / predicted_rate, self.FLOAT_EPS, jnp.inf)
+        ratio = jnp.clip(spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf)
         deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
         return deviance
 
