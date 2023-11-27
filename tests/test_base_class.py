@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 import nemos as nmo
 from nemos.base_class import Base, BaseRegressor
-from nemos.utils import check_invalid_entry
+from nemos.utils import check_invalid_entry, multi_array_device_put
 
 
 @pytest.fixture
@@ -306,31 +306,6 @@ def test_preprocess_simulate_feedforward(mock_regressor):
 def test_empty_set(mock_regressor):
     """Check that an empty set_params returns self."""
     assert mock_regressor.set_params() is mock_regressor
-
-
-@pytest.mark.parametrize("device_name", ["cpu", "gpu", "tpu", "unknown"])
-def test_target_device_put(device_name: Literal["cpu", "gpu", "tpu"], mock_regressor):
-    """Test that put works.
-
-    Put array to device and checks that the device is matched after put, if device is found.
-    Raise error otherwise.
-    """
-    raise_exception = not any(
-        device_name in device.device_kind.lower() for device in jax.local_devices()
-    )
-    x = jnp.array([1])
-    if raise_exception:
-        if device_name != "tpu":
-            with pytest.raises(RuntimeError, match=f"Unknown backend"):
-                mock_regressor.device_put(x, device=device_name)
-        else:
-            with pytest.raises(
-                RuntimeError, match=f"Backend '{device_name}' failed to initialize: "
-            ):
-                mock_regressor.device_put(x, device=device_name)
-    else:
-        (x,) = mock_regressor.device_put(x, device=device_name)
-        assert x.device().device_kind == device_name
 
 
 def test_glm_varargs_error():

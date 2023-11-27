@@ -460,3 +460,32 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
             f"The `{func_name}` should return a scalar! "
             f"Array of shape {array_out.shape} returned instead!"
         )
+
+
+def multi_array_device_put(
+    *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
+) -> Union[Any, jnp.ndarray]:
+    """Send arrays to device.
+
+    This function sends the arrays to the target device, if the arrays are
+    not already there.
+
+    Parameters
+    ----------
+    *args:
+        NDArray
+    device:
+        A target device between "cpu", "tpu", "gpu".
+
+    Returns
+    -------
+    :
+        The arrays on the desired device.
+    """
+    device_obj = jax.devices(device)[0]
+    return tuple(
+        jax.device_put(arg, device_obj)
+        if arg.device_buffer.device() != device_obj
+        else arg
+        for arg in args
+    )
