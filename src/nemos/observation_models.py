@@ -210,7 +210,8 @@ class Observations(Base, abc.ABC):
     ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
-        Compute the pseudo-$R^2$ metric for the GLM.
+        Compute the pseudo-$R^2$ metric for the GLM, as defined by McFadden et al.[$^1$](#references)
+        or by Choen et al.[$^2$](#references).
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
