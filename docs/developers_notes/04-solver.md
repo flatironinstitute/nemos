@@ -2,27 +2,27 @@
 
 ## Introduction
 
-The `solver` module introduces an archetype class `Solver` which provides the structural components for each concrete sub-class.
+The `solver` module introduces an archetype class `Regularizer` which provides the structural components for each concrete sub-class.
 
-Objects of type `Solver` provide methods to define an optimization objective, and instantiate a solver for it. These objects serve as attribute of the [`nemos.glm.GLM`](../05-glm/#the-concrete-class-glm), equipping the glm with a solver for learning model parameters. 
+Objects of type `Regularizer` provide methods to define an optimization objective, and instantiate a solver for it. These objects serve as attribute of the [`nemos.glm.GLM`](../05-glm/#the-concrete-class-glm), equipping the glm with a solver for learning model parameters. 
 
 Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run` and `update` method with the appropriate input/output types).
 We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable.
 
-Each solver object defines a set of allowed optimizers, which in turn depends on the loss function characteristics (smooth vs non-smooth) and/or the optimization type (constrained, un-constrained, batched, etc.).
+Each regularizer object defines a set of allowed optimizers, which in turn depends on the loss function characteristics (smooth vs non-smooth) and/or the optimization type (constrained, un-constrained, batched, etc.).
 
 ```
-Abstract Class Solver
+Abstract Class Regularizer
 |
-├─ Concrete Class UnRegularizedSolver
+├─ Concrete Class UnRegularized
 |
-├─ Concrete Class RidgeSolver
+├─ Concrete Class Ridge
 |
-└─ Abstract Class ProximalGradientSolver
+└─ Abstract Class ProximalGradientRegularizer
     |
-    ├─ Concrete Class LassoSolver
+    ├─ Concrete Class Lasso
     |
-    └─ Concrete Class GroupLassoSolver
+    └─ Concrete Class GroupLasso
 ```
 
 !!! note
