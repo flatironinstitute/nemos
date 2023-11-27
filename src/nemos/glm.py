@@ -50,7 +50,7 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        solver: slv.Solver = slv.RidgeSolver("GradientDescent"),
+        solver: slv.Regularizer = slv.Ridge("GradientDescent"),
     ):
         super().__init__()
 
@@ -67,7 +67,7 @@ class GLM(BaseRegressor):
         return self._solver
 
     @solver.setter
-    def solver(self, solver: slv.Solver):
+    def solver(self, solver: slv.Regularizer):
         if not hasattr(solver, "instantiate_solver"):
             raise AttributeError(
                 "The provided `solver` doesn't implement the `instantiate_sovler` method."
@@ -457,7 +457,7 @@ class GLMRecurrent(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        solver: slv.Solver = slv.RidgeSolver(),
+        solver: slv.Regularizer = slv.Ridge(),
     ):
         super().__init__(observation_model=observation_model, solver=solver)
 

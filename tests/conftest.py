@@ -41,7 +41,7 @@ def poissonGLM_model_instantiation():
     b_true = np.zeros((1, ))
     w_true = np.random.normal(size=(1, 5))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    solver = nmo.solver.UnRegularizedSolver('GradientDescent', {})
+    solver = nmo.solver.UnRegularized('GradientDescent', {})
     model = nmo.glm.GLM(observation_model, solver)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
@@ -117,7 +117,7 @@ def group_sparse_poisson_glm_model_instantiation():
     mask[0, 1:4] = 1
     mask[1, [0,4]] = 1
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    solver = nmo.solver.UnRegularizedSolver('GradientDescent', {})
+    solver = nmo.solver.UnRegularized('GradientDescent', {})
     model = nmo.glm.GLM(observation_model, solver)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask

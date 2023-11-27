@@ -9,7 +9,7 @@ import nemos as nmo
 
 
 class TestUnRegularizedSolver:
-    cls = nmo.solver.UnRegularizedSolver
+    cls = nmo.solver.UnRegularized
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
@@ -119,7 +119,7 @@ class TestUnRegularizedSolver:
 
 
 class TestRidgeSolver:
-    cls = nmo.solver.RidgeSolver
+    cls = nmo.solver.Ridge
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
@@ -229,7 +229,7 @@ class TestRidgeSolver:
 
 
 class TestLassoSolver:
-    cls = nmo.solver.LassoSolver
+    cls = nmo.solver.Lasso
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):
@@ -317,7 +317,7 @@ class TestLassoSolver:
 
 
 class TestGroupLassoSolver:
-    cls = nmo.solver.GroupLassoSolver
+    cls = nmo.solver.GroupLasso
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
     def test_init_solver_name(self, solver_name):

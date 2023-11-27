@@ -99,7 +99,7 @@ for key, value in model.get_params(deep=True).items():
 observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
 
 # Observation model
-solver = nmo.solver.RidgeSolver(
+solver = nmo.solver.Ridge(
     solver_name="LBFGS",
     regularizer_strength=0.1,
     solver_kwargs={"tol":10**-10}
@@ -118,7 +118,7 @@ print("Observation model:", type(model.observation_model))
 # Hyperparameters can be set at any moment via the `set_params` method.
 
 model.set_params(
-    solver=nmo.solver.LassoSolver(),
+    solver=nmo.solver.Lasso(),
     observation_model__inverse_link_function=jax.numpy.exp
 )
 
@@ -175,7 +175,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 #
 # **Lasso**
 
-model.set_params(solver=nmo.solver.LassoSolver())
+model.set_params(solver=nmo.solver.Lasso())
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
@@ -192,7 +192,7 @@ mask = np.zeros((2, 5))
 mask[0, [0, -1]] = 1
 mask[1, 1:-1] = 1
 
-solver = nmo.solver.GroupLassoSolver("ProximalGradient", mask=mask)
+solver = nmo.solver.GroupLasso("ProximalGradient", mask=mask)
 model.set_params(solver=solver)
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)

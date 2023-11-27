@@ -36,9 +36,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "solver, error, match_str",
         [
-            (nmo.solver.RidgeSolver("BFGS"), None, None),
+            (nmo.solver.Ridge("BFGS"), None, None),
             (None, AttributeError, "The provided `solver` doesn't implement "),
-            (nmo.solver.RidgeSolver, TypeError, "The provided `solver` cannot be instantiated")
+            (nmo.solver.Ridge, TypeError, "The provided `solver` cannot be instantiated")
         ]
     )
     def test_solver_type(self, solver, error, match_str, poissonGLM_model_instantiation):
@@ -52,7 +52,7 @@ class TestGLM:
         "observation, error, match_str",
         [
             (nmo.observation_models.PoissonObservations(), None, None),
-            (nmo.solver.Solver, AttributeError, "The provided object does not have the required"),
+            (nmo.solver.Regularizer, AttributeError, "The provided object does not have the required"),
             (1, AttributeError, "The provided object does not have the required")
         ]
     )
@@ -363,7 +363,7 @@ class TestGLM:
     def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
-        model.set_params(solver=nmo.solver.GroupLassoSolver(solver_name="ProximalGradient", mask=mask))
+        model.set_params(solver=nmo.solver.GroupLasso(solver_name="ProximalGradient", mask=mask))
         model.fit(X, y)
 
     #######################

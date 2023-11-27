@@ -39,14 +39,14 @@ ProximalOperator = Callable[
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
 
-__all__ = ["UnRegularizedSolver", "RidgeSolver", "LassoSolver", "GroupLassoSolver"]
+__all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
 
 def __dir__() -> list[str]:
     return __all__
 
 
-class Solver(Base, abc.ABC):
+class Regularizer(Base, abc.ABC):
     """
     Abstract base class for optimization solvers.
 
@@ -192,7 +192,7 @@ class Solver(Base, abc.ABC):
         return solver_run
 
 
-class UnRegularizedSolver(Solver):
+class UnRegularized(Regularizer):
     """
     Solver class for optimizing unregularized models.
 
@@ -226,7 +226,7 @@ class UnRegularizedSolver(Solver):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
 
 
-class RidgeSolver(Solver):
+class Ridge(Regularizer):
     """
     Solver for Ridge regularization using various optimization algorithms.
 
@@ -305,7 +305,7 @@ class RidgeSolver(Solver):
         return self.get_runner(penalized_loss)
 
 
-class ProxGradientSolver(Solver, abc.ABC):
+class ProxGradientRegularizer(Regularizer, abc.ABC):
     """
     Solver for optimization using the Proximal Gradient method.
 
@@ -367,9 +367,9 @@ class ProxGradientSolver(Solver, abc.ABC):
         return super().instantiate_solver(loss, self.regularizer_strength)
 
 
-class LassoSolver(ProxGradientSolver):
+class Lasso(ProxGradientRegularizer):
     """
-    Solver for optimization using the Lasso (L1 regularization) method with Proximal Gradient.
+    Regularizer for optimization using the Lasso (L1 regularization) method with Proximal Gradient.
 
     This class is a specialized version of the ProxGradientSolver with the proximal operator
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
@@ -404,7 +404,7 @@ class LassoSolver(ProxGradientSolver):
         return prox_op
 
 
-class GroupLassoSolver(ProxGradientSolver):
+class GroupLasso(ProxGradientRegularizer):
     """
     Solver for optimization using the Group Lasso regularization method with Proximal Gradient.
 

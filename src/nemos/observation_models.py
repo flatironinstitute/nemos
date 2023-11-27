@@ -518,7 +518,7 @@ def check_observation_model(observation_model):
         "inverse_link_function": {
             "input": [jnp.array([1.0, 1.0, 1.0])],
             "test_differentiable": True,
-            "test_preserve_shape": 0,
+            "test_preserve_shape": False,
         },
         "negative_log_likelihood": {
             "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
@@ -530,7 +530,7 @@ def check_observation_model(observation_model):
         },
         "sample_generator": {
             "input": [jax.random.PRNGKey(123), 0.5 * jnp.array([1.0, 1.0, 1.0])],
-            "test_preserve_shape": 1,
+            "test_preserve_shape": True,
         },
     }
 
@@ -550,7 +550,7 @@ def check_observation_model(observation_model):
             utils.assert_differentiable(func, attr_name)
 
         if "test_preserve_shape" in check_info:
-            index = check_info["test_preserve_shape"]
+            index = int(check_info["test_preserve_shape"])
             utils.assert_preserve_shape(
                 func, check_info["input"], attr_name, input_index=index
             )
