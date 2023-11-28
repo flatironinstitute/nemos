@@ -62,7 +62,7 @@ def prox_group_lasso(
     Parameters
     ----------
     params:
-        Weights, shape (n_neurons, n_features)
+        Weights, shape (n_neurons, n_features); intercept, shape (n_neurons, )
     regularizer_strength:
         The regularization hyperparameter.
     mask:
