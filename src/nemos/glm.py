@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from . import observation_models as obs
-from . import solver as slv
+from . import regularizer as slv
 from . import utils
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
@@ -26,8 +26,9 @@ class GLM(BaseRegressor):
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
-    solver :
-        Solver to use for model optimization. Defines the optimization algorithm and related parameters.
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        and related parameters.
         Default is Ridge regression with gradient descent.
 
     Attributes
@@ -43,19 +44,19 @@ class GLM(BaseRegressor):
     Raises
     ------
     TypeError
-        If provided `solver` or `observation_model` are not valid or implemented in `nemos.solver` and
+        If provided `regularizer` or `observation_model` are not valid or implemented in `nemos.solver` and
         `nemos.observation_models` respectively.
     """
 
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        solver: slv.Regularizer = slv.Ridge("GradientDescent"),
+        regularizer: slv.Regularizer = slv.Ridge("GradientDescent"),
     ):
         super().__init__()
 
         self.observation_model = observation_model
-        self.solver = solver
+        self.regularizer = regularizer
 
         # initialize to None fit output
         self.intercept_ = None
@@ -63,24 +64,24 @@ class GLM(BaseRegressor):
         self.solver_state = None
 
     @property
-    def solver(self):
-        return self._solver
+    def regularizer(self):
+        return self._regularizer
 
-    @solver.setter
-    def solver(self, solver: slv.Regularizer):
-        if not hasattr(solver, "instantiate_solver"):
+    @regularizer.setter
+    def regularizer(self, regularizer: slv.Regularizer):
+        if not hasattr(regularizer, "instantiate_solver"):
             raise AttributeError(
-                "The provided `solver` doesn't implement the `instantiate_sovler` method."
+                "The provided `solver` doesn't implement the `instantiate_solver` method."
             )
         # test solver instantiation on the GLM loss
         try:
-            solver.instantiate_solver(self._score)
+            regularizer.instantiate_solver(self._score)
         except Exception:
             raise TypeError(
                 "The provided `solver` cannot be instantiated on "
                 "the GLM log-likelihood."
             )
-        self._solver = solver
+        self._regularizer = regularizer
 
     @property
     def observation_model(self):
@@ -349,7 +350,7 @@ class GLM(BaseRegressor):
         X, y, init_params = self._preprocess_fit(X, y, init_params)
 
         # Run optimization
-        runner = self.solver.instantiate_solver(self._score)
+        runner = self.regularizer.instantiate_solver(self._score)
         params, state = runner(init_params, X, y)
 
         # estimate the GLM scale
@@ -437,8 +438,8 @@ class GLMRecurrent(GLM):
     observation_model :
         The observation model to use for the GLM. This defines how neural activity is generated
         based on the underlying firing rate. Common choices include Poisson and Gaussian models.
-    solver :
-        The optimization solver to use for fitting the GLM parameters.
+    regularizer :
+        The regularization scheme to use for fitting the GLM parameters.
 
     See Also
     --------
@@ -457,9 +458,9 @@ class GLMRecurrent(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        solver: slv.Regularizer = slv.Ridge(),
+        regularizer: slv.Regularizer = slv.Ridge(),
     ):
-        super().__init__(observation_model=observation_model, solver=solver)
+        super().__init__(observation_model=observation_model, regularizer=regularizer)
 
     def simulate_recurrent(
         self,

@@ -62,16 +62,16 @@ spikes = np.random.poisson(rate)
 # - **Observation Model**: The observation model for the GLM, e.g. an object of the class of type
 # `nemos.observation_models.Observations`. So far, only the `PoissonObservations`
 # model has been implemented.
-# - **Regularizer**: The desired regularizer, e.g. an object of the `nemos.solver.Regularizer` class.
+# - **Regularizer**: The desired regularizer, e.g. an object of the `nemos.regularizer.Regularizer` class.
 # Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso regularization.
 #
-# The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge solver.
+# The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge regularization.
 # Here is how to define the model.
 
-# default Poisson GLM with Ridge solver and Poisson observation model.
+# default Poisson GLM with Ridge regularization and Poisson observation model.
 model = nmo.glm.GLM()
 
-print("Solver type:     ", type(model.solver))
+print("Regularization type:     ", type(model.regularizer))
 print("Observation model:", type(model.observation_model))
 
 # %%
@@ -99,7 +99,7 @@ for key, value in model.get_params(deep=True).items():
 observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
 
 # Observation model
-solver = nmo.solver.Ridge(
+regularizer = nmo.regularizer.Ridge(
     solver_name="LBFGS",
     regularizer_strength=0.1,
     solver_kwargs={"tol":10**-10}
@@ -108,29 +108,29 @@ solver = nmo.solver.Ridge(
 # define the GLM
 model = nmo.glm.GLM(
     observation_model=observation_models,
-    solver=solver,
+    regularizer=regularizer,
 )
 
-print("Solver type:      ", type(model.solver))
+print("Regularizer type:      ", type(model.regularizer))
 print("Observation model:", type(model.observation_model))
 
 # %%
 # Hyperparameters can be set at any moment via the `set_params` method.
 
 model.set_params(
-    solver=nmo.solver.Lasso(),
+    regularizer=nmo.regularizer.Lasso(),
     observation_model__inverse_link_function=jax.numpy.exp
 )
 
-print("Updated solver: ", model.solver)
+print("Updated regularizer: ", model.regularizer)
 print("Updated NL: ", model.observation_model.inverse_link_function)
 
 # %%
 # !!! warning
-#     Each `Solver` has an associated attribute `Solver.allowed_optimizers`
+#     Each `Regularizer` has an associated attribute `Regularizer.allowed_optimizers`
 #     which lists the optimizers that are suited for each optimization problem.
-#     For example, a RidgeSolver is differentiable and can be fit with `GradientDescent`
-#     , `BFGS`, etc., while a LassoSolver should use the `ProximalGradient` method instead.
+#     For example, a `Ridge` is differentiable and can be fit with `GradientDescent`
+#     , `BFGS`, etc., while a `Lasso` should use the `ProximalGradient` method instead.
 #     If the provided `solver_name` is not listed in the `allowed_optimizers` this will raise an
 #     exception.
 
@@ -143,7 +143,7 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 
 # Fit a ridge regression Poisson GLM
 model = nmo.glm.GLM()
-model.set_params(solver__regularizer_strength=0.1)
+model.set_params(regularizer__regularizer_strength=0.1)
 model.fit(X, spikes)
 
 print("Ridge results")
@@ -161,7 +161,7 @@ print("Recovered weights: ", model.coef_)
 #
 # **Ridge**
 
-parameter_grid = {"solver__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
+parameter_grid = {"regularizer__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
@@ -171,11 +171,11 @@ print("True weights:      ", w_true)
 print("Recovered weights: ", cls.best_estimator_.coef_)
 
 # %%
-# We can compare the Ridge cross-validated results with other solvers.
+# We can compare the Ridge cross-validated results with other regularization schemes.
 #
 # **Lasso**
 
-model.set_params(solver=nmo.solver.Lasso())
+model.set_params(regularizer=nmo.regularizer.Lasso())
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 
@@ -192,8 +192,8 @@ mask = np.zeros((2, 5))
 mask[0, [0, -1]] = 1
 mask[1, 1:-1] = 1
 
-solver = nmo.solver.GroupLasso("ProximalGradient", mask=mask)
-model.set_params(solver=solver)
+regularizer = nmo.regularizer.GroupLasso("ProximalGradient", mask=mask)
+model.set_params(regularizer=regularizer)
 cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
 cls.fit(X, spikes)
 

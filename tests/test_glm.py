@@ -34,34 +34,34 @@ class TestGLM:
     # Test model.__init__
     #######################
     @pytest.mark.parametrize(
-        "solver, error, match_str",
+        "regularizer, error, match_str",
         [
-            (nmo.solver.Ridge("BFGS"), None, None),
+            (nmo.regularizer.Ridge("BFGS"), None, None),
             (None, AttributeError, "The provided `solver` doesn't implement "),
-            (nmo.solver.Ridge, TypeError, "The provided `solver` cannot be instantiated")
+            (nmo.regularizer.Ridge, TypeError, "The provided `solver` cannot be instantiated")
         ]
     )
-    def test_solver_type(self, solver, error, match_str, poissonGLM_model_instantiation):
+    def test_solver_type(self, regularizer, error, match_str, poissonGLM_model_instantiation):
         """
         Test that an error is raised if a non-compatible solver is passed.
         """
-        _test_class_initialization(self.cls, {'solver': solver}, error, match_str)
+        _test_class_initialization(self.cls, {'regularizer': regularizer}, error, match_str)
 
 
     @pytest.mark.parametrize(
         "observation, error, match_str",
         [
             (nmo.observation_models.PoissonObservations(), None, None),
-            (nmo.solver.Regularizer, AttributeError, "The provided object does not have the required"),
+            (nmo.regularizer.Regularizer, AttributeError, "The provided object does not have the required"),
             (1, AttributeError, "The provided object does not have the required")
         ]
     )
     def test_init_observation_type(self, observation, error, match_str, ridge_regularizer):
         """
-        Test initialization with different solver names. Check if an appropriate exception is raised
-        when the solver name is not present in jaxopt.
+        Test initialization with different regularizer names. Check if an appropriate exception is raised
+        when the regularizer name is not present in jaxopt.
         """
-        _test_class_initialization(self.cls, {'solver': ridge_regularizer, 'observation_model': observation}, error, match_str)
+        _test_class_initialization(self.cls, {'regularizer': ridge_regularizer, 'observation_model': observation}, error, match_str)
 
     #######################
     # Test model.fit
@@ -363,7 +363,7 @@ class TestGLM:
     def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
-        model.set_params(solver=nmo.solver.GroupLasso(solver_name="ProximalGradient", mask=mask))
+        model.set_params(regularizer=nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask))
         model.fit(X, y)
 
     #######################
@@ -1021,7 +1021,7 @@ class TestGLM:
 
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        param_grid = {"solver__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     def test_end_to_end_fit_and_simulate(self,

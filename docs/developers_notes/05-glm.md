@@ -15,7 +15,7 @@ Our design aligns with the `scikit-learn` API, facilitating seamless integration
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant. 
 
-Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the [`nemos.observation_models.Observations`](../03-observation_models/#the-abstract-class-observations) and [`nemos.solver.Solver`](../04-solver/#the-abstract-class-solver) objects, respectively.
+Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.) and a regularization strategies (Ridge, Lasso, etc.) during initialization. This is done using the [`nemos.observation_models.Observations`](../03-observation_models/#the-abstract-class-observations) and [`nemos.regularizer.Regularizer`](../04-regularizer/#the-abstract-class-regularizer) objects, respectively.
 
 
 <figure markdown>
@@ -35,7 +35,7 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 ### Attributes
 
-- **`solver`**: Refers to the optimization solver - an object of the [`nemos.solver.Solver`](../04-solver/#the-abstract-class-solver) type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
+- **`regularizer`**: Refers to the optimization regularizer - an object of the [`nemos.regularizer.regularizer`](../04-regularizer/#the-abstract-class-regularizer) type. It uses the `jaxopt` solver to minimize the (penalized) negative log-likelihood of the GLM.
 - **`observation_models`**: Represents the GLM observation model, which is an object of the [`nemos.observation_models.Observations`](../03-observation_models/#the-abstract-class-observations) type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
 - **`coef_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
@@ -45,7 +45,7 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 - **`predict`**: Validates input and computes the mean rates of the `GLM` by invoking the inverse-link function of the `observation_models` attribute.
 - **`score`**: Validates input and assesses the Poisson GLM using either log-likelihood or pseudo-$R^2$. This method uses the `observation_models` to determine log-likelihood or pseudo-$R^2$.
-- **`fit`**: Validates input and aligns the Poisson GLM with spike train data. It leverages the `observation_models` and `solver` to define the model's loss function and instantiate the solver.
+- **`fit`**: Validates input and aligns the Poisson GLM with spike train data. It leverages the `observation_models` and `regularizer` to define the model's loss function and instantiate the regularizer.
 - **`simulate`**: Simulates spike trains using the GLM as a feedforward network, invoking the `observation_models.sample_generator` method for emission probability.
 
 ### Private Methods
@@ -72,5 +72,5 @@ When crafting a functional (i.e., concrete) GLM class:
 - **Must** inherit from `BaseRegressor` or one of its derivatives.
 - **Must** realize the `predict`, `fit`, `score`, and `simulate` methods, either directly or through inheritance.
 - **Should** incorporate a `observation_models` attribute of type `nemos.observation_models.Observations` to specify the link-function, emission probability, and likelihood.
-- **Should** include a `solver` attribute of type `nemos.solver.Solver` to establish the solver based on penalization type.
+- **Should** include a `regularizer` attribute of type `nemos.regularizer.Regularizer` to instantiate the solver based on regularization type.
 - **May** embed additional parameter and input checks if required by the specific GLM subclass.

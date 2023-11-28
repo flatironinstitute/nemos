@@ -1,8 +1,8 @@
 """
-A Module for Optimization with Various Regularizations.
+A Module for Optimization with Various Regularization Schemes.
 
 This module provides a series of classes that facilitate the optimization of models
-with different types of regularizations. Each solver class in this module interfaces
+with different types of regularizations. Each `Regularizer` class in this module interfaces
 with various optimization methods, and they can be applied depending on the model's requirements.
 """
 import abc
@@ -48,15 +48,15 @@ def __dir__() -> list[str]:
 
 class Regularizer(Base, abc.ABC):
     """
-    Abstract base class for optimization solvers.
+    Abstract base class for regularized solvers.
 
     This class is designed to provide a consistent interface for optimization solvers,
-    enabling users to easily switch between different solvers and ensure compatibility
-    with various loss functions and regularization schemes.
+    enabling users to easily switch between different regularizers, ensuring compatibility
+    with various loss functions and optimization algorithms.
 
     Attributes
     ----------
-    allowed_algorithms :
+    allowed_solvers :
         List of optimizer names that are allowed for use with this solver.
     solver_name :
         Name of the solver being used.
@@ -64,7 +64,7 @@ class Regularizer(Base, abc.ABC):
         Additional keyword arguments to be passed to the solver during instantiation.
     """
 
-    allowed_algorithms: List[str] = []
+    allowed_solvers: List[str] = []
 
     def __init__(
         self,
@@ -113,11 +113,11 @@ class Regularizer(Base, abc.ABC):
         ValueError
             If the provided solver name is not in the list of allowed optimizers.
         """
-        if solver_name not in self.allowed_algorithms:
+        if solver_name not in self.allowed_solvers:
             raise ValueError(
                 f"Solver `{solver_name}` not allowed for "
                 f"{self.__class__} regularization. "
-                f"Allowed solvers are {self.allowed_algorithms}."
+                f"Allowed solvers are {self.allowed_solvers}."
             )
 
     @staticmethod
@@ -164,7 +164,7 @@ class Regularizer(Base, abc.ABC):
         Parameters
         ----------
         loss :
-            The loss funciton.
+            The loss function.
         run_kwargs :
             Additional keyword arguments for the solver run.
 
@@ -198,19 +198,19 @@ class UnRegularized(Regularizer):
 
     This class provides an interface to various optimization methods for models that
     do not involve regularization. The optimization methods that are allowed for this
-    class are defined in the `allowed_optimizers` attribute.
+    class are defined in the `allowed_solvers` attribute.
 
     Attributes
     ----------
-    allowed_optimizers : list of str
+    allowed_solvers : list of str
         List of optimizer names that are allowed for this solver class.
 
     See Also
     --------
-    [Solver](./#nemos.solver.Solver) : Base solver class from which this class inherits.
+    [Regularizer](./#nemos.solver.Regularizer) : Base solver class from which this class inherits.
     """
 
-    allowed_algorithms = [
+    allowed_solvers = [
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -235,11 +235,11 @@ class Ridge(Regularizer):
 
     Attributes
     ----------
-    allowed_optimizers : List[..., str]
+    allowed_solvers : List[..., str]
         A list of optimizer names that are allowed to be used with this solver.
     """
 
-    allowed_algorithms = [
+    allowed_solvers = [
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -307,18 +307,18 @@ class Ridge(Regularizer):
 
 class ProxGradientRegularizer(Regularizer, abc.ABC):
     """
-    Solver for optimization using the Proximal Gradient method.
+    Abstract class for ptimization solvers using the Proximal Gradient method.
 
     This class utilizes the `jaxopt` library's Proximal Gradient optimizer. It extends
     the base Solver class, with the added functionality of a proximal operator.
 
     Attributes
     ----------
-    allowed_optimizers : List[...,str]
+    allowed_solvers : List[...,str]
         A list of optimizer names that are allowed to be used with this solver.
     """
 
-    allowed_algorithms = ["ProximalGradient"]
+    allowed_solvers = ["ProximalGradient"]
 
     def __init__(
         self,
@@ -369,7 +369,7 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
 
 class Lasso(ProxGradientRegularizer):
     """
-    Regularizer for optimization using the Lasso (L1 regularization) method with Proximal Gradient.
+     Optimization solver using the Lasso (L1 regularization) method with Proximal Gradient.
 
     This class is a specialized version of the ProxGradientSolver with the proximal operator
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
@@ -406,7 +406,7 @@ class Lasso(ProxGradientRegularizer):
 
 class GroupLasso(ProxGradientRegularizer):
     """
-    Solver for optimization using the Group Lasso regularization method with Proximal Gradient.
+    Optimization solver using the Group Lasso regularization method with Proximal Gradient.
 
     This class is a specialized version of the ProxGradientSolver with the proximal operator
     set for Group Lasso regularization. The Group Lasso regularization induces sparsity on groups
