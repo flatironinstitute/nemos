@@ -1,7 +1,27 @@
 r"""Collection of proximal operators.
 
-See the theory note on "Proximal Methods" in the package documentation for an introduction to proximal
-operators and the Proximal Gradient algorithm.
+Proximal operators are a mathematical tools used to solve non-differentiable optimization
+problems or to simplify complex ones.
+
+A classical use-case for proximal operator is that of minimizing a penalized loss function where the
+penalization is non-differentiable (Lasso, group Lasso etc.). In proximal gradient algorithms, proximal
+operators are used to find the parameters that balance the minimization of the penalty term with
+ the proximity to the gradient descent update of the un-penalized loss.
+
+More formally, proximal operators solve the minimization problem,
+
+$$
+\\text{prox}\_f(\bm{v}) = \arg\min\_{\bm{x}} \left( f(\bm{x}) + \frac{1}{2}\Vert \bm{x} - \bm{v}\Vert_2 ^2 \right)
+$$
+
+
+Where $f$ is usually the non-differentiable penalization term, and $\bm{v}$  is the parameter update of the
+un-penalized loss function. The first term controls the penalization magnitude, the second the proximity
+with the gradient based update.
+
+References
+----------
+[1]  Parikh, Neal, and Stephen Boyd. *"Proximal Algorithms, ser. Foundations and Trends (r) in Optimization."* (2013).
 """
 from typing import Tuple
 
