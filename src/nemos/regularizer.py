@@ -147,47 +147,39 @@ class Regularizer(Base, abc.ABC):
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
     ) -> SolverRunner:
-        """Abstract method to instantiate a solver with a given loss function."""
-        # check that the loss is Callable
-        utils.assert_is_callable(loss, "loss")
-        return self.get_runner(loss, *args, **kwargs)
-
-    def get_runner(
-        self,
-        loss: Callable,
-        *run_args: Any,
-        **run_kwargs: dict,
-    ) -> SolverRunner:
         """
-        Get the solver runner with provided arguments.
+        Instantiate the solver with the provided loss function.
+
 
         Parameters
         ----------
         loss :
-            The loss function.
-        run_kwargs :
-            Additional keyword arguments for the solver run.
+            The loss function to be optimized.
+
+        *args:
+            Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
+            strength for proximal gradient methods.
+
+        *kwargs:
+            Keyword arguments for the jaxopt `solver.run` method.
 
         Returns
         -------
         :
-            The solver runner.
-
-        Raises
-        ------
-        TypeError
-            If the loss function is not a callable.
+            A function that runs the solver with the provided loss and proximal operator.
         """
+        # check that the loss is Callable
+        utils.assert_is_callable(loss, "loss")
+
         # get the solver with given arguments.
         # The "fun" argument is not always the first one, but it is always KEYWORD
         # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
 
         def solver_run(
-            init_params: Tuple[jnp.ndarray, jnp.ndarray], *args: jnp.ndarray
+                init_params: Tuple[jnp.ndarray, jnp.ndarray], *run_args: jnp.ndarray
         ) -> jaxopt.OptStep:
-            args = (*run_args, *args)
-            return solver.run(init_params, *args, **run_kwargs)
+            return solver.run(init_params, *args, *run_args, **kwargs)
 
         return solver_run
 
@@ -302,7 +294,7 @@ class Ridge(Regularizer):
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
-        return self.get_runner(penalized_loss)
+        return super().instantiate_solver(penalized_loss)
 
 
 class ProxGradientRegularizer(Regularizer, abc.ABC):
