@@ -1,4 +1,4 @@
-"""## Abstract class for estimators."""
+"""Abstract class for estimators."""
 
 import abc
 import inspect
