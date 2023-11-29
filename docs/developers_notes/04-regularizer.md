@@ -34,15 +34,9 @@ The abstract class `Regularizer` enforces the implementation of the `instantiate
 
 Additionally, the class provides auxiliary methods for checking that the solver and loss function specifications are valid.
 
-### Abstract Methods
-
-`Regularizer` objects define the following abstract method:
-
-- **`instantiate_solver`**: Instantiate a solver runner for a provided loss function. The loss function must be of type `Callable`. In particular, this method prepares the arguments, calls, and returns the output of the `get_runner` public method, see **Public Methods** below.
-
 ### Public Methods
 
-- **`get_runner`**: Configure and return a `solver_run` callable. The method accepts two dictionary arguments, `solver_kwargs` and `run_kwargs`, which are meant to hold additional keyword arguments for the instantiation and execution of the solver, respectively. These keyword arguments are prepared by the concrete implementation of `instantiate_solver`, which is solver-type specific.
+- **`instantiate_solver`**: Instantiate a solver runner for a provided loss function, configure and return a `solver_run` callable. The loss function must be of type `Callable`.
 
 ### Auxiliary Methods
 
