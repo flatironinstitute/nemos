@@ -178,21 +178,17 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=(true_params[0], init_b))
 
-    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
-                             [
-                                 (-1, ValueError, "Model parameters have inconsistent shapes"),
-                                 (0, None, None),
-                                 (1, ValueError, "Model parameters have inconsistent shapes")
-                             ])
-    def test_fit_n_neuron_match_baseline_rate(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method ensuring The number of neurons in the baseline rate matches the expected number.
-        """
-        raise_exception = delta_n_neuron != 0
+    @pytest.mark.parametrize("delta_n_neuron, expectation", [
+        (-1, pytest.raises(ValueError, match="Model parameters have inconsistent shapes")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Model parameters have inconsistent shapes"))
+    ])
+    def test_fit_n_neuron_match_baseline_rate(self, delta_n_neuron, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         init_b = jnp.zeros((n_neurons + delta_n_neuron,))
-        _test_class_method(model, "fit", [X, y], {"init_params": (true_params[0], init_b)}, error, match_str)
+        with expectation:
+            model.fit(X, y, init_params=(true_params[0], init_b))
 
     @pytest.mark.parametrize("delta_n_neuron, error, match_str",
                              [
