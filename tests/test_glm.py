@@ -342,132 +342,99 @@ class TestGLM:
         with expectation:
             model.score(X, y)
 
-    @pytest.mark.parametrize("delta_dim, error, match_str",
-                             [
-                                 (-1, ValueError, "y must be two-dimensional, with shape"),
-                                 (0, None, None),
-                                 (1, ValueError, "y must be two-dimensional, with shape")
-                             ]
-                             )
-    def test_score_y_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_dim, expectation", [
+        (-1, pytest.raises(ValueError, match="y must be two-dimensional, with shape")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="y must be two-dimensional, with shape"))
+    ])
+    def test_score_y_dimensionality(self, delta_dim, expectation, poissonGLM_model_instantiation):
         """
         Test the `score` method with y of different dimensionalities.
         Ensure correct dimensionality for y.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, _ = X.shape
-        # set model coeff
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-
         if delta_dim == -1:
-            # remove a dimension
-            y = np.zeros((n_samples,))
+            y = np.zeros((X.shape[0],))
         elif delta_dim == 1:
-            # add a dimension
-            y = np.zeros((n_samples, n_neurons, 1))
+            y = np.zeros((X.shape[0], X.shape[1], 1))
+        with expectation:
+            model.score(X, y)
 
-        _test_class_method(model, "score", [X, y], {}, error, match_str)
-
-    @pytest.mark.parametrize("delta_n_features, error, match_str",
-                             [
-                                 (-1, ValueError, "Inconsistent number of features"),
-                                 (0, None, None),
-                                 (1, ValueError, "Inconsistent number of features")
-                             ]
-                             )
-    def test_score_n_feature_consistency_x(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("delta_n_features, expectation", [
+        (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Inconsistent number of features"))
+    ])
+    def test_score_n_feature_consistency_x(self, delta_n_features, expectation, poissonGLM_model_instantiation):
         """
         Test the `score` method for inconsistencies in features of X.
         Ensure the number of features in X aligns with the model params.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        # set model coeff
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_n_features == 1:
-            # add a feature
-            X = jnp.concatenate((X, jnp.zeros((100, 1, 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
         elif delta_n_features == -1:
-            # remove a feature
             X = X[..., :-1]
+        with expectation:
+            model.score(X, y)
 
-        _test_class_method(model, "score", [X, y], {}, error, match_str)
+        @pytest.mark.parametrize("is_fit, expectation", [
+            (True, does_not_raise()),
+            (False, pytest.raises(ValueError, match="This GLM instance is not fitted yet"))
+        ])
+        def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
+            """
+            Test the `score` method on models based on their fit status.
+            Ensure scoring is only possible on fitted models.
+            """
+            X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+            if is_fit:
+                model.fit(X, y)
+            with expectation:
+                model.predict(X)
 
-    @pytest.mark.parametrize("is_fit, error, match_str",
-                             [
-                                 (True, None, None),
-                                 (False, ValueError, "This GLM instance is not fitted yet")
-                             ]
-                             )
-    def test_score_is_fit(self, is_fit, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `score` method on models based on their fit status.
-        Ensure scoring is only possible on fitted models.
-        """
-        raise_exception = not is_fit
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        if is_fit:
-            model.fit(X, y)
-        _test_class_method(model, "score", [X, y], {}, error, match_str)
-
-    @pytest.mark.parametrize("delta_tp, error, match_str",
-                             [
-                                 (-1, ValueError, "The number of time-points in X and y"),
-                                 (0, None, None),
-                                 (1, ValueError, "The number of time-points in X and y")
-
-                             ]
-                             )
-    def test_score_time_points_x(self, delta_tp, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `score` method for inconsistencies in time-points in X.
-        Ensure that the number of time-points in X and y matches.
-        """
+    @pytest.mark.parametrize("delta_tp, expectation", [
+        (-1, pytest.raises(ValueError, match="The number of time-points in X and y")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="The number of time-points in X and y"))
+    ])
+    def test_score_time_points_x(self, delta_tp, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
-        _test_class_method(model, "score", [X, y], {}, error, match_str)
+        with expectation:
+            model.score(X, y)
 
-    @pytest.mark.parametrize("delta_tp, error, match_str",
-                             [
-                                 (-1, ValueError, "The number of time-points in X and y"),
-                                 (0, None, None),
-                                 (1, ValueError, "The number of time-points in X and y")
-
-                             ]
-                             )
-    def test_score_time_points_y(self, delta_tp, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `score` method for inconsistencies in time-points in y.
-        Ensure that the number of time-points in X and y matches.
-        """
+    @pytest.mark.parametrize("delta_tp, expectation", [
+        (-1, pytest.raises(ValueError, match="The number of time-points in X and y")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="The number of time-points in X and y"))
+    ])
+    def test_score_time_points_y(self, delta_tp, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
-        _test_class_method(model, "score", [X, y], {}, error, match_str)
+        with expectation:
+            model.score(X, y)
 
-    @pytest.mark.parametrize("score_type, error, match_str", [
-        ("pseudo-r2-McFadden", None, None),
-        ("pseudo-r2-Choen", None, None),
-        ("log-likelihood", None, None),
-        ("not-implemented", NotImplementedError, "Scoring method %s not implemented")
-    ]
-    )
-    def test_score_type_r2(self, score_type, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `score` method for unsupported scoring types.
-        Ensure only valid score types are used.
-        """
+    @pytest.mark.parametrize("score_type, expectation", [
+        ("pseudo-r2-McFadden", does_not_raise()),
+        ("pseudo-r2-Choen", does_not_raise()),
+        ("log-likelihood", does_not_raise()),
+        ("not-implemented", pytest.raises(NotImplementedError, match="Scoring method not-implemented not implemented"))
+    ])
+    def test_score_type_r2(self, score_type, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        match_str = match_str % score_type if type(match_str) is str else None
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        _test_class_method(model, "score", [X, y], {"score_type": score_type}, error, match_str)
+        with expectation:
+            model.score(X, y, score_type=score_type)
 
     def test_loglikelihood_against_scipy_stats(self, poissonGLM_model_instantiation):
         """
@@ -490,337 +457,198 @@ class TestGLM:
     #######################
     # Test model.predict
     #######################
-    @pytest.mark.parametrize("delta_n_neuron, error, match_str", [
-            (-1, ValueError, "The number of neurons in the model parameters"),
-            (0, None, None),
-            (1, ValueError, "The number of neurons in the model parameters")
-        ]
-    )
-    def test_predict_n_neuron_match_x(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `predict` method when The number of neurons in X differs.
-        Ensure that The number of neurons in X, y and params matches.
-        """
-        raise_exception = delta_n_neuron != 0
+    @pytest.mark.parametrize("delta_n_neuron, expectation", [
+        (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="The number of neurons in the model parameters"))
+    ])
+    def test_predict_n_neuron_match_x(self, delta_n_neuron, expectation, poissonGLM_model_instantiation):
         X, _, model, true_params, _ = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        # set model coeff
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        X = jnp.repeat(X, n_neurons + delta_n_neuron, axis=1)
-        _test_class_method(model, "predict", [X], {}, error, match_str)
+        X = jnp.repeat(X, X.shape[1] + delta_n_neuron, axis=1)
+        with expectation:
+            model.predict(X)
 
-    @pytest.mark.parametrize("delta_dim, error, match_str", [
-            (-1, ValueError, "X must be three-dimensional"),
-            (0, None, None),
-            (1, ValueError, "X must be three-dimensional")
-        ]
-    )
-    def test_predict_x_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `predict` method with x input data of different dimensionalities.
-        Ensure correct dimensionality for x.
-        """
+    @pytest.mark.parametrize("delta_dim, expectation", [
+        (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="X must be three-dimensional"))
+    ])
+    def test_predict_x_dimensionality(self, delta_dim, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        # set model coeff
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            # remove a dimension
-            X = np.zeros((n_samples, n_neurons))
+            X = np.zeros((X.shape[0], X.shape[1]))
         elif delta_dim == 1:
-            # add a dimension
-            X = np.zeros((n_samples, n_neurons, n_features, 1))
-        _test_class_method(model, "predict", [X], {}, error, match_str)
+            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+        with expectation:
+            model.predict(X)
 
-    @pytest.mark.parametrize("delta_n_features, error, match_str", [
-            (-1, ValueError, "Inconsistent number of features"),
-            (0, None, None),
-            (1, ValueError, "Inconsistent number of features")
-        ]
-    )
-    def test_predict_n_feature_consistency_x(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `predict` method ensuring the number of features in x input data
-        is consistent with the model's `model.coef_`.
-        """
+    @pytest.mark.parametrize("delta_n_features, expectation", [
+        (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Inconsistent number of features"))
+    ])
+    def test_predict_n_feature_consistency_x(self, delta_n_features, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        # set model coeff
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_n_features == 1:
-            # add a feature
-            X = jnp.concatenate((X, jnp.zeros((100, 1, 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
         elif delta_n_features == -1:
-            # remove a feature
             X = X[..., :-1]
-        _test_class_method(model, "predict", [X], {}, error, match_str)
+        with expectation:
+            model.predict(X)
 
-    @pytest.mark.parametrize("is_fit, error, match_str",
-                             [
-                                 (True, None, None),
-                                 (False, ValueError, "This GLM instance is not fitted yet")
-                             ]
-                             )
-    def test_predict_is_fit(self, is_fit, error, match_str, poissonGLM_model_instantiation):
+    @pytest.mark.parametrize("is_fit, expectation", [
+        (True, does_not_raise()),
+        (False, pytest.raises(ValueError, match="This GLM instance is not fitted yet"))
+    ])
+    def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
         """
-        Test if the model raises a ValueError when trying to score before it's fitted.
+        Test the `score` method on models based on their fit status.
+        Ensure scoring is only possible on fitted models.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if is_fit:
             model.fit(X, y)
-        _test_class_method(model, "predict", [X], {}, error, match_str)
+        with expectation:
+            model.predict(X)
 
     #######################
     # Test model.simulate
     #######################
-    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
-                             [
-                                 (-1, ValueError, "The number of neurons in the model parameters"),
-                                 (0, None, None),
-                                 (1, ValueError, "The number of neurons in the model parameters")
-                             ]
-                             )
-    def test_simulate_n_neuron_match_input(self, delta_n_neuron, error, match_str,
-                                       poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_n_neuron, expectation", [
+        (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="The number of neurons in the model parameters"))
+    ])
+    def test_simulate_n_neuron_match_input(self, delta_n_neuron, expectation, poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method to ensure that The number of neurons in the input
         matches the model's parameters.
         """
-        model, coupling_basis, feedforward_input, init_spikes, random_key = \
-            poissonGLM_coupled_model_config_simulate
-        n_neurons, n_features = model.coef_.shape
-        n_time_points, _, n_basis_input = feedforward_input.shape
+        model, coupling_basis, feedforward_input, init_spikes, random_key = poissonGLM_coupled_model_config_simulate
         if delta_n_neuron != 0:
-            feedforward_input = np.zeros((n_time_points, n_neurons+delta_n_neuron, n_basis_input))
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
+            feedforward_input = np.zeros(
+                (feedforward_input.shape[0], feedforward_input.shape[1] + delta_n_neuron, feedforward_input.shape[2]))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-    @pytest.mark.parametrize("delta_dim, error, match_str",
-                             [
-                                 (-1, ValueError, "X must be three-dimensional"),
-                                 (0, None, None),
-                                 (1, ValueError, "X must be three-dimensional")
-                             ]
-                             )
-    def test_simulate_input_dimensionality(self, delta_dim, error, match_str,
-                                        poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_dim, expectation", [
+        (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="X must be three-dimensional"))
+    ])
+    def test_simulate_input_dimensionality(self, delta_dim, expectation, poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method with input data of different dimensionalities.
         Ensure correct dimensionality for input.
         """
-        model, coupling_basis, feedforward_input, init_spikes, random_key = \
-            poissonGLM_coupled_model_config_simulate
+        model, coupling_basis, feedforward_input, init_spikes, random_key = poissonGLM_coupled_model_config_simulate
         if delta_dim == -1:
-            # remove a dimension
             feedforward_input = np.zeros(feedforward_input.shape[:2])
         elif delta_dim == 1:
-            # add a dimension
             feedforward_input = np.zeros(feedforward_input.shape + (1,))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-
-            },
-            error,
-            match_str
-        )
-
-    @pytest.mark.parametrize("delta_dim, error, match_str",
-                             [
-                                 (-1, ValueError, "y must be two-dimensional"),
-                                 (0, None, None),
-                                 (1, ValueError, "y must be two-dimensional")
-                             ]
-                             )
-    def test_simulate_y_dimensionality(self, delta_dim, error, match_str,
-                                    poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_dim, expectation", [
+        (-1, pytest.raises(ValueError, match="y must be two-dimensional")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="y must be two-dimensional"))
+    ])
+    def test_simulate_y_dimensionality(self, delta_dim, expectation, poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method with init_spikes of different dimensionalities.
         Ensure correct dimensionality for init_spikes.
         """
-        model, coupling_basis, feedforward_input, init_spikes, random_key = \
-            poissonGLM_coupled_model_config_simulate
-        n_samples, n_neurons = feedforward_input.shape[:2]
+        model, coupling_basis, feedforward_input, init_spikes, random_key = poissonGLM_coupled_model_config_simulate
         if delta_dim == -1:
-            # remove a dimension
-            init_spikes = np.zeros((n_samples,))
+            init_spikes = np.zeros((feedforward_input.shape[0],))
         elif delta_dim == 1:
-            # add a dimension
-            init_spikes = np.zeros((n_samples, n_neurons, 1))
+            init_spikes = np.zeros((feedforward_input.shape[0], feedforward_input.shape[1], 1))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input,
-            },
-            error,
-            match_str
-        )
-
-    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
-                             [
-                                 (-1, ValueError, "The number of neurons in the model parameters"),
-                                 (0, None, None),
-                                 (1, ValueError, "The number of neurons in the model parameters")
-                             ]
-                             )
-    def test_simulate_n_neuron_match_y(self, delta_n_neuron, error, match_str,
-                                       poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_n_neuron, expectation", [
+        (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="The number of neurons in the model parameters"))
+    ])
+    def test_simulate_n_neuron_match_y(self, delta_n_neuron, expectation, poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method to ensure that The number of neurons in init_spikes
         matches the model's parameters.
         """
-        model, coupling_basis, feedforward_input, init_spikes, random_key = \
-            poissonGLM_coupled_model_config_simulate
-        n_samples, n_neurons = feedforward_input.shape[:2]
+        model, coupling_basis, feedforward_input, init_spikes, random_key = poissonGLM_coupled_model_config_simulate
+        init_spikes = jnp.zeros((init_spikes.shape[0], feedforward_input.shape[1] + delta_n_neuron))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-        init_spikes = jnp.zeros((init_spikes.shape[0], n_neurons + delta_n_neuron))
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
-
-    @pytest.mark.parametrize("is_fit, error, match_str",
-                             [
-                                 (True, None, None),
-                                 (False, ValueError, "This GLM instance is not fitted yet")
-                             ]
-                             )
-    def test_simulate_is_fit(self, is_fit, error, match_str,
-                             poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("is_fit, expectation", [
+        (True, does_not_raise()),
+        (False, pytest.raises(ValueError, match="This GLM instance is not fitted yet"))
+    ])
+    def test_simulate_is_fit(self, is_fit, expectation, poissonGLM_coupled_model_config_simulate):
         """
         Test if the model raises a ValueError when trying to simulate before it's fitted.
         """
-        model, coupling_basis, feedforward_input, init_spikes, random_key = \
-            poissonGLM_coupled_model_config_simulate
-
+        model, coupling_basis, feedforward_input, init_spikes, random_key = poissonGLM_coupled_model_config_simulate
         if not is_fit:
             model.intercept_ = None
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-    @pytest.mark.parametrize("delta_tp, error, match_str",
-                             [
-                                 (-1, ValueError, "`init_y` and `coupling_basis_matrix`"),
-                                 (0, None, None),
-                                 (1, ValueError, "`init_y` and `coupling_basis_matrix`")
-
-                             ]
-                             )
-    def test_simulate_time_point_match_y(self, delta_tp, error, match_str,
-                             poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_tp, expectation", [
+        (-1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"))
+    ])
+    def test_simulate_time_point_match_y(self, delta_tp, expectation, poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method to ensure that the time points in init_y
         are consistent with the coupling_basis window size (they must be equal).
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
             poissonGLM_coupled_model_config_simulate
+        init_spikes = jnp.zeros((init_spikes.shape[0] + delta_tp, init_spikes.shape[1]))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-        init_spikes = jnp.zeros((init_spikes.shape[0] + delta_tp,
-                                     init_spikes.shape[1]))
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
-
-    @pytest.mark.parametrize("delta_tp, error, match_str",
-                             [
-                                 (-1, ValueError, "`init_y` and `coupling_basis_matrix`"),
-                                 (0, None, None),
-                                 (1, ValueError, "`init_y` and `coupling_basis_matrix`")
-
-                             ]
-                             )
-    def test_simulate_time_point_match_coupling_basis(self, delta_tp, error, match_str,
-                                         poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_tp, expectation", [
+        (-1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"))
+    ])
+    def test_simulate_time_point_match_coupling_basis(self, delta_tp, expectation,
+                                                      poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method to ensure that the window size in coupling_basis
         is consistent with the time-points in init_spikes (they must be equal).
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
             poissonGLM_coupled_model_config_simulate
+        coupling_basis = jnp.zeros((coupling_basis.shape[0] + delta_tp,) + coupling_basis.shape[1:])
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-        coupling_basis = jnp.zeros((coupling_basis.shape[0] + delta_tp,) +
-                                   coupling_basis.shape[1:])
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
-
-
-    @pytest.mark.parametrize("delta_features, error, match_str",
-                             [
-                                 (-1, ValueError, "Inconsistent number of features. spike basis coefficients has"),
-                                 (0, None, None),
-                                 (1, ValueError, "Inconsistent number of features. spike basis coefficients has")
-
-                             ]
-                             )
-    def test_simulate_feature_consistency_input(self, delta_features, error, match_str,
-                                           poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_features, expectation", [
+        (-1, pytest.raises(ValueError, match="Inconsistent number of features. spike basis coefficients has")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Inconsistent number of features. spike basis coefficients has"))
+    ])
+    def test_simulate_feature_consistency_input(self, delta_features, expectation,
+                                                poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method ensuring the number of features in `feedforward_input` is
         consistent with the model's expected number of features.
@@ -832,33 +660,19 @@ class TestGLM:
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
             poissonGLM_coupled_model_config_simulate
-        feedforward_input = jnp.zeros((feedforward_input.shape[0],
-                                       feedforward_input.shape[1],
-                                       feedforward_input.shape[2] + delta_features))
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
+        feedforward_input = jnp.zeros(
+            (feedforward_input.shape[0], feedforward_input.shape[1], feedforward_input.shape[2] + delta_features))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
-    @pytest.mark.parametrize("delta_features, error, match_str",
-                             [
-                                 (-1, ValueError, "Inconsistent number of features"),
-                                 (0, None, None),
-                                 (1, ValueError, "Inconsistent number of features")
-
-                             ]
-                             )
-    def test_simulate_feature_consistency_coupling_basis(self, delta_features, error, match_str,
-                                                poissonGLM_coupled_model_config_simulate):
+    @pytest.mark.parametrize("delta_features, expectation", [
+        (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Inconsistent number of features"))
+    ])
+    def test_simulate_feature_consistency_coupling_basis(self, delta_features, expectation,
+                                                         poissonGLM_coupled_model_config_simulate):
         """
         Test the `simulate` method ensuring the number of features in `coupling_basis` is
         consistent with the model's expected number of features.
@@ -870,21 +684,10 @@ class TestGLM:
         """
         model, coupling_basis, feedforward_input, init_spikes, random_key = \
             poissonGLM_coupled_model_config_simulate
-        coupling_basis = jnp.zeros((coupling_basis.shape[0],
-                                    coupling_basis.shape[1] + delta_features))
-        _test_class_method(
-            model,
-            "simulate_recurrent",
-            [],
-            {
-                "random_key": random_key,
-                "init_y": init_spikes,
-                "coupling_basis_matrix": coupling_basis,
-                "feedforward_input": feedforward_input
-            },
-            error,
-            match_str
-        )
+        coupling_basis = jnp.zeros((coupling_basis.shape[0], coupling_basis.shape[1] + delta_features))
+        with expectation:
+            model.simulate_recurrent(random_key=random_key, init_y=init_spikes, coupling_basis_matrix=coupling_basis,
+                                     feedforward_input=feedforward_input)
 
     def test_simulate_feedforward_GLM_not_fit(self, poissonGLM_model_instantiation):
         X, y, model, params, rate = poissonGLM_model_instantiation
