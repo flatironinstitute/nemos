@@ -151,26 +151,20 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
-    @pytest.mark.parametrize(
-        "init_params, error, match_str",
-        [
-            ([jnp.zeros((1, 5)), jnp.zeros((1,))], None, None),
-            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), None, None),
-            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), TypeError, "Initial parameters must be array-like"),
-            (0, TypeError, "Initial parameters must be array-like"),
-            ({0, 1}, ValueError, r"params\[0\] must be of shape"),
-            ([jnp.zeros((1, 5)), ""], TypeError, "Initial parameters must be array-like"),
-            (["", jnp.zeros((1,))], TypeError, "Initial parameters must be array-like")
-        ]
-    )
-    def test_fit_init_params_type(self, init_params, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
-        are array-like.
-        """
+    @pytest.mark.parametrize("init_params, expectation", [
+        ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
+        (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), does_not_raise()),
+        (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))),
+         pytest.raises(TypeError, match="Initial parameters must be array-like")),
+        (0, pytest.raises(TypeError, match="Initial parameters must be array-like")),
+        ({0, 1}, pytest.raises(ValueError, match=r"params\[0\] must be of shape")),
+        ([jnp.zeros((1, 5)), ""], pytest.raises(TypeError, match="Initial parameters must be array-like")),
+        (["", jnp.zeros((1,))], pytest.raises(TypeError, match="Initial parameters must be array-like"))
+    ])
+    def test_fit_init_params_type(self, init_params, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        _test_class_method(model, "fit", [X, y], {"init_params": init_params}, error, match_str)
-
+        with expectation:
+            model.fit(X, y, init_params=init_params)
 
     @pytest.mark.parametrize("delta_n_neuron, error, match_str",
                              [
