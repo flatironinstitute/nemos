@@ -242,24 +242,17 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=true_params)
 
-    @pytest.mark.parametrize("delta_n_features, error, match_str",
-                             [
-                                 (-1, ValueError, "Inconsistent number of features"),
-                                 (0, None, None),
-                                 (1, ValueError, "Inconsistent number of features")
-                             ]
-                             )
-    def test_fit_n_feature_consistency_weights(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method for inconsistencies between data features and initial weights provided.
-        Ensure the number of features align.
-        """
+    @pytest.mark.parametrize("delta_n_features, expectation", [
+        (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Inconsistent number of features"))
+    ])
+    def test_fit_n_feature_consistency_weights(self, delta_n_features, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        # add/remove a feature from weights
-        init_w = jnp.zeros((n_neurons, n_features + delta_n_features))
-        init_b = jnp.zeros((n_neurons,))
-        _test_class_method(model, "fit", [X, y], {"init_params": (init_w,init_b)}, error, match_str)
+        init_w = jnp.zeros((X.shape[1], X.shape[2] + delta_n_features))
+        init_b = jnp.zeros(X.shape[1])
+        with expectation:
+            model.fit(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize("delta_n_features, error, match_str",
                              [
