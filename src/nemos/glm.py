@@ -215,7 +215,9 @@ class GLM(BaseRegressor):
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
-        score_type: Literal["log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"] = "pseudo-r2-McFadden",
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
