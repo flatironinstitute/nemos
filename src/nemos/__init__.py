@@ -1,3 +1,11 @@
 #!/usr/bin/env python3
 
-from . import basis, glm, observation_models, sample_points, regularizer, utils
+from . import (
+    basis,
+    exceptions,
+    glm,
+    observation_models,
+    regularizer,
+    sample_points,
+    utils,
+)

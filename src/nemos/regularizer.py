@@ -150,7 +150,6 @@ class Regularizer(Base, abc.ABC):
         """
         Instantiate the solver with the provided loss function.
 
-
         Parameters
         ----------
         loss :
@@ -177,7 +176,7 @@ class Regularizer(Base, abc.ABC):
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
 
         def solver_run(
-                init_params: Tuple[jnp.ndarray, jnp.ndarray], *run_args: jnp.ndarray
+            init_params: Tuple[jnp.ndarray, jnp.ndarray], *run_args: jnp.ndarray
         ) -> jaxopt.OptStep:
             return solver.run(init_params, *args, *run_args, **kwargs)
 
@@ -429,6 +428,7 @@ class GroupLasso(ProxGradientRegularizer):
 
     @property
     def mask(self):
+        """Getter for the mask attribute."""
         return self._mask
 
     @mask.setter

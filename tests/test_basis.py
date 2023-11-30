@@ -295,8 +295,11 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         """
         raise_exception = n_basis_funcs < 1
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Object class {self.cls.__name__} "
-                                                 r"requires >= 1 basis elements\."):
+            with pytest.raises(
+                ValueError,
+                match=f"Object class {self.cls.__name__} "
+                r"requires >= 1 basis elements\.",
+            ):
                 self.cls(n_basis_funcs=n_basis_funcs)
         else:
             self.cls(n_basis_funcs=n_basis_funcs)
@@ -565,7 +568,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0]*6, (0,)*6, np.array([0]*6), jax.numpy.array([0]*6)]
+        "arraylike", [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)]
     )
     def test_input_to_evaluate_is_arraylike(self, arraylike):
         """

@@ -4,7 +4,7 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Any, Literal, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -177,6 +177,7 @@ class BaseRegressor(Base, abc.ABC):
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`GLMRecurrent`](../glm/#nemos.glm.GLMRecurrent): A recurrent GLM implementation.
     """
+
     @abc.abstractmethod
     def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
         """Fit the model to neural activity."""

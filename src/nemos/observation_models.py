@@ -87,7 +87,6 @@ class Observations(Base, abc.ABC):
             If the function is not callable, does not return a jax.numpy.ndarray,
             or is not differentiable.
         """
-
         # check that it's callable
         if not callable(inverse_link_function):
             raise TypeError("The `inverse_link_function` function must be a Callable!")
@@ -206,7 +205,9 @@ class Observations(Base, abc.ABC):
         self,
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
-        score_type: Literal["pseudo-r2-McFadden", "pseudo-r2-Choen"] = "pseudo-r2-McFadden",
+        score_type: Literal[
+            "pseudo-r2-McFadden", "pseudo-r2-Choen"
+        ] = "pseudo-r2-McFadden",
     ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
@@ -253,12 +254,13 @@ class Observations(Base, abc.ABC):
 
         References
         ----------
-        1. McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318). London: Croom Helm.
+        1. McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
+        developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
+        London: Croom Helm.
         2. Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
         *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
         3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
-
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y)
         elif score_type == "pseudo-r2-Choen":
@@ -267,7 +269,9 @@ class Observations(Base, abc.ABC):
             raise NotImplementedError(f"Score {score_type} not implemented!")
         return pseudo_r2
 
-    def _pseudo_r2_choen(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
+    def _pseudo_r2_choen(
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+    ) -> jnp.ndarray:
         r"""Choen's pseudo-$R^2$.
 
         Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002). See
@@ -367,7 +371,6 @@ class PoissonObservations(Observations):
 
         Notes
         -----
-
         The formula for the Poisson mean log-likelihood is the following,
 
         $$
@@ -386,7 +389,9 @@ class PoissonObservations(Observations):
         The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        predicted_rate = jnp.clip(predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps)
+        predicted_rate = jnp.clip(
+            predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+        )
         x = y * jnp.log(predicted_rate)
         # see above for derivation of this.
         return jnp.mean(predicted_rate - x)
@@ -448,7 +453,9 @@ class PoissonObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
         """
         # this takes care of 0s in the log
-        ratio = jnp.clip(spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf)
+        ratio = jnp.clip(
+            spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+        )
         deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
         return deviance
 

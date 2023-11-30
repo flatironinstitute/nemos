@@ -38,10 +38,10 @@ def poissonGLM_model_instantiation():
     """
     np.random.seed(123)
     X = np.random.normal(size=(100, 1, 5))
-    b_true = np.zeros((1, ))
+    b_true = np.zeros((1,))
     w_true = np.random.normal(size=(1, 5))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.UnRegularized('GradientDescent', {})
+    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
@@ -64,20 +64,31 @@ def poissonGLM_coupled_model_config_simulate():
     """
     current_file = inspect.getfile(inspect.currentframe())
     test_dir = os.path.dirname(os.path.abspath(current_file))
-    with open(os.path.join(test_dir,
-                           "simulate_coupled_neurons_params.json"), "r") as fh:
+    with open(
+        os.path.join(test_dir, "simulate_coupled_neurons_params.json"), "r"
+    ) as fh:
         config_dict = json.load(fh)
 
     observations = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.Ridge("BFGS", regularizer_strength=0.1)
-    model = nmo.glm.GLMRecurrent(observation_model=observations, regularizer=regularizer)
+    model = nmo.glm.GLMRecurrent(
+        observation_model=observations, regularizer=regularizer
+    )
     model.coef_ = jnp.asarray(config_dict["coef_"])
     model.intercept_ = jnp.asarray(config_dict["intercept_"])
     coupling_basis = jnp.asarray(config_dict["coupling_basis"])
     feedforward_input = jnp.asarray(config_dict["feedforward_input"])
     init_spikes = jnp.asarray(config_dict["init_spikes"])
 
-    return model, coupling_basis, feedforward_input, init_spikes, jax.random.PRNGKey(123)
+    return (
+        model,
+        coupling_basis,
+        feedforward_input,
+        init_spikes,
+        jax.random.PRNGKey(123),
+    )
+
+
 @pytest.fixture
 def jaxopt_solvers():
     return [
@@ -88,7 +99,7 @@ def jaxopt_solvers():
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
-        "ProximalGradient"
+        "ProximalGradient",
     ]
 
 
@@ -110,14 +121,14 @@ def group_sparse_poisson_glm_model_instantiation():
     """
     np.random.seed(123)
     X = np.random.normal(size=(100, 1, 5))
-    b_true = np.zeros((1, ))
+    b_true = np.zeros((1,))
     w_true = np.random.normal(size=(1, 5))
-    w_true[0, 1:4] = 0.
+    w_true[0, 1:4] = 0.0
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
-    mask[1, [0,4]] = 1
+    mask[1, [0, 4]] = 1
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.UnRegularized('GradientDescent', {})
+    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
@@ -135,6 +146,7 @@ def example_data_prox_operator():
 
     return params, regularizer_strength, mask, scaling
 
+
 @pytest.fixture
 def poisson_observation_model():
     return nmo.observation_models.PoissonObservations(jnp.exp)
@@ -147,7 +159,9 @@ def ridge_regularizer():
 
 @pytest.fixture
 def lasso_regularizer():
-    return nmo.regularizer.Lasso(solver_name="ProximalGradient", regularizer_strength=0.1)
+    return nmo.regularizer.Lasso(
+        solver_name="ProximalGradient", regularizer_strength=0.1
+    )
 
 
 @pytest.fixture
@@ -155,9 +169,16 @@ def group_lasso_2groups_5features_regularizer():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1)
+    return nmo.regularizer.GroupLasso(
+        solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1
+    )
 
 
 @pytest.fixture
 def mock_data():
     return jnp.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]), jnp.array([[1, 2], [3, 4]])
+
+
+@pytest.fixture()
+def glm_class():
+    return nmo.glm.GLM

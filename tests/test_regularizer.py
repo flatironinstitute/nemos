@@ -11,7 +11,10 @@ import nemos as nmo
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_init_solver_name(self, solver_name):
         """Test UnRegularized acceptable solvers."""
         acceptable_solvers = [
@@ -21,16 +24,21 @@ class TestUnRegularized:
             "ScipyMinimize",
             "NonlinearCG",
             "ScipyBoundedMinimize",
-            "LBFGSB"
+            "LBFGSB",
         ]
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 self.cls(solver_name)
         else:
             self.cls(solver_name)
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_set_solver_name_allowed(self, solver_name):
         """Test UnRegularized acceptable solvers."""
         acceptable_solvers = [
@@ -40,12 +48,14 @@ class TestUnRegularized:
             "ScipyMinimize",
             "NonlinearCG",
             "ScipyBoundedMinimize",
-            "LBFGSB"
+            "LBFGSB",
         ]
         regularizer = self.cls("GradientDescent")
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 regularizer.set_params(solver_name=solver_name)
         else:
             regularizer.set_params(solver_name=solver_name)
@@ -57,7 +67,9 @@ class TestUnRegularized:
 
         raise_exception = "tols" in list(solver_kwargs.keys())
         if raise_exception:
-            with pytest.raises(NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"):
+            with pytest.raises(
+                NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"
+            ):
                 self.cls(solver_name, solver_kwargs=solver_kwargs)
         else:
             self.cls(solver_name, solver_kwargs=solver_kwargs)
@@ -78,7 +90,7 @@ class TestUnRegularized:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         runner = self.cls("GradientDescent").instantiate_solver(model._score)
-        runner((true_params[0]*0., true_params[1]), X, y)
+        runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -86,19 +98,35 @@ class TestUnRegularized:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
-        runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(model._score)
-        runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(model._score)
-        runner_scipy = self.cls("ScipyMinimize", {"method": "BFGS", "tol": 10**-12}).instantiate_solver(model._score)
-        weights_gd, intercepts_gd = runner_gd((true_params[0] * 0., true_params[1]), X, y)[0]
-        weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
-        weights_scipy, intercepts_scipy = runner_scipy((true_params[0] * 0., true_params[1]), X, y)[0]
+        runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(
+            model._score
+        )
+        runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(
+            model._score
+        )
+        runner_scipy = self.cls(
+            "ScipyMinimize", {"method": "BFGS", "tol": 10**-12}
+        ).instantiate_solver(model._score)
+        weights_gd, intercepts_gd = runner_gd(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        weights_scipy, intercepts_scipy = runner_scipy(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
 
-        match_weights = np.allclose(weights_gd, weights_bfgs) and \
-                        np.allclose(weights_gd, weights_scipy)
-        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs) and \
-                           np.allclose(intercepts_gd, intercepts_scipy)
+        match_weights = np.allclose(weights_gd, weights_bfgs) and np.allclose(
+            weights_gd, weights_scipy
+        )
+        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs) and np.allclose(
+            intercepts_gd, intercepts_scipy
+        )
         if (not match_weights) or (not match_intercepts):
-            raise ValueError("Convex estimators should converge to the same numerical value.")
+            raise ValueError(
+                "Convex estimators should converge to the same numerical value."
+            )
 
     def test_solver_match_sklearn(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -108,9 +136,11 @@ class TestUnRegularized:
         model.data_type = jnp.float64
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
         runner_bfgs = regularizer.instantiate_solver(model._score)
-        weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
-        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.)
-        model_skl.fit(X[:,0], y[:, 0])
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X[:, 0], y[:, 0])
 
         match_weights = np.allclose(model_skl.coef_, weights_bfgs.flatten())
         match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs.flatten())
@@ -121,7 +151,10 @@ class TestUnRegularized:
 class TestRidge:
     cls = nmo.regularizer.Ridge
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_init_solver_name(self, solver_name):
         """Test RidgeSolver acceptable solvers."""
         acceptable_solvers = [
@@ -131,16 +164,21 @@ class TestRidge:
             "ScipyMinimize",
             "NonlinearCG",
             "ScipyBoundedMinimize",
-            "LBFGSB"
+            "LBFGSB",
         ]
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 self.cls(solver_name)
         else:
             self.cls(solver_name)
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_set_solver_name_allowed(self, solver_name):
         """Test RidgeSolver acceptable solvers."""
         acceptable_solvers = [
@@ -150,12 +188,14 @@ class TestRidge:
             "ScipyMinimize",
             "NonlinearCG",
             "ScipyBoundedMinimize",
-            "LBFGSB"
+            "LBFGSB",
         ]
         regularizer = self.cls("GradientDescent")
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 regularizer.set_params(solver_name=solver_name)
         else:
             regularizer.set_params(solver_name=solver_name)
@@ -167,7 +207,9 @@ class TestRidge:
 
         raise_exception = "tols" in list(solver_kwargs.keys())
         if raise_exception:
-            with pytest.raises(NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"):
+            with pytest.raises(
+                NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"
+            ):
                 self.cls(solver_name, solver_kwargs=solver_kwargs)
         else:
             self.cls(solver_name, solver_kwargs=solver_kwargs)
@@ -188,7 +230,7 @@ class TestRidge:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         runner = self.cls("GradientDescent").instantiate_solver(model._score)
-        runner((true_params[0]*0., true_params[1]), X, y)
+        runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -196,19 +238,35 @@ class TestRidge:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
-        runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(model._score)
-        runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(model._score)
-        runner_scipy = self.cls("ScipyMinimize", {"method": "BFGS", "tol": 10**-12}).instantiate_solver(model._score)
-        weights_gd, intercepts_gd = runner_gd((true_params[0] * 0., true_params[1]), X, y)[0]
-        weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
-        weights_scipy, intercepts_scipy = runner_scipy((true_params[0] * 0., true_params[1]), X, y)[0]
+        runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(
+            model._score
+        )
+        runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(
+            model._score
+        )
+        runner_scipy = self.cls(
+            "ScipyMinimize", {"method": "BFGS", "tol": 10**-12}
+        ).instantiate_solver(model._score)
+        weights_gd, intercepts_gd = runner_gd(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        weights_scipy, intercepts_scipy = runner_scipy(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
 
-        match_weights = np.allclose(weights_gd, weights_bfgs) and \
-                        np.allclose(weights_gd, weights_scipy)
-        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs) and \
-                           np.allclose(intercepts_gd, intercepts_scipy)
+        match_weights = np.allclose(weights_gd, weights_bfgs) and np.allclose(
+            weights_gd, weights_scipy
+        )
+        match_intercepts = np.allclose(intercepts_gd, intercepts_bfgs) and np.allclose(
+            intercepts_gd, intercepts_scipy
+        )
         if (not match_weights) or (not match_intercepts):
-            raise ValueError("Convex estimators should converge to the same numerical value.")
+            raise ValueError(
+                "Convex estimators should converge to the same numerical value."
+            )
 
     def test_solver_match_sklearn(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -218,9 +276,13 @@ class TestRidge:
         model.data_type = jnp.float64
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
         runner_bfgs = regularizer.instantiate_solver(model._score)
-        weights_bfgs, intercepts_bfgs = runner_bfgs((true_params[0] * 0., true_params[1]), X, y)[0]
-        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=regularizer.regularizer_strength)
-        model_skl.fit(X[:,0], y[:, 0])
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        model_skl = PoissonRegressor(
+            fit_intercept=True, tol=10**-12, alpha=regularizer.regularizer_strength
+        )
+        model_skl.fit(X[:, 0], y[:, 0])
 
         match_weights = np.allclose(model_skl.coef_, weights_bfgs.flatten())
         match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs.flatten())
@@ -231,29 +293,35 @@ class TestRidge:
 class TestLasso:
     cls = nmo.regularizer.Lasso
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_init_solver_name(self, solver_name):
         """Test Lasso acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient"
-        ]
+        acceptable_solvers = ["ProximalGradient"]
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 self.cls(solver_name)
         else:
             self.cls(solver_name)
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_set_solver_name_allowed(self, solver_name):
         """Test Lasso acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient"
-        ]
+        acceptable_solvers = ["ProximalGradient"]
         regularizer = self.cls("ProximalGradient")
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 regularizer.set_params(solver_name=solver_name)
         else:
             regularizer.set_params(solver_name=solver_name)
@@ -263,7 +331,9 @@ class TestLasso:
         """Test LassoSolver acceptable kwargs."""
         raise_exception = "tols" in list(solver_kwargs.keys())
         if raise_exception:
-            with pytest.raises(NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"):
+            with pytest.raises(
+                NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"
+            ):
                 self.cls("ProximalGradient", solver_kwargs=solver_kwargs)
         else:
             self.cls("ProximalGradient", solver_kwargs=solver_kwargs)
@@ -283,7 +353,7 @@ class TestLasso:
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         runner = self.cls("ProximalGradient").instantiate_solver(model._score)
-        runner((true_params[0]*0., true_params[1]), X, y)
+        runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_match_statsmodels(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -293,21 +363,21 @@ class TestLasso:
         model.data_type = jnp.float64
         regularizer = self.cls("ProximalGradient", {"tol": 10**-12})
         runner = regularizer.instantiate_solver(model._score)
-        weights, intercepts = runner((true_params[0] * 0., true_params[1]), X, y)[0]
+        weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         # instantiate the glm with statsmodels
-        glm_sm = sm.GLM(endog=y[:, 0],
-                        exog=sm.add_constant(X[:, 0]),
-                        family=sm.families.Poisson())
+        glm_sm = sm.GLM(
+            endog=y[:, 0], exog=sm.add_constant(X[:, 0]), family=sm.families.Poisson()
+        )
 
         # regularize everything except intercept
         alpha_sm = np.ones(X.shape[2] + 1) * regularizer.regularizer_strength
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1
-        res_sm = glm_sm.fit_regularized(method="elastic_net",
-                                        alpha=alpha_sm,
-                                        L1_wt=1., cnvrg_tol=10**-12)
+        res_sm = glm_sm.fit_regularized(
+            method="elastic_net", alpha=alpha_sm, L1_wt=1.0, cnvrg_tol=10**-12
+        )
         # compare params
         sm_params = res_sm.params
         glm_params = jnp.hstack((intercepts, weights.flatten()))
@@ -319,12 +389,13 @@ class TestLasso:
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_init_solver_name(self, solver_name):
         """Test GroupLasso acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient"
-        ]
+        acceptable_solvers = ["ProximalGradient"]
         raise_exception = solver_name not in acceptable_solvers
 
         # create a valid mask
@@ -334,17 +405,20 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 self.cls(solver_name, mask)
         else:
             self.cls(solver_name, mask)
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1])
+    @pytest.mark.parametrize(
+        "solver_name",
+        ["GradientDescent", "BFGS", "ProximalGradient", "AGradientDescent", 1],
+    )
     def test_set_solver_name_allowed(self, solver_name):
         """Test GroupLassoSolver acceptable solvers."""
-        acceptable_solvers = [
-            "ProximalGradient"
-        ]
+        acceptable_solvers = ["ProximalGradient"]
         # create a valid mask
         mask = np.zeros((2, 10))
         mask[0, :5] = 1
@@ -353,7 +427,9 @@ class TestGroupLasso:
         regularizer = self.cls("ProximalGradient", mask=mask)
         raise_exception = solver_name not in acceptable_solvers
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Solver `{solver_name}` not allowed for "):
+            with pytest.raises(
+                ValueError, match=f"Solver `{solver_name}` not allowed for "
+            ):
                 regularizer.set_params(solver_name=solver_name)
         else:
             regularizer.set_params(solver_name=solver_name)
@@ -370,7 +446,9 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         if raise_exception:
-            with pytest.raises(NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"):
+            with pytest.raises(
+                NameError, match="kwargs {'tols'} in solver_kwargs not a kwarg"
+            ):
                 self.cls("ProximalGradient", mask, solver_kwargs=solver_kwargs)
         else:
             self.cls("ProximalGradient", mask, solver_kwargs=solver_kwargs)
@@ -404,15 +482,22 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         runner = self.cls("ProximalGradient", mask).instantiate_solver(model._score)
-        runner((true_params[0]*0., true_params[1]), X, y)
+        runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
-    def test_mask_validity_groups(self,
-                                  n_groups_assign,
-                                  group_sparse_poisson_glm_model_instantiation):
+    def test_mask_validity_groups(
+        self, n_groups_assign, group_sparse_poisson_glm_model_instantiation
+    ):
         """Test that mask assigns at most 1 group to each weight."""
         raise_exception = n_groups_assign > 1
-        X, y, model, true_params, firing_rate, _ = group_sparse_poisson_glm_model_instantiation
+        (
+            X,
+            y,
+            model,
+            true_params,
+            firing_rate,
+            _,
+        ) = group_sparse_poisson_glm_model_instantiation
 
         # create a valid mask
         mask = np.zeros((2, X.shape[2]))
@@ -428,13 +513,12 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="Incorrect group assignment. "
-                                                 "Some of the features"):
+            with pytest.raises(
+                ValueError, match="Incorrect group assignment. " "Some of the features"
+            ):
                 self.cls("ProximalGradient", mask).instantiate_solver(model._score)
         else:
             self.cls("ProximalGradient", mask).instantiate_solver(model._score)
-
-
 
     @pytest.mark.parametrize("set_entry", [0, 1, -1, 2, 2.5])
     def test_mask_validity_entries(self, set_entry, poissonGLM_model_instantiation):
@@ -473,7 +557,7 @@ class TestGroupLasso:
             mask[0, :2] = 1
             mask[1, 2:] = 1
         else:
-            mask = np.zeros((2, X.shape[2]) + (1, ) * (n_dim-2))
+            mask = np.zeros((2, X.shape[2]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
 
@@ -494,9 +578,9 @@ class TestGroupLasso:
         # create a mask
         mask = np.zeros((n_groups, X.shape[2]))
         if n_groups > 0:
-            for i in range(n_groups-1):
-                mask[i, i: i+1] = 1
-            mask[-1, n_groups-1:] = 1
+            for i in range(n_groups - 1):
+                mask[i, i : i + 1] = 1
+            mask[-1, n_groups - 1 :] = 1
 
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
@@ -506,9 +590,18 @@ class TestGroupLasso:
         else:
             self.cls("ProximalGradient", mask).instantiate_solver(model._score)
 
-    def test_group_sparsity_enforcement(self, group_sparse_poisson_glm_model_instantiation):
+    def test_group_sparsity_enforcement(
+        self, group_sparse_poisson_glm_model_instantiation
+    ):
         """Test that group lasso works on a simple dataset."""
-        X, y, model, true_params, firing_rate, _ = group_sparse_poisson_glm_model_instantiation
+        (
+            X,
+            y,
+            model,
+            true_params,
+            firing_rate,
+            _,
+        ) = group_sparse_poisson_glm_model_instantiation
         zeros_true = true_params[0].flatten() == 0
         mask = np.zeros((2, X.shape[2]))
         mask[0, zeros_true] = 1
@@ -516,23 +609,29 @@ class TestGroupLasso:
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
         runner = self.cls("ProximalGradient", mask).instantiate_solver(model._score)
-        params, _ = runner((true_params[0]*0., true_params[1]), X, y)
+        params, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
 
         zeros_est = params[0] == 0
         if not np.all(zeros_est == zeros_true):
             raise ValueError("GroupLasso failed to zero-out the parameter group!")
 
-
     ###########
     # Test mask from set_params
     ###########
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
-    def test_mask_validity_groups_set_params(self,
-                                  n_groups_assign,
-                                  group_sparse_poisson_glm_model_instantiation):
+    def test_mask_validity_groups_set_params(
+        self, n_groups_assign, group_sparse_poisson_glm_model_instantiation
+    ):
         """Test that mask assigns at most 1 group to each weight."""
         raise_exception = n_groups_assign > 1
-        X, y, model, true_params, firing_rate, _ = group_sparse_poisson_glm_model_instantiation
+        (
+            X,
+            y,
+            model,
+            true_params,
+            firing_rate,
+            _,
+        ) = group_sparse_poisson_glm_model_instantiation
 
         # create a valid mask
         mask = np.zeros((2, X.shape[2]))
@@ -549,14 +648,17 @@ class TestGroupLasso:
         mask = jnp.asarray(mask)
 
         if raise_exception:
-            with pytest.raises(ValueError, match="Incorrect group assignment. "
-                                                 "Some of the features"):
+            with pytest.raises(
+                ValueError, match="Incorrect group assignment. " "Some of the features"
+            ):
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
 
     @pytest.mark.parametrize("set_entry", [0, 1, -1, 2, 2.5])
-    def test_mask_validity_entries_set_params(self, set_entry, poissonGLM_model_instantiation):
+    def test_mask_validity_entries_set_params(
+        self, set_entry, poissonGLM_model_instantiation
+    ):
         """Test that mask is composed of 0s and 1s."""
         raise_exception = set_entry not in {0, 1}
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
@@ -625,8 +727,8 @@ class TestGroupLasso:
         mask = np.zeros((n_groups, X.shape[2]))
         if n_groups > 0:
             for i in range(n_groups - 1):
-                mask[i, i: i + 1] = 1
-            mask[-1, n_groups - 1:] = 1
+                mask[i, i : i + 1] = 1
+            mask[-1, n_groups - 1 :] = 1
 
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
@@ -635,5 +737,3 @@ class TestGroupLasso:
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
-
-

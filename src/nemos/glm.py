@@ -65,10 +65,12 @@ class GLM(BaseRegressor):
 
     @property
     def regularizer(self):
+        """Getter for the regularizer attribute."""
         return self._regularizer
 
     @regularizer.setter
     def regularizer(self, regularizer: slv.Regularizer):
+        """Setter for the regularizer attribute."""
         if not hasattr(regularizer, "instantiate_solver"):
             raise AttributeError(
                 "The provided `solver` doesn't implement the `instantiate_solver` method."
@@ -85,6 +87,7 @@ class GLM(BaseRegressor):
 
     @property
     def observation_model(self):
+        """Getter for the observation_model attribute."""
         return self._observation_model
 
     @observation_model.setter
@@ -215,7 +218,7 @@ class GLM(BaseRegressor):
         score_type: Literal["log-likelihood", "pseudo-r2"] = "pseudo-r2-McFadden",
         pseudo_r2_type: Literal["McFadden", "Cox"] = "McFadden",
     ) -> jnp.ndarray:
-        r"""Evaluates the goodness-of-fit of the model to the observed neural data.
+        r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
         This method computes the goodness-of-fit score, which can either be the mean
         log-likelihood or the pseudo-R^2. The scoring process includes validation of

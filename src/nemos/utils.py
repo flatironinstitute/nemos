@@ -2,9 +2,8 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
-import inspect
 from functools import partial
-from typing import Any, Callable, Iterable, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Iterable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
