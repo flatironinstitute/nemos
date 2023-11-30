@@ -864,7 +864,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def __init__(
         self,
         n_basis_funcs: int,
-        alpha: float = 1.0,
+        alpha: float = 1.5,
         extend_and_trim_last: bool = True,
         force_first_basis_to_one: bool = False,
     ) -> None:
