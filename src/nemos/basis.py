@@ -845,19 +845,13 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         The number of basis functions.
     alpha :
         Width of the raised cosine. By default, it's set to 1.0.
-    remove_last_basis:
-        If True, removes the last basis element so that the basis ends in zero.
-
-    Attributes
-    ----------
-    n_basis_funcs :
-        The number of basis functions.
-    alpha :
-        Width of the raised cosine. By default, it's set to 1.0.
     extend_and_trim_last:
-            If set to True, the algorithm first constructs a basis with `n_basis_funcs + 1` elements
-            and subsequently trims off the last basis element. This ensures that the final basis element
-            concludes at a value of 0 instead of 1.
+        If set to True, the algorithm first constructs a basis with `n_basis_funcs + 1` elements
+        and subsequently trims off the last basis element. This ensures that the final basis element
+        concludes at a value of 0 instead of 1.
+    force_first_basis_to_one:
+        If set to True, adjusts the first basis function so that it starts with a value of one.
+        This could be useful to capture the refractory period.
 
     References
     ----------
@@ -872,11 +866,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         n_basis_funcs: int,
         alpha: float = 1.0,
         extend_and_trim_last: bool = True,
-        clip_first: bool = False,
+        force_first_basis_to_one: bool = False,
     ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
-        self._clip_first = clip_first
+        self._force_first_basis_to_one = force_first_basis_to_one
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
@@ -932,7 +926,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             eval_basis = super()._evaluate(self._transform_samples(sample_pts))[:, ::-1]
             eval_basis = eval_basis[..., :-n_trim]
             self.n_basis_funcs -= n_trim
-        if self._clip_first:
+        if self._force_first_basis_to_one:
             idx = np.argmin(np.abs(eval_basis[:, 0] - 1))
             eval_basis[:idx, 0] = 1
 
