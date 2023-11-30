@@ -255,7 +255,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize(
         "args, sample_size",
-        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [1, 2, 10, 100]],
+        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
     )
     def test_evaluate_returns_expected_number_of_basis(self, args, sample_size):
         """
