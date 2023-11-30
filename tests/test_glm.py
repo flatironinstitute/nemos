@@ -137,22 +137,19 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=(init_w, true_params[1]))
 
-    @pytest.mark.parametrize("dim_intercepts, error, match_str", [
-        (0, ValueError, r"params\[1\] must be of shape"),
-        (1, None, None),
-        (2, ValueError, r"params\[1\] must be of shape"),
-        (3, ValueError, r"params\[1\] must be of shape")
+    @pytest.mark.parametrize("dim_intercepts, expectation", [
+        (0, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+        (1, does_not_raise()),
+        (2, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+        (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape"))
     ])
-    def test_fit_intercepts_dimensionality(self, dim_intercepts, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
-        """
+    def test_fit_intercepts_dimensionality(self, dim_intercepts, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
-
         init_b = jnp.zeros((n_neurons,) * dim_intercepts)
         init_w = jnp.zeros((n_neurons, n_features))
-        _test_class_method(model, "fit", [X, y], {"init_params": (init_w, init_b)}, error, match_str)
+        with expectation:
+            model.fit(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize(
         "init_params, error, match_str",
