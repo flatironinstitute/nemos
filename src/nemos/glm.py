@@ -5,11 +5,11 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from . import noise_model as nsm
-from . import solver as slv
+from . import observation_models as obs
+from . import regularizer as reg
+from . import utils
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
-from .utils import convolve_1d_trials
 
 
 class GLM(BaseRegressor):
@@ -17,76 +17,89 @@ class GLM(BaseRegressor):
     Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
-    (like convolved currents or light intensities) and a choice of noise model. It is suitable for scenarios where
+    (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
 
     Parameters
     ----------
-    noise_model : NoiseModel
-        Noise model to use. The model describes the noise distribution of the neural activity.
-        Default is Poisson noise model.
-    solver : Solver
-        Solver to use for model optimization. Defines the optimization algorithm and related parameters.
+    observation_model :
+        Observation model to use. The model describes the distribution of the neural activity.
+        Default is the Poisson model.
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        and related parameters.
         Default is Ridge regression with gradient descent.
 
     Attributes
     ----------
-    noise_model : NoiseModel
-        Noise model being used.
-    solver : Solver
-        Solver being used.
-    baseline_link_fr_ : jnp.ndarray or None
-        Model baseline link firing rate parameters after fitting.
-    basis_coeff_ : jnp.ndarray or None
-        Basis coefficients for the model after fitting.
-    solver_state : Any
+    intercept_ :
+        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
+        firing rate will be `jnp.exp(model.intercept_)`.
+    coef_ :
+        Basis coefficients for the model.
+    solver_state :
         State of the solver after fitting. May include details like optimization error.
 
     Raises
     ------
     TypeError
-        If provided `solver` or `noise_model` are not valid or implemented in `neurostatslib.solver` and
-        `neurostatslib.noise_model` respectively.
-
-    Notes
-    -----
-    The GLM aims to model the relationship between several predictor variables and a response variable.
-    In this neural context, the predictors might represent external inputs or other neurons' activity, while
-    the response variable is the neuron's activity being modeled. The noise model captures the statistical properties
-    of the neural activity, while the solver determines how the model parameters are estimated.
+        If provided `regularizer` or `observation_model` are not valid or implemented in `nemos.solver` and
+        `nemos.observation_models` respectively.
     """
 
     def __init__(
         self,
-        noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
-        solver: slv.Solver = slv.RidgeSolver("GradientDescent"),
+        observation_model: obs.Observations = obs.PoissonObservations(),
+        regularizer: reg.Regularizer = reg.Ridge("GradientDescent"),
     ):
         super().__init__()
 
-        if solver.__class__.__name__ not in slv.__all__:
-            raise TypeError(
-                "The provided `solver` should be one of the implemented solvers in `neurostatslib.solver`. "
-                f"Available options are: {slv.__all__}."
-            )
-
-        if noise_model.__class__.__name__ not in nsm.__all__:
-            raise TypeError(
-                "The provided `noise_model` should be one of the implemented models in `neurostatslib.noise_model`. "
-                f"Available options are: {nsm.__all__}."
-            )
-
-        self.noise_model = noise_model
-        self.solver = solver
+        self.observation_model = observation_model
+        self.regularizer = regularizer
 
         # initialize to None fit output
-        self.baseline_link_fr_ = None
-        self.basis_coeff_ = None
+        self.intercept_ = None
+        self.coef_ = None
         self.solver_state = None
+
+    @property
+    def regularizer(self):
+        """Getter for the regularizer attribute."""
+        return self._regularizer
+
+    @regularizer.setter
+    def regularizer(self, regularizer: reg.Regularizer):
+        """Setter for the regularizer attribute."""
+        if not hasattr(regularizer, "instantiate_solver"):
+            raise AttributeError(
+                "The provided `solver` doesn't implement the `instantiate_solver` method."
+            )
+        # test solver instantiation on the GLM loss
+        try:
+            regularizer.instantiate_solver(self._score)
+        except Exception:
+            raise TypeError(
+                "The provided `solver` cannot be instantiated on "
+                "the GLM log-likelihood."
+            )
+        self._regularizer = regularizer
+
+    @property
+    def observation_model(self):
+        """Getter for the observation_model attribute."""
+        return self._observation_model
+
+    @observation_model.setter
+    def observation_model(self, observation: obs.Observations):
+        # check that the model has the required attributes
+        # and that the attribute can be called
+        obs.check_observation_model(observation)
+        self._observation_model = observation
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
-        if (self.basis_coeff_ is None) or (self.baseline_link_fr_ is None):
+        if (self.coef_ is None) or (self.intercept_ is None):
             raise NotFittedError(
                 "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
             )
@@ -95,7 +108,13 @@ class GLM(BaseRegressor):
         self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
-        Predict firing rates given predictors and parameters.
+        Predicts firing rates based on given parameters and design matrix.
+
+        This function computes the predicted firing rates using the provided parameters
+        and model design matrix `X`. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the `GLM.predict`
+        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+
 
         Parameters
         ----------
@@ -106,11 +125,11 @@ class GLM(BaseRegressor):
 
         Returns
         -------
-        jnp.ndarray
+        :
             The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
-        return self.noise_model.inverse_link_function(
+        return self._observation_model.inverse_link_function(
             jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
         )
 
@@ -125,7 +144,7 @@ class GLM(BaseRegressor):
         Returns
         -------
         :
-            The predicted rates with shape (n_neurons, n_time_bins).
+            The predicted rates with shape (n_time_bins, n_neurons).
 
         Raises
         ------
@@ -140,21 +159,21 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        - [score](./#neurostatslib.glm.GLM.score)
+        - [score](./#nemos.glm.GLM.score)
             Score predicted rates against target spike counts.
-        - [simulate (feed-forward only)](../glm/#neurostatslib.glm.GLM.simulate)
+        - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
             Simulate neural activity in response to a feed-forward input .
-        - [simulate (feed-forward + coupling)](../glm/#neurostatslib.glm.GLMRecurrent.simulate)
+        - [simulate_recurrent (feed-forward + coupling)](../glm/#nemos.glm.GLMRecurrent.simulate_recurrent)
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network.
         """
         # check that the model is fitted
         self._check_is_fit()
         # extract model params
-        Ws = self.basis_coeff_
-        bs = self.baseline_link_fr_
+        Ws = self.coef_
+        bs = self.intercept_
 
-        (X,) = self._convert_to_jnp_ndarray(X)
+        X = jnp.asarray(X, dtype=float)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -162,7 +181,7 @@ class GLM(BaseRegressor):
         self._check_input_and_params_consistency((Ws, bs), X=X)
         return self._predict((Ws, bs), X)
 
-    def _score(  # call _negative_log_likelihood
+    def _score(
         self,
         params: Tuple[jnp.ndarray, jnp.ndarray],
         X: jnp.ndarray,
@@ -170,10 +189,9 @@ class GLM(BaseRegressor):
     ) -> jnp.ndarray:
         r"""Score the predicted rates against target neural activity.
 
-        This computes the negative log-likelihood up to a constant term.
-
-        Note that you can end up with infinities in here if there are zeros in
-        ``predicted_rates``. We raise a warning in that case.
+        This method computes the negative log-likelihood up to a constant term. Unlike `score`,
+        it does not conduct parameter checks prior to evaluation. Passed directly to the solver,
+        it serves to establish the optimization objective for learning the model parameters.
 
         Parameters
         ----------
@@ -191,32 +209,24 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self.noise_model.negative_log_likelihood(predicted_rate, y)
+        return self._observation_model.negative_log_likelihood(predicted_rate, y)
 
     def score(
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
-        score_type: Literal["log-likelihood", "pseudo-r2"] = "pseudo-r2",
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
     ) -> jnp.ndarray:
-        r"""Score the predicted firing rates (based on fit) to the target spike counts.
+        r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
-        This computes the GLM pseudo-$R^2$ or the mean log-likelihood, thus the higher the
-        number the better.
+        This method computes the goodness-of-fit score, which can either be the mean
+        log-likelihood or the pseudo-R^2. The scoring process includes validation of
+        input compatibility with the model's parameters, ensuring that the model
+        has been previously fitted and the input data are appropriate for scoring. A
+        higher score indicates a better fit of the model to the observed data.
 
-        The pseudo-$R^2$ can be computed as follows,
-
-        $$
-        \begin{aligned}
-            R^2_{\text{pseudo}} &= \frac{D_{\text{null}} - D_{\text{model}}}{D_{\text{null}}} \\\
-            &= \frac{\log \text{LL}(\hat{\lambda}| y) - \log \text{LL}(\bar{\lambda}| y)}{\log \text{LL}(y| y)
-            - \log \text{LL}(\bar{\lambda}| y)},
-        \end{aligned}
-        $$
-
-        where LL is the log-likelihood, $D_{\text{null}}$ is the deviance for a null model, $D_{\text{model}}$ is
-        the deviance for the current model, $y_{tn}$ and $\hat{\lambda}_{tn}$ are the observed activity and the model
-        predicted rate for neuron $n$ at time-point $t$, and $\bar{\lambda}$ is the mean firing rate. See [1].
 
         Parameters
         ----------
@@ -240,7 +250,7 @@ class GLM(BaseRegressor):
         ValueError
             If attempting to simulate a different number of neurons than were
             present during fitting (i.e., if ``init_y.shape[0] !=
-            self.baseline_link_fr_.shape[0]``).
+            self.intercept_.shape[0]``).
 
         Notes
         -----
@@ -248,41 +258,59 @@ class GLM(BaseRegressor):
         among which the number of model parameters. The log-likelihood can assume both positive
         and negative values.
 
-        The Pseudo-$R^2$ is not equivalent to the $R^2$ value in linear regression. While both provide a measure
-        of model fit, and assume values in the [0,1] range, the methods and interpretations can differ.
-        The Pseudo-$R^2$ is particularly useful for generalized linear models where a traditional $R^2$ doesn't apply.
+        The Pseudo-$ R^2 $ is not equivalent to the $ R^2 $ value in linear regression. While both
+        provide a measure of model fit, and assume values in the [0,1] range, the methods and
+        interpretations can differ. The Pseudo-$ R^2 $ is particularly useful for generalized linear
+        models when the interpretation of the $ R^2 $ as explained variance does not apply
+        (i.e., when the observations are not Gaussian distributed).
 
-        Refer to the `nsl.noise_model.NoiseModel` concrete subclasses for the specific likelihood equations.
+        Why does the traditional $R^2$ is usually a poor measure of performance in GLMs?
 
+        1.  In the context of GLMs the variance and the mean of the observations are related.
+        Ignoring the relation between them can result in underestimating the model
+        performance; for instance, when we model a Poisson variable with large mean we expect an
+        equally large variance. In this scenario, even if our model perfectly captures the mean,
+        the high-variance  will result in large residuals and low $R^2$.
+        Additionally, when the mean of the observations varies, the variance will vary too. This
+        violates the "homoschedasticity" assumption, necessary  for interpreting the $R^2$ as
+        variance explained.
+        2. The $R^2$ capture the variance explained when the relationship between the observations and
+        the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
+        and the mean of the observations, compromising the interpretation of the $R^2$.
 
-        References
-        ----------
-        [1] Cohen, Jacob, et al. Applied multiple regression/correlation analysis for the behavioral sciences.
-        Routledge, 2013.
+        Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
+        to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
+        deviates substantially from normality for counting data with low mean (common for spike counts).
+        Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
+        for GLM modeling counting data.
+
+        Refer to the `nmo.observation_models.Observations` concrete subclasses for the likelihood and
+        pseudo-$R^2$ equations.
 
         """
-        if score_type not in ["log-likelihood", "pseudo-r2"]:
-            raise NotImplementedError(
-                f"Scoring method {score_type} not implemented! "
-                f"`score_type` must be either 'log-likelihood', or 'pseudo-r2'."
-            )
-        # ignore the last time point from predict, because that corresponds to
-        # the next time step, which we have no observed data for
         self._check_is_fit()
-        Ws = self.basis_coeff_
-        bs = self.baseline_link_fr_
+        Ws = self.coef_
+        bs = self.intercept_
 
-        X, y = self._convert_to_jnp_ndarray(X, y)
+        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
+
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
             score = -self._score((Ws, bs), X, y) - norm_constant
+        elif score_type.startswith("pseudo-r2"):
+            score = self._observation_model.pseudo_r2(
+                self._predict((Ws, bs), X), y, score_type=score_type
+            )
         else:
-            score = self.noise_model.pseudo_r2(self._predict((Ws, bs), X), y)
-
+            raise NotImplementedError(
+                f"Scoring method {score_type} not implemented! "
+                "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
+                "or 'pseudo-r2-Choen'."
+            )
         return score
 
     def fit(
@@ -293,8 +321,8 @@ class GLM(BaseRegressor):
     ):
         """Fit GLM to neural activity.
 
-        Following scikit-learn API, the solutions are stored as attributes
-        ``basis_coeff_`` and ``baseline_link_fr``.
+        Fit and store the model parameters as attributes
+        ``coef_`` and ``coef_``.
 
         Parameters
         ----------
@@ -321,14 +349,14 @@ class GLM(BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
         """
         # convert to jnp.ndarray & perform checks
-        X, y, init_params = self.preprocess_fit(X, y, init_params)
+        X, y, init_params = self._preprocess_fit(X, y, init_params)
 
         # Run optimization
-        runner = self.solver.instantiate_solver(self._score)
+        runner = self.regularizer.instantiate_solver(self._score)
         params, state = runner(init_params, X, y)
-        # if any noise model other than Poisson are used
-        # one should set the scale parameter too.
-        # self.noise_model.set_scale(params)
+
+        # estimate the GLM scale
+        self.observation_model.estimate_scale(self._predict(params, X))
 
         if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
             raise ValueError(
@@ -337,8 +365,8 @@ class GLM(BaseRegressor):
             )
 
         # Store parameters
-        self.basis_coeff_: jnp.ndarray = params[0]
-        self.baseline_link_fr_: jnp.ndarray = params[1]
+        self.coef_: jnp.ndarray = params[0]
+        self.intercept_: jnp.ndarray = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
@@ -358,16 +386,15 @@ class GLM(BaseRegressor):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_timesteps, n_neurons, n_basis_input).
+            Expected shape: (n_time_bins, n_neurons, n_basis_input).
 
         Returns
         -------
         simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Shape: (n_time_bins, n_neurons).
         firing_rates :
-            Simulated rates for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Simulated rates for each neuron over time. Shape, (n_neurons, n_time_bins).
 
         Raises
         ------
@@ -381,18 +408,18 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        [predict](./#neurostatslib.glm.GLM.predict) :
+        [predict](./#nemos.glm.GLM.predict) :
         Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
         self._check_is_fit()
-        Ws, bs = self.basis_coeff_, self.baseline_link_fr_
-        (feedforward_input,) = self.preprocess_simulate(
-            feedforward_input, params_f=(Ws, bs)
+        Ws, bs = self.coef_, self.intercept_
+        (feedforward_input,) = self._preprocess_simulate(
+            feedforward_input, params_feedforward=(Ws, bs)
         )
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
-            self.noise_model.emission_probability(
+            self._observation_model.sample_generator(
                 key=random_key, predicted_rate=predicted_rate
             ),
             predicted_rate,
@@ -403,27 +430,22 @@ class GLMRecurrent(GLM):
     """
     A Generalized Linear Model (GLM) with recurrent dynamics.
 
-    This class extends the basic GLM to capture recurrent dynamics between neurons,
-    making it more suitable for simulating the activity of interconnected neural populations.
-    The recurrent GLM combines both feedforward inputs (like sensory stimuli) and past
-    neural activity to simulate or predict future neural activity.
+    This class extends the basic GLM to capture recurrent dynamics between neurons and
+    self-connectivity, making it more suitable for simulating the activity of interconnected
+    neural populations. The recurrent GLM combines both feedforward inputs (like sensory
+    stimuli) and past neural activity to simulate or predict future neural activity.
 
     Parameters
     ----------
-    noise_model : nsm.NoiseModel, default=nsm.PoissonNoiseModel()
-        The noise model to use for the GLM. This defines how neural activity is generated
+    observation_model :
+        The observation model to use for the GLM. This defines how neural activity is generated
         based on the underlying firing rate. Common choices include Poisson and Gaussian models.
-
-    solver : slv.Solver, default=slv.RidgeSolver()
-        The optimization solver to use for fitting the GLM parameters.
-
-    data_type : {jnp.float32, jnp.float64}, optional
-        The numerical data type for internal calculations. If not provided, it will be inferred
-        from the data during fitting.
+    regularizer :
+        The regularization scheme to use for fitting the GLM parameters.
 
     See Also
     --------
-    [GLM](../glm/#neurostatslib.glm.GLM) : Base class for the generalized linear model.
+    [GLM](./#nemos.glm.GLM) : Base class for the generalized linear model.
 
     Notes
     -----
@@ -431,23 +453,16 @@ class GLMRecurrent(GLM):
     inputs and the past activity of the same and other neurons. This makes it particularly
     powerful for capturing the dynamics of neural networks where neurons are interconnected.
 
-    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and might include
+    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and include
     coefficients, fitted status, and other model-related attributes.
-
-    Examples
-    --------
-    >>> # Initialize the recurrent GLM with default parameters
-    >>> model = GLMRecurrent()
-    >>> # ... your code for training and simulating using the model ...
-
     """
 
     def __init__(
         self,
-        noise_model: nsm.NoiseModel = nsm.PoissonNoiseModel(),
-        solver: slv.Solver = slv.RidgeSolver(),
+        observation_model: obs.Observations = obs.PoissonObservations(),
+        regularizer: reg.Regularizer = reg.Ridge(),
     ):
-        super().__init__(noise_model=noise_model, solver=solver)
+        super().__init__(observation_model=observation_model, regularizer=regularizer)
 
     def simulate_recurrent(
         self,
@@ -471,7 +486,7 @@ class GLMRecurrent(GLM):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_timesteps, n_neurons, n_basis_input).
+            Expected shape: (n_time_bins, n_neurons, n_basis_input).
         init_y :
             Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
             Expected shape: (window_size, n_neurons).
@@ -483,10 +498,9 @@ class GLMRecurrent(GLM):
         -------
         simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Shape, (n_time_bins, n_neurons).
         firing_rates :
-            Simulated rates for each neuron over time.
-            Shape: (n_neurons, n_timesteps).
+            Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
 
         Raises
         ------
@@ -500,41 +514,41 @@ class GLMRecurrent(GLM):
 
         See Also
         --------
-        [predict](./#neurostatslib.glm.GLM.predict) :
+        [predict](./#nemos.glm.GLM.predict) :
         Method to predict rates based on the model's parameters.
 
         Notes
         -----
-        The model coefficients (`self.basis_coeff_`) are structured such that the first set of coefficients
+        The model coefficients (`self.coef_`) are structured such that the first set of coefficients
         (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
         The remaining coefficients correspond to the weights for the feed-forward input.
 
 
-        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.basis_coeff_.shape[1]`
+        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
         # check if the model is fit
         self._check_is_fit()
 
         # convert to jnp.ndarray
-        (coupling_basis_matrix,) = self._convert_to_jnp_ndarray(coupling_basis_matrix)
+        coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
 
         n_basis_coupling = coupling_basis_matrix.shape[1]
-        n_neurons = self.baseline_link_fr_.shape[0]
+        n_neurons = self.intercept_.shape[0]
 
-        if init_y is None:
-            init_y = jnp.zeros((coupling_basis_matrix.shape[0], n_neurons))
+        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons :]
+        w_recurrent = self.coef_[:, : n_basis_coupling * n_neurons]
+        bs = self.intercept_
 
-        Wf = self.basis_coeff_[:, n_basis_coupling * n_neurons :]
-        Wr = self.basis_coeff_[:, : n_basis_coupling * n_neurons]
-        bs = self.baseline_link_fr_
-
-        feedforward_input, init_y = self.preprocess_simulate(
-            feedforward_input, params_f=(Wf, bs), init_y=init_y, params_r=(Wr, bs)
+        feedforward_input, init_y = self._preprocess_simulate(
+            feedforward_input,
+            params_feedforward=(w_feedforward, bs),
+            init_y=init_y,
+            params_recurrent=(w_recurrent, bs),
         )
 
         self._check_input_and_params_consistency(
-            (Wr, bs),
+            (w_recurrent, bs),
             y=init_y,
         )
 
@@ -548,7 +562,9 @@ class GLMRecurrent(GLM):
 
         subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
         # (n_samples, n_neurons)
-        feed_forward_contrib = jnp.einsum("ik,tik->ti", Wf, feedforward_input)
+        feed_forward_contrib = jnp.einsum(
+            "ik,tik->ti", w_feedforward, feedforward_input
+        )
 
         def scan_fn(
             data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
@@ -558,41 +574,41 @@ class GLMRecurrent(GLM):
             This function simulates the neural activity and firing rates for each time step
             based on the previous activity, feedforward input, and model coefficients.
             """
-            activity, chunk = data
+            activity, t_sample = data
 
             # Convolve the neural activity with the coupling basis matrix
-            conv_act = convolve_1d_trials(coupling_basis_matrix, activity[None, :, :])[
+            # Output of shape (1, n_neuron, n_basis_coupling)
+            # 1. The first dimension is time, and 1 is by construction since we are simulating 1
+            #    sample
+            # 2. Flatten to shape (n_neuron * n_basis_coupling, )
+            conv_act = utils.convolve_1d_trials(coupling_basis_matrix, activity[None])[
                 0
-            ]
+            ].flatten()
 
-            # Extract the corresponding slice of the feedforward input for the current time step
+            # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
                 feed_forward_contrib,
-                (chunk, 0),
+                (t_sample, 0),
                 (1, feed_forward_contrib.shape[1]),
-            )
-
-            # Reshape the convolved activity and concatenate with the input slice to form the model input
-            conv_act = jnp.tile(
-                conv_act.reshape(conv_act.shape[0], -1), conv_act.shape[1]
-            ).reshape(conv_act.shape[0], conv_act.shape[1], -1)
+            ).squeeze(axis=0)
 
             # Predict the firing rate using the model coefficients
             # Doesn't use predict because the non-linearity needs
             # to be applied after we add the feed forward input
-            firing_rate = self.noise_model.inverse_link_function(
-                jnp.einsum("ik,tik->ti", Wr, conv_act) + input_slice + bs[None, :]
+            firing_rate = self._observation_model.inverse_link_function(
+                w_recurrent.dot(conv_act) + input_slice + bs
             )
 
             # Simulate activity based on the predicted firing rate
-            new_act = self.noise_model.emission_probability(key, firing_rate)
+            new_act = self._observation_model.sample_generator(key, firing_rate)
 
-            # Prepare the spikes for the next iteration (keeping the most recent spikes)
-            concat_act = jnp.row_stack((activity[1:], new_act)), chunk + 1
-            return concat_act, (new_act, firing_rate)
+            # Shift of one sample the spike count window
+            # for the next iteration (i.e. remove the first counts, and
+            # stack the newly generated sample)
+            # Increase the t_sample by one
+            carry = jnp.row_stack((activity[1:], new_act)), t_sample + 1
+            return carry, (new_act, firing_rate)
 
         _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
         simulated_activity, firing_rates = outputs
-        return jnp.squeeze(simulated_activity, axis=1), jnp.squeeze(
-            firing_rates, axis=1
-        )
+        return simulated_activity, firing_rates

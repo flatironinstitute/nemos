@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import utils_testing
 
-import neurostatslib.basis as basis
+import nemos.basis as basis
 
 # automatic define user accessible basis and check the methods
 
@@ -188,37 +188,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
             assert grid.shape[0] == sample_size
 
-    @pytest.mark.parametrize(
-        "alpha",
-        [-1, 0, 0.5, 1, 1.5, 1.75, 2, 2.5],
-    )
-    def test_check_cosine_widths_of_basis(self, alpha):
-        """
-        Verifies that the evaluate() method returns the expected number of basis functions.
-        """
-        raise_exception = alpha not in [1, 1.5, 2, 2.5]
-        if raise_exception:
-            with pytest.raises(ValueError, match="Invalid raised cosine width"):
-                self.cls(n_basis_funcs=10, alpha=alpha)
-        else:
-            self.cls(n_basis_funcs=10, alpha=alpha)
-
-    @pytest.mark.parametrize(
-        "alpha",
-        [-1, 0, 0.5, 1, 1.5, 1.75, 2, 2.5],
-    )
-    def test_check_cosine_widths_of_basis_from_setter(self, alpha):
-        """
-        Verifies that the evaluate() method returns the expected number of basis functions.
-        """
-        raise_exception = alpha not in [1, 1.5, 2, 2.5]
-        basis_obj = self.cls(n_basis_funcs=10)
-        if raise_exception:
-            with pytest.raises(ValueError, match="Invalid raised cosine width"):
-                basis_obj.alpha = alpha
-        else:
-            basis_obj.alpha = alpha
-
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_basis_size(self, sample_size):
         """
@@ -286,7 +255,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize(
         "args, sample_size",
-        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
+        [[{"n_basis_funcs": n_basis}, 100] for n_basis in [1, 2, 10, 100]],
     )
     def test_evaluate_returns_expected_number_of_basis(self, args, sample_size):
         """
@@ -301,37 +270,6 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
                 f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
             )
         return
-
-    @pytest.mark.parametrize(
-        "alpha",
-        [-1, 0, 0.5, 1, 1.5, 1.75, 2, 2.5],
-    )
-    def test_check_cosine_widths_of_basis(self, alpha):
-        """
-        Verifies that the evaluate() method returns the expected number of basis functions.
-        """
-        raise_exception = alpha not in [1, 1.5, 2, 2.5]
-        if raise_exception:
-            with pytest.raises(ValueError, match="Invalid raised cosine width"):
-                self.cls(n_basis_funcs=10, alpha=alpha)
-        else:
-            self.cls(n_basis_funcs=10, alpha=alpha)
-
-    @pytest.mark.parametrize(
-        "alpha",
-        [-1, 0, 0.5, 1, 1.5, 1.75, 2, 2.5],
-    )
-    def test_check_cosine_widths_of_basis_from_setter(self, alpha):
-        """
-        Verifies that the evaluate() method returns the expected number of basis functions.
-        """
-        raise_exception = alpha not in [1, 1.5, 2, 2.5]
-        basis_obj = self.cls(n_basis_funcs=10)
-        if raise_exception:
-            with pytest.raises(ValueError, match="Invalid raised cosine width"):
-                basis_obj.alpha = alpha
-        else:
-            basis_obj.alpha = alpha
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
@@ -627,7 +565,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0]*6, (0,)*6, np.array([0]*6), jax.numpy.array([0]*6)]
+        "arraylike", [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)]
     )
     def test_input_to_evaluate_is_arraylike(self, arraylike):
         """

@@ -1,3 +1,3 @@
 # Examples
 
-A gallery of tutorials on the current `neurostatslib` functionalities.
+A gallery of tutorials on the current `nemos` functionalities.

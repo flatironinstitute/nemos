@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Iterable, List, Literal, Optional, Union
+from typing import Any, Callable, Iterable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -339,10 +339,10 @@ def plot_spike_raster(
 
 
 def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.array:
-    """Compute the row-wise Kronecker product.
+    r"""Compute the row-wise Kronecker product.
 
     Compute the row-wise Kronecker product between two matrices using JAX.
-    See [1] for more details on the Kronecker product.
+    See [\[1\]](#references) for more details on the Kronecker product.
 
     Parameters
     ----------
@@ -365,9 +365,10 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     This function computes the row-wise Kronecker product between dense matrices A and C
     using JAX for automatic differentiation and GPU acceleration.
 
-    .. [1] Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
-       Technical University of Denmark 7.15 (2008): 510.
-
+    References
+    ----------
+    1. Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
+    Technical University of Denmark 7.15 (2008): 510.
     """
     if transpose:
         A = A.T
@@ -385,32 +386,105 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def has_local_device(device_type: str) -> bool:
-    """Scan for local device availability.
-
-    Looks for local device availability and returns True if the specified
-    type of device (e.g., GPU, TPU) is available.
+def check_invalid_entry(array: jnp.ndarray, array_name: str) -> None:
+    """Check if the array has nans or infs.
 
     Parameters
     ----------
-    device_type:
-        The the device type in lower-case, e.g. `gpu`, `tpu`...
+    array:
+        The array to be checked.
+    array_name:
+        The array name.
+
+    Raises
+    ------
+        - ValueError: If any entry of `array` is either NaN or inf.
+
+    """
+    if jnp.any(jnp.isinf(array)):
+        raise ValueError(f"Input array '{array_name}' contains Infs!")
+    elif jnp.any(jnp.isnan(array)):
+        raise ValueError(f"Input array '{array_name}' contains NaNs!")
+
+
+def assert_has_attribute(obj: Any, attr_name: str):
+    """Ensure the object has the given attribute."""
+    if not hasattr(obj, attr_name):
+        raise AttributeError(
+            f"The provided object does not have the required `{attr_name}` attribute!"
+        )
+
+
+def assert_is_callable(func: Callable, func_name: str):
+    """Ensure the provided function is callable."""
+    if not callable(func):
+        raise TypeError(f"The `{func_name}` must be a Callable!")
+
+
+def assert_returns_ndarray(
+    func: Callable, inputs: Union[List[jnp.ndarray], List[float]], func_name: str
+):
+    """Ensure the function returns a jax.numpy.ndarray."""
+    array_out = func(*inputs)
+    if not isinstance(array_out, jnp.ndarray):
+        raise TypeError(f"The `{func_name}` must return a jax.numpy.ndarray!")
+
+
+def assert_differentiable(func: Callable, func_name: str):
+    """Ensure the function is differentiable."""
+    try:
+        gradient_fn = jax.grad(func)
+        gradient_fn(jnp.array(1.0))
+    except Exception as e:
+        raise TypeError(f"The `{func_name}` is not differentiable. Error: {str(e)}")
+
+
+def assert_preserve_shape(
+    func: Callable, inputs: List[jnp.ndarray], func_name: str, input_index: int
+):
+    """Check that the function preserve the input shape."""
+    result = func(*inputs)
+    if not result.shape == inputs[input_index].shape:
+        raise ValueError(f"The `{func_name}` must preserve the input array shape!")
+
+
+def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str):
+    """Check that `func` return an array containing a single scalar."""
+    assert_returns_ndarray(func, inputs, func_name)
+    array_out = func(*inputs)
+    try:
+        float(array_out)
+    except TypeError:
+        raise TypeError(
+            f"The `{func_name}` should return a scalar! "
+            f"Array of shape {array_out.shape} returned instead!"
+        )
+
+
+def multi_array_device_put(
+    *args: jnp.ndarray, device: Literal["cpu", "tpu", "gpu"]
+) -> Union[Any, jnp.ndarray]:
+    """Send arrays to device.
+
+    This function sends the arrays to the target device, if the arrays are
+    not already there.
+
+    Parameters
+    ----------
+    *args:
+        NDArray
+    device:
+        A target device between "cpu", "tpu", "gpu".
 
     Returns
     -------
     :
-        True if the jax finds the device, False otherwise.
-
+        The arrays on the desired device.
     """
-    return any(
-        device_type in device.device_kind.lower() for device in jax.local_devices()
-    )
-
-
-def is_sequence(obj) -> bool:
-    """Check if an object is a sequence."""
-    return (
-        hasattr(obj, "__iter__")
-        and hasattr(obj, "__getitem__")
-        and not isinstance(obj, (str, bytes, dict))
+    device_obj = jax.devices(device)[0]
+    return tuple(
+        jax.device_put(arg, device_obj)
+        if arg.device_buffer.device() != device_obj
+        else arg
+        for arg in args
     )

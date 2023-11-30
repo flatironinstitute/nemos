@@ -1,5 +1,5 @@
-site_name: neurostatslib
-repo_url: https://github.com/flatironinstitute/generalized-linear-models
+site_name: nemos
+repo_url: https://github.com/flatironinstitute/nemos
 
 theme:
   name: 'material'                         # The theme name, using the 'material' theme
@@ -12,7 +12,7 @@ theme:
     - admonition
     - tables
 
-# if footnotes is degined in theme doesn't work
+# if footnotes is defined in theme doesn't work
 # If md_in_html is defined outside theme, it also results in
 # an error when building the docs.
 markdown_extensions:
@@ -37,8 +37,6 @@ plugins:
             show_source: true
             members_order: source
             inherited_members: true
-          filters:
-          - "!neurostatslib.glm.GLMBase.residual_deviance"
 
 extra_javascript:
   - javascripts/katex.js
