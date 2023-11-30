@@ -127,7 +127,7 @@ class TestPoissonObservations:
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
 
-    @pytest.mark.parametrize("score_type", ["pseudo-r2-Choen", "pseudo-r2-McFadden"])
+    @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
     def test_pseudo_r2_range(self, score_type, poissonGLM_model_instantiation):
         """
         Compute the pseudo-r2 and check that is < 1.
@@ -139,7 +139,7 @@ class TestPoissonObservations:
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
 
-    @pytest.mark.parametrize("score_type", ["pseudo-r2-Choen", "pseudo-r2-McFadden"])
+    @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
     def test_pseudo_r2_mean(self, score_type, poissonGLM_model_instantiation):
         """
         Check that the pseudo-r2 of the null model is 0.

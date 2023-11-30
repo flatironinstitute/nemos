@@ -206,13 +206,13 @@ class Observations(Base, abc.ABC):
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
         score_type: Literal[
-            "pseudo-r2-McFadden", "pseudo-r2-Choen"
+            "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
     ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
         Compute the pseudo-$R^2$ metric for the GLM, as defined by McFadden et al.[$^1$](#references)
-        or by Choen et al.[$^2$](#references).
+        or by Cohen et al.[$^2$](#references).
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
@@ -239,10 +239,10 @@ class Observations(Base, abc.ABC):
             $$
                 R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}
             $$
-        - The Choen pseudo-$R^2$ is given by:
+        - The Cohen pseudo-$R^2$ is given by:
             $$
                \begin{aligned}
-               R^2_{\text{Choen}} &= \frac{D_0 - D_M}{D_0} \\\
+               R^2_{\text{Cohen}} &= \frac{D_0 - D_M}{D_0} \\\
                &= 1 - \frac{\log(L_s) - \log(L_M)}{\log(L_s)-\log(L_0)},
                \end{aligned}
             $$
@@ -263,7 +263,7 @@ class Observations(Base, abc.ABC):
         """
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y)
-        elif score_type == "pseudo-r2-Choen":
+        elif score_type == "pseudo-r2-Cohen":
             pseudo_r2 = self._pseudo_r2_choen(predicted_rate, y)
         else:
             raise NotImplementedError(f"Score {score_type} not implemented!")

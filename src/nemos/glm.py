@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from . import observation_models as obs
-from . import regularizer as slv
+from . import regularizer as reg
 from . import utils
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
@@ -51,7 +51,7 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: slv.Regularizer = slv.Ridge("GradientDescent"),
+        regularizer: reg.Regularizer = reg.Ridge("GradientDescent"),
     ):
         super().__init__()
 
@@ -69,7 +69,7 @@ class GLM(BaseRegressor):
         return self._regularizer
 
     @regularizer.setter
-    def regularizer(self, regularizer: slv.Regularizer):
+    def regularizer(self, regularizer: reg.Regularizer):
         """Setter for the regularizer attribute."""
         if not hasattr(regularizer, "instantiate_solver"):
             raise AttributeError(
@@ -215,8 +215,7 @@ class GLM(BaseRegressor):
         self,
         X: Union[NDArray, jnp.ndarray],
         y: Union[NDArray, jnp.ndarray],
-        score_type: Literal["log-likelihood", "pseudo-r2"] = "pseudo-r2-McFadden",
-        pseudo_r2_type: Literal["McFadden", "Cox"] = "McFadden",
+        score_type: Literal["log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"] = "pseudo-r2-McFadden",
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
@@ -236,8 +235,6 @@ class GLM(BaseRegressor):
             during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
         score_type :
             Type of scoring: either log-likelihood or pseudo-r2.
-        pseudo_r2_type :
-            Type of pseudo-r2 to be reported.
 
         Returns
         -------
@@ -461,7 +458,7 @@ class GLMRecurrent(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: slv.Regularizer = slv.Ridge(),
+        regularizer: reg.Regularizer = reg.Ridge(),
     ):
         super().__init__(observation_model=observation_model, regularizer=regularizer)
 

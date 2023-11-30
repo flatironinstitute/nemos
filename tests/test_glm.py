@@ -718,7 +718,7 @@ class TestGLM:
         "score_type, expectation",
         [
             ("pseudo-r2-McFadden", does_not_raise()),
-            ("pseudo-r2-Choen", does_not_raise()),
+            ("pseudo-r2-Cohen", does_not_raise()),
             ("log-likelihood", does_not_raise()),
             (
                 "not-implemented",
