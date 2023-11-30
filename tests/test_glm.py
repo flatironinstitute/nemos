@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
+from contextlib import nullcontext as does_not_raise
 
 import nemos as nmo
 
@@ -23,6 +24,9 @@ def _test_class_method(cls, method_name, args, kwargs, error, match_str):
     else:
         getattr(cls, method_name)(*args, **kwargs)
 
+@pytest.fixture()
+def glm_class():
+    return nmo.glm.GLM
 
 class TestGLM:
     """
@@ -34,45 +38,47 @@ class TestGLM:
     # Test model.__init__
     #######################
     @pytest.mark.parametrize(
-        "regularizer, error, match_str",
+        "regularizer, expectation",
         [
-            (nmo.regularizer.Ridge("BFGS"), None, None),
-            (None, AttributeError, "The provided `solver` doesn't implement "),
-            (nmo.regularizer.Ridge, TypeError, "The provided `solver` cannot be instantiated")
+            (nmo.regularizer.Ridge("BFGS"), does_not_raise()),
+            (None, pytest.raises(AttributeError, match="The provided `solver` doesn't implement ")),
+            (nmo.regularizer.Ridge, pytest.raises(TypeError, match="The provided `solver` cannot be instantiated"))
         ]
     )
-    def test_solver_type(self, regularizer, error, match_str, poissonGLM_model_instantiation):
+    def test_solver_type(self, regularizer, expectation, glm_class):
         """
         Test that an error is raised if a non-compatible solver is passed.
         """
-        _test_class_initialization(self.cls, {'regularizer': regularizer}, error, match_str)
+        with expectation:
+            glm_class(regularizer=regularizer)
 
 
     @pytest.mark.parametrize(
-        "observation, error, match_str",
+        "observation, expectation",
         [
-            (nmo.observation_models.PoissonObservations(), None, None),
-            (nmo.regularizer.Regularizer, AttributeError, "The provided object does not have the required"),
-            (1, AttributeError, "The provided object does not have the required")
+            (nmo.observation_models.PoissonObservations(), does_not_raise()),
+            (nmo.regularizer.Regularizer, pytest.raises(AttributeError, match="The provided object does not have the required")),
+            (1, pytest.raises(AttributeError, match="The provided object does not have the required"))
         ]
     )
-    def test_init_observation_type(self, observation, error, match_str, ridge_regularizer):
+    def test_init_observation_type(self, observation, expectation, glm_class, ridge_regularizer):
         """
         Test initialization with different regularizer names. Check if an appropriate exception is raised
         when the regularizer name is not present in jaxopt.
         """
-        _test_class_initialization(self.cls, {'regularizer': ridge_regularizer, 'observation_model': observation}, error, match_str)
+        with expectation:
+            glm_class(regularizer=ridge_regularizer, observation_model=observation)
 
     #######################
     # Test model.fit
     #######################
-    @pytest.mark.parametrize("n_params, error, match_str", [
-        (0, ValueError, "Params needs to be array-like of length two."),
-        (1, ValueError, "Params needs to be array-like of length two."),
-        (2, None, None),
-        (3, ValueError, "Params needs to be array-like of length two."),
+    @pytest.mark.parametrize("n_params, expectation", [
+        (0, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+        (1, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+        (2, does_not_raise()),
+        (3, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
     ])
-    def test_fit_param_length(self, n_params, error, match_str, poissonGLM_model_instantiation):
+    def test_fit_param_length(self, n_params, expectation, poissonGLM_model_instantiation):
         """
         Test the `fit` method with different numbers of initial parameters.
         Check for correct number of parameters.
@@ -84,20 +90,18 @@ class TestGLM:
             init_params = (true_params[0],)
         else:
             init_params = true_params + (true_params[0],) * (n_params - 2)
-        _test_class_method(model, "fit",
-                           [X, y],
-                           {"init_params": init_params},
-                           error, match_str)
+        with expectation:
+            model.fit(X, y, init_params=init_params)
 
-    @pytest.mark.parametrize("add_entry, add_to, error, match_str", [
-        (0, "X", None, None),
-        (np.nan, "X", ValueError, "Input array .+ contains"),
-        (np.inf, "X", ValueError, "Input array .+ contains"),
-        (0, "y", None, None),
-        (np.nan, "y", ValueError, "Input array .+ contains"),
-        (np.inf, "y", ValueError, "Input array .+ contains"),
+    @pytest.mark.parametrize("add_entry, add_to, expectation", [
+        (0, "X", does_not_raise()),
+        (np.nan, "X", pytest.raises(ValueError, match="Input array .+ contains")),
+        (np.inf, "X", pytest.raises(ValueError, match="Input array .+ contains")),
+        (0, "y", does_not_raise()),
+        (np.nan, "y", pytest.raises(ValueError, match="Input array .+ contains")),
+        (np.inf, "y", pytest.raises(ValueError, match="Input array .+ contains")),
     ])
-    def test_fit_param_values(self, add_entry, add_to, error, match_str, poissonGLM_model_instantiation):
+    def test_fit_param_values(self, add_entry, add_to, expectation, poissonGLM_model_instantiation):
         """
         Test the `fit` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
         """
@@ -110,10 +114,8 @@ class TestGLM:
             idx = np.unravel_index(np.random.choice(y.size), y.shape)
             y = np.asarray(y, dtype=np.float32)
             y[idx] = add_entry
-        _test_class_method(model, "fit",
-                           [X, y],
-                           {"init_params": true_params},
-                           error, match_str)
+        with expectation:
+            model.fit(X, y, init_params=true_params)
 
     @pytest.mark.parametrize("dim_weights, error, match_str", [
         (0, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)"),
