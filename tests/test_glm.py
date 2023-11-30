@@ -214,28 +214,19 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=true_params)
 
-    @pytest.mark.parametrize("delta_dim, error, match_str",
-                             [
-                                 (-1, ValueError, "X must be three-dimensional"),
-                                 (0, None, None),
-                                 (1, ValueError, "X must be three-dimensional")
-                             ]
-                             )
-    def test_fit_x_dimensionality(self, delta_dim, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
-        """
+    @pytest.mark.parametrize("delta_dim, expectation", [
+        (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="X must be three-dimensional"))
+    ])
+    def test_fit_x_dimensionality(self, delta_dim, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-
         if delta_dim == -1:
-            # remove a dimension
-            X = np.zeros((n_samples, n_neurons))
+            X = np.zeros((X.shape[0], X.shape[1]))
         elif delta_dim == 1:
-            # add a dimension
-            X = np.zeros((n_samples, n_neurons, n_features, 1))
-
-        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
+            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+        with expectation:
+            model.fit(X, y, init_params=true_params)
 
     @pytest.mark.parametrize("delta_dim, error, match_str",
                              [
