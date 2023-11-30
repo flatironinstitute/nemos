@@ -312,25 +312,18 @@ class TestGLM:
         with expectation:
             model.score(X, y)
 
-    @pytest.mark.parametrize("delta_n_neuron, error, match_str",
-                             [
-                                 (-1, ValueError, "The number of neurons in the model parameters"),
-                                 (0, None, None),
-                                 (1, ValueError, "The number of neurons in the model parameters")
-                             ]
-                             )
-    def test_score_n_neuron_match_y(self, delta_n_neuron, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `score` method when The number of neurons in y differs. Ensure the correct number of neurons.
-        """
-        raise_exception = delta_n_neuron != 0
+    @pytest.mark.parametrize("delta_n_neuron, expectation", [
+        (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="The number of neurons in the model parameters"))
+    ])
+    def test_score_n_neuron_match_y(self, delta_n_neuron, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_neurons = X.shape[1]
-        # set model coeff
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        y = jnp.repeat(y, n_neurons + delta_n_neuron, axis=1)
-        _test_class_method(model, "score", [X, y], {}, error, match_str)
+        y = jnp.repeat(y, y.shape[1] + delta_n_neuron, axis=1)
+        with expectation:
+            model.score(X, y)
 
     @pytest.mark.parametrize("delta_dim, error, match_str",
                              [
