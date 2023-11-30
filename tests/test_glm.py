@@ -117,17 +117,13 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=true_params)
 
-    @pytest.mark.parametrize("dim_weights, error, match_str", [
-        (0, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)"),
-        (1, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)"),
-        (2, None, None),
-        (3, ValueError, r"params\[0\] must be of shape \(n_neurons, n_features\)")
+    @pytest.mark.parametrize("dim_weights, expectation", [
+        (0, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+        (1, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+        (2, does_not_raise()),
+        (3, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)"))
     ])
-    def test_fit_weights_dimensionality(self, dim_weights, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method with weight matrices of different dimensionalities.
-        Check for correct dimensionality.
-        """
+    def test_fit_weights_dimensionality(self, dim_weights, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_neurons, n_features = X.shape
         if dim_weights == 0:
@@ -138,7 +134,8 @@ class TestGLM:
             init_w = jnp.zeros((n_neurons, n_features))
         else:
             init_w = jnp.zeros((n_neurons, n_features) + (1,) * (dim_weights - 2))
-        _test_class_method(model, "fit", [X, y], {"init_params": (init_w, true_params[1])}, error, match_str)
+        with expectation:
+            model.fit(X, y, init_params=(init_w, true_params[1]))
 
     @pytest.mark.parametrize("dim_intercepts, error, match_str", [
         (0, ValueError, r"params\[1\] must be of shape"),
