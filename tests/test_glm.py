@@ -254,28 +254,19 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
-    @pytest.mark.parametrize("delta_n_features, error, match_str",
-                             [
-                                 (-1, ValueError, "Inconsistent number of features"),
-                                 (0, None, None),
-                                 (1, ValueError, "Inconsistent number of features")
-                             ]
-                             )
-    def test_fit_n_feature_consistency_x(self, delta_n_features, error, match_str, poissonGLM_model_instantiation):
-        """
-        Test the `fit` method for inconsistencies between data features and model's expectations.
-        Ensure the number of features in X aligns.
-        """
+    @pytest.mark.parametrize("delta_n_features, expectation", [
+        (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Inconsistent number of features"))
+    ])
+    def test_fit_n_feature_consistency_x(self, delta_n_features, expectation, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-
         if delta_n_features == 1:
-            # add a feature
-            X = jnp.concatenate((X, jnp.zeros((100, 1, 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
         elif delta_n_features == -1:
-            # remove a feature
             X = X[..., :-1]
-
-        _test_class_method(model, "fit", [X, y], {"init_params": true_params}, error, match_str)
+        with expectation:
+            model.fit(X, y, init_params=true_params)
 
     @pytest.mark.parametrize("delta_tp, error, match_str",
                              [
