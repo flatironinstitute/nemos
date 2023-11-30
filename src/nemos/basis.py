@@ -744,7 +744,6 @@ class RaisedCosineBasisLinear(Basis):
         self._check_alpha(alpha)
         self._alpha = alpha
 
-
     @property
     def alpha(self):
         """Return width of the raised cosine."""
@@ -873,7 +872,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         n_basis_funcs: int,
         alpha: float = 1.0,
         extend_and_trim_last: bool = True,
-        clip_first: bool = False
+        clip_first: bool = False,
     ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
