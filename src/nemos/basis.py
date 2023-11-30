@@ -865,12 +865,18 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         self,
         n_basis_funcs: int,
         alpha: float = 1.5,
+        time_scaling: float = None,
         extend_and_trim_last: bool = True,
         force_first_basis_to_one: bool = False,
     ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
         self._force_first_basis_to_one = force_first_basis_to_one
+        if time_scaling is None:
+            self._time_scaling = np.pi * (self.n_basis_funcs - 1) * 10
+        else:
+            self._time_scaling = time_scaling
+        print(f"time_scaling: {self._time_scaling}")
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
@@ -888,15 +894,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             Transformed version of the sample points that matches the Raised Cosine basis domain,
             shape (n_samples, ).
         """
-        # if equi-spaced samples, this is equivalent to
-        # log_spaced_pts = np.logspace(
-        #   np.log10((self.n_basis_funcs - 1) * np.pi),
-        #   -1,
-        #   sample_pts.shape[0]
-        # ) - 0.1
-        # log_spaced_pts = log_spaced_pts / (np.pi * (self.n_basis_funcs - 1))
-        base = np.pi * (self.n_basis_funcs - 1) * 10
-        log_spaced_pts = base ** (-sample_pts) - 1 / base
+        # This is equivalent to log-spacing the points with base self._time_scaling
+        # and then adjust the extremes to be 0 and 1.
+        # as the base tends to 1, the points will be linearly spaced.
+        # as the base tends to inf, the points will be concentrated in 0.
+        log_spaced_pts = (self._time_scaling ** sample_pts - 1) / (self._time_scaling - 1)
         return log_spaced_pts
 
     def _evaluate(self, sample_pts: NDArray) -> NDArray:
@@ -918,12 +920,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         if not self.extend_and_trim_last:
-            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[:, ::-1]
+            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]#[..., ::-1]
         else:
             # temporarily add a basis element
-            n_trim = int(np.round(self.alpha))
+            n_trim = int(np.ceil(self.alpha))
             self.n_basis_funcs += n_trim
-            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[:, ::-1]
+            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]
             eval_basis = eval_basis[..., :-n_trim]
             self.n_basis_funcs -= n_trim
         if self._force_first_basis_to_one:
