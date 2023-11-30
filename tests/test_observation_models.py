@@ -8,33 +8,37 @@ import statsmodels.api as sm
 import nemos as nmo
 
 
+@pytest.fixture()
+def poisson_observations():
+    return nmo.observation_models.PoissonObservations
+
+
 class TestPoissonObservations:
-    cls = nmo.observation_models.PoissonObservations
 
     @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
-    def test_initialization_link_is_callable(self, link_function):
+    def test_initialization_link_is_callable(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
         raise_exception = not callable(link_function)
         if raise_exception:
             with pytest.raises(TypeError, match="The `inverse_link_function` function must be a Callable"):
-                self.cls(link_function)
+                poisson_observations(link_function)
         else:
-            self.cls(link_function)
+            poisson_observations(link_function)
 
     @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x:x, sm.families.links.log()])
-    def test_initialization_link_is_jax(self, link_function):
+    def test_initialization_link_is_jax(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
         raise_exception = isinstance(link_function, np.ufunc) | isinstance(link_function, sm.families.links.Link)
         if raise_exception:
             with pytest.raises(TypeError, match="The `inverse_link_function` must return a jax.numpy.ndarray"):
-                self.cls(link_function)
+                poisson_observations(link_function)
         else:
-            self.cls(link_function)
+            poisson_observations(link_function)
 
     @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
-    def test_initialization_link_is_callable_set_params(self, link_function):
+    def test_initialization_link_is_callable_set_params(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
-        observation_model = self.cls()
+        observation_model = poisson_observations()
         raise_exception = not callable(link_function)
         if raise_exception:
             with pytest.raises(TypeError, match="The `inverse_link_function` function must be a Callable"):
@@ -43,10 +47,10 @@ class TestPoissonObservations:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize("link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log()])
-    def test_initialization_link_is_jax_set_params(self, link_function):
+    def test_initialization_link_is_jax_set_params(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
         raise_exception = isinstance(link_function, np.ufunc) | isinstance(link_function, sm.families.links.Link)
-        observation_model = self.cls()
+        observation_model = poisson_observations()
         if raise_exception:
             with pytest.raises(TypeError, match="The `inverse_link_function` must return a jax.numpy.ndarray!"):
                 observation_model.set_params(inverse_link_function=link_function)
@@ -57,10 +61,10 @@ class TestPoissonObservations:
         jnp.exp,
         lambda x: jnp.exp(x) if isinstance(x, jnp.ndarray) else "not a number"
     ])
-    def test_initialization_link_returns_scalar(self, link_function):
+    def test_initialization_link_returns_scalar(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
         raise_exception = not isinstance(link_function(1.), (jnp.ndarray, float))
-        observation_model = self.cls()
+        observation_model = poisson_observations()
         if raise_exception:
             with pytest.raises(TypeError, match="The `inverse_link_function` must handle scalar inputs correctly"):
                 observation_model.set_params(inverse_link_function=link_function)
