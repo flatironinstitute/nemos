@@ -871,7 +871,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ) -> None:
         super().__init__(n_basis_funcs, alpha=alpha)
         self.extend_and_trim_last = extend_and_trim_last
-        self._force_first_basis_to_one = force_first_basis_to_one
         if time_scaling is None:
             self._time_scaling = np.pi * (self.n_basis_funcs - 1) * 10
         else:
@@ -920,17 +919,18 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         if not self.extend_and_trim_last:
-            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]#[..., ::-1]
+            # flip the order of raised-cosine in the:
+            #   - time axis: compression at the beginning of the interval
+            #   - basis axis: set the first basis to be the one near t = 0
+            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]
         else:
-            # temporarily add a basis element
+            # temporarily add n_trim basis element
+            # n_trim guarantees that the last basis element decays to 0.
             n_trim = int(np.ceil(self.alpha))
             self.n_basis_funcs += n_trim
             eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]
             eval_basis = eval_basis[..., :-n_trim]
             self.n_basis_funcs -= n_trim
-        if self._force_first_basis_to_one:
-            idx = np.argmin(np.abs(eval_basis[:, 0] - 1))
-            eval_basis[:idx, 0] = 1
 
         return eval_basis
 
