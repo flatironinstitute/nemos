@@ -44,8 +44,7 @@ class GLM(BaseRegressor):
     Raises
     ------
     TypeError
-        If provided `regularizer` or `observation_model` are not valid or implemented in `nemos.solver` and
-        `nemos.observation_models` respectively.
+        If provided `regularizer` or `observation_model` are not valid.
     """
 
     def __init__(
