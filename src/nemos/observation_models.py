@@ -237,8 +237,9 @@ class Observations(Base, abc.ABC):
         -----
         - The McFadden pseudo-$R^2$ is given by:
             $$
-                R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}
+                R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}.
             $$
+          *Equivalent to statsmodels [`GLMResults.pseudo_rsquared(kind='mcf')`](https://www.statsmodels.org/dev/generated/statsmodels.genmod.generalized_linear_model.GLMResults.pseudo_rsquared.html).*
         - The Cohen pseudo-$R^2$ is given by:
             $$
                \begin{aligned}
