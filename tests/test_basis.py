@@ -69,21 +69,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             self.cls(5).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
-        else:
-            basis_obj.evaluate(arraylike)
+        basis_obj.evaluate(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
@@ -237,21 +230,14 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             self.cls(5).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
-        else:
-            basis_obj.evaluate(arraylike)
+        basis_obj.evaluate(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
@@ -403,21 +389,14 @@ class TestMSplineBasis(BasisFuncsTesting):
             self.cls(5).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
-        else:
-            basis_obj.evaluate(arraylike)
+        basis_obj.evaluate(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
@@ -568,21 +547,19 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0]*6, (0,)*6, np.array([0]*6), jax.numpy.array([0]*6)]
+        "eval_input", [0, [0]*6, (0,)*6, np.array([0]*6), jax.numpy.array([0]*6)]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
+        if isinstance(eval_input, int):
+            # OrthExponentialBasis is special -- cannot accept int input
+            with pytest.raises(ValueError, match="OrthExponentialBasis requires at least as many samples"):
+                basis_obj.evaluate(eval_input)
         else:
-            basis_obj.evaluate(arraylike)
+            basis_obj.evaluate(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
@@ -766,21 +743,14 @@ class TestBSplineBasis(BasisFuncsTesting):
             self.cls(5).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
-        else:
-            basis_obj.evaluate(arraylike)
+        basis_obj.evaluate(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
@@ -948,21 +918,14 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             self.cls(5).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
-        else:
-            basis_obj.evaluate(arraylike)
+        basis_obj.evaluate(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [8, 10])
     @pytest.mark.parametrize("order", range(2, 6))
@@ -1191,7 +1154,7 @@ class TestAdditiveBasis(CombinedBasis):
             basis_obj.evaluate(*samples)
 
     @pytest.mark.parametrize(
-        "arraylike",
+        "eval_input",
         [
             [0, 0],
             [[0], [0]],
@@ -1200,20 +1163,12 @@ class TestAdditiveBasis(CombinedBasis):
             [jax.numpy.array([0]), [0]],
         ],
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) + basis.MSplineBasis(5)
-        raise_exception = not all(
-            isinstance(a, (tuple, list, np.ndarray, jax.numpy.ndarray))
-            for a in arraylike
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(*arraylike)
-        else:
-            basis_obj.evaluate(*arraylike)
+        basis_obj.evaluate(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -1418,7 +1373,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_obj.evaluate(*samples)
 
     @pytest.mark.parametrize(
-        "arraylike",
+        "eval_input",
         [
             [0, 0],
             [[0], [0]],
@@ -1427,20 +1382,12 @@ class TestMultiplicativeBasis(CombinedBasis):
             [jax.numpy.array([0]), [0]],
         ],
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_evaluate_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) * basis.MSplineBasis(5)
-        raise_exception = not all(
-            isinstance(a, (tuple, list, np.ndarray, jax.numpy.ndarray))
-            for a in arraylike
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(*arraylike)
-        else:
-            basis_obj.evaluate(*arraylike)
+        basis_obj.evaluate(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
