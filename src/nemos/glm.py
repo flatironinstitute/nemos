@@ -309,7 +309,7 @@ class GLM(BaseRegressor):
             raise NotImplementedError(
                 f"Scoring method {score_type} not implemented! "
                 "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
-                "or 'pseudo-r2-Choen'."
+                "or 'pseudo-r2-Cohen'."
             )
         return score
 

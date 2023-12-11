@@ -24,7 +24,7 @@ For subclasses derived from `Observations` to function correctly, they must impl
 
 ### Public Methods
 
-- **pseudo_r2**: Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Choen at al. 2003[^2]. 
+- **pseudo_r2**: Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Cohen at al. 2003[^2]. 
 
 
 ### Auxiliary Methods
