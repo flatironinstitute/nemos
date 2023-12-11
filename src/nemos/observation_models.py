@@ -264,15 +264,15 @@ class Observations(Base, abc.ABC):
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y)
         elif score_type == "pseudo-r2-Cohen":
-            pseudo_r2 = self._pseudo_r2_choen(predicted_rate, y)
+            pseudo_r2 = self._pseudo_r2_cohen(predicted_rate, y)
         else:
             raise NotImplementedError(f"Score {score_type} not implemented!")
         return pseudo_r2
 
-    def _pseudo_r2_choen(
+    def _pseudo_r2_cohen(
         self, predicted_rate: jnp.ndarray, y: jnp.ndarray
     ) -> jnp.ndarray:
-        r"""Choen's pseudo-$R^2$.
+        r"""Cohen's pseudo-$R^2$.
 
         Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002). See
         [`pseudo_r2`](#pseudo_r2) for additional information.
