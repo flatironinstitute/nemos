@@ -5,9 +5,8 @@ import jax.numpy as jnp
 import pytest
 from numpy.typing import NDArray
 
-import nemos as nmo
 from nemos.base_class import Base, BaseRegressor
-from nemos.utils import check_invalid_entry, multi_array_device_put
+from nemos.utils import check_invalid_entry
 
 
 @pytest.fixture

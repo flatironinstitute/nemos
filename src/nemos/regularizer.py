@@ -57,7 +57,7 @@ class Regularizer(Base, abc.ABC):
     Attributes
     ----------
     allowed_solvers :
-        List of optimizer names that are allowed for use with this solver.
+        List of solver names that are allowed for use with this regularizer.
     solver_name :
         Name of the solver being used.
     solver_kwargs :
@@ -194,7 +194,7 @@ class UnRegularized(Regularizer):
     Attributes
     ----------
     allowed_solvers : list of str
-        List of optimizer names that are allowed for this solver class.
+        List of solver names that are allowed for this regularizer class.
 
     See Also
     --------
@@ -227,7 +227,7 @@ class Ridge(Regularizer):
     Attributes
     ----------
     allowed_solvers : List[..., str]
-        A list of optimizer names that are allowed to be used with this solver.
+        A list of solver names that are allowed to be used with this regularizer.
     """
 
     allowed_solvers = [
@@ -306,7 +306,7 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
     Attributes
     ----------
     allowed_solvers : List[...,str]
-        A list of optimizer names that are allowed to be used with this solver.
+        A list of solver names that are allowed to be used with this regularizer.
     """
 
     allowed_solvers = ["ProximalGradient"]

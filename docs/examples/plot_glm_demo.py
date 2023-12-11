@@ -127,11 +127,11 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 
 # %%
 # !!! warning
-#     Each `Regularizer` has an associated attribute `Regularizer.allowed_optimizers`
+#     Each `Regularizer` has an associated attribute `Regularizer.allowed_solvers`
 #     which lists the optimizers that are suited for each optimization problem.
 #     For example, a `Ridge` is differentiable and can be fit with `GradientDescent`
 #     , `BFGS`, etc., while a `Lasso` should use the `ProximalGradient` method instead.
-#     If the provided `solver_name` is not listed in the `allowed_optimizers` this will raise an
+#     If the provided `solver_name` is not listed in the `allowed_solvers` this will raise an
 #     exception.
 
 # %%
