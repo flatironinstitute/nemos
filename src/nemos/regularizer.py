@@ -198,7 +198,7 @@ class UnRegularized(Regularizer):
 
     See Also
     --------
-    [Regularizer](./#nemos.solver.Regularizer) : Base solver class from which this class inherits.
+    [Regularizer](./#nemos.regularizer.Regularizer) : Base solver class from which this class inherits.
     """
 
     allowed_solvers = [
