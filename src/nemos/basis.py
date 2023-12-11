@@ -188,7 +188,7 @@ class Basis(abc.ABC):
             If the number of inputs doesn't match what the Basis object requires.
         """
         if len(xi) != self._n_input_dimensionality:
-            raise ValueError(
+            raise TypeError(
                 f"Input dimensionality mismatch. This basis evaluation requires {self._n_input_dimensionality} inputs, "
                 f"{len(xi)} inputs provided instead."
             )
