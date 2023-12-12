@@ -29,8 +29,9 @@ import json
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
-import sklearn.model_selection as sklearn_model_selection
 from matplotlib.patches import Rectangle
+from scripts import simulation_utils
+from sklearn import model_selection
 
 import nemos as nmo
 
@@ -162,7 +163,9 @@ print("Recovered weights: ", model.coef_)
 # **Ridge**
 
 parameter_grid = {"regularizer__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
-cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
+# in practice, you should use more folds than 2, but for the purposes of this
+# demo, 2 is sufficient.
+cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
 cls.fit(X, spikes)
 
 print("Ridge results        ")
@@ -176,7 +179,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 # **Lasso**
 
 model.set_params(regularizer=nmo.regularizer.Lasso())
-cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
+cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
 cls.fit(X, spikes)
 
 print("Lasso results        ")
@@ -194,7 +197,7 @@ mask[1, 1:-1] = 1
 
 regularizer = nmo.regularizer.GroupLasso("ProximalGradient", mask=mask)
 model.set_params(regularizer=regularizer)
-cls = sklearn_model_selection.GridSearchCV(model, parameter_grid, cv=5)
+cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
 cls.fit(X, spikes)
 
 print("\nGroup Lasso results")
@@ -233,30 +236,41 @@ plt.eventplot(np.where(spikes)[0])
 with open("coupled_neurons_params.json", "r") as fh:
     config_dict = json.load(fh)
 
-# basis weights & intercept for the GLM (both coupling and feedforward)
-# (the last coefficient is the weight of the feedforward input)
-basis_coeff = np.asarray(config_dict["coef_"])[:, :-1]
+# Neural population params
+n_neurons = 2
+coupling_filter_duration = 100
+# basis weights & intercept for the GLM (coupling only)
+coupling_basis, basis_coeff, intercept = simulation_utils.define_coupling_filters(n_neurons, coupling_filter_duration)
 
-# Mask the weights so that only the first neuron receives the imput
-basis_coeff[:, 40:] = np.abs(basis_coeff[:, 40:]) * np.array([[1.], [0.]])
+#  define a squared current stimulus
+simulation_duration = 1000
+stimulus_onset = 200
+stimulus_offset = 500
+stimulus_intensity = 1.5
+feedforward_input = np.zeros((simulation_duration, n_neurons, 1))
+# inject square input in the first neuron only
+feedforward_input[stimulus_onset: stimulus_offset, 0] = stimulus_intensity
 
-intercept = np.asarray(config_dict["intercept_"])
+# the input for the simulation will be the dot product
+# of input_coeff with the `feedforward_input`
+input_coeff = np.ones((n_neurons, 1))
 
-# basis function, inputs and initial spikes
-coupling_basis = jax.numpy.asarray(config_dict["coupling_basis"])
-feedforward_input = jax.numpy.asarray(config_dict["feedforward_input"])
-init_spikes = jax.numpy.asarray(config_dict["init_spikes"])
+# Add the input coefficient to the basis
+basis_coeff = np.hstack((basis_coeff, input_coeff))
+
+# initialize spikes for the recurrent simulation
+init_spikes = np.zeros((coupling_filter_duration, n_neurons))
 
 # %%
 # We can explore visualize the coupling filters and the input.
 
 # plot coupling functions
 n_basis_coupling = coupling_basis.shape[1]
-fig, axs = plt.subplots(2,2)
+fig, axs = plt.subplots(n_neurons,n_neurons)
 plt.suptitle("Coupling filters")
-for unit_i in range(2):
-    for unit_j in range(2):
-        axs[unit_i,unit_j].set_title(f"unit {unit_j} -> unit {unit_i}")
+for unit_i in range(n_neurons):
+    for unit_j in range(n_neurons):
+        axs[unit_i, unit_j].set_title(f"unit {unit_j} -> unit {unit_i}")
         coeff = basis_coeff[unit_i, unit_j * n_basis_coupling: (unit_j + 1) * n_basis_coupling]
         axs[unit_i, unit_j].plot(np.dot(coupling_basis, coeff))
 plt.tight_layout()
@@ -277,7 +291,7 @@ model.intercept_ = jax.numpy.asarray(intercept)
 # call simulate, with both the recurrent coupling
 # and the input
 spikes, rates = model.simulate_recurrent(
-    random_key,
+    jax.random.PRNGKey(123),
     feedforward_input=feedforward_input,
     coupling_basis_matrix=coupling_basis,
     init_y=init_spikes
@@ -298,8 +312,8 @@ patch = Rectangle((200, -0.011), 300, 0.15,  alpha=0.2, color="grey")
 p0, = plt.plot(rates[:, 0])
 p1, = plt.plot(rates[:, 1])
 
-plt.vlines(np.where(spikes[:, 0])[0], 0.00, 0.01, color=p0.get_color(), label="neu 0")
-plt.vlines(np.where(spikes[:, 1])[0], -0.01, 0.00, color=p1.get_color(), label="neu 1")
+plt.vlines(np.where(spikes[:, 0])[0], 0.00, 0.01, color=p0.get_color(), label="rate neuron 0")
+plt.vlines(np.where(spikes[:, 1])[0], -0.01, 0.00, color=p1.get_color(), label="rate neuron 1")
 plt.plot(np.exp(basis_coeff[0, -1] * feedforward_input[:, 0, 0] + intercept[0]), color='k', lw=0.8, label="stimulus")
 ax.add_patch(patch)
 plt.ylim(-0.011, .13)
