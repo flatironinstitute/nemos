@@ -232,10 +232,6 @@ plt.eventplot(np.where(spikes)[0])
 # For brevity, we will import the model parameters instead of generating
 # them on the fly.
 
-# load parameters
-with open("coupled_neurons_params.json", "r") as fh:
-    config_dict = json.load(fh)
-
 # Neural population params
 n_neurons = 2
 coupling_filter_duration = 100
