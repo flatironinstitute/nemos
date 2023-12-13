@@ -24,22 +24,21 @@ Before digging into the GLM module, let's first import the packages
  data.
 
 """
-import json
 
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
-from scripts import simulation_utils
 from sklearn import model_selection
 
 import nemos as nmo
+from nemos import simulation
 
-# Enable float64 precision (optional)
+# enable float64 precision (optional)
 jax.config.update("jax_enable_x64", True)
 
 np.random.seed(111)
-# Random design tensor. Shape (n_time_points, n_neurons, n_features).
+# random design tensor. Shape (n_time_points, n_neurons, n_features).
 X = 0.5*np.random.normal(size=(100, 1, 5))
 
 # log-rates & weights, shape (n_neurons, ) and (n_neurons, n_features) respectively.
@@ -79,12 +78,12 @@ print("Observation model:", type(model.observation_model))
 # ### Model Configuration
 # One could visualize the model hyperparameters by calling `get_params` method.
 
-# Get the glm model parameters only
+# get the glm model parameters only
 print("\nGLM model parameters:")
 for key, value in model.get_params(deep=False).items():
     print(f"\t- {key}: {value}")
 
-# Get the glm model parameters, including the all the
+# get the glm model parameters, including the all the
 # attributes
 print("\nNested parameters:")
 for key, value in model.get_params(deep=True).items():
@@ -142,7 +141,7 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 # Additionally one may provide an initial parameter guess.
 # The same exact syntax works for any configuration.
 
-# Fit a ridge regression Poisson GLM
+# fit a ridge regression Poisson GLM
 model = nmo.glm.GLM()
 model.set_params(regularizer__regularizer_strength=0.1)
 model.fit(X, spikes)
@@ -226,55 +225,108 @@ plt.eventplot(np.where(spikes)[0])
 # %%
 # ## Recurrently Coupled GLM
 # Defining a recurrent model follows the same syntax. In this example
-# we will simulate two coupled neurons. and we will inject a transient
+# we will simulate two coupled neurons, and we will inject a transient
 # input driving the rate of one of the neurons.
-#
-# For brevity, we will import the model parameters instead of generating
-# them on the fly.
 
-# Neural population params
+
+# Neural population parameters
 n_neurons = 2
 coupling_filter_duration = 100
-# basis weights & intercept for the GLM (coupling only)
-coupling_basis, basis_coeff, intercept = simulation_utils.define_coupling_filters(n_neurons, coupling_filter_duration)
-
-#  define a squared current stimulus
-simulation_duration = 1000
-stimulus_onset = 200
-stimulus_offset = 500
-stimulus_intensity = 1.5
-feedforward_input = np.zeros((simulation_duration, n_neurons, 1))
-# inject square input in the first neuron only
-feedforward_input[stimulus_onset: stimulus_offset, 0] = stimulus_intensity
-
-# the input for the simulation will be the dot product
-# of input_coeff with the `feedforward_input`
-input_coeff = np.ones((n_neurons, 1))
-
-# Add the input coefficient to the basis
-basis_coeff = np.hstack((basis_coeff, input_coeff))
-
-# initialize spikes for the recurrent simulation
-init_spikes = np.zeros((coupling_filter_duration, n_neurons))
 
 # %%
-# We can explore visualize the coupling filters and the input.
+# We can now to define coupling filters that we will use to simulate
+# the pairwise interactions between the neurons. We will model the
+# filters as a difference of two Gamma probability density function.
+# The negative component will capture inhibitory effects such as the
+# refractory period of a neuron, while the positive component will
+# describe excitation.
+
+np.random.seed(101)
+
+# Gamma parameter for the inhibitory component of the fi;ter
+inhib_a = 1
+inhib_b = 1
+
+# Gamma parameters for the excitatory component of the filter
+excit_a = np.random.uniform(1.1, 5, size=(n_neurons, n_neurons))
+excit_b = np.random.uniform(1.1, 5, size=(n_neurons, n_neurons))
+
+# define 2x2 coupling filters of the specific with create_temporal_filter
+coupling_filter_bank = np.zeros((n_neurons, n_neurons, coupling_filter_duration))
+for unit_i in range(n_neurons):
+    for unit_j in range(n_neurons):
+        coupling_filter_bank[unit_i, unit_j, :] = nmo.simulation.difference_of_gammas(
+            coupling_filter_duration,
+            inhib_a=inhib_a,
+            excit_a=excit_a[unit_i, unit_j],
+            inhib_b=inhib_b,
+            excit_b=excit_b[unit_i, unit_j],
+        )
+
+# %%
+# If we represent our filters in terms of basis functions, we can simulate our network by
+# directly calling the `simulate` method of the `nmo.glm.GLMRecurrent` class.
+
+# define a basis function
+n_basis_funcs = 20
+basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs)
+
+# approximate the coupling filters in terms of the basis function
+coupling_basis, coupling_coeff = simulation.regress_filter(coupling_filter_bank, basis)
+intercept = -4 * np.ones(n_neurons)
+
+# %%
+# We can check that our approximation worked by plotting the original filters
+# and the basis expansion
 
 # plot coupling functions
 n_basis_coupling = coupling_basis.shape[1]
-fig, axs = plt.subplots(n_neurons,n_neurons)
+fig, axs = plt.subplots(n_neurons, n_neurons)
 plt.suptitle("Coupling filters")
 for unit_i in range(n_neurons):
     for unit_j in range(n_neurons):
         axs[unit_i, unit_j].set_title(f"unit {unit_j} -> unit {unit_i}")
-        coeff = basis_coeff[unit_i, unit_j * n_basis_coupling: (unit_j + 1) * n_basis_coupling]
-        axs[unit_i, unit_j].plot(np.dot(coupling_basis, coeff))
+        coeff = coupling_coeff[unit_i, unit_j]
+        axs[unit_i, unit_j].plot(coupling_filter_bank[unit_i, unit_j], label="gamma difference")
+        axs[unit_i, unit_j].plot(np.dot(coupling_basis, coeff), ls="--", color="k", label="basis function")
+axs[0, 0].legend()
 plt.tight_layout()
 
-fig, axs = plt.subplots(1,1)
-plt.title("Feedforward inputs")
-plt.plot(feedforward_input[:, 0])
+# %%
+# Define a squared stimulus current for the first neuron, and no stimulus for
+# the second neuron
 
+# define a squared current parameters
+simulation_duration = 1000
+stimulus_onset = 200
+stimulus_offset = 500
+stimulus_intensity = 1.5
+
+# create the input tensor of shape (n_samples, n_neurons, n_dimension_stimuli)
+feedforward_input = np.zeros((simulation_duration, n_neurons, 1))
+# inject square input to the first neuron only
+feedforward_input[stimulus_onset: stimulus_offset, 0] = stimulus_intensity
+
+# plot the input
+fig, axs = plt.subplots(1,2)
+plt.suptitle("Feedforward inputs")
+axs[0].set_title("Input to neuron 0")
+axs[0].plot(feedforward_input[:, 0])
+
+axs[1].set_title("Input to neuron 1")
+axs[1].plot(feedforward_input[:, 1])
+axs[1].set_ylim(axs[0].get_ylim())
+
+
+# the input for the simulation will be the dot product
+# of input_coeff with the feedforward_input
+input_coeff = np.ones((n_neurons, 1))
+
+# stack the coefficients in a single matrix
+basis_coeff = np.hstack((coupling_coeff.reshape(n_neurons, -1), input_coeff))
+
+# initialize the spikes for the recurrent simulation
+init_spikes = np.zeros((coupling_filter_duration, n_neurons))
 
 # %%
 # We can now simulate spikes by calling the `simulate_recurrent` method.

@@ -7,5 +7,6 @@ from . import (
     observation_models,
     regularizer,
     sample_points,
+    simulation,
     utils,
 )

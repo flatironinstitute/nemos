@@ -8,10 +8,6 @@ Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
     and loading predefined parameters for testing various functionalities of the `nemos` library.
 """
-import inspect
-import json
-import os
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -62,23 +58,22 @@ def poissonGLM_coupled_model_config_simulate():
             - init_spikes (jax.numpy.ndarray): Initial spike values from the config.
             - jax.random.PRNGKey(123) (jax.random.PRNGKey): A pseudo-random number generator key.
     """
-    current_file = inspect.getfile(inspect.currentframe())
-    test_dir = os.path.dirname(os.path.abspath(current_file))
-    with open(
-        os.path.join(test_dir, "simulate_coupled_neurons_params.json"), "r"
-    ) as fh:
-        config_dict = json.load(fh)
-
     observations = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.Ridge("BFGS", regularizer_strength=0.1)
     model = nmo.glm.GLMRecurrent(
         observation_model=observations, regularizer=regularizer
     )
-    model.coef_ = jnp.asarray(config_dict["coef_"])
-    model.intercept_ = jnp.asarray(config_dict["intercept_"])
-    coupling_basis = jnp.asarray(config_dict["coupling_basis"])
-    feedforward_input = jnp.asarray(config_dict["feedforward_input"])
-    init_spikes = jnp.asarray(config_dict["init_spikes"])
+
+    n_neurons, coupling_duration, sim_duration = 2, 100, 1000
+    coupling_basis, basis_coeff, intercept = nmo.simulation.define_coupling_filters(n_neurons, coupling_duration)
+    model.coef_ = jnp.hstack([basis_coeff, 0.5 * jnp.ones((n_neurons, n_neurons))])
+    model.intercept_ = -3 * jnp.ones(n_neurons)
+    feedforward_input = jnp.c_[
+        jnp.cos(jnp.linspace(0, np.pi*4, sim_duration)),
+        jnp.sin(jnp.linspace(0, np.pi*4, sim_duration))
+    ]
+    feedforward_input = jnp.tile(feedforward_input[:, None], (1, n_neurons, 1))
+    init_spikes = jnp.zeros((coupling_duration, n_neurons))
 
     return (
         model,
