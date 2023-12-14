@@ -39,7 +39,7 @@ def difference_of_gammas(
     $$
         p(x;\; a, b) = \frac{b^a x^{a-1} e^{-x}}{\Gamma(a)},
     $$
-    where $\Gamma(a)$ refers to teh gamma function, see$^1$.
+    where $\Gamma(a)$ refers to the gamma function, see$^1$.
 
     Returns
     -------
@@ -92,8 +92,7 @@ def difference_of_gammas(
 def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     """Approximate scipy.stats.gamma based filters with basis function.
 
-    Find the ols weights for representing the filters in terms of basis functions.
-    This is done to re-use the nsl.glm.simulate method.
+    Find the Ordinary Least Squares weights for representing the filters in terms of basis functions.
 
     Parameters
     ----------
