@@ -1,5 +1,7 @@
 ![LOGO](CCN-logo-wText.png)
 
+[![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
+
 # nemos
 NEural MOdelS, a statistical modeling framework for neuroscience.
 
