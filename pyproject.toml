@@ -100,7 +100,7 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
-addopts = "--cov=src"
+addopts = "--cov=src --cov-report=xml"
 
 [tool.coverage.report]
 exclude_lines = [
