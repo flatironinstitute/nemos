@@ -93,7 +93,6 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     """Approximate scipy.stats.gamma based filters with basis function.
 
     Find the ols weights for representing the filters in terms of basis functions.
-    This is done to re-use the nsl.glm.simulate method.
 
     Parameters
     ----------
