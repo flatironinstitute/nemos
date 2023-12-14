@@ -24,4 +24,3 @@ earlier `pip install` command or uninstall them first (`pip uninstall jax
 jaxlib`). See [jax docs](https://github.com/google/jax#conda-installation) for
 details (the `pip` instructions did not work for me).
 
-![FOOT](CCN-letterFoot.png)
