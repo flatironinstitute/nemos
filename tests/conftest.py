@@ -65,8 +65,21 @@ def poissonGLM_coupled_model_config_simulate():
     )
 
     n_neurons, coupling_duration, sim_duration = 2, 100, 1000
-    coupling_basis, basis_coeff, intercept = nmo.simulation.define_coupling_filters(n_neurons, coupling_duration)
-    model.coef_ = jnp.hstack([basis_coeff, 0.5 * jnp.ones((n_neurons, n_neurons))])
+    coupling_filter_bank = np.zeros((coupling_duration, n_neurons, n_neurons))
+    for unit_i in range(n_neurons):
+        for unit_j in range(n_neurons):
+            coupling_filter_bank[:, unit_i, unit_j] = nmo.simulation.difference_of_gammas(
+                coupling_duration
+            )
+    # shrink the filters for simulation stability
+    coupling_filter_bank *= 0.8
+    basis = nmo.basis.RaisedCosineBasisLog(20)
+
+    # approximate the coupling filters in terms of the basis function
+    _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])
+    coupling_coeff = nmo.simulation.regress_filter(coupling_filter_bank, coupling_basis)
+
+    model.coef_ = jnp.hstack((coupling_coeff.reshape(n_neurons, -1), np.ones((n_neurons, 2))))
     model.intercept_ = -3 * jnp.ones(n_neurons)
     feedforward_input = jnp.c_[
         jnp.cos(jnp.linspace(0, np.pi*4, sim_duration)),
