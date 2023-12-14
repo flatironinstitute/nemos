@@ -39,7 +39,7 @@ def difference_of_gammas(
     $$
         p(x;\; a, b) = \frac{b^a x^{a-1} e^{-x}}{\Gamma(a)},
     $$
-    where $\Gamma(a)$ refers to teh gamma function, see$^1$.
+    where $\Gamma(a)$ refers to the gamma function, see$^1$.
 
     Returns
     -------
