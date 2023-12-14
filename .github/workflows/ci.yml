@@ -8,6 +8,9 @@ on:
      branches:
        - main
        - development
+   push:
+     branches:
+       - main
 
 jobs:
   tox:
