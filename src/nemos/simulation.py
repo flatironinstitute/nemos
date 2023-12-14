@@ -106,6 +106,13 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     -------
     weights:
         The weights for each neuron. Shape (n_neurons_receiver, n_neurons_sender, n_basis_funcs)
+
+    Raises
+    ------
+    ValueError
+        - If eval_basis is not two-dimensional
+        - If coupling_filters is not three-dimensional
+        - If window_size differs between eval_basis and coupling_filters
     """
     # check shapes
     if eval_basis.ndim != 2:
