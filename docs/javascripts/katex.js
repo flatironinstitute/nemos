@@ -4,7 +4,8 @@ document$.subscribe(({ body }) => {
       { left: "$$",  right: "$$",  display: true },
       { left: "$",   right: "$",   display: false },
       { left: "\\(", right: "\\)", display: false },
-      { left: "\\[", right: "\\]", display: true }
+      { left: "\\[", right: "\\]", display: true },
+      { left: "\\begin{aligned}", right: "\\end{aligned}", display: true }
     ],
   })
 })

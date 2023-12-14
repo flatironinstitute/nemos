@@ -63,7 +63,7 @@ class Basis(abc.ABC):
         pass
 
     @staticmethod
-    def _get_samples(*n_samples: int) -> Generator[NDArray, ...]:
+    def _get_samples(*n_samples: int) -> Generator[NDArray]:
         """Get equi-spaced samples for all the input dimensions.
 
         This will be used to evaluate the basis on a grid of
@@ -517,12 +517,11 @@ class MSplineBasis(SplineBasis):
         at each interior knot. The higher this number, the smoother the basis
         representation will be.
 
-
     References
     ----------
-    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action.
-       Statistical science, 3(4), 425-441.
-
+    [^1]:
+        Ramsay, J. O. (1988). Monotone regression splines in action.
+        Statistical science, 3(4), 425-441.
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
@@ -597,8 +596,9 @@ class BSplineBasis(SplineBasis):
 
     References
     ----------
-    ..[2] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
-    Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+    [^2]:
+        Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+        Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     """
 
@@ -847,9 +847,10 @@ class RaisedCosineBasis(Basis, abc.ABC):
 
 
 class RaisedCosineBasisLinear(RaisedCosineBasis):
-    """Linearly-spaced raised cosine basis functions used by Pillow et al. [2]_.
+    """Linearly-spaced raised cosine basis functions used by Pillow et al.
 
     These are "cosine bumps" that uniformly tile the space.
+
 
     Parameters
     ----------
@@ -858,10 +859,11 @@ class RaisedCosineBasisLinear(RaisedCosineBasis):
 
     References
     ----------
-    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
-       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
-       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+    [^3]:
+        Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
 
     """
 

@@ -13,7 +13,7 @@ class Test1DConvolution:
         if raise_exception:
             with pytest.raises(
                 ValueError,
-                match="Empty basis_matrix provided\. "
+                match=r"Empty basis_matrix provided\. "
                 r"The shape of basis_matrix is \(0, 0\)!",
             ):
                 utils.convolve_1d_trials(basis_matrix, vec)

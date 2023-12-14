@@ -143,3 +143,6 @@ docs/generated/
 
 # vscode
 .vscode/
+
+# nwb cahce
+nwb-cache/

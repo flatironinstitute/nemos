@@ -1,431 +1,614 @@
-"""GLM core module
-"""
-import inspect
-import warnings
-from typing import Callable, Optional, Tuple
+"""GLM core module."""
+from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import jaxopt
 from numpy.typing import NDArray
-from sklearn.exceptions import NotFittedError
 
-from .utils import convolve_1d_trials
+from . import observation_models as obs
+from . import regularizer as reg
+from . import utils
+from .base_class import BaseRegressor
+from .exceptions import NotFittedError
 
 
-class GLM:
-    """Generalized Linear Model for neural responses.
+class GLM(BaseRegressor):
+    """
+    Generalized Linear Model (GLM) for neural activity data.
 
-    No stimulus / external variables, only connections to other neurons.
+    This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
+    (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
+    the relationship between predictors and the response variable might be non-linear, and the residuals
+    don't follow a normal distribution.
 
     Parameters
     ----------
-    spike_basis_matrix : (n_basis_funcs, window_size)
-        Matrix of basis functions to use for this GLM. Most likely the output
-        of ``Basis.gen_basis_funcs()``
-    solver_name
-        Name of the solver to use when fitting the GLM. Must be an attribute of
-        ``jaxopt``.
-    solver_kwargs
-        Dictionary of keyword arguments to pass to the solver during its
-        initialization.
-    inverse_link_function
-        Function to transform outputs of convolution with basis to firing rate.
-        Must accept any number as input and return all non-negative values.
+    observation_model :
+        Observation model to use. The model describes the distribution of the neural activity.
+        Default is the Poisson model.
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        and related parameters.
+        Default is Ridge regression with gradient descent.
 
     Attributes
     ----------
-    solver
-        jaxopt solver, set during ``fit()``
-    solver_state
-        state of the solver, set during ``fit()``
-    spike_basis_coeff_ : jnp.ndarray, (n_neurons, n_basis_funcs, n_neurons)
-        Solutions for the spike basis coefficients, set during ``fit()``
-    baseline_log_fr : jnp.ndarray, (n_neurons,)
-        Solutions for bias terms, set during ``fit()``
+    intercept_ :
+        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
+        firing rate will be `jnp.exp(model.intercept_)`.
+    coef_ :
+        Basis coefficients for the model.
+    solver_state :
+        State of the solver after fitting. May include details like optimization error.
 
+    Raises
+    ------
+    TypeError
+        If provided `regularizer` or `observation_model` are not valid.
     """
 
     def __init__(
         self,
-        spike_basis_matrix: NDArray,
-        solver_name: str = "GradientDescent",
-        solver_kwargs: dict = dict(),
-        inverse_link_function: Callable[[jnp.ndarray], jnp.ndarray] = jax.nn.softplus,
+        observation_model: obs.Observations = obs.PoissonObservations(),
+        regularizer: reg.Regularizer = reg.Ridge("GradientDescent"),
     ):
-        # (n_basis_funcs, window_size)
-        self.spike_basis_matrix = spike_basis_matrix
-        self.solver_name = solver_name
-        try:
-            solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
-        except AttributeError:
+        super().__init__()
+
+        self.observation_model = observation_model
+        self.regularizer = regularizer
+
+        # initialize to None fit output
+        self.intercept_ = None
+        self.coef_ = None
+        self.solver_state = None
+
+    @property
+    def regularizer(self):
+        """Getter for the regularizer attribute."""
+        return self._regularizer
+
+    @regularizer.setter
+    def regularizer(self, regularizer: reg.Regularizer):
+        """Setter for the regularizer attribute."""
+        if not hasattr(regularizer, "instantiate_solver"):
             raise AttributeError(
-                f"module jaxopt has no attribute {solver_name}, pick a different solver!"
+                "The provided `solver` doesn't implement the `instantiate_solver` method."
             )
-        for k in solver_kwargs.keys():
-            if k not in solver_args:
-                raise NameError(
-                    f"kwarg {k} in solver_kwargs is not a kwarg for jaxopt.{solver_name}!"
-                )
-        self.solver_kwargs = solver_kwargs
-        self.inverse_link_function = inverse_link_function
+        # test solver instantiation on the GLM loss
+        try:
+            regularizer.instantiate_solver(self._predict_and_compute_loss)
+        except Exception:
+            raise TypeError(
+                "The provided `solver` cannot be instantiated on "
+                "the GLM log-likelihood."
+            )
+        self._regularizer = regularizer
 
-    def fit(
-        self,
-        spike_data: NDArray,
-        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
-    ):
-        """Fit GLM to spiking data.
+    @property
+    def observation_model(self):
+        """Getter for the observation_model attribute."""
+        return self._observation_model
 
-        Following scikit-learn API, the solutions are stored as attributes
-        ``spike_basis_coeff_`` and ``baseline_log_fr``.
+    @observation_model.setter
+    def observation_model(self, observation: obs.Observations):
+        # check that the model has the required attributes
+        # and that the attribute can be called
+        obs.check_observation_model(observation)
+        self._observation_model = observation
+
+    def _check_is_fit(self):
+        """Ensure the instance has been fitted."""
+        if (self.coef_ is None) or (self.intercept_ is None):
+            raise NotFittedError(
+                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
+            )
+
+    def _predict(
+        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
+    ) -> jnp.ndarray:
+        """
+        Predicts firing rates based on given parameters and design matrix.
+
+        This function computes the predicted firing rates using the provided parameters
+        and model design matrix `X`. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the `GLM.predict`
+        method, it does not perform any input validation, assuming that the inputs are pre-validated.
+
 
         Parameters
         ----------
-        spike_data : (n_neurons, n_timebins)
-            Spike counts arranged in a matrix.
-        init_params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
-            Initial values for the spike basis coefficients and bias terms. If
-            None, we initialize with zeros.
+        params :
+            Tuple containing the spike basis coefficients and bias terms.
+        X :
+            Predictors. Shape (n_time_bins, n_neurons, n_features).
+
+        Returns
+        -------
+        :
+            The predicted rates. Shape (n_time_bins, n_neurons).
+        """
+        Ws, bs = params
+        return self._observation_model.inverse_link_function(
+            jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
+        )
+
+    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+        """Predict rates based on fit parameters.
+
+        Parameters
+        ----------
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+
+        Returns
+        -------
+        :
+            The predicted rates with shape (n_time_bins, n_neurons).
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            - If `params` is not a JAX pytree of size two.
+            - If weights and bias terms in `params` don't have the expected dimensions.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If there's an inconsistent number of features between spike basis coefficients and `X`.
+
+        See Also
+        --------
+        - [score](./#nemos.glm.GLM.score)
+            Score predicted rates against target spike counts.
+        - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
+            Simulate neural activity in response to a feed-forward input .
+        - [simulate_recurrent (feed-forward + coupling)](../glm/#nemos.glm.GLMRecurrent.simulate_recurrent)
+            Simulate neural activity in response to a feed-forward input
+            using the GLM as a recurrent network.
+        """
+        # check that the model is fitted
+        self._check_is_fit()
+        # extract model params
+        Ws = self.coef_
+        bs = self.intercept_
+
+        X = jnp.asarray(X, dtype=float)
+
+        # check input dimensionality
+        self._check_input_dimensionality(X=X)
+        # check consistency between X and params
+        self._check_input_and_params_consistency((Ws, bs), X=X)
+        return self._predict((Ws, bs), X)
+
+    def _predict_and_compute_loss(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        X: jnp.ndarray,
+        y: jnp.ndarray,
+    ) -> jnp.ndarray:
+        r"""Predict the rate and compute the negative log-likelihood against neural activity.
+
+        This method computes the negative log-likelihood up to a constant term. Unlike `score`,
+        it does not conduct parameter checks prior to evaluation. Passed directly to the solver,
+        it serves to establish the optimization objective for learning the model parameters.
+
+        Parameters
+        ----------
+        params :
+            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+        y :
+            The target activity to compare against. Shape (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The model negative log-likehood. Shape (1,).
+
+        """
+        predicted_rate = self._predict(params, X)
+        return self._observation_model.negative_log_likelihood(predicted_rate, y)
+
+    def score(
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        score_type: Literal[
+            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+        ] = "pseudo-r2-McFadden",
+    ) -> jnp.ndarray:
+        r"""Evaluate the goodness-of-fit of the model to the observed neural data.
+
+        This method computes the goodness-of-fit score, which can either be the mean
+        log-likelihood or of two versions of the pseudo-R^2.
+        The scoring process includes validation of input compatibility with the model's
+        parameters, ensuring that the model has been previously fitted and the input data
+        are appropriate for scoring. A higher score indicates a better fit of the model
+        to the observed data.
+
+
+        Parameters
+        ----------
+        X :
+            The exogenous variables. Shape (n_time_bins, n_neurons, n_features)
+        y :
+            Neural activity arranged in a matrix. n_neurons must be the same as
+            during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
+        score_type :
+            Type of scoring: either log-likelihood or pseudo-r2.
+
+        Returns
+        -------
+        score :
+            The log-likelihood or the pseudo-$R^2$ of the current model.
+
+        Raises
+        ------
+        NotFittedError
+            If ``fit`` has not been called first with this instance.
+        ValueError
+            If attempting to simulate a different number of neurons than were
+            present during fitting (i.e., if ``init_y.shape[0] !=
+            self.intercept_.shape[0]``).
+
+        Notes
+        -----
+        The log-likelihood is not on a standard scale, its value is influenced by many factors,
+        among which the number of model parameters. The log-likelihood can assume both positive
+        and negative values.
+
+        The Pseudo-$ R^2 $ is not equivalent to the $ R^2 $ value in linear regression. While both
+        provide a measure of model fit, and assume values in the [0,1] range, the methods and
+        interpretations can differ. The Pseudo-$ R^2 $ is particularly useful for generalized linear
+        models when the interpretation of the $ R^2 $ as explained variance does not apply
+        (i.e., when the observations are not Gaussian distributed).
+
+        Why does the traditional $R^2$ is usually a poor measure of performance in GLMs?
+
+        1.  In the context of GLMs the variance and the mean of the observations are related.
+        Ignoring the relation between them can result in underestimating the model
+        performance; for instance, when we model a Poisson variable with large mean we expect an
+        equally large variance. In this scenario, even if our model perfectly captures the mean,
+        the high-variance  will result in large residuals and low $R^2$.
+        Additionally, when the mean of the observations varies, the variance will vary too. This
+        violates the "homoschedasticity" assumption, necessary  for interpreting the $R^2$ as
+        variance explained.
+        2. The $R^2$ capture the variance explained when the relationship between the observations and
+        the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
+        and the mean of the observations, compromising the interpretation of the $R^2$.
+
+        Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
+        to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
+        deviates substantially from normality for counting data with low mean (common for spike counts).
+        Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
+        for GLM modeling counting data.
+
+        Refer to the `nmo.observation_models.Observations` concrete subclasses for the likelihood and
+        pseudo-$R^2$ equations.
+
+        """
+        self._check_is_fit()
+        Ws = self.coef_
+        bs = self.intercept_
+
+        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
+
+        self._check_input_dimensionality(X, y)
+        self._check_input_n_timepoints(X, y)
+        self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
+
+        if score_type == "log-likelihood":
+            norm_constant = jax.scipy.special.gammaln(y + 1).mean()
+            score = -self._predict_and_compute_loss((Ws, bs), X, y) - norm_constant
+        elif score_type.startswith("pseudo-r2"):
+            score = self._observation_model.pseudo_r2(
+                self._predict((Ws, bs), X), y, score_type=score_type
+            )
+        else:
+            raise NotImplementedError(
+                f"Scoring method {score_type} not implemented! "
+                "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
+                "or 'pseudo-r2-Cohen'."
+            )
+        return score
+
+    def fit(
+        self,
+        X: Union[NDArray, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+    ):
+        """Fit GLM to neural activity.
+
+        Fit and store the model parameters as attributes
+        ``coef_`` and ``coef_``.
+
+        Parameters
+        ----------
+        X :
+            Predictors, shape (n_time_bins, n_neurons, n_features)
+        y :
+            Neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+        init_params :
+            Initial values for the activity basis coefficients and bias terms. If
+            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
 
         Raises
         ------
         ValueError
-            If spike_data is not two-dimensional.
-        ValueError
-            If shapes of init_params are not correct.
-        ValueError
-            If solver returns at least one NaN parameter, which means it found
-            an invalid solution. Try tuning optimization hyperparameters.
-
+            - If `init_params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
+            - If the number of neurons in the model parameters and in the inputs do not match.
+            - If `X` is not three-dimensional.
+            - If `y` is not two-dimensional.
+            - If solver returns at least one NaN parameter, which means it found
+              an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            - If `init_params` are not array-like
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
         """
-        if spike_data.ndim != 2:
-            raise ValueError(
-                "spike_data must be two-dimensional, with shape (n_neurons, n_timebins)"
-            )
-
-        n_neurons, _ = spike_data.shape
-        n_basis_funcs, window_size = self.spike_basis_matrix.shape
-
-        # Convolve spikes with basis functions. We drop the last sample, as
-        # those are the features that could be used to predict spikes in the
-        # next time bin
-        X = jnp.transpose(
-            convolve_1d_trials(self.spike_basis_matrix.T, [spike_data.T])[0], (1, 2, 0)
-        )[:, :, :-1]
-
-        # Initialize parameters
-        if init_params is None:
-            # Ws, spike basis coeffs
-            init_params = (
-                jnp.zeros((n_neurons, n_basis_funcs, n_neurons)),
-                # bs, bias terms
-                jnp.zeros(n_neurons),
-            )
-
-        if init_params[0].ndim != 3:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), but"
-                f" init_params[0] has {init_params[0].ndim} dimensions!"
-            )
-        if init_params[0].shape[0] != init_params[0].shape[-1]:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), but"
-                f" init_params[0] has shape {init_params[0].shape}!"
-            )
-        if init_params[1].ndim != 1:
-            raise ValueError(
-                "bias terms must be of shape (n_neurons,) but init_params[0] have"
-                f"{init_params[1].ndim} dimensions!"
-            )
-        if init_params[0].shape[0] != init_params[1].shape[0]:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), and"
-                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both!"
-                f"init_params[0]: {init_params[0].shape[0]}, init_params[1]: {init_params[1].shape[0]}"
-            )
-        if init_params[0].shape[0] != spike_data.shape[0]:
-            raise ValueError(
-                "spike basis coefficients must be of shape (n_neurons, n_basis_funcs, n_neurons), and"
-                "spike_data must be of shape (n_neurons, n_timebins) but n_neurons doesn't look the same in both!"
-                f"init_params[0]: {init_params[0].shape[0]}, spike_data: {spike_data.shape[0]}"
-            )
-
-        def loss(params, X, y):
-            predicted_firing_rates = self._predict(params, X)
-            return self._score(predicted_firing_rates, y)
+        # convert to jnp.ndarray & perform checks
+        X, y, init_params = self._preprocess_fit(X, y, init_params)
 
         # Run optimization
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
-        params, state = solver.run(init_params, X=X, y=spike_data[:, window_size:])
+        runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        params, state = runner(init_params, X, y)
+
+        # estimate the GLM scale
+        self.observation_model.estimate_scale(self._predict(params, X))
 
         if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
                 " Try tuning optimization hyperparameters."
             )
+
         # Store parameters
-        self.spike_basis_coeff_ = params[0]
-        self.baseline_log_fr_ = params[1]
+        self.coef_: jnp.ndarray = params[0]
+        self.intercept_: jnp.ndarray = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state = state
-        self.solver = solver
-
-    def _predict(
-        self, params: Tuple[jnp.ndarray, jnp.ndarray], convolved_spike_data: NDArray
-    ) -> jnp.ndarray:
-        """Helper function for generating predictions.
-
-        This way, can use same functions during and after fitting.
-
-        Note that the ``n_timebins`` here is not necessarily the same as in
-        public functions: in particular, this method expects the *convolved*
-        spike data, which (since we use the "valid" convolutional output) means
-        that it will have fewer timebins than the un-convolved data.
-
-        Parameters
-        ----------
-        params : ((n_neurons, n_basis_funcs, n_neurons), (n_neurons,))
-            Values for the spike basis coefficients and bias terms.
-        convolved_spike_data : (n_basis_funcs, n_neurons, n_timebins)
-            Spike counts convolved with some set of bases functions.
-
-        Returns
-        -------
-        predicted_firing_rates : (n_neurons, n_timebins)
-            The predicted firing rates.
-
-        """
-        Ws, bs = params
-        return self.inverse_link_function(
-            jnp.einsum("nbt,nbj->nt", convolved_spike_data, Ws) + bs[:, None]
-        )
-
-    def _score(
-        self, predicted_firing_rates: NDArray, target_spikes: NDArray
-    ) -> jnp.ndarray:
-        """Score the predicted firing rates against target spike counts.
-
-                This computes the Poisson negative log-likehood.
-
-                Note that you can end up with infinities in here if there are zeros in
-                ``predicted_firing_rates``. We raise a warning in that case.
-
-                Parameters
-                ----------
-                predicted_firing_rates : (n_neurons, n_timebins)
-                    The predicted firing rates.
-                target_spikes : (n_neurons, n_timebins)
-                    The target spikes to compare against
-
-                Returns
-                -------
-                score : (1,)
-                    The Poisson negative log-likehood
-
-                Notes
-                -----
-                The Poisson probably mass function is:
-
-                .. math::
-                   \frac{\lambda^k \exp(-\lambda)}{k!}
-
-                Thus, the negative log of it is:
-
-                .. math::
-        ¨           -\log{\frac{\lambda^k\exp{-\lambda}}{k!}} &= -[\log(\lambda^k)+\log(\exp{-\lambda})-\log(k!)]
-                   &= -k\log(\lambda)-\lambda+\log(\Gamma(k+1))
-
-                Because $\Gamma(k+1)=k!$, see
-                https://en.wikipedia.org/wiki/Gamma_function.
-
-                And, in our case, ``target_spikes`` is $k$ and
-                ``predicted_firing_rates`` is $\lambda$
-
-        """
-        x = target_spikes * jnp.log(predicted_firing_rates)
-        # this is a jax jit-friendly version of saying "put a 0 wherever
-        # there's a NaN". we do this because NaNs result from 0*log(0)
-        # (log(0)=-inf and any non-zero multiplied by -inf gives the expected
-        # +/- inf)
-        x = jnp.where(jnp.isnan(x), jnp.zeros_like(x), x)
-        # see above for derivation of this.
-        return jnp.mean(
-            predicted_firing_rates - x + jax.scipy.special.gammaln(target_spikes + 1)
-        )
-
-    def predict(self, spike_data: NDArray) -> jnp.ndarray:
-        """Predict firing rates based on fit parameters, for checking against existing data.
-
-        Parameters
-        ----------
-        spike_data : (n_neurons, n_timebins)
-            Spike counts arranged in a matrix. n_neurons must be the same as
-            during the fitting of this GLM instance.
-
-        Returns
-        -------
-        predicted_firing_rates : (n_neurons, n_timebins - window_size + 1)
-            The predicted firing rates.
-
-        Raises
-        ------
-        NotFittedError
-            If ``fit`` has not been called first with this instance.
-        ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``).
-
-        See Also
-        --------
-        score
-            Score predicted firing rates against target spike counts.
-        simulate
-            Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
-
-        """
-        try:
-            Ws = self.spike_basis_coeff_
-        except AttributeError:
-            raise NotFittedError(
-                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
-            )
-        bs = self.baseline_log_fr_
-        if spike_data.shape[0] != bs.shape[0]:
-            raise ValueError(
-                "Number of neurons must be the same during prediction and fitting! "
-                f"spike_data n_neurons: {spike_data.shape[0]}, "
-                f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
-            )
-        X = jnp.transpose(
-            convolve_1d_trials(self.spike_basis_matrix.T, spike_data.T[None, :, :])[0],
-            (1, 2, 0),
-        )
-        return self._predict((Ws, bs), X)
-
-    def score(self, spike_data: NDArray) -> jnp.ndarray:
-        """Score the predicted firing rates (based on fit) to the target spike counts.
-
-        This ignores the last time point of the prediction.
-
-        This computes the Poisson negative log-likehood, thus the lower the
-        number the better, and zero isn't special (you can have a negative
-        score if ``spike_data > 0`` and and ``log(predicted_firing_rates) < 0``
-
-        Parameters
-        ----------
-        spike_data : (n_neurons, n_timebins)
-            Spike counts arranged in a matrix. n_neurons must be the same as
-            during the fitting of this GLM instance.
-
-        Returns
-        -------
-        score : (1,)
-            The Poisson negative log-likehood
-
-        Raises
-        ------
-        NotFittedError
-            If ``fit`` has not been called first with this instance.
-        ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``).
-        UserWarning
-            If there are any zeros in ``self.predict(spike_data)``, since this
-            will likely lead to infinite log-likelihood values being returned.
-
-        """
-        # ignore the last time point from predict, because that corresponds to
-        # the next time step, which we have no observed data for
-        predicted_firing_rates = self.predict(spike_data)[:, :-1]
-        if (predicted_firing_rates == 0).any():
-            warnings.warn(
-                "predicted_firing_rates array contained zeros, this can "
-                "lead to infinite log-likelihood values."
-            )
-        window_size = self.spike_basis_matrix.shape[1]
-        return self._score(predicted_firing_rates, spike_data[:, window_size:])
 
     def simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
-        n_timesteps: int,
-        init_spikes: NDArray,
-    ) -> jnp.ndarray:
-        """Simulate spikes using GLM as a recurrent network, for extrapolating into the future.
+        feedforward_input: Union[NDArray, jnp.ndarray],
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Simulate neural activity in response to a feed-forward input.
 
         Parameters
         ----------
-        random_key
-            jax PRNGKey to seed simulation with.
-        n_timesteps
-            Number of time steps to simulate.
-        init_spikes : (n_neurons, window_size)
-            Spike counts arranged in a matrix. These are used to jump start the
-            forward simulation. ``n_neurons`` must be the same as during the
-            fitting of this GLM instance and ``window_size`` must be the same
-            as the bases functions (i.e., ``self.spike_basis_matrix.shape[1]``)
+        random_key :
+            PRNGKey for seeding the simulation.
+        feedforward_input :
+            External input matrix to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Expected shape: (n_time_bins, n_neurons, n_basis_input).
 
         Returns
         -------
-        simulated_spikes : (n_neurons, n_timesteps)
-            The simulated spikes.
+        simulated_activity :
+            Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
+            Shape: (n_time_bins, n_neurons).
+        firing_rates :
+            Simulated rates for each neuron over time. Shape, (n_neurons, n_time_bins).
 
         Raises
         ------
         NotFittedError
-            If ``fit`` has not been called first with this instance.
+            If the model hasn't been fitted prior to calling this method.
         ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_spikes.shape[0] !=
-            self.baseline_log_fr_.shape[0]``) or if ``init_spikes`` has the
-            wrong number of time steps (i.e., if ``init_spikes.shape[1] !=
-            self.spike_basis_matrix.shape[1]``)
+            - If the instance has not been previously fitted.
+            - If there's an inconsistency between the number of neurons in model parameters.
+            - If the number of neurons in input arguments doesn't match with model parameters.
+
 
         See Also
         --------
-        predict
-            Predict firing rates based on fit parameters, for checking against existing data.
-
+        [predict](./#nemos.glm.GLM.predict) :
+        Method to predict rates based on the model's parameters.
         """
-        try:
-            Ws = self.spike_basis_coeff_
-        except AttributeError:
-            raise NotFittedError(
-                "This GLM instance is not fitted yet. Call 'fit' with appropriate arguments."
-            )
-        bs = self.baseline_log_fr_
+        # check if the model is fit
+        self._check_is_fit()
+        Ws, bs = self.coef_, self.intercept_
+        (feedforward_input,) = self._preprocess_simulate(
+            feedforward_input, params_feedforward=(Ws, bs)
+        )
+        predicted_rate = self._predict((Ws, bs), feedforward_input)
+        return (
+            self._observation_model.sample_generator(
+                key=random_key, predicted_rate=predicted_rate
+            ),
+            predicted_rate,
+        )
 
-        if init_spikes.shape[0] != bs.shape[0]:
+
+class GLMRecurrent(GLM):
+    """
+    A Generalized Linear Model (GLM) with recurrent dynamics.
+
+    This class extends the basic GLM to capture recurrent dynamics between neurons and
+    self-connectivity, making it more suitable for simulating the activity of interconnected
+    neural populations. The recurrent GLM combines both feedforward inputs (like sensory
+    stimuli) and past neural activity to simulate or predict future neural activity.
+
+    Parameters
+    ----------
+    observation_model :
+        The observation model to use for the GLM. This defines how neural activity is generated
+        based on the underlying firing rate. Common choices include Poisson and Gaussian models.
+    regularizer :
+        The regularization scheme to use for fitting the GLM parameters.
+
+    See Also
+    --------
+    [GLM](./#nemos.glm.GLM) : Base class for the generalized linear model.
+
+    Notes
+    -----
+    - The recurrent GLM assumes that neural activity can be influenced by both feedforward
+    inputs and the past activity of the same and other neurons. This makes it particularly
+    powerful for capturing the dynamics of neural networks where neurons are interconnected.
+
+    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and include
+    coefficients, fitted status, and other model-related attributes.
+    """
+
+    def __init__(
+        self,
+        observation_model: obs.Observations = obs.PoissonObservations(),
+        regularizer: reg.Regularizer = reg.Ridge(),
+    ):
+        super().__init__(observation_model=observation_model, regularizer=regularizer)
+
+    def simulate_recurrent(
+        self,
+        random_key: jax.random.PRNGKeyArray,
+        feedforward_input: Union[NDArray, jnp.ndarray],
+        coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+        init_y: Union[NDArray, jnp.ndarray],
+    ):
+        """
+        Simulate neural activity using the GLM as a recurrent network.
+
+        This function projects neural activity into the future, employing the fitted
+        parameters of the GLM. It is capable of simulating activity based on a combination
+        of historical activity and external feedforward inputs like convolved currents, light
+        intensities, etc.
+
+        Parameters
+        ----------
+        random_key :
+            PRNGKey for seeding the simulation.
+        feedforward_input :
+            External input matrix to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Expected shape: (n_time_bins, n_neurons, n_basis_input).
+        init_y :
+            Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
+            Expected shape: (window_size, n_neurons).
+        coupling_basis_matrix :
+            Basis matrix for coupling, representing between-neuron couplings
+            and auto-correlations. Expected shape: (window_size, n_basis_coupling).
+
+        Returns
+        -------
+        simulated_activity :
+            Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
+            Shape, (n_time_bins, n_neurons).
+        firing_rates :
+            Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
+
+        Raises
+        ------
+        NotFittedError
+            If the model hasn't been fitted prior to calling this method.
+        ValueError
+            - If the instance has not been previously fitted.
+            - If there's an inconsistency between the number of neurons in model parameters.
+            - If the number of neurons in input arguments doesn't match with model parameters.
+
+
+        See Also
+        --------
+        [predict](./#nemos.glm.GLM.predict) :
+        Method to predict rates based on the model's parameters.
+
+        Notes
+        -----
+        The model coefficients (`self.coef_`) are structured such that the first set of coefficients
+        (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
+        The remaining coefficients correspond to the weights for the feed-forward input.
+
+
+        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
+        to ensure consistency in the model's input feature dimensionality.
+        """
+        # check if the model is fit
+        self._check_is_fit()
+
+        # convert to jnp.ndarray
+        coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
+
+        n_basis_coupling = coupling_basis_matrix.shape[1]
+        n_neurons = self.intercept_.shape[0]
+
+        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons :]
+        w_recurrent = self.coef_[:, : n_basis_coupling * n_neurons]
+        bs = self.intercept_
+
+        feedforward_input, init_y = self._preprocess_simulate(
+            feedforward_input,
+            params_feedforward=(w_feedforward, bs),
+            init_y=init_y,
+            params_recurrent=(w_recurrent, bs),
+        )
+
+        self._check_input_and_params_consistency(
+            (w_recurrent, bs),
+            y=init_y,
+        )
+
+        if init_y.shape[0] != coupling_basis_matrix.shape[0]:
             raise ValueError(
-                "Number of neurons must be the same during simulation and fitting! "
-                f"init_spikes n_neurons: {init_spikes.shape[0]}, "
-                f"self.baseline_log_fr_ n_neurons: {self.baseline_log_fr_.shape[0]}"
-            )
-        if init_spikes.shape[1] != self.spike_basis_matrix.shape[1]:
-            raise ValueError(
-                "init_spikes has the wrong number of time steps!"
-                f"init_spikes time steps: {init_spikes.shape[1]}, "
-                f"spike_basis_matrix window size: {self.spike_basis_matrix.shape[1]}"
+                "`init_y` and `coupling_basis_matrix`"
+                " should have the same window size! "
+                f"`init_y` window size: {init_y.shape[1]}, "
+                f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
             )
 
-        subkeys = jax.random.split(random_key, num=n_timesteps)
+        subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
+        # (n_samples, n_neurons)
+        feed_forward_contrib = jnp.einsum(
+            "ik,tik->ti", w_feedforward, feedforward_input
+        )
 
-        def scan_fn(spikes, key):
-            # (n_neurons, n_basis_funcs, 1)
-            X = jnp.transpose(
-                convolve_1d_trials(self.spike_basis_matrix.T, spikes.T[None, :, :])[0],
-                (1, 2, 0),
+        def scan_fn(
+            data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
+        ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
+            """Scan over time steps and simulate activity and rates.
+
+            This function simulates the neural activity and firing rates for each time step
+            based on the previous activity, feedforward input, and model coefficients.
+            """
+            activity, t_sample = data
+
+            # Convolve the neural activity with the coupling basis matrix
+            # Output of shape (1, n_neuron, n_basis_coupling)
+            # 1. The first dimension is time, and 1 is by construction since we are simulating 1
+            #    sample
+            # 2. Flatten to shape (n_neuron * n_basis_coupling, )
+            conv_act = utils.convolve_1d_trials(coupling_basis_matrix, activity[None])[
+                0
+            ].flatten()
+
+            # Extract the slice of the feedforward input for the current time step
+            input_slice = jax.lax.dynamic_slice(
+                feed_forward_contrib,
+                (t_sample, 0),
+                (1, feed_forward_contrib.shape[1]),
+            ).squeeze(axis=0)
+
+            # Predict the firing rate using the model coefficients
+            # Doesn't use predict because the non-linearity needs
+            # to be applied after we add the feed forward input
+            firing_rate = self._observation_model.inverse_link_function(
+                w_recurrent.dot(conv_act) + input_slice + bs
             )
-            fr = self._predict((Ws, bs), X).squeeze(-1)
-            new_spikes = jax.random.poisson(key, fr)
-            concat_spikes = jnp.column_stack((spikes[:, 1:], new_spikes))
-            return concat_spikes, new_spikes
 
-        _, simulated_spikes = jax.lax.scan(scan_fn, init_spikes, subkeys)
+            # Simulate activity based on the predicted firing rate
+            new_act = self._observation_model.sample_generator(key, firing_rate)
 
-        return simulated_spikes.T
+            # Shift of one sample the spike count window
+            # for the next iteration (i.e. remove the first counts, and
+            # stack the newly generated sample)
+            # Increase the t_sample by one
+            carry = jnp.row_stack((activity[1:], new_act)), t_sample + 1
+            return carry, (new_act, firing_rate)
+
+        _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+        simulated_activity, firing_rates = outputs
+        return simulated_activity, firing_rates

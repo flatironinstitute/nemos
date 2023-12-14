@@ -6,9 +6,10 @@ One-dimensional convolutions
 # ## Generate synthetic data
 # Generate some simulated spike counts.
 
-import numpy as np
-import matplotlib.pylab as plt
 import matplotlib.patches as patches
+import matplotlib.pylab as plt
+import numpy as np
+
 import nemos as nmo
 
 np.random.seed(10)

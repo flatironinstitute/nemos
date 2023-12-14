@@ -1,10 +1,9 @@
-"""Utility functions for data pre-processing
-"""
+"""Utility functions for data pre-processing."""
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
 from functools import partial
-from typing import Iterable, List, Literal, Optional, Union
+from typing import Any, Callable, Iterable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -52,8 +51,7 @@ def convolve_1d_trials(
     basis_matrix: ArrayLike,
     time_series: Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray],
 ) -> List[jnp.ndarray]:
-    """
-    Convolve trial time series with a basis matrix.
+    """Convolve trial time series with a basis matrix.
 
     This function checks if all trials have the same duration. If they do, it uses a fast method
     to convolve all trials with the basis matrix at once. If they do not, it falls back to convolving
@@ -82,7 +80,6 @@ def convolve_1d_trials(
         - If trials_time_series contains empty trials.
         - If the number of time points in each trial is less than the window size.
     """
-
     basis_matrix = jnp.asarray(basis_matrix)
     # check input size
     if basis_matrix.ndim != 2:
@@ -143,6 +140,7 @@ def _pad_dimension(
     Add padding to the last dimension of an array based on the convolution type.
 
     This is a helper function used by `nan_pad_conv`, which is the function we expect the user will interact with.
+
     Parameters
     ----------
     array:
@@ -218,6 +216,7 @@ def nan_pad_conv(
     ValueError
         If the window_size is not a positive integer, or if the filter_type is not one of 'causal',
         'acausal', or 'anti-causal'. Also raises ValueError if the dimensionality of conv_trials is not as expected.
+
     """
     if not isinstance(window_size, int) or window_size <= 0:
         raise ValueError(
@@ -340,9 +339,10 @@ def plot_spike_raster(
 
 
 def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.array:
-    """
-    Compute the row-wise Kronecker product between two matrices using JAX. See [1]
-    for more details on the Kronecker product.
+    r"""Compute the row-wise Kronecker product.
+
+    Compute the row-wise Kronecker product between two matrices using JAX.
+    See [\[1\]](#references) for more details on the Kronecker product.
 
     Parameters
     ----------
@@ -365,10 +365,11 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     This function computes the row-wise Kronecker product between dense matrices A and C
     using JAX for automatic differentiation and GPU acceleration.
 
-    .. [1] Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
-       Technical University of Denmark 7.15 (2008): 510.
+    References
+    ----------
+    1. Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
+    Technical University of Denmark 7.15 (2008): 510.
     """
-
     if transpose:
         A = A.T
         C = C.T
@@ -383,3 +384,78 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
         K = K.T
 
     return K
+
+
+def check_invalid_entry(array: jnp.ndarray, array_name: str) -> None:
+    """Check if the array has nans or infs.
+
+    Parameters
+    ----------
+    array:
+        The array to be checked.
+    array_name:
+        The array name.
+
+    Raises
+    ------
+        - ValueError: If any entry of `array` is either NaN or inf.
+
+    """
+    if jnp.any(jnp.isinf(array)):
+        raise ValueError(f"Input array '{array_name}' contains Infs!")
+    elif jnp.any(jnp.isnan(array)):
+        raise ValueError(f"Input array '{array_name}' contains NaNs!")
+
+
+def assert_has_attribute(obj: Any, attr_name: str):
+    """Ensure the object has the given attribute."""
+    if not hasattr(obj, attr_name):
+        raise AttributeError(
+            f"The provided object does not have the required `{attr_name}` attribute!"
+        )
+
+
+def assert_is_callable(func: Callable, func_name: str):
+    """Ensure the provided function is callable."""
+    if not callable(func):
+        raise TypeError(f"The `{func_name}` must be a Callable!")
+
+
+def assert_returns_ndarray(
+    func: Callable, inputs: Union[List[jnp.ndarray], List[float]], func_name: str
+):
+    """Ensure the function returns a jax.numpy.ndarray."""
+    array_out = func(*inputs)
+    if not isinstance(array_out, jnp.ndarray):
+        raise TypeError(f"The `{func_name}` must return a jax.numpy.ndarray!")
+
+
+def assert_differentiable(func: Callable, func_name: str):
+    """Ensure the function is differentiable."""
+    try:
+        gradient_fn = jax.grad(func)
+        gradient_fn(jnp.array(1.0))
+    except Exception as e:
+        raise TypeError(f"The `{func_name}` is not differentiable. Error: {str(e)}")
+
+
+def assert_preserve_shape(
+    func: Callable, inputs: List[jnp.ndarray], func_name: str, input_index: int
+):
+    """Check that the function preserve the input shape."""
+    result = func(*inputs)
+    if not result.shape == inputs[input_index].shape:
+        raise ValueError(f"The `{func_name}` must preserve the input array shape!")
+
+
+def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str):
+    """Check that `func` return an array containing a single scalar."""
+    assert_returns_ndarray(func, inputs, func_name)
+    array_out = func(*inputs)
+    try:
+        float(array_out)
+    except TypeError:
+        raise TypeError(
+            f"The `{func_name}` should return a scalar! "
+            f"Array of shape {array_out.shape} returned instead!"
+        )

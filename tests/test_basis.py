@@ -281,7 +281,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError,
                 match=f"Object class {self.cls.__name__} "
-                "requires >= 1 basis elements\.",
+                r"requires >= 1 basis elements\.",
             ):
                 self.cls(n_basis_funcs=n_basis_funcs)
         else:
@@ -538,7 +538,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "eval_input", [0, [0]*6, (0,)*6, np.array([0]*6), jax.numpy.array([0]*6)]
+        "eval_input", [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)]
     )
     def test_evaluate_input(self, eval_input):
         """

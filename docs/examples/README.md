@@ -1,3 +1,3 @@
 # Examples
 
-This will contain tutorials and examples of package usage.
+A gallery of tutorials on the current `nemos` functionalities.

@@ -7,6 +7,16 @@ theme:
     primary: 'light blue'                   # The primary color palette for the theme
     features:
       - navigation.tabs                    # Enable navigation tabs feature for the theme
+  markdown_extensions:
+    - md_in_html
+    - admonition
+    - tables
+
+# if footnotes is defined in theme doesn't work
+# If md_in_html is defined outside theme, it also results in
+# an error when building the docs.
+markdown_extensions:
+  - footnotes
 
 plugins:
   - search
@@ -26,6 +36,7 @@ plugins:
             docstring_style: numpy         
             show_source: true
             members_order: source
+            inherited_members: true
 
 extra_javascript:
   - javascripts/katex.js
@@ -40,4 +51,3 @@ nav:
     - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
     - For Developers: developers_notes/     # Link to the developers notes
     - Code References: reference/           # Link to the reference/ directory
-

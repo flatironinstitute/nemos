@@ -12,8 +12,9 @@ The hyperparameters required to initialize this class are:
 - The order of the spline, which should be an integer greater than 1.
 """
 
-import numpy as np
 import matplotlib.pylab as plt
+import numpy as np
+
 import nemos as nmo
 
 # Initialize hyperparameters
