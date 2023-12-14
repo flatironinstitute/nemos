@@ -4,6 +4,7 @@ from contextlib import nullcontext as does_not_raise
 import numpy as np
 import pytest
 
+import nemos.basis as basis
 import nemos.simulation as simulation
 
 
@@ -145,3 +146,24 @@ def test_regress_filter_weights_size(window_size, n_neurons_sender, n_neurons_re
                                                     f"match the third dimension of coupling_filters.")
     assert weights.shape[2] == n_basis_funcs, (f"Third dimension of weights (n_basis_funcs) does not "
                                                f"match the second dimension of eval_basis.")
+
+
+def test_least_square_correctness():
+    """
+    Test the correctness of the least square estimate by enforcing an invertible map,
+    i.e. a map for which the least-square estimator matches the original weights.
+    """
+    # set up problem dimensionality
+    ws, n_neurons_receiver, n_neurons_sender, n_basis_funcs = 100, 1, 2, 10
+    # evaluate a basis
+    _, eval_basis = basis.RaisedCosineBasisLog(n_basis_funcs).evaluate_on_grid(ws)
+    # generate random weights to define filters
+    weights = np.random.normal(size=(n_neurons_receiver, n_neurons_sender, n_basis_funcs))
+    # define filters as linear combination of basis elements
+    coupling_filt = np.einsum("ijk, tk -> tij", weights, eval_basis)
+    # recover weights by means of linear regression
+    weights_lsq = simulation.regress_filter(coupling_filt, eval_basis)
+    # check the exact matching of the filters up to numerical error
+    assert np.allclose(weights_lsq, weights)
+
+
