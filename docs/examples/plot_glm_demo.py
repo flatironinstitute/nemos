@@ -252,16 +252,19 @@ excit_a = np.random.uniform(1.1, 5, size=(n_neurons, n_neurons))
 excit_b = np.random.uniform(1.1, 5, size=(n_neurons, n_neurons))
 
 # define 2x2 coupling filters of the specific with create_temporal_filter
-coupling_filter_bank = np.zeros((n_neurons, n_neurons, coupling_filter_duration))
+coupling_filter_bank = np.zeros((coupling_filter_duration, n_neurons, n_neurons))
 for unit_i in range(n_neurons):
     for unit_j in range(n_neurons):
-        coupling_filter_bank[unit_i, unit_j, :] = nmo.simulation.difference_of_gammas(
+        coupling_filter_bank[:, unit_i, unit_j] = nmo.simulation.difference_of_gammas(
             coupling_filter_duration,
             inhib_a=inhib_a,
             excit_a=excit_a[unit_i, unit_j],
             inhib_b=inhib_b,
             excit_b=excit_b[unit_i, unit_j],
         )
+
+# shrink the filters for simulation stability
+coupling_filter_bank *= 0.8
 
 # %%
 # If we represent our filters in terms of basis functions, we can simulate our network by
@@ -272,7 +275,8 @@ n_basis_funcs = 20
 basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs)
 
 # approximate the coupling filters in terms of the basis function
-coupling_basis, coupling_coeff = simulation.regress_filter(coupling_filter_bank, basis)
+_, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])
+coupling_coeff = simulation.regress_filter(coupling_filter_bank, coupling_basis)
 intercept = -4 * np.ones(n_neurons)
 
 # %%
@@ -287,7 +291,7 @@ for unit_i in range(n_neurons):
     for unit_j in range(n_neurons):
         axs[unit_i, unit_j].set_title(f"unit {unit_j} -> unit {unit_i}")
         coeff = coupling_coeff[unit_i, unit_j]
-        axs[unit_i, unit_j].plot(coupling_filter_bank[unit_i, unit_j], label="gamma difference")
+        axs[unit_i, unit_j].plot(coupling_filter_bank[:, unit_i, unit_j], label="gamma difference")
         axs[unit_i, unit_j].plot(np.dot(coupling_basis, coeff), ls="--", color="k", label="basis function")
 axs[0, 0].legend()
 plt.tight_layout()
