@@ -156,9 +156,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError, match="evaluate\(\) missing 1 required positional argument"
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -204,13 +209,93 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [10] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) missing 1 required positional argument",
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
             basis_obj.evaluate_on_grid(*inputs)
+
+    @pytest.mark.parametrize(
+        "width ,expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (0, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (0.5, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (1.5, does_not_raise()),
+            (2, does_not_raise()),
+            (2.1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+        ],
+    )
+    def test_width_values(self, width, expectation):
+        """Test allowable widths: integer multiple of 1/2, greater than 1."""
+        with expectation:
+            self.cls(n_basis_funcs=5, width=width)
+
+    @pytest.mark.parametrize("width", [1.5, 2, 2.5])
+    def test_decay_to_zero_basis_number_match(self, width):
+        """Test that the number of basis is preserved."""
+        n_basis_funcs = 10
+        _, ev = self.cls(
+            n_basis_funcs=n_basis_funcs, width=width, enforce_decay_to_zero=True
+        ).evaluate_on_grid(2)
+        assert ev.shape[1] == n_basis_funcs, (
+            "Basis function number mismatch. "
+            f"Expected {n_basis_funcs}, got {ev.shape[1]} instead!"
+        )
+
+    @pytest.mark.parametrize(
+        "time_scaling ,expectation",
+        [
+            (
+                -1,
+                pytest.raises(
+                    ValueError, match="Only strictly positive time_scaling are allowed"
+                ),
+            ),
+            (
+                0,
+                pytest.raises(
+                    ValueError, match="Only strictly positive time_scaling are allowed"
+                ),
+            ),
+            (0.1, does_not_raise()),
+            (10, does_not_raise()),
+        ],
+    )
+    def test_time_scaling_values(self, time_scaling, expectation):
+        """Test that only positive time_scaling are allowed."""
+        with expectation:
+            self.cls(n_basis_funcs=5, time_scaling=time_scaling)
+
+    def test_time_scaling_property(self):
+        """Test that larger time_scaling results in larger departures from linearity."""
+        time_scaling = [0.1, 10, 100]
+        n_basis_funcs = 5
+        _, lin_ev = basis.RaisedCosineBasisLinear(n_basis_funcs).evaluate_on_grid(100)
+        corr = np.zeros(len(time_scaling))
+        for idx, ts in enumerate(time_scaling):
+            # set default decay to zero to get comparable basis
+            basis_log = self.cls(
+                n_basis_funcs=n_basis_funcs,
+                time_scaling=ts,
+                enforce_decay_to_zero=False,
+            )
+            _, log_ev = basis_log.evaluate_on_grid(100)
+            # compute the correlation
+            corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
+                np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
+            )
+        # check that the correlation decreases as time_scale increases
+        assert np.all(np.diff(corr) < 0), "As time scales increases, deviation from linearity should increase!"
 
 
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
@@ -278,8 +363,11 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         """
         raise_exception = n_basis_funcs < 2
         if raise_exception:
-            with pytest.raises(ValueError, match=f"Object class {self.cls.__name__} "
-                                                 r"requires >= 2 basis elements\."):
+            with pytest.raises(
+                ValueError,
+                match=f"Object class {self.cls.__name__} "
+                r"requires >= 2 basis elements\.",
+            ):
                 self.cls(n_basis_funcs=n_basis_funcs)
         else:
             self.cls(n_basis_funcs=n_basis_funcs)
@@ -309,9 +397,14 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError, match="evaluate\(\) missing 1 required positional argument"
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -357,13 +450,36 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [10] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) missing 1 required positional argument",
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
             basis_obj.evaluate_on_grid(*inputs)
+
+    @pytest.mark.parametrize(
+        "width ,expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (0, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (0.5, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+            (1.5, does_not_raise()),
+            (2, does_not_raise()),
+            (2.1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
+        ],
+    )
+    def test_width_values(self, width, expectation):
+        """Test allowable widths: integer multiple of 1/2, greater than 1."""
+        with expectation:
+            self.cls(n_basis_funcs=5, width=width)
 
 
 class TestMSplineBasis(BasisFuncsTesting):
@@ -463,9 +579,14 @@ class TestMSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError, match="evaluate\(\) missing 1 required positional argument"
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -511,9 +632,15 @@ class TestMSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [10] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) missing 1 required positional argument",
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -535,7 +662,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "eval_input", [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)]
+        "eval_input",
+        [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)],
     )
     def test_evaluate_input(self, eval_input):
         """
@@ -544,7 +672,10 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         if isinstance(eval_input, int):
             # OrthExponentialBasis is special -- cannot accept int input
-            with pytest.raises(ValueError, match="OrthExponentialBasis requires at least as many samples"):
+            with pytest.raises(
+                ValueError,
+                match="OrthExponentialBasis requires at least as many samples",
+            ):
                 basis_obj.evaluate(eval_input)
         else:
             basis_obj.evaluate(eval_input)
@@ -623,9 +754,14 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError, match="evaluate\(\) missing 1 required positional argument"
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -670,9 +806,15 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         inputs = [10] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) missing 1 required positional argument",
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -826,9 +968,14 @@ class TestBSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError, match="evaluate\(\) missing 1 required positional argument"
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -878,9 +1025,15 @@ class TestBSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [10] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) missing 1 required positional argument",
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -1017,9 +1170,14 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError, match="evaluate\(\) missing 1 required positional argument"
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -1069,9 +1227,15 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [10] * n_input
         if n_input == 0:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) missing 1 required positional argument")
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) missing 1 required positional argument",
+            )
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(TypeError, match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",)
+            expectation = pytest.raises(
+                TypeError,
+                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -1235,10 +1399,14 @@ class TestAdditiveBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
-        required_dim = basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        required_dim = (
+            basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input != required_dim:
-            expectation = pytest.raises(TypeError, match="Input dimensionality mismatch.")
+            expectation = pytest.raises(
+                TypeError, match="Input dimensionality mismatch."
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -1317,9 +1485,13 @@ class TestAdditiveBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
         inputs = [20] * n_input
-        required_dim = basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        required_dim = (
+            basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        )
         if n_input != required_dim:
-            expectation = pytest.raises(TypeError, match="Input dimensionality mismatch.")
+            expectation = pytest.raises(
+                TypeError, match="Input dimensionality mismatch."
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -1443,10 +1615,14 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
-        required_dim = basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        required_dim = (
+            basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        )
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input != required_dim:
-            expectation = pytest.raises(TypeError, match="Input dimensionality mismatch.")
+            expectation = pytest.raises(
+                TypeError, match="Input dimensionality mismatch."
+            )
         else:
             expectation = does_not_raise()
         with expectation:
@@ -1525,9 +1701,13 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
         inputs = [20] * n_input
-        required_dim = basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        required_dim = (
+            basis_a_obj._n_input_dimensionality + basis_b_obj._n_input_dimensionality
+        )
         if n_input != required_dim:
-            expectation = pytest.raises(TypeError, match="Input dimensionality mismatch.")
+            expectation = pytest.raises(
+                TypeError, match="Input dimensionality mismatch."
+            )
         else:
             expectation = does_not_raise()
         with expectation:

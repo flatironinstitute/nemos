@@ -51,7 +51,7 @@ class Basis(abc.ABC):
         self._check_n_basis_min()
 
     @abc.abstractmethod
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "evaluate" method.
 
@@ -327,7 +327,7 @@ class AdditiveBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -383,7 +383,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -527,7 +527,7 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -605,7 +605,7 @@ class BSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2):
         super().__init__(n_basis_funcs, order=order)
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -693,7 +693,7 @@ class CyclicBSplineBasis(SplineBasis):
                 f"order {self.order} specified instead!"
             )
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
@@ -793,7 +793,7 @@ class RaisedCosineBasisLinear(Basis):
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
     """
 
-    def __init__(self, n_basis_funcs: int, width: float = 1.0) -> None:
+    def __init__(self, n_basis_funcs: int, width: float = 2.0) -> None:
         super().__init__(n_basis_funcs)
         self._n_input_dimensionality = 1
         self.width = width
@@ -821,18 +821,18 @@ class RaisedCosineBasisLinear(Basis):
         Raises
         ------
         ValueError
-            If alpha < 1 or 2*alpha is not a positive integer. Values that do not match
+            If width <= 1 or 2*width is not a positive integer. Values that do not match
             this constraint will result in:
-            - No overlap between bumps (alpha < 1).
-            - Oscillatory behavior when summing the basis elements (2*alpha not integer).
+            - No overlap between bumps (width < 1).
+            - Oscillatory behavior when summing the basis elements (2*width not integer).
         """
-        if width < 1 or (not np.isclose(width * 2, round(2 * width))):
+        if width <= 1 or (not np.isclose(width * 2, round(2 * width))):
             raise ValueError(
                 f"Invalid raised cosine width. "
-                f"2*alpha must be a positive integer, 2*alpha = {2 * width} instead!"
+                f"2*width must be a positive integer, 2*width = {2 * width} instead!"
             )
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -920,13 +920,10 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         The number of basis functions.
     width :
         Width of the raised cosine. By default, it's set to 1.0.
-    extend_and_trim_last:
-        If set to True, the algorithm first constructs a basis with `n_basis_funcs + 1` elements
-        and subsequently trims off the last basis element. This ensures that the final basis element
+    enforce_decay_to_zero:
+        If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(alpha)` elements
+        and subsequently trims off the extra basis elements. This ensures that the final basis element
         concludes at a value of 0 instead of 1.
-    force_first_basis_to_one:
-        If set to True, adjusts the first basis function so that it starts with a value of one.
-        This could be useful to capture the refractory period.
 
     References
     ----------
@@ -939,12 +936,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def __init__(
         self,
         n_basis_funcs: int,
-        width: float = 1.5,
+        width: float = 2.0,
         time_scaling: float = None,
-        extend_and_trim_last: bool = True,
+        enforce_decay_to_zero: bool = True,
     ) -> None:
         super().__init__(n_basis_funcs, width=width)
-        self.extend_and_trim_last = extend_and_trim_last
+        self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self.time_scaling = 50.0
         else:
@@ -986,7 +983,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         )
         return log_spaced_pts
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
@@ -1005,7 +1002,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         (sample_pts,) = self._check_evaluate_input(sample_pts)
-        if not self.extend_and_trim_last:
+        if not self.enforce_decay_to_zero:
             # keep the last basis, i.e. do not enforce decay to zero
             # for the filter.
             eval_basis = super().evaluate(self._transform_samples(sample_pts))
