@@ -946,7 +946,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         super().__init__(n_basis_funcs, width=width)
         self.extend_and_trim_last = extend_and_trim_last
         if time_scaling is None:
-            self.time_scaling = 50.
+            self.time_scaling = 50.0
         else:
             self.time_scaling = time_scaling
 
@@ -957,7 +957,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     @time_scaling.setter
     def time_scaling(self, time_scaling):
         if time_scaling <= 0:
-            raise ValueError(f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead.")
+            raise ValueError(
+                f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
+            )
         self._time_scaling = time_scaling
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
@@ -979,7 +981,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced.
         # - as the time_scaling tends to inf, basis will be dense around 0.
-        log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(self.time_scaling + 1)
+        log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(
+            self.time_scaling + 1
+        )
         return log_spaced_pts
 
     def evaluate(self, sample_pts: NDArray) -> NDArray:
