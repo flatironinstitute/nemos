@@ -12,6 +12,33 @@ class FeaturePytree(UserDict):
 
     This is intended to be used with jax.tree_map and similar functionality.
 
+    Once you have finished using your FeaturePytree instance with nemos
+    objects, you should grab the data attribute in order to get a regular
+    dictionary representation.
+
+    WARNING: The values of FeaturePytree must be array-like objects with at
+    least 1 dimension (i.e., `v.shape[0]` is an int). In particular, this means
+    you cannot tree_map a function which converts the type of the values or
+    returns a scalar. For example, the following fails:
+
+    >>> import nemos
+    >>> d = nemos.pytrees.FeaturePytree(a=np.random.rand(10), b=np.random.rand(10))
+    >>> jax.tree_map(lambda x: x.shape, d)
+
+    As will this:
+
+    >>> import nemos
+    >>> d = nemos.pytrees.FeaturePytree(a=np.random.rand(10), b=np.random.rand(10))
+    >>> jax.tree_map(lambda x: x.sum(), d)
+
+    BUT the following will work:
+
+    >>> import nemos
+    >>> d = nemos.pytrees.FeaturePytree(a=np.random.rand(10, 1), b=np.random.rand(10, 1))
+    >>> jax.tree_map(lambda x: jnp.dot(x.T, x), d)
+
+    Because jnp.dot(x.T, x) returns an array of shape (1, 1).
+
     """
     def __init__(self, **kwargs):
         self._num_time_points = None
@@ -66,3 +93,13 @@ class FeaturePytree(UserDict):
         # Show the shape and data type of each array
         repr = [f'{k}: shape {v.shape}, dtype {v.dtype}' for k, v in self.data.items()]
         return '\n'.join(repr)
+
+    def tree_flatten(self):
+        return jax.tree_util.tree_flatten(self.data)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+         try:
+            return cls(**jax.tree_util.tree_unflatten(aux_data, children))
+         except ValueError:
+            raise ValueError("It looks like you are using jax.tree_map with a function that doesn't return an array of at least 1 dimension (e.g., jnp.sum). This is unsupported. For reference, see...")
