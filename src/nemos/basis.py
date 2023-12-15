@@ -1000,6 +1000,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         if not self.extend_and_trim_last:
             # keep the last basis, i.e. do not enforce decay to zero
             # for the filter.
