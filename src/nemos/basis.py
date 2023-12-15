@@ -919,7 +919,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     enforce_decay_to_zero:
         If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
-        concludes at a value of 0 instead of 1.
+        decays to 0.
 
     References
     ----------
