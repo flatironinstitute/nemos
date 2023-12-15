@@ -505,7 +505,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """M-spline 1-dimensional basis functions.
+    """M-spline[$^1$](references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -519,8 +519,7 @@ class MSplineBasis(SplineBasis):
 
     References
     ----------
-    [^1]:
-        Ramsay, J. O. (1988). Monotone regression splines in action.
+    1. Ramsay, J. O. (1988). Monotone regression splines in action.
         Statistical science, 3(4), 425-441.
     """
 
@@ -577,7 +576,7 @@ class MSplineBasis(SplineBasis):
 
 class BSplineBasis(SplineBasis):
     """
-    B-spline 1-dimensional basis functions.
+    B-spline[$^1$](references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -596,8 +595,7 @@ class BSplineBasis(SplineBasis):
 
     References
     ----------
-    [^2]:
-        Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    1. Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     """
@@ -774,20 +772,19 @@ class CyclicBSplineBasis(SplineBasis):
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al. [2]
-    to uniformly tile the domain (if alpha = 1) or the internal points of the domain
-     (if alpha > 1).
+    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](references)
+    to uniformly tile the internal points of the domain.
 
     Parameters
     ----------
     n_basis_funcs :
         The number of basis functions.
     width :
-        Width of the raised cosine. By default, it's set to 1.0.
+        Width of the raised cosine. By default, it's set to 2.0.
 
     References
     ----------
-    [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    1. Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
@@ -910,24 +907,23 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     """Represent log-spaced raised cosine basis functions.
 
     Similar to `RaisedCosineBasisLinear` but the basis functions are log-spaced.
-    This implementation is based on the cosine bumps used by Pillow et al. [2]
-    to uniformly tile the domain (if alpha = 1) or the internal points of the domain
-     (if alpha > 1).
+    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
+    to uniformly tile the internal points of the domain.
 
     Parameters
     ----------
     n_basis_funcs :
         The number of basis functions.
     width :
-        Width of the raised cosine. By default, it's set to 1.0.
+        Width of the raised cosine. By default, it's set to 2.0.
     enforce_decay_to_zero:
-        If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(alpha)` elements
+        If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         concludes at a value of 0 instead of 1.
 
     References
     ----------
-    [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    1. Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005

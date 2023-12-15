@@ -69,7 +69,7 @@ plt.show()
 # evaluate a log-spaced cosine raised function basis.
 
 # Instantiate the basis noting that the `RaisedCosineBasisLog` does not require an `order` parameter
-raised_cosine_log = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=10, width=1., time_scaling=50)
+raised_cosine_log = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=10, width=1.5, time_scaling=50)
 
 # Evaluate the raised cosine basis at the equi-spaced sample points
 # (same method in all Basis elements)
