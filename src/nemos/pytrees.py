@@ -102,4 +102,4 @@ class FeaturePytree(UserDict):
          try:
             return cls(**jax.tree_util.tree_unflatten(aux_data, children))
          except ValueError:
-            raise ValueError("It looks like you are using jax.tree_map with a function that doesn't return an array of at least 1 dimension (e.g., jnp.sum). This is unsupported. For reference, see...")
+            raise ValueError("It looks like you are using jax.tree_map with a function that doesn't return an array of at least 1 dimension (e.g., jnp.sum). This is unsupported. If you need to tree_map this function, consider applying it on the data attribute")
