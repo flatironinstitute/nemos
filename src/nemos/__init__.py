@@ -6,6 +6,6 @@ from . import (
     glm,
     observation_models,
     regularizer,
-    sample_points,
+    simulation,
     utils,
 )

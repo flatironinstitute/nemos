@@ -22,18 +22,8 @@ class TestGLM:
         "regularizer, expectation",
         [
             (nmo.regularizer.Ridge("BFGS"), does_not_raise()),
-            (
-                None,
-                pytest.raises(
-                    AttributeError, match="The provided `solver` doesn't implement "
-                ),
-            ),
-            (
-                nmo.regularizer.Ridge,
-                pytest.raises(
-                    TypeError, match="The provided `solver` cannot be instantiated"
-                ),
-            ),
+            (None, pytest.raises(AttributeError, match="The provided `solver` doesn't implement ")),
+            (nmo.regularizer.Ridge, pytest.raises(TypeError, match="The provided `solver` cannot be instantiated")),
         ],
     )
     def test_solver_type(self, regularizer, expectation, glm_class):
@@ -47,20 +37,8 @@ class TestGLM:
         "observation, expectation",
         [
             (nmo.observation_models.PoissonObservations(), does_not_raise()),
-            (
-                nmo.regularizer.Regularizer,
-                pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
-                ),
-            ),
-            (
-                1,
-                pytest.raises(
-                    AttributeError,
-                    match="The provided object does not have the required",
-                ),
-            ),
+            (nmo.regularizer.Regularizer, pytest.raises(AttributeError, match="The provided object does not have the required")),
+            (1, pytest.raises(AttributeError, match="The provided object does not have the required")),
         ],
     )
     def test_init_observation_type(
@@ -79,25 +57,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "n_params, expectation",
         [
-            (
-                0,
-                pytest.raises(
-                    ValueError, match="Params needs to be array-like of length two."
-                ),
-            ),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="Params needs to be array-like of length two."
-                ),
-            ),
+            (0, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+            (1, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
             (2, does_not_raise()),
-            (
-                3,
-                pytest.raises(
-                    ValueError, match="Params needs to be array-like of length two."
-                ),
-            ),
+            (3, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
         ],
     )
     def test_fit_param_length(
@@ -149,28 +112,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "dim_weights, expectation",
         [
-            (
-                0,
-                pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be of shape \(n_neurons, n_features\)",
-                ),
-            ),
-            (
-                1,
-                pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be of shape \(n_neurons, n_features\)",
-                ),
-            ),
+            (0, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+            (1, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
             (2, does_not_raise()),
-            (
-                3,
-                pytest.raises(
-                    ValueError,
-                    match=r"params\[0\] must be of shape \(n_neurons, n_features\)",
-                ),
-            ),
+            (3, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
         ],
     )
     def test_fit_weights_dimensionality(
@@ -220,23 +165,11 @@ class TestGLM:
         [
             ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
             (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), does_not_raise()),
-            (
-                dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))),
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-            (
-                0,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
+            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(TypeError, match="Initial parameters must be array-like")),
+            (0, pytest.raises(TypeError, match="Initial parameters must be array-like")),
             ({0, 1}, pytest.raises(ValueError, match=r"params\[0\] must be of shape")),
-            (
-                [jnp.zeros((1, 5)), ""],
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-            (
-                ["", jnp.zeros((1,))],
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
+            ([jnp.zeros((1, 5)), ""], pytest.raises(TypeError, match="Initial parameters must be array-like")),
+            (["", jnp.zeros((1,))], pytest.raises(TypeError, match="Initial parameters must be array-like")),
         ],
     )
     def test_fit_init_params_type(
@@ -253,19 +186,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="Model parameters have inconsistent shapes"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="Model parameters have inconsistent shapes")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="Model parameters have inconsistent shapes"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="Model parameters have inconsistent shapes")),
         ],
     )
     def test_fit_n_neuron_match_baseline_rate(
@@ -283,19 +206,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_fit_n_neuron_match_x(
@@ -313,19 +226,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_fit_n_neuron_match_y(
@@ -431,15 +334,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_tp, expectation",
         [
-            (
-                -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of time-points in X and y")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (1, pytest.raises(ValueError, match="The number of time-points in X and y")),
         ],
     )
     def test_fit_time_points_x(
@@ -456,15 +353,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_tp, expectation",
         [
-            (
-                -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of time-points in X and y")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (1, pytest.raises(ValueError, match="The number of time-points in X and y")),
         ],
     )
     def test_fit_time_points_y(
@@ -494,19 +385,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_score_n_neuron_match_x(
@@ -525,19 +406,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_score_n_neuron_match_y(
@@ -580,19 +451,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="y must be two-dimensional, with shape"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="y must be two-dimensional, with shape")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="y must be two-dimensional, with shape"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="y must be two-dimensional, with shape")),
         ],
     )
     def test_score_y_dimensionality(
@@ -641,10 +502,7 @@ class TestGLM:
         "is_fit, expectation",
         [
             (True, does_not_raise()),
-            (
-                False,
-                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-            ),
+            (False, pytest.raises(ValueError, match="This GLM instance is not fitted yet")),
         ],
     )
     def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
@@ -661,15 +519,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_tp, expectation",
         [
-            (
-                -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of time-points in X and y")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (1, pytest.raises(ValueError, match="The number of time-points in X and y")),
         ],
     )
     def test_score_time_points_x(
@@ -689,15 +541,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_tp, expectation",
         [
-            (
-                -1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of time-points in X and y")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="The number of time-points in X and y"),
-            ),
+            (1, pytest.raises(ValueError, match="The number of time-points in X and y")),
         ],
     )
     def test_score_time_points_y(
@@ -720,13 +566,7 @@ class TestGLM:
             ("pseudo-r2-McFadden", does_not_raise()),
             ("pseudo-r2-Cohen", does_not_raise()),
             ("log-likelihood", does_not_raise()),
-            (
-                "not-implemented",
-                pytest.raises(
-                    NotImplementedError,
-                    match="Scoring method not-implemented not implemented",
-                ),
-            ),
+            ("not-implemented", pytest.raises(NotImplementedError, match="Scoring method not-implemented not implemented")),
         ],
     )
     def test_score_type_r2(
@@ -767,19 +607,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_predict_n_neuron_match_x(
@@ -850,10 +680,7 @@ class TestGLM:
         "is_fit, expectation",
         [
             (True, does_not_raise()),
-            (
-                False,
-                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-            ),
+            (False, pytest.raises(ValueError, match="This GLM instance is not fitted yet")),
         ],
     )
     def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
@@ -873,19 +700,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_simulate_n_neuron_match_input(
@@ -991,19 +808,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_n_neuron, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="The number of neurons in the model parameters")),
         ],
     )
     def test_simulate_n_neuron_match_y(
@@ -1035,10 +842,7 @@ class TestGLM:
         "is_fit, expectation",
         [
             (True, does_not_raise()),
-            (
-                False,
-                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-            ),
+            (False, pytest.raises(ValueError, match="This GLM instance is not fitted yet")),
         ],
     )
     def test_simulate_is_fit(
@@ -1067,15 +871,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_tp, expectation",
         [
-            (
-                -1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
+            (-1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
+            (1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`")),
         ],
     )
     def test_simulate_time_point_match_y(
@@ -1104,15 +902,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_tp, expectation",
         [
-            (
-                -1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
+            (-1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
+            (1, pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`")),
         ],
     )
     def test_simulate_time_point_match_coupling_basis(
@@ -1143,21 +935,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_features, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError,
-                    match="Inconsistent number of features. spike basis coefficients has",
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features. spike basis coefficients has")),
             (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError,
-                    match="Inconsistent number of features. spike basis coefficients has",
-                ),
-            ),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features. spike basis coefficients has")),
         ],
     )
     def test_simulate_feature_consistency_input(

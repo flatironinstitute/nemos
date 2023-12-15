@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 from typing import Generator, Tuple
 
-import jax.numpy
 import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
@@ -52,13 +51,13 @@ class Basis(abc.ABC):
         self._check_n_basis_min()
 
     @abc.abstractmethod
-    def _evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: NDArray) -> NDArray:
         """
-        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "_evaluate" method.
+        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "evaluate" method.
 
         Parameters
         ----------
-        *xi: (number of samples, )
+        *xi: (n_samples,)
             The input samples xi[0],...,xi[n] .
         """
         pass
@@ -82,19 +81,13 @@ class Basis(abc.ABC):
         """
         return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
 
-    def evaluate(self, *xi: ArrayLike) -> NDArray:
-        """
-        Evaluate the basis set at the given samples x[0],...,x[n] using the subclass-specific "_evaluate" method.
+    def _check_evaluate_input(self, *xi: ArrayLike) -> Tuple[NDArray]:
+        """Check evaluate input.
 
         Parameters
         ----------
         xi[0],...,xi[n] :
             The input samples, each  with shape (number of samples, ).
-
-        Returns
-        -------
-        :
-            The generated basis functions.
 
         Raises
         ------
@@ -102,15 +95,16 @@ class Basis(abc.ABC):
             - If the time point number is inconsistent between inputs.
             - If the number of inputs doesn't match what the Basis object requires.
             - At least one of the samples is empty.
-        """
-        # check that the input is array-like
-        if any(
-            not isinstance(x, (list, tuple, np.ndarray, jax.numpy.ndarray)) for x in xi
-        ):
-            raise TypeError("Input samples must be array-like!")
 
-        # convert to numpy.array of floats
-        xi = tuple(np.asarray(x, dtype=float) for x in xi)
+        """
+        # check that the input is array-like (i.e., whether we can cast it to
+        # numeric arrays)
+        try:
+            # make sure array is at least 1d (so that we succeed when only
+            # passed a scalar)
+            xi = tuple(np.atleast_1d(np.asarray(x, dtype=float)) for x in xi)
+        except TypeError:
+            raise TypeError("Input samples must be array-like of floats!")
 
         # check for non-empty samples
         if self._has_zero_samples(tuple(len(x) for x in xi)):
@@ -119,10 +113,7 @@ class Basis(abc.ABC):
         # checks on input and outputs
         self._check_samples_consistency(*xi)
         self._check_input_dimensionality(xi)
-
-        eval_basis = self._evaluate(*xi)
-
-        return eval_basis
+        return xi
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -134,7 +125,8 @@ class Basis(abc.ABC):
         Parameters
         ----------
         n_samples[0],...,n_samples[n]
-            The number of samples in each axis of the grid.
+            The number of samples in each axis of the grid. The length of
+            n_samples must equal the number of combined bases.
 
         Returns
         -------
@@ -196,7 +188,7 @@ class Basis(abc.ABC):
             If the number of inputs doesn't match what the Basis object requires.
         """
         if len(xi) != self._n_input_dimensionality:
-            raise ValueError(
+            raise TypeError(
                 f"Input dimensionality mismatch. This basis evaluation requires {self._n_input_dimensionality} inputs, "
                 f"{len(xi)} inputs provided instead."
             )
@@ -335,24 +327,27 @@ class AdditiveBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def _evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: NDArray) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
         Parameters
         ----------
-        xi[0], ..., xi[n] : (number of samples, )
-            Tuple of input samples.
+        xi[0], ..., xi[n] : (n_samples,)
+            Tuple of input samples, each with the same number of samples. The
+            number of input arrays must equal the number of combined bases.
 
         Returns
         -------
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
+
         """
+        xi = self._check_evaluate_input(*xi)
         return np.hstack(
             (
-                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1.evaluate(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.evaluate(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
 
@@ -388,24 +383,26 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def _evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: NDArray) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
         Parameters
         ----------
-        xi[0], ..., xi[n] : (number of samples, )
-            Tuple of input samples.
+        xi[0], ..., xi[n] : (n_samples,)
+            Tuple of input samples, each with the same number of samples. The
+            number of input arrays must equal the number of combined bases.
 
         Returns
         -------
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
+        xi = self._check_evaluate_input(*xi)
         return np.array(
             row_wise_kron(
-                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1.evaluate(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.evaluate(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
@@ -448,7 +445,7 @@ class SplineBasis(Basis, abc.ABC):
 
         Parameters
         ----------
-        sample_pts : (number of samples, )
+        sample_pts : (n_samples,)
             The sample points.
         perc_low
             The low percentile value, between [0,1).
@@ -530,14 +527,13 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
         ----------
         sample_pts :
-            Spacing for basis functions, holding elements on the interval [min(sample_pts),
-            max(sample_pts)], shape (number of samples, )
+            Spacing for basis functions, shape (n_samples,)
 
         Returns
         -------
@@ -545,6 +541,7 @@ class MSplineBasis(SplineBasis):
             Evaluated spline basis functions, shape (n_samples, n_basis_funcs).
 
         """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -557,6 +554,25 @@ class MSplineBasis(SplineBasis):
             ],
             axis=1,
         )
+
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Evaluate the M-spline basis set on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples :
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape (n_samples,) containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+
+        """
+        return super().evaluate_on_grid(n_samples)
 
 
 class BSplineBasis(SplineBasis):
@@ -589,30 +605,32 @@ class BSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2):
         super().__init__(n_basis_funcs, order=order)
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
         Parameters
         ----------
         sample_pts :
-            The sample points at which the B-spline is evaluated.
+            The sample points at which the B-spline is evaluated, shape (n_samples,).
 
         Returns
         -------
-        NDArray
+        basis_funcs :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
         Raises
         ------
         AssertionError
-            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
+            If the sample points are not within the B-spline knots.
 
         Notes
         -----
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
+
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
@@ -621,6 +639,29 @@ class BSplineBasis(SplineBasis):
         )
 
         return basis_eval
+
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Evaluate the B-spline basis set on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples :
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape (n_samples,) containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+
+        Notes
+        -----
+        The evaluation is performed by looping over each element and using `splev` from
+        SciPy to compute the basis values.
+        """
+        return super().evaluate_on_grid(n_samples)
 
 
 class CyclicBSplineBasis(SplineBasis):
@@ -652,30 +693,28 @@ class CyclicBSplineBasis(SplineBasis):
                 f"order {self.order} specified instead!"
             )
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
-        """
-        Evaluate the B-spline basis functions with given sample points.
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
         ----------
         sample_pts :
-            The sample points at which the B-spline is evaluated. Must be a tuple of length 1.
+            The sample points at which the cyclic B-spline is evaluated, shape
+            (n_samples,).
 
         Returns
         -------
-        NDArray
+        basis_funcs :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
-
-        Raises
-        ------
-        AssertionError
-            If the sample points are not within the B-spline knots range unless `outer_ok=True`.
 
         Notes
         -----
         The evaluation is performed by looping over each element and using `splev` from
         SciPy to compute the basis values.
+
         """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
+
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -708,6 +747,29 @@ class CyclicBSplineBasis(SplineBasis):
 
         return basis_eval
 
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Evaluate the Cyclic B-spline basis set on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples :
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape (n_samples,) containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+
+        Notes
+        -----
+        The evaluation is performed by looping over each element and using `splev` from
+        SciPy to compute the basis values.
+        """
+        return super().evaluate_on_grid(n_samples)
+
 
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
@@ -720,14 +782,7 @@ class RaisedCosineBasisLinear(Basis):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    alpha :
-        Width of the raised cosine. By default, it's set to 1.0.
-
-    Attributes
-    ----------
-    n_basis_funcs :
-        The number of basis functions.
-    alpha :
+    width :
         Width of the raised cosine. By default, it's set to 1.0.
 
     References
@@ -738,30 +793,29 @@ class RaisedCosineBasisLinear(Basis):
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
     """
 
-    def __init__(self, n_basis_funcs: int, alpha: float = 1.0) -> None:
+    def __init__(self, n_basis_funcs: int, width: float = 1.0) -> None:
         super().__init__(n_basis_funcs)
         self._n_input_dimensionality = 1
-        self._check_alpha(alpha)
-        self._alpha = alpha
+        self.width = width
 
     @property
-    def alpha(self):
+    def width(self):
         """Return width of the raised cosine."""
-        return self._alpha
+        return self._width
 
-    @alpha.setter
-    def alpha(self, alpha: float):
+    @width.setter
+    def width(self, width: float):
         """Check and set width of the raised cosine."""
-        self._check_alpha(alpha)
-        self._alpha = alpha
+        self._check_width(width)
+        self._width = width
 
     @staticmethod
-    def _check_alpha(alpha: float):
+    def _check_width(width: float):
         """Validate the width value.
 
         Parameters
         ----------
-        alpha :
+        width :
             The width value to validate.
 
         Raises
@@ -772,13 +826,13 @@ class RaisedCosineBasisLinear(Basis):
             - No overlap between bumps (alpha < 1).
             - Oscillatory behavior when summing the basis elements (2*alpha not integer).
         """
-        if alpha < 1 or (not np.isclose(alpha * 2, round(2 * alpha))):
+        if width < 1 or (not np.isclose(width * 2, round(2 * width))):
             raise ValueError(
                 f"Invalid raised cosine width. "
-                f"2*alpha must be a positive integer, 2*alpha = {2*alpha} instead!"
+                f"2*alpha must be a positive integer, 2*alpha = {2 * width} instead!"
             )
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -795,7 +849,9 @@ class RaisedCosineBasisLinear(Basis):
         ------
         ValueError
             If the sample provided do not lie in [0,1].
+
         """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         if any(sample_pts < 0) or any(sample_pts > 1):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
@@ -804,7 +860,7 @@ class RaisedCosineBasisLinear(Basis):
         basis_funcs = 0.5 * (
             np.cos(
                 np.clip(
-                    np.pi * (sample_pts[:, None] - peaks[None]) / (delta * self.alpha),
+                    np.pi * (sample_pts[:, None] - peaks[None]) / (delta * self.width),
                     -np.pi,
                     np.pi,
                 )
@@ -813,6 +869,25 @@ class RaisedCosineBasisLinear(Basis):
         )
 
         return basis_funcs
+
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Evaluate the basis set on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples :
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape (n_samples,) containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+
+        """
+        return super().evaluate_on_grid(n_samples)
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
@@ -843,7 +918,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    alpha :
+    width :
         Width of the raised cosine. By default, it's set to 1.0.
     extend_and_trim_last:
         If set to True, the algorithm first constructs a basis with `n_basis_funcs + 1` elements
@@ -864,18 +939,26 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def __init__(
         self,
         n_basis_funcs: int,
-        alpha: float = 1.5,
+        width: float = 1.5,
         time_scaling: float = None,
         extend_and_trim_last: bool = True,
-        force_first_basis_to_one: bool = False,
     ) -> None:
-        super().__init__(n_basis_funcs, alpha=alpha)
+        super().__init__(n_basis_funcs, width=width)
         self.extend_and_trim_last = extend_and_trim_last
         if time_scaling is None:
-            self._time_scaling = np.pi * (self.n_basis_funcs - 1) * 10
+            self.time_scaling = 50.
         else:
-            self._time_scaling = time_scaling
-        print(f"time_scaling: {self._time_scaling}")
+            self.time_scaling = time_scaling
+
+    @property
+    def time_scaling(self):
+        return self._time_scaling
+
+    @time_scaling.setter
+    def time_scaling(self, time_scaling):
+        if time_scaling <= 0:
+            raise ValueError(f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead.")
+        self._time_scaling = time_scaling
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
@@ -893,14 +976,13 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             Transformed version of the sample points that matches the Raised Cosine basis domain,
             shape (n_samples, ).
         """
-        # This is equivalent to log-spacing the points with base self._time_scaling
-        # and then adjust the extremes to be 0 and 1.
-        # as the base tends to 1, the points will be linearly spaced.
-        # as the base tends to inf, the points will be concentrated in 0.
-        log_spaced_pts = (self._time_scaling ** sample_pts - 1) / (self._time_scaling - 1)
+        # This log-stretching of the sample axis has the following effect:
+        # - as the time_scaling tends to 0, the points will be linearly spaced.
+        # - as the time_scaling tends to inf, basis will be dense around 0.
+        log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(self.time_scaling + 1)
         return log_spaced_pts
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
@@ -919,18 +1001,21 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         if not self.extend_and_trim_last:
-            # flip the order of raised-cosine in the:
-            #   - time axis: compression at the beginning of the interval
-            #   - basis axis: set the first basis to be the one near t = 0
-            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]
+            # keep the last basis, i.e. do not enforce decay to zero
+            # for the filter.
+            eval_basis = super().evaluate(self._transform_samples(sample_pts))
         else:
             # temporarily add n_trim basis element
-            # n_trim guarantees that the last basis element decays to 0.
-            n_trim = int(np.ceil(self.alpha))
+            # guaranteeing that the last basis element decays to 0 for any width.
+            n_trim = int(np.ceil(self.width))
             self.n_basis_funcs += n_trim
-            eval_basis = super()._evaluate(self._transform_samples(sample_pts))[::-1, ::-1]
-            eval_basis = eval_basis[..., :-n_trim]
-            self.n_basis_funcs -= n_trim
+            # wrap the evaluation in a try -> finally to make sure that the original
+            # basis function number is preserved even if an exception is raised.
+            try:
+                eval_basis = super().evaluate(self._transform_samples(sample_pts))
+                eval_basis = eval_basis[..., :-n_trim]
+            finally:
+                self.n_basis_funcs -= n_trim
 
         return eval_basis
 
@@ -1034,20 +1119,23 @@ class OrthExponentialBasis(Basis):
                 f"but only {sample_pts[0].size} samples provided!"
             )
 
-    def _evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
         ----------
         sample_pts
-            Spacing for basis functions, holding elements on the interval [0, inf), shape (n_pts,).
+            Spacing for basis functions, holding elements on the interval [0,
+            inf), shape (n_samples,).
 
         Returns
         -------
         basis_funcs
-            Evaluated exponentially decaying basis functions,
-            numerically orthogonalized, shape (number of basis, number of samples).
+            Evaluated exponentially decaying basis functions, numerically
+            orthogonalized, shape (n_samples, n_basis_funcs)
+
         """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
         self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
@@ -1057,6 +1145,26 @@ class OrthExponentialBasis(Basis):
         return scipy.linalg.orth(
             np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
         )
+
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Evaluate the basis set on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples :
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape (n_samples,) containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Evaluated exponentially decaying basis functions, numerically
+            orthogonalized, shape (n_samples, n_basis_funcs)
+
+        """
+        return super().evaluate_on_grid(n_samples)
 
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray):
@@ -1116,7 +1224,8 @@ def bspline(
     Parameters
     ----------
     sample_pts :
-        An array containing sample points for which B-spline basis needs to be evaluated.
+        An array containing sample points for which B-spline basis needs to be evaluated,
+        shape (n_samples,)
     knots :
         An array containing knots for the B-spline basis. The knots are sorted in ascending order.
     order :

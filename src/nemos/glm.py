@@ -44,8 +44,7 @@ class GLM(BaseRegressor):
     Raises
     ------
     TypeError
-        If provided `regularizer` or `observation_model` are not valid or implemented in `nemos.solver` and
-        `nemos.observation_models` respectively.
+        If provided `regularizer` or `observation_model` are not valid.
     """
 
     def __init__(
@@ -77,7 +76,7 @@ class GLM(BaseRegressor):
             )
         # test solver instantiation on the GLM loss
         try:
-            regularizer.instantiate_solver(self._score)
+            regularizer.instantiate_solver(self._predict_and_compute_loss)
         except Exception:
             raise TypeError(
                 "The provided `solver` cannot be instantiated on "
@@ -181,13 +180,13 @@ class GLM(BaseRegressor):
         self._check_input_and_params_consistency((Ws, bs), X=X)
         return self._predict((Ws, bs), X)
 
-    def _score(
+    def _predict_and_compute_loss(
         self,
         params: Tuple[jnp.ndarray, jnp.ndarray],
         X: jnp.ndarray,
         y: jnp.ndarray,
     ) -> jnp.ndarray:
-        r"""Score the predicted rates against target neural activity.
+        r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
         This method computes the negative log-likelihood up to a constant term. Unlike `score`,
         it does not conduct parameter checks prior to evaluation. Passed directly to the solver,
@@ -222,10 +221,11 @@ class GLM(BaseRegressor):
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
         This method computes the goodness-of-fit score, which can either be the mean
-        log-likelihood or the pseudo-R^2. The scoring process includes validation of
-        input compatibility with the model's parameters, ensuring that the model
-        has been previously fitted and the input data are appropriate for scoring. A
-        higher score indicates a better fit of the model to the observed data.
+        log-likelihood or of two versions of the pseudo-R^2.
+        The scoring process includes validation of input compatibility with the model's
+        parameters, ensuring that the model has been previously fitted and the input data
+        are appropriate for scoring. A higher score indicates a better fit of the model
+        to the observed data.
 
 
         Parameters
@@ -300,7 +300,7 @@ class GLM(BaseRegressor):
 
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-            score = -self._score((Ws, bs), X, y) - norm_constant
+            score = -self._predict_and_compute_loss((Ws, bs), X, y) - norm_constant
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
                 self._predict((Ws, bs), X), y, score_type=score_type
@@ -309,7 +309,7 @@ class GLM(BaseRegressor):
             raise NotImplementedError(
                 f"Scoring method {score_type} not implemented! "
                 "`score_type` must be either 'log-likelihood', 'pseudo-r2-McFadden', "
-                "or 'pseudo-r2-Choen'."
+                "or 'pseudo-r2-Cohen'."
             )
         return score
 
@@ -352,7 +352,7 @@ class GLM(BaseRegressor):
         X, y, init_params = self._preprocess_fit(X, y, init_params)
 
         # Run optimization
-        runner = self.regularizer.instantiate_solver(self._score)
+        runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
         params, state = runner(init_params, X, y)
 
         # estimate the GLM scale

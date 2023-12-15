@@ -40,7 +40,7 @@ Additionally, the class provides auxiliary methods for checking that the solver 
 
 ### Auxiliary Methods
 
-- **`_check_solver`**: This method ensures that the provided solver name is in the list of allowed optimizers for the specific `Regularizer` object. This is crucial for maintaining consistency and correctness in the solver's operation.
+- **`_check_solver`**: This method ensures that the provided solver name is in the list of allowed solvers for the specific `Regularizer` object. This is crucial for maintaining consistency and correctness in the solver's operation.
 
 - **`_check_solver_kwargs`**: This method checks if the provided keyword arguments are valid for the specified solver. This helps in catching and preventing potential errors in solver configuration.
 
@@ -50,7 +50,7 @@ The `UnRegularized` class extends the base `Regularizer` class and is designed s
 
 ### Attributes
 
-- **`allowed_solvers`**: A list of string identifiers for the optimization algorithms that can be used with this solver class. The optimization methods listed here are specifically suitable for unregularized optimization problems.
+- **`allowed_solvers`**: A list of string identifiers for the optimization solvers that can be used with this regularizer class. The optimization methods listed here are specifically suitable for unregularized optimization problems.
 
 ### Methods
 
@@ -72,7 +72,7 @@ The `Ridge` class extends the `Regularizer` class to handle optimization problem
 
 ### Attributes
 
-- **`allowed_solvers`**: A list containing string identifiers of optimization algorithms compatible with Ridge regularization.
+- **`allowed_solvers`**: A list containing string identifiers of optimization solvers compatible with Ridge regularization.
   
 - **`regularizer_strength`**: A floating-point value determining the strength of the Ridge regularization. Higher values correspond to stronger regularization which tends to drive the model parameters towards zero.
 
@@ -97,7 +97,7 @@ optim_results = runner(init_params, exog_vars, endog_vars)
 `ProxGradientRegularizer` class extends the `Regularizer` class to utilize the Proximal Gradient method for optimization. It leverages the `jaxopt` library's Proximal Gradient optimizer, introducing the functionality of a proximal operator.
 
 ### Attributes:
-- **`allowed_solvers`**: A list containing string identifiers of optimization algorithms compatible with this solver, specifically the "ProximalGradient".
+- **`allowed_solvers`**: A list containing string identifiers of optimization solvers compatible with this solver, specifically the "ProximalGradient".
 
 ### Methods:
 - **`__init__`**: The constructor method for the `ProxGradientRegularizer` class. It accepts the name of the solver algorithm (`solver_name`), an optional dictionary of additional keyword arguments (`solver_kwargs`) for the solver, the regularization strength (`regularizer_strength`), and an optional mask array (`mask`).
@@ -149,7 +149,7 @@ When developing a functional (i.e., concrete) `Regularizer` class:
 - **Must** inherit from `Regularizer` or one of its derivatives.
 - **Must** implement the `instantiate_solver` method to tailor the solver instantiation based on the provided loss function.
 - For any Proximal Gradient method, **must** include a `get_prox_operator` method to define the proximal operator.
-- **Must** possess an `allowed_solvers` attribute to list the optimizer names that are permissible to be used with this solver.
+- **Must** possess an `allowed_solvers` attribute to list the solver names that are permissible to be used with this regularizer.
 - **May** embed additional attributes and methods such as `mask` and `_check_mask` if required by the specific Solver subclass for handling special optimization scenarios.
 - **May** include a `regularizer_strength` attribute to control the strength of the regularization in scenarios where regularization is applicable.
 - **May** rely on a custom solver implementation for specific optimization problems, but the implementation **must** adhere to the `jaxopt` API.

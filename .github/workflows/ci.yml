@@ -8,6 +8,9 @@ on:
      branches:
        - main
        - development
+   push:
+     branches:
+       - main
 
 jobs:
   tox:
@@ -34,6 +37,11 @@ jobs:
 
       - name: Run tox
         run: tox -e py
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   check:
     if: always()

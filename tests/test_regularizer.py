@@ -89,7 +89,7 @@ class TestUnRegularized:
         """Test that the solver runs."""
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        runner = self.cls("GradientDescent").instantiate_solver(model._score)
+        runner = self.cls("GradientDescent").instantiate_solver(model._predict_and_compute_loss)
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
@@ -99,14 +99,14 @@ class TestUnRegularized:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(
-            model._score
+            model._predict_and_compute_loss
         )
         runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(
-            model._score
+            model._predict_and_compute_loss
         )
         runner_scipy = self.cls(
             "ScipyMinimize", {"method": "BFGS", "tol": 10**-12}
-        ).instantiate_solver(model._score)
+        ).instantiate_solver(model._predict_and_compute_loss)
         weights_gd, intercepts_gd = runner_gd(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -135,7 +135,7 @@ class TestUnRegularized:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
-        runner_bfgs = regularizer.instantiate_solver(model._score)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -229,7 +229,7 @@ class TestRidge:
         """Test that the solver runs."""
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        runner = self.cls("GradientDescent").instantiate_solver(model._score)
+        runner = self.cls("GradientDescent").instantiate_solver(model._predict_and_compute_loss)
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
@@ -239,14 +239,14 @@ class TestRidge:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(
-            model._score
+            model._predict_and_compute_loss
         )
         runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(
-            model._score
+            model._predict_and_compute_loss
         )
         runner_scipy = self.cls(
             "ScipyMinimize", {"method": "BFGS", "tol": 10**-12}
-        ).instantiate_solver(model._score)
+        ).instantiate_solver(model._predict_and_compute_loss)
         weights_gd, intercepts_gd = runner_gd(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -275,7 +275,7 @@ class TestRidge:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
-        runner_bfgs = regularizer.instantiate_solver(model._score)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -352,7 +352,7 @@ class TestLasso:
         """Test that the solver runs."""
 
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        runner = self.cls("ProximalGradient").instantiate_solver(model._score)
+        runner = self.cls("ProximalGradient").instantiate_solver(model._predict_and_compute_loss)
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_match_statsmodels(self, poissonGLM_model_instantiation):
@@ -362,7 +362,7 @@ class TestLasso:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         regularizer = self.cls("ProximalGradient", {"tol": 10**-12})
-        runner = regularizer.instantiate_solver(model._score)
+        runner = regularizer.instantiate_solver(model._predict_and_compute_loss)
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         # instantiate the glm with statsmodels
@@ -481,7 +481,7 @@ class TestGroupLasso:
         mask[1, 2:] = 1
         mask = jnp.asarray(mask)
 
-        runner = self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+        runner = self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
@@ -516,9 +516,9 @@ class TestGroupLasso:
             with pytest.raises(
                 ValueError, match="Incorrect group assignment. " "Some of the features"
             ):
-                self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+                self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
         else:
-            self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+            self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
 
     @pytest.mark.parametrize("set_entry", [0, 1, -1, 2, 2.5])
     def test_mask_validity_entries(self, set_entry, poissonGLM_model_instantiation):
@@ -536,9 +536,9 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(ValueError, match="Mask elements be 0s and 1s"):
-                self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+                self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
         else:
-            self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+            self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
 
     @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
     def test_mask_dimension(self, n_dim, poissonGLM_model_instantiation):
@@ -565,9 +565,9 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(ValueError, match="`mask` must be 2-dimensional"):
-                self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+                self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
         else:
-            self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+            self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
 
     @pytest.mark.parametrize("n_groups", [0, 1, 2])
     def test_mask_n_groups(self, n_groups, poissonGLM_model_instantiation):
@@ -586,9 +586,9 @@ class TestGroupLasso:
 
         if raise_exception:
             with pytest.raises(ValueError, match=r"Empty mask provided! Mask has "):
-                self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+                self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
         else:
-            self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+            self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
 
     def test_group_sparsity_enforcement(
         self, group_sparse_poisson_glm_model_instantiation
@@ -608,7 +608,7 @@ class TestGroupLasso:
         mask[1, ~zeros_true] = 1
         mask = jnp.asarray(mask, dtype=jnp.float32)
 
-        runner = self.cls("ProximalGradient", mask).instantiate_solver(model._score)
+        runner = self.cls("ProximalGradient", mask).instantiate_solver(model._predict_and_compute_loss)
         params, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
 
         zeros_est = params[0] == 0
