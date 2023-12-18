@@ -28,6 +28,8 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
+from .pytrees import FeaturePytree
+from .base_class import DESIGN_INPUT_TYPE
 
 def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
     """Euclidean norm of the group.
@@ -72,9 +74,9 @@ _vmap_norm2_masked_2 = jax.vmap(_vmap_norm2_masked_1, in_axes=(None, 0), out_axe
 
 
 def prox_group_lasso(
-    params: Tuple[jnp.ndarray, jnp.ndarray],
+    params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
     regularizer_strength: float,
-    mask: jnp.ndarray,
+    mask: DESIGN_INPUT_TYPE,
     scaling: float = 1.0,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     r"""Proximal gradient operator for group Lasso.
@@ -82,11 +84,13 @@ def prox_group_lasso(
     Parameters
     ----------
     params:
-        Weights, shape (n_neurons, n_features); intercept, shape (n_neurons, )
+        Weights, shape (n_neurons, n_features) or pytree of same; intercept,
+        shape (n_neurons, )
     regularizer_strength:
         The regularization hyperparameter.
     mask:
         ND array of 0,1 as float32, feature mask. size (n_groups, n_features)
+        or pytree of same.
     scaling:
         The scaling factor for the group-lasso (it will be set
         depending on the step-size).
@@ -126,6 +130,7 @@ def prox_group_lasso(
     [^1]:
         Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
         Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
+
     """
     weights, intercepts = params
     # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)

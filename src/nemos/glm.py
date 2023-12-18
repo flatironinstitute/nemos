@@ -8,9 +8,8 @@ from numpy.typing import NDArray
 from . import observation_models as obs
 from . import regularizer as reg
 from . import utils
-from .base_class import BaseRegressor
+from .base_class import BaseRegressor, DESIGN_INPUT_TYPE
 from .exceptions import NotFittedError
-from .pytrees import FeaturePytree
 
 
 class GLM(BaseRegressor):
@@ -105,7 +104,7 @@ class GLM(BaseRegressor):
             )
 
     def _predict(
-        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -121,7 +120,7 @@ class GLM(BaseRegressor):
         params :
             Tuple containing the spike basis coefficients and bias terms.
         X :
-            Predictors. Shape (n_time_bins, n_neurons, n_features).
+            Predictors.
 
         Returns
         -------
@@ -129,17 +128,22 @@ class GLM(BaseRegressor):
             The predicted rates. Shape (n_time_bins, n_neurons).
         """
         Ws, bs = params
+        # First, multiply each feature by its corresponding coefficient
+        mapped = jax.tree_map(lambda w, x: jnp.einsum('ik,tik->ti', w, x),
+                              Ws, X)
         return self._observation_model.inverse_link_function(
-            jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
+            # then sum across all features and add the intercept, before
+            # passing to the inverse link function
+            jax.tree_util.tree_reduce(sum, mapped) + bs[None, :]
         )
 
-    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters.
 
         Parameters
         ----------
         X :
-            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
 
         Returns
         -------
@@ -173,7 +177,7 @@ class GLM(BaseRegressor):
         Ws = self.coef_
         bs = self.intercept_
 
-        X = jnp.asarray(X, dtype=float)
+        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -183,8 +187,8 @@ class GLM(BaseRegressor):
 
     def _predict_and_compute_loss(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        X: jnp.ndarray,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
@@ -196,11 +200,11 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         params :
-            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
+            2-tuple containing the spike basis coefficients and bias terms.
         X :
-            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+            Predictors.
         y :
-            The target activity to compare against. Shape (n_time_bins, n_neurons).
+            Target neural activity.
 
         Returns
         -------
@@ -293,7 +297,8 @@ class GLM(BaseRegressor):
         Ws = self.coef_
         bs = self.intercept_
 
-        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
+        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
+        y = jnp.asarray(y, dtype=float)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -316,9 +321,9 @@ class GLM(BaseRegressor):
 
     def fit(
         self,
-        X: FeaturePytree,
-        y: FeaturePytree,
-        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        X: DESIGN_INPUT_TYPE,
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Optional[Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -328,12 +333,15 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, shape (n_time_bins, n_neurons, n_features)
+            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
         y :
-            Neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+            Target neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
         init_params :
-            Initial values for the activity basis coefficients and bias terms. If
-            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
+            2-tuple of initial parameter values: (coefficients, intercepts). If
+            None, we initialize coefficients with zeros, intercepts with the
+            log of the mean neural activity. coefficients is an array of shape
+            (n_neurons, n_features) or pytree of same, intercepts is an array
+            of shape (n_neurons,)
 
         Raises
         ------
@@ -348,6 +356,7 @@ class GLM(BaseRegressor):
         TypeError
             - If `init_params` are not array-like
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+
         """
         # convert to jnp.ndarray & perform checks
         X, y, init_params = self._preprocess_fit(X, y, init_params)
@@ -359,7 +368,7 @@ class GLM(BaseRegressor):
         # estimate the GLM scale
         self.observation_model.estimate_scale(self._predict(params, X))
 
-        if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
+        if utils.pytree_any(jnp.any, jax.tree_map(jnp.isnan, params[0])) or jnp.isnan(params[1]).any():
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
                 " Try tuning optimization hyperparameters."
@@ -376,7 +385,7 @@ class GLM(BaseRegressor):
     def simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
-        feedforward_input: Union[NDArray, jnp.ndarray],
+        feedforward_input: DESIGN_INPUT_TYPE,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
@@ -387,7 +396,7 @@ class GLM(BaseRegressor):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_time_bins, n_neurons, n_basis_input).
+            Array of shape (n_time_bins, n_neurons, n_basis_input) or pytree of same.
 
         Returns
         -------

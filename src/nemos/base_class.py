@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
 from .pytrees import FeaturePytree
-from .utils import check_invalid_entry
+from .utils import check_invalid_entry, pytree_any
 
 DESIGN_INPUT_TYPE = Union[NDArray, jnp.ndarray, FeaturePytree]
 
@@ -213,8 +213,8 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_and_convert_params(
-        params: Tuple[FeaturePytree, ArrayLike], data_type: Optional[jnp.dtype] = None
-    ) -> Tuple[FeaturePytree, jnp.ndarray]:
+        params: Tuple[DESIGN_INPUT_TYPE, ArrayLike], data_type: Optional[jnp.dtype] = None
+    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
 
@@ -223,21 +223,20 @@ class BaseRegressor(Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
+        if len(params) != 2:
+            raise ValueError("Params needs to be of length two.")
+
         try:
             params = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), params)
         except (ValueError, TypeError):
             raise TypeError(
-                "Initial parameters must be array-like of array-like objects "
+                "Initial parameters must be be array-like objects (or pytrees of array-like objects) "
                 "with numeric data-type!"
             )
 
-        if len(params) != 2:
-            raise ValueError("Params needs to be of length two.")
-
-        check_param_tree = jax.tree_map(lambda x: x.ndim != 2, params[0].data)
-        if jax.tree_util.tree_reduce(any, check_param_tree):
+        if pytree_any(lambda x: x.ndim != 2, params[0]):
             raise ValueError(
-                "params[0] must be a nemos.pytree.FeatureTree with array leafs "
+                "params[0] must be an array or nemos.pytree.FeaturePytree with array leafs "
                 "of shape (n_neurons, n_features)."
             )
 
@@ -250,7 +249,8 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_input_dimensionality(
-        X: Optional[jnp.ndarray] = None, y: Optional[jnp.ndarray] = None
+        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+        y: Optional[jnp.ndarray] = None
     ):
         if not (y is None):
             if y.ndim != 2:
@@ -258,35 +258,37 @@ class BaseRegressor(Base, abc.ABC):
                     "y must be two-dimensional, with shape (n_timebins, n_neurons)"
                 )
         if not (X is None):
-            if X.ndim != 3:
+            if pytree_any(lambda x: x.ndim != 3, X):
                 raise ValueError(
-                    "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features)"
+                    "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features) or pytree of the same"
                 )
 
     @staticmethod
     def _check_input_and_params_consistency(
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        X: Optional[jnp.ndarray] = None,
+        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
-        """
-        Validate the number of neurons in model parameters and input arguments.
+        """Validate the number of neurons in model parameters and input arguments.
 
         Raises
         ------
-            ValueError
-                - if the number of neurons is inconsistent across the model parameters (`params`) and
-                any additional inputs (`X` or `y` when provided).
-                - if the number of features is inconsistent between params[1] and X (when provided).
+        ValueError
+            - if the number of neurons is inconsistent across the model
+              parameters (`params`) and any additional inputs (`X` or `y` when
+              provided).
+            - if the number of features is inconsistent between params[1] and X
+              (when provided).
 
         """
-        n_neurons = params[0].shape[0]
-        if n_neurons != params[1].shape[0]:
+        n_neurons = params[1].shape[0]
+        if pytree_any(lambda x: x.shape[0] != n_neurons, params[0]):
             raise ValueError(
                 "Model parameters have inconsistent shapes. "
                 "Spike basis coefficients must be of shape (n_neurons, n_features), and "
                 "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both! "
-                f"Coefficients n_neurons: {params[0].shape[0]}, bias n_neurons: {params[1].shape[0]}"
+                f"Coefficients n_neurons: {jax.tree_map(lambda x: x.shape[0], params[0])}, "
+                f"bias n_neurons: {params[1].shape[0]}"
             )
 
         if y is not None:
@@ -299,35 +301,49 @@ class BaseRegressor(Base, abc.ABC):
                 )
 
         if X is not None:
-            if X.shape[1] != n_neurons:
+            if pytree_any(lambda x: x.shape[1] != n_neurons, X):
                 raise ValueError(
                     "The number of neurons in the model parameters and in the inputs"
                     "must match."
                     f"parameters has n_neurons: {n_neurons}, "
-                    f"the input provided has n_neurons: {X.shape[1]}"
+                    f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}"
                 )
-            if params[0].shape[1] != X.shape[2]:
+            only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(params[0], FeaturePytree)
+            only_coeff_pytree = not isinstance(X, FeaturePytree) and isinstance(params[0], FeaturePytree)
+            if only_X_pytree or only_coeff_pytree:
+                raise TypeError(f"X and params[0] must be the same type, but X is {type(X)} and "
+                                f"params[0] is {type(params[0])}")
+            if pytree_any(lambda p, x: p.shape[1] != x.shape[2], params[0], X):
                 raise ValueError(
                     "Inconsistent number of features. "
-                    f"spike basis coefficients has {params[0].shape[1]} features, "
-                    f"X has {X.shape[2]} features instead!"
+                    f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
+                    f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!"
                 )
 
     @staticmethod
-    def _check_input_n_timepoints(X: jnp.ndarray, y: jnp.ndarray):
-        if X.shape[0] != y.shape[0]:
+    def _check_input_n_timepoints(X: Union[FeaturePytree, jnp.ndarray], y: jnp.ndarray):
+        X_timepts = jax.tree_map(lambda x: x.shape[0], X)
+        if isinstance(X, FeaturePytree):
+            # then we also need to ensure that all of X's leaves have the same
+            # number of time points. grab the number of timepoints for the
+            # first feature
+            first_feat_timepts = list(X_timepts.values())[0]
+            if pytree_any(lambda x: x != first_feat_timepts, X_timepts):
+                raise ValueError(f"All leaves of X must have the same number of time points, but found {X_timepts}!")
+        # now check that X and y have the same number of time points
+        if pytree_any(lambda x: x != y.shape[0], X_timepts):
             raise ValueError(
                 "The number of time-points in X and y must agree. "
-                f"X has {X.shape[0]} time-points, "
+                f"X has {X_timepts} time-points, "
                 f"y has {y.shape[0]} instead!"
             )
 
     def _preprocess_fit(
         self,
-        X: Union[NDArray, jnp.ndarray],
+        X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray],
-        init_params: Optional[Tuple[ArrayLike, ArrayLike]] = None,
-    ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+        init_params: Optional[Tuple[DESIGN_INPUT_TYPE, ArrayLike]] = None,
+    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray, Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]]:
         """Preprocess input data and initial parameters for the fit method.
 
         This method carries out the following preprocessing steps:
@@ -345,9 +361,9 @@ class BaseRegressor(Base, abc.ABC):
         Parameters
         ----------
         X :
-            Input data, expected to be of shape (n_timebins, n_neurons, n_features).
+            Input data, array of shape (n_timebins, n_neurons, n_features) or pytree of same.
         y :
-            Target values, expected to be of shape (n_timebins, n_neurons).
+            Target values, array of shape (n_timebins, n_neurons).
         init_params :
             Initial parameters for the model. If None, they are initialized with default values.
 
@@ -365,7 +381,8 @@ class BaseRegressor(Base, abc.ABC):
         ValueError
             If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
         """
-        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
+        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
+        y = jnp.asarray(y, dtype=float)
 
         # check input dimensionality
         self._check_input_dimensionality(X, y)
@@ -374,14 +391,18 @@ class BaseRegressor(Base, abc.ABC):
         check_invalid_entry(X, "X")
         check_invalid_entry(y, "y")
 
-        _, n_neurons = y.shape
-        n_features = X.shape[2]
-
         # Initialize parameters
         if init_params is None:
-            # Ws, spike basis coeffs
             init_params = (
-                jnp.zeros((n_neurons, n_features)),
+                # Ws, spike basis coeffs.
+                # - If X is a FeaturePytree with n_features arrays of shape
+                #   (n_timebins, n_neurons, n_features), then this will be a
+                #   FeaturePytree with n_features arrays of shape (n_neurons,
+                #   n_features).
+                # - If X is an array of shape (n_timebins, n_neurons,
+                #   n_features), this will be an array of shape (n_neurons,
+                #   n_features).
+                jax.tree_map(lambda x: jnp.zeros_like(x[0]), X),
                 # bs, bias terms
                 jnp.log(jnp.mean(y, axis=0)),
             )
@@ -396,13 +417,12 @@ class BaseRegressor(Base, abc.ABC):
 
     def _preprocess_simulate(
         self,
-        feedforward_input: Union[NDArray, jnp.ndarray],
-        params_feedforward: Tuple[jnp.ndarray, jnp.ndarray],
+        feedforward_input: DESIGN_INPUT_TYPE,
+        params_feedforward: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
         init_y: Optional[Union[NDArray, jnp.ndarray]] = None,
         params_recurrent: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ) -> Tuple[jnp.ndarray, ...]:
-        """
-        Preprocess the input data and parameters for simulation.
+        """Preprocess the input data and parameters for simulation.
 
         This method handles the conversion of the input data to `jnp.ndarray`, checks the
         input's dimensionality, and ensures the input's consistency with the provided parameters.
@@ -411,9 +431,13 @@ class BaseRegressor(Base, abc.ABC):
         Parameters
         ----------
         feedforward_input :
-            Input data for the feedforward process. Expected shape: (n_timesteps, n_neurons, n_basis_input).
+            Input data for the feedforward process. Array of shape
+            (n_timesteps, n_neurons, n_basis_input) or pytree of same.
         params_feedforward :
-            Parameters corresponding to the feedforward input. Expected shape: (n_neurons, n_basis_input).
+            2-tuple of parameter values corresponding to feedforward input:
+            (coefficients, intercepts). If coefficients is an array of shape
+            (n_neurons, n_features) or pytree of same, intercepts is an array
+            of shape (n_neurons,)
         init_y :
             Initial values for the feedback process. If provided, its dimensionality and consistency
             with params_r will be checked. Expected shape if provided: (window_size, n_neurons).
@@ -431,8 +455,9 @@ class BaseRegressor(Base, abc.ABC):
         ValueError
             If the feedforward_input contains NaNs or Infs.
             If the dimensionality or consistency checks fail for the provided data and parameters.
+
         """
-        feedforward_input = jnp.asarray(feedforward_input, dtype=float)
+        feedforward_input = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), feedforward_input)
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(
             params_feedforward, X=feedforward_input
@@ -440,10 +465,11 @@ class BaseRegressor(Base, abc.ABC):
 
         check_invalid_entry(feedforward_input, "feedforward_input")
 
-        # Ensure that both or neither of `init_y` and `params_r` are provided
+        # Ensure that both or neither of `init_y` and `params_recurrent` are
+        # provided
         if (init_y is None) != (params_recurrent is None):
             raise ValueError(
-                "Both `init_y` and `params_r` should be provided, or neither should be provided."
+                "Both `init_y` and `params_recurrent` should be provided, or neither should be provided."
             )
         # If both are provided, perform checks and conversions
         elif init_y is not None and params_recurrent is not None:

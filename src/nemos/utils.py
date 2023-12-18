@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from .pytrees import FeaturePytree
+
 # Same trial duration
 # [[r , t , n], [w]] -> [r , (t - w + 1) , n]
 # Broadcasted 1d convolution operations
@@ -386,25 +388,28 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def check_invalid_entry(array: jnp.ndarray, array_name: str) -> None:
+def check_invalid_entry(pytree: Union[FeaturePytree, jnp.ndarray],
+                        pytree_name: str) -> None:
     """Check if the array has nans or infs.
 
     Parameters
     ----------
-    array:
-        The array to be checked.
-    array_name:
+    pytree:
+        The pytree to be checked.
+    pytree_name:
         The array name.
 
     Raises
     ------
-        - ValueError: If any entry of `array` is either NaN or inf.
+        - ValueError: If any entry of `pytree` is either NaN or inf.
 
     """
-    if jnp.any(jnp.isinf(array)):
-        raise ValueError(f"Input array '{array_name}' contains Infs!")
-    elif jnp.any(jnp.isnan(array)):
-        raise ValueError(f"Input array '{array_name}' contains NaNs!")
+    # this is a double-any situation: first, we check if each leaf have any
+    # Infs, then we check whether any leaf has an Inf
+    if pytree_any(jnp.any, jax.tree_map(jnp.isinf, pytree)):
+        raise ValueError(f"Input '{pytree_name}' contains Infs!")
+    if pytree_any(jnp.any, jax.tree_map(jnp.isnan, pytree)):
+        raise ValueError(f"Input '{pytree_name}' contains NaNs!")
 
 
 def assert_has_attribute(obj: Any, attr_name: str):
@@ -459,3 +464,17 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
             f"The `{func_name}` should return a scalar! "
             f"Array of shape {array_out.shape} returned instead!"
         )
+
+
+def pytree_any(condition: Callable,
+               *pytrees: Union[FeaturePytree, NDArray, jnp.ndarray]):
+    """Determine whether a condition is true at any of pytree's leaves.
+
+    This is a map/reduce operation: check whether a condition is true at each
+    of pytree's leaves, then check whether any of those pytree's leaves are
+    True.
+
+    """
+    cond_tree = jax.tree_map(condition, *pytrees)
+    # for some reason, tree_reduce doesn't work well with any.
+    return any(jax.tree_util.tree_leaves(cond_tree))
