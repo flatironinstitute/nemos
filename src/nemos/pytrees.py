@@ -22,6 +22,8 @@ class FeaturePytree(UserDict):
     returns a scalar. For example, the following fails:
 
     >>> import nemos
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
     >>> d = nemos.pytrees.FeaturePytree(a=np.random.rand(10), b=np.random.rand(10))
     >>> jax.tree_map(lambda x: x.shape, d)
 

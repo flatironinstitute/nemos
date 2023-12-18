@@ -5,6 +5,7 @@ from . import (
     exceptions,
     glm,
     observation_models,
+    pytrees,
     regularizer,
     simulation,
     utils,
