@@ -10,6 +10,7 @@ from . import regularizer as reg
 from . import utils
 from .base_class import BaseRegressor
 from .exceptions import NotFittedError
+from .pytrees import FeaturePytree
 
 
 class GLM(BaseRegressor):
@@ -315,8 +316,8 @@ class GLM(BaseRegressor):
 
     def fit(
         self,
-        X: Union[NDArray, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
+        X: FeaturePytree,
+        y: FeaturePytree,
         init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
     ):
         """Fit GLM to neural activity.

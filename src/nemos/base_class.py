@@ -10,7 +10,11 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
+from .pytrees import FeaturePytree
 from .utils import check_invalid_entry
+
+
+DESIGN_INPUT_TYPE = Union[NDArray, jnp.ndarray, FeaturePytree]
 
 
 class Base:
@@ -179,19 +183,19 @@ class BaseRegressor(Base, abc.ABC):
     """
 
     @abc.abstractmethod
-    def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
+    def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
         """Fit the model to neural activity."""
         pass
 
     @abc.abstractmethod
-    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters."""
         pass
 
     @abc.abstractmethod
     def score(
         self,
-        X: Union[NDArray, jnp.ndarray],
+        X: DESIGN_INPUT_TYPE,
         y: Union[NDArray, jnp.ndarray],
         # may include score_type or other additional model dependent kwargs
         **kwargs,
@@ -203,15 +207,15 @@ class BaseRegressor(Base, abc.ABC):
     def simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
-        feed_forward_input: Union[NDArray, jnp.ndarray],
+        feed_forward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
 
     @staticmethod
     def _check_and_convert_params(
-        params: Tuple[ArrayLike, ArrayLike], data_type: Optional[jnp.dtype] = None
-    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        params: Tuple[FeaturePytree, ArrayLike], data_type: Optional[jnp.dtype] = None
+    ) -> Tuple[FeaturePytree, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
 
@@ -221,7 +225,7 @@ class BaseRegressor(Base, abc.ABC):
 
         """
         try:
-            params = tuple(jnp.asarray(par, dtype=data_type) for par in params)
+            params = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), params)
         except (ValueError, TypeError):
             raise TypeError(
                 "Initial parameters must be array-like of array-like objects "
