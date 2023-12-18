@@ -232,13 +232,15 @@ class BaseRegressor(Base, abc.ABC):
             )
 
         if len(params) != 2:
-            raise ValueError("Params needs to be array-like of length two.")
+            raise ValueError("Params needs to be of length two.")
 
-        if params[0].ndim != 2:
+        check_param_tree = jax.tree_map(lambda x: x.ndim != 2, params[0].data)
+        if jax.tree_util.tree_reduce(any, check_param_tree):
             raise ValueError(
-                "params[0] must be of shape (n_neurons, n_features), but"
-                f"params[0] has {params[0].ndim} dimensions!"
+                "params[0] must be a nemos.pytree.FeatureTree with array leafs "
+                "of shape (n_neurons, n_features)."
             )
+
         if params[1].ndim != 1:
             raise ValueError(
                 "params[1] must be of shape (n_neurons,) but "
