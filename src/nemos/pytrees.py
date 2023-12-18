@@ -17,18 +17,13 @@ class FeaturePytree(UserDict):
 
     """
     def __init__(self, **kwargs):
-        self._num_time_points = None
         super().__init__(kwargs)
 
     @property
     def shape(self):
-        # Every value is an array with the same number of time points, so
-        # that's the only shared shape.
-        return (self._num_time_points, )
-
-    def __len__(self):
-        # Same logic as shape
-        return self._num_time_points
+        # the only shape we know is the number of features we have, as returned
+        # by len
+        return (self.__len__(), )
 
     @property
     def ndim(self):
