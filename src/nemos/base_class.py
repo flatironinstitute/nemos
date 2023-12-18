@@ -13,7 +13,6 @@ from numpy.typing import ArrayLike, NDArray
 from .pytrees import FeaturePytree
 from .utils import check_invalid_entry
 
-
 DESIGN_INPUT_TYPE = Union[NDArray, jnp.ndarray, FeaturePytree]
 
 
