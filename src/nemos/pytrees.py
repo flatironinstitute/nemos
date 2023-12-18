@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import jax
 from collections import UserDict
+from jax.tree_util import register_pytree_node_class
 
 
+@register_pytree_node_class
 class FeaturePytree(UserDict):
     """Pytree to represent GLM features.
 
