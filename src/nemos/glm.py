@@ -134,7 +134,7 @@ class GLM(BaseRegressor):
         return self._observation_model.inverse_link_function(
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
-            jax.tree_util.tree_reduce(sum, mapped) + bs[None, :]
+            jax.tree_util.tree_reduce(lambda x, y: x+y, mapped) + bs[None, :]
         )
 
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:

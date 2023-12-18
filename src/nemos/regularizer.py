@@ -272,7 +272,7 @@ class Ridge(Regularizer):
             # this squares the parameters for each feature, sums within each
             # feature, then across features, and then squeezes so we have a
             # scalar
-            * jax.tree_util.tree_reduce(sum, jax.tree_map(lambda x: jnp.sum(jnp.power(x, 2), keepdims=True), params[0])).squeeze()
+            * jax.tree_util.tree_reduce(lambda x, y: x+y, jax.tree_map(lambda x: jnp.sum(jnp.power(x, 2), keepdims=True), params[0])).squeeze()
             / params[1].shape[0]
         )
 
