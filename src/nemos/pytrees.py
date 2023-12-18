@@ -44,7 +44,7 @@ class FeaturePytree(UserDict):
             return self.data[key]
         # Or the time dimension
         else:
-            return jax.tree_map(lambda x: x[key], self.data)
+            return jax.tree_map(lambda x: x[key], self)
 
     def __repr__(self):
         # Show the shape and data type of each array
