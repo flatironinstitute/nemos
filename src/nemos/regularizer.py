@@ -266,15 +266,17 @@ class Ridge(Regularizer):
         float
             The Ridge penalization value.
         """
-        return (
-            0.5
-            * self.regularizer_strength
-            # this squares the parameters for each feature, sums within each
-            # feature, then across features, and then squeezes so we have a
-            # scalar
-            * jax.tree_util.tree_reduce(lambda x, y: x+y, jax.tree_map(lambda x: jnp.sum(jnp.power(x, 2), keepdims=True), params[0])).squeeze()
-            / params[1].shape[0]
-        )
+        def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            return (
+                    0.5
+                    * self.regularizer_strength
+                    * jnp.sum(jnp.power(coeff, 2))
+                    / intercept.shape[0]
+            )
+        # tree map the computation
+        l2_pen_tree = jax.tree_map(lambda x: l2_penalty(x, params[1]), params[0])
+        # add over the leaves
+        return sum(jax.tree_util.tree_leaves(l2_pen_tree))
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
