@@ -505,7 +505,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """M-spline[$^1$](references) 1-dimensional basis functions.
+    """M-spline[$^1$](#references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -576,7 +576,7 @@ class MSplineBasis(SplineBasis):
 
 class BSplineBasis(SplineBasis):
     """
-    B-spline[$^1$](references) 1-dimensional basis functions.
+    B-spline[$^1$](#references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -772,7 +772,7 @@ class CyclicBSplineBasis(SplineBasis):
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](references)
+    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -969,8 +969,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             shape (n_samples, ).
         """
         # This log-stretching of the sample axis has the following effect:
-        # - as the time_scaling tends to 0, the points will be linearly spaced.
-        # - as the time_scaling tends to inf, basis will be dense around 0.
+        # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
+        # - as the time_scaling tends to inf, basis will be small and dense around 0 and progressively larger and less dense towards 1.
         log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(
             self.time_scaling + 1
         )
