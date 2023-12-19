@@ -30,6 +30,11 @@ class FeaturePytree(UserDict):
         # Same logic as shape
         return self._num_time_points
 
+    @property
+    def ndim(self):
+        # You can slice into a FeaturePytree along one dimension (time)
+        return 1
+
     def __setitem__(self, key, value):
         # All keys are strings
         if not isinstance(key, str):
