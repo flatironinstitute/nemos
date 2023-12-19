@@ -505,7 +505,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """M-spline[$^1$](references) 1-dimensional basis functions.
+    """M-spline[$^1$](#references) 1-dimensional basis functions.
 
     Parameters
     ----------
