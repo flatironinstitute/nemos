@@ -847,7 +847,7 @@ class RaisedCosineBasisLinear(Basis):
         if any(sample_pts < 0) or any(sample_pts > 1):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
-        peaks = np.linspace(0, 1, self.n_basis_funcs)
+        peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
         # generate a set of shifted cosines, and constrain them to be non-zero
         # over a single period, then enforce the codomain to be [0,1], by adding 1
@@ -864,6 +864,16 @@ class RaisedCosineBasisLinear(Basis):
         )
 
         return basis_funcs
+
+    def _compute_peaks(self):
+        """
+        Compute the location of raised cosine peaks.
+
+        Returns
+        -------
+            Peak locations of each basis element.
+        """
+        return np.linspace(0, 1, self.n_basis_funcs)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -977,6 +987,25 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         )
         return log_spaced_pts
 
+    def _compute_peaks(self):
+        """
+        Peak location of each log-spaced cosine basis element
+
+        Compute the peak location for the log-spaced raised cosine basis.
+        Enforcing that the last basis decays to zero is equivalent to
+        setting the last peak to a value smaller than 1.
+
+        Returns
+        -------
+            Peak locations of each basis element.
+
+        """
+        if self.enforce_decay_to_zero:
+            last_peak = 1 - np.ceil(self.width) / (self.n_basis_funcs + np.ceil(self.width) - 1)
+            return np.linspace(0, last_peak, self.n_basis_funcs)
+        else:
+            super()._compute_peaks()
+
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
@@ -996,24 +1025,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         (sample_pts,) = self._check_evaluate_input(sample_pts)
-        if not self.enforce_decay_to_zero:
-            # keep the last basis, i.e. do not enforce decay to zero
-            # for the filter.
-            eval_basis = super().evaluate(self._transform_samples(sample_pts))
-        else:
-            # temporarily add n_trim basis element
-            # guaranteeing that the last basis element decays to 0 for any width.
-            n_trim = int(np.ceil(self.width))
-            self.n_basis_funcs += n_trim
-            # wrap the evaluation in a try -> finally to make sure that the original
-            # basis function number is preserved even if an exception is raised.
-            try:
-                eval_basis = super().evaluate(self._transform_samples(sample_pts))
-                eval_basis = eval_basis[..., :-n_trim]
-            finally:
-                self.n_basis_funcs -= n_trim
-
-        return eval_basis
+        return super().evaluate(self._transform_samples(sample_pts))
 
 
 class OrthExponentialBasis(Basis):
