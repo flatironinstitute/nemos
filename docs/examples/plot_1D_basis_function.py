@@ -91,12 +91,13 @@ plt.show()
 # interpretation of the model parameters, each of which will represent the relative contribution of a specific
 # oscillation frequency to the overall signal.
 #
-# A Fourier basis can be instantiated with the usual syntax.
-# The user can pass the desired frequencies for the basis or
-# the frequencies will be set to `np.arange(n_basis_funcs//2)`.
-# The number of basis function is required to be even.
+# A Fourier basis can be instantiated with the following syntax:
+# the user can provide the maximum frequency of the cosine and negative
+# sine pairs by setting the `max_freq` parameter.
+# The sinusoidal basis elements will have frequencies from 0 to `max_freq`.
 
-fourier_basis = nmo.basis.FourierBasis(max_freq=4)
+
+fourier_basis = nmo.basis.FourierBasis(max_freq=3)
 
 # evaluate on equi-spaced samples
 samples, eval_basis = fourier_basis.evaluate_on_grid(1000)
@@ -126,13 +127,13 @@ plt.tight_layout()
 
 
 n_samples = 1000
-n_freqs = 20
+max_freq = 20
 
 # define a signal
 signal = np.random.normal(size=n_samples)
 
 # evaluate the basis
-_, eval_basis = nmo.basis.FourierBasis(max_freq=n_freqs).evaluate_on_grid(n_samples)
+_, eval_basis = nmo.basis.FourierBasis(max_freq=max_freq).evaluate_on_grid(n_samples)
 
 # compute the cross-corr with the signal and the basis
 # Note that we are inverting the time axis of the basis because we are aiming
@@ -140,17 +141,17 @@ _, eval_basis = nmo.basis.FourierBasis(max_freq=n_freqs).evaluate_on_grid(n_samp
 xcorr = np.array(
     [
         np.convolve(eval_basis[::-1, k], signal, mode="valid")[0]
-        for k in range(2 * n_freqs - 1)
+        for k in range(2 * max_freq + 1)
     ]
 )
 
 # compute the power (add back sin(0 * t) = 0)
 fft_complex = np.fft.fft(signal)
-fft_amplitude = np.abs(fft_complex[:n_freqs])
-fft_phase = np.angle(fft_complex[:n_freqs])
+fft_amplitude = np.abs(fft_complex[:max_freq + 1])
+fft_phase = np.angle(fft_complex[:max_freq + 1])
 # compute the phase and amplitude from the convolution
-xcorr_phase = np.arctan2(np.hstack([[0], xcorr[n_freqs:]]), xcorr[:n_freqs])
-xcorr_aplitude = np.sqrt(xcorr[:n_freqs] ** 2 + np.hstack([[0], xcorr[n_freqs:]]) ** 2)
+xcorr_phase = np.arctan2(np.hstack([[0], xcorr[max_freq+1:]]), xcorr[:max_freq+1])
+xcorr_aplitude = np.sqrt(xcorr[:max_freq+1] ** 2 + np.hstack([[0], xcorr[max_freq+1:]]) ** 2)
 
 fig, ax = plt.subplots(1, 2)
 ax[0].set_aspect("equal")

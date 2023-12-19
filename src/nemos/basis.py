@@ -1183,18 +1183,19 @@ class FourierBasis(Basis):
     """Set of 1D Fourier basis.
 
     This class defines a cosine and negative sine basis (quadrature pair)
-    with frequencies ranging 0 to max_freq - 1.
+    with frequencies ranging 0 to max_freq.
 
     Parameters
     ----------
     max_freq
-            Number of frequencies. The number of basis function will be 2*max_freq - 1.
+            Highest frequency of the cosine, negative sine pairs.
+            The number of basis function will be 2*max_freq + 1.
     """
 
     def __init__(self, max_freq: int):
-        super().__init__(n_basis_funcs=2 * max_freq - 1)
+        super().__init__(n_basis_funcs=2 * max_freq + 1)
 
-        self._frequencies = np.arange(max_freq, dtype=float)
+        self._frequencies = np.arange(max_freq + 1, dtype=float)
         self._n_input_dimensionality = 1
 
     def _check_n_basis_min(self) -> None:
@@ -1213,7 +1214,7 @@ class FourierBasis(Basis):
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -1228,7 +1229,7 @@ class FourierBasis(Basis):
 
         Notes
         -----
-        If the frequencies provided are np.arange(max_freq), convolving a signal
+        The frequencies are set to np.arange(max_freq+1), convolving a signal
         of length n_samples with this basis is equivalent, but slower,
         then computing the FFT truncated to the first max_freq components.
 
@@ -1240,13 +1241,13 @@ class FourierBasis(Basis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> n_samples, max_freq = 1000, 10
-        >>> basis = nmo.basis.FourierBasis(max_freq*2)
+        >>> basis = nmo.basis.FourierBasis(max_freq)
         >>> eval_basis = basis.evaluate(np.linspace(0, 1, n_samples))
         >>> sinusoid = np.cos(3 * np.arange(0, 1000) * np.pi * 2 / 1000.)
-        >>> conv = [np.convolve(eval_basis[::-1, k], sinusoid, mode='valid')[0] for k in range(2*max_freq-1)]
+        >>> conv = [np.convolve(eval_basis[::-1, k], sinusoid, mode='valid')[0] for k in range(2*max_freq+1)]
         >>> fft = np.fft.fft(sinusoid)
-        >>> print('FFT power:   ', np.round(np.real(fft[:10]), 4))
-        >>> print('Convolution: ', np.round(conv[:10], 4))
+        >>> print('FFT power:   ', np.round(np.real(fft[:max_freq]), 4))
+        >>> print('Convolution: ', np.round(conv[:max_freq], 4))
         """
         (sample_pts,) = self._check_evaluate_input(sample_pts)
         # assumes equi-spaced samples.
