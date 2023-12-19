@@ -276,7 +276,7 @@ class Ridge(Regularizer):
         # tree map the computation
         l2_pen_tree = jax.tree_map(lambda x: l2_penalty(x, params[1]), params[0])
         # add over the leaves
-        return sum(jax.tree_util.tree_leaves(l2_pen_tree))
+        return jnp.sum(*jax.tree_util.tree_leaves(l2_pen_tree))
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
