@@ -730,31 +730,31 @@ class TestFourierBasis(BasisFuncsTesting):
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
         assert(eval_basis.shape[1] == 2*n_freqs-1)
 
-    @pytest.mark.parametrize("samples", [[], np.zeros(11)])
-    def test_non_empty_samples(self, samples):
-        if len(samples) == 0:
-            with pytest.raises(
-                ValueError, match="All sample provided must be non empty"
-            ):
-                self.cls(5).evaluate(samples)
-        else:
+    @pytest.mark.parametrize("samples, expectation",
+        [
+            ([], pytest.raises(ValueError, match="All sample provided must be non empty")),
+            (np.zeros(11), does_not_raise())
+        ]
+    )
+    def test_non_empty_samples(self, samples, expectation):
+        with expectation:
             self.cls(5).evaluate(samples)
 
     @pytest.mark.parametrize(
-        "arraylike", [0, [0]*11, (0,)*11, np.array([0]*11), jax.numpy.array([0]*11)]
+        "arraylike, expectation", [
+            (["x"], pytest.raises(TypeError, match="Input samples must be array-like of floats")),
+            ([0]*11, does_not_raise()),
+            ((0,)*11, does_not_raise()),
+            (np.array([0]*11), does_not_raise()),
+            (jax.numpy.array([0]*11), does_not_raise())
+        ]
     )
-    def test_input_to_evaluate_is_arraylike(self, arraylike):
+    def test_input_to_evaluate_is_arraylike(self, arraylike, expectation):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_freqs=5)
-        raise_exception = not isinstance(
-            arraylike, (tuple, list, np.ndarray, jax.numpy.ndarray)
-        )
-        if raise_exception:
-            with pytest.raises(TypeError, match="Input samples must be array-like"):
-                basis_obj.evaluate(arraylike)
-        else:
+        with expectation:
             basis_obj.evaluate(arraylike)
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
@@ -774,43 +774,40 @@ class TestFourierBasis(BasisFuncsTesting):
                 f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
             )
 
-    @pytest.mark.parametrize("n_freqs", [-1, 0, 1, 3])
-    def test_minimum_number_of_basis_required_is_matched(self, n_freqs):
+    @pytest.mark.parametrize("n_freqs, expectation",
+        [
+            (-1, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 1 basis elements")),
+            (0, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 1 basis elements")),
+            (1, does_not_raise()),
+            (3, does_not_raise())
+        ]
+    )
+    def test_minimum_number_of_basis_required_is_matched(self, n_freqs, expectation):
         """
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
         n_samples = 10
-        raise_exception = n_freqs < 1
-        if raise_exception:
-            with pytest.raises(
-                    ValueError,
-                    match=rf"Object class {self.cls.__name__} requires >= 1 basis elements",
-            ):
-                basis_obj = self.cls(n_freqs=n_freqs)
-                basis_obj.evaluate(np.linspace(0, 1, n_samples))
-        else:
+        with expectation:
             basis_obj = self.cls(n_freqs=n_freqs)
             basis_obj.evaluate(np.linspace(0, 1, n_samples))
 
-    @pytest.mark.parametrize("n_freqs", [3, 6, 7, 10])
-    def test_minimum_aliasing_detection(self, n_freqs):
+    @pytest.mark.parametrize("n_freqs, expectation",
+                             [
+                                 (3, does_not_raise()),
+                                 (6, does_not_raise()),
+                                 (7, pytest.raises(ValueError,match=rf"Not enough samples, aliasing likely to occur")),
+                                 (10, pytest.raises(ValueError,match=rf"Not enough samples, aliasing likely to occur"))
+                             ]
+                             )
+    def test_minimum_aliasing_detection(self, n_freqs, expectation):
         """
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
         n_samples = 10
-        # highest freq * 2 <= n_samples to avoid aliasing.
-        raise_exception = (n_freqs - 1) * 2 > n_samples
-        if raise_exception:
-            with pytest.raises(
-                    ValueError,
-                    match=rf"Not enough samples, aliasing likely to occur",
-            ):
-                basis_obj = self.cls(n_freqs=n_freqs)
-                basis_obj.evaluate(np.linspace(0, 1, n_samples))
-        else:
-            basis_obj = self.cls(n_freqs=n_freqs)
+        basis_obj = self.cls(n_freqs=n_freqs)
+        with expectation:
             basis_obj.evaluate(np.linspace(0, 1, n_samples))
 
     @pytest.mark.parametrize(
@@ -823,56 +820,72 @@ class TestFourierBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_freqs=5)
         basis_obj.evaluate(np.linspace(*sample_range, 100))
 
-    @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
+    @pytest.mark.parametrize("n_input, expectation", [
+         (0, pytest.raises(TypeError, match=r"FourierBasis\.evaluate\(\) missing 1 required positional argument")),
+         (1, does_not_raise()),
+         (2, pytest.raises(TypeError, match=r"FourierBasis\.evaluate\(\) takes 2 positional arguments but")),
+         (3, pytest.raises(TypeError, match=r"FourierBasis\.evaluate\(\) takes 2 positional arguments but"))
+        ]
+    )
+    def test_number_of_required_inputs_evaluate(self, n_input, expectation):
         """
         Confirms that the evaluate() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_freqs=5)
-        raise_exception = n_input != basis_obj._n_input_dimensionality
         inputs = [np.linspace(0, 1, 20)] * n_input
-        if raise_exception:
-            with pytest.raises(
-                    ValueError,
-                    match="Input dimensionality mismatch. This basis evaluation requires [0-9]+ inputs,",
-            ):
-                basis_obj.evaluate(*inputs)
-        else:
+        with expectation:
             basis_obj.evaluate(*inputs)
 
-    @pytest.mark.parametrize("sample_size", [-1, 0, 10, 11, 100])
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size):
+    @pytest.mark.parametrize(
+        "sample_size, expectation",
+        [
+            (-1, pytest.raises(ValueError, match=r"Invalid input data|All sample counts provided must be greater")),
+            (0, pytest.raises(ValueError, match=r"Invalid input data|All sample counts provided must be greater")),
+            (10, does_not_raise()),
+            (11, does_not_raise()),
+            (100, does_not_raise())
+        ]
+    )
+    def test_evaluate_on_grid_meshgrid_valid_size(self, sample_size, expectation):
         """
         Checks that the evaluate_on_grid() method returns a grid of the expected size.
         """
         basis_obj = self.cls(n_freqs=5)
-        raise_exception = sample_size <= 0
-        if raise_exception:
-            with pytest.raises(
-                    ValueError,
-                    match=r"Invalid input data|"
-                          rf"All sample counts provided must be greater",
-            ):
-                basis_obj.evaluate_on_grid(sample_size)
-        else:
+        with expectation:
+            basis_obj.evaluate_on_grid(sample_size)
+
+    @pytest.mark.parametrize(
+        "sample_size, expectation",
+        [
+            (10, does_not_raise()),
+            (11, does_not_raise()),
+            (100, does_not_raise())
+        ]
+    )
+    def test_evaluate_on_grid_meshgrid_match_size(self, sample_size, expectation):
+        """
+        Checks that the evaluate_on_grid() method returns a grid of the expected size.
+        """
+        basis_obj = self.cls(n_freqs=5)
+        with expectation:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
             assert grid.shape[0] == sample_size
 
-    @pytest.mark.parametrize("n_input", [0, 1, 2])
-    def test_evaluate_on_grid_input_number(self, n_input):
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (0, pytest.raises(TypeError, match="Input dimensionality mismatch. This basis evaluation")),
+             (1, does_not_raise()),
+            (2, pytest.raises(TypeError, match="Input dimensionality mismatch. This basis evaluation"))
+        ]
+    )
+    def test_evaluate_on_grid_input_number(self, n_input, expectation):
         """
         Validates that the evaluate_on_grid() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_freqs=5)
         inputs = [10] * n_input
-        raise_exception = n_input != basis_obj._n_input_dimensionality
-        if raise_exception:
-            with pytest.raises(
-                    ValueError,
-                    match=r"Input dimensionality mismatch\. This basis evaluation requires [0-9]+ inputs",
-            ):
-                basis_obj.evaluate_on_grid(*inputs)
-        else:
+        with expectation:
             basis_obj.evaluate_on_grid(*inputs)
 
 
