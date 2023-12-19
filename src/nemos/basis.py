@@ -1002,9 +1002,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """
         if self.enforce_decay_to_zero:
             last_peak = 1 - np.ceil(self.width) / (self.n_basis_funcs + np.ceil(self.width) - 1)
-            return np.linspace(0, last_peak, self.n_basis_funcs)
         else:
-            super()._compute_peaks()
+            last_peak = 1
+        return np.linspace(0, last_peak, self.n_basis_funcs)
 
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
