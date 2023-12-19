@@ -849,15 +849,15 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 class TestFourierBasis(BasisFuncsTesting):
     cls = basis.FourierBasis
 
-    @pytest.mark.parametrize("n_freqs", [2, 4, 8])
+    @pytest.mark.parametrize("max_freq", [2, 4, 8])
     @pytest.mark.parametrize("sample_size", [20, 1000])
     def test_evaluate_returns_expected_number_of_basis(
-            self, n_freqs, sample_size
+            self, max_freq, sample_size
     ):
         """Tests whether the evaluate method returns the expected number of basis functions."""
-        basis_obj = self.cls(n_freqs=n_freqs)
+        basis_obj = self.cls(max_freq=max_freq)
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
-        assert(eval_basis.shape[1] == 2*n_freqs-1)
+        assert(eval_basis.shape[1] == 2*max_freq+1)
 
     @pytest.mark.parametrize("samples, expectation",
         [
@@ -882,19 +882,19 @@ class TestFourierBasis(BasisFuncsTesting):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
-        basis_obj = self.cls(n_freqs=5)
+        basis_obj = self.cls(max_freq=5)
         with expectation:
             basis_obj.evaluate(arraylike)
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
-    @pytest.mark.parametrize("n_freqs", [4, 10])
+    @pytest.mark.parametrize("max_freq", [4, 10])
     def test_sample_size_of_evaluate_matches_that_of_input(
-            self, n_freqs, sample_size
+            self, max_freq, sample_size
     ):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
-        basis_obj = self.cls(n_freqs)
+        basis_obj = self.cls(max_freq)
         eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
@@ -903,39 +903,39 @@ class TestFourierBasis(BasisFuncsTesting):
                 f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
             )
 
-    @pytest.mark.parametrize("n_freqs, expectation",
+    @pytest.mark.parametrize("max_freq, expectation",
         [
-            (-1, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 1 basis elements")),
-            (0, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 1 basis elements")),
+            (-1, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 0 basis elements")),
+            (0, does_not_raise()),
             (1, does_not_raise()),
             (3, does_not_raise())
         ]
     )
-    def test_minimum_number_of_basis_required_is_matched(self, n_freqs, expectation):
+    def test_minimum_number_of_basis_required_is_matched(self, max_freq, expectation):
         """
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
         n_samples = 10
         with expectation:
-            basis_obj = self.cls(n_freqs=n_freqs)
+            basis_obj = self.cls(max_freq=max_freq)
             basis_obj.evaluate(np.linspace(0, 1, n_samples))
 
-    @pytest.mark.parametrize("n_freqs, expectation",
+    @pytest.mark.parametrize("max_freq, expectation",
                              [
                                  (3, does_not_raise()),
-                                 (6, does_not_raise()),
+                                 (6, pytest.raises(ValueError,match=rf"Not enough samples, aliasing likely to occur")),
                                  (7, pytest.raises(ValueError,match=rf"Not enough samples, aliasing likely to occur")),
                                  (10, pytest.raises(ValueError,match=rf"Not enough samples, aliasing likely to occur"))
                              ]
                              )
-    def test_minimum_aliasing_detection(self, n_freqs, expectation):
+    def test_minimum_aliasing_detection(self, max_freq, expectation):
         """
         Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
         order < #basis are enforced.
         """
         n_samples = 10
-        basis_obj = self.cls(n_freqs=n_freqs)
+        basis_obj = self.cls(max_freq=max_freq)
         with expectation:
             basis_obj.evaluate(np.linspace(0, 1, n_samples))
 
@@ -946,7 +946,7 @@ class TestFourierBasis(BasisFuncsTesting):
         """
         Verifies that the evaluate() method can handle input range.
         """
-        basis_obj = self.cls(n_freqs=5)
+        basis_obj = self.cls(max_freq=5)
         basis_obj.evaluate(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input, expectation", [
@@ -960,7 +960,7 @@ class TestFourierBasis(BasisFuncsTesting):
         """
         Confirms that the evaluate() method correctly handles the number of input samples that are provided.
         """
-        basis_obj = self.cls(n_freqs=5)
+        basis_obj = self.cls(max_freq=5)
         inputs = [np.linspace(0, 1, 20)] * n_input
         with expectation:
             basis_obj.evaluate(*inputs)
@@ -979,7 +979,7 @@ class TestFourierBasis(BasisFuncsTesting):
         """
         Checks that the evaluate_on_grid() method returns a grid of the expected size.
         """
-        basis_obj = self.cls(n_freqs=5)
+        basis_obj = self.cls(max_freq=5)
         with expectation:
             basis_obj.evaluate_on_grid(sample_size)
 
@@ -995,7 +995,7 @@ class TestFourierBasis(BasisFuncsTesting):
         """
         Checks that the evaluate_on_grid() method returns a grid of the expected size.
         """
-        basis_obj = self.cls(n_freqs=5)
+        basis_obj = self.cls(max_freq=5)
         with expectation:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
             assert grid.shape[0] == sample_size
@@ -1012,7 +1012,7 @@ class TestFourierBasis(BasisFuncsTesting):
         """
         Validates that the evaluate_on_grid() method correctly handles the number of input samples that are provided.
         """
-        basis_obj = self.cls(n_freqs=5)
+        basis_obj = self.cls(max_freq=5)
         inputs = [10] * n_input
         with expectation:
             basis_obj.evaluate_on_grid(*inputs)
@@ -1426,7 +1426,7 @@ class CombinedBasis(BasisFuncsTesting):
                 n_basis_funcs=n_basis, decay_rates=np.arange(1, 1 + n_basis)
             )
         elif basis_class == basis.FourierBasis:
-            basis_obj = basis_class(n_freqs=n_basis)
+            basis_obj = basis_class(max_freq=n_basis)
         elif basis_class == basis.BSplineBasis:
             basis_obj = basis_class(n_basis_funcs=n_basis, order=3)
         elif basis_class == basis.CyclicBSplineBasis:
@@ -1481,7 +1481,7 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize("sample_size", [10, 1000])
+    @pytest.mark.parametrize("sample_size", [15, 1000])
     @pytest.mark.parametrize(
         "basis_a",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
@@ -1697,7 +1697,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize("sample_size", [10, 1000])
+    @pytest.mark.parametrize("sample_size", [15, 1000])
     @pytest.mark.parametrize(
         "basis_a",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],

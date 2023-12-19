@@ -1210,7 +1210,7 @@ class FourierBasis(Basis):
         """
         if self.n_basis_funcs < 1:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
+                f"Object class {self.__class__.__name__} requires >= 0 basis elements. "
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
 
