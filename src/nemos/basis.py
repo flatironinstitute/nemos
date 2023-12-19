@@ -793,18 +793,13 @@ class RaisedCosineBasisLinear(Basis):
     def __init__(self, n_basis_funcs: int, width: float = 2.0) -> None:
         super().__init__(n_basis_funcs)
         self._n_input_dimensionality = 1
-        self.width = width
+        self._check_width(width)
+        self._width = width
 
     @property
     def width(self):
         """Return width of the raised cosine."""
         return self._width
-
-    @width.setter
-    def width(self, width: float):
-        """Check and set width of the raised cosine."""
-        self._check_width(width)
-        self._width = width
 
     @staticmethod
     def _check_width(width: float):
@@ -854,6 +849,9 @@ class RaisedCosineBasisLinear(Basis):
 
         peaks = np.linspace(0, 1, self.n_basis_funcs)
         delta = peaks[1] - peaks[0]
+        # generate a set of shifted cosines, and constrain them to be non-zero
+        # over a single period, then enforce the codomain to be [0,1], by adding 1
+        # and then multiply by 0.5
         basis_funcs = 0.5 * (
             np.cos(
                 np.clip(
