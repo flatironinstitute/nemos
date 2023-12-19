@@ -772,7 +772,7 @@ class CyclicBSplineBasis(SplineBasis):
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](references)
+    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
     to uniformly tile the internal points of the domain.
 
     Parameters
