@@ -72,4 +72,4 @@ class FeaturePytree(UserDict):
         try:
             return cls(**jax.tree_util.tree_unflatten(aux_data, children))
         except ValueError:
-            return dict(**jax.tree_util.tree_unflatten(aux_data, children))
+            return jax.tree_util.tree_unflatten(aux_data, children)
