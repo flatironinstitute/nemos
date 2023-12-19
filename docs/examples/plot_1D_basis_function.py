@@ -124,6 +124,7 @@ plt.tight_layout()
 # is equivalent to computing the discrete Fourier transform on a sliding window of the same size
 # as that of the basis.
 
+
 n_samples = 1000
 n_freqs = 20
 
