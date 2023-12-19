@@ -1001,8 +1001,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
 
         """
         if self.enforce_decay_to_zero:
-            last_peak = 1 - np.ceil(self.width) / (
-                self.n_basis_funcs + np.ceil(self.width) - 1
+            last_peak = 1 - self.width / (
+                self.n_basis_funcs + self.width - 1
             )
         else:
             last_peak = 1
