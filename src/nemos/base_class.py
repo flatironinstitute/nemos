@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
 from .pytrees import FeaturePytree
-from .utils import check_invalid_entry, pytree_any
+from .utils import check_invalid_entry, pytree_map_and_reduce
 
 DESIGN_INPUT_TYPE = Union[NDArray, jnp.ndarray, FeaturePytree]
 
@@ -234,7 +234,7 @@ class BaseRegressor(Base, abc.ABC):
                 "with numeric data-type!"
             )
 
-        if pytree_any(lambda x: x.ndim != 2, params[0]):
+        if pytree_map_and_reduce(lambda x: x.ndim != 2, any, params[0]):
             raise ValueError(
                 "params[0] must be an array or nemos.pytree.FeaturePytree with array leafs "
                 "of shape (n_neurons, n_features)."
@@ -258,7 +258,7 @@ class BaseRegressor(Base, abc.ABC):
                     "y must be two-dimensional, with shape (n_timebins, n_neurons)"
                 )
         if not (X is None):
-            if pytree_any(lambda x: x.ndim != 3, X):
+            if pytree_map_and_reduce(lambda x: x.ndim != 3, any, X):
                 raise ValueError(
                     "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features) or pytree of the same"
                 )
@@ -282,7 +282,7 @@ class BaseRegressor(Base, abc.ABC):
 
         """
         n_neurons = params[1].shape[0]
-        if pytree_any(lambda x: x.shape[0] != n_neurons, params[0]):
+        if pytree_map_and_reduce(lambda x: x.shape[0] != n_neurons, any, params[0]):
             raise ValueError(
                 "Model parameters have inconsistent shapes. "
                 "Spike basis coefficients must be of shape (n_neurons, n_features), and "
@@ -301,7 +301,7 @@ class BaseRegressor(Base, abc.ABC):
                 )
 
         if X is not None:
-            if pytree_any(lambda x: x.shape[1] != n_neurons, X):
+            if pytree_map_and_reduce(lambda x: x.shape[1] != n_neurons, any, X):
                 raise ValueError(
                     "The number of neurons in the model parameters and in the inputs"
                     "must match."
@@ -313,7 +313,7 @@ class BaseRegressor(Base, abc.ABC):
             if only_X_pytree or only_coeff_pytree:
                 raise TypeError(f"X and params[0] must be the same type, but X is {type(X)} and "
                                 f"params[0] is {type(params[0])}")
-            if pytree_any(lambda p, x: p.shape[1] != x.shape[2], params[0], X):
+            if pytree_map_and_reduce(lambda p, x: p.shape[1] != x.shape[2], any, params[0], X):
                 raise ValueError(
                     "Inconsistent number of features. "
                     f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
@@ -328,10 +328,10 @@ class BaseRegressor(Base, abc.ABC):
             # number of time points. grab the number of timepoints for the
             # first feature
             first_feat_timepts = list(X_timepts.values())[0]
-            if pytree_any(lambda x: x != first_feat_timepts, X_timepts):
+            if pytree_map_and_reduce(lambda x: x != first_feat_timepts, any, X_timepts):
                 raise ValueError(f"All leaves of X must have the same number of time points, but found {X_timepts}!")
         # now check that X and y have the same number of time points
-        if pytree_any(lambda x: x != y.shape[0], X_timepts):
+        if pytree_map_and_reduce(lambda x: x != y.shape[0], any, X_timepts):
             raise ValueError(
                 "The number of time-points in X and y must agree. "
                 f"X has {X_timepts} time-points, "

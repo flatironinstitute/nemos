@@ -406,9 +406,9 @@ def check_invalid_entry(pytree: Union[FeaturePytree, jnp.ndarray],
     """
     # this is a double-any situation: first, we check if each leaf have any
     # Infs, then we check whether any leaf has an Inf
-    if pytree_any(jnp.any, jax.tree_map(jnp.isinf, pytree)):
+    if pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isinf, pytree)):
         raise ValueError(f"Input '{pytree_name}' contains Infs!")
-    if pytree_any(jnp.any, jax.tree_map(jnp.isnan, pytree)):
+    if pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree)):
         raise ValueError(f"Input '{pytree_name}' contains NaNs!")
 
 
@@ -466,15 +466,40 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
         )
 
 
-def pytree_any(condition: Callable,
-               *pytrees: Union[FeaturePytree, NDArray, jnp.ndarray]):
-    """Determine whether a condition is true at any of pytree's leaves.
-
-    This is a map/reduce operation: check whether a condition is true at each
-    of pytree's leaves, then check whether any of those pytree's leaves are
-    True.
-
+def pytree_map_and_reduce(map_fn: Callable, reduce_fn: Callable,
+                          *pytrees: Union[FeaturePytree, NDArray, jnp.ndarray]):
     """
-    cond_tree = jax.tree_map(condition, *pytrees)
+    Apply a mapping function to each leaf of the pytrees and then reduce the results.
+
+    This function performs a map/reduce operation where a mapping function is applied
+    to each leaf of the given pytrees, and then a reduction function is used to
+    aggregate these results into a single output.
+
+    Parameters
+    ----------
+    map_fn :
+        A function to be applied to each leaf of the pytrees. This function should
+        take a single argument and return a single value.
+    reduce_fn :
+        A function that reduces the mapped results. This function should take an
+        iterable and return a single value.
+    *pytrees :
+        One or more pytrees to which the map and reduce functions are applied.
+
+    Returns
+    -------
+    The result of applying the reduce function to the mapped results. The type of the
+    return value depends on the reduce function.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> pytree1 = nmo.pytrees.FeaturePytree(a=jnp.array([0]), b=jnp.array([0]))
+    >>> pytree2 = nmo.pytrees.FeaturePytree(a=jnp.array([10]), b=jnp.array([20]))
+    >>> map_fn = lambda x, y: x > y
+    >>> # Example usage
+    >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
+    """
+    cond_tree = jax.tree_map(map_fn, *pytrees)
     # for some reason, tree_reduce doesn't work well with any.
-    return any(jax.tree_util.tree_leaves(cond_tree))
+    return reduce_fn(jax.tree_util.tree_leaves(cond_tree))

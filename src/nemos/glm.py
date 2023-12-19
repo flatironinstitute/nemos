@@ -368,7 +368,7 @@ class GLM(BaseRegressor):
         # estimate the GLM scale
         self.observation_model.estimate_scale(self._predict(params, X))
 
-        if utils.pytree_any(jnp.any, jax.tree_map(jnp.isnan, params[0])) or jnp.isnan(params[1]).any():
+        if utils.pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, params[0])) or jnp.isnan(params[1]).any():
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
                 " Try tuning optimization hyperparameters."
