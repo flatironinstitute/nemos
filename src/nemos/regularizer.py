@@ -270,7 +270,7 @@ class Ridge(Regularizer):
             return (
                     0.5
                     * self.regularizer_strength
-                    * jnp.sum(jnp.power(coeff, 2), keepdims=True)
+                    * jnp.sum(jnp.power(coeff, 2))
                     / intercept.shape[0]
             )
         # tree map the computation and sum over leaves

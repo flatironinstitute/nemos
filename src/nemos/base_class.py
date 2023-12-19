@@ -310,6 +310,7 @@ class BaseRegressor(Base, abc.ABC):
                 )
             only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(params[0], FeaturePytree)
             only_coeff_pytree = not isinstance(X, FeaturePytree) and isinstance(params[0], FeaturePytree)
+            # add check keys match as class method of featurepytree. pytreedef == pyreedef
             if only_X_pytree or only_coeff_pytree:
                 raise TypeError(f"X and params[0] must be the same type, but X is {type(X)} and "
                                 f"params[0] is {type(params[0])}")
@@ -322,19 +323,10 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_input_n_timepoints(X: Union[FeaturePytree, jnp.ndarray], y: jnp.ndarray):
-        X_timepts = jax.tree_map(lambda x: x.shape[0], X)
-        if isinstance(X, FeaturePytree):
-            # then we also need to ensure that all of X's leaves have the same
-            # number of time points. grab the number of timepoints for the
-            # first feature
-            first_feat_timepts = list(X_timepts.values())[0]
-            if pytree_map_and_reduce(lambda x: x != first_feat_timepts, any, X_timepts):
-                raise ValueError(f"All leaves of X must have the same number of time points, but found {X_timepts}!")
-        # now check that X and y have the same number of time points
-        if pytree_map_and_reduce(lambda x: x != y.shape[0], any, X_timepts):
+        if y.shape[0] != X.shape[0]:
             raise ValueError(
                 "The number of time-points in X and y must agree. "
-                f"X has {X_timepts} time-points, "
+                f"X has {X.shape[0]} time-points, "
                 f"y has {y.shape[0]} instead!"
             )
 
