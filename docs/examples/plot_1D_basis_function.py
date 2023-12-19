@@ -120,7 +120,7 @@ plt.tight_layout()
 #     When computing the cross-correlation of a signal with the Fourier basis functions,
 #     we essentially measure how well the signal correlates with sinusoids of different frequencies,
 #     within a specified temporal window. This process mirrors the operation performed by the Fourier transform.
-#     Therefore, it becomes clear that computing the cross-correlation of a signal with the Fourier basis defined here
+#     Therefore, computing the cross-correlation of a signal with the Fourier basis defined here
 #     is equivalent to computing the discrete Fourier transform on a sliding window of the same size
 #     as that of the basis.
 
