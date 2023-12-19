@@ -255,18 +255,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "time_scaling ,expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="Only strictly positive time_scaling are allowed"
-                ),
-            ),
-            (
-                0,
-                pytest.raises(
-                    ValueError, match="Only strictly positive time_scaling are allowed"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="Only strictly positive time_scaling are allowed")),
+            (0, pytest.raises(ValueError, match="Only strictly positive time_scaling are allowed")),
             (0.1, does_not_raise()),
             (10, does_not_raise()),
         ],
