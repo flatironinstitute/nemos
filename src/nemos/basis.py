@@ -970,7 +970,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
-        # - as the time_scaling tends to inf, basis will be small and dense around 0 and progressively larger and less dense towards 1.
+        # - as the time_scaling tends to inf, basis will be small and dense around 0 and
+        # progressively larger and less dense towards 1.
         log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(
             self.time_scaling + 1
         )
