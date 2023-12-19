@@ -1001,6 +1001,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
 
         """
         if self.enforce_decay_to_zero:
+            # compute the last peak location such that the last
+            # basis element decays to zero at the last sample.
             last_peak = 1 - self.width / (
                 self.n_basis_funcs + self.width - 1
             )
