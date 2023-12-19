@@ -19,9 +19,7 @@ Abstract Class Basis
 │   │
 │   └─ Concrete Subclass CyclicBSplineBasis
 │
-├─ Abstract Subclass RaisedCosineBasis
-│   │
-│   ├─ Concrete Subclass RaisedCosineBasisLinear
+├─ Concrete Subclass RaisedCosineBasisLinear 
 │   │
 │   └─ Concrete Subclass RaisedCosineBasisLog
 │

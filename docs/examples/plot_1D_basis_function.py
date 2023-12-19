@@ -90,13 +90,13 @@ plt.show()
 # Additionally, the Fourier basis has the advantage of being orthogonal, which simplifies the estimation and
 # interpretation of the model parameters, each of which will represent the relative contribution of a specific
 # oscillation frequency to the overall signal.
-
-
+#
 # A Fourier basis can be instantiated with the usual syntax.
 # The user can pass the desired frequencies for the basis or
-# the frequencies will be set to np.arange(n_basis_funcs//2).
+# the frequencies will be set to `np.arange(n_basis_funcs//2)`.
 # The number of basis function is required to be even.
-fourier_basis = nmo.basis.FourierBasis(n_freqs=4)
+
+fourier_basis = nmo.basis.FourierBasis(max_freq=4)
 
 # evaluate on equi-spaced samples
 samples, eval_basis = fourier_basis.evaluate_on_grid(1000)
@@ -112,17 +112,17 @@ plt.plot(samples, eval_basis[:, 4:])
 plt.tight_layout()
 
 # %%
-# !!! note "Fourier basis convolution and Fourier transform"
-#     The Fourier transform of a signal $ s(t) $ restricted to a temporal window $ [t_0,\;t_1] $ is
-#     $$ \\hat{x}(\\omega) = \\int_{t_0}^{t_1} s(\\tau) e^{-j\\omega \\tau} d\\tau. $$
-#     where $ e^{-j\\omega \\tau} = \\cos(\\omega \\tau) - j \\sin (\\omega \\tau) $.
+# ## Fourier Basis Convolution and Fourier Transform
+# The Fourier transform of a signal $ s(t) $ restricted to a temporal window $ [t_0,\;t_1] $ is
+# $$ \\hat{x}(\\omega) = \\int_{t_0}^{t_1} s(\\tau) e^{-j\\omega \\tau} d\\tau. $$
+# where $ e^{-j\\omega \\tau} = \\cos(\\omega \\tau) - j \\sin (\\omega \\tau) $.
 #
-#     When computing the cross-correlation of a signal with the Fourier basis functions,
-#     we essentially measure how well the signal correlates with sinusoids of different frequencies,
-#     within a specified temporal window. This process mirrors the operation performed by the Fourier transform.
-#     Therefore, it becomes clear that computing the cross-correlation of a signal with the Fourier basis defined here
-#     is equivalent to computing the discrete Fourier transform on a sliding window of the same size
-#     as that of the basis.
+# When computing the cross-correlation of a signal with the Fourier basis functions,
+# we essentially measure how well the signal correlates with sinusoids of different frequencies,
+# within a specified temporal window. This process mirrors the operation performed by the Fourier transform.
+# Therefore, it becomes clear that computing the cross-correlation of a signal with the Fourier basis defined here
+# is equivalent to computing the discrete Fourier transform on a sliding window of the same size
+# as that of the basis.
 
 n_samples = 1000
 n_freqs = 20
@@ -131,7 +131,7 @@ n_freqs = 20
 signal = np.random.normal(size=n_samples)
 
 # evaluate the basis
-_, eval_basis = nmo.basis.FourierBasis(n_freqs=n_freqs).evaluate_on_grid(n_samples)
+_, eval_basis = nmo.basis.FourierBasis(max_freq=n_freqs).evaluate_on_grid(n_samples)
 
 # compute the cross-corr with the signal and the basis
 # Note that we are inverting the time axis of the basis because we are aiming

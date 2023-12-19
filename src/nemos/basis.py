@@ -52,7 +52,7 @@ class Basis(abc.ABC):
         self._check_n_basis_min()
 
     @abc.abstractmethod
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "evaluate" method.
 
@@ -328,7 +328,7 @@ class AdditiveBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -384,7 +384,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def evaluate(self, *xi: NDArray) -> NDArray:
+    def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -506,7 +506,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """M-spline 1-dimensional basis functions.
+    """M-spline[$^1$](#references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -520,15 +520,14 @@ class MSplineBasis(SplineBasis):
 
     References
     ----------
-    [^1]:
-        Ramsay, J. O. (1988). Monotone regression splines in action.
+    1. Ramsay, J. O. (1988). Monotone regression splines in action.
         Statistical science, 3(4), 425-441.
     """
 
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -578,7 +577,7 @@ class MSplineBasis(SplineBasis):
 
 class BSplineBasis(SplineBasis):
     """
-    B-spline 1-dimensional basis functions.
+    B-spline[$^1$](#references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -597,8 +596,7 @@ class BSplineBasis(SplineBasis):
 
     References
     ----------
-    [^2]:
-        Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    1. Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     """
@@ -606,7 +604,7 @@ class BSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2):
         super().__init__(n_basis_funcs, order=order)
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -694,7 +692,7 @@ class CyclicBSplineBasis(SplineBasis):
                 f"order {self.order} specified instead!"
             )
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
@@ -772,34 +770,68 @@ class CyclicBSplineBasis(SplineBasis):
         return super().evaluate_on_grid(n_samples)
 
 
-class RaisedCosineBasis(Basis, abc.ABC):
-    def __init__(self, n_basis_funcs: int) -> None:
+class RaisedCosineBasisLinear(Basis):
+    """Represent linearly-spaced raised cosine basis functions.
+
+    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
+    to uniformly tile the internal points of the domain.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        The number of basis functions.
+    width :
+        Width of the raised cosine. By default, it's set to 2.0.
+
+    References
+    ----------
+    1. Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+    """
+
+    def __init__(self, n_basis_funcs: int, width: float = 2.0) -> None:
         super().__init__(n_basis_funcs)
         self._n_input_dimensionality = 1
+        self._check_width(width)
+        self._width = width
 
-    @abc.abstractmethod
-    def _transform_samples(self, sample_pts: NDArray) -> NDArray:
-        """
-        Abstract method for transforming sample points.
+    @property
+    def width(self):
+        """Return width of the raised cosine."""
+        return self._width
+
+    @staticmethod
+    def _check_width(width: float):
+        """Validate the width value.
 
         Parameters
         ----------
-        sample_pts :
-           The sample points to be transformed, shape (n_samples,).
-        """
-        pass
+        width :
+            The width value to validate.
 
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+        Raises
+        ------
+        ValueError
+            If width <= 1 or 2*width is not a positive integer. Values that do not match
+            this constraint will result in:
+            - No overlap between bumps (width < 1).
+            - Oscillatory behavior when summing the basis elements (2*width not integer).
+        """
+        if width <= 1 or (not np.isclose(width * 2, round(2 * width))):
+            raise ValueError(
+                f"Invalid raised cosine width. "
+                f"2*width must be a positive integer, 2*width = {2 * width} instead!"
+            )
+
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
         ----------
-        sample_pts : (number of samples,)
-            Spacing for basis functions, holding elements on interval [0, 1). A
-            good default is ``nmo.sample_points.raised_cosine_log`` for log
-            spacing (as used in [2]_) or
-            ``nmo.sample_points.raised_cosine_linear`` for linear spacing.
-            Shape (n_samples,).
+        sample_pts :
+            Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
 
         Returns
         -------
@@ -816,16 +848,33 @@ class RaisedCosineBasis(Basis, abc.ABC):
         if any(sample_pts < 0) or any(sample_pts > 1):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
-        # transform to the proper domain
-        transform_sample_pts = self._transform_samples(sample_pts)
-
-        shifted_sample_pts = (
-            transform_sample_pts[:, None]
-            - (np.pi * np.arange(self.n_basis_funcs))[None, :]
+        peaks = self._compute_peaks()
+        delta = peaks[1] - peaks[0]
+        # generate a set of shifted cosines, and constrain them to be non-zero
+        # over a single period, then enforce the codomain to be [0,1], by adding 1
+        # and then multiply by 0.5
+        basis_funcs = 0.5 * (
+            np.cos(
+                np.clip(
+                    np.pi * (sample_pts[:, None] - peaks[None]) / (delta * self.width),
+                    -np.pi,
+                    np.pi,
+                )
+            )
+            + 1
         )
-        basis_funcs = 0.5 * (np.cos(np.clip(shifted_sample_pts, -np.pi, np.pi)) + 1)
 
         return basis_funcs
+
+    def _compute_peaks(self):
+        """
+        Compute the location of raised cosine peaks.
+
+        Returns
+        -------
+            Peak locations of each basis element.
+        """
+        return np.linspace(0, 1, self.n_basis_funcs)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -846,127 +895,140 @@ class RaisedCosineBasis(Basis, abc.ABC):
         """
         return super().evaluate_on_grid(n_samples)
 
-
-class RaisedCosineBasisLinear(RaisedCosineBasis):
-    """Linearly-spaced raised cosine basis functions used by Pillow et al.
-
-    These are "cosine bumps" that uniformly tile the space.
-
-
-    Parameters
-    ----------
-    n_basis_funcs
-        Number of basis functions.
-
-    References
-    ----------
-    [^3]:
-        Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
-        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
-        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
-
-    """
-
-    def __init__(self, n_basis_funcs: int) -> None:
-        super().__init__(n_basis_funcs)
-
-    def _transform_samples(self, sample_pts: NDArray) -> NDArray:
-        """
-        Linearly map the samples from [0,1] to the the [0, (n_basis_funcs - 1) * pi].
-
-        Parameters
-        ----------
-        sample_pts :
-            The sample points used for evaluating the splines, shape (n_samples,)
-
-        Returns
-        -------
-        :
-            A transformed version of the sample points that matches the Raised Cosine basis domain,
-            shape (number of samples, ).
-        """
-        return sample_pts * np.pi * (self.n_basis_funcs - 1)
-
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
 
-        Check that the number of basis is at least 1.
+        Check that the number of basis is at least 2.
 
         Raises
         ------
         ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        if self.n_basis_funcs < 1:
-            raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
-                f"{self.n_basis_funcs} basis elements specified instead"
-            )
-
-
-class RaisedCosineBasisLog(RaisedCosineBasis):
-    """Log-spaced raised cosine basis functions used by Pillow et al. [2]_.
-
-    These are "cosine bumps" that uniformly tile the space.
-
-    Parameters
-    ----------
-    n_basis_funcs
-        Number of basis functions.
-
-    References
-    ----------
-    .. [2] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
-       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
-       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
-
-    """
-
-    def __init__(self, n_basis_funcs: int) -> None:
-        super().__init__(n_basis_funcs)
-
-    def _transform_samples(self, sample_pts: NDArray) -> NDArray:
-        """Map the sample domain to log-space.
-
-        Map the equi-spaced samples from [0,1] to log equi-spaced samples [0, (n_basis_funcs - 1) * pi].
-
-        Parameters
-        ----------
-        sample_pts :
-            The sample points used for evaluating the splines, shape (n_samples,).
-
-        Returns
-        -------
-        :
-            A transformed version of the sample points that matches the Raised Cosine basis domain,
-            shape (n_sample_points, ).
-        """
-        return (
-            np.power(
-                10,
-                -(np.log10((self.n_basis_funcs - 1) * np.pi) + 1) * sample_pts
-                + np.log10((self.n_basis_funcs - 1) * np.pi),
-            )
-            - 0.1
-        )
-
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Checks that the number of basis is at least 2.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
+            If n_basis_funcs < 2.
         """
         if self.n_basis_funcs < 2:
             raise ValueError(
                 f"Object class {self.__class__.__name__} requires >= 2 basis elements. "
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
+
+
+class RaisedCosineBasisLog(RaisedCosineBasisLinear):
+    """Represent log-spaced raised cosine basis functions.
+
+    Similar to `RaisedCosineBasisLinear` but the basis functions are log-spaced.
+    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
+    to uniformly tile the internal points of the domain.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        The number of basis functions.
+    width :
+        Width of the raised cosine. By default, it's set to 2.0.
+    enforce_decay_to_zero:
+        If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
+        and subsequently trims off the extra basis elements. This ensures that the final basis element
+        decays to 0.
+
+    References
+    ----------
+    1. Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+       C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+       with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+    """
+
+    def __init__(
+        self,
+        n_basis_funcs: int,
+        width: float = 2.0,
+        time_scaling: float = None,
+        enforce_decay_to_zero: bool = True,
+    ) -> None:
+        super().__init__(n_basis_funcs, width=width)
+        self.enforce_decay_to_zero = enforce_decay_to_zero
+        if time_scaling is None:
+            self._time_scaling = 50.0
+        else:
+            self._check_time_scaling(time_scaling)
+            self._time_scaling = time_scaling
+
+    @property
+    def time_scaling(self):
+        return self._time_scaling
+
+    @staticmethod
+    def _check_time_scaling(time_scaling):
+        if time_scaling <= 0:
+            raise ValueError(
+                f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
+            )
+
+    def _transform_samples(self, sample_pts: NDArray) -> NDArray:
+        """
+        Map the sample domain to log-space.
+
+        Parameters
+        ----------
+        sample_pts :
+            Sample points used for evaluating the splines,
+            shape (n_samples, ).
+
+        Returns
+        -------
+            Transformed version of the sample points that matches the Raised Cosine basis domain,
+            shape (n_samples, ).
+        """
+        # This log-stretching of the sample axis has the following effect:
+        # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
+        # - as the time_scaling tends to inf, basis will be small and dense around 0 and
+        # progressively larger and less dense towards 1.
+        log_spaced_pts = np.log(self.time_scaling * sample_pts + 1) / np.log(
+            self.time_scaling + 1
+        )
+        return log_spaced_pts
+
+    def _compute_peaks(self):
+        """
+        Peak location of each log-spaced cosine basis element
+
+        Compute the peak location for the log-spaced raised cosine basis.
+        Enforcing that the last basis decays to zero is equivalent to
+        setting the last peak to a value smaller than 1.
+
+        Returns
+        -------
+            Peak locations of each basis element.
+
+        """
+        if self.enforce_decay_to_zero:
+            # compute the last peak location such that the last
+            # basis element decays to zero at the last sample.
+            last_peak = 1 - self.width / (self.n_basis_funcs + self.width - 1)
+        else:
+            last_peak = 1
+        return np.linspace(0, last_peak, self.n_basis_funcs)
+
+    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
+        """Generate log-spaced raised cosine basis with given samples.
+
+        Parameters
+        ----------
+        sample_pts :
+            Spacing for basis functions, holding elements on interval [0, 1].
+
+        Returns
+        -------
+        basis_funcs :
+            Log-raised cosine basis functions, shape (n_samples, n_basis_funcs).
+
+        Raises
+        ------
+        ValueError
+            If the sample provided do not lie in [0,1].
+        """
+        (sample_pts,) = self._check_evaluate_input(sample_pts)
+        return super().evaluate(self._transform_samples(sample_pts))
 
 
 class OrthExponentialBasis(Basis):
@@ -1120,16 +1182,19 @@ class OrthExponentialBasis(Basis):
 class FourierBasis(Basis):
     """Set of 1D Fourier basis.
 
+    This class defines a cosine and negative sine basis (quadrature pair)
+    with frequencies ranging 0 to max_freq - 1.
+
     Parameters
     ----------
-    n_freqs
-            Number of frequencies. The number of basis function will be 2*n_freqs - 1.
+    max_freq
+            Number of frequencies. The number of basis function will be 2*max_freq - 1.
     """
 
-    def __init__(self, n_freqs: int):
-        super().__init__(n_basis_funcs=2 * n_freqs - 1)
+    def __init__(self, max_freq: int):
+        super().__init__(n_basis_funcs=2 * max_freq - 1)
 
-        self._frequencies = np.arange(n_freqs, dtype=np.float32)
+        self._frequencies = np.arange(max_freq, dtype=float)
         self._n_input_dimensionality = 1
 
     def _check_n_basis_min(self) -> None:
@@ -1140,7 +1205,7 @@ class FourierBasis(Basis):
         Raises
         ------
         ValueError
-            If an insufficient number of basis element is requested for the basis type
+            If an insufficient number of basis element is requested for the basis type.
         """
         if self.n_basis_funcs < 1:
             raise ValueError(
@@ -1163,25 +1228,25 @@ class FourierBasis(Basis):
 
         Notes
         -----
-            If the frequencies provided are np.arange(n_freq), convolving a signal
-            of length n_samples with this basis is equivalent, but slower,
-            then computing the FFT truncated to the first n_freq components.
+        If the frequencies provided are np.arange(max_freq), convolving a signal
+        of length n_samples with this basis is equivalent, but slower,
+        then computing the FFT truncated to the first max_freq components.
 
-            Therefore, convolving a signal with this basis is equivalent
-            to compute the FFT over sliding window.
+        Therefore, convolving a signal with this basis is equivalent
+        to compute the FFT over a sliding window.
 
         Examples
         --------
-            >>> import nemos as nmo
-            >>> import numpy as np
-            >>> n_samples, n_freqs = 1000, 10
-            >>> basis = nmo.basis.FourierBasis(n_freqs*2)
-            >>> eval_basis = basis.evaluate(np.linspace(0, 1, n_samples))
-            >>> sinusoid = np.cos(3 * np.arange(0, 1000) * np.pi * 2 / 1000.)
-            >>> conv = [np.convolve(eval_basis[::-1, k], sinusoid, mode='valid')[0] for k in range(2*n_freqs-1)]
-            >>> fft = np.fft.fft(sinusoid)
-            >>> print('FFT power:   ', np.round(np.real(fft[:10]), 4))
-            >>> print('Convolution: ', np.round(conv[:10], 4))
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> n_samples, max_freq = 1000, 10
+        >>> basis = nmo.basis.FourierBasis(max_freq*2)
+        >>> eval_basis = basis.evaluate(np.linspace(0, 1, n_samples))
+        >>> sinusoid = np.cos(3 * np.arange(0, 1000) * np.pi * 2 / 1000.)
+        >>> conv = [np.convolve(eval_basis[::-1, k], sinusoid, mode='valid')[0] for k in range(2*max_freq-1)]
+        >>> fft = np.fft.fft(sinusoid)
+        >>> print('FFT power:   ', np.round(np.real(fft[:10]), 4))
+        >>> print('Convolution: ', np.round(conv[:10], 4))
         """
         (sample_pts,) = self._check_evaluate_input(sample_pts)
         # assumes equi-spaced samples.
