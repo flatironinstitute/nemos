@@ -937,21 +937,21 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         super().__init__(n_basis_funcs, width=width)
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
-            self.time_scaling = 50.0
+            self._time_scaling = 50.0
         else:
-            self.time_scaling = time_scaling
+            self._check_time_scaling(time_scaling)
+            self._time_scaling = time_scaling
 
     @property
     def time_scaling(self):
         return self._time_scaling
 
-    @time_scaling.setter
-    def time_scaling(self, time_scaling):
+    @staticmethod
+    def _check_time_scaling(time_scaling):
         if time_scaling <= 0:
             raise ValueError(
                 f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
             )
-        self._time_scaling = time_scaling
 
     def _transform_samples(self, sample_pts: NDArray) -> NDArray:
         """
@@ -959,13 +959,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
 
         Parameters
         ----------
-        sample_pts : NDArray
+        sample_pts :
             Sample points used for evaluating the splines,
             shape (n_samples, ).
 
         Returns
         -------
-        NDArray
             Transformed version of the sample points that matches the Raised Cosine basis domain,
             shape (n_samples, ).
         """
