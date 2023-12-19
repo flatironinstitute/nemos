@@ -1,5 +1,5 @@
 """
-# One-dimensional convolutions
+One-dimensional convolutions
 """
 
 # %%
@@ -10,7 +10,7 @@ import matplotlib.patches as patches
 import matplotlib.pylab as plt
 import numpy as np
 
-import neurostatslib as nsl
+import nemos as nmo
 
 np.random.seed(10)
 ws = 11
@@ -40,7 +40,7 @@ spk[-4] = 1
 
 
 # create three filters
-basis_obj = nsl.basis.RaisedCosineBasisLinear(n_basis_funcs=3)
+basis_obj = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=3)
 _, w = basis_obj.evaluate_on_grid(ws)
 
 plt.plot(w)
@@ -49,7 +49,7 @@ plt.plot(w)
 # the function requires an iterable (one element per trial)
 # and returns a list of convolutions
 
-spk_conv = nsl.utils.convolve_1d_trials(w, [spk, np.zeros((20, 1))])
+spk_conv = nmo.utils.convolve_1d_trials(w, [spk, np.zeros((20, 1))])
 print(f"Shape of spk: {spk.shape}\nShape of w: {w.shape}")
 
 # valid convolution should be of shape n_samples - ws + 1
@@ -73,9 +73,9 @@ print(f"Shape of the convolution output: {spk_conv[0].shape}")
 
 
 # pad according to the causal direction of the filter, after squeeze, the dimension is (n_filters, n_samples)
-spk_causal_utils = np.squeeze(nsl.utils.nan_pad_conv(spk_conv, ws, filter_type="causal")[0])
-spk_anticausal_utils = np.squeeze(nsl.utils.nan_pad_conv(spk_conv, ws, filter_type="anti-causal")[0])
-spk_acausal_utils = np.squeeze(nsl.utils.nan_pad_conv(spk_conv, ws, filter_type="acausal")[0])
+spk_causal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="causal")[0])
+spk_anticausal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="anti-causal")[0])
+spk_acausal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="acausal")[0])
 
 
 # %%

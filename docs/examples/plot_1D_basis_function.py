@@ -15,14 +15,14 @@ The hyperparameters required to initialize this class are:
 import matplotlib.pylab as plt
 import numpy as np
 
-import neurostatslib as nsl
+import nemos as nmo
 
 # Initialize hyperparameters
 order = 4
 n_basis = 10
 
 # Define the 1D basis function object
-mspline_basis = nsl.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
+mspline_basis = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
 
 # %%
 # Evaluating a Basis
@@ -64,14 +64,14 @@ plt.show()
 # Other Basis Types
 # -----------------
 # Each basis type may necessitate specific hyperparameters for instantiation. For a comprehensive description,
-# please refer to the  [Code References](../../../reference/neurostatslib/basis). After instantiation, all classes
+# please refer to the  [Code References](../../../reference/nemos/basis). After instantiation, all classes
 # share the same syntax for basis evaluation.
 #
 # ### The Log-Spaced Raised Cosine Basis
 # The following is an example of how to instantiate and  evaluate a log-spaced cosine raised function basis.
 
 # Instantiate the basis noting that the `RaisedCosineBasisLog` does not require an `order` parameter
-raised_cosine_log = nsl.basis.RaisedCosineBasisLog(n_basis_funcs=10)
+raised_cosine_log = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=10)
 
 # Evaluate the raised cosine basis at the equi-spaced sample points
 # (same method in all Basis elements)
@@ -96,7 +96,7 @@ plt.show()
 # The user can pass the desired frequencies for the basis or
 # the frequencies will be set to np.arange(n_basis_funcs//2).
 # The number of basis function is required to be even.
-fourier_basis = nsl.basis.FourierBasis(n_freqs=4)
+fourier_basis = nmo.basis.FourierBasis(n_freqs=4)
 
 # evaluate on equi-spaced samples
 samples, eval_basis = fourier_basis.evaluate_on_grid(1000)
@@ -131,7 +131,7 @@ n_freqs = 20
 signal = np.random.normal(size=n_samples)
 
 # evaluate the basis
-_, eval_basis = nsl.basis.FourierBasis(n_freqs=n_freqs).evaluate_on_grid(n_samples)
+_, eval_basis = nmo.basis.FourierBasis(n_freqs=n_freqs).evaluate_on_grid(n_samples)
 
 # compute the cross-corr with the signal and the basis
 # Note that we are inverting the time axis of the basis because we are aiming
@@ -164,3 +164,6 @@ ax[1].scatter(fft_phase, xcorr_phase)
 ax[1].set_xlabel("FFT")
 ax[1].set_ylabel("cross-correlation")
 plt.tight_layout()
+
+print(f"Max Error Amplitude: {np.abs(fft_amplitude - xcorr_aplitude).max()}")
+print(f"Max Error Phase: {np.abs(fft_phase - xcorr_phase).max()}")
