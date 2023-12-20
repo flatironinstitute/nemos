@@ -22,7 +22,9 @@ plugins:
   - search
   - gallery:
         conf_script: docs/gallery_conf.py
+        # path to the directory containing our examples/tutorials
         examples_dirs: docs/examples
+        # path to the directory where mkdocs will save the generated output
         gallery_dirs: docs/generated/gallery
   - gen-files:
       scripts:
