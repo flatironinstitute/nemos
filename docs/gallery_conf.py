@@ -11,7 +11,10 @@ if 'SOURCE_DATE_EPOCH' in os.environ:
 # To be used as the "base" config,
 # this script is referenced in the mkdocs.yaml under `conf_script` option: docs/gallery_conf.py
 conf = {
+    # reset args to default.
     'reset_argv': DefaultResetArgv(),
+    # report runtime if larger than this value
     'min_reported_time': min_reported_time,
+    # order your section in file name alphabetical order
     'within_subsection_order': FileNameSortKey
 }
