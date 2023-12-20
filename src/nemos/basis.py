@@ -1208,9 +1208,9 @@ class FourierBasis(Basis):
         ValueError
             If an insufficient number of basis element is requested for the basis type.
         """
-        if self.n_basis_funcs < 1:
+        if self.n_basis_funcs < 0:
             raise ValueError(
-                f"Object class {self.__class__.__name__} requires >= 0 basis elements. "
+                f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
 

@@ -905,7 +905,7 @@ class TestFourierBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("max_freq, expectation",
         [
-            (-1, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 0 basis elements")),
+            (-1, pytest.raises(ValueError,match=r"Object class FourierBasis requires >= 1 basis elements")),
             (0, does_not_raise()),
             (1, does_not_raise()),
             (3, does_not_raise())
