@@ -1,9 +1,6 @@
 import os
 import sys
 
-import plotly.io as pio
-pio.renderers.default = 'sphinx_gallery'
-
 from mkdocs_gallery.gen_gallery import DefaultResetArgv
 from mkdocs_gallery.sorting import FileNameSortKey
 

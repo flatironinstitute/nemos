@@ -64,7 +64,6 @@ docs = [
     "mkdocs-literate-nav>=0.6.1",   # Plugin for literate-style navigation in mkdocs
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
     "mkdocs-material",              # Material theme for mkdocs
-    "plotly",                       # Plotly library for interactive visualizations (used in config)
     "mkdocs-autorefs>=0.5",
     "scikit-learn"
 ]
