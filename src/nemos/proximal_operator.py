@@ -28,8 +28,9 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from .pytrees import FeaturePytree
 from .base_class import DESIGN_INPUT_TYPE
+from .pytrees import FeaturePytree
+
 
 def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
     """Euclidean norm of the group.

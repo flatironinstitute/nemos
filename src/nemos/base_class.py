@@ -13,7 +13,7 @@ from numpy.typing import ArrayLike, NDArray
 from .pytrees import FeaturePytree
 from .utils import check_invalid_entry, pytree_map_and_reduce
 
-DESIGN_INPUT_TYPE = Union[NDArray, jnp.ndarray, FeaturePytree]
+DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
 
 class Base:
@@ -213,7 +213,7 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_and_convert_params(
-        params: Tuple[DESIGN_INPUT_TYPE, ArrayLike], data_type: Optional[jnp.dtype] = None
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike], data_type: Optional[jnp.dtype] = None
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -332,8 +332,8 @@ class BaseRegressor(Base, abc.ABC):
 
     def _preprocess_fit(
         self,
-        X: DESIGN_INPUT_TYPE,
-        y: Union[NDArray, jnp.ndarray],
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: Union[NDArray, ArrayLike],
         init_params: Optional[Tuple[DESIGN_INPUT_TYPE, ArrayLike]] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray, Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]]:
         """Preprocess input data and initial parameters for the fit method.
@@ -386,7 +386,7 @@ class BaseRegressor(Base, abc.ABC):
         # Initialize parameters
         if init_params is None:
             init_params = (
-                # Ws, spike basis coeffs.
+                # coeff, spike basis coeffs.
                 # - If X is a FeaturePytree with n_features arrays of shape
                 #   (n_timebins, n_neurons, n_features), then this will be a
                 #   FeaturePytree with n_features arrays of shape (n_neurons,
@@ -395,7 +395,7 @@ class BaseRegressor(Base, abc.ABC):
                 #   n_features), this will be an array of shape (n_neurons,
                 #   n_features).
                 jax.tree_map(lambda x: jnp.zeros_like(x[0]), X),
-                # bs, bias terms
+                # intercept, bias terms
                 jnp.log(jnp.mean(y, axis=0)),
             )
         else:
@@ -409,10 +409,10 @@ class BaseRegressor(Base, abc.ABC):
 
     def _preprocess_simulate(
         self,
-        feedforward_input: DESIGN_INPUT_TYPE,
+        feedforward_input: Union[DESIGN_INPUT_TYPE, ArrayLike],
         params_feedforward: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        init_y: Optional[Union[NDArray, jnp.ndarray]] = None,
-        params_recurrent: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        init_y: Optional[ArrayLike] = None,
+        params_recurrent: Optional[Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
     ) -> Tuple[jnp.ndarray, ...]:
         """Preprocess the input data and parameters for simulation.
 

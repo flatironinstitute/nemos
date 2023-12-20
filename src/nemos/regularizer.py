@@ -14,11 +14,10 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
-from .pytrees import FeaturePytree
-
 from . import utils
-from .base_class import Base, DESIGN_INPUT_TYPE
+from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
+from .pytrees import FeaturePytree
 
 SolverRunner = Callable[
     [

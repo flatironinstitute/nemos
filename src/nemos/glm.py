@@ -3,13 +3,14 @@ from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from . import observation_models as obs
 from . import regularizer as reg
 from . import utils
-from .base_class import BaseRegressor, DESIGN_INPUT_TYPE
+from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
+from .pytrees import FeaturePytree
 
 
 class GLM(BaseRegressor):
@@ -216,8 +217,8 @@ class GLM(BaseRegressor):
 
     def score(
         self,
-        X: Union[NDArray, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
@@ -320,9 +321,9 @@ class GLM(BaseRegressor):
 
     def fit(
         self,
-        X: DESIGN_INPUT_TYPE,
-        y: Union[NDArray, jnp.ndarray],
-        init_params: Optional[Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -374,7 +375,7 @@ class GLM(BaseRegressor):
             )
 
         # Store parameters
-        self.coef_: jnp.ndarray = params[0]
+        self.coef_: DESIGN_INPUT_TYPE = params[0]
         self.intercept_: jnp.ndarray = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
@@ -536,6 +537,9 @@ class GLMRecurrent(GLM):
         The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
+        if isinstance(feedforward_input, FeaturePytree):
+            raise ValueError("simulate_recurrent works only with arrays. "
+                             "FeaturePytree provided instead!")
         # check if the model is fit
         self._check_is_fit()
 
