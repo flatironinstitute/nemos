@@ -9,10 +9,9 @@ the simple case, with a single neuron receiving some input. We will then show a
 two-neuron system, to demonstrate how FeaturePytree can make it easier to
 separate examine separate types of inputs.
 
-First, let's generate our synthetic single-neuron data.
+First, however, let's briefly discuss FeaturePytrees.
 
 """
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -21,19 +20,6 @@ import nemos as nmo
 # enable float64 precision (optional)
 jax.config.update("jax_enable_x64", True)
 np.random.seed(111)
-
-# random design tensor. Shape (n_time_points, n_neurons, n_features).
-X = 0.5*np.random.normal(size=(100, 1, 5))
-
-# log-rates & weights, shape (n_neurons, ) and (n_neurons, n_features) respectively.
-b_true = np.zeros((1, ))
-w_true = np.random.normal(size=(1, 5))
-# sparsify weights
-w_true[0, 1:4] = 0.
-
-# generate counts
-rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
-spikes = np.random.poisson(rate)
 
 # %%
 # ## FeaturePytrees
@@ -65,6 +51,12 @@ example_pytree['feature_0'].shape
 
 print(len(example_pytree))
 print(example_pytree.shape)
+
+# %%
+#
+# We can also jointly index into the FeaturePytree's leaves:
+
+example_pytree[:10]
 
 # %%
 #
@@ -127,46 +119,151 @@ print(jax.tree_map(jnp.mean, example_pytree))
 print(jax.tree_map(lambda x: x.shape, example_pytree))
 # %%
 #
-# These properties make FeaturePytrees useful for representing design matrices
-# and similar objects for the GLM, which we'll see in the next section.
-#
 # ## FeaturePytrees and GLM
 #
-# Let's take the design matrix that we used to generate our synthetic data and
-# turn it into a FeaturePytree. To start, we'll make the simplest possible
-# FeaturePytree: a single feature.
+# These properties make FeaturePytrees useful for representing design matrices
+# and similar objects for the GLM.
+#
+# First, let's get our dataset and do some initial exploration of it. To do so,
+# we'll use pynapple to [stream
+# data](https://pynapple-org.github.io/pynapple/generated/gallery/tutorial_pynapple_dandi/)
+# from the DANDI archive.
+#
+# !!! attention
+#
+#     We need some additional packages for this portion, which you can install
+#     with `pip install dandi pynapple`
+from pynwb import NWBHDF5IO
 
-design_matrix = nmo.pytrees.FeaturePytree(stimulus=X)
+from dandi.dandiapi import DandiAPIClient
+import fsspec
+from fsspec.implementations.cached import CachingFileSystem
+import h5py
+import pynapple as nap
+import matplotlib.pyplot as plt
+
+# ecephys
+dandiset_id, filepath = (
+    "000582",
+    "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb",
+)
+
+with DandiAPIClient() as client:
+    asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
+    s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
+
+# first, create a virtual filesystem based on the http protocol
+fs = fsspec.filesystem("http")
+
+# create a cache to save downloaded data to disk (optional)
+fs = CachingFileSystem(
+    fs=fs,
+    cache_storage="nwb-cache",  # Local folder for the cache
+)
+
+# next, open the file
+file = h5py.File(fs.open(s3_url, "rb"))
+io = NWBHDF5IO(file=file, load_namespaces=True)
+
+nwb = nap.NWBFile(io.read())
+
+print(nwb)
 
 # %%
 #
-# We can pass this variable to the GLM object just as we would the array, and
-# nemos will fit the model without any problems:
+# This data set has cells that are tuned for head direction and 2d position.
+# Let's compute some simple tuning curves to see if we can find a cell that
+# looks tuned for both.
+
+tc, binsxy = nap.compute_2d_tuning_curves(nwb['units'], nwb['SpatialSeriesLED1'].dropna(), 20)
+fig, axes = plt.subplots(3, 3, figsize=(9, 9))
+for i, ax in zip(tc.keys(), axes.flatten()):
+    ax.imshow(tc[i], origin="lower", aspect="auto")
+    ax.set_title("Unit {}".format(i))
+
+# %%
+# !!! warning
+#     Is this how to compute head direction???
+diff = nwb['SpatialSeriesLED1'].values-nwb['SpatialSeriesLED2'].values
+head_dir = np.arctan2(*diff.T)
+head_dir = nap.Tsd(nwb['SpatialSeriesLED1'].index, head_dir)
+
+tune_head = nap.compute_1d_tuning_curves(nwb['units'], head_dir.dropna(), 30)
+
+fig, axes = plt.subplots(3, 3, figsize=(9, 9), subplot_kw={'projection': 'polar'})
+for i, ax in zip(tune_head.columns, axes.flatten()):
+    ax.plot(tune_head.index, tune_head[i])
+    ax.set_title("Unit {}".format(i))
+
+# %%
+#
+# Okay, let's use unit number 7.
+#
+# Now let's set up our design matrix. First, let's fit the head direction by
+# itself. Head direction is a circular variable (pi and -pi are adjacent to
+# each other), so we need to use a basis that has this property as well.
+# `CyclicBSplineBasis` is one such basis.
+#
+# Let's create our basis and then arrange our data properly.
+    
+unit_no = 7
+spikes = nwb['units'][unit_no]
+
+basis = nmo.basis.CyclicBSplineBasis(10, 5)
+x = np.linspace(-np.pi, np.pi, 100)
+plt.plot(x, basis.evaluate(x))
+
+# this is the interval on which head_dir has no NaNs and spikes.count() returns values
+valid_data = nap.IntervalSet(.88, 599.91)
+head_dir = head_dir.restrict(valid_data)
+spikes = spikes.count(bin_size=.02, time_units='s').restrict(valid_data)
+
+# add extra dim for n_neurons (here, 1)
+X = nmo.pytrees.FeaturePytree(head_direction=np.expand_dims(basis.evaluate(head_dir.values), 1))
+spikes = np.expand_dims(spikes.values, -1)
+
+# %%
+#
+# Now we'll fit our GLM and then see what our head direction tuning looks like:
 
 model = nmo.glm.GLM()
-model.fit(design_matrix, spikes)
+model.fit(X, spikes)
+print(model.coef_['head_direction'])
+
+bs_vis = basis.evaluate(x)
+tuning = jnp.einsum('xb,nb->xn', model.coef_['head_direction'], bs_vis)
+plt.polar(x, tuning.T)
 
 # %%
 #
-# We can see that the coefficient parameters are represented as a FeaturePytree
-# with the same structure as the input `design_matrix` variable. Where each
-# element of the FeaturePytree was an array of shape `(n_time_points,
-# n_neurons, n_features_i)`, each element of the coefficients is an array of
-# shape `(n_neurons, n_features_i)`.
+# This looks like a smoothed version of our tuning curve, like we'd expect!
+# Let's compare this to using arrays, to see what it looks like:
 
-print(model.coef_)
-model.coef_['stimulus']
+model = nmo.glm.GLM()
+model.fit(X['head_direction'], spikes)
+model.coef_
 
 # %%
 #
-# To compare, let's fit the GLM using the array as our design matrix. You'll
-# see that the coefficient parameters are now a regular array, just like `X`.
-# Their shapes also have the same relationship: `X` had shape`(n_time_points,
-# n_neurons, n_features)`, whereas `coef_` has shape `(n_neurons,
-# n_features_i)`.
+# We can see that the solution is identical, as is the way of interacting with
+# the GLM object.
 #
-# You'll also notice that the way of interacting the the GLM object is
-# identical! As are the coefficients we found!
+# However, with a single type of feature, it's unclear why exactly this is
+# helpful. Let's add a feature for the animal's position in space. For this
+# feature, we need a 2d basis. Let's use some raised cosine bumps and organize
+# our data similarly.
+
+pos_basis = nmo.basis.RaisedCosineBasisLinear(10) * nmo.basis.RaisedCosineBasisLinear(10)
+spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data).values
+# normalize to lie on 0,1
+spatial_pos = (spatial_pos - spatial_pos.min()) / 100
+
+X['spatial_position'] = np.expand_dims(pos_basis.evaluate(*spatial_pos.T), 1)
+
+# %%
+#
+# Running the GLM is identical to before, but we can see that our coef_
+# FeaturePytree now has two separate keys, one for each feature type.
 
 model = nmo.glm.GLM()
 model.fit(X, spikes)
@@ -174,11 +271,19 @@ model.coef_
 
 # %%
 #
-# ## Multiple feature types
+# Let's visualize our tuning. Head direction looks pretty much the same (though
+# the values are slightly different, as we can see when printing out the
+# coefficients).
+
+bs_vis = basis.evaluate(x)
+tuning = jnp.einsum('xb,nb->xn', model.coef_['head_direction'], bs_vis)
+print(model.coef_['head_direction'])
+plt.polar(x, tuning.T)
+
+# %%
 #
-# Reading the previous section, you might wonder -- why bother? The power of
-# using FeaturePytrees to represent your design matrix becomes more apparent
-# when we have more features and thus more complicated design matrices.
-#
-# For this example, let's generate a population with two connected neurons, one
-# of which is receiving a square-wave stimulus as input.
+# And the spatial tuning again looks like a smoothed version of our earlier
+# tuning curves.
+X, Y, pos_bs_vis = pos_basis.evaluate_on_grid(50, 50)
+pos_tuning = jnp.einsum('xb,ijb->xij', model.coef_['spatial_position'], pos_bs_vis)
+plt.imshow(pos_tuning[0])

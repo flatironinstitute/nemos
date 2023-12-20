@@ -65,7 +65,9 @@ docs = [
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
     "mkdocs-material",
     "mkdocs-autorefs>=0.5",
-    "scikit-learn"
+    "scikit-learn",
+    "dandi",
+    "pynapple",
 ]
 
 
