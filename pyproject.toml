@@ -68,7 +68,6 @@ docs = [
     "scikit-learn",
     "dandi",
     "pynapple",
-    "einops"
 ]
 
 

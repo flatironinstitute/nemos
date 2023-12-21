@@ -132,7 +132,7 @@ print(jax.tree_map(lambda x: x.shape, example_pytree))
 # !!! attention
 #
 #     We need some additional packages for this portion, which you can install
-#     with `pip install dandi pynapple einops`
+#     with `pip install dandi pynapple`
 from pynwb import NWBHDF5IO
 
 from dandi.dandiapi import DandiAPIClient
@@ -284,7 +284,7 @@ plt.polar(x, tuning.T)
 #
 # And the spatial tuning again looks like a smoothed version of our earlier
 # tuning curves.
-X, Y, pos_bs_vis = pos_basis.evaluate_on_grid(50, 50)
+_, _, pos_bs_vis = pos_basis.evaluate_on_grid(50, 50)
 pos_tuning = jnp.einsum('xb,ijb->xij', model.coef_['spatial_position'], pos_bs_vis)
 plt.imshow(pos_tuning[0])
 
@@ -293,13 +293,8 @@ plt.imshow(pos_tuning[0])
 # We could do all this with matrices as well, but we have to pay attention to
 # indices in a way that is annoying:
 
-X_mat = einops.pack([X['head_direction'], X['spatial_position']],
-                    't n *')[0]
+X_mat = jnp.concatenate([X['head_direction'], X['spatial_position']], -1)
+
 model = nmo.glm.GLM()
 model.fit(X_mat, spikes)
-model.coef_[..., :X['head_direction'].shape[-1]]
-
-# %%
-#
-# !!! warning
-#     Why is this coefficient different?
+model.coef_[..., :basis.n_basis_funcs]
