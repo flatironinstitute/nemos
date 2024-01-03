@@ -60,7 +60,7 @@ example_pytree[:10]
 
 # %%
 #
-# We can new features after initialization, as long as they have the same
+# We can add new features after initialization, as long as they have the same
 # number of time points.
 
 example_pytree['feature_3'] = np.zeros((100, 2, 4))
@@ -108,7 +108,7 @@ print(mapped)
 mapped['feature_1']
 # %%
 # Or the number of time points:
-mapped = jax.tree_map(lambda x: jnp.mean(x, axis=-1), example_pytree)
+mapped = jax.tree_map(lambda x: x[::10], example_pytree)
 print(mapped)
 mapped['feature_1']
 # %%
@@ -180,6 +180,7 @@ fig, axes = plt.subplots(3, 3, figsize=(9, 9))
 for i, ax in zip(tc.keys(), axes.flatten()):
     ax.imshow(tc[i], origin="lower", aspect="auto")
     ax.set_title("Unit {}".format(i))
+plt.tight_layout()
 
 # %%
 # !!! warning
