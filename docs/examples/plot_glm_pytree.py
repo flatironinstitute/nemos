@@ -212,6 +212,7 @@ spikes = nwb['units'][unit_no]
 
 basis = nmo.basis.CyclicBSplineBasis(10, 5)
 x = np.linspace(-np.pi, np.pi, 100)
+plt.figure()
 plt.plot(x, basis.evaluate(x))
 
 # this is the interval on which head_dir has no NaNs and spikes.count() returns values
@@ -226,18 +227,34 @@ spikes = np.expand_dims(spikes.values, -1)
 # %%
 #
 # Now we'll fit our GLM and then see what our head direction tuning looks like:
-
-model = nmo.glm.GLM()
+ridge = nmo.regularizer.Ridge(regularizer_strength=0.001)
+model = nmo.glm.GLM(regularizer=ridge)
 model.fit(X, spikes)
 print(model.coef_['head_direction'])
 
 bs_vis = basis.evaluate(x)
 tuning = jnp.einsum('xb,nb->xn', model.coef_['head_direction'], bs_vis)
+plt.figure()
 plt.polar(x, tuning.T)
 
 # %%
 #
 # This looks like a smoothed version of our tuning curve, like we'd expect!
+#
+# For a more direct comparison, we can plot the tuning function based on the model predicted
+# firing rates with that estimated from the counts.
+
+
+# predict rates and convert back to pynapple
+rates_nap = nap.TsdFrame(t=head_dir.t, d=np.asarray(model.predict(X)))
+# compute tuning function
+tune_head_model = nap.compute_1d_tuning_curves_continuous(rates_nap, head_dir, 30)
+# compare model prediction with data
+fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'polar'})
+ax.plot(tune_head[7], label="counts")
+# multiply by the sampling rate for converting to spike/sec.
+ax.plot(tune_head_model * rates_nap.rate, label="model")
+
 # Let's compare this to using arrays, to see what it looks like:
 
 model = nmo.glm.GLM()
@@ -279,6 +296,7 @@ model.coef_
 bs_vis = basis.evaluate(x)
 tuning = jnp.einsum('xb,nb->xn', model.coef_['head_direction'], bs_vis)
 print(model.coef_['head_direction'])
+plt.figure()
 plt.polar(x, tuning.T)
 
 # %%
@@ -287,6 +305,7 @@ plt.polar(x, tuning.T)
 # tuning curves.
 _, _, pos_bs_vis = pos_basis.evaluate_on_grid(50, 50)
 pos_tuning = jnp.einsum('xb,ijb->xij', model.coef_['spatial_position'], pos_bs_vis)
+plt.figure()
 plt.imshow(pos_tuning[0])
 
 # %%
