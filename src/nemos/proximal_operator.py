@@ -74,9 +74,9 @@ _vmap_norm2_masked_2 = jax.vmap(_vmap_norm2_masked_1, in_axes=(None, 0), out_axe
 
 
 def prox_group_lasso(
-    params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+    params: Tuple[jnp.ndarray, jnp.ndarray],
     regularizer_strength: float,
-    mask: DESIGN_INPUT_TYPE,
+    mask: jnp.ndarray,
     scaling: float = 1.0,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     r"""Proximal gradient operator for group Lasso.
@@ -196,7 +196,7 @@ def prox_group_lasso_pytree(
         Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
     """
     l2_norm = jax.tree_map(
-        lambda xx: jnp.linalg.norm(xx) / jnp.sqrt(xx.shape[1]), params[0]
+        lambda xx: jnp.linalg.norm(xx, axis=1, keepdims=True) / jnp.sqrt(xx.shape[1]), params[0]
     )
     factor = jax.tree_map(lambda xx, yy: 1 - xx * scaling / yy, l2reg, l2_norm)
     factor = jax.tree_map(jax.nn.relu, factor)
