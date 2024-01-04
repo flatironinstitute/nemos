@@ -55,6 +55,7 @@ def test_vmap_norm2_masked_2_non_negative(example_data_prox_operator):
 
 
 def test_compare_group_lasso(example_data_prox_operator):
+    """Compare the group lasso prox operators."""
     params, regularizer_strength, mask, scaling = example_data_prox_operator
     # create a pytree version of params
     params_tree = FeaturePytree(**{f"{k}": params[0][:, jnp.array(msk, dtype=bool)] for k, msk in enumerate(mask)})
