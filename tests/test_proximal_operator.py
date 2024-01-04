@@ -53,6 +53,7 @@ def test_vmap_norm2_masked_2_non_negative(example_data_prox_operator):
     l2_norm = _vmap_norm2_masked_2(params[0], mask)
     assert jnp.all(l2_norm >= 0)
 
+
 def test_compare_group_lasso(example_data_prox_operator):
     params, regularizer_strength, mask, scaling = example_data_prox_operator
     # create a pytree version of params
