@@ -251,7 +251,9 @@ class Ridge(Regularizer):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
-    def _penalization(self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]) -> jnp.ndarray:
+    def _penalization(
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
 
@@ -265,15 +267,19 @@ class Ridge(Regularizer):
         float
             The Ridge penalization value.
         """
+
         def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
             return (
-                    0.5
-                    * self.regularizer_strength
-                    * jnp.sum(jnp.power(coeff, 2))
-                    / intercept.shape[0]
+                0.5
+                * self.regularizer_strength
+                * jnp.sum(jnp.power(coeff, 2))
+                / intercept.shape[0]
             )
+
         # tree map the computation and sum over leaves
-        return utils.pytree_map_and_reduce(lambda x: l2_penalty(x, params[1]), sum, params[0])
+        return utils.pytree_map_and_reduce(
+            lambda x: l2_penalty(x, params[1]), sum, params[0]
+        )
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any

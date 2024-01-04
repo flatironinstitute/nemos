@@ -133,8 +133,10 @@ class GLM(BaseRegressor):
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
-            utils.pytree_map_and_reduce(lambda w, x: jnp.einsum('ik,tik->ti', w, x),
-                                        sum, Ws, X) + bs[None, :]
+            utils.pytree_map_and_reduce(
+                lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, Ws, X
+            )
+            + bs[None, :]
         )
 
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
@@ -323,7 +325,9 @@ class GLM(BaseRegressor):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]] = None,
+        init_params: Optional[
+            Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
+        ] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -368,7 +372,12 @@ class GLM(BaseRegressor):
         # estimate the GLM scale
         self.observation_model.estimate_scale(self._predict(params, X))
 
-        if utils.pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, params[0])) or jnp.isnan(params[1]).any():
+        if (
+            utils.pytree_map_and_reduce(
+                jnp.any, any, jax.tree_map(jnp.isnan, params[0])
+            )
+            or jnp.isnan(params[1]).any()
+        ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
                 " Try tuning optimization hyperparameters."
@@ -538,8 +547,10 @@ class GLMRecurrent(GLM):
         to ensure consistency in the model's input feature dimensionality.
         """
         if isinstance(feedforward_input, FeaturePytree):
-            raise ValueError("simulate_recurrent works only with arrays. "
-                             "FeaturePytree provided instead!")
+            raise ValueError(
+                "simulate_recurrent works only with arrays. "
+                "FeaturePytree provided instead!"
+            )
         # check if the model is fit
         self._check_is_fit()
 

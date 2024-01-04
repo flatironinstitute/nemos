@@ -213,7 +213,8 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_and_convert_params(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike], data_type: Optional[jnp.dtype] = None
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -250,7 +251,7 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     def _check_input_dimensionality(
         X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None
+        y: Optional[jnp.ndarray] = None,
     ):
         if not (y is None):
             if y.ndim != 2:
@@ -308,13 +309,21 @@ class BaseRegressor(Base, abc.ABC):
                     f"parameters has n_neurons: {n_neurons}, "
                     f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}"
                 )
-            only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(params[0], FeaturePytree)
-            only_coeff_pytree = not isinstance(X, FeaturePytree) and isinstance(params[0], FeaturePytree)
+            only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(
+                params[0], FeaturePytree
+            )
+            only_coeff_pytree = not isinstance(X, FeaturePytree) and isinstance(
+                params[0], FeaturePytree
+            )
             # add check keys match as class method of featurepytree. pytreedef == pyreedef
             if only_X_pytree or only_coeff_pytree:
-                raise TypeError(f"X and params[0] must be the same type, but X is {type(X)} and "
-                                f"params[0] is {type(params[0])}")
-            if pytree_map_and_reduce(lambda p, x: p.shape[1] != x.shape[2], any, params[0], X):
+                raise TypeError(
+                    f"X and params[0] must be the same type, but X is {type(X)} and "
+                    f"params[0] is {type(params[0])}"
+                )
+            if pytree_map_and_reduce(
+                lambda p, x: p.shape[1] != x.shape[2], any, params[0], X
+            ):
                 raise ValueError(
                     "Inconsistent number of features. "
                     f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
@@ -449,7 +458,9 @@ class BaseRegressor(Base, abc.ABC):
             If the dimensionality or consistency checks fail for the provided data and parameters.
 
         """
-        feedforward_input = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), feedforward_input)
+        feedforward_input = jax.tree_map(
+            lambda x: jnp.asarray(x, dtype=float), feedforward_input
+        )
         self._check_input_dimensionality(X=feedforward_input)
         self._check_input_and_params_consistency(
             params_feedforward, X=feedforward_input

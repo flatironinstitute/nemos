@@ -388,8 +388,9 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def check_invalid_entry(pytree: Union[FeaturePytree, jnp.ndarray],
-                        pytree_name: str) -> None:
+def check_invalid_entry(
+    pytree: Union[FeaturePytree, jnp.ndarray], pytree_name: str
+) -> None:
     """Check if the array has nans or infs.
 
     Parameters
@@ -466,8 +467,11 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
         )
 
 
-def pytree_map_and_reduce(map_fn: Callable, reduce_fn: Callable,
-                          *pytrees: Union[FeaturePytree, NDArray, jnp.ndarray]):
+def pytree_map_and_reduce(
+    map_fn: Callable,
+    reduce_fn: Callable,
+    *pytrees: Union[FeaturePytree, NDArray, jnp.ndarray],
+):
     """
     Apply a mapping function to each leaf of the pytrees and then reduce the results.
 

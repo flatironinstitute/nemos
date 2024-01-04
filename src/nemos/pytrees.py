@@ -16,6 +16,7 @@ class FeaturePytree(UserDict):
     This is intended to be used with jax.tree_map and similar functionality.
 
     """
+
     def __init__(self, **kwargs):
         self._num_time_points = None
         super().__init__(kwargs)
@@ -24,7 +25,7 @@ class FeaturePytree(UserDict):
     def shape(self):
         # Every value is an array with the same number of time points, so
         # that's the only shared shape.
-        return (self._num_time_points, )
+        return (self._num_time_points,)
 
     def __len__(self):
         # Same logic as shape
@@ -52,7 +53,9 @@ class FeaturePytree(UserDict):
         # For all subsequent values, ensure they have the proper number of time points
         else:
             if self._num_time_points != value.shape[0]:
-                raise ValueError(f"All arrays must have same number of time points, {self._num_time_points}")
+                raise ValueError(
+                    f"All arrays must have same number of time points, {self._num_time_points}"
+                )
         super().__setitem__(key, value)
 
     def __getitem__(self, key):
@@ -66,8 +69,8 @@ class FeaturePytree(UserDict):
 
     def __repr__(self):
         # Show the shape and data type of each array
-        repr = [f'{k}: shape {v.shape}, dtype {v.dtype}' for k, v in self.data.items()]
-        return '\n'.join(repr)
+        repr = [f"{k}: shape {v.shape}, dtype {v.dtype}" for k, v in self.data.items()]
+        return "\n".join(repr)
 
     def tree_flatten(self):
         return jax.tree_util.tree_flatten(self.data)

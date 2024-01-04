@@ -144,9 +144,8 @@ def prox_group_lasso(
 
 
 def prox_group_lasso_pytree(
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        l2reg: DESIGN_INPUT_TYPE,
-        scaling=1.0):
+    params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], l2reg: DESIGN_INPUT_TYPE, scaling=1.0
+):
     r"""Proximal operator for the l2 norm, i.e., block soft-thresholding operator.
 
      Parameters
@@ -196,7 +195,9 @@ def prox_group_lasso_pytree(
         Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
         Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
     """
-    l2_norm = jax.tree_map(lambda xx: jnp.linalg.norm(xx) / jnp.sqrt(xx.shape[1]), params[0])
+    l2_norm = jax.tree_map(
+        lambda xx: jnp.linalg.norm(xx) / jnp.sqrt(xx.shape[1]), params[0]
+    )
     factor = jax.tree_map(lambda xx, yy: 1 - xx * scaling / yy, l2reg, l2_norm)
     factor = jax.tree_map(jax.nn.relu, factor)
     return jax.tree_map(lambda xx, yy: xx * yy, factor, params[0]), params[1]
