@@ -197,7 +197,7 @@ def prox_group_lasso_pytree(
     """
     # assume that the last axis are the features
     l2_norm = jax.tree_map(
-        lambda xx: jnp.linalg.norm(xx, axis=-1, keepdims=True) / jnp.sqrt(xx.shape[1]), params[0]
+        lambda xx: jnp.linalg.norm(xx, axis=-1, keepdims=True) / jnp.sqrt(xx.shape[-1]), params[0]
     )
     factor = jax.tree_map(lambda xx, yy: 1 - xx * scaling / yy, l2reg, l2_norm)
     factor = jax.tree_map(jax.nn.relu, factor)
