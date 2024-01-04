@@ -195,8 +195,9 @@ def prox_group_lasso_pytree(
         Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
         Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
     """
+    # assume that the last axis are the features
     l2_norm = jax.tree_map(
-        lambda xx: jnp.linalg.norm(xx, axis=1, keepdims=True) / jnp.sqrt(xx.shape[1]), params[0]
+        lambda xx: jnp.linalg.norm(xx, axis=-1, keepdims=True) / jnp.sqrt(xx.shape[1]), params[0]
     )
     factor = jax.tree_map(lambda xx, yy: 1 - xx * scaling / yy, l2reg, l2_norm)
     factor = jax.tree_map(jax.nn.relu, factor)
