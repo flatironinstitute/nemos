@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from collections import UserDict
 import warnings
+from collections import UserDict
 
 import jax
 from jax.tree_util import register_pytree_node_class
