@@ -28,8 +28,6 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from .base_class import DESIGN_INPUT_TYPE
-
 
 def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
     """Euclidean norm of the group.

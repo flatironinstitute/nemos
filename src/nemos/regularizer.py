@@ -9,7 +9,6 @@ import abc
 import inspect
 from typing import Any, Callable, List, Optional, Tuple, Union
 
-import jax
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
