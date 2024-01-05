@@ -141,4 +141,3 @@ def prox_group_lasso(
     # by setting the shrinkage factor to 1.
     not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
     return weights * (factor @ mask + not_regularized), intercepts
-
