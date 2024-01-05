@@ -40,7 +40,7 @@ class FeaturePytree(UserDict):
     def __setitem__(self, key, value):
         # All keys are strings
         if not isinstance(key, str):
-            raise ValueError("keys must be strings!")
+            raise ValueError("Keys must be strings!")
         # All values are array-like and must have time points along the first
         # dimension, so double-check that's the case here.
         try:
