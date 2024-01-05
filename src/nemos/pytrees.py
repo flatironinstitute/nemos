@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from collections import UserDict
+import warnings
 
 import jax
 from jax.tree_util import register_pytree_node_class
@@ -80,4 +81,8 @@ class FeaturePytree(UserDict):
         try:
             return cls(**jax.tree_util.tree_unflatten(aux_data, children))
         except ValueError:
+            warnings.warn(
+                "Output is not a FeaturePytree (e.g., because at least one "
+                "value is not an array), returning dict instead"
+            )
             return jax.tree_util.tree_unflatten(aux_data, children)
