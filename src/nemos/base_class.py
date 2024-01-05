@@ -224,7 +224,7 @@ class BaseRegressor(Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        if not hasattr(params, '__len__') or len(params) != 2:
+        if not hasattr(params, "__len__") or len(params) != 2:
             raise ValueError("Params must have length two.")
 
         try:
