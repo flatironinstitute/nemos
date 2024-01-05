@@ -1,9 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso, prox_group_lasso_pytree
-from nemos.utils import pytree_map_and_reduce
-from nemos.pytrees import FeaturePytree
+from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso
 
 def test_prox_group_lasso_returns_tuple(example_data_prox_operator):
     """Test whether prox_group_lasso returns a tuple."""
