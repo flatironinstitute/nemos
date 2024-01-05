@@ -57,10 +57,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "n_params, expectation",
         [
-            (0, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
-            (1, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+            (0, pytest.raises(ValueError, match="Params must have length two.")),
+            (1, pytest.raises(ValueError, match="Params must have length two.")),
             (2, does_not_raise()),
-            (3, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+            (3, pytest.raises(ValueError, match="Params must have length two.")),
         ],
     )
     def test_fit_param_length(
@@ -84,11 +84,11 @@ class TestGLM:
         "add_entry, add_to, expectation",
         [
             (0, "X", does_not_raise()),
-            (np.nan, "X", pytest.raises(ValueError, match="Input array .+ contains")),
-            (np.inf, "X", pytest.raises(ValueError, match="Input array .+ contains")),
+            (np.nan, "X", pytest.raises(ValueError, match="Input .+ contains")),
+            (np.inf, "X", pytest.raises(ValueError, match="Input .+ contains")),
             (0, "y", does_not_raise()),
-            (np.nan, "y", pytest.raises(ValueError, match="Input array .+ contains")),
-            (np.inf, "y", pytest.raises(ValueError, match="Input array .+ contains")),
+            (np.nan, "y", pytest.raises(ValueError, match="Input .+ contains")),
+            (np.inf, "y", pytest.raises(ValueError, match="Input .+ contains")),
         ],
     )
     def test_fit_param_values(
@@ -112,10 +112,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "dim_weights, expectation",
         [
-            (0, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
-            (1, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+            (0, pytest.raises(ValueError, match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)")),
+            (1, pytest.raises(ValueError, match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)")),
             (2, does_not_raise()),
-            (3, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+            (3, pytest.raises(ValueError, match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)")),
         ],
     )
     def test_fit_weights_dimensionality(
@@ -166,8 +166,8 @@ class TestGLM:
             ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
             (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), does_not_raise()),
             (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(TypeError, match="Initial parameters must be array-like")),
-            (0, pytest.raises(TypeError, match="Initial parameters must be array-like")),
-            ({0, 1}, pytest.raises(ValueError, match=r"params\[0\] must be of shape")),
+            (0, pytest.raises(ValueError, match="Params must have length two.")),
+            ({0, 1}, pytest.raises(TypeError, match="Initial parameters must be array-like")),
             ([jnp.zeros((1, 5)), ""], pytest.raises(TypeError, match="Initial parameters must be array-like")),
             (["", jnp.zeros((1,))], pytest.raises(TypeError, match="Initial parameters must be array-like")),
         ],

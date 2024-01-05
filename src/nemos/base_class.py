@@ -224,14 +224,14 @@ class BaseRegressor(Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        if len(params) != 2:
-            raise ValueError("Params needs to be of length two.")
+        if not hasattr(params, '__len__') or len(params) != 2:
+            raise ValueError("Params must have length two.")
 
         try:
             params = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), params)
         except (ValueError, TypeError):
             raise TypeError(
-                "Initial parameters must be be array-like objects (or pytrees of array-like objects) "
+                "Initial parameters must be array-like objects (or pytrees of array-like objects) "
                 "with numeric data-type!"
             )
 
