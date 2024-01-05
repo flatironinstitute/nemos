@@ -182,9 +182,7 @@ for i, ax in zip(tc.keys(), axes.flatten()):
     ax.set_title("Unit {}".format(i))
 plt.tight_layout()
 
-# %%
-# !!! warning
-#     Is this how to compute head direction???
+# compute head direction.
 diff = nwb['SpatialSeriesLED1'].values-nwb['SpatialSeriesLED2'].values
 head_dir = np.arctan2(*diff.T)
 head_dir = nap.Tsd(nwb['SpatialSeriesLED1'].index, head_dir)
@@ -215,14 +213,21 @@ x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
 plt.plot(x, basis.evaluate(x))
 
-# this is the interval on which head_dir has no NaNs and spikes.count() returns values
-valid_data = nap.IntervalSet(.88, 599.91)
+# Find the interval on which head_dir has no NaNs
+head_dir = head_dir.dropna()
+# Grab the second (of two), since the first one is really short
+valid_data= head_dir.time_support.loc[[1]]
 head_dir = head_dir.restrict(valid_data)
-spikes = spikes.count(bin_size=.02, time_units='s').restrict(valid_data)
+# Count spikes at the same rate as head direction, over the same epoch
+spikes = spikes.count(bin_size=1/head_dir.rate, ep=valid_data)
+# the time points for spike are in the middle of these bins (whereas for
+# head_dir they're at the ends), so use interpolate to shift head_dir to the
+# center.
+head_dir = head_dir.interpolate(spikes)
 
 # add extra dim for n_neurons (here, 1)
-X = nmo.pytrees.FeaturePytree(head_direction=np.expand_dims(basis.evaluate(head_dir.values), 1))
-spikes = np.expand_dims(spikes.values, -1)
+X = nmo.pytrees.FeaturePytree(head_direction=np.expand_dims(basis.evaluate(head_dir), 1))
+spikes = np.expand_dims(spikes, -1)
 
 # %%
 #
