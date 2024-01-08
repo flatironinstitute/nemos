@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
+from nemos.pytrees import FeaturePytree
 
 import nemos as nmo
 
@@ -164,8 +165,10 @@ class TestGLM:
         "init_params, expectation",
         [
             ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
-            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), does_not_raise()),
-            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(TypeError, match="Initial parameters must be array-like")),
+            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), pytest.raises(ValueError, match="Params must have length two.")),
+            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
+            ((dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1, 1))), jnp.zeros((1, ))), pytest.raises(TypeError, match=r"X and params\[0\] must be the same type")),
+            ((FeaturePytree(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1, 1))), jnp.zeros((1, ))), pytest.raises(TypeError, match=r"X and params\[0\] must be the same type")),
             (0, pytest.raises(ValueError, match="Params must have length two.")),
             ({0, 1}, pytest.raises(TypeError, match="Initial parameters must be array-like")),
             ([jnp.zeros((1, 5)), ""], pytest.raises(TypeError, match="Initial parameters must be array-like")),
