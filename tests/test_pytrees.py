@@ -77,7 +77,8 @@ class TestFeaturePytree:
         """Ensure jax.tree_map transforms FeaturePytree to a dictionary with mean values."""
         tree = FeaturePytree(test=np.random.rand(100,),
                              test2=np.random.rand(100, 2))
-        mapped = jax.tree_map(jnp.mean, tree)
+        with pytest.warns(UserWarning, match=r"Output is not a FeaturePytree \(e\.g\.\, because at"):
+            mapped = jax.tree_map(jnp.mean, tree)
         assert isinstance(mapped, dict)
         assert list(tree.keys()) == list(mapped.keys())
 
