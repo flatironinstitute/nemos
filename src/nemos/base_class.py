@@ -309,6 +309,16 @@ class BaseRegressor(Base, abc.ABC):
                     f"parameters has n_neurons: {n_neurons}, "
                     f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}"
                 )
+            # If X and params[0] are dictionaries that can be cast to
+            # FeaturePytrees, that's okay as well
+            try:
+                X = FeaturePytree(**X)
+            except:
+                pass
+            try:
+                params = (FeaturePytree(**params[0]), params[1])
+            except:
+                pass
             only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(
                 params[0], FeaturePytree
             )
