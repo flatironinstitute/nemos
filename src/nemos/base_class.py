@@ -309,7 +309,9 @@ class BaseRegressor(Base, abc.ABC):
                     f"parameters has n_neurons: {n_neurons}, "
                     f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}"
                 )
-            if type(X) != type(params[0]):
+            X_structure = jax.tree_util.tree_structure(X)
+            params_structure = jax.tree_util.tree_structure(params[0])
+            if X_structure != params_structure:
                 raise TypeError(
                     f"X and params[0] must be the same type, but X is {type(X)} and "
                     f"params[0] is {type(params[0])}"
