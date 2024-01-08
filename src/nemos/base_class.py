@@ -309,30 +309,7 @@ class BaseRegressor(Base, abc.ABC):
                     f"parameters has n_neurons: {n_neurons}, "
                     f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}"
                 )
-            # If X and params[0] are dictionaries that can be cast to
-            # FeaturePytrees, that's okay as well
-            try:
-                X = FeaturePytree(**X)
-            # ValueError will show up if it's a dict that can't be parsed
-            # (e.g., because it's leaves aren't arrays or are arrays with
-            # incompatible shapes), and TypeError will show up if it's an array
-            except (ValueError, TypeError):
-                pass
-            try:
-                params = (FeaturePytree(**params[0]), params[1])
-            # ValueError will show up if it's a dict that can't be parsed
-            # (e.g., because it's leaves aren't arrays or are arrays with
-            # incompatible shapes), and TypeError will show up if it's an array
-            except (ValueError, TypeError):
-                pass
-            only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(
-                params[0], FeaturePytree
-            )
-            only_coeff_pytree = not isinstance(X, FeaturePytree) and isinstance(
-                params[0], FeaturePytree
-            )
-            # add check keys match as class method of featurepytree. pytreedef == pyreedef
-            if only_X_pytree or only_coeff_pytree:
+            if type(X) != type(params[0]):
                 raise TypeError(
                     f"X and params[0] must be the same type, but X is {type(X)} and "
                     f"params[0] is {type(params[0])}"
