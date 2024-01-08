@@ -571,11 +571,6 @@ class GLMRecurrent(GLM):
             params_recurrent=(w_recurrent, bs),
         )
 
-        self._check_input_and_params_consistency(
-            (w_recurrent, bs),
-            y=init_y,
-        )
-
         if init_y.shape[0] != coupling_basis_matrix.shape[0]:
             raise ValueError(
                 "`init_y` and `coupling_basis_matrix`"
