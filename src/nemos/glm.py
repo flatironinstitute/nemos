@@ -3,13 +3,14 @@ from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from . import observation_models as obs
 from . import regularizer as reg
 from . import utils
-from .base_class import BaseRegressor
+from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
+from .pytrees import FeaturePytree
 
 
 class GLM(BaseRegressor):
@@ -104,7 +105,7 @@ class GLM(BaseRegressor):
             )
 
     def _predict(
-        self, params: Tuple[jnp.ndarray, jnp.ndarray], X: jnp.ndarray
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -120,7 +121,7 @@ class GLM(BaseRegressor):
         params :
             Tuple containing the spike basis coefficients and bias terms.
         X :
-            Predictors. Shape (n_time_bins, n_neurons, n_features).
+            Predictors.
 
         Returns
         -------
@@ -129,16 +130,22 @@ class GLM(BaseRegressor):
         """
         Ws, bs = params
         return self._observation_model.inverse_link_function(
-            jnp.einsum("ik,tik->ti", Ws, X) + bs[None, :]
+            # First, multiply each feature by its corresponding coefficient,
+            # then sum across all features and add the intercept, before
+            # passing to the inverse link function
+            utils.pytree_map_and_reduce(
+                lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, Ws, X
+            )
+            + bs[None, :]
         )
 
-    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
+    def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters.
 
         Parameters
         ----------
         X :
-            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
 
         Returns
         -------
@@ -172,7 +179,7 @@ class GLM(BaseRegressor):
         Ws = self.coef_
         bs = self.intercept_
 
-        X = jnp.asarray(X, dtype=float)
+        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -182,8 +189,8 @@ class GLM(BaseRegressor):
 
     def _predict_and_compute_loss(
         self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        X: jnp.ndarray,
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
@@ -195,11 +202,11 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         params :
-            Values for the spike basis coefficients and bias terms. Shape ((n_neurons, n_features), (n_neurons,)).
+            2-tuple containing the spike basis coefficients and bias terms.
         X :
-            The exogenous variables. Shape (n_time_bins, n_neurons, n_features).
+            Predictors.
         y :
-            The target activity to compare against. Shape (n_time_bins, n_neurons).
+            Target neural activity.
 
         Returns
         -------
@@ -212,8 +219,8 @@ class GLM(BaseRegressor):
 
     def score(
         self,
-        X: Union[NDArray, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
@@ -292,7 +299,8 @@ class GLM(BaseRegressor):
         Ws = self.coef_
         bs = self.intercept_
 
-        X, y = jnp.asarray(X, dtype=float), jnp.asarray(y, dtype=float)
+        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
+        y = jnp.asarray(y, dtype=float)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -315,9 +323,11 @@ class GLM(BaseRegressor):
 
     def fit(
         self,
-        X: Union[NDArray, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
-        init_params: Optional[Tuple[jnp.ndarray, jnp.ndarray]] = None,
+        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+        y: ArrayLike,
+        init_params: Optional[
+            Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
+        ] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -327,12 +337,15 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, shape (n_time_bins, n_neurons, n_features)
+            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
         y :
-            Neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+            Target neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
         init_params :
-            Initial values for the activity basis coefficients and bias terms. If
-            None, we initialize with zeros. shape.  ((n_neurons, n_features), (n_neurons,))
+            2-tuple of initial parameter values: (coefficients, intercepts). If
+            None, we initialize coefficients with zeros, intercepts with the
+            log of the mean neural activity. coefficients is an array of shape
+            (n_neurons, n_features) or pytree of same, intercepts is an array
+            of shape (n_neurons,)
 
         Raises
         ------
@@ -347,6 +360,7 @@ class GLM(BaseRegressor):
         TypeError
             - If `init_params` are not array-like
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+
         """
         # convert to jnp.ndarray & perform checks
         X, y, init_params = self._preprocess_fit(X, y, init_params)
@@ -358,14 +372,19 @@ class GLM(BaseRegressor):
         # estimate the GLM scale
         self.observation_model.estimate_scale(self._predict(params, X))
 
-        if jnp.isnan(params[0]).any() or jnp.isnan(params[1]).any():
+        if (
+            utils.pytree_map_and_reduce(
+                jnp.any, any, jax.tree_map(jnp.isnan, params[0])
+            )
+            or jnp.isnan(params[1]).any()
+        ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
                 " Try tuning optimization hyperparameters."
             )
 
         # Store parameters
-        self.coef_: jnp.ndarray = params[0]
+        self.coef_: DESIGN_INPUT_TYPE = params[0]
         self.intercept_: jnp.ndarray = params[1]
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
@@ -375,7 +394,7 @@ class GLM(BaseRegressor):
     def simulate(
         self,
         random_key: jax.random.PRNGKeyArray,
-        feedforward_input: Union[NDArray, jnp.ndarray],
+        feedforward_input: DESIGN_INPUT_TYPE,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
@@ -386,7 +405,7 @@ class GLM(BaseRegressor):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_time_bins, n_neurons, n_basis_input).
+            Array of shape (n_time_bins, n_neurons, n_basis_input) or pytree of same.
 
         Returns
         -------
@@ -527,6 +546,11 @@ class GLMRecurrent(GLM):
         The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
         to ensure consistency in the model's input feature dimensionality.
         """
+        if isinstance(feedforward_input, FeaturePytree):
+            raise ValueError(
+                "simulate_recurrent works only with arrays. "
+                "FeaturePytree provided instead!"
+            )
         # check if the model is fit
         self._check_is_fit()
 
@@ -545,11 +569,6 @@ class GLMRecurrent(GLM):
             params_feedforward=(w_feedforward, bs),
             init_y=init_y,
             params_recurrent=(w_recurrent, bs),
-        )
-
-        self._check_input_and_params_consistency(
-            (w_recurrent, bs),
-            y=init_y,
         )
 
         if init_y.shape[0] != coupling_basis_matrix.shape[0]:

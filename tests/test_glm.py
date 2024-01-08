@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
+from nemos.pytrees import FeaturePytree
 
 import nemos as nmo
 
@@ -57,10 +58,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "n_params, expectation",
         [
-            (0, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
-            (1, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+            (0, pytest.raises(ValueError, match="Params must have length two.")),
+            (1, pytest.raises(ValueError, match="Params must have length two.")),
             (2, does_not_raise()),
-            (3, pytest.raises(ValueError, match="Params needs to be array-like of length two.")),
+            (3, pytest.raises(ValueError, match="Params must have length two.")),
         ],
     )
     def test_fit_param_length(
@@ -84,11 +85,11 @@ class TestGLM:
         "add_entry, add_to, expectation",
         [
             (0, "X", does_not_raise()),
-            (np.nan, "X", pytest.raises(ValueError, match="Input array .+ contains")),
-            (np.inf, "X", pytest.raises(ValueError, match="Input array .+ contains")),
+            (np.nan, "X", pytest.raises(ValueError, match="Input .+ contains")),
+            (np.inf, "X", pytest.raises(ValueError, match="Input .+ contains")),
             (0, "y", does_not_raise()),
-            (np.nan, "y", pytest.raises(ValueError, match="Input array .+ contains")),
-            (np.inf, "y", pytest.raises(ValueError, match="Input array .+ contains")),
+            (np.nan, "y", pytest.raises(ValueError, match="Input .+ contains")),
+            (np.inf, "y", pytest.raises(ValueError, match="Input .+ contains")),
         ],
     )
     def test_fit_param_values(
@@ -112,10 +113,10 @@ class TestGLM:
     @pytest.mark.parametrize(
         "dim_weights, expectation",
         [
-            (0, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
-            (1, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+            (0, pytest.raises(ValueError, match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)")),
+            (1, pytest.raises(ValueError, match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)")),
             (2, does_not_raise()),
-            (3, pytest.raises(ValueError, match=r"params\[0\] must be of shape \(n_neurons, n_features\)")),
+            (3, pytest.raises(ValueError, match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)")),
         ],
     )
     def test_fit_weights_dimensionality(
@@ -164,10 +165,12 @@ class TestGLM:
         "init_params, expectation",
         [
             ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
-            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), does_not_raise()),
-            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(TypeError, match="Initial parameters must be array-like")),
-            (0, pytest.raises(TypeError, match="Initial parameters must be array-like")),
-            ({0, 1}, pytest.raises(ValueError, match=r"params\[0\] must be of shape")),
+            (iter([jnp.zeros((1, 5)), jnp.zeros((1,))]), pytest.raises(ValueError, match="Params must have length two.")),
+            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
+            ((dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1, 1))), jnp.zeros((1, ))), pytest.raises(TypeError, match=r"X and params\[0\] must be the same type")),
+            ((FeaturePytree(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1, 1))), jnp.zeros((1, ))), pytest.raises(TypeError, match=r"X and params\[0\] must be the same type")),
+            (0, pytest.raises(ValueError, match="Params must have length two.")),
+            ({0, 1}, pytest.raises(TypeError, match="Initial parameters must be array-like")),
             ([jnp.zeros((1, 5)), ""], pytest.raises(TypeError, match="Initial parameters must be array-like")),
             (["", jnp.zeros((1,))], pytest.raises(TypeError, match="Initial parameters must be array-like")),
         ],
@@ -378,6 +381,24 @@ class TestGLM:
             )
         )
         model.fit(X, y)
+
+    def test_fit_pytree_equivalence(self, poissonGLM_model_instantiation,
+                                    poissonGLM_model_instantiation_pytree):
+        """Check that the glm fit with pytree learns the same parameters."""
+        # required for numerical precision of coeffs
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        X_tree, _, model_tree, true_params_tree, _ = poissonGLM_model_instantiation_pytree
+        # fit both models
+        model.fit(X, y, init_params=true_params)
+        model_tree.fit(X_tree, y, init_params=true_params_tree)
+
+        # get the flat parameters
+        flat_coef = np.concatenate(model_tree.coef_.tree_flatten()[0], axis=-1)
+
+        # assert equivalence of solutions
+        assert np.allclose(model.coef_, flat_coef)
+        assert np.allclose(model.intercept_, model_tree.intercept_)
 
     #######################
     # Test model.score

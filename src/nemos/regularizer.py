@@ -14,8 +14,9 @@ import jaxopt
 from numpy.typing import NDArray
 
 from . import utils
-from .base_class import Base
+from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
+from .pytrees import FeaturePytree
 
 SolverRunner = Callable[
     [
@@ -176,7 +177,7 @@ class Regularizer(Base, abc.ABC):
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
 
         def solver_run(
-            init_params: Tuple[jnp.ndarray, jnp.ndarray], *run_args: jnp.ndarray
+            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
         ) -> jaxopt.OptStep:
             return solver.run(init_params, *args, *run_args, **kwargs)
 
@@ -249,7 +250,9 @@ class Ridge(Regularizer):
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
-    def _penalization(self, params: Tuple[jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
+    def _penalization(
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
 
@@ -263,11 +266,18 @@ class Ridge(Regularizer):
         float
             The Ridge penalization value.
         """
-        return (
-            0.5
-            * self.regularizer_strength
-            * jnp.sum(jnp.power(params[0], 2))
-            / params[1].shape[0]
+
+        def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            return (
+                0.5
+                * self.regularizer_strength
+                * jnp.sum(jnp.power(coeff, 2))
+                / intercept.shape[0]
+            )
+
+        # tree map the computation and sum over leaves
+        return utils.pytree_map_and_reduce(
+            lambda x: l2_penalty(x, params[1]), sum, params[0]
         )
 
     def instantiate_solver(
@@ -390,6 +400,10 @@ class Lasso(ProxGradientRegularizer):
 
         def prox_op(params, l1reg, scaling=1.0):
             Ws, bs = params
+            # if Ws is a pytree, l1reg needs to be a pytree with the same
+            # structure
+            if isinstance(Ws, FeaturePytree):
+                l1reg = FeaturePytree(**{k: l1reg for k in Ws.keys()})
             return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
 
         return prox_op

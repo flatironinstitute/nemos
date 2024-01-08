@@ -1086,7 +1086,8 @@ class OrthExponentialBasis(Basis):
                 "linearly dependent set of function for the basis."
             )
 
-    def _check_sample_range(self, sample_pts: NDArray):
+    @staticmethod
+    def _check_sample_range(sample_pts: NDArray):
         """
         Check if the sample points are all positive.
 

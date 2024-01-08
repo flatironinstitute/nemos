@@ -82,11 +82,13 @@ def prox_group_lasso(
     Parameters
     ----------
     params:
-        Weights, shape (n_neurons, n_features); intercept, shape (n_neurons, )
+        Weights, shape (n_neurons, n_features) or pytree of same; intercept,
+        shape (n_neurons, )
     regularizer_strength:
         The regularization hyperparameter.
     mask:
         ND array of 0,1 as float32, feature mask. size (n_groups, n_features)
+        or pytree of same.
     scaling:
         The scaling factor for the group-lasso (it will be set
         depending on the step-size).
@@ -126,6 +128,7 @@ def prox_group_lasso(
     [^1]:
         Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
         Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
+
     """
     weights, intercepts = params
     # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)

@@ -65,7 +65,9 @@ docs = [
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
     "mkdocs-material",              # Material theme for mkdocs
     "mkdocs-autorefs>=0.5",
-    "scikit-learn"
+    "scikit-learn",
+    "dandi",
+    "pynapple",
 ]
 
 
@@ -100,7 +102,6 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
-addopts = "--cov=nemos"
 
 [tool.coverage.report]
 exclude_lines = [

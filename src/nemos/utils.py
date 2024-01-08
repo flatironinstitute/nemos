@@ -3,13 +3,26 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Any, Callable, Iterable, List, Literal, Optional, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Union,
+)
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+
+# to avoid circular imports
+if TYPE_CHECKING:
+    from .pytrees import FeaturePytree
 
 # Same trial duration
 # [[r , t , n], [w]] -> [r , (t - w + 1) , n]
@@ -386,25 +399,29 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def check_invalid_entry(array: jnp.ndarray, array_name: str) -> None:
+def check_invalid_entry(
+    pytree: Union[FeaturePytree, jnp.ndarray], pytree_name: str
+) -> None:
     """Check if the array has nans or infs.
 
     Parameters
     ----------
-    array:
-        The array to be checked.
-    array_name:
+    pytree:
+        The pytree to be checked.
+    pytree_name:
         The array name.
 
     Raises
     ------
-        - ValueError: If any entry of `array` is either NaN or inf.
+        - ValueError: If any entry of `pytree` is either NaN or inf.
 
     """
-    if jnp.any(jnp.isinf(array)):
-        raise ValueError(f"Input array '{array_name}' contains Infs!")
-    elif jnp.any(jnp.isnan(array)):
-        raise ValueError(f"Input array '{array_name}' contains NaNs!")
+    # this is a double-any situation: first, we check if each leaf have any
+    # Infs, then we check whether any leaf has an Inf
+    if pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isinf, pytree)):
+        raise ValueError(f"Input '{pytree_name}' contains Infs!")
+    if pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree)):
+        raise ValueError(f"Input '{pytree_name}' contains NaNs!")
 
 
 def assert_has_attribute(obj: Any, attr_name: str):
@@ -459,3 +476,45 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
             f"The `{func_name}` should return a scalar! "
             f"Array of shape {array_out.shape} returned instead!"
         )
+
+
+def pytree_map_and_reduce(
+    map_fn: Callable,
+    reduce_fn: Callable,
+    *pytrees: Union[FeaturePytree, NDArray, jnp.ndarray],
+):
+    """
+    Apply a mapping function to each leaf of the pytrees and then reduce the results.
+
+    This function performs a map/reduce operation where a mapping function is applied
+    to each leaf of the given pytrees, and then a reduction function is used to
+    aggregate these results into a single output.
+
+    Parameters
+    ----------
+    map_fn :
+        A function to be applied to each leaf of the pytrees. This function should
+        take a single argument and return a single value.
+    reduce_fn :
+        A function that reduces the mapped results. This function should take an
+        iterable and return a single value.
+    *pytrees :
+        One or more pytrees to which the map and reduce functions are applied.
+
+    Returns
+    -------
+    The result of applying the reduce function to the mapped results. The type of the
+    return value depends on the reduce function.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> pytree1 = nmo.pytrees.FeaturePytree(a=jnp.array([0]), b=jnp.array([0]))
+    >>> pytree2 = nmo.pytrees.FeaturePytree(a=jnp.array([10]), b=jnp.array([20]))
+    >>> map_fn = lambda x, y: x > y
+    >>> # Example usage
+    >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
+    """
+    cond_tree = jax.tree_map(map_fn, *pytrees)
+    # for some reason, tree_reduce doesn't work well with any.
+    return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
