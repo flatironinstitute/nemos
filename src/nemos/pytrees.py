@@ -3,7 +3,9 @@ import warnings
 from collections import UserDict
 
 import jax
+import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
+from .utils import pytree_map_and_reduce
 
 
 @register_pytree_node_class
@@ -72,6 +74,12 @@ class FeaturePytree(UserDict):
         # Show the shape and data type of each array
         repr = [f"{k}: shape {v.shape}, dtype {v.dtype}" for k, v in self.data.items()]
         return "\n".join(repr)
+
+    def __eq__(self, other):
+        # if structure is different, pytree_map_and_reduce will return a ValueError
+        if jax.tree_util.tree_structure(self) != jax.tree_util.tree_structure(other):
+            return False
+        return pytree_map_and_reduce(lambda x, y: jnp.array_equal(x, y), all, self, other)
 
     def tree_flatten(self):
         return jax.tree_util.tree_flatten(self.data)

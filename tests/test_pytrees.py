@@ -112,3 +112,27 @@ class TestFeaturePytree:
         assert list(model.coef_.keys()) == list(X.keys())
         for k in model.coef_.keys():
             assert model.coef_[k].shape == X[k].shape[1:]
+
+    def test_eq(self):
+        """Check that we can test equality."""
+        tree1 = FeaturePytree(test=np.arange(100))
+        tree2 = FeaturePytree(test=np.arange(100))
+        assert tree1 == tree2
+
+    def test_eq_fail_keys(self):
+        """Check that equality fails when keys differ."""
+        tree1 = FeaturePytree(test=np.arange(100))
+        tree2 = FeaturePytree(test2=np.arange(100))
+        assert tree1 != tree2
+
+    def test_eq_fail_shape(self):
+        """Check that equality fails when shapes differ."""
+        tree1 = FeaturePytree(test=np.arange(100))
+        tree2 = FeaturePytree(test=np.arange(50))
+        assert tree1 != tree2
+
+    def test_eq_fail_values(self):
+        """Check that equality fails when values differ."""
+        tree1 = FeaturePytree(test=np.random.rand(100))
+        tree2 = FeaturePytree(test=np.random.rand(100))
+        assert tree1 != tree2
