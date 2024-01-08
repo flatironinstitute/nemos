@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Any, Callable, Iterable, List, Literal, Optional, Union, TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Union,
+)
 
 import jax
 import jax.numpy as jnp
