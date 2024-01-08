@@ -44,6 +44,32 @@ def poissonGLM_model_instantiation():
 
 
 @pytest.fixture
+def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
+    """Set up a Poisson GLM for testing purposes.
+
+    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = poissonGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        nmo.pytrees.FeaturePytree(input_1=true_params[0][:, :3], input_2=true_params[0][:, 3:]),
+        true_params[1]
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
 def poissonGLM_coupled_model_config_simulate():
     """Set up a Poisson GLM from a predefined configuration in a json file.
 

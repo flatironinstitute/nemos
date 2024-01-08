@@ -379,6 +379,24 @@ class TestGLM:
         )
         model.fit(X, y)
 
+    def test_fit_pyrtee_equivalence(self, poissonGLM_model_instantiation,
+                                    poissonGLM_model_instantiation_pytree):
+        """Check that the glm fit with pytree learns the same parameters."""
+        # required for numerical precision of coeffs
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        X_tree, _, model_tree, true_params_tree, _ = poissonGLM_model_instantiation_pytree
+        # fit both models
+        model.fit(X, y, init_params=true_params)
+        model_tree.fit(X_tree, y, init_params=true_params_tree)
+
+        # get the flat parameters
+        flat_coef = np.concatenate(model_tree.coef_.tree_flatten()[0], axis=-1)
+
+        # assert equivalence of solutions
+        assert np.allclose(model.coef_, flat_coef)
+        assert np.allclose(model.intercept_, model_tree.intercept_)
+
     #######################
     # Test model.score
     #######################
