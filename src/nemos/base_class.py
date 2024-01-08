@@ -313,11 +313,17 @@ class BaseRegressor(Base, abc.ABC):
             # FeaturePytrees, that's okay as well
             try:
                 X = FeaturePytree(**X)
-            except:
+            # ValueError will show up if it's a dict that can't be parsed
+            # (e.g., because it's leaves aren't arrays or are arrays with
+            # incompatible shapes), and TypeError will show up if it's an array
+            except (ValueError, TypeError):
                 pass
             try:
                 params = (FeaturePytree(**params[0]), params[1])
-            except:
+            # ValueError will show up if it's a dict that can't be parsed
+            # (e.g., because it's leaves aren't arrays or are arrays with
+            # incompatible shapes), and TypeError will show up if it's an array
+            except (ValueError, TypeError):
                 pass
             only_X_pytree = isinstance(X, FeaturePytree) and not isinstance(
                 params[0], FeaturePytree
