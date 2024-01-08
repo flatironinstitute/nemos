@@ -379,7 +379,7 @@ class TestGLM:
         )
         model.fit(X, y)
 
-    def test_fit_pyrtee_equivalence(self, poissonGLM_model_instantiation,
+    def test_fit_pytree_equivalence(self, poissonGLM_model_instantiation,
                                     poissonGLM_model_instantiation_pytree):
         """Check that the glm fit with pytree learns the same parameters."""
         # required for numerical precision of coeffs
