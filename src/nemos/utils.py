@@ -39,18 +39,18 @@ _CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
 
 
 def check_dimensionality(
-    iterable: Union[NDArray, Iterable[NDArray], jnp.ndarray, Iterable[jnp.ndarray]],
+    pytree: Any,
     expected_dim: int,
 ) -> bool:
     """
-    Check the dimensionality of the arrays in iterable.
+    Check the dimensionality of the arrays in a pytree.
 
-    Check that all arrays in iterable has the expected dimensionality.
+    Check that all arrays in pytree have the expected dimensionality.
 
     Parameters
     ----------
-    iterable :
-        Array-like object containing numpy or jax.numpy NDArrays.
+    pytree :
+        A pytree object.
     expected_dim :
         Number of expected dimension for the NDArrays.
 
@@ -58,7 +58,7 @@ def check_dimensionality(
     -------
     True if all the arrays has the expected number of dimension, False otherwise.
     """
-    return not any(array.ndim != expected_dim for array in iterable)
+    return not pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree)
 
 
 def convolve_1d_trials(
@@ -108,32 +108,35 @@ def convolve_1d_trials(
         time_series = jnp.asarray(time_series)
         if time_series.ndim != 3:
             raise ValueError
+        # if the time series is a 3D NDArray, then first dimension is trial, the second is samples
+        sample_idx = 1
 
-    except ValueError:
+    except (ValueError, TypeError):
         # convert each trial to array
         time_series = jax.tree_map(jnp.asarray, time_series)
+        # if the time series is not a 3D NDArray, then each leaf of the tree has samples on the first dimension
+        sample_idx = 0
         if not check_dimensionality(time_series, 2):
             raise ValueError(
-                "time_series must be an iterable of 2 dimensional array-like objects."
+                "time_series must be an pytree of 2 dimensional array-like objects or a"
+                " 3 dimensional array-like object."
             )
 
-    if any(k == 0 for trial in time_series for k in trial.shape) or (
-        len(time_series) == 0
-    ):
+    if pytree_map_and_reduce(lambda x: np.prod(x.shape) == 0, any, time_series):
         raise ValueError("time_series should not contain empty trials!")
 
     # Check window size
     ws = len(basis_matrix)
-    if pytree_map_and_reduce(lambda x: x.shape[0] < ws, any, list(time_series)):
+    if pytree_map_and_reduce(lambda x: x.shape[sample_idx] < ws, any, time_series):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
         )
 
-    if isinstance(time_series, jnp.ndarray):
+    try:
         # if the conversion to array went through, time_series have trials with equal size
         conv_trials = _CORR_SAME_TRIAL_DUR(time_series, basis_matrix)
-    else:
+    except:
         # trials have different length
         conv_trials = jax.tree_map(
             lambda x: _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(x), basis_matrix),

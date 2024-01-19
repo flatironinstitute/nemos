@@ -1,3 +1,5 @@
+from contextlib import nullcontext as does_not_raise
+
 import numpy as np
 import pytest
 
@@ -53,27 +55,22 @@ class Test1DConvolution:
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((3, 4))])
     @pytest.mark.parametrize(
-        "trial_counts",
+        "trial_counts, expectation",
         [
-            np.zeros((1, 30, 2)),  # valid
-            [np.zeros((30, 2))],  # valid
-            np.zeros((1, 30, 1, 2)),  # invalid
-            [np.zeros((1, 30, 2))],  # invalid
-            np.zeros((1, 10)),  # invalid
-            [np.zeros(10)],  # invalid
+            (np.zeros((1, 30, 2)), does_not_raise()),
+            ([np.zeros((30, 2))], does_not_raise()),
+            ({"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}, does_not_raise()),
+            (np.zeros((1, 30, 1, 2)), pytest.raises(ValueError, match="time_series must be an pytree of 2 dimensional array-like objects ")),
+            ([np.zeros((1, 30, 2))],pytest.raises(ValueError, match="time_series must be an pytree of 2 dimensional array-like objects ")),
+            (np.zeros((30, 10)), does_not_raise()),
+            ([np.zeros((30, 10))], does_not_raise()),
+            (np.zeros(10), pytest.raises(ValueError, match="time_series must be an pytree of 2 dimensional array-like objects ")),
         ],
     )
-    def test_spike_count_ndim(self, basis_matrix, trial_counts):
-        raise_exception = any(trial.ndim != 2 for trial in trial_counts)
-        if raise_exception:
-            with pytest.raises(
-                ValueError,
-                match="time_series must be an iterable "
-                "of 2 dimensional array-like objects.",
-            ):
+    def test_spike_count_ndim(self, basis_matrix, expectation, trial_counts):
+        with expectation:
                 utils.convolve_1d_trials(basis_matrix, trial_counts)
-        else:
-            utils.convolve_1d_trials(basis_matrix, trial_counts)
+
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
     @pytest.mark.parametrize(
