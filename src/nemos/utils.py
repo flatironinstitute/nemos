@@ -136,7 +136,7 @@ def convolve_1d_trials(
         # trials have different length
         conv_trials = jax.tree_map(
             lambda x: _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(x), basis_matrix),
-            time_series, basis_matrix
+            time_series
         )
 
     return conv_trials
