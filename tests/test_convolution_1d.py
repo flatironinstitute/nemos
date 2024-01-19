@@ -133,6 +133,28 @@ class Test1DConvolution:
             '"valid" mode.'
         )
 
+    def test_compare_with_numpy(self):
+        """
+        Convolve using numpy as a loop and compare results.
+        """
+        ws = 3
+        n_basis = 2
+        n_trials = 2
+        n_samples = 10
+        n_neu = 20
+        samples = np.random.uniform(size=(n_trials, n_samples, n_neu))
+        basis = np.random.uniform(size=(ws, n_basis))
+
+        # loop over the trials, neurons, and basis and compute conv
+        # in mode valid
+        res_numpy = np.zeros((n_trials, n_samples - ws + 1, n_neu, n_basis))
+        for tr in range(len(samples)):
+            for neu in range(samples.shape[2]):
+                for bas_idx, bas in enumerate(basis.T):
+                    res_numpy[tr, :, neu, bas_idx] = np.convolve(bas, samples[tr, :, neu], mode="valid")
+        res_nemos = utils.convolve_1d_trials(basis, samples)
+        assert np.allclose(res_nemos, res_numpy)
+
 
 class TestPadding:
     @pytest.mark.parametrize(
