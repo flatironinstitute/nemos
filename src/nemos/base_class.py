@@ -205,7 +205,7 @@ class BaseRegressor(Base, abc.ABC):
     @abc.abstractmethod
     def simulate(
         self,
-        random_key: jax.random.PRNGKeyArray,
+        random_key: jax.Array,
         feed_forward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
