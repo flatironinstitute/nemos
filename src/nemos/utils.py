@@ -151,7 +151,7 @@ def check_trials_longer_then_window_size(
 def convolve_1d_trials(
     basis_matrix: ArrayLike,
     time_series: Any,
-) -> Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray]:
+) -> Any:
     """Convolve trial time series with a basis matrix.
 
     This function applies a convolution in mode "valid" to each trials in the
