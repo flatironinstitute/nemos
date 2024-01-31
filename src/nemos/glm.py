@@ -1,4 +1,5 @@
 """GLM core module."""
+
 from typing import Literal, Optional, Tuple, Union
 
 import jax

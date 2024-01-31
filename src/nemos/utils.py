@@ -1,4 +1,5 @@
 """Utility functions for data pre-processing."""
+
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
@@ -458,7 +459,7 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
         A = A.T
         C = C.T
 
-    @ jax.jit if jit else lambda x: x
+    @jax.jit if jit else lambda x: x
     def row_wise_kron(a, c):
         return jnp.kron(a, c)
 
