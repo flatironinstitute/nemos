@@ -1038,14 +1038,14 @@ class TestGLM:
         with pytest.raises(
             nmo.exceptions.NotFittedError, match="This GLM instance is not fitted yet"
         ):
-            model.simulate(jax.random.PRNGKey(123), X)
+            model.simulate(jax.random.key(123), X)
 
     def test_simulate_feedforward_GLM(self, poissonGLM_model_instantiation):
         """Test that simulate goes through"""
         X, y, model, params, rate = poissonGLM_model_instantiation
         model.coef_ = params[0]
         model.intercept_ = params[1]
-        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned
         assert ysim.ndim == 2
         assert ratesim.ndim == 2
