@@ -60,86 +60,156 @@ def check_dimensionality(
     return not pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree)
 
 
-def convolve_1d_trials(
-    basis_matrix: ArrayLike,
-    time_series: Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray],
-) -> Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray]:
-    """Convolve trial time series with a basis matrix.
+def check_convolve_input_dims(basis_matrix: jnp.ndarray, time_series: Any):
+    """
+    Check the dimensions of inputs for convolution operation.
 
-    This function checks if all trials have the same duration. If they do, it uses a fast method
-    to convolve all trials with the basis matrix at once. If they do not, it falls back to convolving
-    each trial individually.
+    This function validates that the `basis_matrix` is 2-dimensional and the `time_series`
+    is either a pytree of 2-dimensional arrays or a single 3-dimensional array.
 
     Parameters
     ----------
     basis_matrix :
-        The basis matrix with which to convolve the trials. Shape (window_size, n_basis_funcs).
+        A 2-dimensional array representing the basis matrix.
     time_series :
-        The time series of trials to convolve with the basis matrix. It should be a list of 2D arrays,
-        where each array represents a trial and its second dimension matches the first dimension
-        of the basis_matrix. Each trial has shape (n_timebins_trial, n_neurons).
-
-    Returns
-    -------
-    :
-        The convolved trials. It is a list of 3D arrays, where each array represents a convolved trial.
-        Each element of the list will have shape (n_timebins_trial - window_size - 1, n_neurons, n_basis_funcs).
+        A pytree of 2-dimensional arrays or a single 3-dimensional array representing the time series.
 
     Raises
     ------
     ValueError
-        - If basis_matrix is not a 2D array-like object.
-        - If trials_time_series is not an iterable of 2D array-like objects.
-        - If trials_time_series contains empty trials.
-        - If the number of time points in each trial is less than the window size.
+        If `basis_matrix` is not a 2-dimensional array or if `time_series` is not a pytree of
+        2-dimensional arrays or a single 3-dimensional array.
     """
-    basis_matrix = jnp.asarray(basis_matrix)
     # check input size
-    if basis_matrix.ndim != 2:
+    if not check_dimensionality(basis_matrix, expected_dim=2):
         raise ValueError("basis_matrix must be a 2 dimensional array-like object.")
-    elif 0 in basis_matrix.shape:
-        raise ValueError(
-            "Empty basis_matrix provided. "
-            f"The shape of basis_matrix is {basis_matrix.shape}!"
-        )
-    try:
-        # this should fail for variable trial length
-        time_series = jnp.asarray(time_series)
-        if time_series.ndim != 3:
-            raise ValueError
-        # if the time series is a 3D NDArray, then first dimension is trial, the second is samples
-        sample_idx = 1
 
-    except (ValueError, TypeError):
-        # convert each trial to array
-        time_series = jax.tree_map(jnp.asarray, time_series)
-        # if the time series is not a 3D NDArray, then each leaf of the tree has samples on the first dimension
-        sample_idx = 0
+    try:
+        if time_series.ndim != 3:
+            raise AttributeError
+    except AttributeError:
         if not check_dimensionality(time_series, 2):
             raise ValueError(
                 "time_series must be an pytree of 2 dimensional array-like objects or a"
                 " 3 dimensional array-like object."
             )
 
-    if pytree_map_and_reduce(lambda x: np.prod(x.shape) == 0, any, time_series):
-        raise ValueError("time_series should not contain empty trials!")
 
+def check_non_empty(pytree: Any, pytree_name: str):
+    """
+    Check if any array in the pytree is empty.
+
+    Parameters
+    ----------
+    pytree :
+        A pytree object containing arrays.
+    pytree_name :
+        The name of the pytree variable for error message purposes.
+
+    Raises
+    ------
+    ValueError
+        If any array in the pytree is empty (i.e., has a zero dimension).
+    """
+    if pytree_map_and_reduce(lambda x: 0 in x.shape, any, pytree):
+        raise ValueError(
+            f"Empty array provided. At least one of dimension in {pytree_name} is empty."
+        )
+
+
+def check_trials_longer_then_window_size(
+    time_series: Any, window_size: int, sample_axis: int
+):
+    """
+    Check if the duration of each trial in the time series is at least as long as the window size.
+
+    Parameters
+    ----------
+    time_series :
+        A pytree of trial data.
+    window_size :
+        The size of the window to be used in convolution.
+    sample_axis :
+        The axis in the arrays representing the time dimension.
+
+    Raises
+    ------
+    ValueError
+        If any trial in the time series is shorter than the window size.
+    """
     # Check window size
-    ws = len(basis_matrix)
-    if pytree_map_and_reduce(lambda x: x.shape[sample_idx] < ws, any, time_series):
+    if pytree_map_and_reduce(
+        lambda x: x.shape[sample_axis] < window_size, any, time_series
+    ):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
         )
 
-    try:
+
+def convolve_1d_trials(
+    basis_matrix: ArrayLike,
+    time_series: Any,
+) -> Union[Iterable[NDArray], NDArray, Iterable[jnp.ndarray], jnp.ndarray]:
+    """Convolve trial time series with a basis matrix.
+
+    This function applies a convolution in mode "valid" to each trials in the
+    `time_series`. The `time_series` pytree could be either a single 3D array with trials
+    as the first dimension, or a pytree with trials as the leaves.
+
+    Parameters
+    ----------
+    basis_matrix :
+        The basis matrix with which to convolve the trials. Shape (window_size, n_basis_funcs).
+    time_series :
+        The time series of trials to convolve with the basis matrix. This variable should be a pytree
+        with arrays as leaves. The structure could be one of the following:
+            1. A single array leaf of 3-dimensions, (n_trials, n_time_bins, n_neurons).
+            2. Any pytree with 2-dimensional arrays, (n_time_bins_trials, n_neurons_trials), as leaves.
+
+    Returns
+    -------
+    :
+        The convolved trials as a pytree with the same structure as `time_series`.
+
+    Raises
+    ------
+    ValueError
+        - If basis_matrix is not a 2D array-like object.
+        - If time_series is not a pytree of 2D array-like objects or a 3D array.
+        - If time_series contains empty trials.
+        - If basis_matrix is empty
+        - If the number of time points in each trial is less than the window size.
+    """
+    # convert to jax arrays
+    basis_matrix = jnp.asarray(basis_matrix)
+    time_series = jax.tree_map(jnp.asarray, time_series)
+
+    # check dimensions
+    check_convolve_input_dims(basis_matrix, time_series)
+
+    # check for empty inputs
+    check_non_empty(basis_matrix, "basis_matrix")
+    check_non_empty(time_series, "time_series")
+
+    # get the sample axis
+    if pytree_map_and_reduce(lambda x: x.ndim == 2, all, time_series):
+        sample_axis = 0
+    else:
+        sample_axis = 1
+
+    check_trials_longer_then_window_size(
+        time_series, basis_matrix.shape[0], sample_axis
+    )
+
+    if sample_axis:
         # if the conversion to array went through, time_series have trials with equal size
         conv_trials = _CORR_SAME_TRIAL_DUR(time_series, basis_matrix)
-    except:
+    else:
         # trials have different length
         conv_trials = jax.tree_map(
             lambda x: _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(x), basis_matrix),
-            time_series
+            time_series,
         )
 
     return conv_trials
@@ -206,17 +276,22 @@ def _pad_dimension(
 
 
 def nan_pad_conv(
-    conv_trials: Union[Iterable[jnp.ndarray], Iterable[NDArray], NDArray, jnp.ndarray],
+    conv_trials: Any,
     window_size: int,
     filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
-) -> List[jnp.ndarray]:
+) -> Any:
     """
     Add NaN padding to convolution trials based on the convolution type.
 
     Parameters
     ----------
     conv_trials:
-        A 4D array-like of trials to be padded. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial).
+        The convolved time series. This variable should be a pytree
+        with arrays as leaves. The structure could be one of the following:
+            1. A single array leaf of 4-dimensions, (n_trials, n_time_bins, n_neurons, n_features).
+            2. Any pytree with 3-dimensional arrays, (n_time_bins_trials, n_neurons_trials, n_features_trials),
+            as leaves.
+
     window_size:
         The window size to determine the padding.
     filter_type: str, optional
@@ -225,7 +300,7 @@ def nan_pad_conv(
     Returns
     -------
     :
-        A 4D array-like of padded trials. Each trial has shape (n_neurons, n_basis_funcs, n_timebins_trial + padding).
+        A pytree with the padded trials that has the same structure as conv_trials.
 
     Raises
     ------
@@ -254,37 +329,30 @@ def nan_pad_conv(
         )
 
     start, end = adjust_indices[filter_type]
-
+    # convert to jax ndarray
+    conv_trials = jax.tree_map(jnp.asarray, conv_trials)
     try:
-        conv_trials = jnp.asarray(conv_trials)
         if conv_trials.ndim != 4:
-            raise ValueError(
-                "conv_trials must be an iterable of 3D arrays or a 4D array!"
+            raise AttributeError(
+                "conv_trials must be an pytree of 3D arrays or a 4D array!"
             )
 
         conv_trials = conv_trials[:, start:end]
-        return list(
-            _pad_dimension(
-                conv_trials, 1, window_size, filter_type, constant_values=jnp.nan
-            )
+        return _pad_dimension(
+            conv_trials, 1, window_size, filter_type, constant_values=jnp.nan
         )
 
-    except (TypeError, ValueError):
+    except AttributeError:
         if not check_dimensionality(conv_trials, 3):
             raise ValueError(
                 "conv_trials must be an iterable of 3D arrays or a 4D array!"
             )
-
-        return [
-            _pad_dimension(
-                trial[start:end],
-                0,
-                window_size,
-                filter_type,
-                constant_values=jnp.nan,
-            )
-            for trial in conv_trials
-        ]
+        return jax.tree_map(
+            lambda trial: _pad_dimension(
+                trial[start:end], 0, window_size, filter_type, constant_values=jnp.nan
+            ),
+            conv_trials,
+        )
 
 
 def plot_spike_raster(
