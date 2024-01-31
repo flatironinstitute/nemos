@@ -394,7 +394,7 @@ class GLM(BaseRegressor):
 
     def simulate(
         self,
-        random_key: jax.random.PRNGKeyArray,
+        random_key: jax.Array,
         feedforward_input: DESIGN_INPUT_TYPE,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
@@ -402,7 +402,7 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         random_key :
-            PRNGKey for seeding the simulation.
+            jax.random.key for seeding the simulation.
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
@@ -486,7 +486,7 @@ class GLMRecurrent(GLM):
 
     def simulate_recurrent(
         self,
-        random_key: jax.random.PRNGKeyArray,
+        random_key: jax.Array,
         feedforward_input: Union[NDArray, jnp.ndarray],
         coupling_basis_matrix: Union[NDArray, jnp.ndarray],
         init_y: Union[NDArray, jnp.ndarray],
@@ -502,7 +502,7 @@ class GLMRecurrent(GLM):
         Parameters
         ----------
         random_key :
-            PRNGKey for seeding the simulation.
+            jax.random.key for seeding the simulation.
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
@@ -587,7 +587,7 @@ class GLMRecurrent(GLM):
         )
 
         def scan_fn(
-            data: Tuple[jnp.ndarray, int], key: jax.random.PRNGKeyArray
+            data: Tuple[jnp.ndarray, int], key: jax.Array
         ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
             """Scan over time steps and simulate activity and rates.
 

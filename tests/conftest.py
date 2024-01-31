@@ -82,7 +82,7 @@ def poissonGLM_coupled_model_config_simulate():
             - coupling_basis (jax.numpy.ndarray): Coupling basis values from the config.
             - feedforward_input (jax.numpy.ndarray): Feedforward input values from the config.
             - init_spikes (jax.numpy.ndarray): Initial spike values from the config.
-            - jax.random.PRNGKey(123) (jax.random.PRNGKey): A pseudo-random number generator key.
+            - jax.random.key(123) (jax.Array): A pseudo-random number generator key.
     """
     observations = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.Ridge("BFGS", regularizer_strength=0.1)
@@ -119,7 +119,7 @@ def poissonGLM_coupled_model_config_simulate():
         coupling_basis,
         feedforward_input,
         init_spikes,
-        jax.random.PRNGKey(123),
+        jax.random.key(123),
     )
 
 
