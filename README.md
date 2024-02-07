@@ -9,21 +9,51 @@ NEural MOdelS, a statistical modeling framework for neuroscience.
 ## Disclaimer
 This is an alpha version, the code is in active development and the API is subject to change.
 
-## Setup
+## Installation
 
-To install, clone this repo and install using `pip`:
+To install `nemos` we recommend to creating and activating a virtual environment. You can create do so through
+`venv`.
 
-``` sh
-git clone git@github.com:flatironinstitute/nemos.git
-cd nemos/
-pip install -e .
+For  Mac and Linux,
+```shell
+python -m venv <DIR>
+source <DIR>/bin/activate
 ```
 
-If you have a GPU, you may need to install jax separately to get the proper
-build. The following has worked for me on a Flatiron Linux workstation: `conda
-install jax cuda-nvcc -c conda-forge -c nvidia`. Note this should be done
-without `jax` and `jaxlib` already installed, so either run this before the
-earlier `pip install` command or uninstall them first (`pip uninstall jax
-jaxlib`). See [jax docs](https://github.com/google/jax#conda-installation) for
-details (the `pip` instructions did not work for me).
+For Windows,
+```shell
+python -m venv <DIR>
+<DIR>\Scripts\activate
+```
+
+### CPU Install
+
+To install `nemos` in your environment run,
+
+``` shell
+pip install --upgrade pip
+pip install nemos@git+https://github.com/flatironinstitute/nemos.git
+```
+
+### GPU install
+If you have a GPU, you must need to install jax separately first to get the proper
+build. 
+In order to install `jax` and `jaxlib` for GPU, follow the instruction provided in the 
+[jax docs](https://jax.readthedocs.io/en/latest/installation.html).
+
+To check that `jax` for GPU is installed correctly, run python and type,
+
+```python
+import jax
+print(jax.devices())
+```
+This should print a list of devices that `jax` can access. If your `GPU` is listed, your installation 
+was successful.
+
+Once `jax` is installed correctly, continue with the usual steps for installing `nemos`,
+
+``` shell
+pip install --upgrade pip
+pip install nemos@git+https://github.com/flatironinstitute/nemos.git
+```
 
