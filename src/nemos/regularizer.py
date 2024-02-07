@@ -5,6 +5,7 @@ This module provides a series of classes that facilitate the optimization of mod
 with different types of regularizations. Each `Regularizer` class in this module interfaces
 with various optimization methods, and they can be applied depending on the model's requirements.
 """
+
 import abc
 import inspect
 from typing import Any, Callable, List, Optional, Tuple, Union
