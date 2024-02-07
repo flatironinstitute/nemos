@@ -11,49 +11,72 @@ This is an alpha version, the code is in active development and the API is subje
 
 ## Installation
 
-To install `nemos` we recommend to creating and activating a virtual environment. You can do so through
-`venv`.
+### Prerequisites
 
-For  Mac and Linux,
-```shell
-python -m venv <DIR>
-source <DIR>/bin/activate
-```
+Before installing `nemos`, we recommend creating and activating a Python virtual environment using `venv`. This helps to manage dependencies and avoid conflicts with other Python packages.
 
-For Windows,
-```shell
-python -m venv <DIR>
-<DIR>\Scripts\activate
-```
+#### Creating a Virtual Environment
 
-### CPU Install
+- **For macOS and Linux:**
+  Open a terminal and run the following commands:
 
-To install `nemos` in your environment run,
+  ```
+  python -m venv <DIR>
+  source <DIR>/bin/activate
+  ```
 
-``` shell
-pip install --upgrade pip
-pip install nemos@git+https://github.com/flatironinstitute/nemos.git
-```
+- **For Windows:**
+  Open a command prompt and execute:
 
-### GPU install
-If you have a GPU, you must need to install jax separately first to get the proper
-build. 
-In order to install `jax` and `jaxlib` for GPU, follow the instruction provided in the 
-[jax docs](https://jax.readthedocs.io/en/latest/installation.html).
+  ```
+  python -m venv <DIR>
+  <DIR>\Scripts\activate
+  ```
 
-To check that `jax` for GPU is installed correctly, run python and type,
+Replace `<DIR>` with the directory where you want to create the virtual environment.
 
-```python
-import jax
-print(jax.devices())
-```
-This should print a list of devices that `jax` can access. If your `GPU` is listed, your installation 
-was successful.
+### Installation Steps
 
-Once `jax` is installed correctly, continue with the usual steps for installing `nemos`,
+#### Standard CPU Installation
 
-``` shell
-pip install --upgrade pip
-pip install nemos@git+https://github.com/flatironinstitute/nemos.git
-```
+To install `nemos` on a system without a GPU, follow these steps:
 
+1. Ensure your pip is up to date:
+
+   ```
+   pip install --upgrade pip
+   ```
+
+2. Install `nemos` directly from the GitHub repository:
+
+   ```
+   pip install git+https://github.com/flatironinstitute/nemos.git
+   ```
+
+#### GPU Installation
+
+For systems equipped with a GPU, a specific installation process is required to utilize the GPU with `nemos`.
+
+1. **Install `jax` and `jaxlib` for GPU:**
+
+   - Follow the instructions provided in the [JAX documentation](https://jax.readthedocs.io/en/latest/installation.html) to install `jax` and `jaxlib` for GPU support.
+
+2. **Verify GPU Installation:**
+
+   - To ensure `jax` recognizes your GPU, execute the following in Python:
+
+     ```
+     import jax
+     print(jax.devices())
+     ```
+
+     If your GPU is listed among the devices, the installation was successful.
+
+3. **Install `nemos`:**
+
+   - After successfully installing and configuring `jax` for GPU, install `nemos` using the same steps as the CPU installation:
+
+     ```
+     pip install --upgrade pip
+     pip install git+https://github.com/flatironinstitute/nemos.git
+     ```
