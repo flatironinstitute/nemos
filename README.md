@@ -75,7 +75,7 @@ We communicate via several channels on Github:
 - To report a bug, open an
   [issue](https://github.com/flatironinstitute/nemos/issues).
 - To ask usage questions, discuss broad issues, or show off what you’ve made
-  with plenoptic, go to
+  with nemos, go to
   [Discussions](https://github.com/flatironinstitute/nemos/discussions).
 - To send suggestions for extensions or enhancements, please post in the
   [ideas](https://github.com/flatironinstitute/nemos/discussions/categories/ideas)
