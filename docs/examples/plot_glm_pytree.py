@@ -15,6 +15,7 @@ First, however, let's briefly discuss FeaturePytrees.
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 import nemos as nmo
 
 # enable float64 precision (optional)
@@ -117,6 +118,13 @@ mapped['feature_1']
 # values are scalars or non-arrays), we return a dictionary of arrays instead:
 print(jax.tree_map(jnp.mean, example_pytree))
 print(jax.tree_map(lambda x: x.shape, example_pytree))
+import fsspec
+import h5py
+import matplotlib.pyplot as plt
+import pynapple as nap
+from dandi.dandiapi import DandiAPIClient
+from fsspec.implementations.cached import CachingFileSystem
+
 # %%
 #
 # ## FeaturePytrees and GLM
@@ -134,13 +142,6 @@ print(jax.tree_map(lambda x: x.shape, example_pytree))
 #     We need some additional packages for this portion, which you can install
 #     with `pip install dandi pynapple`
 from pynwb import NWBHDF5IO
-
-from dandi.dandiapi import DandiAPIClient
-import fsspec
-from fsspec.implementations.cached import CachingFileSystem
-import h5py
-import pynapple as nap
-import matplotlib.pyplot as plt
 
 # ecephys
 dandiset_id, filepath = (

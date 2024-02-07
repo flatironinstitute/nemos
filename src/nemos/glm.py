@@ -1,4 +1,5 @@
 """GLM core module."""
+
 from typing import Literal, Optional, Tuple, Union
 
 import jax
@@ -625,7 +626,7 @@ class GLMRecurrent(GLM):
             # for the next iteration (i.e. remove the first counts, and
             # stack the newly generated sample)
             # Increase the t_sample by one
-            carry = jnp.row_stack((activity[1:], new_act)), t_sample + 1
+            carry = jnp.vstack((activity[1:], new_act)), t_sample + 1
             return carry, (new_act, firing_rate)
 
         _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
