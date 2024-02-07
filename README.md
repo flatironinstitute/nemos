@@ -11,7 +11,7 @@ This is an alpha version, the code is in active development and the API is subje
 
 ## Installation
 
-To install `nemos` we recommend to creating and activating a virtual environment. You can create do so through
+To install `nemos` we recommend to creating and activating a virtual environment. You can do so through
 `venv`.
 
 For  Mac and Linux,
