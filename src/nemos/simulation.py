@@ -1,6 +1,5 @@
 """Utility functions for coupling filter definition."""
 
-
 import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
