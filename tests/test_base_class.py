@@ -7,7 +7,7 @@ import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base, BaseRegressor
-from nemos.utils import check_invalid_entry
+from nemos.utils import check_invalid_entry, pytree_map_and_reduce
 
 
 @pytest.fixture
@@ -134,12 +134,12 @@ def test_check_invalid_entry():
 
 def test_check_valid_structure():
     """Test that validation of trees returns the proper structure."""
-    valid_data = jnp.array([1, 2, 3])
+    valid_data = jnp.array([1, 2, 3, 4])
     invalid_data_nan = {"x": {"y": jnp.array([1, 2, jnp.nan])}}
     valid, _ = check_invalid_entry(valid_data, "valid_data")
     valid_nan, _ = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
-    assert jax.tree_structure(valid) == jax.tree_structure(valid_data)
-    assert jax.tree_structure(valid_nan) == jax.tree_structure(invalid_data_nan)
+    assert pytree_map_and_reduce(lambda x: x.shape[0] == valid_nan.shape[0], all, invalid_data_nan)
+    assert pytree_map_and_reduce(lambda x: x.shape[0] == valid.shape[0], all, valid_data)
 
 
 def test_check_valid_entries():
@@ -148,10 +148,10 @@ def test_check_valid_entries():
     invalid_data_inf = {"x": {"y": jnp.array([1, jnp.inf, 2])}}
 
     valid, _ = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
-    assert jnp.all(valid["x"]["y"] == jnp.array([True, True, False]))
+    assert jnp.all(valid == jnp.array([True, True, False]))
 
     valid, _ = check_invalid_entry(invalid_data_inf, "invalid_data_nan")
-    assert jnp.all(valid["x"]["y"] == jnp.array([True, False, True]))
+    assert jnp.all(valid == jnp.array([True, False, True]))
 
 
 # To ensure abstract methods aren't callable

@@ -399,8 +399,8 @@ class BaseRegressor(Base, abc.ABC):
         is_valid = jax.tree_map(lambda x, y: x & y, valid_x, valid_y)
 
         # filter for valid
-        X = jax.tree_map(lambda x, v: x[v], X, is_valid)
-        y = jax.tree_map(lambda x, v: x[v], y, is_valid)
+        X = jax.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_map(lambda x: x[is_valid], y)
 
         # Initialize parameters
         if init_params is None:

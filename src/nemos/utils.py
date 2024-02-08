@@ -3,7 +3,7 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
-from functools import partial
+from functools import partial, reduce
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -440,6 +440,8 @@ def check_invalid_entry(
     any_nans = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree))
     # create the bool vector
     is_valid = jax.tree_map(lambda x: check_not_inf(x) & check_not_nan(x), pytree)
+    # reduce with an "and" logical preserving the time axis
+    is_valid = reduce(jnp.logical_and, jax.tree_util.tree_leaves(is_valid))
 
     # define appropriate error messages
     if any_infs and any_nans:
