@@ -12,6 +12,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Tuple,
     Union,
 )
 
@@ -402,7 +403,7 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
 
 def check_invalid_entry(
     pytree: Union[FeaturePytree, jnp.ndarray], pytree_name: str
-) -> None:
+) -> Tuple[Any, Union[None, ValueError]]:
     """Check if the array has nans or infs.
 
     Parameters
@@ -412,17 +413,43 @@ def check_invalid_entry(
     pytree_name:
         The array name.
 
-    Raises
+    Returns
     ------
-        - ValueError: If any entry of `pytree` is either NaN or inf.
+    is_valid:
+        A pytree with leaves flat boolean arrays of shape (n_sample_points, ) with
+        the invalid indices (samples with Nans or Infs).
+    err:
+        Either None, if all entries are valid, or a ValueError exception.
 
     """
+
+    # this functions returns a boolean array of shape (num_samples,)
+    # indicating which sample as nans or index
+    def check_not_inf(x):
+        return jax.numpy.all(~jnp.isinf(x), axis=range(1, x.ndim))
+
+    def check_not_nan(x):
+        return jax.numpy.all(~jnp.isnan(x), axis=range(1, x.ndim))
+
+    # initialize exception and is_invalid to None
+    err = None
+
     # this is a double-any situation: first, we check if each leaf have any
     # Infs, then we check whether any leaf has an Inf
-    if pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isinf, pytree)):
-        raise ValueError(f"Input '{pytree_name}' contains Infs!")
-    if pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree)):
-        raise ValueError(f"Input '{pytree_name}' contains NaNs!")
+    any_infs = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isinf, pytree))
+    any_nans = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree))
+    # create the bool vector
+    is_valid = jax.tree_map(lambda x: check_not_inf(x) & check_not_nan(x), pytree)
+
+    # define appropriate error messages
+    if any_infs and any_nans:
+        err = ValueError(f"Input '{pytree_name}' contains Infs and Nans!")
+    elif any_infs:
+        err = ValueError(f"Input '{pytree_name}' contains Infs!")
+    elif any_nans:
+        err = ValueError(f"Input '{pytree_name}' contains NaNs!")
+
+    return is_valid, err
 
 
 def assert_has_attribute(obj: Any, attr_name: str):

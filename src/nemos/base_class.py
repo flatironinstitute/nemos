@@ -384,8 +384,23 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
-        check_invalid_entry(X, "X")
-        check_invalid_entry(y, "y")
+        valid_x, err_x = check_invalid_entry(X, "X")
+        valid_y, err_y = check_invalid_entry(y, "y")
+
+        # warn the user of the dropped samples.
+        if err_x:
+            message = err_x.args[0] + " Dropping corresponding samples."
+            warnings.warn(message=message, category=UserWarning)
+        if err_y:
+            message = err_y.args[0] + " Dropping corresponding samples."
+            warnings.warn(message=message, category=UserWarning)
+
+        # get the valid time points the valid
+        is_valid = jax.tree_map(lambda x, y: x & y, valid_x, valid_y)
+
+        # filter for valid
+        X = jax.tree_map(lambda x, v: x[v], X, is_valid)
+        y = jax.tree_map(lambda x, v: x[v], y, is_valid)
 
         # Initialize parameters
         if init_params is None:
@@ -461,7 +476,10 @@ class BaseRegressor(Base, abc.ABC):
             params_feedforward, X=feedforward_input
         )
 
-        check_invalid_entry(feedforward_input, "feedforward_input")
+        _, err = check_invalid_entry(feedforward_input, "feedforward_input")
+        # if error is not None, raise the exception
+        if err:
+            raise err
 
         # Ensure that both or neither of `init_y` and `params_recurrent` are
         # provided
