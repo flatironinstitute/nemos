@@ -389,10 +389,10 @@ class BaseRegressor(Base, abc.ABC):
 
         # warn the user of the dropped samples.
         if err_x:
-            message = err_x.args[0] + " Dropping corresponding samples."
+            message = err_x.join(" Dropping corresponding samples.")
             warnings.warn(message=message, category=UserWarning)
         if err_y:
-            message = err_y.args[0] + " Dropping corresponding samples."
+            message = err_y.join(" Dropping corresponding samples.")
             warnings.warn(message=message, category=UserWarning)
 
         # get the valid time points the valid
@@ -479,7 +479,7 @@ class BaseRegressor(Base, abc.ABC):
         _, err = check_invalid_entry(feedforward_input, "feedforward_input")
         # if error is not None, raise the exception
         if err:
-            raise err
+            raise ValueError(err)
 
         # Ensure that both or neither of `init_y` and `params_recurrent` are
         # provided

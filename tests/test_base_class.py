@@ -126,10 +126,10 @@ def test_check_invalid_entry():
     check_invalid_entry(valid_data, "valid_data")
     with pytest.raises(ValueError, match="Input 'invalid_data_nan' contains NaN"):
         _, err = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
-        raise err
+        raise ValueError(err)
     with pytest.raises(ValueError, match="Input 'invalid_data_inf' contains Inf"):
         _, err = check_invalid_entry(invalid_data_inf, "invalid_data_inf")
-        raise err
+        raise ValueError(err)
 
 
 def test_check_valid_structure():

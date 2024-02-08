@@ -403,7 +403,7 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
 
 def check_invalid_entry(
     pytree: Any, pytree_name: str
-) -> Tuple[Any, Union[None, ValueError]]:
+) -> Tuple[Any, Union[None, str]]:
     """Check if the array has nans or infs.
 
     Parameters
@@ -419,7 +419,7 @@ def check_invalid_entry(
         A pytree with leaves flat boolean arrays of shape (n_sample_points, ) with
         the invalid indices (samples with Nans or Infs).
     err:
-        Either None, if all entries are valid, or a ValueError exception.
+        Either None, if all entries are valid, or an error message.
 
     """
 
@@ -445,11 +445,11 @@ def check_invalid_entry(
 
     # define appropriate error messages
     if any_infs and any_nans:
-        err = ValueError(f"Input '{pytree_name}' contains Infs and Nans!")
+        err = f"Input '{pytree_name}' contains Infs and Nans!"
     elif any_infs:
-        err = ValueError(f"Input '{pytree_name}' contains Infs!")
+        err = f"Input '{pytree_name}' contains Infs!"
     elif any_nans:
-        err = ValueError(f"Input '{pytree_name}' contains NaNs!")
+        err = f"Input '{pytree_name}' contains NaNs!"
 
     return is_valid, err
 
