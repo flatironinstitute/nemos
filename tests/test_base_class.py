@@ -2,6 +2,7 @@ from typing import Literal, Union
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from numpy.typing import NDArray
 
@@ -118,15 +119,39 @@ def test_get_param_names():
 
 
 def test_check_invalid_entry():
-    """Test validation of data arrays."""
+    """Test validation of trees generates the correct exceptions."""
     valid_data = jnp.array([1, 2, 3])
     invalid_data_nan = jnp.array([1, 2, jnp.nan])
     invalid_data_inf = jnp.array([1, jnp.inf, 2])
     check_invalid_entry(valid_data, "valid_data")
     with pytest.raises(ValueError, match="Input 'invalid_data_nan' contains NaN"):
-        check_invalid_entry(invalid_data_nan, "invalid_data_nan")
+        _, err = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
+        raise err
     with pytest.raises(ValueError, match="Input 'invalid_data_inf' contains Inf"):
-        check_invalid_entry(invalid_data_inf, "invalid_data_inf")
+        _, err = check_invalid_entry(invalid_data_inf, "invalid_data_inf")
+        raise err
+
+
+def test_check_valid_structure():
+    """Test that validation of trees returns the proper structure."""
+    valid_data = jnp.array([1, 2, 3])
+    invalid_data_nan = {"x": {"y": jnp.array([1, 2, jnp.nan])}}
+    valid, _ = check_invalid_entry(valid_data, "valid_data")
+    valid_nan, _ = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
+    assert jax.tree_structure(valid) == jax.tree_structure(valid_data)
+    assert jax.tree_structure(valid_nan) == jax.tree_structure(invalid_data_nan)
+
+
+def test_check_valid_entries():
+    """Test tat validation of trees finds the valid entries."""
+    invalid_data_nan = {"x": {"y": jnp.array([1, 2, jnp.nan])}}
+    invalid_data_inf = {"x": {"y": jnp.array([1, jnp.inf, 2])}}
+
+    valid, _ = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
+    assert jnp.all(valid["x"]["y"] == jnp.array([True, True, False]))
+
+    valid, _ = check_invalid_entry(invalid_data_inf, "invalid_data_nan")
+    assert jnp.all(valid["x"]["y"] == jnp.array([True, False, True]))
 
 
 # To ensure abstract methods aren't callable
@@ -176,33 +201,33 @@ def test_preprocess_fit_invalid_datatypes(mock_regressor):
 
 def test_preprocess_fit_with_nan_in_X(mock_regressor):
     """Test behavior with NaN values in data."""
-    X = jnp.array([[[1, 2], [jnp.nan, 4]]])
-    y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [jnp.nan, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, 2], [3, 4]])
+    with pytest.warns(UserWarning, match="Input .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_inf_in_X(mock_regressor):
     """Test behavior with inf values in data."""
-    X = jnp.array([[[1, 2], [jnp.inf, 4]]])
-    y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [jnp.inf, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, 2], [3, 4]])
+    with pytest.warns(UserWarning, match="Input .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_nan_in_y(mock_regressor):
     """Test behavior with NaN values in data."""
-    X = jnp.array([[[1, 2], [2, 4]]])
-    y = jnp.array([[1, jnp.nan]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [0, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, jnp.nan], [3, 4]])
+    with pytest.warns(UserWarning, match="Input .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_inf_in_y(mock_regressor):
     """Test behavior with inf values in data."""
-    X = jnp.array([[[1, 2], [2, 4]]])
-    y = jnp.array([[1, jnp.inf]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [0, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, 0], [3, jnp.inf]])
+    with pytest.warns(UserWarning, match="Input .+ contains"):
         mock_regressor._preprocess_fit(X, y)
 
 
