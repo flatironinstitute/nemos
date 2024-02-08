@@ -412,7 +412,7 @@ def check_invalid_entry(pytree: Any, pytree_name: str) -> Tuple[Any, Union[None,
         The array name.
 
     Returns
-    ------
+    -------
     is_valid:
         A pytree with leaves flat boolean arrays of shape (n_sample_points, ) with
         the invalid indices (samples with Nans or Infs).
