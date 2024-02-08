@@ -401,9 +401,7 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def check_invalid_entry(
-    pytree: Any, pytree_name: str
-) -> Tuple[Any, Union[None, str]]:
+def check_invalid_entry(pytree: Any, pytree_name: str) -> Tuple[Any, Union[None, str]]:
     """Check if the array has nans or infs.
 
     Parameters
