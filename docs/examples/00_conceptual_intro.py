@@ -152,6 +152,7 @@ fig = workshop_utils.plotting.lnp_schematic(input_feature,
 #
 # Now we're ready to see what these spikes look like!
 
+# mkdocs_gallery_thumbnail_number = 3
 fig = workshop_utils.plotting.lnp_schematic(input_feature,
                                    weights, intercepts,
                                    plot_nonlinear=True, plot_spikes=True)

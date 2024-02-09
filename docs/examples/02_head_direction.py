@@ -744,6 +744,7 @@ plotting.plot_head_direction_tuning_model(tuning_curves, predicted_firing_rate, 
 # - Visually compare all the models.
 # </div>
 
+# mkdocs_gallery_thumbnail_number = 2
 plotting.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection: raw history": rate_history,

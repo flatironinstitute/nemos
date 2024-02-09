@@ -647,6 +647,8 @@ print(f"intercept_ shape: {model.intercept_.shape}")
 #   - generate and examine model predictions.
 # </div>
 
+# mkdocs_gallery_thumbnail_number = 4
+
 predicted_fr = model.predict(predictor)
 # convert units from spikes/bin to spikes/sec
 predicted_fr = predicted_fr / bin_size

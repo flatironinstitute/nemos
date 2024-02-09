@@ -132,6 +132,7 @@ sta[1, 0]
 # <div class="notes">
 #   - visualize spike-triggered average and decide on our spatial filter.
 # </div>
+
 fig, axes = plt.subplots(1, len(sta), figsize=(3*len(sta),3))
 for i, t in enumerate(sta.t):
     axes[i].imshow(sta[i,0], vmin = np.min(sta), vmax = np.max(sta),
@@ -146,6 +147,8 @@ for i, t in enumerate(sta.t):
 #
 # To convert this to the spatial filter we'll use for the GLM, let's take the
 # average across the bins that look informative: -.125 to -.05
+
+# mkdocs_gallery_thumbnail_number = 3
 receptive_field = np.mean(sta.get(-0.125, -0.05), axis=0)[0]
 
 fig, ax = plt.subplots(1, 1, figsize=(4,4))
