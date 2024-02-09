@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-"""# What's a GLM and why should you care?
+r"""# What's a GLM and why should you care?
 
 Before we dive into using nemos, you might wonder: why model at all? Why not
  just make a bunch of tuning curves and submit to *Science*? Modeling is
