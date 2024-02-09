@@ -160,7 +160,7 @@ class TestPoissonObservations:
         Check that the emission probability is set to jax.random.poisson.
         """
         _, _, model, _, _ = poissonGLM_model_instantiation
-        key_array = jax.random.PRNGKey(123)
+        key_array = jax.random.key(123)
         counts = model.observation_model.sample_generator(key_array, np.arange(1, 11))
         if not jnp.all(counts == jax.random.poisson(key_array, np.arange(1, 11))):
             raise ValueError(

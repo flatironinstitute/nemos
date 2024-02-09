@@ -42,7 +42,7 @@ class MockBaseRegressor(BaseRegressor):
 
     def simulate(
         self,
-        random_key: jax.random.PRNGKeyArray,
+        random_key: jax.Array,
         feed_forward_input: Union[NDArray, jnp.ndarray],
         **kwargs,
     ):
