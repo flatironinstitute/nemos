@@ -89,7 +89,7 @@ For systems equipped with a GPU, you may need to first specifically install the 
 
    - After successfully installing and configuring `jax` for GPU, install `nemos` using the same steps as the CPU installation:
 
-     ```
+     ```bash
      pip install --upgrade pip
      pip install git+https://github.com/flatironinstitute/nemos.git
      ```
