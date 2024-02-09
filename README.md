@@ -56,7 +56,7 @@ To install `nemos` on a system without a GPU, follow these steps:
 
 1. Ensure your pip is up to date:
 
-   ```
+   ```bash
    pip install --upgrade pip
    ```
 
