@@ -5,12 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nemos"
 version = "0.1.0"
-authors = [
-    {name = "Edoardo Balzani", email = "ebalzani@flatironinstitute.org"},
-    {name = "William Broderick", email = "wbroderick@flatironinstitute.org"},
-    {name = "Guillaume Vejo", email = "gviejo@flatironinstitute.org"},
-    {name = "Alex Williams", email = "alex.h.williams@nyu.edu"}
-]
+authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
 requires-python = ">=3.8"
