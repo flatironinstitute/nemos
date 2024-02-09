@@ -62,7 +62,7 @@ To install `nemos` on a system without a GPU, follow these steps:
 
 2. Install `nemos` directly from the GitHub repository:
 
-   ```
+   ```bash
    pip install git+https://github.com/flatironinstitute/nemos.git
    ```
 
