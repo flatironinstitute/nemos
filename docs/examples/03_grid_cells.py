@@ -6,19 +6,14 @@
 
 """
 
-import math
-import os
-from typing import Optional
-
 import jax
 import matplotlib.pyplot as plt
-import nemos as nmo
 import numpy as np
 import pynapple as nap
 import nemos as nmo
 from scipy.ndimage import gaussian_filter
 
-import workshop_utils
+from examples_utils import data
 
 jax.config.update("jax_enable_x64", True)
 
@@ -31,8 +26,8 @@ jax.config.update("jax_enable_x64", True)
 #   - Stream the data
 # </div>
 
-io = workshop_utils.data.download_dandi_data("000582", "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb",
-)
+io = data.download_dandi_data("000582", "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb",
+                                 )
 
 # %%
 # ## PYNAPPLE
@@ -42,7 +37,7 @@ io = workshop_utils.data.download_dandi_data("000582", "sub-11265/sub-11265_ses-
 #   - Load the data with pynapple
 # </div>
 
-data = nap.NWBFile(io.read())
+dataset = nap.NWBFile(io.read())
 
 # %%
 # Let's see what is in our data
@@ -52,7 +47,7 @@ data = nap.NWBFile(io.read())
 # </div>
 
 
-print(data)
+print(dataset)
 
 
 # %%
@@ -65,8 +60,8 @@ print(data)
 #   - extract the spike times and the position of the animal frome the `data` object
 # </div>
 
-spikes = data["units"]  # Get spike timings
-position = data["SpatialSeriesLED1"] # Get the tracked orientation of the animal
+spikes = dataset["units"]  # Get spike timings
+position = dataset["SpatialSeriesLED1"] # Get the tracked orientation of the animal
 
 
 # %%
@@ -75,9 +70,9 @@ position = data["SpatialSeriesLED1"] # Get the tracked orientation of the animal
 # <div class="notes">
 #   - compute the head-direction of the animal from `SpatialSeriesLED1` and `SpatialSeriesLED1`
 # </div>
-diff = data['SpatialSeriesLED1'].values-data['SpatialSeriesLED2'].values
+diff = dataset['SpatialSeriesLED1'].values - dataset['SpatialSeriesLED2'].values
 head_dir = (np.arctan2(*diff.T) + (2*np.pi))%(2*np.pi)
-head_dir = nap.Tsd(data['SpatialSeriesLED1'].index, head_dir).dropna()
+head_dir = nap.Tsd(dataset['SpatialSeriesLED1'].index, head_dir).dropna()
 
 
 # %%
@@ -234,7 +229,7 @@ plt.tight_layout()
 #   - set `regularizer_strength=1.0`
 # </div>
 
-model = workshop_utils.model.GLM(
+model = nmo.glm.GLM(
         regularizer=nmo.regularizer.Ridge(regularizer_strength=1.0, solver_name="LBFGS")
     )
 
@@ -247,7 +242,7 @@ model = workshop_utils.model.GLM(
 
 neuron = 7
 
-model.fit(position_basis, counts[:,neuron])
+model.fit(np.expand_dims(position_basis,1), counts[:, neuron:neuron+1])
 
 
 # %%
@@ -257,23 +252,23 @@ model.fit(position_basis, counts[:,neuron])
 #   - predict the rate and compute a tuning curves using `compute_2d_tuning_curves_continuous` from pynapple
 # </div>
 
-rate_pos = model.predict(position_basis)
+rate_pos = model.predict(np.expand_dims(position_basis,1))
 
 
 # %%
 # Let's go back to pynapple
-rate_pos = nap.TsdFrame(t=counts.t, d=np.asarray(rate_pos), columns = [neuron])
+rate_pos = nap.TsdFrame(t=counts.t, d=np.asarray(rate_pos), columns=[neuron]) * counts.rate
 
 # %%
 # And compute a tuning curves again
 
 model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
     tsdframe=rate_pos,
-    features=position, 
+    features=position,
     nb_bins=12)
 
 
-# %% 
+# %%
 # Let's compare tuning curves
 #
 # <div class="notes">
@@ -293,7 +288,7 @@ plt.tight_layout()
 # The grid does not show very nicely. Can we improve it by optimizing the regularization strenght.
 # We can cross-validate with scikit-learn
 # We will find the best regularization strenght with scikit-learn
-# 
+#
 #
 # <div class="notes">
 #   - find the best `regularizer_strength` using `sklearn.model_selection.GriSearchCV`
@@ -303,7 +298,7 @@ param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-3, 1.0])
 
 cls = GridSearchCV(model, param_grid=param_grid)
 
-cls.fit(position_basis, counts[:,neuron])
+cls.fit(np.expand_dims(position_basis, 1), counts[:, neuron: neuron+1])
 
 # %%
 # Let's get the best estimator and see what we get
@@ -320,29 +315,31 @@ best_model = cls.best_estimator_
 #   - predict the rate of the best model and compute a 2d tuning curves
 # </div>
 
-best_rate_pos = best_model.predict(position_basis)
-best_rate_pos = nap.TsdFrame(t=counts.t, d=np.asarray(best_rate_pos), columns=[neuron])
+best_rate_pos = best_model.predict(np.expand_dims(position_basis, 1))
+best_rate_pos = nap.TsdFrame(t=counts.t, d=np.asarray(best_rate_pos), columns=[neuron]) * counts.rate
 
 best_model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
     tsdframe=best_rate_pos,
-    features=position, 
+    features=position,
     nb_bins=12)
 
 
 # %%
-# 
+#
 # <div class="notes">
 #   - compare the 2d tuning curves
 # </div>
+vmin = min(pos_tuning[neuron].min(), best_model_tuning[neuron].min(), model_tuning[neuron].min())
+vmax = max(pos_tuning[neuron].max(), best_model_tuning[neuron].max(), model_tuning[neuron].max())
 
-fig = plt.figure(figsize = (12, 4))
-gs = plt.GridSpec(1, 3)
-ax = plt.subplot(gs[0, 0])
-ax.imshow(gaussian_filter(pos_tuning[neuron], sigma=1))
-ax = plt.subplot(gs[0, 1])
-ax.imshow(gaussian_filter(model_tuning[neuron], sigma=1))
-ax = plt.subplot(gs[0, 2])
-ax.imshow(gaussian_filter(best_model_tuning[neuron], sigma=1))
+fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+plt.suptitle("Rate predictions\n")
+axs[0].set_title("Raw Counts")
+axs[0].imshow(gaussian_filter(pos_tuning[neuron], sigma=1), vmin=vmin, vmax=vmax)
+axs[1].set_title(f"Ridge - strength: {model.regularizer.regularizer_strength}")
+axs[1].imshow(gaussian_filter(model_tuning[neuron]*counts.rate, sigma=1), vmin=vmin, vmax=vmax)
+axs[2].set_title(f"Ridge - strength: {best_model.regularizer.regularizer_strength}")
+axs[2].imshow(gaussian_filter(best_model_tuning[neuron]*counts.rate, sigma=1), vmin=vmin, vmax=vmax)
 plt.tight_layout()
 
 

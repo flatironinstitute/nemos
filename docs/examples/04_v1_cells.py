@@ -10,20 +10,18 @@
 """
 
 import jax
-import math
-import os
+
 import matplotlib.pyplot as plt
 import nemos as nmo
 import numpy as np
 import pynapple as nap
-import requests
-import tqdm
-import workshop_utils
+
+from examples_utils import plotting, data
 
 # required for second order methods (BFGS, Newton-CG)
 jax.config.update("jax_enable_x64", True)
 # configure plots some
-plt.style.use(workshop_utils.STYLE_FILE)
+plt.style.use("examples_utils/nemos.mplstyle")
 
 # %%
 # ## Data Streaming
@@ -31,7 +29,7 @@ plt.style.use(workshop_utils.STYLE_FILE)
 # Here we load the data from OSF. This data comes from Sonica Saraf, in Tony
 # Movshon's lab.
 
-path = workshop_utils.data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
+path = data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
                                          '../data')
 
 
@@ -40,17 +38,17 @@ path = workshop_utils.data.download_data("m691l1.nwb", "https://osf.io/xesdm/dow
 # The data have been copied to your local station.
 # We are gonna open the NWB file with pynapple
 
-data = nap.load_file(path)
+dataset = nap.load_file(path)
 
 # %%
 # What does it look like?
-print(data)
+print(dataset)
 
 # %%
 # Let's extract the data.
-epochs = data["epochs"]
-spikes = data["units"]
-stimulus = data["whitenoise"]
+epochs = dataset["epochs"]
+spikes = dataset["units"]
+stimulus = dataset["whitenoise"]
 
 # %%
 # stimulus is white noise shown at 40 Hz
@@ -233,7 +231,7 @@ print(filtered_stimulus[:5])
 # as time 0. At time 0.0015? Same thing, up until we pass time 0.025017. Thus,
 # we want to "fill forward" the values of our input, and we have pynapple
 # convenience function to do so:
-filtered_stimulus = workshop_utils.data.fill_forward(counts, filtered_stimulus)
+filtered_stimulus = data.fill_forward(counts, filtered_stimulus)
 filtered_stimulus
 
 # %%
@@ -252,7 +250,7 @@ basis = nmo.basis.RaisedCosineBasisLog(8)
 window_size = 100
 time, basis_kernels = basis.evaluate_on_grid(window_size)
 time *= bin_size * window_size
-convolved_input = nmo.utils.convolve_1d_trials(basis_kernels, filtered_stimulus)
+convolved_input = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(filtered_stimulus,0))[0]
 # convolved_input has shape (n_time_pts, n_features, n_basis_funcs), and
 # n_features is the singleton dimension from filtered_stimulus, so let's
 # squeeze it out:
@@ -263,7 +261,7 @@ convolved_input = np.squeeze(convolved_input)
 counts = counts[window_size:]
 convolved_input = convolved_input[:-1]
 # and grab the counts for our single neuron
-counts = counts[:, 0]
+counts = counts[:, :1]
 
 # %%
 #
@@ -274,8 +272,8 @@ counts = counts[:, 0]
 # <div class="notes">
 #   - Fit the GLM
 # </div>
-model = workshop_utils.model.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
-model.fit(convolved_input, counts)
+model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
+model.fit(np.expand_dims(convolved_input, 1), counts)
 
 # %%
 #
@@ -286,7 +284,7 @@ model.fit(convolved_input, counts)
 #   - Examine the resulting temporal filter
 # </div>
 
-temp_weights = np.einsum('b, t b -> t', model.coef_, basis_kernels)
+temp_weights = np.einsum('i b, t b -> t', model.coef_, basis_kernels)
 plt.plot(time, temp_weights)
 
 # %%

@@ -17,13 +17,15 @@ import nemos as nmo
 import numpy as np
 import pynapple as nap
 
-import workshop_utils
+from copy import deepcopy
+
+from examples_utils import data, plotting
 
 # Set the default precision to float64, which is generally a good idea for
 # optimization purposes.
 jax.config.update("jax_enable_x64", True)
 # configure plots some
-plt.style.use(workshop_utils.STYLE_FILE)
+plt.style.use("examples_utils/nemos.mplstyle")
 
 # %%
 # ## Data Streaming
@@ -34,7 +36,7 @@ plt.style.use(workshop_utils.STYLE_FILE)
 # - Stream the head-direction neurons data
 # </div>
 
-path = workshop_utils.data.download_data("Mouse32-140822.nwb", "https://osf.io/jb2gd/download",
+path = data.download_data("Mouse32-140822.nwb", "https://osf.io/jb2gd/download",
                                          '../data')
 
 # %%
@@ -132,7 +134,7 @@ plt.tight_layout()
 # <div class="notes">
 # - Let's visualize the data at the population level.
 # </div>
-fig = workshop_utils.plotting.plot_head_direction_tuning(
+fig = plotting.plot_head_direction_tuning(
     tuning_curves, spikes, angle, threshold_hz=1, start=8910, end=8960
 )
 
@@ -188,7 +190,7 @@ count = nap.TsdFrame(
 # </div>
 
 # select a neuron's spike count time series
-neuron_count = count.loc[[0]]
+neuron_count = count[:, 0]
 
 # restrict to a smaller time interval
 epoch_one_spk = nap.IntervalSet(
@@ -214,7 +216,7 @@ plt.tight_layout()
 # set the size of the spike history window in seconds
 window_size_sec = 0.8
 
-workshop_utils.plotting.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
+plotting.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
 
 
 # %%
@@ -226,7 +228,7 @@ workshop_utils.plotting.plot_history_window(neuron_count, epoch_one_spk, window_
 # - Roll your window one bin at the time to predict the subsequent samples
 # </div>
 
-workshop_utils.plotting.run_animation(neuron_count, float(epoch_one_spk.start))
+plotting.run_animation(neuron_count, float(epoch_one_spk.start))
 
 # %%
 # If $t$ is smaller than the window size, we won't have a full window of spike history for estimating the rate.
@@ -254,8 +256,8 @@ window_size = int(window_size_sec * neuron_count.rate)
 
 # convolve the counts with the identity matrix.
 input_feature = nmo.utils.convolve_1d_trials(
-    np.eye(window_size), np.expand_dims(neuron_count.d, axis=1)
-)
+    np.eye(window_size), np.expand_dims(neuron_count.d, axis=(0,2))
+)[0]
 
 # %%
 # The binned counts originally have shape "number of samples", we should check that the
@@ -278,7 +280,7 @@ print(f"Feature shape: {input_feature.shape}")
 
 
 # get rid of the last time point.
-input_feature = np.squeeze(input_feature[:-1])
+input_feature = np.asarray(input_feature[:-1])
 
 print(f"Feature shape: {input_feature.shape}")
 print(f"Time bins in counts: {neuron_count.shape[0]}")
@@ -297,7 +299,7 @@ print(f"Convolution window size in bins: {window_size}")
 
 suptitle = "Input feature: Count History"
 neuron_id = 0
-workshop_utils.plotting.plot_features(input_feature, count.rate, suptitle)
+plotting.plot_features(input_feature, count.rate, suptitle)
 
 # %%
 # As you may see, the time axis is backward, this happens because convolution flips the time axis.
@@ -321,7 +323,7 @@ workshop_utils.plotting.plot_features(input_feature, count.rate, suptitle)
 # </div>
 
 # convert features to TsdFrame
-input_feature = nap.TsdFrame(t=neuron_count.t[window_size:], d=np.asarray(input_feature))
+input_feature = nap.TsdTensor(t=neuron_count.t[window_size:], d=np.asarray(input_feature))
 
 # %%
 # #### Fitting the model
@@ -344,10 +346,13 @@ second_half = nap.IntervalSet(start + duration / 2, end)
 # </div>
 
 # define the GLM object
-model = workshop_utils.model.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
 
 # Fit over the training epochs
-model.fit(input_feature.restrict(first_half), neuron_count.restrict(first_half))
+model.fit(
+    input_feature.restrict(first_half),
+    np.expand_dims(neuron_count.restrict(first_half), 1)
+)
 
 # %%
 # <div class="notes">
@@ -356,7 +361,7 @@ model.fit(input_feature.restrict(first_half), neuron_count.restrict(first_half))
 
 plt.figure()
 plt.title("Spike History Weights")
-plt.plot(np.arange(window_size) / count.rate, model.coef_, lw=2, label="GLM raw history 1st Half")
+plt.plot(np.arange(window_size) / count.rate, np.squeeze(model.coef_), lw=2, label="GLM raw history 1st Half")
 plt.axhline(0, color="k", lw=0.5)
 plt.xlabel("Time From Spike (sec)")
 plt.ylabel("Kernel")
@@ -374,13 +379,18 @@ plt.legend()
 
 # fit on the test set
 
-model_second_half = workshop_utils.model.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_second_half.fit(input_feature.restrict(second_half), neuron_count.restrict(second_half))
+model_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model_second_half.fit(
+    input_feature.restrict(second_half),
+    np.expand_dims(neuron_count.restrict(second_half), 1)
+)
 
 plt.figure()
 plt.title("Spike History Weights")
-plt.plot(np.arange(window_size) / count.rate, model.coef_, label="GLM raw history 1st Half", lw=2)
-plt.plot(np.arange(window_size) / count.rate, model_second_half.coef_, color="orange", label="GLM raw history 2nd Half", lw=2)
+plt.plot(np.arange(window_size) / count.rate, np.squeeze(model.coef_),
+         label="GLM raw history 1st Half", lw=2)
+plt.plot(np.arange(window_size) / count.rate,  np.squeeze(model_second_half.coef_),
+         color="orange", label="GLM raw history 2nd Half", lw=2)
 plt.axhline(0, color="k", lw=0.5)
 plt.xlabel("Time From Spike (sec)")
 plt.ylabel("Kernel")
@@ -421,7 +431,7 @@ plt.legend()
 # - Visualize the raised cosine basis.
 # </div>
 
-workshop_utils.plotting.plot_basis()
+plotting.plot_basis()
 
 # %%
 # !!! info
@@ -474,10 +484,10 @@ time *= window_size_sec
 # </div>
 
 # compute the least-squares weights
-lsq_coef, _, _, _ = np.linalg.lstsq(basis_kernels, model.coef_, rcond=-1)
+lsq_coef, _, _, _ = np.linalg.lstsq(basis_kernels, np.squeeze(model.coef_), rcond=-1)
 
 # plot the basis and the approximation
-workshop_utils.plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
+plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 
 # %%
 #
@@ -504,8 +514,8 @@ workshop_utils.plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels
 # - Convolve the counts with the basis functions.
 # </div>
 
-conv_spk = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(neuron_count, 1))
-conv_spk = nap.TsdFrame(t=count[window_size:].t, d=np.asarray(conv_spk[:-1, 0]))
+conv_spk = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(neuron_count, (0, 2)))[0]
+conv_spk = nap.TsdTensor(t=count[window_size:].t, d=np.asarray(conv_spk[:-1]))
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -520,7 +530,7 @@ print(f"Compressed count history as feature: {conv_spk.shape}")
 epoch_one_spk = nap.IntervalSet(8917.5, 8918.5)
 epoch_multi_spk = nap.IntervalSet(8979.2, 8980.2)
 
-workshop_utils.plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_multi_spk)
+plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_multi_spk)
 
 # find interval with two spikes to show the accumulation, in a second row
 
@@ -534,8 +544,8 @@ workshop_utils.plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_
 # </div>
 
 # use restrict on interval set training
-model_basis = workshop_utils.model.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_basis.fit(conv_spk.restrict(first_half), neuron_count.restrict(first_half))
+model_basis = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model_basis.fit(conv_spk.restrict(first_half), np.expand_dims(neuron_count.restrict(first_half),1))
 
 # %%
 # We can plot the resulting response, noting that the weights we just learned needs to be "expanded" back
@@ -552,7 +562,7 @@ print(model_basis.coef_)
 # - Reconstruct the history filter.
 # </div>
 
-self_connection = np.matmul(basis_kernels, model_basis.coef_)
+self_connection = np.matmul(basis_kernels, np.squeeze(model_basis.coef_))
 
 print(self_connection.shape)
 
@@ -563,7 +573,7 @@ print(self_connection.shape)
 
 plt.figure()
 plt.title("Spike History Weights")
-plt.plot(time, model.coef_, alpha=0.3, label="GLM raw history")
+plt.plot(time, np.squeeze(model.coef_), alpha=0.3, label="GLM raw history")
 plt.plot(time, self_connection, "--k", label="GLM basis", lw=2)
 plt.axhline(0, color="k", lw=0.5)
 plt.xlabel("Time from spike (sec)")
@@ -580,16 +590,16 @@ plt.legend()
 # </div>
 
 
-model_basis_second_half = workshop_utils.model.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_basis_second_half.fit(conv_spk.restrict(second_half), neuron_count.restrict(second_half))
+model_basis_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model_basis_second_half.fit(conv_spk.restrict(second_half), np.expand_dims(neuron_count.restrict(second_half),1))
 
 # compute responses for the 2nd half fit
-self_connection_second_half = np.matmul(basis_kernels, model_basis_second_half.coef_)
+self_connection_second_half = np.matmul(basis_kernels, np.squeeze(model_basis_second_half.coef_))
 
 plt.figure()
 plt.title("Spike History Weights")
-plt.plot(time, model.coef_, "k", alpha=0.3, label="GLM raw history 1st half")
-plt.plot(time, model_second_half.coef_, alpha=0.3, color="orange", label="GLM raw history 2nd half")
+plt.plot(time, np.squeeze(model.coef_), "k", alpha=0.3, label="GLM raw history 1st half")
+plt.plot(time, np.squeeze(model_second_half.coef_), alpha=0.3, color="orange", label="GLM raw history 2nd half")
 plt.plot(time, self_connection, "--k", lw=2, label="GLM basis 1st half")
 plt.plot(time, self_connection_second_half, color="orange", lw=2, ls="--", label="GLM basis 2nd half")
 plt.axhline(0, color="k", lw=0.5)
@@ -608,14 +618,14 @@ plt.legend()
 
 # compare model scores, as expected the training score is better with more parameters
 # this may could be over-fitting.
-print(f"full history train score: {model.score(input_feature.restrict(first_half), neuron_count.restrict(first_half), score_type='pseudo-r2-Cohen')}")
-print(f"basis train score: {model_basis.score(conv_spk.restrict(first_half), neuron_count.restrict(first_half), score_type='pseudo-r2-Cohen')}")
+print(f"full history train score: {model.score(input_feature.restrict(first_half), np.expand_dims(neuron_count.restrict(first_half), 1), score_type='pseudo-r2-Cohen')}")
+print(f"basis train score: {model_basis.score(conv_spk.restrict(first_half), np.expand_dims(neuron_count.restrict(first_half), 1), score_type='pseudo-r2-Cohen')}")
 
 # %%
 # To check that, let's try to see ho the model perform on unseen data and obtaining a test
 # score.
-print(f"\nfull history test score: {model.score(input_feature.restrict(second_half), neuron_count.restrict(second_half), score_type='pseudo-r2-Cohen')}")
-print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), neuron_count.restrict(second_half), score_type='pseudo-r2-Cohen')}")
+print(f"\nfull history test score: {model.score(input_feature.restrict(second_half), np.expand_dims(neuron_count.restrict(second_half), 1), score_type='pseudo-r2-Cohen')}")
+print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), np.expand_dims(neuron_count.restrict(second_half), 1), score_type='pseudo-r2-Cohen')}")
 
 # %%
 # Let's extract the rates
@@ -625,12 +635,12 @@ print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), neu
 # </div>
 
 
-rate_basis = nap.Tsd(t=conv_spk.t, d=np.asarray(model_basis.predict(conv_spk.d))) * conv_spk.rate
-rate_history = nap.Tsd(t=conv_spk.t, d=np.asarray(model.predict(input_feature))) * conv_spk.rate
+rate_basis = nap.TsdFrame(t=conv_spk.t, d=np.asarray(model_basis.predict(conv_spk.d))) * conv_spk.rate
+rate_history = nap.TsdFrame(t=conv_spk.t, d=np.asarray(model.predict(input_feature))) * conv_spk.rate
 ep = nap.IntervalSet(start=8819.4, end=8821)
 
 # plot the rates
-workshop_utils.plotting.plot_rates_and_smoothed_counts(
+plotting.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection raw history":rate_history, "Self-connection bsais": rate_basis}
 )
@@ -649,7 +659,7 @@ workshop_utils.plotting.plot_rates_and_smoothed_counts(
 # - Print the output shape
 # </div>
 
-convolved_count = nmo.utils.convolve_1d_trials(basis_kernels, count.values)
+convolved_count = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(count.d, 0))[0]
 convolved_count = np.asarray(convolved_count[:-1])
 
 # %%
@@ -673,8 +683,9 @@ print(f"Convolved count shape: {convolved_count.shape}")
 # </div>
 
 convolved_count = convolved_count.reshape(convolved_count.shape[0], -1)
+convolved_count = np.expand_dims(convolved_count, 1)
 print(f"Convolved count reshaped: {convolved_count.shape}")
-convolved_count = nap.TsdFrame(t=neuron_count.t[window_size:], d=convolved_count)
+convolved_count = nap.TsdTensor(t=neuron_count.t[window_size:], d=convolved_count)
 
 # %%
 # Now fit the GLM for each neuron.
@@ -689,12 +700,13 @@ convolved_count = nap.TsdFrame(t=neuron_count.t[window_size:], d=convolved_count
 models = []
 for neu in range(count.shape[1]):
     print(f"fitting neuron {neu}...")
-    count_neu = count[:, neu]
-    model = workshop_utils.model.GLM(
+    count_neu = count[:, neu:neu+1]
+    model = nmo.glm.GLM(
         regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1, solver_name="LBFGS")
     )
     # models.append(model.fit(convolved_count.restrict(train_epoch), count_neu.restrict(train_epoch)))
-    models.append(model.fit(convolved_count, count_neu.restrict(convolved_count.time_support)))
+    model.fit(convolved_count, count_neu.restrict(convolved_count.time_support))
+    models.append(deepcopy(model))
 
 
 # %%
@@ -709,9 +721,9 @@ for neu in range(count.shape[1]):
 
 predicted_firing_rate = np.zeros((count.shape[0] - window_size, count.shape[1]))
 for receiver_neu in range(count.shape[1]):
-    predicted_firing_rate[:, receiver_neu] = models[receiver_neu].predict(
+    predicted_firing_rate[:, receiver_neu] = np.squeeze(models[receiver_neu].predict(
         convolved_count
-    ) * conv_spk.rate
+    ))* conv_spk.rate
 
 predicted_firing_rate = nap.TsdFrame(t=count[window_size:].t, d=predicted_firing_rate)
 
@@ -723,8 +735,8 @@ predicted_firing_rate = nap.TsdFrame(t=count[window_size:].t, d=predicted_firing
 # </div>
 
 # use pynapple for time axis for all variables plotted for tick labels in imshow
-workshop_utils.plotting.plot_head_direction_tuning_model(tuning_curves, predicted_firing_rate, spikes, angle, threshold_hz=1,
-                                                start=8910, end=8960, cmap_label="hsv")
+plotting.plot_head_direction_tuning_model(tuning_curves, predicted_firing_rate, spikes, angle, threshold_hz=1,
+                                          start=8910, end=8960, cmap_label="hsv")
 # %%
 # Let's see if our firing rate predictions improved and in what sense.
 #
@@ -732,7 +744,7 @@ workshop_utils.plotting.plot_head_direction_tuning_model(tuning_curves, predicte
 # - Visually compare all the models.
 # </div>
 
-workshop_utils.plotting.plot_rates_and_smoothed_counts(
+plotting.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection: raw history": rate_history,
      "Self-connection: bsais": rate_basis,
@@ -787,7 +799,7 @@ print(responses.shape)
 # - Plot the connectivity map.
 # </div>
 
-workshop_utils.plotting.plot_coupling(responses, tuning)
+plotting.plot_coupling(responses, tuning)
 
 
 # %%

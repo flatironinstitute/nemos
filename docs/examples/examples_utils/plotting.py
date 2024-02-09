@@ -473,6 +473,7 @@ def plot_features(
     -------
 
     """
+    input_feature = np.squeeze(input_feature)
     window_size = input_feature.shape[1]
     fig = plt.figure(figsize=(8, 8))
     plt.suptitle(suptitle)
@@ -517,6 +518,7 @@ def plot_weighted_sum_basis(time, weights, basis_kernels, basis_coeff):
         The figure.
 
     """
+    basis_coeff = np.squeeze(basis_coeff)
     fig, axs = plt.subplots(1, 4, figsize=(12, 3))
 
     axs[0].set_title("Basis")
@@ -793,6 +795,7 @@ def plot_history_window(neuron_count, interval, window_size_sec):
 
 def plot_convolved_counts(counts, conv_spk, *epochs, figsize=(6.5, 4.5)):
     n_rows = len(epochs)
+    conv_spk = np.squeeze(conv_spk)
     fig, axs = plt.subplots(n_rows, 1, sharey="all", figsize=figsize)
     for row, ep in enumerate(epochs):
         axs[row].plot(conv_spk.restrict(ep))
@@ -812,7 +815,7 @@ def plot_rates_and_smoothed_counts(counts, rate_dict,
     ep = nap.IntervalSet(start=start, end=end)
     fig = plt.figure()
     for key in  rate_dict:
-        plt.plot(rate_dict[key].restrict(ep), label=key)
+        plt.plot(np.squeeze(rate_dict[key].restrict(ep)), label=key)
 
     idx_spikes = np.where(counts.restrict(ep).d > 0)[0]
     plt.vlines(counts.restrict(ep).t[idx_spikes], -8, -1, color="k")
