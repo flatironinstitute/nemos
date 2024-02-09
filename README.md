@@ -41,7 +41,7 @@ Before installing `nemos`, we recommend creating and activating a Python virtual
 - **For Windows:**
   Open a command prompt and execute:
 
-  ```
+  ```shell
   python -m venv <DIR>
   <DIR>\Scripts\activate
   ```
