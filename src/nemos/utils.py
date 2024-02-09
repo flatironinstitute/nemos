@@ -436,7 +436,7 @@ def check_invalid_entry(pytree: Any, pytree_name: str) -> Tuple[Any, Union[None,
     # Infs, then we check whether any leaf has an Inf
     any_infs = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isinf, pytree))
     any_nans = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree))
-    # create the bool vector
+    # create the bool tree
     is_valid = jax.tree_map(lambda x: check_not_inf(x) & check_not_nan(x), pytree)
     # reduce with an "and" logical preserving the time axis
     is_valid = reduce(jnp.logical_and, jax.tree_util.tree_leaves(is_valid))
