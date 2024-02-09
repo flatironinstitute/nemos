@@ -757,7 +757,7 @@ spikes = jax.random.poisson(jax.random.PRNGKey(0), predicted_fr.values)
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
 
-log_likelihood = model.score(predictor, count, score_type="log-likelihood")
+log_likelihood = model.score(predictor, np.expand_dims(count, 1), score_type="log-likelihood")
 print(f"log-likelihood: {log_likelihood}")
 
 # %%
@@ -778,7 +778,7 @@ print(f"log-likelihood: {log_likelihood}")
 # compared across datasets (because e.g., it won't account for difference in
 # noise levels). We provide the ability to compute the pseudo-$R^2$ for this
 # purpose:
-model.score(predictor, count, score_type='pseudo-r2-Cohen')
+model.score(predictor, np.expand_dims(count, 1), score_type='pseudo-r2-Cohen')
 
 # %%
 #
