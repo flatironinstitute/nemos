@@ -414,7 +414,7 @@ def check_invalid_entry(pytree: Any, pytree_name: str) -> Tuple[Any, Union[None,
     Returns
     -------
     is_valid:
-        A pytree with leaves flat boolean arrays of shape (n_sample_points, ) with
+        A boolean aray of shape (n_sample_points, ) with
         the invalid indices (samples with Nans or Infs).
     err:
         Either None, if all entries are valid, or an error message.
