@@ -144,8 +144,8 @@ def test_check_valid_structure():
 
 def test_check_valid_entries():
     """Test tat validation of trees finds the valid entries."""
-    invalid_data_nan = {"x": {"y": jnp.array([1, 2, jnp.nan])}}
-    invalid_data_inf = {"x": {"y": jnp.array([1, jnp.inf, 2])}}
+    invalid_data_nan = {"x": {"y": jnp.array([[1], [2], [jnp.nan]])}}
+    invalid_data_inf = {"x": {"y": jnp.array([[1], [jnp.inf], [2]])}}
 
     valid, _ = check_invalid_entry(invalid_data_nan, "invalid_data_nan")
     assert jnp.all(valid == jnp.array([True, True, False]))
