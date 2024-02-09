@@ -78,7 +78,7 @@ For systems equipped with a GPU, you may need to first specifically install the 
 
    - To ensure `jax` recognizes your GPU, execute the following in Python:
 
-     ```
+     ```python
      import jax
      print(jax.devices())
      ```
