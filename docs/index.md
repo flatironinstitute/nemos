@@ -63,10 +63,10 @@ Our sections on "Basic Tutorials" and "Worked-Out Examples" are continuously evo
 While they are under development, we ensure they are regularly tested and ready for you to explore. 
 
 If your goal is a quick-start that would bring you up to speed with the main functionalities of the package, 
-you should focus on the [Basic Tutorials](tutorials) section.
+you should focus on the [Basic Tutorials](generated/tutorials) section.
 
 If you want to learn more about the GLM framework and its applications in the field of Neuroscience, you should 
-check out the [Worked-Out Examples](examples). Here you will find a number of real-data examples covering a 
+check out the [Worked-Out Examples](generated/examples). Here you will find a number of real-data examples covering a 
 variety of Neuroscientific domains and brain regions. We sorted our examples from the simplest to the more complex,
 with the intent of gradually introducing the model components.
 
