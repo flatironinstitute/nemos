@@ -33,7 +33,7 @@ Before installing `nemos`, we recommend creating and activating a Python virtual
 - **For macOS and Linux:**
   Open a terminal and run the following commands:
 
-  ```
+  ```bash
   python -m venv <DIR>
   source <DIR>/bin/activate
   ```
