@@ -68,7 +68,7 @@ To install `nemos` on a system without a GPU, follow these steps:
 
 #### GPU Installation
 
-For systems equipped with a GPU, a specific installation process is required to utilize the GPU with `nemos`.
+For systems equipped with a GPU, you may need to first specifically install the GPU-enabled `jax` and `jaxlib`, before installing `nemos`. If you follow the instructions above and `jax` cannot find your GPU, try the following:
 
 1. **Install `jax` and `jaxlib` for GPU:**
 
