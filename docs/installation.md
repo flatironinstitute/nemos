@@ -37,7 +37,7 @@ After creating you virtual environment, follow one of the following sections bel
 
 To install `nemos` on a system without a GPU, run this command from within your activated environment, 
 
- ```shell
+ ```bash
  pip install git@github.com:flatironinstitute/nemos.git
  ```
 
