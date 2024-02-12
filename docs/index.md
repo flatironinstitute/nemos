@@ -25,9 +25,15 @@ tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 ## Installation
 Run the following `pip` command in your virtual environment.
 
-```bash
-pip install git+https://github.com/flatironinstitute/nemos.git
-```
+**For macOS/Linux users:**
+ ```shell
+ pip install git@github.com:flatironinstitute/nemos.git
+ ```
+
+**For Windows users:**
+ ```shell
+ python -m pip install git+https://github.com/flatironinstitute/nemos.git
+ ```
 
 For more comprehensive instructions, including specifics for GPU users and developers, refer to [this section](installation.md).
 

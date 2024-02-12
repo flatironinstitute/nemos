@@ -26,7 +26,8 @@ For `venv`, create your virtual environment in a specific directory. This exampl
 2. Execute the commands below to create and activate the virtual environment:
     ```bash
     python -m venv C:\Users\username\python_venvs\nemos
-    C:\Users\username\python_venvs\nemos\Scripts\activate
+    cd C:\Users\username\python_venvs\nemos\
+    .\Scripts\activate
     ```
     
 **Note: Replace `username` with your actual Windows username.*
@@ -37,8 +38,14 @@ For `venv`, create your virtual environment in a specific directory. This exampl
 
 To install `nemos` on a system without a GPU, run this command from within your activated environment, 
 
+**For macOS/Linux users:**
  ```shell
  pip install git@github.com:flatironinstitute/nemos.git
+ ```
+
+**For Windows users:**
+ ```shell
+ python -m pip install git+https://github.com/flatironinstitute/nemos.git
  ```
 
 ### GPU Installation
