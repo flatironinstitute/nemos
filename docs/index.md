@@ -22,6 +22,21 @@ lesson](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/s
 and [Jonathan Pillow's Cosyne 2018
 tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
+## Installation
+Run the following `pip` command in your virtual environment.
+
+**For macOS/Linux users:**
+ ```bash
+ pip install git@github.com:flatironinstitute/nemos.git
+ ```
+
+**For Windows users:**
+ ```
+ python -m pip install git+https://github.com/flatironinstitute/nemos.git
+ ```
+
+For more comprehensive instructions, including specifics for GPU users and developers, refer to [the installation page](installation.md).
+
 ## Basic usage
 
 The core object of nemos is the [`GLM`][nemos.glm.GLM] object, which is built as an
