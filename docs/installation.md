@@ -32,7 +32,7 @@ For `venv`, create your virtual environment in a specific directory. This exampl
 **Note: Replace `username` with your actual Windows username.*
 
 ## Installation Steps
-
+After creating you virtual environment, follow one of the following sections below, depending on whether you need GPU support or not:
 ### CPU Installation
 
 To install `nemos` on a system without a GPU, run this command from within your activated environment, 
