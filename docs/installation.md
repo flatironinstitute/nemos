@@ -24,7 +24,7 @@ For `venv`, create your virtual environment in a specific directory. This exampl
 1. Open a command prompt.
 
 2. Execute the commands below to create and activate the virtual environment:
-    ```bash
+    ```
     python -m venv C:\Users\username\python_venvs\nemos
     C:\Users\username\python_venvs\nemos\Scripts\activate
     ```
