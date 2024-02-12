@@ -34,20 +34,20 @@
 1. Open a command prompt.
 
 2. Execute the commands below to create and activate the virtual environment:
-    ```bash
+    ```shell
     python -m venv C:%HOMEPATH%\python_venvs\nemos
     cd C:%HOMEPATH%\python_venvs\nemos\
     .\Scripts\activate
     ```
 
 ## Installation Steps
-
+After creating you virtual environment, follow one of the following sections below, depending on whether you need GPU support or not:
 ### CPU Installation
 
 To install `nemos` on a system without a GPU, run this command from within your activated environment, 
 
 **For macOS/Linux users:**
- ```shell
+ ```bash
  pip install git@github.com:flatironinstitute/nemos.git
  ```
 
