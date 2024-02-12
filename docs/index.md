@@ -29,7 +29,7 @@ Run the following `pip` command in your virtual environment.
 pip install git+https://github.com/flatironinstitute/nemos.git
 ```
 
-For more detailed instructions see [here](installation.md).
+For more comprehensive instructions, including specifics for GPU users and developers, refer to [this section](installation.md).
 
 ## Basic usage
 

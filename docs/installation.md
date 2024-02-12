@@ -4,7 +4,7 @@ Ensure you have Python version 3.9 or above installed on your system.
 
 We recommend creating and activating a Python virtual environment using [`venv`](https://docs.python.org/3/library/venv.html) before installing `nemos`. This practice helps manage dependencies and avoid conflicts with other Python packages.
 
-For `venv`, create your virtual environment in a specific directory. This example uses `~/python_venvs/nemos` for Linux/Mac and `C:\Users\username\python_venvs\nemos` for Windows. Feel free to use whatever directory works best for you.
+For `venv`, create your virtual environment in a specific directory. This example uses `~/python_venvs/nemos` for Linux/Mac and `C:\Users\username\python_venvs\nemos` for Windows; in general, free to use whatever directory works best for you.
 
 ### Creating and Activating a Virtual Environment
 
@@ -35,12 +35,11 @@ For `venv`, create your virtual environment in a specific directory. This exampl
 
 ### CPU Installation
 
-To install `nemos` on a system without a GPU, follow these steps:
+To install `nemos` on a system without a GPU, run this command from within your activated environment, 
 
-1. **Install nemos:** From within your activated environment, install the package and its dependencies using:
-    ```shell
-    pip install git@github.com:flatironinstitute/nemos.git
-    ```
+ ```shell
+ pip install git@github.com:flatironinstitute/nemos.git
+ ```
 
 ### GPU Installation
 
