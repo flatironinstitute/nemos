@@ -1,10 +1,20 @@
 ## Prerequisites
 
-Ensure you have Python version 3.9 or above installed on your system.
+1. **Ensure you have Python version `3.9` or above**:
+   Check that Python `3.9` or above is installed in your system by opening the terminal/command prompt and executing the following command,
+   ```bash
+   python --version
+   ```
+   If you are unable to run the command, or if your Python version is below `3.9`, install/update Python.<br>
+   We suggest downloading an installer from [Anaconda](https://docs.anaconda.com/free/anaconda/install/) or 
+   [Miniconda](https://docs.anaconda.com/free/miniconda/). The former includes a comprehensive selection of Python 
+   packages for data-science and machine learning. The latter is a minimal installer which includes only few packages. 
+   If you are not sure which one works best for you, 
+   take a look at the [Anaconda guidelines](https://docs.anaconda.com/free/distro-or-miniconda/).
 
-We recommend creating and activating a Python virtual environment using [`venv`](https://docs.python.org/3/library/venv.html) before installing `nemos`. This practice helps manage dependencies and avoid conflicts with other Python packages.
-
-For `venv`, create your virtual environment in a specific directory. This example uses `~/python_venvs/nemos` for Linux/Mac and `C:\Users\username\python_venvs\nemos` for Windows; in general, free to use whatever directory works best for you.
+2. **Create and activate a virtual environment:** 
+   Once your updated python is up and running, we recommend creating and activating a Python virtual environment using [`venv`](https://docs.python.org/3/library/venv.html) before installing `nemos`. This practice helps manage dependencies and avoid conflicts with other Python packages. <br>
+   For `venv`, create your virtual environment in a specific directory. This example uses `~/python_venvs/nemos` for Linux/Mac and `C:%HOMEPATH%\nemos_env\python_venvs\nemos` for Windows; in general, free to use whatever directory works best for you.
 
 ### Creating and Activating a Virtual Environment
 
@@ -25,12 +35,10 @@ For `venv`, create your virtual environment in a specific directory. This exampl
 
 2. Execute the commands below to create and activate the virtual environment:
     ```bash
-    python -m venv C:\Users\username\python_venvs\nemos
-    cd C:\Users\username\python_venvs\nemos\
+    python -m venv C:%HOMEPATH%\python_venvs\nemos
+    cd C:%HOMEPATH%\python_venvs\nemos\
     .\Scripts\activate
     ```
-    
-**Note: Replace `username` with your actual Windows username.*
 
 ## Installation Steps
 
