@@ -2,6 +2,7 @@ from nemos import utils
 import jax.numpy as jnp
 import pytest
 
+
 @pytest.mark.parametrize(
     "array, expected",
     [
@@ -13,6 +14,7 @@ import pytest
 def test_get_not_inf(array, expected):
     """Test _get_not_inf function for correctly identifying non-infinite values."""
     assert jnp.array_equal(utils._get_not_inf(array), expected)
+
 
 @pytest.mark.parametrize(
     "array, expected",
@@ -32,7 +34,7 @@ def test_get_not_nan(array, expected):
     ({"x": {"y": jnp.array([1, 2, jnp.nan])}}, 3)
 ])
 def test_check_valid_length(tree, expected_shape):
-    """Test that validation of trees returns the array shape."""
+    """Test that validation of trees returns an array of the right first shape."""
     valid = utils._get_valid_tree(tree)
     assert valid.shape[0] == expected_shape
 
@@ -42,7 +44,7 @@ def test_check_valid_length(tree, expected_shape):
     ({"x": {"y": jnp.array([1, 2, jnp.nan])}})
 ])
 def test_check_flat_array(tree):
-    """Test that validation of trees returns the array shape."""
+    """Test that validation of trees returns an array of the right dimensionality."""
     valid = utils._get_valid_tree(tree)
     assert valid.ndim == 1
 
