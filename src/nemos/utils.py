@@ -118,7 +118,7 @@ def check_non_empty(pytree: Any, pytree_name: str):
 
 
 def check_trials_longer_then_window_size(
-    time_series: Any, window_size: int, sample_axis: int
+    time_series: Any, window_size: int, sample_axis: int = 0
 ):
     """
     Check if the duration of each trial in the time series is at least as long as the window size.
