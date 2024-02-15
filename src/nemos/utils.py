@@ -347,7 +347,7 @@ def nan_pad_conv(
     conv_trials = jax.tree_map(jnp.asarray, conv_trials)
     try:
         if conv_trials.ndim != 4:
-            raise AttributeError(
+            raise ValueError(
                 "conv_trials must be an pytree of 3D arrays or a 4D array!"
             )
 
