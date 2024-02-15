@@ -85,11 +85,11 @@ class TestGLM:
         "add_entry, add_to, expectation",
         [
             (0, "X", does_not_raise()),
-            (np.nan, "X", pytest.warns(UserWarning, match="Input .+ contains")),
-            (np.inf, "X", pytest.warns(UserWarning, match="Input .+ contains")),
+            (np.nan, "X", pytest.warns(UserWarning, match="The provided trees contain")),
+            (np.inf, "X", pytest.warns(UserWarning, match="The provided trees contain")),
             (0, "y", does_not_raise()),
-            (np.nan, "y", pytest.warns(UserWarning, match="Input .+ contains")),
-            (np.inf, "y", pytest.warns(UserWarning, match="Input .+ contains")),
+            (np.nan, "y", pytest.warns(UserWarning, match="The provided trees contain")),
+            (np.inf, "y", pytest.warns(UserWarning, match="The provided trees contain")),
         ],
     )
     def test_fit_param_values(
@@ -1060,8 +1060,8 @@ class TestGLM:
     @pytest.mark.parametrize("insert, expectation",
                              [
                                  (0, does_not_raise()),
-                                 (np.nan, pytest.raises(ValueError, match=r"Input '.+' contains")),
-                                 (np.inf, pytest.raises(ValueError, match=r"Input '.+' contains"))
+                                 (np.nan, pytest.raises(ValueError, match=r"The provided trees contain")),
+                                 (np.inf, pytest.raises(ValueError, match=r"The provided trees contain"))
                              ]
                              )
     def test_simulate_invalid_feedforward(self, insert, expectation, poissonGLM_model_instantiation):

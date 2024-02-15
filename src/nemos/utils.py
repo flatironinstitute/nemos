@@ -12,7 +12,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    Tuple,
     Union,
 )
 
@@ -401,55 +400,94 @@ def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.
     return K
 
 
-def check_invalid_entry(pytree: Any, pytree_name: str) -> Tuple[Any, Union[None, str]]:
-    """Check if the array has nans or infs.
+def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
+    """
+    Identify non-infinite entries within an array.
+
+    This function evaluates each element in the input array to determine whether it is finite (not infinite).
+    It performs this check across all axes except the first one, aggregating results using a logical 'AND' operation.
+    Thus, for a given element along the first axis, if all corresponding elements in other dimensions are finite,
+    the result is True; otherwise, it is False.
 
     Parameters
     ----------
-    pytree:
-        The pytree to be checked.
-    pytree_name:
-        The array name.
+    array : jnp.ndarray
+        Input array to check for infinite values.
 
     Returns
     -------
-    is_valid:
-        A boolean aray of shape (n_sample_points, ) with
-        the invalid indices (samples with Nans or Infs).
-    err:
-        Either None, if all entries are valid, or an error message.
-
+        A 1D boolean array of length equal to the size of the first dimension of the input array.
+        Each entry in this array corresponds to an aggregation across all other dimensions of the input array,
+        with True indicating all values are finite (not infinite) and False indicating at least one infinite value.
     """
+    return jax.numpy.all(~jnp.isinf(array), axis=range(1, array.ndim))
 
-    # this functions returns a boolean array of shape (num_samples,)
-    # indicating which sample as nans or index
-    def check_not_inf(x):
-        return jax.numpy.all(~jnp.isinf(x), axis=range(1, x.ndim))
 
-    def check_not_nan(x):
-        return jax.numpy.all(~jnp.isnan(x), axis=range(1, x.ndim))
+def _get_not_nan(array: jnp.ndarray) -> jnp.ndarray:
+    """
+    Identifies non-NaN (Not a Number) entries within an array.
 
-    # initialize exception and is_invalid to None
-    err = None
+    Similar to the _get_not_inf function, this function checks each element in the input array for being non-NaN across
+    all axes except the first one. It aggregates these checks using a logical 'AND' operation. An element along the
+    first axis is considered valid (True) if all its corresponding elements in other dimensions are not NaN.
 
-    # this is a double-any situation: first, we check if each leaf have any
-    # Infs, then we check whether any leaf has an Inf
-    any_infs = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isinf, pytree))
-    any_nans = pytree_map_and_reduce(jnp.any, any, jax.tree_map(jnp.isnan, pytree))
-    # create the bool tree
-    is_valid = jax.tree_map(lambda x: check_not_inf(x) & check_not_nan(x), pytree)
-    # reduce with an "and" logical preserving the time axis
-    is_valid = reduce(jnp.logical_and, jax.tree_util.tree_leaves(is_valid))
+    Parameters
+    ----------
+    array :
+        The input array for which to check for NaN values.
 
-    # define appropriate error messages
-    if any_infs and any_nans:
-        err = f"Input '{pytree_name}' contains Infs and Nans!"
-    elif any_infs:
-        err = f"Input '{pytree_name}' contains Infs!"
-    elif any_nans:
-        err = f"Input '{pytree_name}' contains NaNs!"
+    Returns
+    -------
+    :
+        A 1D boolean array of length equal to the size of the first dimension of the input array.
+        Each entry in this array is the result of an aggregation across all other dimensions,
+        with True indicating all values are not NaN, and False indicating at least one NaN value.
+    """
+    return jax.numpy.all(~jnp.isnan(array), axis=range(1, array.ndim))
 
-    return is_valid, err
+
+def _get_valid_tree(tree: Any) -> jnp.ndarray:
+    """
+    Filter valid entries across all leaves in a pytree.
+
+    Processes a pytree to identify entries without NaN or infinite values across all its leaves. A leaf is considered
+    valid if all its entries are finite and not NaN. The function assumes homogeneous first dimension across all leaves.
+
+    Parameters
+    ----------
+    tree :
+        A pytree with leaves as NDArrays sharing the same size for the first dimension.
+
+    Returns
+    -------
+        A boolean array indicating validity of each entry across all leaves. True represents a valid entry,
+        while False indicates an invalid (NaN or infinite) entry.
+    """
+    valid = jax.tree_util.tree_leaves(
+        jax.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), tree)
+    )
+    return reduce(jnp.logical_and, valid)
+
+
+def get_valid_multitree(*tree: Any):
+    """
+    Filter valid entries across multiple pytrees.
+
+    Evaluates multiple pytrees to identify common entries that are valid (non-NaN and finite) across all of them.
+    Assumes that all pytrees have leaves with NDArrays sharing the same size for the first dimension.
+
+    Parameters
+    ----------
+    tree :
+        Variable number of pytrees with NDArrays as leaves, each having a consistent first dimension size.
+
+    Returns
+    -------
+    :
+        A boolean array indicating the validity of each entry across all leaves in all pytrees. True for valid entries,
+        False for invalid ones.
+    """
+    return reduce(jnp.logical_and, map(_get_valid_tree, tree))
 
 
 def assert_has_attribute(obj: Any, attr_name: str):

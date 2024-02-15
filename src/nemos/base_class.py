@@ -10,8 +10,8 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
+from . import utils, validation
 from .pytrees import FeaturePytree
-from .utils import check_invalid_entry, pytree_map_and_reduce
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
@@ -235,7 +235,7 @@ class BaseRegressor(Base, abc.ABC):
                 "with numeric data-type!"
             )
 
-        if pytree_map_and_reduce(lambda x: x.ndim != 2, any, params[0]):
+        if utils.pytree_map_and_reduce(lambda x: x.ndim != 2, any, params[0]):
             raise ValueError(
                 "params[0] must be an array or nemos.pytree.FeaturePytree with array leafs "
                 "of shape (n_neurons, n_features)."
@@ -259,7 +259,7 @@ class BaseRegressor(Base, abc.ABC):
                     "y must be two-dimensional, with shape (n_timebins, n_neurons)"
                 )
         if not (X is None):
-            if pytree_map_and_reduce(lambda x: x.ndim != 3, any, X):
+            if utils.pytree_map_and_reduce(lambda x: x.ndim != 3, any, X):
                 raise ValueError(
                     "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features) or pytree of the same"
                 )
@@ -283,7 +283,9 @@ class BaseRegressor(Base, abc.ABC):
 
         """
         n_neurons = params[1].shape[0]
-        if pytree_map_and_reduce(lambda x: x.shape[0] != n_neurons, any, params[0]):
+        if utils.pytree_map_and_reduce(
+            lambda x: x.shape[0] != n_neurons, any, params[0]
+        ):
             raise ValueError(
                 "Model parameters have inconsistent shapes. "
                 "Spike basis coefficients must be of shape (n_neurons, n_features), and "
@@ -302,7 +304,7 @@ class BaseRegressor(Base, abc.ABC):
                 )
 
         if X is not None:
-            if pytree_map_and_reduce(lambda x: x.shape[1] != n_neurons, any, X):
+            if utils.pytree_map_and_reduce(lambda x: x.shape[1] != n_neurons, any, X):
                 raise ValueError(
                     "The number of neurons in the model parameters and in the inputs"
                     "must match."
@@ -316,7 +318,7 @@ class BaseRegressor(Base, abc.ABC):
                     f"X and params[0] must be the same type, but X is {type(X)} and "
                     f"params[0] is {type(params[0])}"
                 )
-            if pytree_map_and_reduce(
+            if utils.pytree_map_and_reduce(
                 lambda p, x: p.shape[1] != x.shape[2], any, params[0], X
             ):
                 raise ValueError(
@@ -384,19 +386,11 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
-        valid_x, err_x = check_invalid_entry(X, "X")
-        valid_y, err_y = check_invalid_entry(y, "y")
+        # validate input
+        validation.warn_invalid_entry(X, y)
 
-        # warn the user of the dropped samples.
-        if err_x:
-            message = err_x.join(" Dropping corresponding samples.")
-            warnings.warn(message=message, category=UserWarning)
-        if err_y:
-            message = err_y.join(" Dropping corresponding samples.")
-            warnings.warn(message=message, category=UserWarning)
-
-        # get the valid time points the valid
-        is_valid = jax.tree_map(lambda x, y: x & y, valid_x, valid_y)
+        # get valid entries
+        is_valid = utils.get_valid_multitree(X, y)
 
         # filter for valid
         X = jax.tree_map(lambda x: x[is_valid], X)
@@ -476,10 +470,7 @@ class BaseRegressor(Base, abc.ABC):
             params_feedforward, X=feedforward_input
         )
 
-        _, err = check_invalid_entry(feedforward_input, "feedforward_input")
-        # if error is not None, raise the exception
-        if err:
-            raise ValueError(err)
+        validation.error_invalid_entry(feedforward_input)
 
         # Ensure that both or neither of `init_y` and `params_recurrent` are
         # provided
