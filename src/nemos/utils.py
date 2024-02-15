@@ -91,7 +91,7 @@ def check_convolve_input_dims(basis_matrix: jnp.ndarray, time_series: Any):
     except AttributeError:
         if not check_dimensionality(time_series, 2):
             raise ValueError(
-                "time_series must be an pytree of 2 dimensional array-like objects or a"
+                "time_series must be a pytree of 2 dimensional array-like objects or a"
                 " 3 dimensional array-like object."
             )
 
@@ -310,6 +310,18 @@ def nan_pad_conv(
     ValueError
         If the window_size is not a positive integer, or if the filter_type is not one of 'causal',
         'acausal', or 'anti-causal'. Also raises ValueError if the dimensionality of conv_trials is not as expected.
+
+    Notes
+    -----
+        The `adjust_indices` dictionary specifies the start and end indices for slicing the input data based on the
+        filter type.
+        - For 'causal' convolution, the data is sliced to exclude the last time bin.
+        This happens because we will the convolution output to predict the next sample.
+        At the very last sample we will run out of observations that matches our predictions.
+        - For 'acausal' convolution, the entire data is used without slicing.
+        - For 'anti-causal' convolution, the data is sliced to start from the second time bin. This happens
+        because we will the convolution output to predict the previous sample.  At the very first sample we
+        will run out of observations that matches our predictions.
 
     """
     if not isinstance(window_size, int) or window_size <= 0:
