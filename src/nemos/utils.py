@@ -4,15 +4,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    List,
-    Literal,
-    Optional,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
