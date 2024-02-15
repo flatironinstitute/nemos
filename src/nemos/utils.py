@@ -317,15 +317,20 @@ def nan_pad_conv(
 
     Notes
     -----
-        The `adjust_indices` dictionary specifies the start and end indices for slicing the input data based on the
-        filter type.
-        - For 'causal' convolution, the data is sliced to exclude the last time bin.
-        This happens because we will the convolution output to predict the next sample.
-        At the very last sample we will run out of observations that matches our predictions.
-        - For 'acausal' convolution, the entire data is used without slicing.
-        - For 'anti-causal' convolution, the data is sliced to start from the second time bin. This happens
-        because we will the convolution output to predict the previous sample.  At the very first sample we
-        will run out of observations that matches our predictions.
+    The `adjust_indices` dictionary specifies the start and end indices for
+    slicing the input data based on the filter type.
+
+    - For 'causal' convolution, the data is sliced to exclude the last time
+      bin. This happens because we will the convolution output to predict the
+      next sample. At the very last sample we will run out of observations that
+      matches our predictions.
+
+    - For 'acausal' convolution, the entire data is used without slicing.
+
+    - For 'anti-causal' convolution, the data is sliced to start from the
+      second time bin. This happens because we will the convolution output to
+      predict the previous sample. At the very first sample we will run out of
+      observations that matches our predictions.
 
     """
     if not isinstance(window_size, int) or window_size <= 0:
