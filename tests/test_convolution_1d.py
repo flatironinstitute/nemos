@@ -126,11 +126,11 @@ class Test1DConvolution:
             (np.zeros((1, 30, 2)), does_not_raise()),
             ([np.zeros((30, 2))], does_not_raise()),
             ({"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}, does_not_raise()),
-            (np.zeros((1, 30, 1, 2)), pytest.raises(ValueError, match="time_series must be an pytree of 2 dimensional array-like objects ")),
-            ([np.zeros((1, 30, 2))],pytest.raises(ValueError, match="time_series must be an pytree of 2 dimensional array-like objects ")),
+            (np.zeros((1, 30, 1, 2)), pytest.raises(ValueError, match="time_series must be a pytree of 2 dimensional array-like objects ")),
+            ([np.zeros((1, 30, 2))],pytest.raises(ValueError, match="time_series must be a pytree of 2 dimensional array-like objects ")),
             (np.zeros((30, 10)), does_not_raise()),
             ([np.zeros((30, 10))], does_not_raise()),
-            (np.zeros(10), pytest.raises(ValueError, match="time_series must be an pytree of 2 dimensional array-like objects ")),
+            (np.zeros(10), pytest.raises(ValueError, match="time_series must be a pytree of 2 dimensional array-like objects ")),
         ],
     )
     def test_spike_count_type(self, basis_matrix, expectation, trial_counts):
@@ -249,13 +249,13 @@ class TestPadding:
     @pytest.mark.parametrize(
         "pytree, expectation",
         [
-            (np.zeros([1]), pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays")),
-            (np.zeros([1, 1]), pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays")),
-            (np.zeros([1, 1, 1]), does_not_raise()),
-            (np.zeros([1]), pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays")),
+            (np.zeros([1]), pytest.raises(ValueError, match="conv_trials must be a pytree of 3D arrays")),
+            (np.zeros([1, 1]), pytest.raises(ValueError, match="conv_trials must be a pytree of 3D arrays")),
+            (np.zeros([1, 1, 1]), pytest.raises(ValueError, match="conv_trials must be a pytree of 3D arrays")),
+            (np.zeros([1]), pytest.raises(ValueError, match="conv_trials must be a pytree of 3D arrays")),
             ([np.zeros([1, 1, 1])], does_not_raise()),
             ({"nested": [np.zeros([1, 1, 1])]}, does_not_raise()),
-            ([np.zeros([1, 1, 1, 1])], pytest.raises(ValueError, match="conv_trials must be an iterable of 3D arrays")),
+            ([np.zeros([1, 1, 1, 1])], pytest.raises(ValueError, match="conv_trials must be a pytree of 3D arrays")),
         ],
     )
     @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal"])

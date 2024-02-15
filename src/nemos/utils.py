@@ -339,9 +339,7 @@ def nan_pad_conv(
     conv_trials = jax.tree_map(jnp.asarray, conv_trials)
     try:
         if conv_trials.ndim != 4:
-            raise ValueError(
-                "conv_trials must be an pytree of 3D arrays or a 4D array!"
-            )
+            raise ValueError("conv_trials must be a pytree of 3D arrays or a 4D array!")
 
         conv_trials = conv_trials[:, start:end]
         return _pad_dimension(
@@ -350,9 +348,7 @@ def nan_pad_conv(
 
     except AttributeError:
         if not check_dimensionality(conv_trials, 3):
-            raise ValueError(
-                "conv_trials must be an iterable of 3D arrays or a 4D array!"
-            )
+            raise ValueError("conv_trials must be a pytree of 3D arrays or a 4D array!")
         return jax.tree_map(
             lambda trial: _pad_dimension(
                 trial[start:end], 0, window_size, filter_type, constant_values=jnp.nan
