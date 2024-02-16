@@ -1,18 +1,13 @@
-"""
+"""Decorator for array casting.
+
 This module provides utilities for seamless type casting between JAX, NumPy, and pynapple time series with data
 objects.
 
 It includes functions to check if objects are numpy array-like or pynapple time series data (TSD) objects, verify
 consistency in time axes and supports among TSD objects, and perform conditional conversion to JAX arrays.
-A key feature is the `cast_jax` decorator, which automatically casts function inputs to JAX arrays and,
-where applicable, converts outputs back to pynapple TSD objects, ensuring time axis consistency throughout.
-
-
-The module is designed to support researchers and developers working with time series data, particularly in
-contexts where integrating data from various sources and formats is common. It aims to reduce boilerplate code
-and increase codebase readability and maintainability.
+The key feature for this module is the `cast_jax` decorator, which automatically casts numpy-array like inputs
+to JAX arrays and, where applicable, converts outputs back to pynapple TSD objects.
 """
-
 
 from functools import wraps
 from typing import Any, Callable, Union
@@ -135,8 +130,8 @@ def _has_same_support(*args, **kwargs):
     """
     Verify matching time support intervals among pynapple objects.
 
-    Evaluates whether the time support intervals of provided pynapple objects are close enough to be considered identical,
-    using a predefined precision level.
+    Evaluates whether the time support intervals of provided pynapple objects are close enough to be
+    considered identical, using a predefined precision level.
 
     Parameters
     ----------
@@ -173,7 +168,7 @@ def _has_same_support(*args, **kwargs):
     return bool_support
 
 
-def all_same_time_info(*args, **kwargs):
+def all_same_time_info(*args, **kwargs) -> bool:
     """
     Ensure consistent time axis and support information among pynapple objects.
 
@@ -257,7 +252,9 @@ def cast_to_pynapple(
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
 
-def jnp_asarray_if(x: Any, condition: Callable[[Any], bool] = is_numpy_array_like) -> Any:
+def jnp_asarray_if(
+    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like
+) -> Any:
     """
     Conditionally convert an object to a JAX array.
 
@@ -281,7 +278,7 @@ def jnp_asarray_if(x: Any, condition: Callable[[Any], bool] = is_numpy_array_lik
     return x
 
 
-def cast_jax(func: Callable) -> Any:
+def cast_jax(func: Callable) -> Callable:
     """
     Decorate a function to cast inputs between JAX arrays and pynapple objects.
 
@@ -313,11 +310,14 @@ def cast_jax(func: Callable) -> Any:
                     "Time axis mismatch. pynapple objects have mismatching time axis."
                 )
             time, support = _get_time_info(*args, **kwargs)
-            cast_out = lambda tree: jax.tree_map(
-                lambda x: cast_to_pynapple(x, time, support), tree
-            )
+
+            def cast_out(tree):
+                return jax.tree_map(lambda x: cast_to_pynapple(x, time, support), tree)
+
         else:
-            cast_out = lambda x: x
+
+            def cast_out(tree):
+                return tree
 
         args, kwargs = jax.tree_map(jnp_asarray_if, (args, kwargs))
         res = func(*args, **kwargs)
