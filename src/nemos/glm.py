@@ -14,6 +14,7 @@ from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import cast_jax
 
+
 class GLM(BaseRegressor):
     """
     Generalized Linear Model (GLM) for neural activity data.

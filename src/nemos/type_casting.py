@@ -1,18 +1,20 @@
 """
 Type casting decorator.
 """
-from typing import Callable, Any
+
 from functools import wraps
+from typing import Any, Callable, Union
+
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 from numpy.typing import NDArray
 
 from . import utils
-import pynapple as nap
 
 
-def is_array_like(obj):
+def is_array_like(obj) -> bool:
     """
     Check if an object is array-like.
 
@@ -27,7 +29,7 @@ def is_array_like(obj):
 
     Returns
     -------
-    bool
+    :
         True if the object is array-like, False otherwise.
 
     Notes
@@ -59,22 +61,48 @@ def is_array_like(obj):
     except TypeError:
         is_iterable = False
 
-    return (
-        has_shape
-        and has_dtype
-        and has_ndim
-        and is_indexable
-        and is_iterable
-    )
+    return has_shape and has_dtype and has_ndim and is_indexable and is_iterable
 
-def is_pynapple_tsd(x):
+
+def is_pynapple_tsd(x: Any) -> bool:
+    """
+    Verify if an object is a pynapple time series with data object.
+
+    Examines the presence of specific attributes that are characteristic of pynapple time series data structures.
+
+    Parameters
+    ----------
+    x
+        Object to evaluate.
+
+    Returns
+    -------
+    :
+        Indicates the result of the evaluation.
+    """
     return all(hasattr(x, attr) for attr in ["times", "data"])
 
 
-def _has_same_time_axis(*args, **kwargs):
-    """Check that the time axis matches using pynapple precision.
+def _has_same_time_axis(*args, **kwargs) -> bool:
     """
+    Check for matching time axes among pynapple objects.
 
+    Evaluates whether the time axes of provided pynapple objects are close enough to be considered identical,
+    using a predefined precision level.
+
+    Parameters
+    ----------
+    args:
+        Any positional argument.
+    kwargs:
+        Any keyword argument.
+
+
+    Returns
+    -------
+    :
+    Indicates whether all time axes match.
+    """
     flat_tree, _ = jax.tree_util.tree_flatten((args, kwargs))
     if len(flat_tree) == 1:
         return True
@@ -85,13 +113,30 @@ def _has_same_time_axis(*args, **kwargs):
 
     # check time samples are close (10**-9 is hard-coded in pynapple)
     return all(
-        jnp.allclose(flat_tree[first_nap].t, x.t, rtol=0, atol=10 ** -9)
-        for i, x in enumerate(flat_tree) if is_nap[i] and i != first_nap
+        jnp.allclose(flat_tree[first_nap].t, x.t, rtol=0, atol=10**-9)
+        for i, x in enumerate(flat_tree)
+        if is_nap[i] and i != first_nap
     )
 
 
 def _has_same_support(*args, **kwargs):
-    """Check that the time axis matches using pynapple precision.
+    """
+    Verify matching time support intervals among pynapple objects.
+
+    Evaluates whether the time support intervals of provided pynapple objects are close enough to be considered identical,
+    using a predefined precision level.
+
+    Parameters
+    ----------
+    args:
+        Any positional argument.
+    kwargs:
+        Any keyword argument.
+
+    Returns
+    -------
+    :
+        Indicates the result of the verification.
     """
     flat_tree, _ = jax.tree_util.tree_flatten((args, kwargs))
 
@@ -104,20 +149,57 @@ def _has_same_support(*args, **kwargs):
 
     # check starts and ends are close (10**-9 is hard-coded in pynapple)
     bool_support = all(
-        jnp.allclose(flat_tree[first_nap].time_support.values, x.time_support.values, rtol=0, atol=10 ** -9)
-        for i, x in enumerate(flat_tree) if is_nap[i] and i != first_nap
+        jnp.allclose(
+            flat_tree[first_nap].time_support.values,
+            x.time_support.values,
+            rtol=0,
+            atol=10**-9,
+        )
+        for i, x in enumerate(flat_tree)
+        if is_nap[i] and i != first_nap
     )
     return bool_support
 
 
 def all_same_time_info(*args, **kwargs):
+    """
+    Ensure consistent time axis and support information among pynapple objects.
+
+    Combines checks for matching time axes and support intervals to verify consistency across all provided pynapple
+    objects.
+
+    Parameters
+    ----------
+    args:
+        Any positional argument.
+    kwargs:
+        Any keyword argument.
+
+    Returns
+    -------
+    :
+        Indicates whether time-related information is consistent.
+    """
     return _has_same_time_axis(*args, **kwargs) and _has_same_support(*args, **kwargs)
 
 
 def _get_time_info(*args, **kwargs):
-    """Get the time axis from the first pynapple object.
+    """
+    Extract time axis and support information from the first pynapple object.
 
-    This function assumes that there is at least one nap object
+    Assumes the presence of at least one pynapple object among the inputs and retrieves its time-related information.
+
+    Parameters
+    ----------
+    args:
+        Any positional argument.
+    kwargs:
+        Any keyword argument.
+
+    Returns
+    -------
+    :
+        Time axis and support information of the first pynapple object detected.
     """
     # list of bool
     flat, _ = jax.tree_util.tree_flatten(jax.tree_map(is_pynapple_tsd, (args, kwargs)))
@@ -130,7 +212,29 @@ def _get_time_info(*args, **kwargs):
     return tsd[idx].t, tsd[idx].time_support
 
 
-def cast_to_pynapple(array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet):
+def cast_to_pynapple(
+    array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet
+) -> Union[nap.Tsd, nap.TsdFrame, nap.TsdTensorT]:
+    """
+    Convert an array to a pynapple time series object.
+
+    Depending on the dimensionality of the array, creates an appropriate pynapple time series data structure using
+    the provided time and support information.
+
+    Parameters
+    ----------
+    array:
+        Data array to convert.
+    time:
+        Time axis for the pynapple object.
+    time_support:
+        Time support information for the pynapple object.
+
+    Returns
+    -------
+    :
+     A pynapple time series object based on the input array.
+    """
     time = np.asarray(time)
     array = np.asarray(array)
     if array.ndim == 1:
@@ -141,30 +245,49 @@ def cast_to_pynapple(array: jnp.ndarray, time: NDArray, time_support: nap.Interv
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
 
-def jnp_asarray_if(x: Any, condition: Callable[[Any], bool] = is_array_like):
+def jnp_asarray_if(x: Any, condition: Callable[[Any], bool] = is_array_like) -> Any:
+    """
+    Conditionally convert an object to a JAX array.
+
+    Applies the conversion if the specified condition is met. Allows for flexible handling of inputs that should
+    be treated as arrays for numerical computations.
+
+    Parameters
+    ----------
+    x:
+        Object to potentially convert.
+    condition:
+        A callable that determines whether conversion should occur.
+
+    Returns
+    -------
+    :
+        The original object or its conversion to a JAX array, based on the condition.
+    """
     if condition(x):
         x = jnp.asarray(x)
     return x
 
 
-def cast_jax(func):
+def cast_jax(func: Callable) -> Any:
     """
-    Decorator for casting between jax and pynapple.
+    Decorate a function to cast inputs between JAX arrays and pynapple objects.
 
-    This decorator casts the input to func to jax arrays. If any pynapple Tsd/TsdFrame/TsdTensor is present,
-    it will cast back the output of func to pynapple object. If time_math=False, and input to func are
-    multiple pynapple object, it will use the time axis of the first pynapple object detected.
-
+    Automatically converts input arguments to JAX arrays for processing. If the original inputs include pynapple
+    objects, attempts to convert the function's output back to pynapple format while ensuring consistency in the
+    time axis.
 
     Parameters
     ----------
     func
-    time_match
+        The function to decorate.
 
     Returns
     -------
-
+    :
+        A wrapper function that applies the specified casting behavior.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         # check for the presence of any pynapple tsd/tsdFrame/tsdTensor
@@ -174,9 +297,13 @@ def cast_jax(func):
         if any_nap:
             # check if the time axis is the same
             if not all_same_time_info(*args, **kwargs):
-                raise ValueError("Time axis mismatch. pynapple objects have mismatching time axis.")
+                raise ValueError(
+                    "Time axis mismatch. pynapple objects have mismatching time axis."
+                )
             time, support = _get_time_info(*args, **kwargs)
-            cast_out = lambda tree: jax.tree_map(lambda x: cast_to_pynapple(x, time, support), tree)
+            cast_out = lambda tree: jax.tree_map(
+                lambda x: cast_to_pynapple(x, time, support), tree
+            )
         else:
             cast_out = lambda x: x
 
@@ -185,5 +312,3 @@ def cast_jax(func):
         return cast_out(res)
 
     return wrapper
-
-

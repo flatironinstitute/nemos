@@ -8,6 +8,6 @@ from . import (
     pytrees,
     regularizer,
     simulation,
+    type_casting,
     utils,
-    type_casting
 )

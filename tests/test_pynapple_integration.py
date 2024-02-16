@@ -47,19 +47,10 @@ def test_predict_nap_output(iset, poissonGLM_model_instantiation):
     time = jnp.linspace(0, 1, n_samp)
     tsd_X = nap.TsdTensor(t=time, d=X).restrict(iset)
     tsd_y = nap.TsdFrame(t=time, d=y).restrict(iset)
-    pred_rate = model.predict(tsd_X, tsd_y)
+    model.fit(X, y)
+    pred_rate = model.predict(tsd_X)
     assert isinstance(pred_rate, type(tsd_y))
-    assert all(iset.values == pred_rate.time_support.values)
+    assert np.all(iset.values == pred_rate.time_support.values)
 
 
-
-@pytest.mark.parametrize(
-    "iset",
-    [
-        nap.IntervalSet(start=[0], end=[1]),
-        nap.IntervalSet(start=[0, 0.5], end=[0.49, 1])
-    ]
-)
-def test_nan_convolve_nap_output(iset, poissonGLM_model_instantiation):
-    pass
 
