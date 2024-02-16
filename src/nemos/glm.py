@@ -12,7 +12,7 @@ from . import utils
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
-
+from .type_casting import cast_jax
 
 class GLM(BaseRegressor):
     """
@@ -140,6 +140,7 @@ class GLM(BaseRegressor):
             + bs[None, :]
         )
 
+    @cast_jax
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters.
 
