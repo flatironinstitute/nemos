@@ -214,7 +214,7 @@ def _get_time_info(*args, **kwargs):
 
 def cast_to_pynapple(
     array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet
-) -> Union[nap.Tsd, nap.TsdFrame, nap.TsdTensorT]:
+) -> Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor]:
     """
     Convert an array to a pynapple time series object.
 
