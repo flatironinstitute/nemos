@@ -239,7 +239,7 @@ def _pad_dimension(
     array: jnp.ndarray,
     axis: int,
     window_size: int,
-    filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
+    predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
     constant_values: float = jnp.nan,
 ) -> jnp.ndarray:
     """
@@ -255,8 +255,8 @@ def _pad_dimension(
         The axis to be padded.
     window_size:
         The window size to determine the padding.
-    filter_type:
-        The type of convolution.
+    predictor_causality:
+        Causality of this predictor, which determines where padded values are added.
     constant_values:
         The constant values for padding, default is jnp.nan.
 
@@ -279,17 +279,14 @@ def _pad_dimension(
         "anti-causal": (0, window_size),
     }
 
-    if filter_type not in padding_settings:
-        cases_string = " or ".join(padding_settings).replace(
-            " or ", ", ", len(padding_settings) - 2
-        )
+    if predictor_causality not in padding_settings:
         raise ValueError(
-            f"filter_type must be {cases_string}. {filter_type} provided instead!"
+            f"predictor_causality must be {padding_settings.keys()}. {predictor_causality} provided instead!"
         )
 
     pad_width = (
         ((0, 0),) * axis
-        + (padding_settings[filter_type],)
+        + (padding_settings[predictor_causality],)
         + ((0, 0),) * (array.ndim - 1 - axis)
     )
     return jnp.pad(array, pad_width, constant_values=constant_values)
@@ -298,9 +295,9 @@ def _pad_dimension(
 def nan_pad(
     conv_time_series: Any,
     window_size: int,
-    filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
+    predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
 ) -> Any:
-    """Add NaN padding to conv_time_series based on causality of filter.
+    """Add NaN padding to conv_time_series based on causality.
 
     Parameters
     ----------
@@ -314,14 +311,14 @@ def nan_pad(
            n_features)`
     window_size:
         The window size to determine the padding.
-    filter_type:
-        The type of convolution to account for.
+    predictor_causality:
+        Causality of this predictor, which determines where padded values are added.
 
     Returns
     -------
     padded_conv_time_series :
         `conv_time_series` with NaN padding. NaN location is determined by
-        value of `filter_type` (see Notes), and `padded_conv_time_series`
+        value of `predictor_causality` (see Notes), and `padded_conv_time_series`
         structure is determined by that of `conv_time_series`:
 
         1. Single array of shape `(n_trials, n_time_bins + window_size - 1,
@@ -334,17 +331,17 @@ def nan_pad(
     ValueError
         - If conv_time_series does not have a float dtype.
         - If the window_size is not a positive integer
-        - If the filter_type is not one of 'causal', 'acausal', or 'anti-causal'.
+        - If the predictor_causality is not one of 'causal', 'acausal', or 'anti-causal'.
         - If the dimensionality of conv_trials is not as expected.
     warning
-        - If window_size is even and filter_type=='acausal'. In order for the
+        - If window_size is even and predictor_causality=='acausal'. In order for the
           output to be truly acausal, i.e., symmetric around events found in
           `conv_trials`, we need to be able to add an equal number of NaNs on
           both sides.
 
     Notes
     -----
-    The location of the NaN-padding depends on the value of `filter_type`.
+    The location of the NaN-padding depends on the value of `predictor_causality`.
 
     - `'causal'`: `window_size-1` NaNs are placed at the beginning of the
       temporal dimension.
@@ -359,12 +356,12 @@ def nan_pad(
             f"window_size must be a positive integer! Window size of {window_size} provided instead!"
         )
 
-    filter_choices = ['causal', 'acausal', 'anti-causal']
-    if filter_type not in filter_choices:
+    causality_choices = ['causal', 'acausal', 'anti-causal']
+    if predictor_causality not in causality_choices:
         raise ValueError(
-            f"filter_type must be one of {filter_choices}. {filter_type} provided instead!"
+            f"predictor_causality must be one of {causality_choices}. {predictor_causality} provided instead!"
         )
-    if filter_type == 'acausal' and (window_size % 2 == 0):
+    if predictor_causality == 'acausal' and (window_size % 2 == 0):
         warnings.warn("With acausal filter, window_size should probably be odd, so that we can place an equal number of NaNs on either side of input")
 
     # convert to jax ndarray
@@ -375,7 +372,7 @@ def nan_pad(
         if not np.issubdtype(conv_time_series.dtype, np.floating):
             raise ValueError(f"conv_time_series must have a float dtype!")
         return _pad_dimension(
-            conv_time_series, 1, window_size, filter_type, constant_values=jnp.nan
+            conv_time_series, 1, window_size, predictor_causality, constant_values=jnp.nan
         )
 
     except AttributeError:
@@ -385,14 +382,14 @@ def nan_pad(
             raise ValueError(f"All leaves of conv_time_series must have a float dtype!")
         return jax.tree_map(
             lambda trial: _pad_dimension(
-                trial, 0, window_size, filter_type, constant_values=jnp.nan
+                trial, 0, window_size, predictor_causality, constant_values=jnp.nan
             ),
             conv_time_series,
         )
 
 
 def shift_time_series(time_series: Any,
-                      filter_type: Literal["causal", "anti-causal"] = "causal"):
+                      predictor_causality: Literal["causal", "anti-causal"] = "causal"):
     """Shift time series based on causality of filter, adding NaNs as needed.
 
     Parameters
@@ -405,14 +402,14 @@ def shift_time_series(time_series: Any,
            n_features)`
         2. Pytree whose leaves are arrays of shape `(n_time_bins, n_neurons,
            n_features)`
-    filter_type: str, optional
-        The type of convolution to account for.
+    predictor_causality:
+        Causality of this predictor, which determines how to shift time_series.
 
     Returns
     -------
     shifted_time_series :
         `time_series` that has been shifted. shift is determined by value of
-        `filter_type` (see Notes), and `shifted_time_series` structure is
+        `predictor_causality` (see Notes), and `shifted_time_series` structure is
         determined by that of `time_series`:
 
         1. Single array of shape `(n_trials, n_time_bins, n_neurons,
@@ -424,12 +421,12 @@ def shift_time_series(time_series: Any,
     ------
     ValueError
         - If time_series does not have a float dtype.
-        - If the filter_type is not one of 'causal' or 'anti-causal'.
+        - If the predictor_causality is not one of 'causal' or 'anti-causal'.
         - If the dimensionality of conv_trials is not as expected.
 
     Notes
     -----
-    The direction of the shift depends on the value of `filter_type`:
+    The direction of the shift depends on the value of `predictor_causality`:
 
     - `'causal'`: shift `time_series` one time bin forward and drop final time
       point, so that e.g., `[0, 1, 2]` becomes `[np.nan, 0, 1]`
@@ -438,16 +435,16 @@ def shift_time_series(time_series: Any,
 
     """
     filter_choices = ['causal', 'anti-causal']
-    if filter_type not in filter_choices:
+    if predictor_causality not in filter_choices:
         raise ValueError(
-            f"filter_type must be one of {filter_choices}. {filter_type} provided instead!"
+            f"predictor_causality must be one of {filter_choices}. {predictor_causality} provided instead!"
         )
     # See docstring Notes section for what this does.
     adjust_indices = {
         "causal": (None, -1),
         "anti-causal": (1, None),
     }
-    start, end = adjust_indices[filter_type]
+    start, end = adjust_indices[predictor_causality]
 
     # convert to jax ndarray
     time_series = jax.tree_map(jnp.asarray, time_series)
@@ -456,29 +453,28 @@ def shift_time_series(time_series: Any,
             raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError(f"conv_time_series must have a float dtype!")
-        return _pad_dimension(time_series[start:end], 1, 1, filter_type, jnp.nan)
+        return _pad_dimension(time_series[start:end], 1, 1, predictor_causality, jnp.nan)
     except AttributeError:
         if not check_dimensionality(time_series, 3):
             raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
         if any(jax.tree_map(lambda trial: not np.issubdtype(trial.dtype, np.floating), time_series)):
             raise ValueError(f"All leaves of conv_time_series must have a float dtype!")
-        return jax.tree_map(lambda trial: _pad_dimension(trial[start:end], 0, 1, filter_type, jnp.nan), time_series)
+        return jax.tree_map(lambda trial: _pad_dimension(trial[start:end], 0, 1, predictor_causality, jnp.nan), time_series)
 
 
 def create_convolutional_predictor(basis_matrix: ArrayLike, time_series: Any,
-                                   filter_type: Literal["causal", "acausal", "anti-causal"] = "causal",
+                                   predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
                                    shift : bool = True,
                                    ):
     """Create predictor by convolving basis_matrix with time_series.
 
-    To create the convolutional predictor, three steps are taken:
+    To create the convolutional predictor, three steps are taken, which calls
+    three functions in sequence. See their docstrings for more details about
+    each step.
 
-    - Convolve `basis_matrix` with `time_series`
-    - Pad output with NaNs based on causality of intended predictor
-    - (Optional) Shift predictor based on causality
-
-    See the docstrings of `convolve_1d_trials`, `nan_pad`, `shift_time_series`
-    for more details about each step.
+    - Convolve `basis_matrix` with `time_series` (function: `convolve_1d_trials`)
+    - Pad output with NaNs based on causality of intended predictor (function: `nan_pad`)
+    - (Optional) Shift predictor based on causality (function: `shift_time_series`)
 
     Parameters
     ----------
@@ -494,11 +490,12 @@ def create_convolutional_predictor(basis_matrix: ArrayLike, time_series: Any,
         2. Any pytree with 2-dimensional arrays, `(n_time_bins, n_neurons)`, as
            leaves. Note that neither `n_time_bins` nor `n_neurons` need to be
            identical across leaves.
-    filter_type :
-        The type of convolution to account for.
+    predictor_causality:
+        Causality of this predictor, which determines where padded values are
+        added and how the predictor is shifted.
     shift :
         Whether to shift predictor based on causality (only valid if
-        filter_type is not acausal)
+        predictor_causality is not acausal)
 
     Returns
     -------
@@ -506,12 +503,12 @@ def create_convolutional_predictor(basis_matrix: ArrayLike, time_series: Any,
         Predictor of with same shape and structure as `time_series`
 
     """
-    if shift and filter_type == "acausal":
-        raise ValueError("Cannot shift predictor when filter_type is acausal!")
+    if shift and predictor_causality == "acausal":
+        raise ValueError("Cannot shift predictor when predictor_causality is acausal!")
     predictor = convolve_1d_trials(basis_matrix, time_series)
-    predictor = nan_pad(predictor, basis_matrix.shape[0], filter_type)
+    predictor = nan_pad(predictor, basis_matrix.shape[0], predictor_causality)
     if shift:
-        predictor = shift_time_series(predictor, filter_type)
+        predictor = shift_time_series(predictor, predictor_causality)
     return predictor
 
 

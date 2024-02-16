@@ -73,9 +73,9 @@ print(f"Shape of the convolution output: {spk_conv[0].shape}")
 
 
 # pad according to the causal direction of the filter, after squeeze, the dimension is (n_filters, n_samples)
-spk_causal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="causal")[0])
-spk_anticausal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="anti-causal")[0])
-spk_acausal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="acausal")[0])
+spk_causal_utils = np.squeeze(nmo.utils.nan_pad(spk_conv, ws, predictor_causality="causal")[0])
+spk_anticausal_utils = np.squeeze(nmo.utils.nan_pad(spk_conv, ws, predictor_causality="anti-causal")[0])
+spk_acausal_utils = np.squeeze(nmo.utils.nan_pad(spk_conv, ws, predictor_causality="acausal")[0])
 
 
 # %%

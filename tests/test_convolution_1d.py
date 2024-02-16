@@ -258,20 +258,20 @@ class TestPadding:
             ([np.zeros([1, 1, 1, 1])], pytest.raises(ValueError, match="conv_trials must be a pytree of 3D arrays")),
         ],
     )
-    @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal"])
-    def test_check_dim(self, pytree, expectation, filter_type):
+    @pytest.mark.parametrize("predictor_causality", ["causal", "acausal", "anti-causal"])
+    def test_check_dim(self, pytree, expectation, predictor_causality):
          with expectation:
-            utils.nan_pad_conv(pytree, 3, filter_type=filter_type)
+            utils.nan_pad_conv(pytree, 3, predictor_causality=predictor_causality)
 
-    @pytest.mark.parametrize("filter_type", ["causal", "acausal", "anti-causal", ""])
+    @pytest.mark.parametrize("predictor_causality", ["causal", "acausal", "anti-causal", ""])
     @pytest.mark.parametrize("iterable", [[np.zeros([2, 4, 5]), np.zeros([1, 1, 10])]])
-    def test_conv_type(self, iterable, filter_type):
-        raise_exception = not (filter_type in ["causal", "anti-causal", "acausal"])
+    def test_conv_type(self, iterable, predictor_causality):
+        raise_exception = not (predictor_causality in ["causal", "anti-causal", "acausal"])
         if raise_exception:
-            with pytest.raises(ValueError, match="filter_type must be causal, acausal"):
-                utils.nan_pad_conv(iterable, 3, filter_type)
+            with pytest.raises(ValueError, match="predictor_causality must be causal, acausal"):
+                utils.nan_pad_conv(iterable, 3, predictor_causality)
         else:
-            utils.nan_pad_conv(iterable, 3, filter_type)
+            utils.nan_pad_conv(iterable, 3, predictor_causality)
 
     @pytest.mark.parametrize("iterable", [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]])
     @pytest.mark.parametrize("window_size", [0.1, -1, 0, 1, 2, 3, 5, 6])
@@ -355,3 +355,15 @@ class TestPadding:
                 padded[k].shape[0] == iterable[k].shape[0] - 1 + window_size
                 for k in range(len(padded))
             ), "Size after padding doesn't match expectation. Should be T + window_size - 1."
+
+    @pytest.mark.parametrize("dtype, expectation",
+                             [
+                                 (np.int8, pytest.raises(ValueError, match="conv trials must have a float")),
+                                 (jax.numpy.int8, pytest.raises(ValueError, match="conv trials must have a float")),
+                                 (np.float32, does_not_raise()),
+                                 (jax.numpy.float32, does_not_raise()),
+                             ])
+    def test_nan_pad_conv_dtype(self, dtype, expectation):
+        iterable = np.arange(100).astype(dtype)
+        with expectation:
+            utils.nan_pad_conv(iterable, 10)
