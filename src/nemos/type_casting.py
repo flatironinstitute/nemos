@@ -1,6 +1,18 @@
 """
-Type casting decorator.
+This module provides utilities for seamless type casting between JAX, NumPy, and pynapple time series with data
+objects.
+
+It includes functions to check if objects are numpy array-like or pynapple time series data (TSD) objects, verify
+consistency in time axes and supports among TSD objects, and perform conditional conversion to JAX arrays.
+A key feature is the `cast_jax` decorator, which automatically casts function inputs to JAX arrays and,
+where applicable, converts outputs back to pynapple TSD objects, ensuring time axis consistency throughout.
+
+
+The module is designed to support researchers and developers working with time series data, particularly in
+contexts where integrating data from various sources and formats is common. It aims to reduce boilerplate code
+and increase codebase readability and maintainability.
 """
+
 
 from functools import wraps
 from typing import Any, Callable, Union
@@ -14,7 +26,7 @@ from numpy.typing import NDArray
 from . import utils
 
 
-def is_array_like(obj) -> bool:
+def is_numpy_array_like(obj) -> bool:
     """
     Check if an object is array-like.
 
@@ -245,7 +257,7 @@ def cast_to_pynapple(
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
 
-def jnp_asarray_if(x: Any, condition: Callable[[Any], bool] = is_array_like) -> Any:
+def jnp_asarray_if(x: Any, condition: Callable[[Any], bool] = is_numpy_array_like) -> Any:
     """
     Conditionally convert an object to a JAX array.
 
