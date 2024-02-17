@@ -312,15 +312,20 @@ def cast_jax(func: Callable) -> Callable:
             time, support = _get_time_info(*args, **kwargs)
 
             def cast_out(tree):
+                # cast back to pynapple
                 return jax.tree_map(lambda x: cast_to_pynapple(x, time, support), tree)
 
         else:
 
             def cast_out(tree):
+                # no type casting
                 return tree
 
+        # cast to jax
         args, kwargs = jax.tree_map(jnp_asarray_if, (args, kwargs))
+        # apply function/method
         res = func(*args, **kwargs)
+        # revert casting if pynapple
         return cast_out(res)
 
     return wrapper
