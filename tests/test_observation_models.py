@@ -28,7 +28,7 @@ class TestPoissonObservations:
             poisson_observations(link_function)
 
     @pytest.mark.parametrize(
-        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log()]
+        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.Log()]
     )
     def test_initialization_link_is_jax(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
