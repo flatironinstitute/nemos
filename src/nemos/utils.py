@@ -169,14 +169,8 @@ def convolve_1d_trials(
 
     Returns
     -------
-    conv_time_series :
-        Convolution of `basis_matrix` and `time_series`, whose structure is
-        determined by that of `time_series`:
-
-        1. Single array of shape `(n_trials, n_time_bins - window_size + 1,
-           n_neurons, n_features)`
-        2. Pytree whose leaves are arrays of shape `(n_time_bins - window_size +
-           1, n_neurons, n_features)`
+    :
+        The convolved trials as a pytree with the same structure as `time_series`.
 
     Raises
     ------
@@ -186,7 +180,6 @@ def convolve_1d_trials(
         - If time_series contains empty trials.
         - If basis_matrix is empty
         - If the number of time points in each trial is less than the window size.
-
     """
     # convert to jax arrays
     basis_matrix = jnp.asarray(basis_matrix)
