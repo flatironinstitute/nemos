@@ -444,7 +444,7 @@ def shift_time_series(
         if time_series.ndim != 4:
             raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
         if not np.issubdtype(time_series.dtype, np.floating):
-            raise ValueError("conv_time_series must have a float dtype!")
+            raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
             time_series[:, start:end], 1, 1, predictor_causality, jnp.nan
         )
