@@ -3,11 +3,11 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
+import warnings
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
 
 import jax
-import warnings
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -336,31 +336,41 @@ def nan_pad(
             f"pad_size must be a positive integer! Pad size of {pad_size} provided instead!"
         )
 
-    causality_choices = ['causal', 'acausal', 'anti-causal']
+    causality_choices = ["causal", "acausal", "anti-causal"]
     if predictor_causality not in causality_choices:
         raise ValueError(
             f"predictor_causality must be one of {causality_choices}. {predictor_causality} provided instead!"
         )
-    if predictor_causality == 'acausal' and (pad_size % 2 == 0):
-        warnings.warn("With acausal filter, pad_size should probably be even, so that we can place an equal number of NaNs on either side of input")
+    if predictor_causality == "acausal" and (pad_size % 2 == 0):
+        warnings.warn(
+            "With acausal filter, pad_size should probably be even,"
+            " so that we can place an equal number of NaNs on either side of input"
+        )
 
     # convert to jax ndarray
     conv_time_series = jax.tree_map(jnp.asarray, conv_time_series)
     try:
         if conv_time_series.ndim != 4:
-            raise ValueError("conv_time_series must be a pytree of 3D arrays or a 4D array!")
+            raise ValueError(
+                "conv_time_series must be a pytree of 3D arrays or a 4D array!"
+            )
         if not np.issubdtype(conv_time_series.dtype, np.floating):
-            raise ValueError(f"conv_time_series must have a float dtype!")
+            raise ValueError("conv_time_series must have a float dtype!")
         return _pad_dimension(
             conv_time_series, 1, pad_size, predictor_causality, constant_values=jnp.nan
         )
 
     except AttributeError:
         if not check_dimensionality(conv_time_series, 3):
-            raise ValueError("conv_time_series must be a pytree of 3D arrays or a 4D array!")
-        if pytree_map_and_reduce(lambda trial: not np.issubdtype(trial.dtype, np.floating),
-                                 any, conv_time_series):
-            raise ValueError(f"All leaves of conv_time_series must have a float dtype!")
+            raise ValueError(
+                "conv_time_series must be a pytree of 3D arrays or a 4D array!"
+            )
+        if pytree_map_and_reduce(
+            lambda trial: not np.issubdtype(trial.dtype, np.floating),
+            any,
+            conv_time_series,
+        ):
+            raise ValueError("All leaves of conv_time_series must have a float dtype!")
         return jax.tree_map(
             lambda trial: _pad_dimension(
                 trial, 0, pad_size, predictor_causality, constant_values=jnp.nan
@@ -369,8 +379,9 @@ def nan_pad(
         )
 
 
-def shift_time_series(time_series: Any,
-                      predictor_causality: Literal["causal", "anti-causal"] = "causal"):
+def shift_time_series(
+    time_series: Any, predictor_causality: Literal["causal", "anti-causal"] = "causal"
+):
     """Shift time series based on causality of predictor, adding NaNs as needed.
 
     Parameters
@@ -415,7 +426,7 @@ def shift_time_series(time_series: Any,
       first time point, so that e.g., `[0, 1, 2]` becomes `[1, 2, np.nan]`
 
     """
-    filter_choices = ['causal', 'anti-causal']
+    filter_choices = ["causal", "anti-causal"]
     if predictor_causality not in filter_choices:
         raise ValueError(
             f"predictor_causality must be one of {filter_choices}. {predictor_causality} provided instead!"
@@ -433,21 +444,31 @@ def shift_time_series(time_series: Any,
         if time_series.ndim != 4:
             raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
         if not np.issubdtype(time_series.dtype, np.floating):
-            raise ValueError(f"conv_time_series must have a float dtype!")
-        return _pad_dimension(time_series[:, start:end], 1, 1, predictor_causality, jnp.nan)
+            raise ValueError("conv_time_series must have a float dtype!")
+        return _pad_dimension(
+            time_series[:, start:end], 1, 1, predictor_causality, jnp.nan
+        )
     except AttributeError:
         if not check_dimensionality(time_series, 3):
             raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
-        if pytree_map_and_reduce(lambda trial: not np.issubdtype(trial.dtype, np.floating),
-                                 any, time_series):
-            raise ValueError(f"All leaves of time_series must have a float dtype!")
-        return jax.tree_map(lambda trial: _pad_dimension(trial[start:end], 0, 1, predictor_causality, jnp.nan), time_series)
+        if pytree_map_and_reduce(
+            lambda trial: not np.issubdtype(trial.dtype, np.floating), any, time_series
+        ):
+            raise ValueError("All leaves of time_series must have a float dtype!")
+        return jax.tree_map(
+            lambda trial: _pad_dimension(
+                trial[start:end], 0, 1, predictor_causality, jnp.nan
+            ),
+            time_series,
+        )
 
 
-def create_convolutional_predictor(basis_matrix: ArrayLike, time_series: Any,
-                                   predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
-                                   shift : bool = True,
-                                   ):
+def create_convolutional_predictor(
+    basis_matrix: ArrayLike,
+    time_series: Any,
+    predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
+    shift: bool = True,
+):
     """Create predictor by convolving basis_matrix with time_series.
 
     To create the convolutional predictor, three steps are taken, which calls
@@ -489,7 +510,7 @@ def create_convolutional_predictor(basis_matrix: ArrayLike, time_series: Any,
     if shift and predictor_causality == "acausal":
         raise ValueError("Cannot shift predictor when predictor_causality is acausal!")
     predictor = convolve_1d_trials(basis_matrix, time_series)
-    predictor = nan_pad(predictor, basis_matrix.shape[0]-1, predictor_causality)
+    predictor = nan_pad(predictor, basis_matrix.shape[0] - 1, predictor_causality)
     if shift:
         predictor = shift_time_series(predictor, predictor_causality)
     return predictor
