@@ -242,7 +242,7 @@ class Test1DConvolution:
     def test_tree_structure_match(self, trial_counts):
         basis_matrix = np.zeros((4, 3))
         conv = utils.convolve_1d_trials(basis_matrix, trial_counts)
-        assert jax.tree_structure(trial_counts) == jax.tree_structure(conv)
+        assert jax.tree_util.tree_structure(trial_counts) == jax.tree_structure(conv)
 
 
 class TestPadding:

@@ -61,7 +61,7 @@ class TestPoissonObservations:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize(
-        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log()]
+        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.Log()]
     )
     def test_initialization_link_is_jax_set_params(
         self, link_function, poisson_observations
