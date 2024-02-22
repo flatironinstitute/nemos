@@ -59,14 +59,14 @@ class Regularizer(Base, abc.ABC):
     Attributes
     ----------
     allowed_solvers :
-        List of solver names that are allowed for use with this regularizer.
+        Tuple of solver names that are allowed for use with this regularizer.
     solver_name :
         Name of the solver being used.
     solver_kwargs :
         Additional keyword arguments to be passed to the solver during instantiation.
     """
 
-    allowed_solvers: List[str] = []
+    _allowed_solvers: Tuple[str] = tuple()
 
     def __init__(
         self,
@@ -82,6 +82,10 @@ class Regularizer(Base, abc.ABC):
         else:
             self._solver_kwargs = solver_kwargs
         self._check_solver_kwargs(self.solver_name, self.solver_kwargs)
+
+    @property
+    def allowed_solvers(self):
+        return self._allowed_solvers
 
     @property
     def solver_name(self):
@@ -203,7 +207,7 @@ class UnRegularized(Regularizer):
     [Regularizer](./#nemos.regularizer.Regularizer) : Base solver class from which this class inherits.
     """
 
-    allowed_solvers = [
+    _allowed_solvers = (
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -211,7 +215,7 @@ class UnRegularized(Regularizer):
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
-    ]
+    )
 
     def __init__(
         self, solver_name: str = "GradientDescent", solver_kwargs: Optional[dict] = None
@@ -232,7 +236,7 @@ class Ridge(Regularizer):
         A list of solver names that are allowed to be used with this regularizer.
     """
 
-    allowed_solvers = [
+    _allowed_solvers = (
         "GradientDescent",
         "BFGS",
         "LBFGS",
@@ -240,7 +244,7 @@ class Ridge(Regularizer):
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
-    ]
+    )
 
     def __init__(
         self,
@@ -320,7 +324,7 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         A list of solver names that are allowed to be used with this regularizer.
     """
 
-    allowed_solvers = ["ProximalGradient"]
+    _allowed_solvers = ("ProximalGradient", )
 
     def __init__(
         self,
