@@ -87,7 +87,7 @@ def is_pynapple_tsd(x: Any) -> bool:
     :
         Indicates the result of the evaluation.
     """
-    return all(hasattr(x, attr) for attr in ["times", "data"])
+    return all(hasattr(x, attr) for attr in ["times", "data", "time_support"])
 
 
 def _has_same_time_axis(*args, **kwargs) -> bool:
