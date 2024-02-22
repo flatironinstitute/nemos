@@ -309,11 +309,11 @@ def cast_jax(func: Callable) -> Callable:
                 raise ValueError(
                     "Time axis mismatch. pynapple objects have mismatching time axis."
                 )
-            time, support = _get_time_info(*args, **kwargs)
+            time, time_support = _get_time_info(*args, **kwargs)
 
             def cast_out(tree):
                 # cast back to pynapple
-                return jax.tree_map(lambda x: cast_to_pynapple(x, time, support), tree)
+                return jax.tree_map(lambda x: cast_to_pynapple(x, time, time_support), tree)
 
         else:
 
