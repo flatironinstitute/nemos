@@ -323,11 +323,12 @@ def nan_pad(
     -----
     The location of the NaN-padding depends on the value of `predictor_causality`.
 
-    - `'causal'`: `pad_size-1` NaNs are placed at the beginning of the
+    - `'causal'`: `pad_size` NaNs are placed at the beginning of the
       temporal dimension.
     - `'acausal'`: `floor(pad_size/2)` NaNs are placed at the beginning of
-      the temporal dimensions, `ceil(pad_size/2)` placed at the end.
-    - `'anti-causal'`: `pad_size-1` NaNs are placed at the end of the
+      the temporal dimensions, `ceil(pad_size/2)` placed at the end (for `pad_size`
+      total NaNs).
+    - `'anti-causal'`: `pad_size` NaNs are placed at the end of the
       temporal dimension.
 
     """
