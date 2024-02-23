@@ -299,7 +299,7 @@ def nan_pad(
     padded_conv_time_series :
         `conv_time_series` with NaN padding. NaN location is determined by
         value of `predictor_causality` (see Notes), and `padded_conv_time_series`
-        structure is determined by that of `conv_time_series`:
+        structure matches that of `conv_time_series`:
 
         1. Single array of shape `(n_trials, n_time_bins + pad_size,
            n_neurons, n_features)`
