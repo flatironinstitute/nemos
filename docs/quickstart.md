@@ -232,8 +232,8 @@ nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).r
 
 !!! note
     In this example we do all the processing and fitting in a single line to showcase how versatile this approach can
-    be. In general, you should always avoid nesting many processing steps without each transformation: what if you
-    unintentionally used the wrong bin-size? What if you selected the wrong feature? 
+    be. In general, you should always avoid nesting many processing steps without each inspecting transformation first: 
+    what if you unintentionally used the wrong bin-size? What if you selected the wrong feature? 
 
 ### Interactions with `scikit-learn`
 
