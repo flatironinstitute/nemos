@@ -498,7 +498,7 @@ def create_convolutional_predictor(
         added and how the predictor is shifted.
     shift :
         Whether to shift predictor based on causality (only valid if
-        predictor_causality is not acausal)
+        `predictor_causality != 'acausal'`)
 
     Returns
     -------
