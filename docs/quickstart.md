@@ -103,8 +103,8 @@ set of weights.
 The user can set any non-linearity, provided that:
 
 1. JAX can auto-differentiate it.
-2. It maps scalars into scalars, i.e. $f : \mathbb{R} -> \mathbb{R}$.
-3. It is vectorized, i.e. if pass a NumPy array or a JAX array, it returns an array of the same shape.
+2. It maps scalars into scalars, i.e. $f : \mathbb{R} \longrightarrow \mathbb{R}$.
+3. It is vectorized, i.e. if you pass a NumPy array or a JAX array, it returns an array of the same shape.
 
 However, in the general case, we cannot guarantee the convexity of the objective anymore.
 
@@ -118,7 +118,7 @@ Object of type regularizer have different hyper-parameters, depending on the typ
     similar) as a dictionary.
 
 For each regularizer, we have one or more allowable solvers, stored in the `allowed_solvers` attribute. 
-This ensures that for each regularization scheme, we run an appropriate optimization algorithms. 
+This ensures that for each regularization scheme, we run an appropriate optimization algorithm. 
 
 ```python
 import nemos as nmo
@@ -128,15 +128,15 @@ print(f"Allowed solver: {regularizer.allowed_solvers}")
 ```
 
 !!! note
-    The `allowed_solvers` shouldn't be changed, attempt of changing the default values will 
+    The `allowed_solvers` shouldn't be changed, changing the default values of this attribute will 
     result in an exception being raised.
 
-Except for `Unregularized`, all the other `Regularizer` type objects will have the `regularizer_strength` hyper-parameter.
-This is particularly helpful for controlling over-fitting, generally, the larger the `regularizer_strength` 
-the smaller the coefficients. Usually you shoul tune this hyper-arameter by means of cross-validation. Look at the
-scikit-learn session for 
+Except for `Unregularized`, all the other `Regularizer` objects will have the `regularizer_strength` hyper-parameter.
+This is particularly helpful for controlling over-fitting. In general, the larger the `regularizer_strength` 
+the smaller the coefficients. Usually, one should tune this hyper-parameter by means of cross-validation. Look at the
+[Integration  with `scikit-learn`](#interactions-with-scikit-learn) session for a concrete example.
 
-## Interactions with `pynapple`
+### Interactions with `pynapple`
 
 !!! warning
     This section assumes some familiarity with the `pynapple` package for time-series manipulation and data 
@@ -146,8 +146,9 @@ If you represent your task variables and/or spike counts as `pynapple` time-seri
 fully compatible with it. You can pass your time series direclty to the `fit` and `score` methods, as well as to 
 `predict`.
 
-When a transformation in nemos preserve the time-axis, if `pynapple` time-series is provided as input 
+In `nemos`, when a transformation preserve the time-axis, if a `pynapple` time-series is provided as input, 
 the output will be a `pynapple` time-series too!
+
 A canonical example of this behavior is the `predict` method of `GLM`. The method receives a time-series of features as 
 input  and outputs a corresponding time-series of firing rates.
 
@@ -161,7 +162,10 @@ import pynapple as nap
 time = np.arange(100)
 X = nap.TsdTensor(t=time, d=0.2 * np.random.normal(size=(100, 1, 1)))
 coef = np.random.normal(size=(1, 1))
-y = nap.TsdFrame(t=time, d=np.random.poisson(np.exp(np.einsum("nf, tnf -> tn", coef, X))))
+# compute the firing rate as a weighted sum of the feature
+firing_rate = np.exp(np.einsum("nf, tnf -> tn", coef, X))
+# generate spikes
+y = nap.TsdFrame(t=time, d=np.random.poisson(firing_rate))
 
 model = nmo.glm.GLM()
 # the following works
@@ -171,11 +175,11 @@ model.fit(X, y)
 print(type(model.predict(X)))
 ```
 
-### Why should you care?
+#### Why should you care?
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such 
 as restricting your time-series to specific epochs (sleep/wake, context A vs context B. etc.), as well as common 
-pre-processing steps robustly and efficiently. This includes bin-averaging, counting, convolving, smoothing and many
+pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy time-series manipulation.
 
 Combining `pynapple` and `nemos` can greatly streamline the modeling process. To show how handy this could 
@@ -196,6 +200,7 @@ import pynapple as nap
 # - recording duration: 5 min 
 # - task variable sampled at 10KHz
 # - spike times in seconds.
+
 # define time axis and a feature
 time_sec = np.linspace(0, 300, 300 * 10000)
 X = nap.TsdTensor(t=time_sec, d=0.2 * np.random.normal(size=(time_sec.shape[0], 1, 1)))
@@ -223,12 +228,11 @@ nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).r
 !!! note
     In this example we do all the processing and fitting in a single line to showcase how versatile this approach can
     be. In general, you should always avoid nesting many processing steps without each transformation: what if you
-    unintentionally used the wrong bin-size? What if yoy included the wrong feature? What `nemos` and `pynapple` can 
-    do for you is simplify your pipline and make it more robust, and reproducible.
+    unintentionally used the wrong bin-size? What if you selected the wrong feature? 
 
-## Interactions with `scikit-learn`
+### Interactions with `scikit-learn`
 
-### `scikit-learn`-style Get and Set Parameter
+#### `scikit-learn`-style Get and Set Parameter
 
 As previously mentioned, `nemos` GLM conforms to the `scikit-learn` API for estimators. As a consequence, 
 you can retrieve the all the parameters and set any of them using the `get_param` and `set_param` methods.
@@ -254,7 +258,7 @@ print(model.get_params())
 
 This is used internally by `scikit-learn` to construct complex pipelines.
 
-### Why should you care?
+#### Why should you care?
 
 Respecting the scikit-learn API will allow us to access their powerful pipeline and cross-validation machinery.
 All of this, while relying on JAX in the backend for code efficiency (GPU-acceleration).
