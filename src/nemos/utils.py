@@ -470,8 +470,8 @@ def create_convolutional_predictor(
 ):
     """Create predictor by convolving basis_matrix with time_series.
 
-    To create the convolutional predictor, three steps are taken, which calls
-    three functions in sequence. See their docstrings for more details about
+    To create the convolutional predictor, three steps are taken, each of 
+    calls a single function. See their docstrings for more details about
     each step.
 
     - Convolve `basis_matrix` with `time_series` (function: `convolve_1d_trials`)
