@@ -4,7 +4,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from .utils import pytree_map_and_reduce
+from .utils import pytree_map_and_reduce, get_valid_multitree
 
 
 def warn_invalid_entry(*pytree: Any):
@@ -53,3 +53,27 @@ def error_invalid_entry(*pytree: Any):
         raise ValueError("The provided trees contain Infs!")
     elif any_nans:
         raise ValueError("The provided trees contain Nans!")
+
+
+def error_all_invalid(*pytree: Any):
+    """
+    Raises an error if all sample points across multiple pytrees are invalid.
+
+    This function checks multiple pytrees with NDArrays as leaves to determine if all sample points are invalid.
+    A sample point is considered invalid if it contains NaN or infinite values in at least one of the pytrees.
+    The sample axis is the first dimension of the NDArray.
+
+    Parameters
+    ----------
+    pytree :
+        Variable number of pytrees to be evaluated. Each pytree is expected to have NDArrays as leaves with a
+        consistent size for the first dimension (sample dimension).
+        The function checks for the validity of sample points across these pytrees.
+
+    Raises
+    ------
+    ValueError
+        If all sample points across the provided pytrees are invalid (i.e., contain NaN or infinite values).
+    """
+    if all(~get_valid_multitree(*pytree)):
+        raise ValueError("At least a NaN or an Inf at all sample points!")

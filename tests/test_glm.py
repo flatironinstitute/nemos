@@ -400,6 +400,20 @@ class TestGLM:
         assert np.allclose(model.coef_, flat_coef)
         assert np.allclose(model.intercept_, model_tree.intercept_)
 
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (jnp.inf, pytest.raises(ValueError, match="At least a NaN or an Inf at all sample points")),
+            (jnp.nan, pytest.raises(ValueError, match="At least a NaN or an Inf at all sample points")),
+        ]
+    )
+    def test_fit_all_invalid_X(self, fill_val, expectation, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        X.fill(fill_val)
+        with expectation:
+            model.fit(X, y)
+
     #######################
     # Test model.score
     #######################

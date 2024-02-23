@@ -3,6 +3,7 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
+import re
 import warnings
 from functools import partial, reduce
 from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
@@ -508,9 +509,24 @@ def create_convolutional_predictor(
 
     """
     if shift and predictor_causality == "acausal":
-        raise ValueError("Cannot shift predictor when predictor_causality is acausal!")
+        shift = False
+        warnings.warn("Cannot shift `predictor` when `predictor_causality` is `acausal`. "
+                      "Setting `shift` to False instead!",
+                      UserWarning)
+
     predictor = convolve_1d_trials(basis_matrix, time_series)
-    predictor = nan_pad(predictor, basis_matrix.shape[0] - 1, predictor_causality)
+    with warnings.catch_warnings(record=True) as warns:
+        warnings.simplefilter("always")
+        predictor = nan_pad(predictor, basis_matrix.shape[0] - 1, predictor_causality)
+
+    for w in warns:
+        if re.match("^With acausal filter", str(w.message)):
+            warnings.warn(message="With acausal filter, `basis_matrix.shape[0] "
+                          "should probably be odd, so that we can place an equal number of NaNs on "
+                          "either side of input.", category=UserWarning)
+        else:
+            warnings.warn(w.message, w.category)
+
     if shift:
         predictor = shift_time_series(predictor, predictor_causality)
     return predictor
@@ -700,7 +716,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
     return reduce(jnp.logical_and, valid)
 
 
-def get_valid_multitree(*tree: Any):
+def get_valid_multitree(*tree: Any) -> jnp.ndarray:
     """
     Filter valid entries across multiple pytrees.
 

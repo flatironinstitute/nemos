@@ -386,6 +386,9 @@ class BaseRegressor(Base, abc.ABC):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
 
+        # error if all samples are invalid
+        validation.error_all_invalid(X, y)
+
         # validate input
         validation.warn_invalid_entry(X, y)
 
