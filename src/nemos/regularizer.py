@@ -8,7 +8,7 @@ with various optimization methods, and they can be applied depending on the mode
 
 import abc
 import inspect
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
