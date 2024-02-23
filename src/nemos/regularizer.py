@@ -324,7 +324,7 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         A list of solver names that are allowed to be used with this regularizer.
     """
 
-    _allowed_solvers = ("ProximalGradient", )
+    _allowed_solvers = ("ProximalGradient",)
 
     def __init__(
         self,
