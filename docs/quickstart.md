@@ -1,4 +1,3 @@
-## Quickstart
 
 This tutorial will introduce the main `nemos` functionalities. This is intended for users that are 
 already familiar with the GLM framework but want to learn how to interact with the `nemos` API. 
@@ -99,7 +98,7 @@ print(model.observation_model.inverse_link_function)
 
 These two options result in a convex optimization objective for all the provided regularizers 
 (un-regularized, Ridge, Lasso, group-Lasso). This is nice because we can guarantee that there exists a single optimal 
-set of weights.
+set of model coefficients.
 
 The user can set any non-linearity, provided that:
 
@@ -232,8 +231,6 @@ nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).r
     unintentionally used the wrong bin-size? What if you selected the wrong feature? 
 
 ### Interactions with `scikit-learn`
-
-#### `scikit-learn`-style Get and Set Parameter
 
 As previously mentioned, `nemos` GLM conforms to the `scikit-learn` API for estimators. As a consequence, 
 you can retrieve the all the parameters and set any of them using the `get_param` and `set_param` methods.
