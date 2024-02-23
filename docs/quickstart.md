@@ -204,11 +204,16 @@ import pynapple as nap
 # define time axis and a feature
 time_sec = np.linspace(0, 300, 300 * 10000)
 X = nap.TsdTensor(t=time_sec, d=0.2 * np.random.normal(size=(time_sec.shape[0], 1, 1)))
+
 # define epochs as pynapple IntervalSet
 recording_epoch = nap.IntervalSet(start=0, end=300)
-wake_epoch = nap.IntervalSet(start=0, end=150)               
+wake_epoch = nap.IntervalSet(start=0, end=150)           
+
 # deine spikes by generating random times, and adding the recording_epoch as the time_support for the spikes
-spike_ts = nap.Ts(np.sort(np.random.uniform(0, 300, size=100)), time_support=recording_epoch)
+spike_ts = nap.Ts(
+    np.sort(np.random.uniform(0, 300, size=100)), 
+    time_support=recording_epoch
+)
 spikes = nap.TsGroup({1: spike_ts})
 ```
 
