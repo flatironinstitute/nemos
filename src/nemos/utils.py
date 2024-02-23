@@ -401,8 +401,8 @@ def shift_time_series(
     -------
     shifted_time_series :
         `time_series` that has been shifted. shift is determined by value of
-        `predictor_causality` (see Notes), and `shifted_time_series` structure is
-        determined by that of `time_series`:
+        `predictor_causality` (see Notes), and `shifted_time_series` structure
+        matches that of `time_series`:
 
         1. Single array of shape `(n_trials, n_time_bins, n_neurons,
            n_features)`
