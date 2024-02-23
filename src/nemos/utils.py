@@ -149,7 +149,7 @@ def convolve_1d_trials(
     This function applies a convolution in mode "valid" to each trials in the
     `time_series`. The `time_series` pytree could be either a single 3D array
     with trials as the first dimension, or a pytree with trials as the leaves.
-    The algorithm is more efficient when a `time_series` is a 3D array, you may
+    As the algorithm is more efficient when a `time_series` is a 3D array, you should
     consider organizing your data in this way when possible.
 
     Parameters
