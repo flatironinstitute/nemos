@@ -262,7 +262,7 @@ Respecting the scikit-learn API will allow us to access their powerful pipeline 
 All of this, while relying on JAX in the backend for code efficiency (GPU-acceleration).
 
 For example, if we would like to tune the critical hyper-parameter `regularization_strenght`, we
-could easily run a `K-Fold` cross-validation using through `scikit-learn`.
+could easily run a `K-Fold` cross-validation using `scikit-learn`.
 
 ```python
 import nemos as nmo
