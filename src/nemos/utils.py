@@ -342,7 +342,7 @@ def nan_pad(
         raise ValueError(
             f"predictor_causality must be one of {causality_choices}. {predictor_causality} provided instead!"
         )
-    if predictor_causality == "acausal" and (pad_size % 2 == 0):
+    if predictor_causality == "acausal" and (pad_size % 2 == 1):
         warnings.warn(
             "With acausal filter, pad_size should probably be even,"
             " so that we can place an equal number of NaNs on either side of input"
