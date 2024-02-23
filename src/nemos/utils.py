@@ -475,7 +475,7 @@ def create_convolutional_predictor(
     each step.
 
     - Convolve `basis_matrix` with `time_series` (function: `convolve_1d_trials`)
-    - Pad output with `basis_matrix.shape[0]`-1 NaNs, with location based on
+    - Pad output with `basis_matrix.shape[0]-1` NaNs, with location based on
       causality of intended predictor (function: `nan_pad`).
     - (Optional) Shift predictor based on causality (function: `shift_time_series`)
 
