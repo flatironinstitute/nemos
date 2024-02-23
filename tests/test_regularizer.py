@@ -17,7 +17,11 @@ import nemos as nmo
     ]
 )
 def test_get_only_allowed_solvers(regularizer):
-    with pytest.raises(AttributeError, match="property 'allowed_solvers' of '.+' object has no setter"):
+    # the error raised by property changed in python 3.11
+    with pytest.raises(
+            AttributeError,
+            match="property 'allowed_solvers' of '.+' object has no setter|can't set attribute"
+    ):
         regularizer.allowed_solvers = []
 
 
