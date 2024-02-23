@@ -113,7 +113,7 @@ plt.plot(samples, eval_basis[:, 4:])
 plt.tight_layout()
 
 # %%
-# ## Fourier Basis Convolution and Fourier Transform
+# #### Fourier Basis Convolution and Fourier Transform
 # The Fourier transform of a signal $ s(t) $ restricted to a temporal window $ [t_0,\;t_1] $ is
 # $$ \\hat{x}(\\omega) = \\int_{t_0}^{t_1} s(\\tau) e^{-j\\omega \\tau} d\\tau. $$
 # where $ e^{-j\\omega \\tau} = \\cos(\\omega \\tau) - j \\sin (\\omega \\tau) $.
