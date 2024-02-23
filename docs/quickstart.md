@@ -9,13 +9,14 @@ In the following sessions, you will learn:
 
 1. How to define and fit a GLM model.
 2. Which are the GLM parameters and hyperparameters and how to set it.
-3. How to set parameters (Ridge, Lasso, etc.).
+3. How `nemos` interacts with `pynapple` for pre-processing
+4. How `nemos` interacts with `scikit-learn` for pipelines and cross-validation. 
 
 Each of this section will be an independent example.
 
 ### Basic Model Fit
 
-`nemos` GLM object is defined in the `nemos.glm` module. You can define and fit a model with the following syntax,
+Defining and fitting a `nemos` GLM model is straightforward and can be done using the following syntax:
 
 ```python
 import nemos as nmo
@@ -55,7 +56,7 @@ print(f"Model intercept: {model.intercept_.shape}")
 The `model` object has the following arguments, stored as attributes,
 
 1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
-2. `model.regularizer`: The type of regularization to be applied. The default is `nemos.regularizer.Ridge`, which implements Ridge (or $L_2$) regularization.
+2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Ridge`, for $L_2$ regularization.
 
 You can change the defaults when you instantiate the model or after.
 
@@ -74,8 +75,8 @@ print(model.regularizer)
 
 #### Observation Model Hyperparameters
 
-The observation model has a single hyper-parameter, the non-linearity which maps the weighted sum of the predictors 
-into the mean of the neural activity (the instantaneous firing rate). We call the non-linearity *inverse link-function*, 
+The observation model has a single hyper-parameter, the non-linearity which maps a linear combination of predictors 
+to the neural activity mean (the instantaneous firing rate). We call the non-linearity *inverse link-function*, 
 naming convention from the [statistical literature on  GLMs](https://en.wikipedia.org/wiki/Generalized_linear_model).
 The default for the `PoissonObservation` is the exponential $f(x) = e^x$, implemented in JAX as `jax.numpy.exp`. 
 Another common choice is the "soft-plus", in JAX this is implemented as `jax.nn.softplus`. 
