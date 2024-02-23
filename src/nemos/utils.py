@@ -426,16 +426,15 @@ def shift_time_series(
       first time point, so that e.g., `[0, 1, 2]` becomes `[1, 2, np.nan]`
 
     """
-    filter_choices = ["causal", "anti-causal"]
-    if predictor_causality not in filter_choices:
-        raise ValueError(
-            f"predictor_causality must be one of {filter_choices}. {predictor_causality} provided instead!"
-        )
     # See docstring Notes section for what this does.
     adjust_indices = {
         "causal": (None, -1),
         "anti-causal": (1, None),
     }
+    if predictor_causality not in adjust_indices.keys():
+        raise ValueError(
+            f"predictor_causality must be one of {adjust_indices.keys()}. {predictor_causality} provided instead!"
+        )
     start, end = adjust_indices[predictor_causality]
 
     # convert to jax ndarray
