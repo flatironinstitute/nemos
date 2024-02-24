@@ -465,4 +465,33 @@ class TestCreateConvolutionalPredictor:
 
 
 class TestShiftTimeSeries:
-    pass
+    def test_causal_shift(self):
+        # Assuming time_series shape is (1, 3, 2, 2)
+        time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
+        shifted_series = utils.shift_time_series(time_series, "causal")
+
+        assert np.isnan(shifted_series[0, 0]).all(), "First time bin should be NaN for causal shift"
+        assert np.array_equal(shifted_series[0, 1:], time_series[0, :-1]), "Causal shift did not work as expected"
+
+    def test_anti_causal_shift(self):
+        time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
+        shifted_series = utils.shift_time_series(time_series, "anti-causal")
+
+        assert np.isnan(shifted_series[0, -1]).all(), "Last time bin should be NaN for anti-causal shift"
+        assert np.array_equal(shifted_series[0, :-1], time_series[0, 1:]), "Anti-causal shift did not work as expected"
+
+    def test_error_on_non_float_dtype(self):
+        time_series = np.random.randint(0, 10, (1, 3, 2, 2))
+        with pytest.raises(ValueError, match="time_series must have a float dtype"):
+            utils.shift_time_series(time_series)
+
+    def test_error_on_invalid_causality(self):
+        time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
+        with pytest.raises(ValueError, match="predictor_causality must be one of"):
+            utils.shift_time_series(time_series, "acausal")
+
+    def test_error_on_invalid_dimensionality(self):
+        # Dimensionality not matching expected (1, 3, 2, 2) or a valid pytree structure
+        time_series = np.random.rand(3, 2, 2).astype(np.float32)  # Missing n_trials dimension
+        with pytest.raises(ValueError):
+            utils.shift_time_series(time_series)
