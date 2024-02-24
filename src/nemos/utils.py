@@ -468,7 +468,7 @@ def create_convolutional_predictor(
     basis_matrix: ArrayLike,
     time_series: Any,
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
-    shift: bool = True,
+    shift: Optional[bool] = None,
 ):
     """Create predictor by convolving basis_matrix with time_series.
 
@@ -500,7 +500,8 @@ def create_convolutional_predictor(
         added and how the predictor is shifted.
     shift :
         Whether to shift predictor based on causality (only valid if
-        `predictor_causality != 'acausal'`)
+        `predictor_causality != 'acausal'`). Default is True for causa and
+        anti-causal, False for `acausal`.
 
     Returns
     -------
@@ -508,11 +509,16 @@ def create_convolutional_predictor(
         Predictor of with same shape and structure as `time_series`
 
     """
+
+    # assign defaults
+    if shift is None:
+        if predictor_causality == "acausal":
+            shift = False
+        else:
+            shift = True
+
     if shift and predictor_causality == "acausal":
-        shift = False
-        warnings.warn("Cannot shift `predictor` when `predictor_causality` is `acausal`. "
-                      "Setting `shift` to False instead!",
-                      UserWarning)
+        raise ValueError("Cannot shift `predictor` when `predictor_causality` is `acausal`!")
 
     predictor = convolve_1d_trials(basis_matrix, time_series)
     with warnings.catch_warnings(record=True) as warns:
@@ -521,7 +527,7 @@ def create_convolutional_predictor(
 
     for w in warns:
         if re.match("^With acausal filter", str(w.message)):
-            warnings.warn(message="With acausal filter, `basis_matrix.shape[0] "
+            warnings.warn(message="With `acausal` filter, `basis_matrix.shape[0] "
                           "should probably be odd, so that we can place an equal number of NaNs on "
                           "either side of input.", category=UserWarning)
         else:
