@@ -4,7 +4,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from .utils import pytree_map_and_reduce, get_valid_multitree
+from .utils import get_valid_multitree, pytree_map_and_reduce
 
 
 def warn_invalid_entry(*pytree: Any):

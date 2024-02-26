@@ -442,7 +442,7 @@ class TestCreateConvolutionalPredictor:
             (2, False, "acausal", [29]),
         ]
     )
-    def test_expected_nan_causal(self, feature, window_size, shift, predictor_causality, nan_idx):
+    def test_expected_nan(self, feature, window_size, shift, predictor_causality, nan_idx):
         basis = np.zeros((window_size, 1))
         res = utils.create_convolutional_predictor(
             basis,
@@ -454,14 +454,11 @@ class TestCreateConvolutionalPredictor:
         assert np.all(np.isnan(res[:, nan_idx]))
         assert not np.any(np.isnan(res[:, other_idx]))
 
-    def test_expected_nan_acausal(self):
-        pass
-
-    def test_expected_nan_antiacausal(self):
-        pass
-
     def test_acausal_shift_error(self):
-        pass
+        basis = np.zeros((3, 1))
+        feature = np.zeros((1, 30, 1))
+        with pytest.raises(ValueError, match="Cannot shift `predictor` when `predictor_causality` is `acausal`"):
+            utils.create_convolutional_predictor(basis, feature, predictor_causality="acausal", shift=True)
 
 
 class TestShiftTimeSeries:

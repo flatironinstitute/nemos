@@ -472,7 +472,7 @@ def create_convolutional_predictor(
 ):
     """Create predictor by convolving basis_matrix with time_series.
 
-    To create the convolutional predictor, three steps are taken, each of 
+    To create the convolutional predictor, three steps are taken, each of
     calls a single function. See their docstrings for more details about
     each step.
 
@@ -518,7 +518,9 @@ def create_convolutional_predictor(
             shift = True
 
     if shift and predictor_causality == "acausal":
-        raise ValueError("Cannot shift `predictor` when `predictor_causality` is `acausal`!")
+        raise ValueError(
+            "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
+        )
 
     predictor = convolve_1d_trials(basis_matrix, time_series)
     with warnings.catch_warnings(record=True) as warns:
@@ -527,9 +529,12 @@ def create_convolutional_predictor(
 
     for w in warns:
         if re.match("^With acausal filter", str(w.message)):
-            warnings.warn(message="With `acausal` filter, `basis_matrix.shape[0] "
-                          "should probably be odd, so that we can place an equal number of NaNs on "
-                          "either side of input.", category=UserWarning)
+            warnings.warn(
+                message="With `acausal` filter, `basis_matrix.shape[0] "
+                "should probably be odd, so that we can place an equal number of NaNs on "
+                "either side of input.",
+                category=UserWarning,
+            )
         else:
             warnings.warn(w.message, w.category)
 
