@@ -508,7 +508,18 @@ def create_convolutional_predictor(
     predictor :
         Predictor of with same shape and structure as `time_series`
 
+    Raises
+    ------
+    ValueError:
+        - If `basis_matrix.shape[0] <= 0`
+        - If shift == True` and `predictor_causality == "causal"`
+
     """
+    # convert to jnp.ndarray
+    basis_matrix = jnp.asarray(basis_matrix)
+
+    if basis_matrix.shape[0] == 1:
+        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
 
     # assign defaults
     if shift is None:
