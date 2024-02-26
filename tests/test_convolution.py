@@ -460,6 +460,57 @@ class TestCreateConvolutionalPredictor:
         with pytest.raises(ValueError, match="Cannot shift `predictor` when `predictor_causality` is `acausal`"):
             utils.create_convolutional_predictor(basis, feature, predictor_causality="acausal", shift=True)
 
+    def test_basis_len_one_error(self):
+        basis = np.zeros((1, 1))
+        feature = np.zeros((1, 30, 1))
+        with pytest.raises(ValueError, match=r"`basis_matrix.shape\[0\]` should be at least 2"):
+            utils.create_convolutional_predictor(basis, feature, predictor_causality="acausal")
+
+    @pytest.mark.parametrize(
+        "feature",
+        [
+            {
+                "1": [[np.ones((30, 1))]],
+                "2": np.ones((20, 1))
+            }
+        ]
+    )
+    @pytest.mark.parametrize("predictor_causality", ["causal", "acausal", "anti-causal"])
+    @pytest.mark.parametrize("shift", [True, False, None])
+    def test_conv_tree(self, feature, predictor_causality, shift):
+        if shift and predictor_causality == "acausal":
+            return
+        basis = np.zeros((2, 1))
+        with does_not_raise():
+            utils.create_convolutional_predictor(basis, feature,
+                                                 predictor_causality=predictor_causality,
+                                                 shift=shift)
+
+    @pytest.mark.parametrize(
+        "feature",
+        [
+            {
+                "1": [[np.ones((30, 1))]],
+                "2": np.ones((20, 1))
+            }
+        ]
+    )
+    @pytest.mark.parametrize("predictor_causality", ["causal", "acausal", "anti-causal"])
+    @pytest.mark.parametrize("shift", [True, False, None])
+    def test_conv_tree_shape(self, feature, predictor_causality, shift):
+        if shift and predictor_causality == "acausal":
+            return
+        basis = np.zeros((2, 1))
+        res = utils.create_convolutional_predictor(
+            basis,
+            feature,
+            predictor_causality=predictor_causality,
+            shift=shift
+        )
+        arr1, arr2 = jax.tree_util.tree_flatten(res)[0]
+        assert arr1.shape[0] == 30
+        assert arr2.shape[0] == 20
+
 
 class TestShiftTimeSeries:
     def test_causal_shift(self):
