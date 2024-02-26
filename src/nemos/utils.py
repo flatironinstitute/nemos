@@ -475,7 +475,7 @@ def create_convolutional_predictor(
     To create the convolutional predictor, three steps are taken, each of
     calls a single function. See their docstrings for more details about
     each step. This function **preserves** the number of samples by
-    NaN-padding at the border appropriately.
+    NaN-padding appropriately.
 
     - Convolve `basis_matrix` with `time_series` (function: `convolve_1d_trials`)
     - Pad output with `basis_matrix.shape[0]-1` NaNs, with location based on
