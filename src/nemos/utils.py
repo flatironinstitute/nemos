@@ -695,7 +695,7 @@ def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
 
 def _get_not_nan(array: jnp.ndarray) -> jnp.ndarray:
     """
-    Identifies non-NaN (Not a Number) entries within an array.
+    Identify non-NaN (Not a Number) entries within an array.
 
     Similar to the _get_not_inf function, this function checks each element in the input array for being non-NaN across
     all axes except the first one. It aggregates these checks using a logical 'AND' operation. An element along the
