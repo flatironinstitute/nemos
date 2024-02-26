@@ -18,8 +18,6 @@ import numpy as np
 
 import nemos as nmo
 
-# enable float64 precision (optional)
-jax.config.update("jax_enable_x64", True)
 np.random.seed(111)
 
 # %%

@@ -1,4 +1,4 @@
-from typing import Literal, Union
+from typing import Union
 
 import jax
 import jax.numpy as jnp
@@ -6,7 +6,7 @@ import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base, BaseRegressor
-from nemos.utils import check_invalid_entry
+from nemos.utils import pytree_map_and_reduce
 
 
 @pytest.fixture
@@ -117,18 +117,6 @@ def test_get_param_names():
     assert "std_param" in param_names
 
 
-def test_check_invalid_entry():
-    """Test validation of data arrays."""
-    valid_data = jnp.array([1, 2, 3])
-    invalid_data_nan = jnp.array([1, 2, jnp.nan])
-    invalid_data_inf = jnp.array([1, jnp.inf, 2])
-    check_invalid_entry(valid_data, "valid_data")
-    with pytest.raises(ValueError, match="Input 'invalid_data_nan' contains NaN"):
-        check_invalid_entry(invalid_data_nan, "invalid_data_nan")
-    with pytest.raises(ValueError, match="Input 'invalid_data_inf' contains Inf"):
-        check_invalid_entry(invalid_data_inf, "invalid_data_inf")
-
-
 # To ensure abstract methods aren't callable
 def test_abstract_class():
     """Ensure that abstract methods aren't callable."""
@@ -176,33 +164,33 @@ def test_preprocess_fit_invalid_datatypes(mock_regressor):
 
 def test_preprocess_fit_with_nan_in_X(mock_regressor):
     """Test behavior with NaN values in data."""
-    X = jnp.array([[[1, 2], [jnp.nan, 4]]])
-    y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [jnp.nan, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, 2], [3, 4]])
+    with pytest.warns(UserWarning, match="The provided trees contain Na"):
         mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_inf_in_X(mock_regressor):
     """Test behavior with inf values in data."""
-    X = jnp.array([[[1, 2], [jnp.inf, 4]]])
-    y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [jnp.inf, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, 2], [3, 4]])
+    with pytest.warns(UserWarning, match="The provided trees contain Inf"):
         mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_nan_in_y(mock_regressor):
     """Test behavior with NaN values in data."""
-    X = jnp.array([[[1, 2], [2, 4]]])
-    y = jnp.array([[1, jnp.nan]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [0, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, jnp.nan], [3, 4]])
+    with pytest.warns(UserWarning, match="The provided trees contain Na"):
         mock_regressor._preprocess_fit(X, y)
 
 
 def test_preprocess_fit_with_inf_in_y(mock_regressor):
     """Test behavior with inf values in data."""
-    X = jnp.array([[[1, 2], [2, 4]]])
-    y = jnp.array([[1, jnp.inf]])
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    X = jnp.array([[[1, 2], [0, 4]], [[1, 2], [0, 4]]])
+    y = jnp.array([[1, 0], [3, jnp.inf]])
+    with pytest.warns(UserWarning, match="The provided trees contain In"):
         mock_regressor._preprocess_fit(X, y)
 
 
@@ -262,7 +250,7 @@ def test_preprocess_simulate_with_nan(mock_regressor):
     """Test behavior with NaN values in feedforward_input."""
     feedforward_input = jnp.array([[[jnp.nan]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    with pytest.raises(ValueError, match="The provided trees contain Nan"):
         mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
@@ -270,7 +258,7 @@ def test_preprocess_simulate_with_inf(mock_regressor):
     """Test behavior with infinite values in feedforward_input."""
     feedforward_input = jnp.array([[[jnp.inf]]])
     params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="Input .+ contains"):
+    with pytest.raises(ValueError, match="The provided trees contain Inf"):
         mock_regressor._preprocess_simulate(feedforward_input, params_f)
 
 
