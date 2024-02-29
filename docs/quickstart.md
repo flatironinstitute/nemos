@@ -50,7 +50,7 @@ print(f"Model intercept: {model.intercept_}")
 
 ### Model Arguments
 
-The `model` object has the following arguments, stored as attributes,
+During initialization, the `GLM` class accepts the following optional input arguments,
 
 1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Ridge`, for $L_2$ regularization.
