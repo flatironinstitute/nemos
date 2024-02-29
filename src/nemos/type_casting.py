@@ -20,6 +20,8 @@ from numpy.typing import NDArray
 
 from . import utils
 
+_NAP_TIME_PRECISION = 10 ** (-nap.config.nap_config.time_index_precision)
+
 
 def is_numpy_array_like(obj) -> bool:
     """
@@ -118,9 +120,9 @@ def _has_same_time_axis(*args, **kwargs) -> bool:
     is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
     first_nap = is_nap.index(True)
 
-    # check time samples are close (10**-9 is hard-coded in pynapple)
+    # check time samples are close (using pynapple precision)
     return all(
-        jnp.allclose(flat_tree[first_nap].t, x.t, rtol=0, atol=10**-9)
+        jnp.allclose(flat_tree[first_nap].t, x.t, rtol=0, atol=_NAP_TIME_PRECISION)
         for i, x in enumerate(flat_tree)
         if is_nap[i] and i != first_nap
     )
@@ -154,13 +156,13 @@ def _has_same_support(*args, **kwargs):
     is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
     first_nap = is_nap.index(True)
 
-    # check starts and ends are close (10**-9 is hard-coded in pynapple)
+    # check starts and ends are close (using pynapple precision)
     bool_support = all(
         jnp.allclose(
             flat_tree[first_nap].time_support.values,
             x.time_support.values,
             rtol=0,
-            atol=10**-9,
+            atol=_NAP_TIME_PRECISION,
         )
         for i, x in enumerate(flat_tree)
         if is_nap[i] and i != first_nap
