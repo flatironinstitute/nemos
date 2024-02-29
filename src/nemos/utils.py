@@ -6,17 +6,13 @@ from __future__ import annotations
 import re
 import warnings
 from functools import partial, reduce
-from typing import TYPE_CHECKING, Any, Callable, List, Literal, Optional, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike
-
-# to avoid circular imports
-if TYPE_CHECKING:
-    from .pytrees import FeaturePytree
 
 # Same trial duration
 # [[r , t , n], [w]] -> [r , (t - w + 1) , n]
