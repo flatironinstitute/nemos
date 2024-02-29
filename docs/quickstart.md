@@ -236,7 +236,7 @@ nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).r
 ### Interactions with `scikit-learn`
 
 As previously mentioned, `nemos` GLM conforms to the `scikit-learn` API for estimators. As a consequence, 
-you can retrieve the all the parameters and set any of them using the `get_param` and `set_param` methods.
+you can retrieve all the parameters and set any of them using the `get_param` and `set_param` methods.
 
 ```python
 import nemos as nmo
