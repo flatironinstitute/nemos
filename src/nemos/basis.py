@@ -12,6 +12,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
 from .utils import row_wise_kron
+from .type_casting import cast_jax
 
 __all__ = [
     "MSplineBasis",
@@ -115,6 +116,7 @@ class Basis(abc.ABC):
         self._check_input_dimensionality(xi)
         return xi
 
+    @cast_jax
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
@@ -327,6 +329,7 @@ class AdditiveBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
+    @cast_jax
     def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
@@ -382,7 +385,7 @@ class MultiplicativeBasis(Basis):
 
     def _check_n_basis_min(self) -> None:
         pass
-
+    @cast_jax
     def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
@@ -526,6 +529,7 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
+    @cast_jax
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
@@ -554,6 +558,7 @@ class MSplineBasis(SplineBasis):
             axis=1,
         )
 
+    @cast_jax
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the M-spline basis set on a grid of equi-spaced sample points.
 
@@ -603,6 +608,7 @@ class BSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2):
         super().__init__(n_basis_funcs, order=order)
 
+    @cast_jax
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
@@ -638,6 +644,7 @@ class BSplineBasis(SplineBasis):
 
         return basis_eval
 
+    @cast_jax
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the B-spline basis set on a grid of equi-spaced sample points.
 
@@ -691,6 +698,7 @@ class CyclicBSplineBasis(SplineBasis):
                 f"order {self.order} specified instead!"
             )
 
+    @cast_jax
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
@@ -745,6 +753,7 @@ class CyclicBSplineBasis(SplineBasis):
 
         return basis_eval
 
+    @cast_jax
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the Cyclic B-spline basis set on a grid of equi-spaced sample points.
 
@@ -824,6 +833,7 @@ class RaisedCosineBasisLinear(Basis):
                 f"2*width must be a positive integer, 2*width = {2 * width} instead!"
             )
 
+    @cast_jax
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given samples.
 
@@ -875,6 +885,7 @@ class RaisedCosineBasisLinear(Basis):
         """
         return np.linspace(0, 1, self.n_basis_funcs)
 
+    @cast_jax
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
@@ -1008,6 +1019,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             last_peak = 1
         return np.linspace(0, last_peak, self.n_basis_funcs)
 
+    @cast_jax
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
@@ -1130,6 +1142,7 @@ class OrthExponentialBasis(Basis):
                 f"but only {sample_pts[0].size} samples provided!"
             )
 
+    @cast_jax
     def evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
@@ -1157,6 +1170,7 @@ class OrthExponentialBasis(Basis):
             np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
         )
 
+    @cast_jax
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
