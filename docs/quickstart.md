@@ -48,7 +48,7 @@ print(f"Model intercept: {model.intercept_.shape}")
 ```
 
 !!! note
-    This works the same as in scikit-learn, see for example their [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
+    This API is the same as scikit-learn's, see for example their [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 
 ### Model Arguments
 
