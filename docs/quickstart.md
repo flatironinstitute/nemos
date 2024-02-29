@@ -11,7 +11,7 @@ In the following sessions, you will learn:
 3. How `nemos` interacts with `pynapple` for pre-processing
 4. How `nemos` interacts with `scikit-learn` for pipelines and cross-validation. 
 
-Each of this section will be an independent example.
+Each of these sections can be run independently of the others.
 
 ### Basic Model Fit
 
