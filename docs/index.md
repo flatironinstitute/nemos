@@ -27,7 +27,7 @@ Run the following `pip` command in your virtual environment.
 
 **For macOS/Linux users:**
  ```bash
- pip install git@github.com:flatironinstitute/nemos.git
+ pip install git+https://github.com/flatironinstitute/nemos.git
  ```
 
 **For Windows users:**

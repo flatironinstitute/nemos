@@ -45,7 +45,7 @@ To install `nemos` on a system without a GPU, run this command from within your 
 
 **For macOS/Linux users:**
  ```bash
- pip install git@github.com:flatironinstitute/nemos.git
+  pip install git+https://github.com/flatironinstitute/nemos.git
  ```
 
 **For Windows users:**
