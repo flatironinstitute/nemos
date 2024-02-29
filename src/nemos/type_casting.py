@@ -25,7 +25,7 @@ _NAP_TIME_PRECISION = 10 ** (-nap.config.nap_config.time_index_precision)
 
 def is_numpy_array_like(obj) -> bool:
     """
-    Check if an object is array-like.
+    Check if an object is array-like of at least 1-dimension.
 
     This function determines if an object has array-like properties but isn't an _AstractTsd.
     An object is considered array-like if it has attributes typically associated with arrays
@@ -280,7 +280,7 @@ def jnp_asarray_if(
     return x
 
 
-def cast_jax(func: Callable) -> Callable:
+def support_pynapple(func: Callable) -> Callable:
     """
     Decorate a function to cast inputs between JAX arrays and pynapple objects.
 

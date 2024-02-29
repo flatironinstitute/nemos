@@ -85,7 +85,7 @@ import nemos as nmo
 )
 def test_decorator_output_type(inp, jax_func, expected_type):
     """Validate that the `cast_jax` decorator correctly casts output types based on input types."""
-    @nmo.type_casting.cast_jax
+    @nmo.type_casting.support_pynapple
     def func(*x):
         return jax_func(*x)
 
