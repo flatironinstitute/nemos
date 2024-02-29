@@ -11,8 +11,8 @@ import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
-from .utils import row_wise_kron
 from .type_casting import support_pynapple
+from .utils import row_wise_kron
 
 __all__ = [
     "MSplineBasis",
@@ -116,7 +116,6 @@ class Basis(abc.ABC):
         self._check_input_dimensionality(xi)
         return xi
 
-    @support_pynapple
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
@@ -385,6 +384,7 @@ class MultiplicativeBasis(Basis):
 
     def _check_n_basis_min(self) -> None:
         pass
+
     @support_pynapple
     def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
@@ -558,7 +558,6 @@ class MSplineBasis(SplineBasis):
             axis=1,
         )
 
-    @support_pynapple
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the M-spline basis set on a grid of equi-spaced sample points.
 
@@ -644,7 +643,6 @@ class BSplineBasis(SplineBasis):
 
         return basis_eval
 
-    @support_pynapple
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the B-spline basis set on a grid of equi-spaced sample points.
 
@@ -753,7 +751,6 @@ class CyclicBSplineBasis(SplineBasis):
 
         return basis_eval
 
-    @support_pynapple
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the Cyclic B-spline basis set on a grid of equi-spaced sample points.
 
@@ -885,7 +882,6 @@ class RaisedCosineBasisLinear(Basis):
         """
         return np.linspace(0, 1, self.n_basis_funcs)
 
-    @support_pynapple
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
@@ -1170,7 +1166,6 @@ class OrthExponentialBasis(Basis):
             np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
         )
 
-    @support_pynapple
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 

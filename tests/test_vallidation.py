@@ -5,6 +5,7 @@ import pytest
 
 from nemos import validation
 
+
 @pytest.mark.parametrize(
     "tree, expectation",
     [

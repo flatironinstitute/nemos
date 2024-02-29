@@ -1,9 +1,10 @@
-import pytest
 import jax
 import jax.numpy as jnp
 import numpy as np
-from nemos.pytrees import FeaturePytree
+import pytest
+
 import nemos as nmo
+from nemos.pytrees import FeaturePytree
 
 
 class TestFeaturePytree:

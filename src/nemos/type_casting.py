@@ -315,7 +315,9 @@ def support_pynapple(func: Callable) -> Callable:
 
             def cast_out(tree):
                 # cast back to pynapple
-                return jax.tree_map(lambda x: cast_to_pynapple(x, time, time_support), tree)
+                return jax.tree_map(
+                    lambda x: cast_to_pynapple(x, time, time_support), tree
+                )
 
         else:
 

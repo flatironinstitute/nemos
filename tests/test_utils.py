@@ -1,6 +1,7 @@
-from nemos import utils
 import jax.numpy as jnp
 import pytest
+
+from nemos import utils
 
 
 @pytest.mark.parametrize(

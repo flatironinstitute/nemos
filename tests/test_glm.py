@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
-from nemos.pytrees import FeaturePytree
 
 import nemos as nmo
+from nemos.pytrees import FeaturePytree
 
 
 class TestGLM:
