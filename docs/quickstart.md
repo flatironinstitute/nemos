@@ -39,12 +39,10 @@ Once fit, you can retrieve model parameters as follows,
 
 ```python
 # model coefficients, shape (n_neurons, n_features)
-print(f"Model coefficients: {model.coef_.shape}")
-# out: Model coefficients: (1, 1)
+print(f"Model coefficients: {model.coef_}")
 
 # model coefficients, shape (n_neurons, )
-print(f"Model intercept: {model.intercept_.shape}")
-# out: Model intercept: (1,)
+print(f"Model intercept: {model.intercept_}")
 ```
 
 !!! note
