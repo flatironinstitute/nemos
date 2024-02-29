@@ -10,7 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
-from typing import Any, Callable, Union
+from typing import Any, Callable, List, Union
 
 import jax
 import jax.numpy as jnp
@@ -113,19 +113,16 @@ def _has_same_time_axis(*args, **kwargs) -> bool:
     Indicates whether all time axes match.
     """
     flat_tree, _ = jax.tree_util.tree_flatten((args, kwargs))
+
     if len(flat_tree) == 1:
         return True
 
     # get first pynapple
     is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
-    first_nap = is_nap.index(True)
+    time = [x.t for i, x in enumerate(flat_tree) if is_nap[i]]
 
     # check time samples are close (using pynapple precision)
-    return all(
-        jnp.allclose(flat_tree[first_nap].t, x.t, rtol=0, atol=_NAP_TIME_PRECISION)
-        for i, x in enumerate(flat_tree)
-        if is_nap[i] and i != first_nap
-    )
+    return _check_all_close(time)
 
 
 def _has_same_support(*args, **kwargs):
@@ -154,20 +151,26 @@ def _has_same_support(*args, **kwargs):
 
     # get first pynapple
     is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
-    first_nap = is_nap.index(True)
+    time_support = [x.time_support.values for i, x in enumerate(flat_tree) if is_nap[i]]
 
     # check starts and ends are close (using pynapple precision)
-    bool_support = all(
-        jnp.allclose(
-            flat_tree[first_nap].time_support.values,
-            x.time_support.values,
-            rtol=0,
-            atol=_NAP_TIME_PRECISION,
+    return _check_all_close(time_support)
+
+
+def _check_all_close(arrays: List[NDArray]) -> bool:
+    try:
+        return all(
+            jnp.allclose(
+                arrays[0],
+                x,
+                rtol=0,
+                atol=_NAP_TIME_PRECISION,
+            )
+            for x in arrays[1:]
         )
-        for i, x in enumerate(flat_tree)
-        if is_nap[i] and i != first_nap
-    )
-    return bool_support
+    # hit this for arrays of different size
+    except TypeError:
+        return False
 
 
 def all_same_time_info(*args, **kwargs) -> bool:

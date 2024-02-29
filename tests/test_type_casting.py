@@ -4,7 +4,7 @@ import pynapple as nap
 import pytest
 
 import nemos as nmo
-
+from contextlib import nullcontext as does_not_raise
 
 @pytest.mark.parametrize(
     "inp, jax_func, expected_type",
@@ -192,3 +192,23 @@ def test_jnp_asarray_if(inp, expected):
     """Evaluate conditional conversion to JAX array based on input characteristics."""
     result = nmo.type_casting.jnp_asarray_if(inp)
     assert isinstance(result, expected)
+
+
+@pytest.mark.parametrize(
+    "inp, expected",
+    [
+        ([], True),
+        ([jnp.array([0,1]), jnp.array([0,1])], True),
+        ([jnp.array([0,1]), jnp.array([0,1]), jnp.array([0,1])], True),
+        ([jnp.array([0,1]), jnp.array([0,2]), jnp.array([0,1])], False),
+        ([np.array([0,1]), jnp.array([0,1]), jnp.array([0,1])], True),
+        ([jnp.array([0, 1]), jnp.array([0, 1, 2])], False),
+
+    ],
+)
+def test_check_all_close(inp, expected):
+    """Evaluate conditional conversion to JAX array based on input characteristics."""
+    assert nmo.type_casting._check_all_close(inp) == expected
+
+
+
