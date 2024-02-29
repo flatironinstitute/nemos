@@ -85,11 +85,11 @@ class TestGLM:
         "add_entry, add_to, expectation",
         [
             (0, "X", does_not_raise()),
-            (np.nan, "X", pytest.raises(ValueError, match="Input .+ contains")),
-            (np.inf, "X", pytest.raises(ValueError, match="Input .+ contains")),
+            (np.nan, "X", pytest.warns(UserWarning, match="The provided trees contain")),
+            (np.inf, "X", pytest.warns(UserWarning, match="The provided trees contain")),
             (0, "y", does_not_raise()),
-            (np.nan, "y", pytest.raises(ValueError, match="Input .+ contains")),
-            (np.inf, "y", pytest.raises(ValueError, match="Input .+ contains")),
+            (np.nan, "y", pytest.warns(UserWarning, match="The provided trees contain")),
+            (np.inf, "y", pytest.warns(UserWarning, match="The provided trees contain")),
         ],
     )
     def test_fit_param_values(
@@ -399,6 +399,20 @@ class TestGLM:
         # assert equivalence of solutions
         assert np.allclose(model.coef_, flat_coef)
         assert np.allclose(model.intercept_, model_tree.intercept_)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (jnp.inf, pytest.raises(ValueError, match="At least a NaN or an Inf at all sample points")),
+            (jnp.nan, pytest.raises(ValueError, match="At least a NaN or an Inf at all sample points")),
+        ]
+    )
+    def test_fit_all_invalid_X(self, fill_val, expectation, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        X.fill(fill_val)
+        with expectation:
+            model.fit(X, y)
 
     #######################
     # Test model.score
@@ -1056,6 +1070,21 @@ class TestGLM:
         assert ysim.shape[0] == X.shape[0]
         # check that the number if neurons is respected
         assert ysim.shape[1] == y.shape[1]
+
+    @pytest.mark.parametrize("insert, expectation",
+                             [
+                                 (0, does_not_raise()),
+                                 (np.nan, pytest.raises(ValueError, match=r"The provided trees contain")),
+                                 (np.inf, pytest.raises(ValueError, match=r"The provided trees contain"))
+                             ]
+                             )
+    def test_simulate_invalid_feedforward(self, insert, expectation, poissonGLM_model_instantiation):
+        X, y, model, params, rate = poissonGLM_model_instantiation
+        model.coef_ = params[0]
+        model.intercept_ = params[1]
+        X[0] = insert
+        with expectation:
+            model.simulate(jax.random.key(123), X)
 
     #######################################
     # Compare with standard implementation
