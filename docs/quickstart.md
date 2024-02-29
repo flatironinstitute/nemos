@@ -15,7 +15,7 @@ Each of these sections can be run independently of the others.
 
 ### Basic Model Fitting
 
-Defining and fitting a `nemos` GLM model is straightforward and can be done using the following syntax:
+Defining and fitting a `nemos` GLM model is straightforward:
 
 ```python
 import nemos as nmo
