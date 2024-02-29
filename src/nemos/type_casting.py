@@ -18,7 +18,7 @@ import numpy as np
 import pynapple as nap
 from numpy.typing import NDArray
 
-from . import utils
+from . import tree_utils
 
 _NAP_TIME_PRECISION = 10 ** (-nap.config.nap_config.time_index_precision)
 
@@ -321,7 +321,7 @@ def support_pynapple(func: Callable) -> Callable:
     @wraps(func)
     def wrapper(*args, **kwargs):
         # check for the presence of any pynapple tsd/tsdFrame/tsdTensor
-        any_nap = utils.pytree_map_and_reduce(is_pynapple_tsd, any, (args, kwargs))
+        any_nap = tree_utils.pytree_map_and_reduce(is_pynapple_tsd, any, (args, kwargs))
 
         # type casting pynapple
         if any_nap:

@@ -4,7 +4,7 @@ import jax
 import numpy as np
 import pytest
 
-import nemos.utils as utils
+from nemos import utils
 
 
 class Test1DConvolution:

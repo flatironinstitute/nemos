@@ -111,7 +111,7 @@ class TestFeaturePytree:
         X = FeaturePytree(
             test=np.random.rand(100, 1, 3), test2=np.random.rand(100, 1, 2)
         )
-        rate = nmo.utils.pytree_map_and_reduce(
+        rate = nmo.tree_utils.pytree_map_and_reduce(
             lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, w_true, X
         )
         spikes = np.random.poisson(rate)

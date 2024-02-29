@@ -1,7 +1,7 @@
 import jax.numpy as jnp
 import pytest
 
-from nemos import utils
+from nemos import tree_utils
 
 
 @pytest.mark.parametrize(
@@ -14,7 +14,7 @@ from nemos import utils
 )
 def test_get_not_inf(array, expected):
     """Test _get_not_inf function for correctly identifying non-infinite values."""
-    assert jnp.array_equal(utils._get_not_inf(array), expected)
+    assert jnp.array_equal(tree_utils._get_not_inf(array), expected)
 
 
 @pytest.mark.parametrize(
@@ -27,7 +27,7 @@ def test_get_not_inf(array, expected):
 )
 def test_get_not_nan(array, expected):
     """Test _get_not_nan function for correctly identifying non-NaN values."""
-    assert jnp.array_equal(utils._get_not_nan(array), expected)
+    assert jnp.array_equal(tree_utils._get_not_nan(array), expected)
 
 
 @pytest.mark.parametrize(
@@ -39,7 +39,7 @@ def test_get_not_nan(array, expected):
 )
 def test_check_valid_length(tree, expected_shape):
     """Test that validation of trees returns an array of the right first shape."""
-    valid = utils._get_valid_tree(tree)
+    valid = tree_utils._get_valid_tree(tree)
     assert valid.shape[0] == expected_shape
 
 
@@ -49,7 +49,7 @@ def test_check_valid_length(tree, expected_shape):
 )
 def test_check_flat_array(tree):
     """Test that validation of trees returns an array of the right dimensionality."""
-    valid = utils._get_valid_tree(tree)
+    valid = tree_utils._get_valid_tree(tree)
     assert valid.ndim == 1
 
 
@@ -75,7 +75,7 @@ def test_check_flat_array(tree):
 )
 def test_get_valid_tree(tree, expected):
     """Test _get_valid_tree function for filtering valid tree entries."""
-    assert jnp.array_equal(utils._get_valid_tree(tree), expected)
+    assert jnp.array_equal(tree_utils._get_valid_tree(tree), expected)
 
 
 @pytest.mark.parametrize(
@@ -103,4 +103,4 @@ def test_get_valid_tree(tree, expected):
 )
 def test_get_valid_multitree(trees, expected):
     """Test get_valid_multitree function for filtering valid entries across multiple trees."""
-    assert jnp.array_equal(utils.get_valid_multitree(*trees), expected)
+    assert jnp.array_equal(tree_utils.get_valid_multitree(*trees), expected)

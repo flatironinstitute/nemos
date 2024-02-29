@@ -94,7 +94,7 @@ def test_decorator_output_type(inp, jax_func, expected_type):
         return jax_func(*x)
 
     out = func(*inp)
-    assert nmo.utils.pytree_map_and_reduce(
+    assert nmo.tree_utils.pytree_map_and_reduce(
         lambda x, y: isinstance(x, y), all, out, expected_type
     )
 

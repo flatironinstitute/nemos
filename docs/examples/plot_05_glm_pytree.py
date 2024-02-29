@@ -316,9 +316,17 @@ plt.imshow(pos_tuning[0])
 #
 # We could do all this with matrices as well, but we have to pay attention to
 # indices in a way that is annoying:
+from nemos.type_casting import support_pynapple
 
-X_mat = jnp.concatenate([X['head_direction'], X['spatial_position']], -1)
+
+X_mat = concatenate([X['head_direction'], X['spatial_position']], -1)
 
 model = nmo.glm.GLM()
 model.fit(X_mat, spikes)
 model.coef_[..., :basis.n_basis_funcs]
+
+time = X['head_direction'].t.copy()
+time[10]=time[10]+0.0001
+Xtest = nap.TsdTensor(t=time, d=X["head_direction"].d, time_support=X["head_direction"].time_support)
+plt.close("all")
+X_mat = concatenate([X['head_direction'], Xtest], -1)
