@@ -1,7 +1,7 @@
 
 This tutorial will introduce the main `nemos` functionalities. This is intended for users that are 
 already familiar with the GLM framework but want to learn how to interact with the `nemos` API. 
-If you have used [scikit-learn](https://scikit-learn.org/stable/) before, we are compatible the [estimator API](https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html), so the quickstart should look 
+If you have used [scikit-learn](https://scikit-learn.org/stable/) before, we are compatible with the [estimator API](https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html), so the quickstart should look 
 familiar.
 
 In the following sessions, you will learn:
