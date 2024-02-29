@@ -261,8 +261,7 @@ This is used internally by `scikit-learn` to construct complex pipelines.
 
 #### Why should you care?
 
-Respecting the scikit-learn API will allow us to access their powerful pipeline and cross-validation machinery.
-All of this, while relying on JAX in the backend for code efficiency (GPU-acceleration).
+Respecting the scikit-learn API allows us to make use of their powerful pipeline and cross-validation machinery, while still gaining the benefit of jax's just-in-time compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
 could easily run a `K-Fold` cross-validation using `scikit-learn`.
