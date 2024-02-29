@@ -51,4 +51,3 @@ def test_vmap_norm2_masked_2_non_negative(example_data_prox_operator):
     params, _, mask, _ = example_data_prox_operator
     l2_norm = _vmap_norm2_masked_2(params[0], mask)
     assert jnp.all(l2_norm >= 0)
-

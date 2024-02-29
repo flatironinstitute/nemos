@@ -256,8 +256,18 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "time_scaling ,expectation",
         [
-            (-1, pytest.raises(ValueError, match="Only strictly positive time_scaling are allowed")),
-            (0, pytest.raises(ValueError, match="Only strictly positive time_scaling are allowed")),
+            (
+                -1,
+                pytest.raises(
+                    ValueError, match="Only strictly positive time_scaling are allowed"
+                ),
+            ),
+            (
+                0,
+                pytest.raises(
+                    ValueError, match="Only strictly positive time_scaling are allowed"
+                ),
+            ),
             (0.1, does_not_raise()),
             (10, does_not_raise()),
         ],
@@ -286,13 +296,19 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
                 np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
         # check that the correlation decreases as time_scale increases
-        assert np.all(np.diff(corr) < 0), "As time scales increases, deviation from linearity should increase!"
+        assert np.all(
+            np.diff(corr) < 0
+        ), "As time scales increases, deviation from linearity should increase!"
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_evaluate(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
         out = self.cls(n_basis).evaluate(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -485,7 +501,11 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_evaluate(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
         out = self.cls(n_basis).evaluate(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -659,7 +679,11 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_evaluate(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
         out = self.cls(n_basis).evaluate(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -877,8 +901,12 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_evaluate(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
-        out = self.cls(n_basis, np.arange(1, n_basis+1)).evaluate(inp)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
+        out = self.cls(n_basis, np.arange(1, n_basis + 1)).evaluate(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1070,7 +1098,11 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_evaluate(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
         out = self.cls(n_basis).evaluate(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -1281,7 +1313,11 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_evaluate(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
         out = self.cls(n_basis).evaluate(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -1553,10 +1589,18 @@ class TestAdditiveBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_pynapple_support_evaluate(self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size):
+    def test_pynapple_support_evaluate(
+        self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
+    ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
-        basis_add = self.instantiate_basis(n_basis_a, basis_a) + self.instantiate_basis(n_basis_b, basis_b)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
+        basis_add = self.instantiate_basis(n_basis_a, basis_a) + self.instantiate_basis(
+            n_basis_b, basis_b
+        )
         out = basis_add.evaluate(*([inp] * basis_add._n_input_dimensionality))
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -1815,10 +1859,18 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_pynapple_support_evaluate(self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size):
+    def test_pynapple_support_evaluate(
+        self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
+    ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
-        inp = nap.Tsd(t=np.linspace(0, 1, sample_size), d=np.linspace(0, 1, sample_size), time_support=iset)
-        basis_prod = self.instantiate_basis(n_basis_a, basis_a) * self.instantiate_basis(n_basis_b, basis_b)
+        inp = nap.Tsd(
+            t=np.linspace(0, 1, sample_size),
+            d=np.linspace(0, 1, sample_size),
+            time_support=iset,
+        )
+        basis_prod = self.instantiate_basis(
+            n_basis_a, basis_a
+        ) * self.instantiate_basis(n_basis_b, basis_b)
         out = basis_prod.evaluate(*([inp] * basis_prod._n_input_dimensionality))
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
@@ -1863,4 +1915,3 @@ def test_power_of_basis(exponent, basis_class):
         assert np.allclose(
             eval_pow, basis_obj.evaluate(*[samples] * basis_obj._n_input_dimensionality)
         )
-
