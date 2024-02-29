@@ -264,7 +264,7 @@ This is used internally by `scikit-learn` to construct complex pipelines.
 Respecting the scikit-learn API will allow us to access their powerful pipeline and cross-validation machinery.
 All of this, while relying on JAX in the backend for code efficiency (GPU-acceleration).
 
-For example, if we would like to tune the critical hyper-parameter `regularization_strenght`, we
+For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
 could easily run a `K-Fold` cross-validation using `scikit-learn`.
 
 ```python
