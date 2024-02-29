@@ -158,19 +158,35 @@ def _has_same_support(*args, **kwargs):
 
 
 def _check_all_close(arrays: List[NDArray]) -> bool:
-    try:
-        return all(
-            jnp.allclose(
-                arrays[0],
-                x,
-                rtol=0,
-                atol=_NAP_TIME_PRECISION,
-            )
-            for x in arrays[1:]
-        )
-    # hit this for arrays of different size
-    except TypeError:
+    """
+    Check that equality of two arrays up to numerical precision.
+
+    Parameters
+    ----------
+    arrays:
+        List of arrays to compare
+
+    Returns
+    -------
+    :
+        True if the array are equal up to numerical precision, False otherwise.
+
+    """
+    if not all(arrays[0].ndim == arr.ndim for arr in arrays[1:]):
         return False
+
+    elif not all(arrays[0].shape == arr.shape for arr in arrays[1:]):
+        return False
+
+    return all(
+        jnp.allclose(
+            arrays[0],
+            x,
+            rtol=0,
+            atol=_NAP_TIME_PRECISION,
+        )
+        for x in arrays[1:]
+    )
 
 
 def all_same_time_info(*args, **kwargs) -> bool:

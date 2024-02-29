@@ -224,6 +224,7 @@ def test_jnp_asarray_if(inp, expected):
         ([jnp.array([0, 1]), jnp.array([0, 2]), jnp.array([0, 1])], False),
         ([np.array([0, 1]), jnp.array([0, 1]), jnp.array([0, 1])], True),
         ([jnp.array([0, 1]), jnp.array([0, 1, 2])], False),
+        ([jnp.array([[0, 1]]), jnp.array([0, 1])], False),
     ],
 )
 def test_check_all_close(inp, expected):
