@@ -13,7 +13,7 @@ In the following sessions, you will learn:
 
 Each of these sections can be run independently of the others.
 
-### Basic Model Fit
+### Basic Model Fitting
 
 Defining and fitting a `nemos` GLM model is straightforward and can be done using the following syntax:
 
