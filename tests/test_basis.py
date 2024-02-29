@@ -1601,8 +1601,11 @@ class TestAdditiveBasis(CombinedBasis):
         basis_add = self.instantiate_basis(n_basis_a, basis_a) + self.instantiate_basis(
             n_basis_b, basis_b
         )
+        # evaluate the basis over pynapple Tsd objects
         out = basis_add.evaluate(*([inp] * basis_add._n_input_dimensionality))
+        # check type
         assert isinstance(out, nap.TsdFrame)
+        # check value
         assert np.all(out.time_support.values == inp.time_support.values)
 
 
