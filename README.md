@@ -77,6 +77,9 @@ functions](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/) for
 estimating more complicated, non-linear relationships between experimental
 variables and neuronal spiking.
 
+See [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/) for a
+slightly longer overview of basic nemos functionality.
+
 ## Disclaimer
 
 Please note that this package is currently under development. While you can
