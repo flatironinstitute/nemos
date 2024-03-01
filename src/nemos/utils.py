@@ -5,16 +5,18 @@ from __future__ import annotations
 
 import re
 import warnings
-from functools import partial, reduce
-from typing import Any, Callable, List, Literal, Optional, Union
+from functools import partial
+from typing import Any, Callable, List, Literal, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from .tree_utils import pytree_map_and_reduce
+from .type_casting import support_pynapple
 
 # Same trial duration
 # [[r , t , n], [w]] -> [r , (t - w + 1) , n]
@@ -720,3 +722,32 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
             f"The `{func_name}` should return a scalar! "
             f"Array of shape {array_out.shape} returned instead!"
         )
+
+
+@support_pynapple
+def pynapple_concatenate(
+    arrays: Union[Tsd, TsdFrame, TsdTensor, jnp.ndarray, NDArray], axis: int = 1, dtype: type = None
+):
+    """Concatenation  for arrays and pynapple Tsd, TsdGroup, TsdFrame.
+
+    Pynapple doesn't allow concatenation. With this function,
+    we relax this, allowing concatenation when the time axis and support matches.
+
+    Parameters
+    ----------
+    arrays:
+        Sequence of ndarrays or pynapple time series with data.
+        The arrays must have the same shape along all but the second axis,
+        except 1-D arrays which can be any length.
+
+    axis:
+        Concatenation axis.
+
+    dtype:
+        The data type of the concatenated array.
+
+    Returns
+    -------
+        The array/pynapple time series with data, stacked horizontally.
+    """
+    return jnp.concatenate(arrays, axis=axis, dtype=dtype)

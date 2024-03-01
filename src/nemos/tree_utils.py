@@ -1,3 +1,5 @@
+"""Utilities for manipulating and checking PyTrees."""
+
 from functools import reduce
 from typing import Any, Callable
 
