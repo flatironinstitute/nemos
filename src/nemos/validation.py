@@ -1,3 +1,5 @@
+"""Collection of methods utilities."""
+
 import warnings
 from typing import Any
 
@@ -32,7 +34,7 @@ def warn_invalid_entry(*pytree: Any):
 
 def error_invalid_entry(*pytree: Any):
     """
-    Raises an error if any entry in the provided pytrees contains NaN or Infinite (Inf) values.
+    Raise an error if any entry in the provided pytrees contains NaN or Infinite (Inf) values.
 
     Parameters
     ----------
@@ -57,7 +59,7 @@ def error_invalid_entry(*pytree: Any):
 
 def error_all_invalid(*pytree: Any):
     """
-    Raises an error if all sample points across multiple pytrees are invalid.
+    Raise an error if all sample points across multiple pytrees are invalid.
 
     This function checks multiple pytrees with NDArrays as leaves to determine if all sample points are invalid.
     A sample point is considered invalid if it contains NaN or infinite values in at least one of the pytrees.
