@@ -67,7 +67,8 @@ print(model.regularizer)
 
 #### Regularizer Hyperparameters
 
-Object of type regularizer have different hyper-parameters, depending on the type, but they all share the following:
+We specify objective function regularization using regularizer objects. Each have different input arguments 
+(see [API documentation]][nemos.regularizer.Regularizer] for more details), but all share the following:
 
 1. `solver_name`: The name of the [`jaxopt`](https://jaxopt.github.io/stable/) solver used for learning the model parameters (for instance, 
     `GradientDescent`, `BFGS`, etc.)
@@ -83,10 +84,6 @@ import nemos as nmo
 regularizer = nmo.regularizer.Ridge()
 print(f"Allowed solver: {regularizer.allowed_solvers}")
 ```
-
-!!! note
-    The `allowed_solvers` shouldn't be changed, changing the default values of this attribute will 
-    result in an exception being raised.
 
 Except for `Unregularized`, all the other `Regularizer` objects will have the `regularizer_strength` hyper-parameter.
 This is particularly helpful for controlling over-fitting. In general, the larger the `regularizer_strength` 
@@ -122,15 +119,14 @@ set of model coefficients.
     it can accept either scalars or arrays as input, returning a scalar or array of the same shape, respectively.
     However, if you do so, note that we can no longer guarantee the convexity of the optimization procedure! 
 
-### Interactions with `pynapple`
+### `pynapple` compatibility
 
 !!! warning
     This section assumes some familiarity with the `pynapple` package for time-series manipulation and data 
     exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
 
 If you represent your task variables and/or spike counts as `pynapple` time-series, don't worry, `nemos` estimators are 
-fully compatible with it. You can pass your time series direclty to the `fit` and `score` methods, as well as to 
-`predict`.
+fully compatible with it. You can pass your time series directly to any of our functions.
 
 In `nemos`, when a transformation preserve the time-axis, if a `pynapple` time-series is provided as input, 
 the output will be a `pynapple` time-series too!
@@ -164,7 +160,7 @@ print(type(model.predict(X)))
 #### Why should you care?
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such 
-as restricting your time-series to specific epochs (sleep/wake, context A vs context B. etc.), as well as common 
+as restricting your time-series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common  
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy time-series manipulation.
 
@@ -221,7 +217,7 @@ nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).r
     be. In general, you should always avoid nesting many processing steps without each inspecting transformation first: 
     what if you unintentionally used the wrong bin-size? What if you selected the wrong feature? 
 
-### Interactions with `scikit-learn`
+### `scikit-learn` compatibility
 
 As previously mentioned, `nemos` GLM conforms to the `scikit-learn` API for estimators. As a consequence, 
 you can retrieve all the parameters and set any of them using the `get_param` and `set_param` methods.
@@ -267,7 +263,8 @@ y = np.random.poisson(np.exp(np.einsum("nf, tnf -> tn", coef, X)))
 # model definition
 model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge())
 
-# fit a 5-fold cross-validation scheme
+# fit a 5-fold cross-validation scheme for comparing two different
+# regularizer strengths
 param_grid = dict(regularizer__regularizer_strength=(0.01, 0.001))
 cls = GridSearchCV(model, param_grid=param_grid, cv=5)
 cls.fit(X, y)
