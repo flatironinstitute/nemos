@@ -185,9 +185,12 @@ import pynapple as nap
 # - task variable sampled at 10KHz
 # - spike times in seconds.
 
-# define time axis and a feature
+# define time axis and a feature 
+# (num_samples, num_neurons, num_features)
 time_sec = np.linspace(0, 300, 300 * 10000)
-X = nap.TsdTensor(t=time_sec, d=0.2 * np.random.normal(size=(time_sec.shape[0], 1, 1)))
+X = nap.TsdTensor(
+    t=time_sec, 
+    d= 0.2 * np.random.normal(size=(time_sec.shape[0], 1, 1)))
 
 # define epochs as pynapple IntervalSet
 recording_epoch = nap.IntervalSet(start=0, end=300)
@@ -253,7 +256,7 @@ could easily run a `K-Fold` cross-validation using `scikit-learn`.
 import nemos as nmo
 from sklearn.model_selection import GridSearchCV
 
-# ...Assume X and y are generated as previously shown
+# ...Assume X and y are available or generated as shown above
 
 # model definition
 model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge())
