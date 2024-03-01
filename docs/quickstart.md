@@ -68,7 +68,7 @@ print(model.regularizer)
 #### Regularizer Hyperparameters
 
 We specify objective function regularization using regularizer objects. Each have different input arguments 
-(see [API documentation]][nemos.regularizer.Regularizer] for more details), but all share the following:
+(see [API documentation](../reference/nemos/regularizer#Regularizer) for more details), but all share the following:
 
 1. `solver_name`: The name of the [`jaxopt`](https://jaxopt.github.io/stable/) solver used for learning the model parameters (for instance, 
     `GradientDescent`, `BFGS`, etc.)
@@ -153,14 +153,16 @@ model = nmo.glm.GLM()
 # the following works
 model.fit(X, y)
 
-# this will return a pynapple TsdFrame
-print(type(model.predict(X)))
+# predict the firing rate of the neuron
+firing_rate = model.predict(X)
+# this will still be a pynapple time-seris
+print(type(firing_rate))
 ```
 
 #### Why should you care?
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such 
-as restricting your time-series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common  
+as restricting your time-series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common 
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy time-series manipulation.
 
@@ -191,7 +193,8 @@ X = nap.TsdTensor(t=time_sec, d=0.2 * np.random.normal(size=(time_sec.shape[0], 
 recording_epoch = nap.IntervalSet(start=0, end=300)
 wake_epoch = nap.IntervalSet(start=0, end=150)           
 
-# deine spikes by generating random times, and adding the recording_epoch as the time_support for the spikes
+# deine spikes by generating random times, and 
+# adding the recording_epoch as the time_support
 spike_ts = nap.Ts(
     np.sort(np.random.uniform(0, 300, size=100)), 
     time_support=recording_epoch
@@ -205,10 +208,24 @@ Finally, let's process and fit our data.
 import nemos as nmo
 
 # Actual processing and fitting:
+
 # - Restrict to the wake epoch
+X_wake = X.restrict(wake_epoch)
+spikes_wake = spikes.restrict(wake_epoch)
+
 # - Down-sample to 10ms the features
+X_downsample = X_wake.bin_average(0.01)
+
 # - Bin the spike to the same resolution
+counts = spikes_wake.count(0.01)
+
 # - Fit a GLM.
+nmo.glm.GLM().fit(X_downsample, counts)
+```
+
+Or alternative, in a single command,
+
+```python
 nmo.glm.GLM().fit(
     X.bin_average(0.01).restrict(wake_epoch), 
     spikes.count(0.01).restrict(wake_epoch)
@@ -234,21 +251,23 @@ could easily run a `K-Fold` cross-validation using `scikit-learn`.
 
 ```python
 import nemos as nmo
-import numpy as np
 from sklearn.model_selection import GridSearchCV
 
-# predictors, true coefficients, and observed counts
-X = 0.2 * np.random.normal(size=(100, 1, 1))
-coef = np.random.normal(size=(1, 1))
-y = np.random.poisson(np.exp(np.einsum("nf, tnf -> tn", coef, X)))
+# ...Assume X and y are generated as previously shown
 
 # model definition
 model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge())
 
 # fit a 5-fold cross-validation scheme for comparing two different
-# regularizer strengths
+# regularizer strengths:
+
+# - define the parameter grid
 param_grid = dict(regularizer__regularizer_strength=(0.01, 0.001))
+
+# - define the 5-fold cross-validation grid search from sklearn
 cls = GridSearchCV(model, param_grid=param_grid, cv=5)
+
+# - run the 5-fold cross-validation grid search
 cls.fit(X, y)
 
 # print best regularizer strength
