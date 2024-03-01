@@ -49,7 +49,7 @@ plt.plot(w)
 # the function requires an iterable (one element per trial)
 # and returns a list of convolutions
 
-spk_conv = nmo.tree_utils.convolve_1d_trials(w, [spk, np.zeros((20, 1))])
+spk_conv = nmo.utils.convolve_1d_trials(w, [spk, np.zeros((20, 1))])
 print(f"Shape of spk: {spk.shape}\nShape of w: {w.shape}")
 
 # valid convolution should be of shape n_samples - ws + 1
