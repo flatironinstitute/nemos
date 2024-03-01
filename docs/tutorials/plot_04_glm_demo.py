@@ -34,9 +34,6 @@ from sklearn import model_selection
 import nemos as nmo
 from nemos import simulation
 
-# enable float64 precision (optional)
-jax.config.update("jax_enable_x64", True)
-
 np.random.seed(111)
 # random design tensor. Shape (n_time_points, n_neurons, n_features).
 X = 0.5*np.random.normal(size=(100, 1, 5))

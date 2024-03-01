@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
-from .utils import pytree_map_and_reduce
+from .tree_utils import pytree_map_and_reduce
 
 
 @register_pytree_node_class

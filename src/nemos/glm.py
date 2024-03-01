@@ -8,10 +8,11 @@ from numpy.typing import ArrayLike, NDArray
 
 from . import observation_models as obs
 from . import regularizer as reg
-from . import utils
+from . import tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
+from .type_casting import support_pynapple
 
 
 class GLM(BaseRegressor):
@@ -134,12 +135,13 @@ class GLM(BaseRegressor):
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
-            utils.pytree_map_and_reduce(
+            tree_utils.pytree_map_and_reduce(
                 lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, Ws, X
             )
             + bs[None, :]
         )
 
+    @support_pynapple
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters.
 
@@ -374,7 +376,7 @@ class GLM(BaseRegressor):
         self.observation_model.estimate_scale(self._predict(params, X))
 
         if (
-            utils.pytree_map_and_reduce(
+            tree_utils.pytree_map_and_reduce(
                 jnp.any, any, jax.tree_map(jnp.isnan, params[0])
             )
             or jnp.isnan(params[1]).any()
