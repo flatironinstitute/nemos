@@ -169,7 +169,7 @@ be, let's simulate a common scenario for many systems neuro-scientists: we recor
 feature with a temporal resolution, but we want to model spike counts at a different resolution. On top of that,
 let's assume that we want to restrict our fit to a specific time epoch.
 
-All of this could be done in a single line of code.
+All of this could be done with a single command.
 
 First, let's simulate our feature and the spike times of a neuron, and define the recording epoch and the 
 epoch that we want to use for fitting (let's assume it marks when the subject was awake).
@@ -209,7 +209,10 @@ import nemos as nmo
 # - Down-sample to 10ms the features
 # - Bin the spike to the same resolution
 # - Fit a GLM.
-nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).restrict(wake_epoch))
+nmo.glm.GLM().fit(
+    X.bin_average(0.01).restrict(wake_epoch), 
+    spikes.count(0.01).restrict(wake_epoch)
+)
 ```
 
 !!! note
@@ -219,33 +222,12 @@ nmo.glm.GLM().fit(X.bin_average(0.01).restrict(wake_epoch), spikes.count(0.01).r
 
 ### `scikit-learn` compatibility
 
-As previously mentioned, `nemos` GLM conforms to the `scikit-learn` API for estimators. As a consequence, 
-you can retrieve all the parameters and set any of them using the `get_param` and `set_param` methods.
-
-```python
-import nemos as nmo
-
-model = nmo.glm.GLM()
-
-# get a dictionary of attributes, including nested once.
-parameter_dict = model.get_params()
-print(parameter_dict)
-
-
-# set a model attribute
-model.set_params(regularizer=nmo.regularizer.Lasso())
-print(model.get_params()["regularizer"])
-
-# set a nested attribute
-model.set_params(regularizer__regularizer_strength=10)
-print(model.get_params())
-```
-
-This is used internally by `scikit-learn` to construct complex pipelines.
+As previously mentioned, `nemos` GLM conforms with `scikit-learn` API for estimators.
 
 #### Why should you care?
 
-Respecting the scikit-learn API allows us to make use of their powerful pipeline and cross-validation machinery, while still gaining the benefit of jax's just-in-time compilation and GPU-acceleration!
+Respecting the scikit-learn API allows us to make use of their powerful pipeline and cross-validation machinery, 
+while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
 could easily run a `K-Fold` cross-validation using `scikit-learn`.
