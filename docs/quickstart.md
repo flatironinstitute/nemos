@@ -55,7 +55,7 @@ During initialization, the `GLM` class accepts the following optional input argu
 1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Ridge`, for $L_2$ regularization.
 
-You can change the defaults when you instantiate the model or after.
+You can set the defaults when you instantiate a model.
 
 ```python
 import nemos as nmo
@@ -63,48 +63,7 @@ import nemos as nmo
 # set no regularization at initialization
 model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized())
 print(model.regularizer)
-
-
-# change to Lasso
-model.regularizer = nmo.regularizer.Lasso()
-print(model.regularizer)
 ```
-
-#### Observation Model Hyperparameters
-
-The observation model has a single hyper-parameter, the non-linearity which maps a linear combination of predictors 
-to the neural activity mean (the instantaneous firing rate). We call the non-linearity *inverse link-function*, 
-naming convention from the [statistical literature on  GLMs](https://en.wikipedia.org/wiki/Generalized_linear_model).
-The default for the `PoissonObservation` is the exponential $f(x) = e^x$, implemented in JAX as `jax.numpy.exp`. 
-Another common choice is the "soft-plus", in JAX this is implemented as `jax.nn.softplus`. 
-
-As with all `nemos` objects, one can set the parameters at initialization or after.
-
-```python
-import jax
-import nemos as nmo
-
-# change default 
-obs_model = nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
-model = nmo.glm.GLM(observation_model=obs_model)
-print(model.observation_model.inverse_link_function)
-
-# change back to the exponential
-model.observation_model.inverse_link_function = jax.numpy.exp
-print(model.observation_model.inverse_link_function)
-```
-
-These two options result in a convex optimization objective for all the provided regularizers 
-(un-regularized, Ridge, Lasso, group-Lasso). This is nice because we can guarantee that there exists a single optimal 
-set of model coefficients.
-
-The user can set any non-linearity, provided that:
-
-1. JAX can auto-differentiate it.
-2. It maps scalars into scalars, i.e. $f : \mathbb{R} \longrightarrow \mathbb{R}$.
-3. It is vectorized, i.e. if you pass a NumPy array or a JAX array, it returns an array of the same shape.
-
-However, in the general case, we cannot guarantee the convexity of the objective anymore.
 
 #### Regularizer Hyperparameters
 
@@ -133,6 +92,35 @@ Except for `Unregularized`, all the other `Regularizer` objects will have the `r
 This is particularly helpful for controlling over-fitting. In general, the larger the `regularizer_strength` 
 the smaller the coefficients. Usually, one should tune this hyper-parameter by means of cross-validation. Look at the
 [Integration  with `scikit-learn`](#interactions-with-scikit-learn) session for a concrete example.
+
+#### Observation Model Input Arguments
+
+The observation model has a single input argument, the non-linearity which maps a linear combination of predictors 
+to the neural activity mean (the instantaneous firing rate). We call the non-linearity *inverse link-function*, 
+naming convention from the [statistical literature on  GLMs](https://en.wikipedia.org/wiki/Generalized_linear_model).
+The default for the `PoissonObservation` is the exponential $f(x) = e^x$, implemented in JAX as `jax.numpy.exp`. 
+Another common choice is the "soft-plus", in JAX this is implemented as `jax.nn.softplus`. 
+
+As with all `nemos` objects, one can change the defaults at initialization.
+
+```python
+import jax
+import nemos as nmo
+
+# change default 
+obs_model = nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
+model = nmo.glm.GLM(observation_model=obs_model)
+print(model.observation_model.inverse_link_function)
+```
+
+These two options result in a convex optimization objective for all the provided regularizers 
+(un-regularized, Ridge, Lasso, group-Lasso). This is nice because we can guarantee that there exists a single optimal 
+set of model coefficients.
+
+!!! info "Can I set my own inverse link function?"
+    Yes! You can pass arbitrary python functions to our observation models, provided that jax can differentiate it and 
+    it can accept either scalars or arrays as input, returning a scalar or array of the same shape, respectively.
+    However, if you do so, note that we can no longer guarantee the convexity of the optimization procedure! 
 
 ### Interactions with `pynapple`
 
