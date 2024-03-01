@@ -1,75 +1,60 @@
-from nemos import utils
 import jax.numpy as jnp
+import numpy as np
+import pynapple as nap
 import pytest
 
-
-@pytest.mark.parametrize(
-    "array, expected",
-    [
-        (jnp.array([[1, 2], [3, 4]]), jnp.array([True, True])),
-        (jnp.array([[1, jnp.inf], [3, 4]]), jnp.array([False, True])),
-        (jnp.array([[1, 2], [jnp.inf, jnp.inf]]), jnp.array([True, False])),
-    ]
-)
-def test_get_not_inf(array, expected):
-    """Test _get_not_inf function for correctly identifying non-infinite values."""
-    assert jnp.array_equal(utils._get_not_inf(array), expected)
+from nemos import utils
 
 
 @pytest.mark.parametrize(
-    "array, expected",
+    "arrays, expected_out",
     [
-        (jnp.array([[1, 2], [3, 4]]), jnp.array([True, True])),
-        (jnp.array([[1, jnp.nan], [3, 4]]), jnp.array([False, True])),
-        (jnp.array([[1, 2], [jnp.nan, jnp.nan]]), jnp.array([True, False])),
+        ([jnp.zeros((10, 1)), np.zeros((10, 1))], jnp.zeros((10, 2))),
+        ([np.zeros((10, 1)), np.zeros((10, 1))], jnp.zeros((10, 2))),
+        ([np.zeros((10, 1)), nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1)))],
+         nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2)))),
+        ([nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1))), nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1)))],
+         nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2)))),
+        ([nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))), nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2)))],
+         nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 2, 2)))),
     ]
 )
-def test_get_not_nan(array, expected):
-    """Test _get_not_nan function for correctly identifying non-NaN values."""
-    assert jnp.array_equal(utils._get_not_nan(array), expected)
-
-
-@pytest.mark.parametrize("tree, expected_shape", [
-    (jnp.array([[1], [2], [3], [4]]), 4),
-    ({"x": {"y": jnp.array([1, 2, jnp.nan])}}, 3)
-])
-def test_check_valid_length(tree, expected_shape):
-    """Test that validation of trees returns an array of the right first shape."""
-    valid = utils._get_valid_tree(tree)
-    assert valid.shape[0] == expected_shape
-
-
-@pytest.mark.parametrize("tree", [
-    (jnp.array([[1], [2], [3], [4]])),
-    ({"x": {"y": jnp.array([1, 2, jnp.nan])}})
-])
-def test_check_flat_array(tree):
-    """Test that validation of trees returns an array of the right dimensionality."""
-    valid = utils._get_valid_tree(tree)
-    assert valid.ndim == 1
+def test_concatenate_eval(arrays, expected_out):
+    """Test various combination of arrays and pyapple time series."""
+    out = utils.pynapple_concatenate(arrays)
+    if hasattr(expected_out, "times"):
+        assert np.all(out.d == expected_out.d)
+        assert np.all(out.t == expected_out.t)
+        assert np.all(out.time_support.values == expected_out.time_support.values)
+    else:
+        assert np.all(out == expected_out)
 
 
 @pytest.mark.parametrize(
-    "tree, expected",
+    "axis, arrays, expected_shape",
     [
-        ({'a': jnp.array([[1, 2], [3, 4]]), 'b': jnp.array([[5, 6], [7, 8]])}, jnp.array([True, True])),
-        ({'a': jnp.array([[1, 2], [jnp.nan, 4]]), 'b': jnp.array([[5, 6], [7, 8]])}, jnp.array([True, False])),
-        ({'a': jnp.array([[1, jnp.nan], [3, 4]]), 'b': jnp.array([[5, 6], [jnp.inf, 8]])}, jnp.array([False, False])),
+        (0, [jnp.zeros((10, )), np.zeros((10, ))], 20),
+        (0, [jnp.zeros((10, 1)), np.zeros((10, 1))], 20),
+        (1, [jnp.zeros((10, 1)), np.zeros((10, 1))], 2),
+        (2, [nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+             nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2)))],4),
     ]
 )
-def test_get_valid_tree(tree, expected):
-    """Test _get_valid_tree function for filtering valid tree entries."""
-    assert jnp.array_equal(utils._get_valid_tree(tree), expected)
+def test_concatenate_axis(arrays, axis, expected_shape):
+    """Test various combination of arrays and pyapple time series."""
+    assert utils.pynapple_concatenate(arrays, axis).shape[axis] == expected_shape
 
 
 @pytest.mark.parametrize(
-    "trees, expected",
+    "dtype, arrays",
     [
-        (({'a': jnp.array([[1, 2], [3, 4]])}, {'b': jnp.array([[5, 6], [7, 8]])}), jnp.array([True, True])),
-        (({'a': jnp.array([[1, 2], [3, 4]])}, {'b': jnp.array([[5, 6], [jnp.nan, 8]])}), jnp.array([True, False])),
-        (({'a': jnp.array([[1, jnp.nan], [3, 4]])}, {'b': jnp.array([[4, 6], [7, jnp.inf]])}), jnp.array([False, False])),
+        (np.int32, [jnp.zeros((10, 1)), np.zeros((10, 1))]),
+        (np.float32, [jnp.zeros((10, 1)), np.zeros((10, 1))]),
+        (np.int32, [nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+                 nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2)))]),
     ]
 )
-def test_get_valid_multitree(trees, expected):
-    """Test get_valid_multitree function for filtering valid entries across multiple trees."""
-    assert jnp.array_equal(utils.get_valid_multitree(*trees), expected)
+def test_concatenate_type(arrays, dtype):
+    """Test various combination of arrays and pyapple time series."""
+    assert utils.pynapple_concatenate(arrays, dtype=dtype).dtype == dtype
+
