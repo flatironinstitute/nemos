@@ -1,8 +1,9 @@
-import pytest
 import jax.numpy as jnp
 import numpy as np
-from nemos import utils
 import pynapple as nap
+import pytest
+
+from nemos import utils
 
 
 @pytest.mark.parametrize(

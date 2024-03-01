@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 import warnings
 from functools import partial
-from typing import Any, Callable, List, Literal, Optional, Sequence, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -726,7 +726,9 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
 
 @support_pynapple
 def pynapple_concatenate(
-    arrays: Union[Tsd, TsdFrame, TsdTensor, jnp.ndarray, NDArray], axis: int = 1, dtype: type = None
+    arrays: Union[Tsd, TsdFrame, TsdTensor, jnp.ndarray, NDArray],
+    axis: int = 1,
+    dtype: type = None,
 ):
     """Concatenation  for arrays and pynapple Tsd, TsdGroup, TsdFrame.
 
