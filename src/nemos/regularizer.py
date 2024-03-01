@@ -14,7 +14,7 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
-from . import utils
+from . import tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
 from .pytrees import FeaturePytree
@@ -281,7 +281,7 @@ class Ridge(Regularizer):
             )
 
         # tree map the computation and sum over leaves
-        return utils.pytree_map_and_reduce(
+        return tree_utils.pytree_map_and_reduce(
             lambda x: l2_penalty(x, params[1]), sum, params[0]
         )
 

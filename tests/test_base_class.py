@@ -6,7 +6,7 @@ import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base, BaseRegressor
-from nemos.utils import pytree_map_and_reduce
+from nemos.tree_utils import pytree_map_and_reduce
 
 
 @pytest.fixture
