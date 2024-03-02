@@ -353,7 +353,7 @@ def nan_pad(
     conv_time_series = jax.tree_map(jnp.asarray, conv_time_series)
     try:
         if conv_time_series.ndim != 4:
-            raise ValueError(
+            raise AttributeError(
                 "conv_time_series must be a pytree of 3D arrays or a 4D array!"
             )
         if not np.issubdtype(conv_time_series.dtype, np.floating):

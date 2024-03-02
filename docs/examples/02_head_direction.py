@@ -255,8 +255,9 @@ plotting.run_animation(neuron_count, float(epoch_one_spk.start))
 window_size = int(window_size_sec * neuron_count.rate)
 
 # convolve the counts with the identity matrix.
-input_feature = nmo.utils.convolve_1d_trials(
-    np.eye(window_size), np.expand_dims(neuron_count.d, axis=(0,2))
+plt.close("all")
+input_feature = nmo.utils.create_convolutional_predictor(
+    np.eye(window_size), np.expand_dims(neuron_count, 1)
 )[0]
 
 # %%
