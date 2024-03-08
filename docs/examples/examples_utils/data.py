@@ -79,8 +79,8 @@ def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
         time_series.restrict(ep)
 
     data = data.restrict(ep)
-    starts = ep.start.values
-    ends = ep.end.values
+    starts = ep.start
+    ends = ep.end
 
     filled_d = np.full((time_series.t.shape[0], *data.shape[1:]), out_of_range, dtype=data.dtype)
     fill_idx = 0
