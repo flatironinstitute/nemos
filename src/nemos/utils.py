@@ -30,6 +30,30 @@ _CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 1), 3)
 _CORR3 = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
 _CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
 
+_CORR_VEC = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
+_CORR_VEC = jax.vmap(_CORR_VEC, (None, 1), 2)
+
+
+def reshape_convolve(array: NDArray, eval_basis: NDArray, time_axis):
+
+    # move time axis to first
+    new_axis = (jnp.arange(array.ndim) + time_axis) % array.ndim
+    array = jnp.transpose(array, new_axis)
+
+    # flatten over other dims & apply vectorized conv
+    conv = _CORR_VEC(array.reshape(array.shape[0], -1), eval_basis)
+
+    # unravel the dimensions
+    window_size = eval_basis.shape[0]
+    num_samples = array.shape[0]
+    conv = conv.reshape(num_samples - window_size + 1, *array.shape[1:], eval_basis.shape[1])
+
+    # reverse transposition
+    new_axis = (*((jnp.arange(array.ndim) - time_axis) % array.ndim), array.ndim)
+    conv = jnp.transpose(conv, new_axis)
+    return conv
+
+
 
 def check_dimensionality(
     pytree: Any,
