@@ -55,154 +55,153 @@ During initialization, the `GLM` class accepts the following optional input argu
 1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Ridge`, for $L_2$ regularization.
 
-You can set the defaults when you instantiate a model.
+For more information on how to change default arguments, see the API guide for [`observation_models`]() and
+[`regularizer`]().
 
-```python
-import nemos as nmo
 
-# set no regularization at initialization
-model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized())
-print(model.regularizer)
-```
+[//]: # (You can set the defaults when you instantiate a model.)
 
-#### Regularizer Hyperparameters
+[//]: # ()
+[//]: # (```python)
 
-We specify objective function regularization using regularizer objects. Each have different input arguments 
-(see [API documentation](../reference/nemos/regularizer#Regularizer) for more details), but all share the following:
+[//]: # (import nemos as nmo)
 
-1. `solver_name`: The name of the [`jaxopt`](https://jaxopt.github.io/stable/) solver used for learning the model parameters (for instance, 
-    `GradientDescent`, `BFGS`, etc.)
-2. `solver_kwargs`: Additional arguments that should be passed to the solver (for instance, `tol`, `max_iter` and 
-    similar) as a dictionary.
+[//]: # ()
+[//]: # (# set no regularization at initialization)
 
-For each regularizer, we have one or more allowable solvers, stored in the `allowed_solvers` attribute. 
-This ensures that for each regularization scheme, we run an appropriate optimization algorithm. 
+[//]: # (model = nmo.glm.GLM&#40;regularizer=nmo.regularizer.UnRegularized&#40;&#41;&#41;)
 
-```python
-import nemos as nmo
+[//]: # (print&#40;model.regularizer&#41;)
 
-regularizer = nmo.regularizer.Ridge()
-print(f"Allowed solver: {regularizer.allowed_solvers}")
-```
+[//]: # (```)
 
-Except for `Unregularized`, all the other `Regularizer` objects will have the `regularizer_strength` hyper-parameter.
-This is particularly helpful for controlling over-fitting. In general, the larger the `regularizer_strength` 
-the smaller the coefficients. Usually, one should tune this hyper-parameter by means of cross-validation. Look at the
-[Integration  with `scikit-learn`](#interactions-with-scikit-learn) session for a concrete example.
+[//]: # ()
+[//]: # (#### Regularizer Hyperparameters)
 
-#### Observation Model Input Arguments
+[//]: # ()
+[//]: # (We specify objective function regularization using regularizer objects. Each have different input arguments )
 
-The observation model has a single input argument, the non-linearity which maps a linear combination of predictors 
-to the neural activity mean (the instantaneous firing rate). We call the non-linearity *inverse link-function*, 
-naming convention from the [statistical literature on  GLMs](https://en.wikipedia.org/wiki/Generalized_linear_model).
-The default for the `PoissonObservation` is the exponential $f(x) = e^x$, implemented in JAX as `jax.numpy.exp`. 
-Another common choice is the "soft-plus", in JAX this is implemented as `jax.nn.softplus`. 
+[//]: # (&#40;see [API documentation]&#40;../reference/nemos/regularizer#Regularizer&#41; for more details&#41;, but all share the following:)
 
-As with all `nemos` objects, one can change the defaults at initialization.
+[//]: # ()
+[//]: # (1. `solver_name`: The name of the [`jaxopt`]&#40;https://jaxopt.github.io/stable/&#41; solver used for learning the model parameters &#40;for instance, )
 
-```python
-import jax
-import nemos as nmo
+[//]: # (    `GradientDescent`, `BFGS`, etc.&#41;)
 
-# change default 
-obs_model = nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
-model = nmo.glm.GLM(observation_model=obs_model)
-print(model.observation_model.inverse_link_function)
-```
+[//]: # (2. `solver_kwargs`: Additional arguments that should be passed to the solver &#40;for instance, `tol`, `max_iter` and )
 
-These two options result in a convex optimization objective for all the provided regularizers 
-(un-regularized, Ridge, Lasso, group-Lasso). This is nice because we can guarantee that there exists a single optimal 
-set of model coefficients.
+[//]: # (    similar&#41; as a dictionary.)
 
-!!! info "Can I set my own inverse link function?"
-    Yes! You can pass arbitrary python functions to our observation models, provided that jax can differentiate it and 
-    it can accept either scalars or arrays as input, returning a scalar or array of the same shape, respectively.
-    However, if you do so, note that we can no longer guarantee the convexity of the optimization procedure! 
+[//]: # ()
+[//]: # (For each regularizer, we have one or more allowable solvers, stored in the `allowed_solvers` attribute. )
 
-### `pynapple` compatibility
+[//]: # (This ensures that for each regularization scheme, we run an appropriate optimization algorithm. )
+
+[//]: # ()
+[//]: # (```python)
+
+[//]: # (import nemos as nmo)
+
+[//]: # ()
+[//]: # (regularizer = nmo.regularizer.Ridge&#40;&#41;)
+
+[//]: # (print&#40;f"Allowed solver: {regularizer.allowed_solvers}"&#41;)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (Except for `Unregularized`, all the other `Regularizer` objects will have the `regularizer_strength` hyper-parameter.)
+
+[//]: # (This is particularly helpful for controlling over-fitting. In general, the larger the `regularizer_strength` )
+
+[//]: # (the smaller the coefficients. Usually, one should tune this hyper-parameter by means of cross-validation. Look at the)
+
+[//]: # ([Integration  with `scikit-learn`]&#40;#interactions-with-scikit-learn&#41; session for a concrete example.)
+
+[//]: # ()
+[//]: # (#### Observation Model Input Arguments)
+
+[//]: # ()
+[//]: # (The observation model has a single input argument, the non-linearity which maps a linear combination of predictors )
+
+[//]: # (to the neural activity mean &#40;the instantaneous firing rate&#41;. We call the non-linearity *inverse link-function*, )
+
+[//]: # (naming convention from the [statistical literature on  GLMs]&#40;https://en.wikipedia.org/wiki/Generalized_linear_model&#41;.)
+
+[//]: # (The default for the `PoissonObservation` is the exponential $f&#40;x&#41; = e^x$, implemented in JAX as `jax.numpy.exp`. )
+
+[//]: # (Another common choice is the "soft-plus", in JAX this is implemented as `jax.nn.softplus`. )
+
+[//]: # ()
+[//]: # (As with all `nemos` objects, one can change the defaults at initialization.)
+
+[//]: # ()
+[//]: # (```python)
+
+[//]: # (import jax)
+
+[//]: # (import nemos as nmo)
+
+[//]: # ()
+[//]: # (# change default )
+
+[//]: # (obs_model = nmo.observation_models.PoissonObservations&#40;inverse_link_function=jax.nn.softplus&#41;)
+
+[//]: # (model = nmo.glm.GLM&#40;observation_model=obs_model&#41;)
+
+[//]: # (print&#40;model.observation_model.inverse_link_function&#41;)
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (These two options result in a convex optimization objective for all the provided regularizers )
+
+[//]: # (&#40;un-regularized, Ridge, Lasso, group-Lasso&#41;. This is nice because we can guarantee that there exists a single optimal )
+
+[//]: # (set of model coefficients.)
+
+[//]: # ()
+[//]: # (!!! info "Can I set my own inverse link function?")
+
+[//]: # (    Yes! You can pass arbitrary python functions to our observation models, provided that jax can differentiate it and )
+
+[//]: # (    it can accept either scalars or arrays as input, returning a scalar or array of the same shape, respectively.)
+
+[//]: # (    However, if you do so, note that we can no longer guarantee the convexity of the optimization procedure! )
+
+### Pre-processing with `pynapple`
 
 !!! warning
     This section assumes some familiarity with the `pynapple` package for time-series manipulation and data 
     exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
 
-If you represent your task variables and/or spike counts as `pynapple` time-series, don't worry, `nemos` estimators are 
-fully compatible with it. You can pass your time series directly to any of our functions.
-
-In `nemos`, when a transformation preserve the time-axis, if a `pynapple` time-series is provided as input, 
-the output will be a `pynapple` time-series too!
-
-A canonical example of this behavior is the `predict` method of `GLM`. The method receives a time-series of features as 
-input  and outputs a corresponding time-series of firing rates.
-
-
-```python
-import nemos as nmo
-import numpy as np
-import pynapple as nap
-
-# predictors and observed counts as pynapple time-series with data
-time = np.arange(100)
-X = nap.TsdTensor(t=time, d=0.2 * np.random.normal(size=(100, 1, 1)))
-coef = np.random.normal(size=(1, 1))
-# compute the firing rate as a weighted sum of the feature
-firing_rate = np.exp(np.einsum("nf, tnf -> tn", coef, X))
-# generate spikes
-y = nap.TsdFrame(t=time, d=np.random.poisson(firing_rate))
-
-model = nmo.glm.GLM()
-# the following works
-model.fit(X, y)
-
-# predict the firing rate of the neuron
-firing_rate = model.predict(X)
-# this will still be a pynapple time-seris
-print(type(firing_rate))
-```
-
-#### Why should you care?
-
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such 
 as restricting your time-series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common 
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
-others. All these operations can be easily concatenated for a quick and easy time-series manipulation.
+others. All these operations can be easily concatenated for a quick and easy data pre-processing.
 
-Combining `pynapple` and `nemos` can greatly streamline the modeling process. To show how handy this could 
-be, let's simulate a common scenario for many systems neuro-scientists: we record a behavioral
-feature with a temporal resolution, but we want to model spike counts at a different resolution. On top of that,
-let's assume that we want to restrict our fit to a specific time epoch.
+In `nemos`, if a transformation  preserve the time-axis and you use a `pynapple` time-series as input, the result will 
+also be a `pynapple` time-series.
 
-All of this could be done with a single command.
-
-First, let's simulate our feature and the spike times of a neuron, and define the recording epoch and the 
-epoch that we want to use for fitting (let's assume it marks when the subject was awake).
+A canonical example of this behavior is the `predict` method of `GLM`. 
 
 ```python
-import numpy as np
-import pynapple as nap
+>>> print(type(X)) # ...Assume X is a pynapple TsdTensor of shape (num samples, num neurons, num features)
+nap.TsdTensor
 
-# Assume that this is your input before any processing:
-# - recording duration: 5 min 
-# - task variable sampled at 10KHz
-# - spike times in seconds.
+>>> model.fit(X, y) # the following works
 
-# define time axis and a feature 
-# (num_samples, num_neurons, num_features)
-time_sec = np.linspace(0, 300, 300 * 10000)
-X = nap.TsdTensor(
-    t=time_sec, 
-    d= 0.2 * np.random.normal(size=(time_sec.shape[0], 1, 1)))
+>>> firing_rate = model.predict(X) # predict the firing rate of the neuron
 
-# define epochs as pynapple IntervalSet
-recording_epoch = nap.IntervalSet(start=0, end=300)
-wake_epoch = nap.IntervalSet(start=0, end=150)           
+>>> print(type(firing_rate)) # this will still be a pynapple time-series of shape (num_samples, num_neurons)
+nap.TsdFrame
+```
 
-# deine spikes by generating random times, and 
-# adding the recording_epoch as the time_support
-spike_ts = nap.Ts(
-    np.sort(np.random.uniform(0, 300, size=100)), 
-    time_support=recording_epoch
-)
-spikes = nap.TsGroup({1: spike_ts})
+Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`
+
+```python
+# load head direction data
+
 ```
 
 Finally, let's process and fit our data.
@@ -235,19 +234,27 @@ nmo.glm.GLM().fit(
 )
 ```
 
+And you can visualize the results,
+
+```python
+# tuning raw vs tuning model using pyanapple
+tc_model = nap.tuning_curve_continuous_1d(model.predict(X))
+tc_raw = nap.tuning_curve_1d(spikes)
+
+plt.plot(tc_raw.index, )
+```
+
 !!! note
     In this example we do all the processing and fitting in a single line to showcase how versatile this approach can
     be. In general, you should always avoid nesting many processing steps without each inspecting transformation first: 
     what if you unintentionally used the wrong bin-size? What if you selected the wrong feature? 
 
-### `scikit-learn` compatibility
+### Compatibility with `scikit-learn`
 
-As previously mentioned, `nemos` GLM conforms with `scikit-learn` API for estimators.
+`scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 
-#### Why should you care?
-
-Respecting the scikit-learn API allows us to make use of their powerful pipeline and cross-validation machinery, 
-while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
+In `nemos` takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
+compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
 could easily run a `K-Fold` cross-validation using `scikit-learn`.
