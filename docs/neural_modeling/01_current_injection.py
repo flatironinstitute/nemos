@@ -545,7 +545,7 @@ count = jax.numpy.asarray(count.values)
 #     jax.numpy arrays. However, in general, nemos is able to properly convert
 #     from pynapple objects to jax.numpy arrays without any additional steps
 #     (it can similarly convert from numpy arrays to jax.numpy arrays). Thus,
-#     in later tutorials we will omit this step.
+#     in later background we will omit this step.
 #
 # ### Fitting the model
 #
@@ -832,7 +832,7 @@ model.score(predictor, np.expand_dims(count, 1), score_type='pseudo-r2-Cohen')
 #   improve that.
 #
 # The proper way to add these in nemos makes use of `Basis` objects, which
-# we'll explore more in later tutorials. You can try the adding the spiking or
+# we'll explore more in later background. You can try the adding the spiking or
 # current history inputs without them (though the model won't do as well), or
 # return to this example after you've learned about `Basis` objects and how to
 # use them.

@@ -15,8 +15,6 @@ from scipy.ndimage import gaussian_filter
 
 from examples_utils import data
 
-jax.config.update("jax_enable_x64", True)
-
 # %%
 # ## DATA STREAMING
 # 

@@ -21,9 +21,6 @@ from copy import deepcopy
 
 from examples_utils import data, plotting
 
-# Set the default precision to float64, which is generally a good idea for
-# optimization purposes.
-jax.config.update("jax_enable_x64", True)
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")
 
@@ -257,7 +254,7 @@ window_size = int(window_size_sec * neuron_count.rate)
 # convolve the counts with the identity matrix.
 plt.close("all")
 input_feature = nmo.utils.create_convolutional_predictor(
-    np.eye(window_size), np.expand_dims(neuron_count, 1)
+    np.eye(window_size), np.expand_dims(neuron_count, (0, 2))
 )[0]
 
 # %%
@@ -281,7 +278,7 @@ print(f"Feature shape: {input_feature.shape}")
 
 
 # get rid of the last time point.
-input_feature = np.asarray(input_feature[:-1])
+input_feature = np.asarray(input_feature)
 
 print(f"Feature shape: {input_feature.shape}")
 print(f"Time bins in counts: {neuron_count.shape[0]}")
@@ -317,14 +314,14 @@ plotting.plot_features(input_feature, count.rate, suptitle)
 # half of the wake epochs for training and the second half for testing. This is a reasonable
 # choice if the statistics of the neural activity does not change during the course of
 # the recording. We will learn about better cross-validation strategy in later
-# tutorials.
+# background.
 #
 # <div class="notes">
 # - Convert the features back to a pynapple TsdFrame.
 # </div>
 
 # convert features to TsdFrame
-input_feature = nap.TsdTensor(t=neuron_count.t[window_size:], d=np.asarray(input_feature))
+input_feature = nap.TsdTensor(t=neuron_count.t, d=np.asarray(input_feature))
 
 # %%
 # #### Fitting the model
@@ -515,8 +512,8 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 # - Convolve the counts with the basis functions.
 # </div>
 
-conv_spk = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(neuron_count, (0, 2)))[0]
-conv_spk = nap.TsdTensor(t=count[window_size:].t, d=np.asarray(conv_spk[:-1]))
+conv_spk = nmo.utils.create_convolutional_predictor(basis_kernels, np.expand_dims(neuron_count, (0, 2)))[0]
+conv_spk = nap.TsdTensor(t=count.t, d=np.asarray(conv_spk))
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")

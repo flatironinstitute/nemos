@@ -5,7 +5,7 @@
 ## Learning objectives {.keep-text}
 
  - Learn how to combine GLM with other modeling approach.
- - Review previous tutorials.
+ - Review previous background.
 
 """
 
@@ -18,8 +18,7 @@ import pynapple as nap
 
 from examples_utils import plotting, data
 
-# required for second order methods (BFGS, Newton-CG)
-jax.config.update("jax_enable_x64", True)
+
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")
 
@@ -221,7 +220,7 @@ print(filtered_stimulus.rate)
 # %%
 #
 # Hold on, our stimulus is at a much lower rate than what we want for our rates
-# -- in previous examples, our input has been at a higher rate than our spikes,
+# -- in previous neural_modeling, our input has been at a higher rate than our spikes,
 # and so we used `bin_average` to down-sample to the appropriate rate. When the
 # input is at a lower rate, we need to think a little more carefully about how
 # to up-sample.
