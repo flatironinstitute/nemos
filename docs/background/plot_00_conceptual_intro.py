@@ -95,14 +95,14 @@ that our model can make:
 
 """
 
-# first import things
-import numpy as np
-import workshop_utils
-import pynapple as nap
 import matplotlib.pyplot as plt
 
+# first import things
+import numpy as np
+import pynapple as nap
+
 # configure plots some
-plt.style.use(workshop_utils.STYLE_FILE)
+plt.style.use("../neural_modeling/examples_utils/nemos.mplstyle")
 
 # %%
 # to make this plot work well, keep this to three values

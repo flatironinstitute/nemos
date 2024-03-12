@@ -1,6 +1,6 @@
 import os
-import sys
 import re
+import sys
 
 from mkdocs_gallery.sorting import FileNameSortKey
 
