@@ -7,9 +7,9 @@ familiar.
 In the following sessions, you will learn:
 
 1. [How to define and fit a GLM model.](#basic-model-fitting)
-2. [How to tweak the GLM using the input arguments.](#model-arguments)
-3. [How to use `nemos` with `pynapple` for pre-processing.](#pynapple-compatibility)
-4. [How to use `nemos` with `scikit-learn` for pipelines and cross-validation.](#scikit-learn-compatibility)
+2. [What are the GLM input arguments.](#model-arguments)
+3. [How to use `nemos` with `pynapple` for pre-processing.](#pre-processing-with-pynapple)
+4. [How to use `nemos` with `scikit-learn` for pipelines and cross-validation.](#compatibility-with-scikit-learn)
 
 Each of these sections can be run independently of the others.
 
