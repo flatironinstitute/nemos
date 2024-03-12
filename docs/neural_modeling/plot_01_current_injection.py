@@ -524,17 +524,6 @@ print(f"count shape: {count.shape}")
 #     whether you fit the neurons separately or simultaneously, and fitting
 #     them separately can make your life easier.
 #
-# Our last step is to convert these to `jax.numpy` arrays.
-#
-# <div class="notes">
-#   - predictors and spikes must be jax arrays
-# </div>
-
-predictor = jax.numpy.asarray(predictor.values)
-count = jax.numpy.asarray(count.values)
-
-# %%
-#
 # !!! info
 #
 #     In this example, we're being very explicit about this conversion to
@@ -649,11 +638,7 @@ predicted_fr = model.predict(predictor)
 # convert units from spikes/bin to spikes/sec
 predicted_fr = predicted_fr / bin_size
 
-# let's reintroduce the time axis by defining a TsdFrame.
 
-# we must convert the firing rate to a numpy array (from jax.numpy) to make it
-# pynapple compatible
-predicted_fr = nap.TsdFrame(t=binned_current.t, d=np.asarray(predicted_fr))
 # and let's smooth the firing rate the same way that we smoothed the smoothed
 # spike train
 smooth_predicted_fr = predicted_fr.smooth(50, 1000)
