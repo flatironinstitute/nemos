@@ -765,61 +765,6 @@ print(f"log-likelihood: {log_likelihood}")
 # purpose:
 model.score(predictor, np.expand_dims(count, 1), score_type='pseudo-r2-Cohen')
 
-# %%
-#
-# ## Further Exercises {.strip-headers}
-#
-# <div class="notes">
-#   - what else can we do?
-# </div>
-#
-# Despite the simplicity of this dataset, there is still more that we can do
-# here. The following sections provide some possible exercises to try yourself!
-#
-# ### Other stimulation protocols
-#
-# We've only fit the model to a single stimulation protocol, but our dataset
-# contains many more! How does the model perform on "Ramp"? On "Noise 2"? Based
-# on the example code above, write new code that fits the model on some other
-# stimulation protocol and evaluate its performance. Which stimulation does it
-# perform best on? Which is the worst?
-#
-# ### Train and test sets
-#
-# In this example, we've used been fitting and evaluating our model on the same
-# data set. That's generally a bad idea! Try splitting the data in to train and
-# test sets, fitting the model to one portion of the data and evaluating on
-# another portion. You could split this stimulation protocol into train and
-# test sets or use different protocols to train and test on.
-#
-# ### Model extensions
-#
-# Our model did not do a good job capturing the onset transience seen in the
-# data, and we could probably improve the match between the amplitudes of the
-# predicted firing rate and smoothed spike train. How would we do that?
-#
-# We could try adding the following inputs to the model, alone or together:
-#
-# - Spiking history: we know neurons have a refactory period (they are unable
-#   to spike a second time immediately after spiking), so maybe making the
-#   model aware of whether the neuron spiked recently could help capture the
-#   onset transience.
-#
-# - Current history: the model's input here is the current at the same moment
-#   as the spike, but that information is probably integrated over time. Maybe
-#   we can add additional time points.
-#
-# - More complicated tuning curve: as we saw with the tuning curve plots, this
-#   model implicitly assumes that the relationship between current and firing
-#   rate is exponential, which is close but not quite right. Maybe we can
-#   improve that.
-#
-# The proper way to add these in nemos makes use of `Basis` objects, which
-# we'll explore more in later background. You can try the adding the spiking or
-# current history inputs without them (though the model won't do as well), or
-# return to this example after you've learned about `Basis` objects and how to
-# use them.
-#
 # ## Citation {.keep-text}
 #
 # The data used in this tutorial is from the Allen Brain Map, with the

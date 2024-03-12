@@ -784,10 +784,3 @@ print(responses.shape)
 plotting.plot_coupling(responses, tuning)
 
 
-# %%
-# ## Exercise
-
-# 1. What would happen if we regressed explicitly the head direction?
-# 2. What would happen to the connectivity if we fit on the sleep epochs?
-# 3. How would we sparsify the connectivity?
-
