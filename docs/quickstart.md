@@ -87,7 +87,7 @@ nap.TsdTensor
 nap.TsdFrame
 ```
 
-Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`
+Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
 
 ```python
 import nemos as nmo
@@ -126,9 +126,7 @@ plt.xlabel("angle")
 ```
 
 !!! note
-    In this example we do all the processing and fitting in a single line to showcase how versatile this approach can
-    be. In general, you should always avoid nesting many processing steps without each inspecting transformation first: 
-    what if you unintentionally used the wrong bin-size? What if you selected the wrong feature? 
+    You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
 
 ### Compatibility with `scikit-learn`
 
