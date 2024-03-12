@@ -2,10 +2,11 @@ from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-import nemos as nmo
 import numpy as np
-from nemos.base_class import DESIGN_INPUT_TYPE
 from numpy.typing import ArrayLike
+
+import nemos as nmo
+from nemos.base_class import DESIGN_INPUT_TYPE
 
 
 class GLM(nmo.glm.GLM):

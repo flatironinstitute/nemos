@@ -44,14 +44,16 @@ Linear Model and how to fit it with nemos.
 
 """
 
+import examples_utils.data as data
+import examples_utils.plotting as plotting
+
 # Import everything
 import jax
 import matplotlib.pyplot as plt
-import nemos as nmo
 import numpy as np
 import pynapple as nap
-import examples_utils.plotting as plotting
-import examples_utils.data as data
+
+import nemos as nmo
 
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")

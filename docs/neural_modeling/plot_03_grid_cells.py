@@ -10,10 +10,10 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-import nemos as nmo
+from examples_utils import data
 from scipy.ndimage import gaussian_filter
 
-from examples_utils import data
+import nemos as nmo
 
 # %%
 # ## DATA STREAMING

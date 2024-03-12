@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 
-import requests
-import numpy as np
+import math
 import os
 import os.path as op
-import math
-import click
-import tqdm.auto as tqdm
 from typing import Union
+
+import click
+import numpy as np
 import pynapple as nap
+import requests
+import tqdm.auto as tqdm
 
 TsdType = Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor]
 
+import fsspec
+import h5py
+from dandi.dandiapi import DandiAPIClient
+from fsspec.implementations.cached import CachingFileSystem
+
 # Dandi stuffs
 from pynwb import NWBHDF5IO
-from dandi.dandiapi import DandiAPIClient
-import fsspec
-from fsspec.implementations.cached import CachingFileSystem
-import h5py
+
 
 def download_data(filename, url, data_dir):
     filename = op.join(data_dir, filename)

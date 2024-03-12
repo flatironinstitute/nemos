@@ -11,15 +11,14 @@
 
 """
 
-import jax
-import matplotlib.pyplot as plt
-import nemos as nmo
-import numpy as np
-import pynapple as nap
-
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pynapple as nap
 from examples_utils import data, plotting
+
+import nemos as nmo
 
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")
@@ -225,7 +224,7 @@ plotting.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
 # - Roll your window one bin at the time to predict the subsequent samples
 # </div>
 
-plotting.run_animation(neuron_count, float(epoch_one_spk.start))
+plotting.run_animation(neuron_count, epoch_one_spk.start[0])
 
 # %%
 # If $t$ is smaller than the window size, we won't have a full window of spike history for estimating the rate.
@@ -254,7 +253,7 @@ window_size = int(window_size_sec * neuron_count.rate)
 # convolve the counts with the identity matrix.
 plt.close("all")
 input_feature = nmo.utils.create_convolutional_predictor(
-    np.eye(window_size), np.expand_dims(neuron_count, (0, 2))
+    np.eye(window_size), [np.expand_dims(neuron_count, 1)]
 )[0]
 
 # %%
@@ -264,25 +263,9 @@ input_feature = nmo.utils.create_convolutional_predictor(
 # - Check the shape of the counts and features.
 # </div>
 
-
 print(f"Time bins in counts: {neuron_count.shape[0]}")
 print(f"Convolution window size in bins: {window_size}")
 print(f"Feature shape: {input_feature.shape}")
-
-
-# %%
-# As discussed, we should remove the last time sample from the input features.
-# <div class="notes">
-# - Match time axis.
-# </div>
-
-
-# get rid of the last time point.
-input_feature = np.asarray(input_feature)
-
-print(f"Feature shape: {input_feature.shape}")
-print(f"Time bins in counts: {neuron_count.shape[0]}")
-print(f"Convolution window size in bins: {window_size}")
 
 # %%
 # !!! info
@@ -721,7 +704,7 @@ predicted_firing_rate = np.zeros((count.shape[0] - window_size, count.shape[1]))
 for receiver_neu in range(count.shape[1]):
     predicted_firing_rate[:, receiver_neu] = np.squeeze(models[receiver_neu].predict(
         convolved_count
-    ))* conv_spk.rate
+    )) * conv_spk.rate
 
 predicted_firing_rate = nap.TsdFrame(t=count[window_size:].t, d=predicted_firing_rate)
 

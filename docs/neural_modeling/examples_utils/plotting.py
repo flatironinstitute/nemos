@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 
-from typing import Optional
+from typing import Optional, Union
 
 import jax
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import nemos as nmo
 import numpy as np
 import pandas as pd
 import pynapple as nap
 from IPython.display import HTML
 from matplotlib.animation import FuncAnimation
 from numpy.typing import NDArray
+
+import nemos as nmo
 
 
 def tuning_curve_plot(tuning_curve: pd.DataFrame):
@@ -450,7 +451,7 @@ def plot_count_history_window(
 
 
 def plot_features(
-        input_feature: NDArray,
+        input_feature: Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor, NDArray],
         sampling_rate: float,
         suptitle:str,
         n_rows: int = 20
@@ -473,7 +474,7 @@ def plot_features(
     -------
 
     """
-    input_feature = np.squeeze(input_feature)
+    input_feature = np.squeeze(input_feature).dropna()
     window_size = input_feature.shape[1]
     fig = plt.figure(figsize=(8, 8))
     plt.suptitle(suptitle)

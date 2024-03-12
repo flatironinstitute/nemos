@@ -10,14 +10,12 @@
 """
 
 import jax
-
 import matplotlib.pyplot as plt
-import nemos as nmo
 import numpy as np
 import pynapple as nap
+from examples_utils import data, plotting
 
-from examples_utils import plotting, data
-
+import nemos as nmo
 
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")

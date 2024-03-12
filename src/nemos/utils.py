@@ -464,6 +464,7 @@ def shift_time_series(
         )
 
 
+@support_pynapple
 def create_convolutional_predictor(
     basis_matrix: ArrayLike,
     time_series: Any,
