@@ -9,11 +9,10 @@
 
 """
 
-import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from examples_utils import data, plotting
+from examples_utils import data
 
 import nemos as nmo
 
@@ -250,20 +249,10 @@ basis = nmo.basis.RaisedCosineBasisLog(8)
 window_size = 100
 time, basis_kernels = basis.evaluate_on_grid(window_size)
 time *= bin_size * window_size
-convolved_input = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(filtered_stimulus,0))[0]
-# convolved_input has shape (n_time_pts, n_features, n_basis_funcs), and
-# n_features is the singleton dimension from filtered_stimulus, so let's
-# squeeze it out:
-convolved_input = np.squeeze(convolved_input)
-# and, as also described in the head direction tutorial, when doing this we
-# need to remove the first window_size time points from the neuron counts and
-# the last time point from the convolved input:
-counts = counts[window_size:]
-convolved_input = convolved_input[:-1]
-# and grab the counts for our single neuron
-counts = counts[:, :1]
+convolved_input = nmo.utils.create_convolutional_predictor(basis_kernels, [filtered_stimulus])[0]
 
-# %%
+# convolved_input has shape (n_time_pts, n_features, n_basis_funcs), and
+# n_features is the singleton dimension from filtered_stimulus.
 #
 # ## Fitting the GLM {.strip-code}
 #
@@ -272,8 +261,9 @@ counts = counts[:, :1]
 # <div class="notes">
 #   - Fit the GLM
 # </div>
+
 model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
-model.fit(np.expand_dims(convolved_input, 1), counts)
+model.fit(convolved_input, counts)
 
 # %%
 #
@@ -292,20 +282,3 @@ plt.plot(time, temp_weights)
 # When taken together, the results of the GLM and the spike-triggered average
 # give us the linear component of our LNP model: the separable spatio-temporal
 # filter.
-#
-# ## Further exercises
-#
-# There's more that could (and should) be done here. First, we should probably
-# split our data into separate test and train sets, to see how consistent our
-# estimates of the spatial and temporal filters are. Then, using the test and
-# train sets, we can:
-#
-# - try different choices for the spatial receptive field: modify the
-#   parameters of the STA, pick one of the time bins directly (instead of
-#   averaging), lowpass filter the receptive field (to remove the high
-#   frequency noise), manually create or fit a Gabor to match the STA results.
-#
-# - try different choices for the temporal filter: change basis functions,
-#   change the parameters of the basis object.
-#
-# - try adding regularization to the GLM for fitting the temporal filter.
