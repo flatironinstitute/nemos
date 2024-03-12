@@ -25,10 +25,12 @@ plugins:
         # path to the directory containing our background/neural_modeling
         examples_dirs:
           - docs/background
+          - docs/api_guide
           - docs/neural_modeling
         # path to the directory where mkdocs will save the generated output
         gallery_dirs:
           - docs/generated/background
+          - docs/generated/api_guide
           - docs/generated/neural_modeling
   - gen-files:
       scripts:

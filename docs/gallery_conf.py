@@ -18,5 +18,6 @@ conf = {
     'within_subsection_order': FileNameSortKey,
     # run every script that matches pattern
     # (here we match every file that ends in .py)
-    'filename_pattern': re.escape(os.sep) + r".+\.py$"
+    'filename_pattern': re.escape(os.sep) + r"plot_.+\.py$",
+    'ignore_pattern': r"_plot_.+\.py$"
 }

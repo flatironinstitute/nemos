@@ -56,10 +56,6 @@ import examples_utils.data as data
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")
 
-# Set the default precision to float64, which is generally a good idea for
-# optimization purposes.
-jax.config.update("jax_enable_x64", True)
-
 # %%
 # ## Data Streaming
 #

@@ -69,7 +69,7 @@ position = dataset["SpatialSeriesLED1"] # Get the tracked orientation of the ani
 #   - compute the head-direction of the animal from `SpatialSeriesLED1` and `SpatialSeriesLED1`
 # </div>
 diff = dataset['SpatialSeriesLED1'].values - dataset['SpatialSeriesLED2'].values
-head_dir = (np.arctan2(*diff.T) + (2*np.pi))%(2*np.pi)
+head_dir = (np.arctan2(*diff.T) + (2*np.pi)) % (2*np.pi)
 head_dir = nap.Tsd(dataset['SpatialSeriesLED1'].index, head_dir).dropna()
 
 
@@ -203,8 +203,8 @@ cmap = plt.get_cmap("rainbow")
 colors = np.linspace(0,1, len(xt))
 for cnt, i in enumerate(xt):
     ax = plt.subplot(gs[0, i // 200])
-    ax.imshow(position_basis[i].reshape(10, 10).T, origin = 'lower')
-    for spine in ["top", "bottom", "left","right"]:
+    ax.imshow(position_basis[i].reshape(10, 10).T, origin='lower')
+    for spine in ["top", "bottom", "left", "right"]:
         ax.spines[spine].set_color(cmap(colors[cnt]))
         ax.spines[spine].set_linewidth(3)
     plt.title("T "+str(i))
@@ -254,14 +254,10 @@ rate_pos = model.predict(np.expand_dims(position_basis,1))
 
 
 # %%
-# Let's go back to pynapple
-rate_pos = nap.TsdFrame(t=counts.t, d=np.asarray(rate_pos), columns=[neuron]) * counts.rate
-
-# %%
 # And compute a tuning curves again
 
 model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
-    tsdframe=rate_pos,
+    tsdframe=rate_pos * rate_pos.rate,
     features=position,
     nb_bins=12)
 
@@ -273,26 +269,31 @@ model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
 #   - compare the tuning curves
 # </div>
 
+smooth_pos_tuning = gaussian_filter(pos_tuning[neuron], sigma=1)
+smooth_model = gaussian_filter(model_tuning[0], sigma=1)
+
+vmin = min(smooth_pos_tuning.min(), smooth_model.min())
+vmax = max(smooth_pos_tuning.max(), smooth_model.max())
+
 fig = plt.figure(figsize = (12, 4))
 gs = plt.GridSpec(1, 2)
 ax = plt.subplot(gs[0, 0])
-ax.imshow(gaussian_filter(pos_tuning[neuron], sigma=1))
+ax.imshow(gaussian_filter(pos_tuning[neuron], sigma=1), vmin=vmin,vmax=vmax)
 ax = plt.subplot(gs[0, 1])
-ax.imshow(gaussian_filter(model_tuning[neuron], sigma=1))
+ax.imshow(gaussian_filter(model_tuning[0], sigma=1), vmin=vmin,vmax=vmax)
 plt.tight_layout()
 
 
 # %%
-# The grid does not show very nicely. Can we improve it by optimizing the regularization strenght.
-# We can cross-validate with scikit-learn
-# We will find the best regularization strenght with scikit-learn
+# The grid does not show at all, we over regularized. We can fix this by tuining the regularization
+# strength by means of cross-validation. This can be done through scikit-learn.
 #
 #
 # <div class="notes">
-#   - find the best `regularizer_strength` using `sklearn.model_selection.GriSearchCV`
+#   - find the better `regularizer_strength` using `sklearn.model_selection.GriSearchCV`
 # </div>
 from sklearn.model_selection import GridSearchCV
-param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-3, 1.0])
+param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-3, 1])
 
 cls = GridSearchCV(model, param_grid=param_grid)
 
@@ -314,10 +315,9 @@ best_model = cls.best_estimator_
 # </div>
 
 best_rate_pos = best_model.predict(np.expand_dims(position_basis, 1))
-best_rate_pos = nap.TsdFrame(t=counts.t, d=np.asarray(best_rate_pos), columns=[neuron]) * counts.rate
 
 best_model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
-    tsdframe=best_rate_pos,
+    tsdframe=best_rate_pos * best_rate_pos.rate,
     features=position,
     nb_bins=12)
 
@@ -327,17 +327,21 @@ best_model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
 # <div class="notes">
 #   - compare the 2d tuning curves
 # </div>
-vmin = min(pos_tuning[neuron].min(), best_model_tuning[neuron].min(), model_tuning[neuron].min())
-vmax = max(pos_tuning[neuron].max(), best_model_tuning[neuron].max(), model_tuning[neuron].max())
+
+
+smooth_best_model = gaussian_filter(best_model_tuning[0], sigma=1)
+
+vmin = min(smooth_pos_tuning.min(), smooth_model.min(), smooth_best_model.min())
+vmax = max(smooth_pos_tuning.max(), smooth_model.max(), smooth_best_model.max())
 
 fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 plt.suptitle("Rate predictions\n")
 axs[0].set_title("Raw Counts")
-axs[0].imshow(gaussian_filter(pos_tuning[neuron], sigma=1), vmin=vmin, vmax=vmax)
+axs[0].imshow(smooth_pos_tuning, vmin=vmin, vmax=vmax)
 axs[1].set_title(f"Ridge - strength: {model.regularizer.regularizer_strength}")
-axs[1].imshow(gaussian_filter(model_tuning[neuron]*counts.rate, sigma=1), vmin=vmin, vmax=vmax)
+axs[1].imshow(smooth_model, vmin=vmin, vmax=vmax)
 axs[2].set_title(f"Ridge - strength: {best_model.regularizer.regularizer_strength}")
-axs[2].imshow(gaussian_filter(best_model_tuning[neuron]*counts.rate, sigma=1), vmin=vmin, vmax=vmax)
+axs[2].imshow(smooth_best_model, vmin=vmin, vmax=vmax)
 plt.tight_layout()
 
 
