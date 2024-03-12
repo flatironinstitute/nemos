@@ -139,8 +139,7 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 # The same exact syntax works for any configuration.
 
 # fit a ridge regression Poisson GLM
-model = nmo.glm.GLM()
-model.set_params(regularizer__regularizer_strength=0.1)
+model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1))
 model.fit(X, spikes)
 
 print("Ridge results")

@@ -89,6 +89,9 @@ nap.TsdFrame
 
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
 
+!!! note
+    You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+
 ```python
 import nemos as nmo
 import numpy as np
@@ -102,9 +105,11 @@ head_dir = data["ry"]
 counts = spikes[6].count(0.01, ep=head_dir.time_support)  # restrict and bin
 upsampled_head_dir = head_dir.bin_average(0.01) #  up-sample head direction
 
-X = nmo.basis.CyclicBSplineBasis(10).evaluate(upsampled_head_dir / (2 * np.pi)) # create your features
+# create your features
+X = nmo.basis.CyclicBSplineBasis(10).evaluate(upsampled_head_dir / (2 * np.pi))
 
-model = nmo.glm.GLM().fit(X[:, np.newaxis], counts[:, np.newaxis]) # add a neuron axis and fit model
+# add a neuron axis and fit model
+model = nmo.glm.GLM().fit(X[:, np.newaxis], counts[:, np.newaxis]) 
 ```
 
 Finally, let's compare the tuning curves
@@ -113,7 +118,11 @@ Finally, let's compare the tuning curves
 import matplotlib.pyplot as plt
 
 raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
-model_tuning =  nap.compute_1d_tuning_curves_continuous(model.predict(X[:, np.newaxis]) * X.rate, head_dir, nb_bins=100)[0]
+model_tuning =  nap.compute_1d_tuning_curves_continuous(
+    model.predict(X[:, np.newaxis]) * X.rate,  # scale by the sampling rate
+    head_dir, 
+    nb_bins=100
+)[0]
 
 # plot results
 plt.subplot(111, projection="polar")
@@ -121,12 +130,10 @@ plt.plot(raw_tuning.index, raw_tuning.values,label="raw")
 plt.plot(model_tuning.index, model_tuning.values, label="glm")
 plt.legend()
 plt.yticks([])
-plt.xlabel("angle")
-
+plt.xlabel("heading angle")
 ```
 
-!!! note
-    You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+![Alt text](head_dir_tuning.jpg)
 
 ### Compatibility with `scikit-learn`
 
