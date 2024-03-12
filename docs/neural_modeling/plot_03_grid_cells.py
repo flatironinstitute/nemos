@@ -228,7 +228,7 @@ plt.tight_layout()
 # </div>
 
 model = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Ridge(regularizer_strength=1.0, solver_name="LBFGS")
+    regularizer=nmo.regularizer.Ridge(regularizer_strength=0.001, solver_name="LBFGS")
 )
 
 # %%
@@ -284,8 +284,9 @@ plt.tight_layout()
 
 
 # %%
-# The grid does not show at all, we over regularized. We can fix this by tuining the regularization
-# strength by means of cross-validation. This can be done through scikit-learn.
+# The grid shows but the peak firing rate is off, we might have over-regularized.
+# We can fix this by tuning the regularization strength by means of cross-validation.
+# This can be done through scikit-learn.
 #
 #
 # <div class="notes">
@@ -293,7 +294,7 @@ plt.tight_layout()
 # </div>
 from sklearn.model_selection import GridSearchCV
 
-param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-3, 1])
+param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-5, 1e-3])
 
 cls = GridSearchCV(model, param_grid=param_grid)
 
