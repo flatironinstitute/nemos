@@ -604,7 +604,7 @@ class BSplineBasis(SplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2):
+    def __init__(self, n_basis_funcs: int, order: int = 4):
         super().__init__(n_basis_funcs, order=order)
 
     @support_pynapple
@@ -688,7 +688,7 @@ class CyclicBSplineBasis(SplineBasis):
         Order of the splines used in basis functions.
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2):
+    def __init__(self, n_basis_funcs: int, order: int = 4):
         super().__init__(n_basis_funcs, order=order)
         if self.order < 2:
             raise ValueError(

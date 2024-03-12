@@ -53,121 +53,11 @@ print(f"Model intercept: {model.intercept_}")
 During initialization, the `GLM` class accepts the following optional input arguments,
 
 1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
-2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Ridge`, for $L_2$ regularization.
+2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`.
 
 For more information on how to change default arguments, see the API guide for [`observation_models`]() and
 [`regularizer`]().
 
-
-[//]: # (You can set the defaults when you instantiate a model.)
-
-[//]: # ()
-[//]: # (```python)
-
-[//]: # (import nemos as nmo)
-
-[//]: # ()
-[//]: # (# set no regularization at initialization)
-
-[//]: # (model = nmo.glm.GLM&#40;regularizer=nmo.regularizer.UnRegularized&#40;&#41;&#41;)
-
-[//]: # (print&#40;model.regularizer&#41;)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (#### Regularizer Hyperparameters)
-
-[//]: # ()
-[//]: # (We specify objective function regularization using regularizer objects. Each have different input arguments )
-
-[//]: # (&#40;see [API documentation]&#40;../reference/nemos/regularizer#Regularizer&#41; for more details&#41;, but all share the following:)
-
-[//]: # ()
-[//]: # (1. `solver_name`: The name of the [`jaxopt`]&#40;https://jaxopt.github.io/stable/&#41; solver used for learning the model parameters &#40;for instance, )
-
-[//]: # (    `GradientDescent`, `BFGS`, etc.&#41;)
-
-[//]: # (2. `solver_kwargs`: Additional arguments that should be passed to the solver &#40;for instance, `tol`, `max_iter` and )
-
-[//]: # (    similar&#41; as a dictionary.)
-
-[//]: # ()
-[//]: # (For each regularizer, we have one or more allowable solvers, stored in the `allowed_solvers` attribute. )
-
-[//]: # (This ensures that for each regularization scheme, we run an appropriate optimization algorithm. )
-
-[//]: # ()
-[//]: # (```python)
-
-[//]: # (import nemos as nmo)
-
-[//]: # ()
-[//]: # (regularizer = nmo.regularizer.Ridge&#40;&#41;)
-
-[//]: # (print&#40;f"Allowed solver: {regularizer.allowed_solvers}"&#41;)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (Except for `Unregularized`, all the other `Regularizer` objects will have the `regularizer_strength` hyper-parameter.)
-
-[//]: # (This is particularly helpful for controlling over-fitting. In general, the larger the `regularizer_strength` )
-
-[//]: # (the smaller the coefficients. Usually, one should tune this hyper-parameter by means of cross-validation. Look at the)
-
-[//]: # ([Integration  with `scikit-learn`]&#40;#interactions-with-scikit-learn&#41; session for a concrete example.)
-
-[//]: # ()
-[//]: # (#### Observation Model Input Arguments)
-
-[//]: # ()
-[//]: # (The observation model has a single input argument, the non-linearity which maps a linear combination of predictors )
-
-[//]: # (to the neural activity mean &#40;the instantaneous firing rate&#41;. We call the non-linearity *inverse link-function*, )
-
-[//]: # (naming convention from the [statistical literature on  GLMs]&#40;https://en.wikipedia.org/wiki/Generalized_linear_model&#41;.)
-
-[//]: # (The default for the `PoissonObservation` is the exponential $f&#40;x&#41; = e^x$, implemented in JAX as `jax.numpy.exp`. )
-
-[//]: # (Another common choice is the "soft-plus", in JAX this is implemented as `jax.nn.softplus`. )
-
-[//]: # ()
-[//]: # (As with all `nemos` objects, one can change the defaults at initialization.)
-
-[//]: # ()
-[//]: # (```python)
-
-[//]: # (import jax)
-
-[//]: # (import nemos as nmo)
-
-[//]: # ()
-[//]: # (# change default )
-
-[//]: # (obs_model = nmo.observation_models.PoissonObservations&#40;inverse_link_function=jax.nn.softplus&#41;)
-
-[//]: # (model = nmo.glm.GLM&#40;observation_model=obs_model&#41;)
-
-[//]: # (print&#40;model.observation_model.inverse_link_function&#41;)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (These two options result in a convex optimization objective for all the provided regularizers )
-
-[//]: # (&#40;un-regularized, Ridge, Lasso, group-Lasso&#41;. This is nice because we can guarantee that there exists a single optimal )
-
-[//]: # (set of model coefficients.)
-
-[//]: # ()
-[//]: # (!!! info "Can I set my own inverse link function?")
-
-[//]: # (    Yes! You can pass arbitrary python functions to our observation models, provided that jax can differentiate it and )
-
-[//]: # (    it can accept either scalars or arrays as input, returning a scalar or array of the same shape, respectively.)
-
-[//]: # (    However, if you do so, note that we can no longer guarantee the convexity of the optimization procedure! )
 
 ### Pre-processing with `pynapple`
 
@@ -200,48 +90,39 @@ nap.TsdFrame
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`
 
 ```python
-# load head direction data
-
-```
-
-Finally, let's process and fit our data.
-
-```python
 import nemos as nmo
+import numpy as np
+import pynapple as nap
 
-# Actual processing and fitting:
+data = nap.load_file("A2929-200711.nwb")
 
-# - Restrict to the wake epoch
-X_wake = X.restrict(wake_epoch)
-spikes_wake = spikes.restrict(wake_epoch)
+spikes = data["units"]
+head_dir = data["ry"]
 
-# - Down-sample to 10ms the features
-X_downsample = X_wake.bin_average(0.01)
+counts = spikes[6].count(0.01, ep=head_dir.time_support)  # restrict and bin
+upsampled_head_dir = head_dir.bin_average(0.01) #  up-sample head direction
 
-# - Bin the spike to the same resolution
-counts = spikes_wake.count(0.01)
+X = nmo.basis.CyclicBSplineBasis(10).evaluate(upsampled_head_dir / (2 * np.pi)) # create your features
 
-# - Fit a GLM.
-nmo.glm.GLM().fit(X_downsample, counts)
+model = nmo.glm.GLM().fit(X[:, np.newaxis], counts[:, np.newaxis]) # add a neuron axis and fit model
 ```
 
-Or alternative, in a single command,
+Finally, let's compare the tuning curves
 
 ```python
-nmo.glm.GLM().fit(
-    X.bin_average(0.01).restrict(wake_epoch), 
-    spikes.count(0.01).restrict(wake_epoch)
-)
-```
+import matplotlib.pyplot as plt
 
-And you can visualize the results,
+raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
+model_tuning =  nap.compute_1d_tuning_curves_continuous(model.predict(X[:, np.newaxis]) * X.rate, head_dir, nb_bins=100)[0]
 
-```python
-# tuning raw vs tuning model using pyanapple
-tc_model = nap.tuning_curve_continuous_1d(model.predict(X))
-tc_raw = nap.tuning_curve_1d(spikes)
+# plot results
+plt.subplot(111, projection="polar")
+plt.plot(raw_tuning.index, raw_tuning.values,label="raw")
+plt.plot(model_tuning.index, model_tuning.values, label="glm")
+plt.legend()
+plt.yticks([])
+plt.xlabel("angle")
 
-plt.plot(tc_raw.index, )
 ```
 
 !!! note
@@ -283,4 +164,3 @@ cls.fit(X, y)
 # print best regularizer strength
 print(cls.best_params_)
 ```
-
