@@ -309,6 +309,13 @@ class GLM(BaseRegressor):
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
 
+        # get valid entries
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # filter for valid
+        X = jax.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_map(lambda x: x[is_valid], y)
+
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
             score = -self._predict_and_compute_loss((Ws, bs), X, y) - norm_constant
