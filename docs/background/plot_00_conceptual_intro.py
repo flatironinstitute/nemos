@@ -100,7 +100,6 @@ import matplotlib.pyplot as plt
 # first import things
 import numpy as np
 import pynapple as nap
-
 from background_utils import plotting
 
 # configure plots some
