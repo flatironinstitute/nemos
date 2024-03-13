@@ -101,6 +101,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 
+from background_utils import plotting
+
 # configure plots some
 plt.style.use("../neural_modeling/examples_utils/nemos.mplstyle")
 
@@ -114,7 +116,7 @@ input_feature[50:] = 1
 input_feature *= np.random.rand(100)
 input_feature =  nap.Tsd(np.linspace(0, 100, 100), input_feature)
 
-fig = workshop_utils.plotting.lnp_schematic(input_feature,
+fig = plotting.lnp_schematic(input_feature,
                                             weights, intercepts)
 
 # %%
@@ -130,7 +132,7 @@ fig = workshop_utils.plotting.lnp_schematic(input_feature,
 # have to be non-negative! That's what the nonlinearity handles: making sure our
 # firing rate is always positive:
 
-fig = workshop_utils.plotting.lnp_schematic(input_feature,
+fig = plotting.lnp_schematic(input_feature,
                                    weights, intercepts,
                                    plot_nonlinear=True)
 
@@ -153,7 +155,7 @@ fig = workshop_utils.plotting.lnp_schematic(input_feature,
 # Now we're ready to see what these spikes look like!
 
 # mkdocs_gallery_thumbnail_number = 3
-fig = workshop_utils.plotting.lnp_schematic(input_feature,
+fig = plotting.lnp_schematic(input_feature,
                                    weights, intercepts,
                                    plot_nonlinear=True, plot_spikes=True)
 
