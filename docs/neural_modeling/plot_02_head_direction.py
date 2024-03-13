@@ -510,18 +510,22 @@ plotting.plot_rates_and_smoothed_counts(
 # is predicted not only by its own count history, but also by the rest of the
 # simultaneously recorded population. We can convolve the basis with the counts of each neuron
 # to get an array of predictors of shape, `(num_time_points, num_neurons, num_basis_funcs)`.
-# This can be done in nemos with a single call,
 #
 # #### Preparing the features
 
-convolved_count = nmo.utils.convolve_1d_trials(basis_kernels, np.expand_dims(count.d, 0))[0]
-convolved_count = np.asarray(convolved_count[:-1])
+# convolve all the neurons
+convolved_count = nmo.utils.create_convolutional_predictor(basis_kernels, [count])[0]
 
 # %%
 # Check the dimension to make sure it make sense
 print(f"Convolved count shape: {convolved_count.shape}")
 
+# Reshape to (n_samples, 1, n_basis_func * n_neurons)
+convolved_count = np.reshape(convolved_count, (convolved_count.shape[0], 1, -1))
+print(f"Convolved count re-shaped: {convolved_count.shape}")
+
 # %%
+# #### Fitting the Model
 # This is all neuron to one neuron. We can fit a neuron at the time, this is mathematically equivalent
 # to fit the population jointly and easier to parallelize.
 #
@@ -530,18 +534,6 @@ print(f"Convolved count shape: {convolved_count.shape}")
 #     of individual neurons. Maximizing the sum (i.e. the population log-likelihood) is equivalent to
 #     maximizing each individual term separately (i.e. fitting one neuron at the time).
 #
-# Nemos requires an input of shape `(num_time_points, num_features)`. To achieve that we need to concatenate
-# the convolved count history in a single feature dimension. This can be done using numpy reshape.
-
-
-convolved_count = convolved_count.reshape(convolved_count.shape[0], -1)
-convolved_count = np.expand_dims(convolved_count, 1)
-print(f"Convolved count reshaped: {convolved_count.shape}")
-convolved_count = nap.TsdTensor(t=neuron_count.t[window_size:], d=convolved_count)
-
-# %%
-# Now fit the GLM for each neuron.
-# #### Fitting the Model
 
 models = []
 for neu in range(count.shape[1]):
@@ -558,13 +550,13 @@ for neu in range(count.shape[1]):
 # #### Comparing model predictions.
 # Predict the rate (counts are already sorted by tuning prefs)
 
-predicted_firing_rate = np.zeros((count.shape[0] - window_size, count.shape[1]))
+predicted_firing_rate = np.zeros((count.shape[0], count.shape[1]))
 for receiver_neu in range(count.shape[1]):
     predicted_firing_rate[:, receiver_neu] = np.squeeze(models[receiver_neu].predict(
         convolved_count
     )) * conv_spk.rate
 
-predicted_firing_rate = nap.TsdFrame(t=count[window_size:].t, d=predicted_firing_rate)
+predicted_firing_rate = nap.TsdFrame(t=count.t, d=predicted_firing_rate)
 
 # %%
 # Plot fit predictions over a short window not used for training.
