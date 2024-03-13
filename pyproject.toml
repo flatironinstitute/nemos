@@ -62,7 +62,8 @@ docs = [
     "mkdocs-material",              # Material theme for mkdocs
     "mkdocs-autorefs>=0.5",
     "scikit-learn",
-    "dandi"
+    "dandi",
+    "ipython"
 ]
 
 
