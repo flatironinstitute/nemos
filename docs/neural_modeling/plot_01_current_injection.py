@@ -246,10 +246,6 @@ spikes[0]
 # Similar to `current`, this object originally contains data from the entire
 # experiment. To get only the data we need, we again use
 # `restrict(noise_interval)`:
-#
-# <div class="notes">"
-# Let's restrict to the same epoch `noise_interval`:
-# </div>
 
 spikes = spikes.restrict(noise_interval)
 print(spikes)
@@ -277,7 +273,7 @@ ax.set_xlabel("Time (s)")
 #
 # Before using the Generalized Linear Model, or any model, it's worth taking
 # some time to examine our data and think about what features are interesting
-# and worth capturing. As we discussed in [tutorial 0](../00_conceptual_intro),
+# and worth capturing. As we discussed in the [background](../../background/plot_00_conceptual_intro),
 # the GLM is a model of the neuronal firing rate. However, in our experiments,
 # we do not observe the firing rate, only the spikes! Moreover, neural
 # responses are typically noisy&mdash;even in this highly controlled experiment
@@ -318,13 +314,6 @@ ax.set_xlabel("Time (s)")
 # interesting and would like a model to capture.
 #
 # First, we must convert from our spike times to binned spikes:
-#
-# <div class="notes">"
-# The Generalized Linear Model gives a predicted firing rate. First we can use
-# pynapple to visualize this firing rate for a single trial.
-# 
-# - `count` : count the number of events within `bin_size`
-# </div>
 
 # bin size in seconds
 bin_size = 0.001
@@ -336,11 +325,6 @@ count
 # Now, let's convert the binned spikes into the firing rate, by smoothing them
 # with a gaussian kernel. Pynapple again provides a convenience function for
 # this:
-# <div class="notes">"
-# Let's convert the spike counts to firing rate :
-# 
-# - `smooth` : convolve with a Gaussian kernel
-# </div>
 
 # the inputs to this function are the standard deviation of the gaussian and
 # the full width of the window, given in bins. So std=50 corresponds to a
@@ -351,13 +335,9 @@ firing_rate = firing_rate / bin_size
 
 # %%
 #
-# Note that this changes the object's type to a
-# [`TsdFrame`](https://pynapple-org.github.io/pynapple/reference/core/time_series/)!
-#
-# <div class="notes">"
 # Note that firing_rate is a [`TsdFrame`](https://pynapple-org.github.io/pynapple/reference/core/time_series/)!
 # 
-# </div>
+
 print(type(firing_rate))
 
 # %%
@@ -400,10 +380,8 @@ plotting.current_injection_plot(current, spikes, firing_rate)
 # binning our spikes based on the instantaneous input current and computing the
 # firing rate within those bins:
 #
-# <div class="notes">"
-# What is the relationship between the current and the spiking activity?
-# [`compute_1d_tuning_curves`](https://pynapple-org.github.io/pynapple/reference/process/tuning_curves/#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
-# </div>
+# !!! note "Tuning curve in `pynapple`"
+#     [`compute_1d_tuning_curves`](https://pynapple-org.github.io/pynapple/reference/process/tuning_curves/#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
 
 tuning_curve = nap.compute_1d_tuning_curves(spikes, current, nb_bins=15)
 tuning_curve
@@ -413,11 +391,6 @@ tuning_curve
 # `tuning_curve` is a pandas DataFrame where each column is a neuron (one
 # neuron in this case) and each row is a bin over the feature (here, the input
 # current). We can easily plot the tuning curve of the neuron:
-#
-# <div class="notes">"
-# Let's plot the tuning curve of the neuron.
-# </div>
-
 
 plotting.tuning_curve_plot(tuning_curve)
 
@@ -446,17 +419,16 @@ plotting.tuning_curve_plot(tuning_curve)
 #
 # - predictors and spike counts must have the same number of time points.
 #
-# - predictors must be two-dimensional, with shape `(n_time_bins, n_features)`.
+# - predictors must be three-dimensional, with shape `(n_time_bins, n_neurons, n_features)`.
 #   In this example, we have a single feature (the injected current).
 #
-# - spike counts must be one-dimensional, with shape `(n_time_bins,)`. As
+# - spike counts must be two-dimensional, with shape `(n_time_bins, n_neurons)`. As
 #   discussed above, `n_time_bins` must be the same for both the predictors and
 #   spike counts.
 #
 # - predictors and spike counts must be
 #   [`jax.numpy`](https://jax.readthedocs.io/en/latest/jax-101/01-jax-basics.html)
-#   arrays. As we'll see, we can easily convert between `jax.numpy` arrays,
-#   numpy arrays, and pynapple objects.
+#   arrays, `numpy` arrays or `pynapple` `TsdTensor`/`TsdFrame`.
 #
 # !!! info "What is jax?"
 #
@@ -472,11 +444,6 @@ plotting.tuning_curve_plot(tuning_curve)
 # spike counts to the proper resolution using the
 # [`bin_average`](https://pynapple-org.github.io/pynapple/reference/core/time_series/#pynapple.core.time_series.TsdTensor.bin_average)
 # method from pynapple:
-#
-# <div class="notes">
-#   - Get data from pynapple to nemos-ready format:
-#   - predictors and spikes must have same number of time points
-# </div>
 
 binned_current = current.bin_average(bin_size)
 
@@ -492,21 +459,16 @@ print(f"count sampling rate: {count.rate/1000:.02f} KHz")
 #
 # Secondly, we have to reshape our variables so that they are the proper shape:
 #
-# - `predictors`: `(n_time_bins, n_features)`
-# - `count`: `(n_time_bins, )`
+# - `predictors`: `(n_time_bins, n_neurons, n_features)`
+# - `count`: `(n_time_bins, n_neurons)`
 #
 # Because we only have a single predictor feature, we'll use
 # [`np.expand_dims`](https://numpy.org/doc/stable/reference/generated/numpy.expand_dims.html)
 # to handle .
-#
-# <div class="notes">
-#   - predictors must be 2d, spikes 1d
-# </div>
 
-# add singleton dimensions for axis 1.
-predictor = np.expand_dims(binned_current, 1)
-# grab the spike counts for our one neuron
-count = count[:, 0]
+
+# add two dimensions for axis 1 and 2.
+predictor = np.expand_dims(binned_current, (1, 2))
 
 # check that the dimensionality matches nemos expectation
 print(f"predictor shape: {predictor.shape}")
@@ -596,13 +558,8 @@ model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS
 # fit our data! In the previous section, we prepared our model matrix
 # (`predictor`) and target data (`count`), so to fit the model we just need to
 # pass them to the model:
-#
-# <div class="notes">
-#   - call fit and retrieve parameters
-# </div>
 
-predictor = np.expand_dims(predictor, 1)
-model.fit(predictor, np.expand_dims(count, 1))
+model.fit(predictor, count)
 
 # %%
 #
@@ -742,7 +699,7 @@ spikes = jax.random.poisson(jax.random.PRNGKey(0), predicted_fr.values)
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
 
-log_likelihood = model.score(predictor, np.expand_dims(count, 1), score_type="log-likelihood")
+log_likelihood = model.score(predictor, count, score_type="log-likelihood")
 print(f"log-likelihood: {log_likelihood}")
 
 # %%
@@ -763,31 +720,32 @@ print(f"log-likelihood: {log_likelihood}")
 # compared across datasets (because e.g., it won't account for difference in
 # noise levels). We provide the ability to compute the pseudo-$R^2$ for this
 # purpose:
-model.score(predictor, np.expand_dims(count, 1), score_type='pseudo-r2-Cohen')
+model.score(predictor, count, score_type='pseudo-r2-Cohen')
 
-# ## Citation {.keep-text}
+# %%
+# ## Citation
 #
-# The data used in this tutorial is from the Allen Brain Map, with the
+# The data used in this tutorial is from the **Allen Brain Map**, with the
 # [following
 # citation](https://knowledge.brain-map.org/data/1HEYEW7GMUKWIQW37BO/summary):
 #
-# Contributors: Agata Budzillo, Bosiljka Tasic, Brian R. Lee, Fahimeh
+# **Contributors:** Agata Budzillo, Bosiljka Tasic, Brian R. Lee, Fahimeh
 # Baftizadeh, Gabe Murphy, Hongkui Zeng, Jim Berg, Nathan Gouwens, Rachel
 # Dalley, Staci A. Sorensen, Tim Jarsky, Uygar Sümbül Zizhen Yao
 #
-# Dataset: Allen Institute for Brain Science (2020). Allen Cell Types Database
+# **Dataset:** Allen Institute for Brain Science (2020). Allen Cell Types Database
 # -- Mouse Patch-seq [dataset]. Available from
 # brain-map.org/explore/classes/multimodal-characterization.
 #
-# Primary publication: Gouwens, N.W., Sorensen, S.A., et al. (2020). Integrated
+# **Primary publication:** Gouwens, N.W., Sorensen, S.A., et al. (2020). Integrated
 # morphoelectric and transcriptomic classification of cortical GABAergic cells.
 # Cell, 183(4), 935-953.E19. https://doi.org/10.1016/j.cell.2020.09.057
 #
-# Patch-seq protocol: Lee, B. R., Budzillo, A., et al. (2021). Scaled, high
+# **Patch-seq protocol:** Lee, B. R., Budzillo, A., et al. (2021). Scaled, high
 # fidelity electrophysiological, morphological, and transcriptomic cell
 # characterization. eLife, 2021;10:e65482. https://doi.org/10.7554/eLife.65482
 #
-# Mouse VISp L2/3 glutamatergic neurons: Berg, J., Sorensen, S. A., Miller, J.,
+# **Mouse VISp L2/3 glutamatergic neurons:** Berg, J., Sorensen, S. A., Miller, J.,
 # Ting, J., et al. (2021) Human neocortical expansion involves glutamatergic
 # neuron diversification. Nature, 598(7879):151-158. doi:
 # 10.1038/s41586-021-03813-8
