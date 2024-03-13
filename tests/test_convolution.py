@@ -290,9 +290,7 @@ class TestPadding:
             ),
             (
                 np.zeros([1, 1, 1]),
-                pytest.raises(
-                    ValueError, match="conv_time_series must be a pytree of 3D arrays"
-                ),
+                does_not_raise(),
             ),
             (
                 np.zeros([1]),
