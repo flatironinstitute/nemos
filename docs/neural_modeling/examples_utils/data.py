@@ -23,6 +23,8 @@ from pynwb import NWBHDF5IO
 
 
 def download_data(filename, url, data_dir):
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
     filename = op.join(data_dir, filename)
     if not os.path.exists(filename):
         r = requests.get(url, stream=True)

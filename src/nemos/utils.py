@@ -464,7 +464,7 @@ def shift_time_series(
         )
 
 
-@support_pynapple
+@support_pynapple(conv_type="jax")
 def create_convolutional_predictor(
     basis_matrix: ArrayLike,
     time_series: Any,
@@ -725,7 +725,7 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
         )
 
 
-@support_pynapple
+@support_pynapple(conv_type="jax")
 def pynapple_concatenate(
     arrays: Union[Tsd, TsdFrame, TsdTensor, jnp.ndarray, NDArray],
     axis: int = 1,
