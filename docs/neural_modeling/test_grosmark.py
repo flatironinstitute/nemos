@@ -3,16 +3,14 @@
 # @Date:   2024-03-12 17:28:33
 # @Last Modified by:   Guillaume Viejo
 # @Last Modified time: 2024-03-14 12:55:17
-import jax
+
 from matplotlib.pyplot import *
 import numpy as np
 import pynapple as nap
-from examples_utils import data
-from scipy.ndimage import gaussian_filter
-import sys, os
+
+import os
 import nemos as nmo
-from scipy.io import loadmat
-import pandas as pd
+
 
 # ################
 # units = loadmat("/mnt/home/gviejo/Downloads/Achilles_10252013_spikes_cellinfo.mat")
@@ -32,9 +30,9 @@ import pandas as pd
 # theta = nap.Tsd(t=theta_info['theta']['time'], d=theta_info['theta']['phase'])
 # ################
 
-spikes = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_spikes.npz"))
-position = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_position.npz"))
-theta = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_theta.npz"))
+spikes = nap.load_file(os.path.expanduser("/Users/ebalzani/Downloads/Achilles_10252013/Achilles_10252013_spikes.npz"))
+position = nap.load_file(os.path.expanduser("/Users/ebalzani/Downloads/Achilles_10252013/Achilles_10252013_position.npz"))
+theta = nap.load_file(os.path.expanduser("/Users/ebalzani/Downloads/Achilles_10252013/Achilles_10252013_theta.npz"))
 
 
 # only the pyr
@@ -90,8 +88,8 @@ glm.fit(X, count[:,[neuron]])
 
 
 w_pos = glm.coef_[0, 0:10]
-w_phase = glm.coef_[0,10:22]
-w_speed = glm.coef_[0,-15:]
+w_phase = glm.coef_[0, 10:22]
+w_speed = glm.coef_[0, -15:]
 
 
 samples, eval_basis = speed_basis.evaluate_on_grid(100)
@@ -144,5 +142,19 @@ for i in range(10*11):
 
 show()
 
+from sklearn.linear_model import PoissonRegressor
+import jax
+from copy import deepcopy
 
+model = PoissonRegressor(alpha=0, tol=10**-12)
+model.fit(X.d[:,0], count.d[:,10])
+jax.config.update("jax_enable_x64", True)
+glm = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12)))
+glm.fit(X, count[:, 10:11])
+glm_skl = deepcopy(glm)
+glm_skl.coef_ = model.coef_[np.newaxis]
+glm_skl.intercept = np.asarray([model.intercept_])
+
+print("nemos", glm.score(X, count[:, 10:11], score_type="log-likelihood"))
+print("skl", glm_skl.score(X, count[:, 10:11], score_type="log-likelihood"))
 
