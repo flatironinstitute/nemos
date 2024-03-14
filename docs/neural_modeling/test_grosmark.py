@@ -31,9 +31,14 @@ from sklearn.model_selection import GridSearchCV
 # theta = nap.Tsd(t=theta_info['theta']['time'], d=theta_info['theta']['phase'])
 # ################
 
-spikes = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_spikes.npz"))
-position = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_position.npz"))
-theta = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_theta.npz"))
+# spikes = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_spikes.npz"))
+# position = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_position.npz"))
+# theta = nap.load_file(os.path.expanduser("~/Dropbox/Achilles_10252013/Achilles_10252013_theta.npz"))
+
+spikes = nap.load_file(os.path.expanduser("/Users/ebalzani/Downloads/Achilles_10252013/Achilles_10252013_spikes.npz"))
+position = nap.load_file(os.path.expanduser("/Users/ebalzani/Downloads/Achilles_10252013/Achilles_10252013_position.npz"))
+theta = nap.load_file(os.path.expanduser("/Users/ebalzani/Downloads/Achilles_10252013/Achilles_10252013_theta.npz"))
+
 
 
 # only the pyr
@@ -84,16 +89,20 @@ X = X[:,None,:]
 
 neuron = 77
 
-glm = nmo.glm.GLM(regularizer=nmo.regularizer.Lasso(regularizer_strength=1e-5, solver_kwargs=dict(tol=10**-12)))
-#glm = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12)))
+mask = np.zeros((2, 135))
+mask[0,:120] = 1
+mask[1,120:] = 1
+
+glm = nmo.glm.GLM(regularizer=nmo.regularizer.GroupLasso("ProximalGradient", mask=mask, regularizer_strength=1e-5, solver_kwargs=dict(tol=10**-12)))
+# glm = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12)))
 glm.fit(X, count[:,[neuron]])
 
-# reg = {"regularizer__regularizer_strength":np.logspace(-5, -1, 5)}
+reg = {"regularizer__regularizer_strength":np.logspace(-8, -1, 5)}
 
-# cls = GridSearchCV(glm, reg)
-# cls.fit(X, count[:, [neuron]])
+cls = GridSearchCV(glm, reg)
+cls.fit(X, count[:, [neuron]])
 
-# glm = cls.best_estimator_
+glm = cls.best_estimator_
 
 
 w_speed = glm.coef_[0,-15:]
@@ -126,10 +135,11 @@ lin_pred = np.exp(
 
 tc_sp_glm = nap.compute_1d_tuning_curves_continuous(lin_pred[:,None], speed, 20, position.time_support)
 
-pr = glm.predict(X)/bin_size
+pr = glm.predict(X) / bin_size
 tc_pf_glm = nap.compute_1d_tuning_curves_continuous(pr, position, 50, position.time_support)
 
-
+tmp = nap.TsdFrame(t=position.t, d=np.vstack((position.d, phase.d)).T, time_support = position.time_support)
+tc_pf_glm_2d, xybins_glm = nap.compute_2d_tuning_curves_continuous(pr, tmp, 20, position.time_support)
 
 figure()
 subplot(221)
@@ -143,54 +153,60 @@ plot(tc_pf_glm.values[:,0])
 # show()
 
 
-figure()
-subplot(131)
+figure(figsize=(6,8))
+subplot(311)
 imshow(out, origin='lower', aspect='auto')
-subplot(132)
-imshow(tc_pos_ph[list(tc_pos_ph.keys())[neuron]], origin='lower', aspect='auto')
+subplot(312)
 
+vmin = min(np.min(tc_pos_ph[list(tc_pos_ph.keys())[neuron]]), np.min(tc_pf_glm_2d[0]))
+vmax = max(np.max(tc_pos_ph[list(tc_pos_ph.keys())[neuron]]), np.max(tc_pf_glm_2d[0]))
+
+imshow(tc_pos_ph[list(tc_pos_ph.keys())[neuron]], origin='lower', aspect='auto',vmin=vmin,vmax=vmax)
+subplot(313)
+imshow(tc_pf_glm_2d[0], origin='lower', aspect='auto',vmin=vmin,vmax=vmax)
 show()
+tight_layout()
 
-
-import sys
-sys.exit()
-
-figure()
-
-
-plot(position, color = 'black')
-[axvspan(s,e, alpha = 0.4) for s,e in position.time_support.values]
-
-figure()
-for i in range(10*11):
-	subplot(10, 11, i+1)
-	fill_between(tc_pf.index.values, np.zeros(len(tc_pf)), tc_pf.values[:,i])
-	title(i)
-	xticks([])
-	yticks([])
-figure()
-for i in range(10*11):
-	subplot(10, 11, i+1)
-	fill_between(tc_sp.index.values, np.zeros(len(tc_sp)), tc_sp.values[:,i])
-	title(i)
-	xticks([])
-	yticks([])
-
-show()
-
-from sklearn.linear_model import PoissonRegressor
-import jax
-from copy import deepcopy
-
-model = PoissonRegressor(alpha=0, tol=10**-12)
-model.fit(X.d[:,0], count.d[:,10])
-jax.config.update("jax_enable_x64", True)
-glm = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12)))
-glm.fit(X, count[:, 10:11])
-glm_skl = deepcopy(glm)
-glm_skl.coef_ = model.coef_[np.newaxis]
-glm_skl.intercept = np.asarray([model.intercept_])
-
-print("nemos", glm.score(X, count[:, 10:11], score_type="log-likelihood"))
-print("skl", glm_skl.score(X, count[:, 10:11], score_type="log-likelihood"))
-
+#
+# import sys
+# sys.exit()
+#
+# figure()
+#
+#
+# plot(position, color = 'black')
+# [axvspan(s,e, alpha = 0.4) for s,e in position.time_support.values]
+#
+# figure()
+# for i in range(10*11):
+# 	subplot(10, 11, i+1)
+# 	fill_between(tc_pf.index.values, np.zeros(len(tc_pf)), tc_pf.values[:,i])
+# 	title(i)
+# 	xticks([])
+# 	yticks([])
+# figure()
+# for i in range(10*11):
+# 	subplot(10, 11, i+1)
+# 	fill_between(tc_sp.index.values, np.zeros(len(tc_sp)), tc_sp.values[:,i])
+# 	title(i)
+# 	xticks([])
+# 	yticks([])
+#
+# show()
+#
+# from sklearn.linear_model import PoissonRegressor
+# import jax
+# from copy import deepcopy
+#
+# model = PoissonRegressor(alpha=0, tol=10**-12)
+# model.fit(X.d[:,0], count.d[:,10])
+# jax.config.update("jax_enable_x64", True)
+# glm = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12)))
+# glm.fit(X, count[:, 10:11])
+# glm_skl = deepcopy(glm)
+# glm_skl.coef_ = model.coef_[np.newaxis]
+# glm_skl.intercept = np.asarray([model.intercept_])
+#
+# print("nemos", glm.score(X, count[:, 10:11], score_type="log-likelihood"))
+# print("skl", glm_skl.score(X, count[:, 10:11], score_type="log-likelihood"))
+#
