@@ -141,7 +141,7 @@ class GLM(BaseRegressor):
             + bs[None, :]
         )
 
-    @support_pynapple
+    @support_pynapple(conv_type="jax")
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters.
 
