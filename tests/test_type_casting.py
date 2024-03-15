@@ -321,3 +321,45 @@ def test_jnp_asarray_if(inp, expected):
 def test_check_all_close(inp, expected):
     """Evaluate conditional conversion to JAX array based on input characteristics."""
     assert nmo.type_casting._check_all_close(inp) == expected
+
+@pytest.mark.parametrize(
+    "data, cls",
+    [
+        (np.zeros((10, )), nap.Tsd),
+        (np.zeros((10, 1)), nap.TsdFrame),
+        (np.zeros((10, 1, 1)), nap.TsdFrame),
+    ]
+)
+@pytest.mark.parametrize(
+    "t1, t2, expectation",
+    [
+        (np.arange(10), np.arange(10), does_not_raise()),
+        (np.arange(10), np.arange(10) + 1, pytest.raises(ValueError,
+                                                    match="Time axis mismatch. pynapple objects have mismatching"))
+    ]
+)
+def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
+    @nmo.type_casting.support_pynapple(conv_type="jax")
+    def func(*x):
+        return x
+    with expectation:
+        func(cls(t=t1, d=data), cls(t=t2, d=data))
+
+
+@pytest.mark.parametrize(
+    "tsds, expectation",
+    [
+        ([nap.Tsd(t=np.arange(10), d=np.arange(10)), nap.Tsd(t=np.arange(11), d=np.arange(11))],
+         pytest.raises(ValueError, match="Time axis mismatch. pynapple objects have mismatching")),
+        ([nap.Tsd(t=np.arange(10), d=np.arange(10)),
+          nap.Tsd(t=np.arange(1), d=np.arange(1)),
+          nap.Tsd(t=np.arange(10), d=np.arange(10))],
+         pytest.raises(ValueError,match="Time axis mismatch. pynapple objects have mismatching"))
+    ]
+)
+def test_equal_time_axis_different_len(tsds, expectation):
+    @nmo.type_casting.support_pynapple(conv_type="jax")
+    def func(*x):
+        return x
+    with expectation:
+        func(*tsds)
