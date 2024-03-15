@@ -47,12 +47,8 @@ spikes = dataset["units"]
 stimulus = dataset["whitenoise"]
 
 # %%
-# stimulus is white noise shown at 40 Hz
-# <div class="notes">
-#   - stimulus is white noise shown at 40 Hz
-#   - white noise is a good stimulus for mapping basic stimulus properties of
-#     V1 simple cells
-# </div>
+# Stimulus is white noise shown at 40 Hz
+
 fig, ax = plt.subplots(1, 1, figsize=(12,4))
 ax.imshow(stimulus[0], cmap='Greys_r')
 stimulus.shape
@@ -63,12 +59,6 @@ print(spikes)
 spikes = spikes[[34]]
 
 # %%
-#
-# <div class="notes">
-#   - goal is to predict the neuron's response to this white noise stimuli
-#   - several ways we could do this, what do you think?
-# </div>
-#
 # How could we predict neuron's response to white noise stimulus?
 # 
 # - we could fit the instantaneous spatial response. that is, just predict
@@ -94,7 +84,7 @@ spikes = spikes[[34]]
 # using spike-triggered average, and then we'll use the GLM to fit the temporal
 # timecourse.
 #
-# ## Spike-triggered average {.strip-code}
+# ## Spike-triggered average
 #
 # Spike-triggered average says: every time our neuron spikes, we store the
 # stimulus that was on the screen. for the whole recording, we'll have many of
@@ -104,10 +94,7 @@ spikes = spikes[[34]]
 # In practice, we do not just the stimulus on screen, but in some window of
 # time around it. (it takes some time for info to travel through the eye/LGN to
 # V1). Pynapple makes this easy:
-#
-# <div class="notes">
-#   - compute spike-triggered average to visualize receptive field.
-# </div>
+
 
 sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
                                         windowsize=(-0.15, 0.0))
@@ -115,6 +102,7 @@ sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
 #
 # sta is a `TsdTensor`, which gives us the 2d receptive field at each of the
 # time points.
+
 sta
 
 # %%
@@ -124,10 +112,6 @@ sta[1, 0]
 
 # %%
 # we can easily plot this
-#
-# <div class="notes">
-#   - visualize spike-triggered average and decide on our spatial filter.
-# </div>
 
 fig, axes = plt.subplots(1, len(sta), figsize=(3*len(sta),3))
 for i, t in enumerate(sta.t):
@@ -155,10 +139,6 @@ ax.imshow(receptive_field, cmap='Greys_r')
 # This receptive field gives us the spatial part of the linear response: it
 # gives a map of weights that we use for a weighted sum on an image. There are
 # multiple ways of performing this operation:
-#
-# <div class="notes">
-#   - use the spike-triggered average to preprocess our visual input.
-# </div>
 
 # element-wise multiplication and sum
 print((receptive_field * stimulus[0]).sum())
@@ -198,14 +178,10 @@ ax.plot(filtered_stimulus)
 #
 # This, then, is the spatial component of our input, as described above.
 #
-# ## Preparing data for nemos {.strip-code}
+# ## Preparing data for nemos
 #
 # We'll now use the GLM to fit the temporal component. To do that, let's get
 # this and our spike counts into the proper format for nemos:
-#
-# <div class="notes">
-#   - get `counts` and `filtered_stimulus` into proper shape for nemos
-# </div>
 
 # grab spikes from when we were showing our stimulus, and bin at 1 msec
 # resolution
@@ -221,6 +197,7 @@ print(filtered_stimulus.rate)
 # and so we used `bin_average` to down-sample to the appropriate rate. When the
 # input is at a lower rate, we need to think a little more carefully about how
 # to up-sample.
+
 print(counts[:5])
 print(filtered_stimulus[:5])
 
@@ -241,10 +218,7 @@ filtered_stimulus
 # Now, similar to the [head direction tutorial](../02_head_direction), we'll
 # use the log-stretched raised cosine basis to create the predictor for our
 # GLM:
-#
-# <div class="notes">
-#   - Set up the basis and prepare the temporal predictor for the GLM.
-# </div>
+
 basis = nmo.basis.RaisedCosineBasisLog(8)
 window_size = 100
 time, basis_kernels = basis.evaluate_on_grid(window_size)
@@ -257,10 +231,7 @@ convolved_input = nmo.utils.create_convolutional_predictor(basis_kernels, [filte
 # ## Fitting the GLM {.strip-code}
 #
 # Now we're ready to fit the model! Let's do it, same as before:
-#
-# <div class="notes">
-#   - Fit the GLM
-# </div>
+
 
 model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
 model.fit(convolved_input, counts)
@@ -269,10 +240,7 @@ model.fit(convolved_input, counts)
 #
 # We have our coefficients for each of our 8 basis functions, let's combine
 # them to get the temporal time course of our input:
-#
-# <div class="notes">
-#   - Examine the resulting temporal filter
-# </div>
+
 
 temp_weights = np.einsum('i b, t b -> t', model.coef_, basis_kernels)
 plt.plot(time, temp_weights)
