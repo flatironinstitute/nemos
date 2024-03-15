@@ -327,7 +327,7 @@ def test_check_all_close(inp, expected):
     [
         (np.zeros((10, )), nap.Tsd),
         (np.zeros((10, 1)), nap.TsdFrame),
-        (np.zeros((10, 1, 1)), nap.TsdFrame),
+        (np.zeros((10, 1, 1)), nap.TsdTensor),
     ]
 )
 @pytest.mark.parametrize(
@@ -357,9 +357,25 @@ def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
          pytest.raises(ValueError,match="Time axis mismatch. pynapple objects have mismatching"))
     ]
 )
-def test_equal_time_axis_different_len(tsds, expectation):
-    @nmo.type_casting.support_pynapple(conv_type="jax")
+@pytest.mark.parametrize("conv_type", ["numpy", "jax"])
+def test_equal_time_axis_different_len(tsds, conv_type, expectation):
+    @nmo.type_casting.support_pynapple(conv_type=conv_type)
     def func(*x):
         return x
     with expectation:
         func(*tsds)
+
+
+@pytest.mark.parametrize(
+    "conv_type, expectation",
+    [
+        ("numpy", does_not_raise()), ("jax", does_not_raise()), ("not_implemented", pytest.raises(
+        NotImplementedError, match="Conversion of type 'not_implemented'"))
+    ]
+)
+def test_conv_type(conv_type, expectation):
+    @nmo.type_casting.support_pynapple(conv_type=conv_type)
+    def func(*x):
+        return x
+    with expectation:
+        func(nap.Tsd(t=np.arange(10), d=np.arange(10)))

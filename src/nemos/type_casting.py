@@ -342,6 +342,11 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
     -------
     :
         A wrapper function that applies the specified casting behavior.
+
+    Raises
+    ------
+    NotImplementedError:
+        If the conversion type is not implemented.
     """
 
     def decorator(func):
@@ -377,6 +382,10 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
             elif conv_type == "numpy":
                 # cast to numpy
                 args, kwargs = jax.tree_map(np_asarray_if, (args, kwargs))
+            else:
+                raise NotImplementedError(
+                    f"Conversion of type '{conv_type}' not implemented!"
+                )
             # apply function/method
             res = func(*args, **kwargs)
             # revert casting if pynapple
