@@ -263,8 +263,8 @@ def cast_to_pynapple(
     :
      A pynapple time series object based on the input array.
     """
+    # keep time on CPU, pynapple numba operations on time are more efficient
     time = np.asarray(time)
-    array = np.asarray(array)
     if array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
@@ -342,12 +342,20 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
     -------
     :
         A wrapper function that applies the specified casting behavior.
+
+    Raises
+    ------
+    NotImplementedError:
+        If the conversion type is not implemented.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # check for the presence of any pynapple tsd/tsdFrame/tsdTensor
-            any_nap = tree_utils.pytree_map_and_reduce(is_pynapple_tsd, any, (args, kwargs))
+            any_nap = tree_utils.pytree_map_and_reduce(
+                is_pynapple_tsd, any, (args, kwargs)
+            )
 
             # type casting pynapple
             if any_nap:
@@ -365,10 +373,8 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
 
             else:
-
-                def cast_out(tree):
-                    # no type casting
-                    return tree
+                # if no pynapple time series is present, apply the function/method
+                return func(*args, **kwargs)
 
             if conv_type == "jax":
                 # cast to jax
@@ -376,10 +382,15 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
             elif conv_type == "numpy":
                 # cast to numpy
                 args, kwargs = jax.tree_map(np_asarray_if, (args, kwargs))
+            else:
+                raise NotImplementedError(
+                    f"Conversion of type '{conv_type}' not implemented!"
+                )
             # apply function/method
             res = func(*args, **kwargs)
             # revert casting if pynapple
             return cast_out(res)
 
         return wrapper
+
     return decorator
