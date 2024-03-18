@@ -20,6 +20,9 @@ from examples_utils import data, plotting
 
 import nemos as nmo
 
+# configure pynapple to ignore conversion warning
+nap.config.nap_config.suppress_conversion_warnings = True
+
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")
 
@@ -401,7 +404,6 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 
 
 conv_spk = nmo.utils.create_convolutional_predictor(basis_kernels, [count_tsdframe])[0]
-conv_spk = nap.TsdTensor(t=count.t, d=np.asarray(conv_spk))
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -492,8 +494,8 @@ print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), cou
 # Let's extract and plot the rates
 
 
-rate_basis = nap.TsdFrame(t=conv_spk.t, d=np.asarray(model_basis.predict(conv_spk.d))) * conv_spk.rate
-rate_history = nap.TsdFrame(t=conv_spk.t, d=np.asarray(model.predict(input_feature))) * conv_spk.rate
+rate_basis = model_basis.predict(conv_spk) * conv_spk.rate
+rate_history = model.predict(input_feature) * conv_spk.rate
 ep = nap.IntervalSet(start=8819.4, end=8821)
 
 # plot the rates
@@ -541,7 +543,7 @@ for neu in range(count.shape[1]):
         regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1, solver_name="LBFGS")
     )
     model.fit(convolved_count, count_neu.restrict(convolved_count.time_support))
-    models.append(deepcopy(model))
+    models.append(model)
 
 
 # %%
