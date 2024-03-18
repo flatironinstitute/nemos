@@ -191,13 +191,16 @@ plotting.run_animation(neuron_count, epoch_one_spk.start[0])
 # [`nemos.utils.create_convolutional_predictor`](../../../reference/nemos/utils/#nemos.utils.create_convolutional_predictor)
 # function.
 
+# reshape counts to (num_samples, num_neurons)
+count_tsdframe = np.expand_dims(neuron_count, 1)
+
 # convert the prediction window to bins (by multiplying with the sampling rate)
 window_size = int(window_size_sec * neuron_count.rate)
 
 # convolve the counts with the identity matrix.
 plt.close("all")
 input_feature = nmo.utils.create_convolutional_predictor(
-    np.eye(window_size), [np.expand_dims(neuron_count, 1)]
+    np.eye(window_size), [count_tsdframe]
 )[0]
 
 # print the NaN indices along the time axis
@@ -229,11 +232,6 @@ plotting.plot_features(input_feature, count.rate, suptitle)
 # In the previous tutorial our feature was 1-dimensional (just the current), now
 # instead the feature dimension is 80, because our bin size was 0.01 sec and the window size is 0.8 sec.
 # We can learn these weights by maximum likelihood by fitting a GLM.
-#
-
-
-# convert features to TsdFrame
-input_feature = nap.TsdTensor(t=neuron_count.t, d=np.asarray(input_feature))
 
 # %%
 # #### Fitting the Model
@@ -265,7 +263,7 @@ model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
 # Fit over the training epochs
 model.fit(
     input_feature.restrict(first_half),
-    np.expand_dims(neuron_count.restrict(first_half), 1)
+    count_tsdframe.restrict(first_half)
 )
 
 # %%
@@ -290,7 +288,7 @@ plt.legend()
 model_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
 model_second_half.fit(
     input_feature.restrict(second_half),
-    np.expand_dims(neuron_count.restrict(second_half), 1)
+    count_tsdframe.restrict(second_half)
 )
 
 plt.figure()
@@ -402,7 +400,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 # This can be performed in nemos.
 
 
-conv_spk = nmo.utils.create_convolutional_predictor(basis_kernels, np.expand_dims(neuron_count, (0, 2)))[0]
+conv_spk = nmo.utils.create_convolutional_predictor(basis_kernels, [count_tsdframe])[0]
 conv_spk = nap.TsdTensor(t=count.t, d=np.asarray(conv_spk))
 
 print(f"Raw count history as feature: {input_feature.shape}")
@@ -424,7 +422,7 @@ plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_mult
 
 # use restrict on interval set training
 model_basis = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_basis.fit(conv_spk.restrict(first_half), np.expand_dims(neuron_count.restrict(first_half),1))
+model_basis.fit(conv_spk.restrict(first_half), count_tsdframe.restrict(first_half))
 
 # %%
 # We can plot the resulting response, noting that the weights we just learned needs to be "expanded" back
@@ -458,7 +456,7 @@ plt.legend()
 # by visual comparison, as we did previously. Let's fit the second half of the dataset.
 
 model_basis_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_basis_second_half.fit(conv_spk.restrict(second_half), np.expand_dims(neuron_count.restrict(second_half),1))
+model_basis_second_half.fit(conv_spk.restrict(second_half), count_tsdframe.restrict(second_half))
 
 # compute responses for the 2nd half fit
 self_connection_second_half = np.matmul(basis_kernels, np.squeeze(model_basis_second_half.coef_))
@@ -481,14 +479,14 @@ plt.legend()
 
 # compare model scores, as expected the training score is better with more parameters
 # this may could be over-fitting.
-print(f"full history train score: {model.score(input_feature.restrict(first_half), np.expand_dims(neuron_count.restrict(first_half), 1), score_type='pseudo-r2-Cohen')}")
-print(f"basis train score: {model_basis.score(conv_spk.restrict(first_half), np.expand_dims(neuron_count.restrict(first_half), 1), score_type='pseudo-r2-Cohen')}")
+print(f"full history train score: {model.score(input_feature.restrict(first_half), count_tsdframe.restrict(first_half), score_type='pseudo-r2-Cohen')}")
+print(f"basis train score: {model_basis.score(conv_spk.restrict(first_half), count_tsdframe.restrict(first_half), score_type='pseudo-r2-Cohen')}")
 
 # %%
 # To check that, let's try to see ho the model perform on unseen data and obtaining a test
 # score.
-print(f"\nfull history test score: {model.score(input_feature.restrict(second_half), np.expand_dims(neuron_count.restrict(second_half), 1), score_type='pseudo-r2-Cohen')}")
-print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), np.expand_dims(neuron_count.restrict(second_half), 1), score_type='pseudo-r2-Cohen')}")
+print(f"\nfull history test score: {model.score(input_feature.restrict(second_half), count_tsdframe.restrict(second_half), score_type='pseudo-r2-Cohen')}")
+print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), count_tsdframe.restrict(second_half), score_type='pseudo-r2-Cohen')}")
 
 # %%
 # Let's extract and plot the rates
