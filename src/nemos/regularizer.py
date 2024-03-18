@@ -366,7 +366,9 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-        return super().instantiate_solver(loss, self.regularizer_strength, *args, **kwargs)
+        return super().instantiate_solver(
+            loss, self.regularizer_strength, *args, **kwargs
+        )
 
 
 class Lasso(ProxGradientRegularizer):
