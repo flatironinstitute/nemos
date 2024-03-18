@@ -10,7 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
-from typing import Any, Callable, List, Union
+from typing import Any, Callable, List, Literal, Union
 
 import jax
 import jax.numpy as jnp
@@ -263,8 +263,8 @@ def cast_to_pynapple(
     :
      A pynapple time series object based on the input array.
     """
+    # keep time on CPU, pynapple numba operations on time are more efficient
     time = np.asarray(time)
-    array = np.asarray(array)
     if array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
@@ -299,7 +299,33 @@ def jnp_asarray_if(
     return x
 
 
-def support_pynapple(func: Callable) -> Callable:
+def np_asarray_if(
+    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like
+) -> Any:
+    """
+    Conditionally convert an object to a numpy array.
+
+    Applies the conversion if the specified condition is met. Allows for flexible handling of inputs that should
+    be treated as arrays for numerical computations.
+
+    Parameters
+    ----------
+    x:
+        Object to potentially convert.
+    condition:
+        A callable that determines whether conversion should occur.
+
+    Returns
+    -------
+    :
+        The original object or its conversion to a numpy array, based on the condition.
+    """
+    if condition(x):
+        x = np.asarray(x)
+    return x
+
+
+def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
     """
     Decorate a function to cast inputs between JAX arrays and pynapple objects.
 
@@ -309,46 +335,62 @@ def support_pynapple(func: Callable) -> Callable:
 
     Parameters
     ----------
-    func
-        The function to decorate.
+    conv_type
+        The type of conversion. Either "numpy" or "jax".
 
     Returns
     -------
     :
         A wrapper function that applies the specified casting behavior.
+
+    Raises
+    ------
+    NotImplementedError:
+        If the conversion type is not implemented.
     """
 
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        # check for the presence of any pynapple tsd/tsdFrame/tsdTensor
-        any_nap = tree_utils.pytree_map_and_reduce(is_pynapple_tsd, any, (args, kwargs))
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # check for the presence of any pynapple tsd/tsdFrame/tsdTensor
+            any_nap = tree_utils.pytree_map_and_reduce(
+                is_pynapple_tsd, any, (args, kwargs)
+            )
 
-        # type casting pynapple
-        if any_nap:
-            # check if the time axis is the same
-            if not all_same_time_info(*args, **kwargs):
-                raise ValueError(
-                    "Time axis mismatch. pynapple objects have mismatching time axis."
+            # type casting pynapple
+            if any_nap:
+                # check if the time axis is the same
+                if not all_same_time_info(*args, **kwargs):
+                    raise ValueError(
+                        "Time axis mismatch. pynapple objects have mismatching time axis."
+                    )
+                time, time_support = _get_time_info(*args, **kwargs)
+
+                def cast_out(tree):
+                    # cast back to pynapple
+                    return jax.tree_map(
+                        lambda x: cast_to_pynapple(x, time, time_support), tree
+                    )
+
+            else:
+                # if no pynapple time series is present, apply the function/method
+                return func(*args, **kwargs)
+
+            if conv_type == "jax":
+                # cast to jax
+                args, kwargs = jax.tree_map(jnp_asarray_if, (args, kwargs))
+            elif conv_type == "numpy":
+                # cast to numpy
+                args, kwargs = jax.tree_map(np_asarray_if, (args, kwargs))
+            else:
+                raise NotImplementedError(
+                    f"Conversion of type '{conv_type}' not implemented!"
                 )
-            time, time_support = _get_time_info(*args, **kwargs)
+            # apply function/method
+            res = func(*args, **kwargs)
+            # revert casting if pynapple
+            return cast_out(res)
 
-            def cast_out(tree):
-                # cast back to pynapple
-                return jax.tree_map(
-                    lambda x: cast_to_pynapple(x, time, time_support), tree
-                )
+        return wrapper
 
-        else:
-
-            def cast_out(tree):
-                # no type casting
-                return tree
-
-        # cast to jax
-        args, kwargs = jax.tree_map(jnp_asarray_if, (args, kwargs))
-        # apply function/method
-        res = func(*args, **kwargs)
-        # revert casting if pynapple
-        return cast_out(res)
-
-    return wrapper
+    return decorator
