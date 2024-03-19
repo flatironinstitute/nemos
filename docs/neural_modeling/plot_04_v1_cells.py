@@ -2,7 +2,10 @@
 #
 """# Fit V1 cell
 
-## Learning objectives {.keep-text}
+!!! warning
+    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/5a267a523e35095644df008a6d460d6b76b0a753/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
+
+## Learning objectives
 
  - Learn how to combine GLM with other modeling approach.
  - Review previous background.
@@ -225,10 +228,12 @@ time, basis_kernels = basis.evaluate_on_grid(window_size)
 time *= bin_size * window_size
 convolved_input = nmo.utils.create_convolutional_predictor(basis_kernels, [filtered_stimulus])[0]
 
+# %%
+#
 # convolved_input has shape (n_time_pts, n_features, n_basis_funcs), and
 # n_features is the singleton dimension from filtered_stimulus.
 #
-# ## Fitting the GLM {.strip-code}
+# ## Fitting the GLM
 #
 # Now we're ready to fit the model! Let's do it, same as before:
 

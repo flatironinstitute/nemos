@@ -3,6 +3,8 @@
 """
 # Fit Grid Cells population
 
+!!! warning
+    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/5a267a523e35095644df008a6d460d6b76b0a753/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
 
 """
 
