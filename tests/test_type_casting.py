@@ -44,7 +44,7 @@ import nemos as nmo
             (nap.Tsd, nap.TsdTensor),
         ),
         # Test adding a scalar to different types of inputs
-        ([np.arange(3)], lambda x: x + 5, jnp.ndarray),
+        ([np.arange(3)], lambda x: x + 5, np.ndarray),
         ([jnp.arange(3)], lambda x: x + 5, jnp.ndarray),
         ([nap.Tsd(t=np.arange(3), d=np.arange(3))], lambda x: x + 5, nap.Tsd),
         # Test element-wise multiplication between array and Tsd
@@ -89,7 +89,98 @@ import nemos as nmo
 def test_decorator_output_type(inp, jax_func, expected_type):
     """Validate that the `cast_jax` decorator correctly casts output types based on input types."""
 
-    @nmo.type_casting.support_pynapple
+    @nmo.type_casting.support_pynapple(conv_type="jax")
+    def func(*x):
+        return jax_func(*x)
+
+    out = func(*inp)
+    assert nmo.tree_utils.pytree_map_and_reduce(
+        lambda x, y: isinstance(x, y), all, out, expected_type
+    )
+
+
+@pytest.mark.parametrize(
+    "inp, jax_func, expected_type",
+    [
+        ([jnp.arange(3)], lambda x: jnp.power(x, 2), jnp.ndarray),
+        ([np.arange(3)], lambda x: np.power(x, 2), np.ndarray),
+        ([nap.Tsd(t=np.arange(3), d=np.arange(3))], lambda x: jnp.power(x, 2), nap.Tsd),
+        (
+            [nap.TsdFrame(t=np.arange(3), d=np.expand_dims(np.arange(3), 1))],
+            lambda x: jnp.power(x, 2),
+            nap.TsdFrame,
+        ),
+        (
+            [nap.TsdTensor(t=np.arange(3), d=np.expand_dims(np.arange(3), (1, 2, 3)))],
+            lambda x: jnp.power(x, 2),
+            nap.TsdTensor,
+        ),
+        ([nmo.glm.GLM()], lambda x: x, nmo.glm.GLM),
+        (
+            [nap.Tsd(t=np.arange(3), d=np.arange(3)), np.arange(3)],
+            lambda x, y: (x + y, y),
+            (nap.Tsd, nap.Tsd),
+        ),
+        (
+            [nap.Tsd(t=np.arange(3), d=np.arange(3)), np.expand_dims(np.arange(3), 1)],
+            lambda x, y: (np.power(x, 2), x + y),
+            (nap.Tsd, nap.TsdFrame),
+        ),
+        (
+            [
+                nap.Tsd(t=np.arange(3), d=np.arange(3)),
+                np.expand_dims(np.arange(3), (1, 2)),
+            ],
+            lambda x, y: (np.power(x, 2), x + y),
+            (nap.Tsd, nap.TsdTensor),
+        ),
+        # Test adding a scalar to different types of inputs
+        ([np.arange(3)], lambda x: x + 5, np.ndarray),
+        ([jnp.arange(3)], lambda x: x + 5, jnp.ndarray),
+        ([nap.Tsd(t=np.arange(3), d=np.arange(3))], lambda x: x + 5, nap.Tsd),
+        # Test element-wise multiplication between array and Tsd
+        (
+            [np.arange(3), nap.Tsd(t=np.arange(3), d=np.arange(3))],
+            lambda x, y: x * y,
+            nap.Tsd,
+        ),
+        # Test concatenation of TsdFrames along a new dimension
+        (
+            [
+                nap.TsdFrame(t=np.arange(3), d=np.arange(3).reshape(-1, 1)),
+                nap.TsdFrame(t=np.arange(3), d=np.arange(3, 6).reshape(-1, 1)),
+            ],
+            lambda x, y: np.concatenate([x, y], axis=1),
+            nap.TsdFrame,
+        ),
+        # Test operation that reduces dimensionality, from TsdTensor to TsdFrame
+        (
+            [nap.TsdTensor(t=np.arange(3), d=np.random.rand(3, 2, 2))],
+            lambda x: x.mean(axis=2),  # Reduce last dimension
+            nap.TsdFrame,
+        ),
+        # Test mixing JAX array and NumPy array inputs resulting in a JAX array
+        (
+            [jnp.arange(3), np.arange(3)],
+            lambda x, y: x + y,
+            jnp.ndarray,
+        ),
+        # Test operation involving three inputs of mixed types
+        (
+            [
+                np.arange(3),
+                jnp.arange(3, 6),
+                nap.Tsd(t=np.arange(6, 9), d=np.arange(6, 9)),
+            ],
+            lambda x, y, z: (x + y, y + z),
+            (nap.Tsd, nap.Tsd),
+        ),
+    ],
+)
+def test_decorator_output_type_numpy(inp, jax_func, expected_type):
+    """Validate that the `cast_jax` decorator correctly casts output types based on input types."""
+
+    @nmo.type_casting.support_pynapple(conv_type="numpy")
     def func(*x):
         return jax_func(*x)
 
@@ -230,3 +321,61 @@ def test_jnp_asarray_if(inp, expected):
 def test_check_all_close(inp, expected):
     """Evaluate conditional conversion to JAX array based on input characteristics."""
     assert nmo.type_casting._check_all_close(inp) == expected
+
+@pytest.mark.parametrize(
+    "data, cls",
+    [
+        (np.zeros((10, )), nap.Tsd),
+        (np.zeros((10, 1)), nap.TsdFrame),
+        (np.zeros((10, 1, 1)), nap.TsdTensor),
+    ]
+)
+@pytest.mark.parametrize(
+    "t1, t2, expectation",
+    [
+        (np.arange(10), np.arange(10), does_not_raise()),
+        (np.arange(10), np.arange(10) + 1, pytest.raises(ValueError,
+                                                    match="Time axis mismatch. pynapple objects have mismatching"))
+    ]
+)
+def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
+    @nmo.type_casting.support_pynapple(conv_type="jax")
+    def func(*x):
+        return x
+    with expectation:
+        func(cls(t=t1, d=data), cls(t=t2, d=data))
+
+
+@pytest.mark.parametrize(
+    "tsds, expectation",
+    [
+        ([nap.Tsd(t=np.arange(10), d=np.arange(10)), nap.Tsd(t=np.arange(11), d=np.arange(11))],
+         pytest.raises(ValueError, match="Time axis mismatch. pynapple objects have mismatching")),
+        ([nap.Tsd(t=np.arange(10), d=np.arange(10)),
+          nap.Tsd(t=np.arange(1), d=np.arange(1)),
+          nap.Tsd(t=np.arange(10), d=np.arange(10))],
+         pytest.raises(ValueError,match="Time axis mismatch. pynapple objects have mismatching"))
+    ]
+)
+@pytest.mark.parametrize("conv_type", ["numpy", "jax"])
+def test_equal_time_axis_different_len(tsds, conv_type, expectation):
+    @nmo.type_casting.support_pynapple(conv_type=conv_type)
+    def func(*x):
+        return x
+    with expectation:
+        func(*tsds)
+
+
+@pytest.mark.parametrize(
+    "conv_type, expectation",
+    [
+        ("numpy", does_not_raise()), ("jax", does_not_raise()), ("not_implemented", pytest.raises(
+        NotImplementedError, match="Conversion of type 'not_implemented'"))
+    ]
+)
+def test_conv_type(conv_type, expectation):
+    @nmo.type_casting.support_pynapple(conv_type=conv_type)
+    def func(*x):
+        return x
+    with expectation:
+        func(nap.Tsd(t=np.arange(10), d=np.arange(10)))

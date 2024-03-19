@@ -22,10 +22,16 @@ plugins:
   - search
   - gallery:
         conf_script: docs/gallery_conf.py
-        # path to the directory containing our examples/tutorials
-        examples_dirs: docs/examples
+        # path to the directory containing our background/neural_modeling
+        examples_dirs:
+          - docs/background
+          - docs/api_guide
+          - docs/neural_modeling
         # path to the directory where mkdocs will save the generated output
-        gallery_dirs: docs/generated/gallery
+        gallery_dirs:
+          - docs/generated/background
+          - docs/generated/api_guide
+          - docs/generated/neural_modeling
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py            # Specify the script to generate the code reference pages
@@ -50,8 +56,10 @@ extra_css:
   - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/katex.min.css
 
 nav:
-    - Home: index.md                        # Link to the index.md file (home page)
+    - Home: index.md                          # Link to the index.md file (home page)
     - Installation Instructions: installation.md # Link to the installation.md file
-    - Tutorials: generated/gallery          # Link to the generated gallery as Tutorials
-    - For Developers: developers_notes/     # Link to the developers notes
-    - Code References: reference/           # Link to the reference/ directory
+    - Background: generated/background    # Link to the generated gallery Tutorials
+    - API Guide: generated/api_guide # Link to the generated gallery neural_modeling
+    - Neural Modeling: generated/neural_modeling # Link to the generated gallery neural_modeling
+    - For Developers: developers_notes/       # Link to the developers notes
+    - Code References: reference/             # Link to the reference/ directory

@@ -240,7 +240,7 @@ coupling_filter_duration = 100
 
 np.random.seed(101)
 
-# Gamma parameter for the inhibitory component of the fi;ter
+# Gamma parameter for the inhibitory component of the filter
 inhib_a = 1
 inhib_b = 1
 

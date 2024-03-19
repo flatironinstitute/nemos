@@ -28,7 +28,7 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple @ git+https://git@github.com/pynapple-org/pynapple"
+    "pynapple"
 ]
 
 
@@ -62,7 +62,8 @@ docs = [
     "mkdocs-material",              # Material theme for mkdocs
     "mkdocs-autorefs>=0.5",
     "scikit-learn",
-    "dandi"
+    "dandi",
+    "ipython"
 ]
 
 

@@ -73,6 +73,23 @@ Nemos also provides a variety of [basis functions][nemos.basis] for estimating
 more complicated, non-linear relationships between experimental variables and
 neuronal spiking.
 
+## Navigating Our Tutorials and Guides
+
+Our "API Guide", "Background" and "Neural Modeling" sections are continuously evolving and expanding. 
+While they are under development, we ensure they are regularly tested and ready for you to explore. 
+
+If your goal is a quick-start that would bring you up to speed with the main functionalities of the package, 
+you should focus on the [API Guide](generated/api_guide) section.
+
+If you seek a concise overview of the GLM framework and a detailed, step-by-step guide on building 
+your model with `nemos`, refer to the [Background](generated/background) section.
+
+If you want to learn more about the GLM framework and its applications in the field of Neuroscience, you should 
+check out the [Neural Modeling](generated/neural_modeling). Here you will find a number of real-data examples covering a 
+variety of Neuroscientific domains and brain regions. We sorted our examples from the simplest to the more complex,
+with the intent of gradually introducing the model components.
+
+
 ## Disclaimer
 
 Please note that this package is currently under development. While you can
