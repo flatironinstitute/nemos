@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from nemos import utils
+from nemos import convolve
 
 
 class Test1DConvolution:
@@ -23,21 +24,24 @@ class Test1DConvolution:
     def test_empty_basis(self, basis_matrix, expectation):
         vec = np.ones((1, 10))
         with expectation:
-            utils.convolve_1d_trials(basis_matrix, vec)
+            convolve._convolve_1d_trials(basis_matrix, vec)
 
     @pytest.mark.parametrize("window_size", [1, 2])
     @pytest.mark.parametrize("trial_len", [4, 5])
-    @pytest.mark.parametrize("array_dim", [2, 3])
+    @pytest.mark.parametrize("array_dim", [1, 2, 3])
     def test_output_trial_length(self, window_size, trial_len, array_dim):
         basis_matrix = np.zeros((window_size, 1))
-        time_series = np.zeros((trial_len, 1))
+        time_series = np.zeros((trial_len, ))
         sample_axis = 0
 
-        if array_dim == 3:
+        if array_dim == 2:
             time_series = np.expand_dims(time_series, axis=0)
-            sample_axis += 1
+            sample_axis = 1
+        if array_dim == 3:
+            time_series = np.expand_dims(time_series, axis=(0, 2))
+            sample_axis = 1
 
-        res = utils.convolve_1d_trials(basis_matrix, time_series)
+        res = convolve._convolve_1d_trials(basis_matrix, time_series, axis=sample_axis)
         if res.shape[sample_axis] != trial_len - window_size + 1:
             raise ValueError(
                 "The output of convolution in mode valid should be of "
@@ -45,72 +49,60 @@ class Test1DConvolution:
             )
 
     @pytest.mark.parametrize(
-        "time_series, check_func",
+        "time_series, check_func, axis",
         [
-            (np.zeros((20, 1)), lambda x: x.ndim == 3),
-            (np.zeros((1, 20, 1)), lambda x: x.ndim == 4),
-            ([np.zeros((20, 1)), np.zeros((20, 1))], lambda x: x.ndim == 3),
-            ([np.zeros((10, 1)), np.zeros((20, 1))], lambda x: x.ndim == 3),
+            (np.zeros((1, 20)), lambda x: x.ndim == 3, 1),
+            (np.zeros((20, )), lambda x: x.ndim == 2, 0),
+            ([np.zeros((20, )), np.zeros((10, ))], lambda x: x.ndim == 2, 0),
+            (np.zeros((20, 1)), lambda x: x.ndim == 3, 0),
+            (np.zeros((1, 20, 1)), lambda x: x.ndim == 4, 0),
+            ([np.zeros((20, 1)), np.zeros((20, 1))], lambda x: x.ndim == 3, 0),
+            ([np.zeros((10, 1)), np.zeros((20, 1))], lambda x: x.ndim == 3, 0),
         ],
     )
-    def test_output_shape(self, time_series, check_func):
-        res = utils.convolve_1d_trials(np.zeros((1, 1)), time_series)
+    def test_output_shape(self, time_series, check_func,axis):
+        res = convolve._convolve_1d_trials(np.zeros((1, 1)), time_series, axis=axis)
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
 
     @pytest.mark.parametrize(
-        "time_series",
+        "time_series, axis, output_shape",
         [
-            np.zeros((20, 1)),
-            np.zeros((1, 20, 1)),
-            [np.zeros((20, 1))],
-            [np.zeros((10, 1))],
-            [np.zeros((10, 1))],
+            (np.zeros((20, 1)), 0, (20, 1, 1)),
+            (np.zeros((1, 20, 1)), 1, (1, 20, 1, 1)),
+            ([[np.zeros((1, 1, 20))], np.zeros((1, 1, 20))], 1, (1, 1, 20, 1)),
+            ([np.zeros((20, 1))], 0, (20, 1, 1)),
+            ([np.zeros((10, 1))], 0, (10, 1, 1)),
+            ([[np.zeros((10, 1))]], 0, (10, 1, 1)),
         ],
     )
-    def test_output_num_neuron(self, time_series):
-        def check_func(x, ts):
-            return x.shape[-2] == ts.shape[-1]
+    def test_output_output_shape(self, time_series, axis, output_shape):
+        def check_func(x):
+            return x.shape == output_shape
 
-        res = utils.convolve_1d_trials(np.zeros((1, 1)), time_series)
-        if not utils.pytree_map_and_reduce(check_func, all, res, time_series):
-            raise ValueError("Output  number of neuron doesn't match input.")
-
-    @pytest.mark.parametrize(
-        "time_series",
-        [
-            np.zeros((20, 1)),
-            np.zeros((1, 20, 1)),
-            [np.zeros((20, 1)), np.zeros((20, 1))],
-            [np.zeros((10, 1)), np.zeros((20, 1))],
-            [np.zeros((10, 1)), np.zeros((20, 2))],
-        ],
-    )
-    @pytest.mark.parametrize("basis_matrix", [np.zeros((1, 1)), np.zeros((1, 2))])
-    def test_output_num_basis(self, time_series, basis_matrix):
-        def check_func(conv):
-            return basis_matrix.shape[-1] == conv.shape[-1]
-
-        res = utils.convolve_1d_trials(basis_matrix, time_series)
+        res = convolve._convolve_1d_trials(np.zeros((1, 1)), time_series, axis=axis)
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
 
     @pytest.mark.parametrize(
-        "time_series",
+        "time_series, axis",
         [
-            np.zeros((1, 20, 1)),
-            [np.zeros((20, 1)), np.zeros((20, 1))],
-            [np.zeros((10, 1)), np.zeros((20, 1))],
-            [np.zeros((10, 1)), np.zeros((20, 2))],
+            (np.zeros((20, )), 0),
+            (np.zeros((20, 1)), 0),
+            (np.zeros((1, 20, 1)), 1),
+            ([np.zeros((20, 1)), np.zeros((20, 1))], 0),
+            ([np.zeros((10, 1)), np.zeros((20, 1))], 0),
+            ([np.zeros((10, 1)), np.zeros((20, 2))], 0),
         ],
     )
-    def test_output_num_trials(self, time_series):
-        def check_func(x, ts):
-            return x.shape[0] == ts.shape[0]
+    @pytest.mark.parametrize("basis_matrix", [np.zeros((1, 1)), np.zeros((1, 2))])
+    def test_output_num_basis(self, time_series, basis_matrix, axis):
+        def check_func(conv):
+            return basis_matrix.shape[-1] == conv.shape[-1]
 
-        res = utils.convolve_1d_trials(np.zeros((1, 1)), time_series)
-        if not utils.pytree_map_and_reduce(check_func, all, res, time_series):
-            raise ValueError("Number of trials do not match between input and output")
+        res = convolve._convolve_1d_trials(basis_matrix, time_series, axis=axis)
+        if not utils.pytree_map_and_reduce(check_func, all, res):
+            raise ValueError("Output  number of neuron doesn't match input.")
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((3,) * n) for n in [0, 1, 2, 3]])
     @pytest.mark.parametrize("trial_count_shape", [(1, 30, 2), (2, 10, 20)])
@@ -121,9 +113,9 @@ class Test1DConvolution:
             with pytest.raises(
                 ValueError, match="basis_matrix must be a 2 dimensional"
             ):
-                utils.convolve_1d_trials(basis_matrix, vec)
+                convolve._convolve_1d_trials(basis_matrix, vec, axis=1)
         else:
-            utils.convolve_1d_trials(basis_matrix, vec)
+            convolve._convolve_1d_trials(basis_matrix, vec)
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((3, 4))])
     @pytest.mark.parametrize(

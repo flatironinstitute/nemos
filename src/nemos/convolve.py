@@ -267,6 +267,7 @@ def create_convolutional_predictor(
 ):
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)
+    utils.check_dimensionality(basis_matrix, 2)
 
     if basis_matrix.shape[0] == 1:
         raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
