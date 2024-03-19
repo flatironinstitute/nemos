@@ -16,11 +16,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from .tree_utils import pytree_map_and_reduce
-from .type_casting import (
-    is_numpy_array_like,
-    is_pynapple_tsd,
-    support_pynapple,
-)
+from .type_casting import is_numpy_array_like, is_pynapple_tsd, support_pynapple
 
 # Same trial duration
 # [[r , t , n], [w]] -> [r , (t - w + 1) , n]
@@ -81,7 +77,9 @@ def validate_axis(tree: Any, axis: int):
         on every array in the tree.
     """
     if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
-        raise ValueError("'axis' must be smaller than the number of dimensions of any array in 'tree'.")
+        raise ValueError(
+            "'axis' must be smaller than the number of dimensions of any array in 'tree'."
+        )
 
 
 def check_convolve_input_dims(basis_matrix: jnp.ndarray, time_series: Any):
@@ -232,7 +230,7 @@ def nan_pad(
     conv_time_series: Any,
     pad_size: int,
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
-    axis: int = 0
+    axis: int = 0,
 ) -> Any:
     """
     Add NaN padding to a convolved time series based on specified causality and axis.
@@ -297,7 +295,11 @@ def nan_pad(
         if not np.issubdtype(conv_time_series.dtype, np.floating):
             raise ValueError("conv_time_series must have a float dtype!")
         return _pad_dimension(
-            conv_time_series, axis, pad_size, predictor_causality, constant_values=jnp.nan
+            conv_time_series,
+            axis,
+            pad_size,
+            predictor_causality,
+            constant_values=jnp.nan,
         )
 
     else:
@@ -316,7 +318,9 @@ def nan_pad(
 
 
 def shift_time_series(
-    time_series: Any, predictor_causality: Literal["causal", "anti-causal"] = "causal", axis: int = 0
+    time_series: Any,
+    predictor_causality: Literal["causal", "anti-causal"] = "causal",
+    axis: int = 0,
 ):
     """Shift time series based on causality of predictor, adding NaNs as needed.
 

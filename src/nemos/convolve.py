@@ -122,7 +122,9 @@ def _list_epochs(tsd: Any):
     return [tsd]
 
 
-def _convolve_1d_trials(basis_matrix: ArrayLike, time_series: Any, axis: int = 0) -> Any:
+def _convolve_1d_trials(
+    basis_matrix: ArrayLike, time_series: Any, axis: int = 0
+) -> Any:
     """Convolve trial time series with a basis matrix.
 
     This function applies a convolution in mode "valid" to each trials in the
