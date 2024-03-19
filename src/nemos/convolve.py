@@ -313,7 +313,7 @@ def create_convolutional_predictor(
     #  concatenate back
     flat_stack = [jnp.concatenate(x, axis=axis) for x in conv]
 
-    # re-attach axis
+    # re-attach time axis
     flat_stack = [
         type_casting.cast_to_pynapple(x, *time_info[i]) if is_nap[i] else x
         for i, x in enumerate(flat_stack)
