@@ -38,15 +38,15 @@ model.fit(X, y)
 Once fit, you can retrieve model parameters as follows,
 
 ```python
-# model coefficients, shape (n_neurons, n_features)
-print(f"Model coefficients: {model.coef_}")
+>>> # model coefficients, shape (n_neurons, n_features)
+>>> print(f"Model coefficients: {model.coef_}")
+Model coefficients: [[-1.5791758]] 
 
-# model coefficients, shape (n_neurons, )
-print(f"Model intercept: {model.intercept_}")
+>>> # model coefficients, shape (n_neurons, )
+>>> print(f"Model intercept: {model.intercept_}")
+Model intercept: [-0.0010547]
 ```
 
-!!! note
-    This API is the same as scikit-learn's, see for example their [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 
 ### Model Arguments
 
@@ -55,36 +55,38 @@ During initialization, the `GLM` class accepts the following optional input argu
 1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`.
 
-For more information on how to change default arguments, see the API guide for [`observation_models`]() and
-[`regularizer`]().
+For more information on how to change default arguments, see the API guide for [`observation_models`](../reference/nemos/observation_models/) and
+[`regularizer`](../reference/nemos/regularizer/).
 
 
 ### Pre-processing with `pynapple`
 
 !!! warning
-    This section assumes some familiarity with the `pynapple` package for time-series manipulation and data 
+    This section assumes some familiarity with the `pynapple` package for time series manipulation and data 
     exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such 
-as restricting your time-series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common 
+as restricting your time series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common 
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy data pre-processing.
 
-In `nemos`, if a transformation  preserve the time-axis and you use a `pynapple` time-series as input, the result will 
-also be a `pynapple` time-series.
+In `nemos`, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
+also be a `pynapple` time series.
 
 A canonical example of this behavior is the `predict` method of `GLM`. 
 
 ```python
->>> print(type(X)) # ...Assume X is a pynapple TsdTensor of shape (num samples, num neurons, num features)
-nap.TsdTensor
+>>> # Assume X is a pynapple TsdTensor
+>>> print(type(X)) # shape (num samples, num neurons, num features)
+<class 'pynapple.core.time_series.TsdTensor'>
 
 >>> model.fit(X, y) # the following works
 
 >>> firing_rate = model.predict(X) # predict the firing rate of the neuron
 
->>> print(type(firing_rate)) # this will still be a pynapple time-series of shape (num_samples, num_neurons)
-nap.TsdFrame
+>>> # this will still be a pynapple time series
+>>> print(type(firing_rate)) # shape (num_samples, num_neurons)
+<class 'pynapple.core.time_series.TsdFrame'>
 ```
 
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
@@ -131,6 +133,7 @@ plt.plot(model_tuning.index, model_tuning.values, label="glm")
 plt.legend()
 plt.yticks([])
 plt.xlabel("heading angle")
+plt.show()
 ```
 
 ![Alt text](head_dir_tuning.jpg)
@@ -139,7 +142,7 @@ plt.xlabel("heading angle")
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 
-In `nemos` takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
+`nemos` takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
 compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
@@ -165,7 +168,14 @@ cls = GridSearchCV(model, param_grid=param_grid, cv=5)
 
 # - run the 5-fold cross-validation grid search
 cls.fit(X, y)
-
-# print best regularizer strength
-print(cls.best_params_)
 ```
+
+Now we can print the best coefficient.
+
+```python
+# print best regularizer strength
+>>> print(cls.best_params_)
+{'regularizer__regularizer_strength': 0.001}
+```
+
+Enjoy modeling with `nemos`!
