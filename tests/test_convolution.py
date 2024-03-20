@@ -166,7 +166,7 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize(
         "basis_matrix, expectation",
         [
-            (np.zeros((1, 1)), does_not_raise()),
+            (np.zeros((2, 1)), does_not_raise()),
             (
                 np.zeros((0, 1)),
                 pytest.raises(
@@ -178,7 +178,7 @@ class TestCreateConvolutionalPredictor:
     def test_empty_basis(self, basis_matrix, expectation):
         vec = np.ones((1, 10))
         with expectation:
-            convolve._convolve_1d_trials(basis_matrix, vec)
+            convolve.create_convolutional_predictor(basis_matrix, vec, axis=1)
 
     @pytest.mark.parametrize("window_size", [2])
     @pytest.mark.parametrize("trial_len", [4, 5])
