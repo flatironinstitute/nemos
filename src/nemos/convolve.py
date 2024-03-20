@@ -289,7 +289,7 @@ def create_convolutional_predictor(
     # flatten and grab tree struct
     flat_tree, struct = jax.tree_util.tree_flatten(time_series)
 
-    # get pynapple
+    # find pynapple
     is_nap = list(type_casting.is_pynapple_tsd(x) for x in flat_tree)
 
     # retrieve time info
@@ -302,7 +302,7 @@ def create_convolutional_predictor(
     two_layer = jax.tree_map(_list_epochs, flat_tree)
 
     # check trial size (after splitting)
-    utils.check_trials_longer_then_window_size(two_layer, basis_matrix.shape[0], axis)
+    utils.check_trials_longer_than_time_window(two_layer, basis_matrix.shape[0], axis)
 
     # convert to array
     two_layer = jax.tree_map(jnp.asarray, two_layer)

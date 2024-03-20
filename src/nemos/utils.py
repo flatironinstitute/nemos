@@ -139,7 +139,7 @@ def check_non_empty(pytree: Any, pytree_name: str):
         )
 
 
-def check_trials_longer_then_window_size(
+def check_trials_longer_than_time_window(
     time_series: Any, window_size: int, axis: int = 0
 ):
     """
