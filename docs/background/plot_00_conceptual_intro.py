@@ -115,8 +115,7 @@ input_feature[50:] = 1
 input_feature *= np.random.rand(100)
 input_feature =  nap.Tsd(np.linspace(0, 100, 100), input_feature)
 
-fig = plotting.lnp_schematic(input_feature,
-                                            weights, intercepts)
+fig = plotting.lnp_schematic(input_feature, weights, intercepts)
 
 # %%
 #
@@ -131,9 +130,8 @@ fig = plotting.lnp_schematic(input_feature,
 # have to be non-negative! That's what the nonlinearity handles: making sure our
 # firing rate is always positive:
 
-fig = plotting.lnp_schematic(input_feature,
-                                   weights, intercepts,
-                                   plot_nonlinear=True)
+fig = plotting.lnp_schematic(input_feature, weights, intercepts,
+                             plot_nonlinear=True)
 
 # %%
 # !!! info
@@ -154,9 +152,8 @@ fig = plotting.lnp_schematic(input_feature,
 # Now we're ready to see what these spikes look like!
 
 # mkdocs_gallery_thumbnail_number = 3
-fig = plotting.lnp_schematic(input_feature,
-                                   weights, intercepts,
-                                   plot_nonlinear=True, plot_spikes=True)
+fig = plotting.lnp_schematic(input_feature, weights, intercepts,
+                             plot_nonlinear=True, plot_spikes=True)
 
 # %%
 #

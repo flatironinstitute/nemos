@@ -2,6 +2,10 @@
 
 """# Fit injected current
 
+!!! warning
+    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
+
+
 For our first example, we will look at a very simple dataset: patch-clamp
 recordings from a single neuron in layer 4 of mouse primary visual cortex. This
 data is from the [Allen Brain
@@ -81,9 +85,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 # to download the data, and a progress bar will show the download's progress.
 # On subsequent runs, the cell gets skipped: we do not need to redownload the
 # data.
-# <div class="notes">
-# - Stream the data. Format is [Neurodata Without Borders (NWB) standard](https://nwb-overview.readthedocs.io/en/latest/)
-# </div>
+
 
 path = data.download_data("allen_478498617.nwb", "https://osf.io/vf2nj/download",
                                          '../data')
@@ -95,10 +97,6 @@ path = data.download_data("allen_478498617.nwb", "https://osf.io/vf2nj/download"
 #
 # Now that we've downloaded the data, let's open it with pynapple and examine
 # its contents.
-#
-# <div class="notes">
-# - Open the NWB file with [pynapple](https://pynapple-org.github.io/pynapple/)
-# </div>
 
 
 data = nap.load_file(path)
@@ -121,14 +119,6 @@ print(data)
 #   We will not use this info in this example
 #
 # Now let's go through the relevant variables in some more detail:
-# <div class="notes">"
-# - `units`: dictionary of neurons, holding each neuron's spike timestamps.
-# - `epochs`: start and end times of different intervals, defining the
-#   experimental structure, specifying when each stimulation protocol began and
-#   ended.
-# - `stimulus`: injected current, in Amperes, sampled at 20k Hz.
-# - `response`: the neuron's intracellular voltage, sampled at 20k Hz.
-# </div>
 
 
 trial_interval_set = data["epochs"]
@@ -139,11 +129,7 @@ spikes = data["units"]
 
 # %% 
 # First, let's examine `trial_interval_set`:
-# <div class="notes">"
-# - `trial_interval_set`: dictionnary of start and end times of different intervals, defining the
-#   experimental structure, specifying when each stimulation protocol began and
-#   ended.
-# </div>
+
 
 trial_interval_set.keys()
 
@@ -153,10 +139,6 @@ trial_interval_set.keys()
 # [`IntervalSets`](https://pynapple-org.github.io/pynapple/reference/core/interval_set/)
 # for values. Each key defines the stimulus protocol, with the value defining
 # the begining and end of that stimulation protocol.
-#
-# <div class="notes">"
-# - `Noise 1`: epochs of random noise
-# </div>
 
 noise_interval = trial_interval_set["Noise 1"]
 noise_interval
@@ -167,23 +149,14 @@ noise_interval
 # three rows, each defining a separate sweep. We'll just grab the first sweep
 # (shown in blue in the pictures above) and ignore the other two (shown in
 # gray).
-#
-# To select only one epoch from an IntervalSet, use 2 square brackets:
-#
-# <div class="notes">"
-# - Let's focus on the first epoch.
-# </div>
 
-noise_interval = noise_interval.loc[[0]]
+noise_interval = noise_interval[0]
 noise_interval
 
 # %%
 #
 # Now let's examine `current`:
-#
-# <div class="notes">"
-# - `current` : Tsd (TimeSeriesData) : time index + data
-# </div>
+
 
 
 current
@@ -200,10 +173,7 @@ current
 # discussed above, we only want one of the "Noise 1" sweeps. Fortunately,
 # `pynapple` makes it easy to grab out the relevant time points by making use
 # of the `noise_interval` we defined above:
-#
-# <div class="notes">"
-# - `restrict` : restricts a time series object to a set of time intervals delimited by an IntervalSet object
-# </div>
+
 
 
 current = current.restrict(noise_interval)
@@ -217,11 +187,7 @@ current
 # [`TsGroup`](https://pynapple-org.github.io/pynapple/reference/core/ts_group/),
 # a dictionary-like object that holds multiple `Ts` (timeseries) objects with
 # potentially different time indices:
-#
-# <div class="notes">"
-# - `TsGroup` : a custom dictionnary holding multiple `Ts` (timeseries) objects with
-# potentially different time indices.
-# </div>
+
 
 spikes
 
@@ -233,11 +199,7 @@ spikes
 #
 # We can index into the `TsGroup` to see the timestamps for this neuron's
 # spikes:
-#
-# <div class="notes">"
-# We can index into the `TsGroup` to see the timestamps for this neuron's
-# spikes:
-# </div>
+
 
 spikes[0]
 
@@ -256,10 +218,7 @@ spikes[0]
 #
 # Now, let's visualize the data from this trial, replicating rows 1 and 3
 # from the Allen Brain Atlas figure at the beginning of this notebook:
-#
-# <div class="notes">"
-# Let's visualize the data from this trial:
-# </div>
+
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 2))
 ax.plot(current, "grey")
@@ -691,13 +650,13 @@ spikes = jax.random.poisson(jax.random.PRNGKey(0), predicted_fr.values)
 # Note that this is not actually that informative and, in general, it is
 # recommended that you focus on firing rates when interpreting your model. In
 # particular, if your GLM includes auto-regressive inputs (e.g., neurons are
-# connected to themselves or each other), simulate can behave poorly, see
-# **XXX** for details.
+# connected to themselves or each other), simulate can behave poorly [^1].
 #
 # Secondly, you may want a number with which to evaluate your model's
 # performance. As discussed earlier, the model optimizes log-likelihood to find
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
+# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
 
 log_likelihood = model.score(predictor, count, score_type="log-likelihood")
 print(f"log-likelihood: {log_likelihood}")
@@ -749,3 +708,5 @@ model.score(predictor, count, score_type='pseudo-r2-Cohen')
 # Ting, J., et al. (2021) Human neocortical expansion involves glutamatergic
 # neuron diversification. Nature, 598(7879):151-158. doi:
 # 10.1038/s41586-021-03813-8
+#
+#
