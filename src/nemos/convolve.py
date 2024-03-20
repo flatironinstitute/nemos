@@ -148,13 +148,7 @@ def _convolve_pad_and_shift(
         `(window_size, n_basis_funcs)`.
     time_series :
         The time series to convolve with the basis matrix. This variable should
-        be a pytree with arrays as leaves. The structure could be one of the
-        following:
-
-        1. A single array of 3-dimensions, `(n_trials, n_time_bins, n_neurons)`.
-        2. Any pytree with 2-dimensional arrays, `(n_time_bins, n_neurons)`, as
-           leaves. Note that neither `n_time_bins` nor `n_neurons` need to be
-           identical across leaves.
+        be a pytree with arrays of at least one-dimension as leaves.
     predictor_causality:
         Causality of this predictor, which determines where padded values are
         added and how the predictor is shifted.
@@ -162,8 +156,8 @@ def _convolve_pad_and_shift(
         Axis containing samples.
     shift :
         Whether to shift predictor based on causality (only valid if
-        `predictor_causality != 'acausal'`). Default is True for causa and
-        anti-causal, False for `acausal`.
+        `predictor_causality != 'acausal'`). Default is True for `causal` and
+        `anti-causal`, False for `acausal`.
 
     Returns
     -------
@@ -225,8 +219,8 @@ def create_convolutional_predictor(
         A 2D array representing the basis matrix to convolve with the time series.
         The first dimension should represent the window size for the convolution.
     time_series :
-        The time series data to convolve with the basis matrix. Can be a single
-        array/pynapple time series, a pytree of arrays/pynapple time series.
+        The time series data to convolve with the basis matrix. Can be single arrays, pytree of arrays,
+        pynapple time series, pytree of pynapple time series or a mix.
         In case of Pynapple time series data, each epoch will be convolved separately.
     predictor_causality :
         The causality of the predictor, determining how the padding and shifting
