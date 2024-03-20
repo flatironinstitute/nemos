@@ -8,6 +8,7 @@ with various optimization methods, and they can be applied depending on the mode
 
 import abc
 import inspect
+import warnings
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import jax.numpy as jnp
@@ -75,13 +76,10 @@ class Regularizer(Base, abc.ABC):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self._check_solver(solver_name)
-        self._solver_name = solver_name
+        self.solver_name = solver_name
         if solver_kwargs is None:
-            self._solver_kwargs = dict()
-        else:
-            self._solver_kwargs = solver_kwargs
-        self._check_solver_kwargs(self.solver_name, self.solver_kwargs)
+            solver_kwargs = dict()
+        self.solver_kwargs = solver_kwargs
 
     @property
     def solver_name(self):
@@ -147,7 +145,7 @@ class Regularizer(Base, abc.ABC):
             )
 
     def instantiate_solver(
-        self, loss: Callable, *args: Any, **kwargs: Any
+        self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
     ) -> SolverRunner:
         """
         Instantiate the solver with the provided loss function.
@@ -160,6 +158,9 @@ class Regularizer(Base, abc.ABC):
         *args:
             Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
             strength for proximal gradient methods.
+
+        prox:
+            Optional, the proximal projection operator.
 
         *kwargs:
             Keyword arguments for the jaxopt `solver.run` method.
@@ -175,7 +176,27 @@ class Regularizer(Base, abc.ABC):
         # get the solver with given arguments.
         # The "fun" argument is not always the first one, but it is always KEYWORD
         # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **self.solver_kwargs)
+        # The proximal gradient is added to the kwargs if passed. This avoids issues with over-writing
+        # the proximal operator.
+        if "prox" in self.solver_kwargs:
+            if prox is None:
+                raise ValueError(
+                    f"Regularizer of type {self.__class__.__name__} "
+                    f"does not require a proximal operator!"
+                )
+            else:
+                warnings.warn(
+                    "Overwritten the user-defined proximal operator! "
+                    "There is only one valid proximal operator for each regularizer type.",
+                    UserWarning,
+                )
+        # update the kwargs if prox is passed
+        if prox is not None:
+            solver_kwargs = self.solver_kwargs.copy()
+            solver_kwargs.update(prox=prox)
+        else:
+            solver_kwargs = self.solver_kwargs
+        solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_kwargs)
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -329,10 +350,6 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         regularizer_strength: float = 1.0,
         **kwargs,
     ):
-        if solver_kwargs is None:
-            solver_kwargs = dict(prox=self._get_proximal_operator())
-        else:
-            solver_kwargs["prox"] = self._get_proximal_operator()
         super().__init__(solver_name, solver_kwargs=solver_kwargs)
         self.regularizer_strength = regularizer_strength
 
@@ -367,7 +384,11 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
             A function that runs the solver with the provided loss and proximal operator.
         """
         return super().instantiate_solver(
-            loss, self.regularizer_strength, *args, **kwargs
+            loss,
+            self.regularizer_strength,
+            *args,
+            prox=self._get_proximal_operator(),
+            **kwargs,
         )
 
 

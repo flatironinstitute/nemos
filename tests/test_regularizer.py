@@ -1,9 +1,12 @@
+import warnings
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.linear_model import PoissonRegressor
+from contextlib import nullcontext as does_not_raise
 
 import nemos as nmo
 
@@ -149,6 +152,19 @@ class TestUnRegularized:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM regularizer estimate does not match sklearn!")
 
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
+    @pytest.mark.parametrize("kwargs, expectation", [
+        ({}, does_not_raise()),
+        ({"prox": 0}, pytest.raises(ValueError, match=r"Regularizer of type [A-z]+ does not require a "
+                                                      r"proximal operator!")),
+    ])
+    def test_overwritten_proximal_operator(self, solver_name, kwargs, expectation,
+                                           poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        with expectation:
+            model.regularizer.solver_kwargs = kwargs
+            model.fit(X, y)
+
 
 class TestRidge:
     cls = nmo.regularizer.Ridge
@@ -293,6 +309,19 @@ class TestRidge:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM solver estimate does not match sklearn!")
 
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
+    @pytest.mark.parametrize("kwargs, expectation", [
+        ({}, does_not_raise()),
+        ({"prox": 0}, pytest.raises(ValueError, match=r"Regularizer of type [A-z]+ does not require a "
+                                                      r"proximal operator!")),
+    ])
+    def test_overwritten_proximal_operator(self, solver_name, kwargs, expectation,
+                                           poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        with expectation:
+            model.regularizer.solver_kwargs = kwargs
+            model.fit(X, y)
+
 
 class TestLasso:
     cls = nmo.regularizer.Lasso
@@ -391,6 +420,18 @@ class TestLasso:
         if not match_weights:
             raise ValueError("Lasso GLM solver estimate does not match statsmodels!")
 
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient"])
+    @pytest.mark.parametrize("kwargs, expectation", [
+        ({}, does_not_raise()),
+        ({"prox": 0}, pytest.warns(UserWarning, match=r"Overwritten the user-defined proximal operator")),
+    ])
+    def test_overwritten_proximal_operator(self, solver_name, kwargs, expectation,
+                                           poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = nmo.regularizer.Lasso()
+        with expectation:
+            model.regularizer.solver_kwargs = kwargs
+            model.fit(X, y)
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
@@ -763,3 +804,16 @@ class TestGroupLasso:
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
+
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient"])
+    @pytest.mark.parametrize("kwargs, expectation", [
+        ({}, does_not_raise()),
+        ({"prox": 0}, pytest.warns(UserWarning, match=r"Overwritten the user-defined proximal operator")),
+    ])
+    def test_overwritten_proximal_operator(self, solver_name, kwargs, expectation,
+                                           poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = nmo.regularizer.Lasso()
+        with expectation:
+            model.regularizer.solver_kwargs = kwargs
+            model.fit(X, y)
