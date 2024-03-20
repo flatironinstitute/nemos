@@ -122,62 +122,6 @@ def _list_epochs(tsd: Any):
     return [tsd]
 
 
-def _convolve_1d_trials(
-    basis_matrix: ArrayLike, time_series: Any, axis: int = 0
-) -> Any:
-    """
-    Applies a convolution along a specified axis of the time series with a basis matrix.
-
-    This function handles the convolution of each array within the provided time series
-    data with the given basis matrix. The convolution is performed in 'valid' mode, meaning
-    that the output size in the convolution axis is reduced according to the size of the
-    basis matrix. This function supports both single arrays and collections of
-    arrays (pytrees).
-
-    Parameters
-    ----------
-    basis_matrix :
-        A 2D array representing the convolution basis matrix. The shape should be
-        `(window_size, n_basis_funcs)`, where `window_size` is the length of the convolution window.
-    time_series :
-        The time series data to be convolved with the basis matrix. It can be a single array or a
-         pytree of arrays.
-    axis :
-        The axis along which the convolution is to be applied.  This axis must exist in every array
-        within the time series.
-
-    Returns
-    -------
-    :
-        A structure mirroring that of `time_series`, containing the convolved data. Each array within the structure
-        is the result of convolving the original array with `basis_matrix` along the specified axis.
-
-    Raises
-    ------
-    ValueError
-        - If any array within `time_series` has fewer dimensions than specified by `axis`.
-        - If `basis_matrix` is empty or if any array within `time_series` is empty.
-        - If the number of elements along the convolution axis in any array within `time_series`
-          is less than the size of the convolution window defined by the first dimension of `basis_matrix`.
-    """
-    # check for empty inputs
-    utils.check_non_empty(basis_matrix, "basis_matrix")
-    utils.check_non_empty(time_series, "time_series")
-
-    # check sample_axis exists
-    if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
-        raise ValueError("`time_series` should contain arrays of at least one-dimension. "
-                         "At list one 0-dimensional array provided.")
-
-    utils.check_trials_longer_then_window_size(time_series, basis_matrix.shape[0], axis)
-
-    # apply convolution
-    def conv(x):
-        return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)
-
-    return jax.tree_map(conv, time_series)
-
-
 def _convolve_pad_and_shift(
     basis_matrix: ArrayLike,
     time_series: Any,
@@ -225,14 +169,13 @@ def _convolve_pad_and_shift(
     -------
     predictor :
         Predictor of with same shape and structure as `time_series`
-
-    Raises
-    ------
-    ValueError:
-        - If `basis_matrix.shape[0] <= 0`
-        - If shift == True` and `predictor_causality == "causal"`
     """
-    predictor = _convolve_1d_trials(basis_matrix, time_series, axis=axis)
+
+    # apply convolution
+    def conv(x):
+        return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)
+    predictor = jax.tree_map(conv, time_series)
+
     with warnings.catch_warnings(record=True) as warns:
         warnings.simplefilter("always")
         predictor = utils.nan_pad(
@@ -305,8 +248,13 @@ def create_convolutional_predictor(
     Raises
     ------
     ValueError
-        - If the `basis_matrix` is not at least 2D with a non-singleton first dimension.
-        - If shifting is enabled for 'acausal' causality.
+        - If `basis_matrix` is not a 2-dimensional array or has a singleton first dimension.
+        - If `time_series` does not contain arrays of at least one dimension or contains
+          arrays with a dimensionality less than `axis`.
+        - If any array within `time_series` or `basis_matrix` is empty.
+        - If the number of elements along the convolution axis in any array within `time_series`
+          is less than the window size of the `basis_matrix`.
+        - If shifting is attempted with 'acausal' causality.
     """
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)
@@ -316,6 +264,15 @@ def create_convolutional_predictor(
 
     if basis_matrix.shape[0] == 1:
         raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
+
+    # check for empty inputs
+    utils.check_non_empty(basis_matrix, "basis_matrix")
+    utils.check_non_empty(time_series, "time_series")
+
+    # check sample_axis exists
+    if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
+        raise ValueError("`time_series` should contain arrays of at least one-dimension. "
+                         "At list one 0-dimensional array provided.")
 
     # assign defaults
     if shift is None:
@@ -341,8 +298,11 @@ def create_convolutional_predictor(
         for i, ts in enumerate(flat_tree)
     ]
 
-    # split pynapple (adds one layer to pytree)
+    # split epochs (adds one layer to pytree)
     two_layer = jax.tree_map(_list_epochs, flat_tree)
+
+    # check trial size (after splitting)
+    utils.check_trials_longer_then_window_size(two_layer, basis_matrix.shape[0], axis)
 
     # convert to array
     two_layer = jax.tree_map(jnp.asarray, two_layer)

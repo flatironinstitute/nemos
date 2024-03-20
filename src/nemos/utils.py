@@ -140,7 +140,7 @@ def check_non_empty(pytree: Any, pytree_name: str):
 
 
 def check_trials_longer_then_window_size(
-    time_series: Any, window_size: int, sample_axis: int = 0
+    time_series: Any, window_size: int, axis: int = 0
 ):
     """
     Check if the duration of each trial in the time series is at least as long as the window size.
@@ -151,7 +151,7 @@ def check_trials_longer_then_window_size(
         A pytree of trial data.
     window_size :
         The size of the window to be used in convolution.
-    sample_axis :
+    axis :
         The axis in the arrays representing the time dimension.
 
     Raises
@@ -161,7 +161,7 @@ def check_trials_longer_then_window_size(
     """
     # Check window size
     if pytree_map_and_reduce(
-        lambda x: x.shape[sample_axis] < window_size, any, time_series
+        lambda x: x.shape[axis] < window_size, any, time_series
     ):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
