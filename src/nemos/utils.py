@@ -295,6 +295,19 @@ def nan_pad(
         )
 
 
+def _compute_index_adjust(
+        time_series: NDArray,
+        causality: Literal["causal", "anti-causal"],
+        axis: int
+):
+    """Compute index adjustment for shifting a time series."""
+    adjust_indices = {
+        "causal": (0, time_series.shape[axis] - 1),
+        "anti-causal": (1, time_series.shape[axis]),
+    }
+    return adjust_indices[causality]
+
+
 def shift_time_series(
     time_series: Any,
     predictor_causality: Literal["causal", "anti-causal"] = "causal",
@@ -343,25 +356,23 @@ def shift_time_series(
     # validate axis
     validate_axis(time_series, axis)
 
-    # See docstring Notes section for what this does.
-    adjust_indices = {
-        "causal": (0, time_series.shape[axis] - 1),
-        "anti-causal": (1, time_series.shape[axis]),
-    }
-    if predictor_causality not in adjust_indices.keys():
+    if predictor_causality not in ["causal", "anti-causal"]:
         raise ValueError(
-            f"predictor_causality must be one of {adjust_indices.keys()}. {predictor_causality} provided instead!"
+            f"predictor_causality must be one of 'causal', 'anti-causal'. {predictor_causality} provided instead!"
         )
-    start, end = adjust_indices[predictor_causality]
+
+    # compute the start, end indices tree
+    adjust_idx = jax.tree_map(lambda x: _compute_index_adjust(x, predictor_causality, axis), time_series)
 
     # convert to jax ndarray
     time_series = jax.tree_map(jnp.asarray, time_series)
 
     if is_numpy_array_like(time_series):
+
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
-            jnp.take(time_series, jnp.arange(start, end), axis=axis), axis, 1, predictor_causality, jnp.nan
+            jnp.take(time_series, jnp.arange(*adjust_idx), axis=axis), axis, 1, predictor_causality, jnp.nan
         )
     else:
         if pytree_map_and_reduce(
@@ -369,10 +380,10 @@ def shift_time_series(
         ):
             raise ValueError("All leaves of time_series must have a float dtype!")
         return jax.tree_map(
-            lambda trial: _pad_dimension(
-                jnp.take(trial, jnp.arange(start, end), axis=axis), axis, 1, predictor_causality, jnp.nan
+            lambda trial, idx: _pad_dimension(
+                jnp.take(trial, jnp.arange(*idx), axis=axis), axis, 1, predictor_causality, jnp.nan
             ),
-            time_series,
+            time_series, adjust_idx
         )
 
 
