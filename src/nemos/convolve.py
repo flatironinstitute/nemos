@@ -165,7 +165,9 @@ def _convolve_1d_trials(
     utils.check_non_empty(time_series, "time_series")
 
     # check sample_axis exists
-    assert utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series)
+    if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
+        raise ValueError("`time_series` should contain arrays of at least one-dimension. "
+                         "At list one 0-dimensional array provided.")
 
     utils.check_trials_longer_then_window_size(time_series, basis_matrix.shape[0], axis)
 
@@ -308,7 +310,9 @@ def create_convolutional_predictor(
     """
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)
-    utils.check_dimensionality(basis_matrix, 2)
+    if not utils.check_dimensionality(basis_matrix, 2):
+        raise ValueError("basis_matrix must be a 2 dimensional array! "
+                         f"{basis_matrix.ndim} dimensions provided instead.")
 
     if basis_matrix.shape[0] == 1:
         raise ValueError("`basis_matrix.shape[0]` should be at least 2!")

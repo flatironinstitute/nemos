@@ -113,45 +113,33 @@ class Test1DConvolution:
             with pytest.raises(
                 ValueError, match="basis_matrix must be a 2 dimensional"
             ):
-                convolve._convolve_1d_trials(basis_matrix, vec, axis=1)
+                convolve.create_convolutional_predictor(basis_matrix, vec, axis=1)
         else:
-            convolve._convolve_1d_trials(basis_matrix, vec)
+            convolve.create_convolutional_predictor(basis_matrix, vec, axis=1)
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((3, 4))])
     @pytest.mark.parametrize(
-        "trial_counts, expectation",
+        "trial_counts, expectation, axis",
         [
-            (np.zeros((1, 30, 2)), does_not_raise()),
-            ([np.zeros((30, 2))], does_not_raise()),
-            ({"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}, does_not_raise()),
+            (np.zeros((1, 30, 2)), does_not_raise(), 1),
+            ([np.zeros((30, 2))], does_not_raise(), 0),
+            ({"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}, does_not_raise(), 0),
+            (np.zeros((1, 30, 1, 2)),does_not_raise(), 1),
             (
-                np.zeros((1, 30, 1, 2)),
+                [np.array(10)],
                 pytest.raises(
                     ValueError,
-                    match="time_series must be a pytree of 2 dimensional array-like objects ",
-                ),
+                    match="`time_series` should contain arrays of at least one",
+                ), 0
             ),
-            (
-                [np.zeros((1, 30, 2))],
-                pytest.raises(
-                    ValueError,
-                    match="time_series must be a pytree of 2 dimensional array-like objects ",
-                ),
-            ),
-            (np.zeros((30, 10)), does_not_raise()),
-            ([np.zeros((30, 10))], does_not_raise()),
-            (
-                np.zeros(10),
-                pytest.raises(
-                    ValueError,
-                    match="time_series must be a pytree of 2 dimensional array-like objects ",
-                ),
-            ),
+            (np.zeros((30, 10)), does_not_raise(), 0),
+            ([np.zeros((30, 10))], does_not_raise(), 1),
+            (np.zeros(10), does_not_raise(), 0)
         ],
     )
-    def test_spike_count_type(self, basis_matrix, expectation, trial_counts):
+    def test_spike_count_type(self, basis_matrix, expectation, trial_counts, axis):
         with expectation:
-            utils.convolve_1d_trials(basis_matrix, trial_counts)
+            convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=axis)
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
     @pytest.mark.parametrize(
@@ -169,9 +157,9 @@ class Test1DConvolution:
                 ValueError,
                 match="Insufficient trial duration. The number of time points",
             ):
-                utils.convolve_1d_trials(basis_matrix, trial_counts)
+                convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
         else:
-            utils.convolve_1d_trials(basis_matrix, trial_counts)
+            convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
     @pytest.mark.parametrize(
@@ -183,7 +171,7 @@ class Test1DConvolution:
     )
     def test_empty_counts(self, basis_matrix, trial_counts):
         with pytest.raises(ValueError, match="Empty array provided"):
-            utils.convolve_1d_trials(basis_matrix, trial_counts)
+            convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
 
     @pytest.mark.parametrize(
         "basis_matrix", [np.random.normal(size=(4, 3)) for _ in range(2)]
@@ -207,7 +195,7 @@ class Test1DConvolution:
                         vec, basis, mode="valid"
                     )
 
-        utils_out = np.asarray(utils.convolve_1d_trials(basis_matrix, trial_counts))
+        utils_out = np.asarray(convolve._convolve_1d_trials(basis_matrix, trial_counts, axis=1))
         assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (
             "Output of utils.convolve_1d_trials "
             "does not match numpy.convolve in "
@@ -236,7 +224,7 @@ class Test1DConvolution:
                         vec, basis, mode="valid"
                     )
 
-        utils_out = utils.convolve_1d_trials(basis_matrix, trial_counts)
+        utils_out = convolve._convolve_1d_trials(basis_matrix, trial_counts, axis=0)
         check = all(
             np.allclose(utils_out[k], numpy_out[k], rtol=10**-5, atol=10**-5)
             for k in utils_out
@@ -248,19 +236,19 @@ class Test1DConvolution:
         )
 
     @pytest.mark.parametrize(
-        "trial_counts",
+        "trial_counts, axis",
         [
-            np.zeros((1, 30, 2)),
-            [np.zeros((30, 2))],
-            {"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))},
-            np.zeros((30, 10)),
-            [np.zeros((30, 10))],
-            {"nested": [{"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}]},
+            (np.zeros((1, 30, 2)), 1),
+            ([np.zeros((30, 2))], 0),
+            ({"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))} ,0),
+            (np.zeros((30, 10)), 0),
+            ([np.zeros((30, 10))], 0),
+            ({"nested": [{"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}]}, 0),
         ],
     )
-    def test_tree_structure_match(self, trial_counts):
+    def test_tree_structure_match(self, trial_counts, axis):
         basis_matrix = np.zeros((4, 3))
-        conv = utils.convolve_1d_trials(basis_matrix, trial_counts)
+        conv = convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=axis)
         assert jax.tree_util.tree_structure(trial_counts) == jax.tree_structure(conv)
 
 
