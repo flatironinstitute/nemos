@@ -6,6 +6,7 @@ See [CCN template repo](https://ccn-template.readthedocs.io/en/latest/notes/03-d
 from pathlib import Path
 
 import mkdocs_gen_files
+
 nav = mkdocs_gen_files.Nav()
 
 for path in sorted(Path("src").rglob("*.py")):

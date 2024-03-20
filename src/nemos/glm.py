@@ -141,7 +141,7 @@ class GLM(BaseRegressor):
             + bs[None, :]
         )
 
-    @support_pynapple
+    @support_pynapple(conv_type="jax")
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
         """Predict rates based on fit parameters.
 
@@ -308,6 +308,13 @@ class GLM(BaseRegressor):
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
         self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
+
+        # get valid entries
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # filter for valid
+        X = jax.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_map(lambda x: x[is_valid], y)
 
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()

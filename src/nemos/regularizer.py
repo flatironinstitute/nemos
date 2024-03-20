@@ -308,7 +308,7 @@ class Ridge(Regularizer):
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
-        return super().instantiate_solver(penalized_loss)
+        return super().instantiate_solver(penalized_loss, *args, **kwargs)
 
 
 class ProxGradientRegularizer(Regularizer, abc.ABC):
@@ -370,7 +370,9 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         :
             A function that runs the solver with the provided loss and proximal operator.
         """
-        return super().instantiate_solver(loss, self.regularizer_strength)
+        return super().instantiate_solver(
+            loss, self.regularizer_strength, *args, **kwargs
+        )
 
 
 class Lasso(ProxGradientRegularizer):

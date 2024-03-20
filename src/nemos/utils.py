@@ -353,7 +353,7 @@ def nan_pad(
     conv_time_series = jax.tree_map(jnp.asarray, conv_time_series)
     try:
         if conv_time_series.ndim != 4:
-            raise ValueError(
+            raise AttributeError(
                 "conv_time_series must be a pytree of 3D arrays or a 4D array!"
             )
         if not np.issubdtype(conv_time_series.dtype, np.floating):
@@ -464,6 +464,7 @@ def shift_time_series(
         )
 
 
+@support_pynapple(conv_type="jax")
 def create_convolutional_predictor(
     basis_matrix: ArrayLike,
     time_series: Any,
@@ -724,7 +725,7 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
         )
 
 
-@support_pynapple
+@support_pynapple(conv_type="jax")
 def pynapple_concatenate(
     arrays: Union[Tsd, TsdFrame, TsdTensor, jnp.ndarray, NDArray],
     axis: int = 1,
