@@ -1,7 +1,7 @@
 """Utilities for manipulating and checking PyTrees."""
 
 from functools import reduce
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
@@ -101,7 +101,7 @@ def pytree_map_and_reduce(
     map_fn: Callable,
     reduce_fn: Callable,
     *pytrees: Any,
-    is_leaf: Callable[[Any], bool] | None = None,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
     """
     Apply a mapping function to each leaf of the pytrees and then reduce the results.
