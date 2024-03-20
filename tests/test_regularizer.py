@@ -11,6 +11,35 @@ from contextlib import nullcontext as does_not_raise
 import nemos as nmo
 
 
+@pytest.mark.parametrize(
+    "regularizer", [
+        nmo.regularizer.UnRegularized(),
+        nmo.regularizer.Ridge(),
+        nmo.regularizer.Lasso(),
+        nmo.regularizer.GroupLasso("ProximalGradient", np.array([[1.]]))
+    ]
+)
+def test_get_only_allowed_solvers(regularizer):
+    # the error raised by property changed in python 3.11
+    with pytest.raises(
+            AttributeError,
+            match="property 'allowed_solvers' of '.+' object has no setter|can't set attribute"
+    ):
+        regularizer.allowed_solvers = []
+
+
+@pytest.mark.parametrize(
+    "regularizer", [
+        nmo.regularizer.UnRegularized(),
+        nmo.regularizer.Ridge(),
+        nmo.regularizer.Lasso(),
+        nmo.regularizer.GroupLasso("ProximalGradient", np.array([[1.]]))
+    ]
+)
+def test_item_assignment_allowed_solvers(regularizer):
+    with pytest.raises(TypeError, match="'tuple' object does not support item assignment"):
+        regularizer.allowed_solvers[0] = 'my-favourite-solver'
+
 class TestUnRegularized:
     cls = nmo.regularizer.UnRegularized
 

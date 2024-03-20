@@ -33,7 +33,7 @@ class GLM(BaseRegressor):
     regularizer :
         Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
         and related parameters.
-        Default is Ridge regression with gradient descent.
+        Default is UnRegularized regression with gradient descent.
 
     Attributes
     ----------
@@ -54,7 +54,7 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.Ridge("GradientDescent"),
+        regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
     ):
         super().__init__()
 
@@ -401,6 +401,7 @@ class GLM(BaseRegressor):
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state = state
+        return self
 
     def simulate(
         self,
@@ -490,7 +491,7 @@ class GLMRecurrent(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.Ridge(),
+        regularizer: reg.Regularizer = reg.UnRegularized(),
     ):
         super().__init__(observation_model=observation_model, regularizer=regularizer)
 

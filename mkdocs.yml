@@ -58,6 +58,7 @@ extra_css:
 nav:
     - Home: index.md                          # Link to the index.md file (home page)
     - Installation Instructions: installation.md # Link to the installation.md file
+    - Quickstart: quickstart.md
     - Background: generated/background    # Link to the generated gallery Tutorials
     - API Guide: generated/api_guide # Link to the generated gallery neural_modeling
     - Neural Modeling: generated/neural_modeling # Link to the generated gallery neural_modeling
