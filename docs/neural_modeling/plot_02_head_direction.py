@@ -3,7 +3,10 @@
 """
 # Fit Head-direction population
 
-## Learning objectives {.keep-text}
+!!! warning
+    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/5a267a523e35095644df008a6d460d6b76b0a753/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
+
+## Learning objectives
 
 - Learn how to add history-related predictors to nemos GLM
 - Learn about nemos `Basis` objects
@@ -34,8 +37,7 @@ path = data.download_data("Mouse32-140822.nwb", "https://osf.io/jb2gd/download",
 
 # %%
 # ## Pynapple
-# We are going to open the NWB file with pynapple
-# Since pynapple has been covered in tutorial 0, we are going faster here.
+# We are going to open the NWB file with pynapple.
 
 
 data = nap.load_file(path)
@@ -114,7 +116,7 @@ fig = plotting.plot_head_direction_tuning(
 
 
 wake_ep = nap.IntervalSet(
-    start=wake_ep.loc[0, "start"], end=wake_ep.loc[0, "start"] + 3 * 60
+    start=wake_ep.start[0], end=wake_ep.start[0] + 3 * 60
 )
 
 # %%
@@ -151,7 +153,7 @@ neuron_count = count[:, 0]
 
 # restrict to a smaller time interval
 epoch_one_spk = nap.IntervalSet(
-    start=count.time_support["start"][0], end=count.time_support["start"][0] + 1.2
+    start=count.time_support.start[0], end=count.time_support.start[0] + 1.2
 )
 plt.figure(figsize=(8, 3.5))
 plt.step(
@@ -216,9 +218,6 @@ print(f"Convolution window size in bins: {window_size}")
 print(f"Feature shape: {input_feature.shape}")
 
 # %%
-# !!! info
-#     The convolution is performed in mode "valid" and always returns `num_samples - window_size + 1` time points.
-#     This is true in general (numpy, scipy, etc.).
 #
 # We can visualize the output for a few time bins
 

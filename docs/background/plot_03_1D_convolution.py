@@ -73,18 +73,20 @@ print(f"Shape of the convolution output: {spk_conv[0].shape}")
 # for the different filter types.
 
 
-# pad according to the causal direction of the filter, after squeeze, the dimension is (n_filters, n_samples)
+# pad according to the causal direction of the filter, after squeeze,
+# the dimension is (n_filters, n_samples)
 spk_causal_utils = np.squeeze(
-    nmo.utils.create_convolutional_predictor(w, [spk], predictor_causality="causal")[0]
+    nmo.utils.create_convolutional_predictor(
+        w, [spk], predictor_causality="causal")[0]
 )
 spk_anticausal_utils = np.squeeze(
-    nmo.utils.create_convolutional_predictor(w, [spk], predictor_causality="anti-causal")[0]
+    nmo.utils.create_convolutional_predictor(
+        w, [spk], predictor_causality="anti-causal")[0]
 )
 spk_acausal_utils = np.squeeze(
-    nmo.utils.create_convolutional_predictor(w, [spk], predictor_causality="acausal", shift=False)[0]
+    nmo.utils.create_convolutional_predictor(
+        w, [spk], predictor_causality="acausal", shift=False)[0]
 )
-
-
 
 
 # %%
