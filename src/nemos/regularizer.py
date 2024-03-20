@@ -180,12 +180,16 @@ class Regularizer(Base, abc.ABC):
         # the proximal operator.
         if "prox" in self.solver_kwargs:
             if prox is None:
-                raise ValueError(f"Regularizer of type {self.__class__.__name__} "
-                                 f"does not require a proximal operator!")
+                raise ValueError(
+                    f"Regularizer of type {self.__class__.__name__} "
+                    f"does not require a proximal operator!"
+                )
             else:
-                warnings.warn("Overwritten the user-defined proximal operator! "
-                                 "There is only one valid proximal operator for each regularizer type.",
-                              UserWarning)
+                warnings.warn(
+                    "Overwritten the user-defined proximal operator! "
+                    "There is only one valid proximal operator for each regularizer type.",
+                    UserWarning,
+                )
         # update the kwargs if prox is passed
         if prox is not None:
             solver_kwargs = self.solver_kwargs.copy()
@@ -380,8 +384,11 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
             A function that runs the solver with the provided loss and proximal operator.
         """
         return super().instantiate_solver(
-            loss, self.regularizer_strength,  *args,
-            prox=self._get_proximal_operator(), **kwargs
+            loss,
+            self.regularizer_strength,
+            *args,
+            prox=self._get_proximal_operator(),
+            **kwargs,
         )
 
 
