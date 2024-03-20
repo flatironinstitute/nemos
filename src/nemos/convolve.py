@@ -174,6 +174,7 @@ def _convolve_pad_and_shift(
     # apply convolution
     def conv(x):
         return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)
+
     predictor = jax.tree_map(conv, time_series)
 
     with warnings.catch_warnings(record=True) as warns:
@@ -259,8 +260,10 @@ def create_convolutional_predictor(
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)
     if not utils.check_dimensionality(basis_matrix, 2):
-        raise ValueError("basis_matrix must be a 2 dimensional array! "
-                         f"{basis_matrix.ndim} dimensions provided instead.")
+        raise ValueError(
+            "basis_matrix must be a 2 dimensional array! "
+            f"{basis_matrix.ndim} dimensions provided instead."
+        )
 
     if basis_matrix.shape[0] == 1:
         raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
@@ -271,8 +274,10 @@ def create_convolutional_predictor(
 
     # check sample_axis exists
     if not utils.pytree_map_and_reduce(lambda x: x.ndim > axis, all, time_series):
-        raise ValueError("`time_series` should contain arrays of at least one-dimension. "
-                         "At list one 0-dimensional array provided.")
+        raise ValueError(
+            "`time_series` should contain arrays of at least one-dimension. "
+            "At list one 0-dimensional array provided."
+        )
 
     # assign defaults
     if shift is None:

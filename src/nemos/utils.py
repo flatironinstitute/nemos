@@ -150,9 +150,7 @@ def check_trials_longer_than_time_window(
         If any trial in the time series is shorter than the window size.
     """
     # Check window size
-    if pytree_map_and_reduce(
-        lambda x: x.shape[axis] < window_size, any, time_series
-    ):
+    if pytree_map_and_reduce(lambda x: x.shape[axis] < window_size, any, time_series):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
@@ -260,7 +258,7 @@ def nan_pad(
         warnings.warn(
             "With acausal filter, pad_size should probably be even,"
             " so that we can place an equal number of NaNs on either side of input",
-            UserWarning
+            UserWarning,
         )
 
     # convert to jax ndarray
@@ -296,9 +294,7 @@ def nan_pad(
 
 
 def _compute_index_adjust(
-        time_series: NDArray,
-        causality: Literal["causal", "anti-causal"],
-        axis: int
+    time_series: NDArray, causality: Literal["causal", "anti-causal"], axis: int
 ):
     """Compute index adjustment for shifting a time series."""
     adjust_indices = {
@@ -362,7 +358,9 @@ def shift_time_series(
         )
 
     # compute the start, end indices tree
-    adjust_idx = jax.tree_map(lambda x: _compute_index_adjust(x, predictor_causality, axis), time_series)
+    adjust_idx = jax.tree_map(
+        lambda x: _compute_index_adjust(x, predictor_causality, axis), time_series
+    )
 
     # convert to jax ndarray
     time_series = jax.tree_map(jnp.asarray, time_series)
@@ -372,7 +370,11 @@ def shift_time_series(
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
-            jnp.take(time_series, jnp.arange(*adjust_idx), axis=axis), axis, 1, predictor_causality, jnp.nan
+            jnp.take(time_series, jnp.arange(*adjust_idx), axis=axis),
+            axis,
+            1,
+            predictor_causality,
+            jnp.nan,
         )
     else:
         if pytree_map_and_reduce(
@@ -381,9 +383,14 @@ def shift_time_series(
             raise ValueError("All leaves of time_series must have a float dtype!")
         return jax.tree_map(
             lambda trial, idx: _pad_dimension(
-                jnp.take(trial, jnp.arange(*idx), axis=axis), axis, 1, predictor_causality, jnp.nan
+                jnp.take(trial, jnp.arange(*idx), axis=axis),
+                axis,
+                1,
+                predictor_causality,
+                jnp.nan,
             ),
-            time_series, adjust_idx
+            time_series,
+            adjust_idx,
         )
 
 
