@@ -388,6 +388,7 @@ class TestCreateConvolutionalPredictor:
         ],
     )
     def test_multi_epoch_pynapple(self, tsd, window_size, shift, predictor_causality, nan_index):
+        """Test nan location in multi-epoch pynapple tsd."""
         basis = np.zeros((window_size, 1))
         res = convolve.create_convolutional_predictor(basis, tsd, predictor_causality=predictor_causality, shift=shift)
 
