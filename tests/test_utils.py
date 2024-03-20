@@ -229,3 +229,78 @@ class TestPadding:
         array = jnp.zeros((10, ))
         with expectation:
             utils.nan_pad(array, pad_size, causality, axis=0)
+
+
+class TestShiftTimeSeries:
+
+    @pytest.mark.parametrize(
+        "predictor_causality, expectation",
+        [
+            ("causal", does_not_raise()),
+            ("anti-causal", does_not_raise()),
+            ("invalid", pytest.raises(ValueError, match="predictor_causality must be one"))
+        ]
+    )
+    def test_causality_validation(self, predictor_causality, expectation):
+        """Ensure the function rejects invalid predictor_causality values."""
+        time_series = np.array([1.0, 2.0, 3.0])
+        with expectation:
+            utils.shift_time_series(time_series, predictor_causality)
+
+    @pytest.mark.parametrize("predictor_causality, expected", [
+        ("causal", [np.nan, 1.0, 2.0]),
+        ("anti-causal", [2.0, 3.0, np.nan]),
+    ])
+    def test_shift_direction(self, predictor_causality, expected):
+        """Verify the shift direction matches the predictor_causality."""
+        time_series = np.array([1.0, 2.0, 3.0])
+        shifted_series = utils.shift_time_series(time_series, predictor_causality)
+        np.testing.assert_array_equal(shifted_series, expected)
+
+    @pytest.mark.parametrize("dtype, expectation", [
+        (np.float32, does_not_raise()),
+        (np.int32, pytest.raises(ValueError)),
+    ])
+    def test_dtype_validation(self, dtype, expectation):
+        """Check that the function raises an error for non-float data types."""
+        time_series = np.array([1, 2, 3], dtype=dtype)
+        with expectation:
+            utils.shift_time_series(time_series, "causal")
+
+    @pytest.mark.parametrize("axis, expectation", [
+        (0, does_not_raise()),  # Assuming time_series is 1D for simplicity
+        (1, pytest.raises(ValueError)),  # Invalid axis for 1D array
+    ])
+    def test_axis_validation(self, axis, expectation):
+        """Validate the function's handling of the axis parameter."""
+        time_series = np.array([1.0, 2.0, 3.0])
+        with expectation:
+            utils.shift_time_series(time_series, "causal", axis)
+
+    @pytest.mark.parametrize("shape, predictor_causality, axis", [
+        ((5, 5), "causal", 1),
+        ((5, 5), "anti-causal", 0),
+    ])
+    def test_shift_in_multidimensional_array(self, shape, predictor_causality, axis):
+        """Ensure correct shifting in multidimensional arrays along a specified axis."""
+        time_series = np.zeros(shape)
+        shifted_series = utils.shift_time_series(time_series, predictor_causality, axis)
+        if predictor_causality == "causal":
+            assert np.isnan(shifted_series.take(0, axis=axis)).all(), "First element along the axis should be NaN for causal shift."
+        else:
+            assert np.isnan(shifted_series.take(-1, axis=axis)).all(), "Last element along the axis should be NaN for anti-causal shift."
+
+    @pytest.mark.parametrize("predictor_causality, axis", [
+        ("causal", 0),
+        ("anti-causal", 0),
+    ])
+    def test_shift_with_pytree(self, predictor_causality, axis):
+        """Test shifting functionality with a pytree of arrays."""
+        time_series = [np.array([1.0, 2.0, 3.0]), np.array([4.0, 5.0, 6.0])]
+        shifted_series = utils.shift_time_series(time_series, predictor_causality, axis)
+        for original, shifted in zip(time_series, shifted_series):
+            if predictor_causality == "causal":
+                expected = np.concatenate(([np.nan], original[:-1]))
+            else:  # anti-causal
+                expected = np.concatenate((original[1:], [np.nan]))
+            np.testing.assert_array_equal(shifted, expected)

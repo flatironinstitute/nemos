@@ -340,10 +340,13 @@ def shift_time_series(
       first time point, so that e.g., `[0, 1, 2]` becomes `[1, 2, np.nan]`
 
     """
+    # validate axis
+    validate_axis(time_series, axis)
+
     # See docstring Notes section for what this does.
     adjust_indices = {
-        "causal": (None, -1),
-        "anti-causal": (1, None),
+        "causal": (0, time_series.shape[axis] - 1),
+        "anti-causal": (1, time_series.shape[axis]),
     }
     if predictor_causality not in adjust_indices.keys():
         raise ValueError(
@@ -354,14 +357,11 @@ def shift_time_series(
     # convert to jax ndarray
     time_series = jax.tree_map(jnp.asarray, time_series)
 
-    # validate axis
-    validate_axis(time_series, axis)
-
     if is_numpy_array_like(time_series):
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
-            time_series[:, start:end], axis, 1, predictor_causality, jnp.nan
+            jnp.take(time_series, jnp.arange(start, end), axis=axis), axis, 1, predictor_causality, jnp.nan
         )
     else:
         if pytree_map_and_reduce(
@@ -370,7 +370,7 @@ def shift_time_series(
             raise ValueError("All leaves of time_series must have a float dtype!")
         return jax.tree_map(
             lambda trial: _pad_dimension(
-                trial[start:end], axis, 1, predictor_causality, jnp.nan
+                jnp.take(trial, jnp.arange(start, end), axis=axis), axis, 1, predictor_causality, jnp.nan
             ),
             time_series,
         )
