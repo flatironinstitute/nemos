@@ -4,8 +4,7 @@ import jax
 import numpy as np
 import pytest
 
-from nemos import utils
-from nemos import convolve
+from nemos import convolve, utils
 
 
 class TestShiftTimeAxisAndConvolve:
@@ -14,14 +13,16 @@ class TestShiftTimeAxisAndConvolve:
         "time_series, check_func, axis",
         [
             (np.zeros((1, 20)), lambda x: x.ndim == 3, 1),
-            (np.zeros((20, )), lambda x: x.ndim == 2, 0),
+            (np.zeros((20,)), lambda x: x.ndim == 2, 0),
             (np.zeros((20, 1)), lambda x: x.ndim == 3, 0),
             (np.zeros((1, 20, 1)), lambda x: x.ndim == 4, 0),
         ],
     )
-    def test_output_ndim(self, time_series, check_func,axis):
+    def test_output_ndim(self, time_series, check_func, axis):
         """Check that the output dimensionality matches expectation."""
-        res = convolve._shift_time_axis_and_convolve(time_series, np.zeros((1, 1)), axis=axis)
+        res = convolve._shift_time_axis_and_convolve(
+            time_series, np.zeros((1, 1)), axis=axis
+        )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
 
@@ -34,17 +35,20 @@ class TestShiftTimeAxisAndConvolve:
     )
     def test_output_shape(self, time_series, axis, output_shape):
         """Check that the output shape matches expectation."""
+
         def check_func(x):
             return x.shape == output_shape
 
-        res = convolve._shift_time_axis_and_convolve(time_series, np.zeros((1, 1)), axis=axis)
+        res = convolve._shift_time_axis_and_convolve(
+            time_series, np.zeros((1, 1)), axis=axis
+        )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
 
     @pytest.mark.parametrize(
         "time_series, axis",
         [
-            (np.zeros((20, )), 0),
+            (np.zeros((20,)), 0),
             (np.zeros((20, 1)), 0),
             (np.zeros((1, 20, 1)), 1),
         ],
@@ -52,10 +56,13 @@ class TestShiftTimeAxisAndConvolve:
     @pytest.mark.parametrize("basis_matrix", [np.zeros((1, 1)), np.zeros((1, 2))])
     def test_output_num_basis(self, time_series, basis_matrix, axis):
         """Check that the number of features in input and output matches."""
+
         def check_func(conv):
             return basis_matrix.shape[-1] == conv.shape[-1]
 
-        res = convolve._shift_time_axis_and_convolve(time_series, basis_matrix, axis=axis)
+        res = convolve._shift_time_axis_and_convolve(
+            time_series, basis_matrix, axis=axis
+        )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
 
@@ -82,7 +89,9 @@ class TestShiftTimeAxisAndConvolve:
                         vec, basis, mode="valid"
                     )
 
-        utils_out = np.asarray(convolve._shift_time_axis_and_convolve(trial_counts, basis_matrix, axis=1))
+        utils_out = np.asarray(
+            convolve._shift_time_axis_and_convolve(trial_counts, basis_matrix, axis=1)
+        )
         assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (
             "Output of utils.convolve_1d_trials "
             "does not match numpy.convolve in "
@@ -147,20 +156,23 @@ class TestCreateConvolutionalPredictor:
             ({"tr1": np.zeros((30, 2)), "tr2": np.zeros((30, 2))}, does_not_raise(), 0),
             (np.zeros((1, 30, 1, 2)), does_not_raise(), 1),
             (
-                    [np.array(10)],
-                    pytest.raises(
-                        ValueError,
-                        match="`time_series` should contain arrays of at least one",
-                    ), 0
+                [np.array(10)],
+                pytest.raises(
+                    ValueError,
+                    match="`time_series` should contain arrays of at least one",
+                ),
+                0,
             ),
             (np.zeros((30, 10)), does_not_raise(), 0),
             ([np.zeros((30, 10))], does_not_raise(), 1),
-            (np.zeros(10), does_not_raise(), 0)
+            (np.zeros(10), does_not_raise(), 0),
         ],
     )
     def test_spike_count_type(self, basis_matrix, expectation, trial_counts, axis):
         with expectation:
-            convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=axis)
+            convolve.create_convolutional_predictor(
+                basis_matrix, trial_counts, axis=axis
+            )
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
     @pytest.mark.parametrize(
@@ -175,10 +187,12 @@ class TestCreateConvolutionalPredictor:
         raise_exception = trial_counts.shape[1] < basis_matrix.shape[0]
         if raise_exception:
             with pytest.raises(
-                    ValueError,
-                    match="Insufficient trial duration. The number of time points",
+                ValueError,
+                match="Insufficient trial duration. The number of time points",
             ):
-                convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
+                convolve.create_convolutional_predictor(
+                    basis_matrix, trial_counts, axis=1
+                )
         else:
             convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=1)
 
@@ -187,10 +201,10 @@ class TestCreateConvolutionalPredictor:
         [
             (np.zeros((1, 1)), does_not_raise()),
             (
-                    np.zeros((0, 1)),
-                    pytest.raises(
-                        ValueError, match=r"Empty array provided. At least one of dimension"
-                    ),
+                np.zeros((0, 1)),
+                pytest.raises(
+                    ValueError, match=r"Empty array provided. At least one of dimension"
+                ),
             ),
         ],
     )
@@ -246,7 +260,9 @@ class TestCreateConvolutionalPredictor:
         ],
     )
     def test_output_ndim(self, time_series, check_func, axis):
-        res = convolve._shift_time_axis_and_convolve(np.zeros((1, 1)), time_series, axis=axis)
+        res = convolve._shift_time_axis_and_convolve(
+            np.zeros((1, 1)), time_series, axis=axis
+        )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
 
@@ -265,7 +281,9 @@ class TestCreateConvolutionalPredictor:
         def check_func(x):
             return x.shape == output_shape
 
-        res = convolve._shift_time_axis_and_convolve(np.zeros((1, 1)), time_series, axis=axis)
+        res = convolve._shift_time_axis_and_convolve(
+            np.zeros((1, 1)), time_series, axis=axis
+        )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
 
@@ -285,7 +303,9 @@ class TestCreateConvolutionalPredictor:
         def check_func(conv):
             return basis_matrix.shape[-1] == conv.shape[-1]
 
-        res = convolve._shift_time_axis_and_convolve(basis_matrix, time_series, axis=axis)
+        res = convolve._shift_time_axis_and_convolve(
+            basis_matrix, time_series, axis=axis
+        )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
 
@@ -311,8 +331,10 @@ class TestCreateConvolutionalPredictor:
                         vec, basis, mode="valid"
                     )
 
-        utils_out = np.asarray(convolve._shift_time_axis_and_convolve(basis_matrix, trial_counts, axis=1))
-        assert np.allclose(utils_out, numpy_out, rtol=10 ** -5, atol=10 ** -5), (
+        utils_out = np.asarray(
+            convolve._shift_time_axis_and_convolve(basis_matrix, trial_counts, axis=1)
+        )
+        assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (
             "Output of utils.convolve_1d_trials "
             "does not match numpy.convolve in "
             '"valid" mode.'
@@ -342,7 +364,7 @@ class TestCreateConvolutionalPredictor:
 
         utils_out = convolve._convolve_1d_trials(basis_matrix, trial_counts, axis=0)
         check = all(
-            np.allclose(utils_out[k], numpy_out[k], rtol=10 ** -5, atol=10 ** -5)
+            np.allclose(utils_out[k], numpy_out[k], rtol=10**-5, atol=10**-5)
             for k in utils_out
         )
         assert check, (
@@ -364,7 +386,9 @@ class TestCreateConvolutionalPredictor:
     )
     def test_tree_structure_match(self, trial_counts, axis):
         basis_matrix = np.zeros((4, 3))
-        conv = convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=axis)
+        conv = convolve.create_convolutional_predictor(
+            basis_matrix, trial_counts, axis=axis
+        )
         assert jax.tree_util.tree_structure(trial_counts) == jax.tree_structure(conv)
 
     #     @pytest.mark.parametrize(

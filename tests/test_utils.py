@@ -1,9 +1,10 @@
+from contextlib import nullcontext as does_not_raise
+
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
-from contextlib import nullcontext as does_not_raise
-import jax
 
 from nemos import utils
 
@@ -13,13 +14,25 @@ from nemos import utils
     [
         ([jnp.zeros((10, 1)), np.zeros((10, 1))], jnp.zeros((10, 2))),
         ([np.zeros((10, 1)), np.zeros((10, 1))], jnp.zeros((10, 2))),
-        ([np.zeros((10, 1)), nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1)))],
-         nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2)))),
-        ([nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1))), nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1)))],
-         nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2)))),
-        ([nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))), nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2)))],
-         nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 2, 2)))),
-    ]
+        (
+            [np.zeros((10, 1)), nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1)))],
+            nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2))),
+        ),
+        (
+            [
+                nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1))),
+                nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1))),
+            ],
+            nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2))),
+        ),
+        (
+            [
+                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+            ],
+            nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 2, 2))),
+        ),
+    ],
 )
 def test_concatenate_eval(arrays, expected_out):
     """Test various combination of arrays and pyapple time series."""
@@ -35,12 +48,18 @@ def test_concatenate_eval(arrays, expected_out):
 @pytest.mark.parametrize(
     "axis, arrays, expected_shape",
     [
-        (0, [jnp.zeros((10, )), np.zeros((10, ))], 20),
+        (0, [jnp.zeros((10,)), np.zeros((10,))], 20),
         (0, [jnp.zeros((10, 1)), np.zeros((10, 1))], 20),
         (1, [jnp.zeros((10, 1)), np.zeros((10, 1))], 2),
-        (2, [nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
-             nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2)))],4),
-    ]
+        (
+            2,
+            [
+                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+            ],
+            4,
+        ),
+    ],
 )
 def test_concatenate_axis(arrays, axis, expected_shape):
     """Test various combination of arrays and pyapple time series."""
@@ -52,9 +71,14 @@ def test_concatenate_axis(arrays, axis, expected_shape):
     [
         (np.int32, [jnp.zeros((10, 1)), np.zeros((10, 1))]),
         (np.float32, [jnp.zeros((10, 1)), np.zeros((10, 1))]),
-        (np.int32, [nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
-                 nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2)))]),
-    ]
+        (
+            np.int32,
+            [
+                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
+            ],
+        ),
+    ],
 )
 def test_concatenate_type(arrays, dtype):
     """Test various combination of arrays and pyapple time series."""
@@ -186,16 +210,39 @@ class TestPadding:
     @pytest.mark.parametrize(
         "array, axis, expectation",
         [
-            (jnp.zeros((10, )), 0, does_not_raise()),
+            (jnp.zeros((10,)), 0, does_not_raise()),
             (jnp.zeros((10, 11)), 0, does_not_raise()),
             (jnp.zeros((10, 11)), 1, does_not_raise()),
-            (jnp.zeros((10,)), 1, pytest.raises(ValueError, match="'axis' must be smaller than the number ")),
-            (jnp.zeros((10, 11)), 2, pytest.raises(ValueError, match="'axis' must be smaller than the number ")),
-            (jnp.zeros((10, 11)), 0., pytest.raises(ValueError, match="`axis` must be a non negative integer")),
-            (jnp.zeros((10, 11)), "x", pytest.raises(ValueError, match="`axis` must be a non negative integer"))
-
-        ]
-                             )
+            (
+                jnp.zeros((10,)),
+                1,
+                pytest.raises(
+                    ValueError, match="'axis' must be smaller than the number "
+                ),
+            ),
+            (
+                jnp.zeros((10, 11)),
+                2,
+                pytest.raises(
+                    ValueError, match="'axis' must be smaller than the number "
+                ),
+            ),
+            (
+                jnp.zeros((10, 11)),
+                0.0,
+                pytest.raises(
+                    ValueError, match="`axis` must be a non negative integer"
+                ),
+            ),
+            (
+                jnp.zeros((10, 11)),
+                "x",
+                pytest.raises(
+                    ValueError, match="`axis` must be a non negative integer"
+                ),
+            ),
+        ],
+    )
     def test_axis_compatibility(self, pad_size, array, causality, axis, expectation):
         with expectation:
             utils.nan_pad(array, pad_size, causality, axis=axis)
@@ -204,11 +251,17 @@ class TestPadding:
     @pytest.mark.parametrize(
         "pad_size, expectation",
         [
-            (-1, pytest.raises(ValueError, match="pad_size must be a positive integer")),
-            (1., pytest.raises(ValueError, match="pad_size must be a positive integer")),
+            (
+                -1,
+                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+            ),
+            (
+                1.0,
+                pytest.raises(ValueError, match="pad_size must be a positive integer"),
+            ),
             (1, does_not_raise()),
-            (2, does_not_raise())
-        ]
+            (2, does_not_raise()),
+        ],
     )
     @pytest.mark.parametrize("array", [jnp.zeros((10,)), np.zeros((10, 11))])
     def test_pad_size_type(self, pad_size, array, causality, expectation):
@@ -219,14 +272,22 @@ class TestPadding:
         "causality, pad_size, expectation",
         [
             ("causal", 1, does_not_raise()),
-            ("acausal", 1, pytest.warns(UserWarning, match="With acausal filter, pad_size should probably be even")),
+            (
+                "acausal",
+                1,
+                pytest.warns(
+                    UserWarning,
+                    match="With acausal filter, pad_size should probably be even",
+                ),
+            ),
             ("anti-causal", 1, does_not_raise()),
             ("causal", 2, does_not_raise()),
             ("acausal", 2, does_not_raise()),
             ("anti-causal", 2, does_not_raise()),
-         ])
+        ],
+    )
     def test_pad_window_size(self, pad_size, causality, expectation):
-        array = jnp.zeros((10, ))
+        array = jnp.zeros((10,))
         with expectation:
             utils.nan_pad(array, pad_size, causality, axis=0)
 
@@ -238,8 +299,11 @@ class TestShiftTimeSeries:
         [
             ("causal", does_not_raise()),
             ("anti-causal", does_not_raise()),
-            ("invalid", pytest.raises(ValueError, match="predictor_causality must be one of"))
-        ]
+            (
+                "invalid",
+                pytest.raises(ValueError, match="predictor_causality must be one of"),
+            ),
+        ],
     )
     def test_causality_validation(self, predictor_causality, expectation):
         """Ensure the function rejects invalid predictor_causality values."""
@@ -251,8 +315,11 @@ class TestShiftTimeSeries:
         "dtype, expectation",
         [
             (np.float32, does_not_raise()),
-            (np.int32, pytest.raises(ValueError, match="time_series must have a float dtype"))
-        ]
+            (
+                np.int32,
+                pytest.raises(ValueError, match="time_series must have a float dtype"),
+            ),
+        ],
     )
     def test_dtype_validation(self, dtype, expectation):
         """Check that the function raises an error for non-float data types."""
@@ -264,8 +331,14 @@ class TestShiftTimeSeries:
         "axis, expectation",
         [
             (0, does_not_raise()),  # Assuming time_series is 1D for simplicity
-            (1, pytest.raises(ValueError, match="'axis' must be smaller than the number of dimensions"))
-        ]
+            (
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="'axis' must be smaller than the number of dimensions",
+                ),
+            ),
+        ],
     )
     def test_axis_validation(self, axis, expectation):
         """Validate the function's handling of the axis parameter."""
@@ -278,41 +351,62 @@ class TestShiftTimeSeries:
         [
             ((5, 5), "causal", 1, does_not_raise()),
             ((5, 5), "anti-causal", 0, does_not_raise()),
-            ((5, 5), "invalid", 0, pytest.raises(ValueError, match="predictor_causality must be one of"))
-        ]
+            (
+                (5, 5),
+                "invalid",
+                0,
+                pytest.raises(ValueError, match="predictor_causality must be one of"),
+            ),
+        ],
     )
-    def test_shift_in_multidimensional_array(self, shape, predictor_causality, axis, expectation):
+    def test_shift_in_multidimensional_array(
+        self, shape, predictor_causality, axis, expectation
+    ):
         """Ensure correct shifting in multidimensional arrays along a specified axis."""
         time_series = np.zeros(shape)
         with expectation:
-            shifted_series = utils.shift_time_series(time_series, predictor_causality, axis)
+            shifted_series = utils.shift_time_series(
+                time_series, predictor_causality, axis
+            )
             if expectation == does_not_raise():
                 # Check for NaN at the expected location
                 if predictor_causality == "causal":
-                    assert np.isnan(shifted_series.take(0,
-                                                        axis=axis)).all(), "First element along the axis should be NaN for causal shift."
+                    assert np.isnan(
+                        shifted_series.take(0, axis=axis)
+                    ).all(), (
+                        "First element along the axis should be NaN for causal shift."
+                    )
                     # Ensure no NaNs elsewhere
-                    assert not np.isnan(shifted_series.take(range(1, shifted_series.shape[axis]),
-                                                            axis=axis)).any(), "Unexpected NaNs found in the array."
+                    assert not np.isnan(
+                        shifted_series.take(
+                            range(1, shifted_series.shape[axis]), axis=axis
+                        )
+                    ).any(), "Unexpected NaNs found in the array."
                 else:  # anti-causal
-                    assert np.isnan(shifted_series.take(-1,
-                                                        axis=axis)).all(), "Last element along the axis should be NaN for anti-causal shift."
+                    assert np.isnan(
+                        shifted_series.take(-1, axis=axis)
+                    ).all(), "Last element along the axis should be NaN for anti-causal shift."
                     # Ensure no NaNs elsewhere
-                    assert not np.isnan(shifted_series.take(range(0, shifted_series.shape[axis] - 1),
-                                                            axis=axis)).any(), "Unexpected NaNs found in the array."
+                    assert not np.isnan(
+                        shifted_series.take(
+                            range(0, shifted_series.shape[axis] - 1), axis=axis
+                        )
+                    ).any(), "Unexpected NaNs found in the array."
 
     @pytest.mark.parametrize(
         "predictor_causality, axis, expectation",
         [
             ("causal", 0, does_not_raise()),
             ("anti-causal", 0, does_not_raise()),
-        ]
+        ],
     )
     def test_shift_with_pytree(self, predictor_causality, axis, expectation):
         """Test shifting functionality with a pytree of arrays."""
         time_series = [np.array([1.0, 2.0, 3.0]), np.array([4.0, 5.0, 6.0])]
         with expectation:
-            shifted_series = utils.shift_time_series(time_series, predictor_causality, axis)
+            shifted_series = utils.shift_time_series(
+                time_series, predictor_causality, axis
+            )
             for original, shifted in zip(time_series, shifted_series):
                 if predictor_causality == "causal":
                     expected = np.concatenate(([np.nan], original[:-1]))
