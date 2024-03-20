@@ -220,14 +220,14 @@ class TestCreateConvolutionalPredictor:
             (np.zeros((20,)), lambda x: x.ndim == 2, 0),
             ([np.zeros((20,)), np.zeros((10,))], lambda x: x.ndim == 2, 0),
             (np.zeros((20, 1)), lambda x: x.ndim == 3, 0),
-            (np.zeros((1, 20, 1)), lambda x: x.ndim == 4, 0),
+            (np.zeros((1, 20, 1)), lambda x: x.ndim == 4, 1),
             ([np.zeros((20, 1)), np.zeros((20, 1))], lambda x: x.ndim == 3, 0),
             ([np.zeros((10, 1)), np.zeros((20, 1))], lambda x: x.ndim == 3, 0),
         ],
     )
     def test_output_ndim(self, time_series, check_func, axis):
-        res = convolve._shift_time_axis_and_convolve(
-            np.zeros((1, 1)), time_series, axis=axis
+        res = convolve.create_convolutional_predictor(
+            np.zeros((2, 1)), time_series, axis=axis
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output doesn't match expected structure")
@@ -237,7 +237,7 @@ class TestCreateConvolutionalPredictor:
         [
             (np.zeros((20, 1)), 0, (20, 1, 1)),
             (np.zeros((1, 20, 1)), 1, (1, 20, 1, 1)),
-            ([[np.zeros((1, 1, 20))], np.zeros((1, 1, 20))], 1, (1, 1, 20, 1)),
+            ([[np.zeros((1, 1, 20))], np.zeros((1, 1, 20))], 2, (1, 1, 20, 1)),
             ([np.zeros((20, 1))], 0, (20, 1, 1)),
             ([np.zeros((10, 1))], 0, (10, 1, 1)),
             ([[np.zeros((10, 1))]], 0, (10, 1, 1)),
@@ -247,8 +247,8 @@ class TestCreateConvolutionalPredictor:
         def check_func(x):
             return x.shape == output_shape
 
-        res = convolve._shift_time_axis_and_convolve(
-            np.zeros((1, 1)), time_series, axis=axis
+        res = convolve.create_convolutional_predictor(
+            np.zeros((2, 1)), time_series, axis=axis
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
@@ -264,47 +264,16 @@ class TestCreateConvolutionalPredictor:
             ([np.zeros((10, 1)), np.zeros((20, 2))], 0),
         ],
     )
-    @pytest.mark.parametrize("basis_matrix", [np.zeros((1, 1)), np.zeros((1, 2))])
+    @pytest.mark.parametrize("basis_matrix", [np.zeros((2, 1)), np.zeros((2, 2))])
     def test_output_num_basis(self, time_series, basis_matrix, axis):
         def check_func(conv):
             return basis_matrix.shape[-1] == conv.shape[-1]
 
-        res = convolve._shift_time_axis_and_convolve(
+        res = convolve.create_convolutional_predictor(
             basis_matrix, time_series, axis=axis
         )
         if not utils.pytree_map_and_reduce(check_func, all, res):
             raise ValueError("Output  number of neuron doesn't match input.")
-
-    @pytest.mark.parametrize(
-        "basis_matrix", [np.random.normal(size=(4, 3)) for _ in range(2)]
-    )
-    @pytest.mark.parametrize(
-        "trial_counts", [np.random.normal(size=(2, 10, 3)) for _ in range(2)]
-    )
-    def test_valid_convolution_output(self, basis_matrix, trial_counts):
-        numpy_out = np.zeros(
-            (
-                trial_counts.shape[0],
-                trial_counts.shape[1] - basis_matrix.shape[0] + 1,
-                trial_counts.shape[2],
-                basis_matrix.shape[1],
-            )
-        )
-        for tri_i, trial in enumerate(trial_counts):
-            for neu_k, vec in enumerate(trial.T):
-                for bas_j, basis in enumerate(basis_matrix.T):
-                    numpy_out[tri_i, :, neu_k, bas_j] = np.convolve(
-                        vec, basis, mode="valid"
-                    )
-
-        utils_out = np.asarray(
-            convolve._shift_time_axis_and_convolve(basis_matrix, trial_counts, axis=1)
-        )
-        assert np.allclose(utils_out, numpy_out, rtol=10**-5, atol=10**-5), (
-            "Output of utils.convolve_1d_trials "
-            "does not match numpy.convolve in "
-            '"valid" mode.'
-        )
 
     @pytest.mark.parametrize(
         "basis_matrix", [np.random.normal(size=(4, 3)) for _ in range(2)]
@@ -327,10 +296,10 @@ class TestCreateConvolutionalPredictor:
                     numpy_out[tri_i, :, neu_k, bas_j] = np.convolve(
                         vec, basis, mode="valid"
                     )
-
-        utils_out = convolve._convolve_1d_trials(basis_matrix, trial_counts, axis=0)
+        ws = basis_matrix.shape[0]
+        utils_out = convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=0, shift=False)
         check = all(
-            np.allclose(utils_out[k], numpy_out[k], rtol=10**-5, atol=10**-5)
+            np.allclose(utils_out[k][ws-1:], numpy_out[k], rtol=10**-5, atol=10**-5)
             for k in utils_out
         )
         assert check, (
@@ -357,83 +326,34 @@ class TestCreateConvolutionalPredictor:
         )
         assert jax.tree_util.tree_structure(trial_counts) == jax.tree_structure(conv)
 
-    #     @pytest.mark.parametrize(
-    #         "basis, expectation",
-    #         [
-    #             (np.ones((3, 1)), does_not_raise()),
-    #             (
-    #                 np.ones((2, 1)),
-    #                 pytest.warns(
-    #                     UserWarning, match="With `acausal` filter, `basis_matrix.shape"
-    #                 ),
-    #             ),
-    #         ],
-    #     )
-    #     def test_warns_even_window(self, basis, expectation):
-    #         with expectation:
-    #             utils.create_convolutional_predictor(
-    #                 basis, np.zeros((1, 10, 1)), predictor_causality="acausal", shift=False
-    #             )
-    #
-    #     @pytest.mark.parametrize("feature", [np.ones((1, 30, 1)), np.ones((1, 20, 1))])
-    #     @pytest.mark.parametrize(
-    #         "basis",
-    #         [
-    #             np.ones((3, 1)),
-    #             np.ones((2, 1)),
-    #             np.ones((3, 2)),
-    #             np.ones((2, 3)),
-    #         ],
-    #     )
-    #     @pytest.mark.parametrize(
-    #         "shift",
-    #         [
-    #             True,
-    #             False,
-    #             None,
-    #         ],
-    #     )
-    #     @pytest.mark.parametrize(
-    #         "predictor_causality", ["causal", "acausal", "anti-causal"]
-    #     )
-    #     def test_preserve_first_axis_shape(
-    #         self, feature, basis, shift, predictor_causality
-    #     ):
-    #         if predictor_causality == "acausal" and shift:
-    #             return
-    #         res = utils.create_convolutional_predictor(
-    #             basis, feature, predictor_causality=predictor_causality, shift=shift
-    #         )
-    #         assert res.shape[0] == feature.shape[0]
-    #
-    #     @pytest.mark.parametrize("feature", [np.zeros((1, 30, 1))])
-    #     @pytest.mark.parametrize(
-    #         "window_size, shift, predictor_causality, nan_idx",
-    #         [
-    #             (3, True, "causal", [0, 1, 2]),
-    #             (2, True, "causal", [0, 1]),
-    #             (3, False, "causal", [0, 1]),
-    #             (2, False, "causal", [0]),
-    #             (2, None, "causal", [0, 1]),
-    #             (3, True, "anti-causal", [29, 28, 27]),
-    #             (2, True, "anti-causal", [29, 28]),
-    #             (3, False, "anti-causal", [29, 28]),
-    #             (2, False, "anti-causal", [29]),
-    #             (2, None, "anti-causal", [29, 28]),
-    #             (3, False, "acausal", [29, 0]),
-    #             (2, False, "acausal", [29]),
-    #         ],
-    #     )
-    #     def test_expected_nan(
-    #         self, feature, window_size, shift, predictor_causality, nan_idx
-    #     ):
-    #         basis = np.zeros((window_size, 1))
-    #         res = utils.create_convolutional_predictor(
-    #             basis, feature, predictor_causality=predictor_causality, shift=shift
-    #         )
-    #         other_idx = list(set(np.arange(res.shape[1])).difference(nan_idx))
-    #         assert np.all(np.isnan(res[:, nan_idx]))
-    #         assert not np.any(np.isnan(res[:, other_idx]))
+    @pytest.mark.parametrize("feature", [np.zeros((1, 30, 1))])
+    @pytest.mark.parametrize(
+        "window_size, shift, predictor_causality, nan_idx",
+        [
+            (3, True, "causal", [0, 1, 2]),
+            (2, True, "causal", [0, 1]),
+            (3, False, "causal", [0, 1]),
+            (2, False, "causal", [0]),
+            (2, None, "causal", [0, 1]),
+            (3, True, "anti-causal", [29, 28, 27]),
+            (2, True, "anti-causal", [29, 28]),
+            (3, False, "anti-causal", [29, 28]),
+            (2, False, "anti-causal", [29]),
+            (2, None, "anti-causal", [29, 28]),
+            (3, False, "acausal", [29, 0]),
+            (2, False, "acausal", [29]),
+        ],
+    )
+    def test_expected_nan(
+        self, feature, window_size, shift, predictor_causality, nan_idx
+    ):
+        basis = np.zeros((window_size, 1))
+        res = convolve.create_convolutional_predictor(
+            basis, feature, predictor_causality=predictor_causality, shift=shift, axis=1
+        )
+        other_idx = list(set(np.arange(res.shape[1])).difference(nan_idx))
+        assert np.all(np.isnan(res[:, nan_idx]))
+        assert not np.any(np.isnan(res[:, other_idx]))
     #
     #     def test_acausal_shift_error(self):
     #         basis = np.zeros((3, 1))

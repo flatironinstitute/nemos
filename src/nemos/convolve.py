@@ -195,7 +195,7 @@ def _convolve_pad_and_shift(
             warnings.warn(w.message, w.category)
 
     if shift:
-        predictor = utils.shift_time_series(predictor, predictor_causality)
+        predictor = utils.shift_time_series(predictor, predictor_causality, axis=axis)
     return predictor
 
 
