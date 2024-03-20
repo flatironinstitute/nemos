@@ -229,4 +229,3 @@ class TestPadding:
         array = jnp.zeros((10, ))
         with expectation:
             utils.nan_pad(array, pad_size, causality, axis=0)
-

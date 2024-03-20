@@ -3,9 +3,7 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
-import re
 import warnings
-from functools import partial
 from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
@@ -16,19 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from .tree_utils import pytree_map_and_reduce
-from .type_casting import is_numpy_array_like, is_pynapple_tsd, support_pynapple
-
-# Same trial duration
-# [[r , t , n], [w]] -> [r , (t - w + 1) , n]
-# Broadcasted 1d convolution operations
-_CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
-_CORR2 = jax.vmap(_CORR1, (2, None), 2)
-_CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 1), 3)
-
-# Variable trial dur
-# [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-_CORR3 = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
-_CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
+from .type_casting import is_numpy_array_like, support_pynapple
 
 
 def check_dimensionality(
