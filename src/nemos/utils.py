@@ -77,7 +77,7 @@ def validate_axis(tree: Any, axis: int):
         on every array in the tree.
         - If the axis is negative or non-integer.
     """
-    if axis < 0 or not isinstance(axis, int):
+    if not isinstance(axis, int) or axis < 0:
         raise ValueError("`axis` must be a non negative integer.")
 
     if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
@@ -273,7 +273,8 @@ def nan_pad(
     if predictor_causality == "acausal" and (pad_size % 2 == 1):
         warnings.warn(
             "With acausal filter, pad_size should probably be even,"
-            " so that we can place an equal number of NaNs on either side of input"
+            " so that we can place an equal number of NaNs on either side of input",
+            UserWarning
         )
 
     # convert to jax ndarray

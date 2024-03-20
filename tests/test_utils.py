@@ -60,6 +60,7 @@ def test_concatenate_type(arrays, dtype):
     """Test various combination of arrays and pyapple time series."""
     assert utils.pynapple_concatenate(arrays, dtype=dtype).dtype == dtype
 
+
 class TestPadding:
 
     @pytest.mark.parametrize(
@@ -188,11 +189,44 @@ class TestPadding:
             (jnp.zeros((10, )), 0, does_not_raise()),
             (jnp.zeros((10, 11)), 0, does_not_raise()),
             (jnp.zeros((10, 11)), 1, does_not_raise()),
-            (jnp.zeros((10,)), 1, pytest.raises(ValueError, match="`axis` must be smaller than `array.ndim`")),
-            (jnp.zeros((10, 11)), 2, pytest.raises(ValueError, match="`axis` must be smaller than `array.ndim`")),
+            (jnp.zeros((10,)), 1, pytest.raises(ValueError, match="'axis' must be smaller than the number ")),
+            (jnp.zeros((10, 11)), 2, pytest.raises(ValueError, match="'axis' must be smaller than the number ")),
+            (jnp.zeros((10, 11)), 0., pytest.raises(ValueError, match="`axis` must be a non negative integer")),
+            (jnp.zeros((10, 11)), "x", pytest.raises(ValueError, match="`axis` must be a non negative integer"))
+
         ]
                              )
     def test_axis_compatibility(self, pad_size, array, causality, axis, expectation):
         with expectation:
             utils.nan_pad(array, pad_size, causality, axis=axis)
+
+    @pytest.mark.parametrize("causality", ["causal", "acausal", "anti-causal"])
+    @pytest.mark.parametrize(
+        "pad_size, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="pad_size must be a positive integer")),
+            (1., pytest.raises(ValueError, match="pad_size must be a positive integer")),
+            (1, does_not_raise()),
+            (2, does_not_raise())
+        ]
+    )
+    @pytest.mark.parametrize("array", [jnp.zeros((10,)), np.zeros((10, 11))])
+    def test_axis_compatibility(self, pad_size, array, causality, expectation):
+        with expectation:
+            utils.nan_pad(array, pad_size, causality, axis=0)
+
+    @pytest.mark.parametrize(
+        "causality, pad_size, expectation",
+        [
+            ("causal", 1, does_not_raise()),
+            ("acausal", 1, pytest.warns(UserWarning, match="With acausal filter, pad_size should probably be even")),
+            ("anti-causal", 1, does_not_raise()),
+            ("causal", 2, does_not_raise()),
+            ("acausal", 2, does_not_raise()),
+            ("anti-causal", 2, does_not_raise()),
+         ])
+    def test_pad_window_size(self, pad_size, causality, expectation):
+        array = jnp.zeros((10, ))
+        with expectation:
+            utils.nan_pad(array, pad_size, causality, axis=0)
 
