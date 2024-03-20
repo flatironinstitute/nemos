@@ -226,7 +226,7 @@ basis = nmo.basis.RaisedCosineBasisLog(8)
 window_size = 100
 time, basis_kernels = basis.evaluate_on_grid(window_size)
 time *= bin_size * window_size
-convolved_input = nmo.utils.create_convolutional_predictor(basis_kernels, [filtered_stimulus])[0]
+convolved_input = nmo.convolve.create_convolutional_predictor(basis_kernels, filtered_stimulus)
 
 # %%
 #

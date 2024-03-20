@@ -3,9 +3,7 @@
 # required to get ArrayLike to render correctly, unnecessary as of python 3.10
 from __future__ import annotations
 
-import re
 import warnings
-from functools import partial
 from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
@@ -16,19 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from .tree_utils import pytree_map_and_reduce
-from .type_casting import support_pynapple
-
-# Same trial duration
-# [[r , t , n], [w]] -> [r , (t - w + 1) , n]
-# Broadcasted 1d convolution operations
-_CORR1 = jax.vmap(partial(jnp.convolve, mode="valid"), (0, None), 0)
-_CORR2 = jax.vmap(_CORR1, (2, None), 2)
-_CORR_SAME_TRIAL_DUR = jax.vmap(_CORR2, (None, 1), 3)
-
-# Variable trial dur
-# [[n x t],[p x w]] -> [n x p x (t - w + 1)]
-_CORR3 = jax.vmap(partial(jnp.convolve, mode="valid"), (1, None), 1)
-_CORR_VARIABLE_TRIAL_DUR = jax.vmap(_CORR3, (None, 1), 2)
+from .type_casting import is_numpy_array_like, support_pynapple
 
 
 def check_dimensionality(
@@ -52,6 +38,38 @@ def check_dimensionality(
     True if all the arrays has the expected number of dimension, False otherwise.
     """
     return not pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, pytree)
+
+
+def validate_axis(tree: Any, axis: int):
+    """
+    Validate the axis for each array in a given tree structure.
+
+    This function checks if the specified axis exists in each array within the tree. It raises a ValueError
+    if the specified axis is equal to or greater than the number of dimensions in any of the arrays.
+
+    Parameters
+    ----------
+    tree :
+        A tree containing arrays.
+    axis :
+        The axis that should be valid for each array in the tree. This means each array must have at least
+        `axis + 1` dimensions.
+
+    Raises
+    ------
+    ValueError
+        - If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
+        within the tree. This ensures that operations intended for a specific axis can be safely performed
+        on every array in the tree.
+        - If the axis is negative or non-integer.
+    """
+    if not isinstance(axis, int) or axis < 0:
+        raise ValueError("`axis` must be a non negative integer.")
+
+    if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
+        raise ValueError(
+            "'axis' must be smaller than the number of dimensions of any array in 'tree'."
+        )
 
 
 def check_convolve_input_dims(basis_matrix: jnp.ndarray, time_series: Any):
@@ -111,8 +129,8 @@ def check_non_empty(pytree: Any, pytree_name: str):
         )
 
 
-def check_trials_longer_then_window_size(
-    time_series: Any, window_size: int, sample_axis: int = 0
+def check_trials_longer_than_time_window(
+    time_series: Any, window_size: int, axis: int = 0
 ):
     """
     Check if the duration of each trial in the time series is at least as long as the window size.
@@ -123,7 +141,7 @@ def check_trials_longer_then_window_size(
         A pytree of trial data.
     window_size :
         The size of the window to be used in convolution.
-    sample_axis :
+    axis :
         The axis in the arrays representing the time dimension.
 
     Raises
@@ -132,88 +150,11 @@ def check_trials_longer_then_window_size(
         If any trial in the time series is shorter than the window size.
     """
     # Check window size
-    if pytree_map_and_reduce(
-        lambda x: x.shape[sample_axis] < window_size, any, time_series
-    ):
+    if pytree_map_and_reduce(lambda x: x.shape[axis] < window_size, any, time_series):
         raise ValueError(
             "Insufficient trial duration. The number of time points in each trial must "
             "be greater or equal to the window size."
         )
-
-
-def convolve_1d_trials(
-    basis_matrix: ArrayLike,
-    time_series: Any,
-) -> Any:
-    """Convolve trial time series with a basis matrix.
-
-    This function applies a convolution in mode "valid" to each trials in the
-    `time_series`. The `time_series` pytree could be either a single 3D array
-    with trials as the first dimension, or a pytree with trials as the leaves.
-    As the algorithm is more efficient when a `time_series` is a 3D array, you should
-    consider organizing your data in this way when possible.
-
-    Parameters
-    ----------
-    basis_matrix :
-        The basis matrix with which to convolve the trials. Shape
-        `(window_size, n_basis_funcs)`.
-    time_series :
-        The time series to convolve with the basis matrix. This variable should
-        be a pytree with arrays as leaves. The structure could be one of the
-        following:
-
-        1. A single array of 3-dimensions, `(n_trials, n_time_bins, n_neurons)`.
-        2. Any pytree with 2-dimensional arrays, `(n_time_bins, n_neurons)`, as
-           leaves. Note that neither `n_time_bins` nor `n_neurons` need to be
-           identical across leaves.
-
-    Returns
-    -------
-    :
-        The convolved trials as a pytree with the same structure as `time_series`.
-
-    Raises
-    ------
-    ValueError
-        - If basis_matrix is not a 2D array-like object.
-        - If time_series is not a pytree of 2D array-like objects or a 3D array.
-        - If time_series contains empty trials.
-        - If basis_matrix is empty
-        - If the number of time points in each trial is less than the window size.
-    """
-    # convert to jax arrays
-    basis_matrix = jnp.asarray(basis_matrix)
-    time_series = jax.tree_map(jnp.asarray, time_series)
-
-    # check dimensions
-    check_convolve_input_dims(basis_matrix, time_series)
-
-    # check for empty inputs
-    check_non_empty(basis_matrix, "basis_matrix")
-    check_non_empty(time_series, "time_series")
-
-    # get the sample axis
-    if pytree_map_and_reduce(lambda x: x.ndim == 2, all, time_series):
-        sample_axis = 0
-    else:
-        sample_axis = 1
-
-    check_trials_longer_then_window_size(
-        time_series, basis_matrix.shape[0], sample_axis
-    )
-
-    if sample_axis:
-        # if the conversion to array went through, time_series have trials with equal size
-        conv_trials = _CORR_SAME_TRIAL_DUR(time_series, basis_matrix)
-    else:
-        # trials have different length
-        conv_trials = jax.tree_map(
-            lambda x: _CORR_VARIABLE_TRIAL_DUR(jnp.atleast_2d(x), basis_matrix),
-            time_series,
-        )
-
-    return conv_trials
 
 
 def _pad_dimension(
@@ -246,24 +187,11 @@ def _pad_dimension(
     :
         An array with padded last dimension.
     """
-    if axis < 0 or not isinstance(axis, int):
-        raise ValueError("`axis` must be a non negative integer.")
-    elif axis >= array.ndim:
-        raise IndexError(
-            "`axis` must be smaller than `array.ndim`. "
-            f"array.ndim is {array.ndim}, axis = {axis} provided!"
-        )
-
     padding_settings = {
         "causal": (pad_size, 0),
         "acausal": ((pad_size) // 2, pad_size - (pad_size) // 2),
         "anti-causal": (0, pad_size),
     }
-
-    if predictor_causality not in padding_settings:
-        raise ValueError(
-            f"predictor_causality must be {padding_settings.keys()}. {predictor_causality} provided instead!"
-        )
 
     pad_width = (
         ((0, 0),) * axis
@@ -277,61 +205,44 @@ def nan_pad(
     conv_time_series: Any,
     pad_size: int,
     predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
+    axis: int = 0,
 ) -> Any:
-    """Add NaN padding to conv_time_series based on causality.
+    """
+    Add NaN padding to a convolved time series based on specified causality and axis.
+
+    This function pads the convolved time series with NaNs along a specified axis. The amount
+    and location of the padding are determined by the pad_size and predictor_causality parameters.
 
     Parameters
     ----------
-    conv_time_series:
-        The convolved time series to pad. This variable should be a pytree
-        with arrays as leaves. The structure may be one of the following:
-
-        1. Single array of shape `(n_trials, n_time_bins, n_neurons,
-           n_features)`
-        2. Pytree whose leaves are arrays of shape `(n_time_bins, n_neurons,
-           n_features)`
-    pad_size:
+    conv_time_series :
+        The convolved time series to pad. This variable should be a pytree with arrays as leaves.
+        The structure can be one of the following:
+        1. A single array with ndim > axis.
+        2. A pytree whose leaves are arrays.
+    pad_size :
         The number of NaNs to concatenate as padding.
-    predictor_causality:
-        Causality of this predictor, which determines where padded values are added.
+    predictor_causality : {'causal', 'acausal', 'anti-causal'}, default='causal'
+        Causality of the predictor, which determines where padded values are added:
+        - 'causal': Padding is added before the data.
+        - 'acausal': Padding is evenly distributed before and after the data.
+        - 'anti-causal': Padding is added after the data.
+    axis : int, default=0
+        The axis along which to add padding.
 
     Returns
     -------
-    padded_conv_time_series :
-        `conv_time_series` with NaN padding. NaN location is determined by
-        value of `predictor_causality` (see Notes), and `padded_conv_time_series`
-        structure matches that of `conv_time_series`:
-
-        1. Single array of shape `(n_trials, n_time_bins + pad_size,
-           n_neurons, n_features)`
-        2. Pytree whose leaves are arrays of shape `(n_time_bins + pad_size,
-           n_neurons, n_features)`
+    padded_conv_time_series : Any
+        The convolved time series with NaN padding. The structure matches that of `conv_time_series`.
 
     Raises
     ------
     ValueError
-        - If conv_time_series does not have a float dtype.
-        - If pad_size is not a positive integer
-        - If predictor_causality is not one of 'causal', 'acausal', or 'anti-causal'.
-        - If the dimensionality of conv_trials is not as expected.
-    warning
-        - If pad_size is odd and predictor_causality=='acausal'. In order for
-          the output to be truly acausal, i.e., symmetric around events found
-          in `conv_trials`, we need to be able to add an equal number of NaNs
-          on both sides.
-
-    Notes
-    -----
-    The location of the NaN-padding depends on the value of `predictor_causality`.
-
-    - `'causal'`: `pad_size` NaNs are placed at the beginning of the
-      temporal dimension.
-    - `'acausal'`: `floor(pad_size/2)` NaNs are placed at the beginning of
-      the temporal dimensions, `ceil(pad_size/2)` placed at the end (for `pad_size`
-      total NaNs).
-    - `'anti-causal'`: `pad_size` NaNs are placed at the end of the
-      temporal dimension.
-
+        - If `pad_size` is not a positive integer.
+        - If `predictor_causality` is not one of the expected values ('causal', 'acausal', 'anti-causal').
+        - If `axis` is not a valid axis for any of the arrays in `conv_time_series`, specifically
+          if `axis >= array.ndim` for any array.
+        - If any array in `conv_time_series` does not have a floating-point data type.
     """
     if not isinstance(pad_size, int) or pad_size <= 0:
         raise ValueError(
@@ -346,27 +257,28 @@ def nan_pad(
     if predictor_causality == "acausal" and (pad_size % 2 == 1):
         warnings.warn(
             "With acausal filter, pad_size should probably be even,"
-            " so that we can place an equal number of NaNs on either side of input"
+            " so that we can place an equal number of NaNs on either side of input",
+            UserWarning,
         )
 
     # convert to jax ndarray
     conv_time_series = jax.tree_map(jnp.asarray, conv_time_series)
-    try:
-        if conv_time_series.ndim != 4:
-            raise AttributeError(
-                "conv_time_series must be a pytree of 3D arrays or a 4D array!"
-            )
+
+    # validate the axis
+    validate_axis(conv_time_series, axis)
+
+    if is_numpy_array_like(conv_time_series):
         if not np.issubdtype(conv_time_series.dtype, np.floating):
             raise ValueError("conv_time_series must have a float dtype!")
         return _pad_dimension(
-            conv_time_series, 1, pad_size, predictor_causality, constant_values=jnp.nan
+            conv_time_series,
+            axis,
+            pad_size,
+            predictor_causality,
+            constant_values=jnp.nan,
         )
 
-    except AttributeError:
-        if not check_dimensionality(conv_time_series, 3):
-            raise ValueError(
-                "conv_time_series must be a pytree of 3D arrays or a 4D array!"
-            )
+    else:
         if pytree_map_and_reduce(
             lambda trial: not np.issubdtype(trial.dtype, np.floating),
             any,
@@ -375,48 +287,57 @@ def nan_pad(
             raise ValueError("All leaves of conv_time_series must have a float dtype!")
         return jax.tree_map(
             lambda trial: _pad_dimension(
-                trial, 0, pad_size, predictor_causality, constant_values=jnp.nan
+                trial, axis, pad_size, predictor_causality, constant_values=jnp.nan
             ),
             conv_time_series,
         )
 
 
+def _compute_index_adjust(
+    time_series: NDArray, causality: Literal["causal", "anti-causal"], axis: int
+):
+    """Compute index adjustment for shifting a time series."""
+    adjust_indices = {
+        "causal": (0, time_series.shape[axis] - 1),
+        "anti-causal": (1, time_series.shape[axis]),
+    }
+    return adjust_indices[causality]
+
+
 def shift_time_series(
-    time_series: Any, predictor_causality: Literal["causal", "anti-causal"] = "causal"
+    time_series: Any,
+    predictor_causality: Literal["causal", "anti-causal"] = "causal",
+    axis: int = 0,
 ):
     """Shift time series based on causality of predictor, adding NaNs as needed.
 
+    Shift a time series based on the causality of the predictor and adds NaNs as needed,
+    with the operation applied along a specified axis.
+
     Parameters
     ----------
-    time_series:
-        The time series to shift. This variable should be a pytree with arrays
-        as leaves. The structure may be one of the following:
-
-        1. Single array of shape `(n_trials, n_time_bins, n_neurons,
-           n_features)`
-        2. Pytree whose leaves are arrays of shape `(n_time_bins, n_neurons,
-           n_features)`
-    predictor_causality:
-        Causality of this predictor, which determines how to shift time_series.
+    time_series :
+        The time series to shift, which can be a single array or a pytree of arrays.
+        Each array should have a floating-point data type.
+    predictor_causality :
+        Determines the direction of the shift:
+        - 'causal': Shifts the series forward, inserting a NaN at the start.
+        - 'anti-causal': Shifts the series backward, appending a NaN at the end.
+    axis :
+        The axis along which to perform the shift. Must be valid for all arrays in the time series.
 
     Returns
     -------
-    shifted_time_series :
-        `time_series` that has been shifted. shift is determined by value of
-        `predictor_causality` (see Notes), and `shifted_time_series` structure
-        matches that of `time_series`:
-
-        1. Single array of shape `(n_trials, n_time_bins, n_neurons,
-           n_features)`
-        2. Pytree whose leaves are arrays of shape `(n_time_bins, n_neurons,
-           n_features)`
+    shifted_time_series : Any
+        The shifted time series. The structure matches that of `time_series`, with each element
+        shifted according to `predictor_causality` and NaNs added accordingly.
 
     Raises
     ------
     ValueError
-        - If time_series does not have a float dtype.
-        - If the predictor_causality is not one of 'causal' or 'anti-causal'.
-        - If the dimensionality of conv_trials is not as expected.
+        - If `predictor_causality` is not 'causal' or 'anti-causal'.
+        - If `axis` is invalid for any array within `time_series`.
+        - If any array in `time_series` does not have a floating-point data type.
 
     Notes
     -----
@@ -428,132 +349,49 @@ def shift_time_series(
       first time point, so that e.g., `[0, 1, 2]` becomes `[1, 2, np.nan]`
 
     """
-    # See docstring Notes section for what this does.
-    adjust_indices = {
-        "causal": (None, -1),
-        "anti-causal": (1, None),
-    }
-    if predictor_causality not in adjust_indices.keys():
+    # validate axis
+    validate_axis(time_series, axis)
+
+    if predictor_causality not in ["causal", "anti-causal"]:
         raise ValueError(
-            f"predictor_causality must be one of {adjust_indices.keys()}. {predictor_causality} provided instead!"
+            f"predictor_causality must be one of 'causal', 'anti-causal'. {predictor_causality} provided instead!"
         )
-    start, end = adjust_indices[predictor_causality]
+
+    # compute the start, end indices tree
+    adjust_idx = jax.tree_map(
+        lambda x: _compute_index_adjust(x, predictor_causality, axis), time_series
+    )
 
     # convert to jax ndarray
     time_series = jax.tree_map(jnp.asarray, time_series)
-    try:
-        if time_series.ndim != 4:
-            raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
+
+    if is_numpy_array_like(time_series):
+
         if not np.issubdtype(time_series.dtype, np.floating):
             raise ValueError("time_series must have a float dtype!")
         return _pad_dimension(
-            time_series[:, start:end], 1, 1, predictor_causality, jnp.nan
+            jnp.take(time_series, jnp.arange(*adjust_idx), axis=axis),
+            axis,
+            1,
+            predictor_causality,
+            jnp.nan,
         )
-    except AttributeError:
-        if not check_dimensionality(time_series, 3):
-            raise ValueError("time_series must be a pytree of 3D arrays or a 4D array!")
+    else:
         if pytree_map_and_reduce(
             lambda trial: not np.issubdtype(trial.dtype, np.floating), any, time_series
         ):
             raise ValueError("All leaves of time_series must have a float dtype!")
         return jax.tree_map(
-            lambda trial: _pad_dimension(
-                trial[start:end], 0, 1, predictor_causality, jnp.nan
+            lambda trial, idx: _pad_dimension(
+                jnp.take(trial, jnp.arange(*idx), axis=axis),
+                axis,
+                1,
+                predictor_causality,
+                jnp.nan,
             ),
             time_series,
+            adjust_idx,
         )
-
-
-@support_pynapple(conv_type="jax")
-def create_convolutional_predictor(
-    basis_matrix: ArrayLike,
-    time_series: Any,
-    predictor_causality: Literal["causal", "acausal", "anti-causal"] = "causal",
-    shift: Optional[bool] = None,
-):
-    """Create predictor by convolving basis_matrix with time_series.
-
-    To create the convolutional predictor, three steps are taken, each of
-    calls a single function. See their docstrings for more details about
-    each step. This function **preserves** the number of samples by
-    NaN-padding appropriately.
-
-    - Convolve `basis_matrix` with `time_series` (function: `convolve_1d_trials`)
-    - Pad output with `basis_matrix.shape[0]-1` NaNs, with location based on
-      causality of intended predictor (function: `nan_pad`).
-    - (Optional) Shift predictor based on causality (function: `shift_time_series`)
-
-    Parameters
-    ----------
-    basis_matrix :
-        The basis matrix with which to convolve the trials. Shape
-        `(window_size, n_basis_funcs)`.
-    time_series :
-        The time series to convolve with the basis matrix. This variable should
-        be a pytree with arrays as leaves. The structure could be one of the
-        following:
-
-        1. A single array of 3-dimensions, `(n_trials, n_time_bins, n_neurons)`.
-        2. Any pytree with 2-dimensional arrays, `(n_time_bins, n_neurons)`, as
-           leaves. Note that neither `n_time_bins` nor `n_neurons` need to be
-           identical across leaves.
-    predictor_causality:
-        Causality of this predictor, which determines where padded values are
-        added and how the predictor is shifted.
-    shift :
-        Whether to shift predictor based on causality (only valid if
-        `predictor_causality != 'acausal'`). Default is True for causa and
-        anti-causal, False for `acausal`.
-
-    Returns
-    -------
-    predictor :
-        Predictor of with same shape and structure as `time_series`
-
-    Raises
-    ------
-    ValueError:
-        - If `basis_matrix.shape[0] <= 0`
-        - If shift == True` and `predictor_causality == "causal"`
-
-    """
-    # convert to jnp.ndarray
-    basis_matrix = jnp.asarray(basis_matrix)
-
-    if basis_matrix.shape[0] == 1:
-        raise ValueError("`basis_matrix.shape[0]` should be at least 2!")
-
-    # assign defaults
-    if shift is None:
-        if predictor_causality == "acausal":
-            shift = False
-        else:
-            shift = True
-
-    if shift and predictor_causality == "acausal":
-        raise ValueError(
-            "Cannot shift `predictor` when `predictor_causality` is `acausal`!"
-        )
-
-    predictor = convolve_1d_trials(basis_matrix, time_series)
-    with warnings.catch_warnings(record=True) as warns:
-        warnings.simplefilter("always")
-        predictor = nan_pad(predictor, basis_matrix.shape[0] - 1, predictor_causality)
-
-    for w in warns:
-        if re.match("^With acausal filter", str(w.message)):
-            warnings.warn(
-                message="With `acausal` filter, `basis_matrix.shape[0] "
-                "should probably be odd, so that we can place an equal number of NaNs on "
-                "either side of input.",
-                category=UserWarning,
-            )
-        else:
-            warnings.warn(w.message, w.category)
-
-    if shift:
-        predictor = shift_time_series(predictor, predictor_causality)
-    return predictor
 
 
 def plot_spike_raster(

@@ -1386,9 +1386,8 @@ class TestGLM:
 
         # convolve basis and spikes
         # (n_trials, n_timepoints - ws + 1, n_neurons, n_coupling_basis)
-        conv_spikes = jnp.asarray(
-            nmo.utils.convolve_1d_trials(coupling_basis, [spikes]), dtype=jnp.float32
-        )
+        conv_spikes = nmo.convolve._shift_time_axis_and_convolve(spikes, coupling_basis, axis=0)[jnp.newaxis]
+
 
         # create an individual neuron predictor by stacking the
         # two convolved spike trains in a single feature vector

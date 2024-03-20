@@ -6,9 +6,10 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
+from . import convolve
 from . import observation_models as obs
 from . import regularizer as reg
-from . import tree_utils, utils
+from . import tree_utils
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
@@ -610,9 +611,11 @@ class GLMRecurrent(GLM):
             # 1. The first dimension is time, and 1 is by construction since we are simulating 1
             #    sample
             # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-            conv_act = utils.convolve_1d_trials(coupling_basis_matrix, activity[None])[
-                0
-            ].flatten()
+            conv_act = convolve.reshape_convolve(
+                activity, coupling_basis_matrix
+            ).reshape(
+                -1,
+            )
 
             # Extract the slice of the feedforward input for the current time step
             input_slice = jax.lax.dynamic_slice(
