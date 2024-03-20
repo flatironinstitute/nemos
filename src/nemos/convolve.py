@@ -125,44 +125,40 @@ def _list_epochs(tsd: Any):
 def _convolve_1d_trials(
     basis_matrix: ArrayLike, time_series: Any, axis: int = 0
 ) -> Any:
-    """Convolve trial time series with a basis matrix.
+    """
+    Applies a convolution along a specified axis of the time series with a basis matrix.
 
-    This function applies a convolution in mode "valid" to each trials in the
-    `time_series`. The `time_series` pytree could be either a single 3D array
-    with trials as the first dimension, or a pytree with trials as the leaves.
-    As the algorithm is more efficient when a `time_series` is a 3D array, you should
-    consider organizing your data in this way when possible.
+    This function handles the convolution of each array within the provided time series
+    data with the given basis matrix. The convolution is performed in 'valid' mode, meaning
+    that the output size in the convolution axis is reduced according to the size of the
+    basis matrix. This function supports both single arrays and collections of
+    arrays (pytrees).
 
     Parameters
     ----------
     basis_matrix :
-        The basis matrix with which to convolve the trials. Shape
-        `(window_size, n_basis_funcs)`.
+        A 2D array representing the convolution basis matrix. The shape should be
+        `(window_size, n_basis_funcs)`, where `window_size` is the length of the convolution window.
     time_series :
-        The time series to convolve with the basis matrix. This variable should
-        be a pytree with arrays as leaves. The structure could be one of the
-        following:
-
-        1. A single array of 3-dimensions, `(n_trials, n_time_bins, n_neurons)`.
-        2. Any pytree with 2-dimensional arrays, `(n_time_bins, n_neurons)`, as
-           leaves. Note that neither `n_time_bins` nor `n_neurons` need to be
-           identical across leaves.
+        The time series data to be convolved with the basis matrix. It can be a single array or a
+         pytree of arrays.
     axis :
-        The sample axis in time_series
+        The axis along which the convolution is to be applied.  This axis must exist in every array
+        within the time series.
 
     Returns
     -------
     :
-        The convolved trials as a pytree with the same structure as `time_series`.
+        A structure mirroring that of `time_series`, containing the convolved data. Each array within the structure
+        is the result of convolving the original array with `basis_matrix` along the specified axis.
 
     Raises
     ------
     ValueError
-        - If basis_matrix is not a 2D array-like object.
-        - If time_series is not a pytree of 2D array-like objects or a 3D array.
-        - If time_series contains empty trials.
-        - If basis_matrix is empty
-        - If the number of time points in each trial is less than the window size.
+        - If any array within `time_series` has fewer dimensions than specified by `axis`.
+        - If `basis_matrix` is empty or if any array within `time_series` is empty.
+        - If the number of elements along the convolution axis in any array within `time_series`
+          is less than the size of the convolution window defined by the first dimension of `basis_matrix`.
     """
     # check for empty inputs
     utils.check_non_empty(basis_matrix, "basis_matrix")
