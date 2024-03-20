@@ -287,10 +287,19 @@ class TestShiftTimeSeries:
         with expectation:
             shifted_series = utils.shift_time_series(time_series, predictor_causality, axis)
             if expectation == does_not_raise():
+                # Check for NaN at the expected location
                 if predictor_causality == "causal":
-                    assert np.isnan(shifted_series.take(0, axis=axis)).all(), "First element along the axis should be NaN for causal shift."
+                    assert np.isnan(shifted_series.take(0,
+                                                        axis=axis)).all(), "First element along the axis should be NaN for causal shift."
+                    # Ensure no NaNs elsewhere
+                    assert not np.isnan(shifted_series.take(range(1, shifted_series.shape[axis]),
+                                                            axis=axis)).any(), "Unexpected NaNs found in the array."
                 else:  # anti-causal
-                    assert np.isnan(shifted_series.take(-1, axis=axis)).all(), "Last element along the axis should be NaN for anti-causal shift."
+                    assert np.isnan(shifted_series.take(-1,
+                                                        axis=axis)).all(), "Last element along the axis should be NaN for anti-causal shift."
+                    # Ensure no NaNs elsewhere
+                    assert not np.isnan(shifted_series.take(range(0, shifted_series.shape[axis] - 1),
+                                                            axis=axis)).any(), "Unexpected NaNs found in the array."
 
     @pytest.mark.parametrize(
         "predictor_causality, axis, expectation",
@@ -310,3 +319,26 @@ class TestShiftTimeSeries:
                 else:  # anti-causal
                     expected = np.concatenate((original[1:], [np.nan]))
                 np.testing.assert_array_equal(shifted, expected)
+
+    def test_causal_shift(self):
+        # Assuming time_series shape is (1, 3, 2, 2)
+        time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
+        shifted_series = utils.shift_time_series(time_series, "causal", axis=1)
+
+        assert np.isnan(
+            shifted_series[0, 0]
+        ).all(), "First time bin should be NaN for causal shift"
+        assert np.array_equal(
+            shifted_series[0, 1:], time_series[0, :-1]
+        ), "Causal shift did not work as expected"
+
+    def test_anti_causal_shift(self):
+        time_series = np.random.rand(1, 3, 2, 2).astype(np.float32)
+        shifted_series = utils.shift_time_series(time_series, "anti-causal", axis=1)
+
+        assert np.isnan(
+            shifted_series[0, -1]
+        ).all(), "Last time bin should be NaN for anti-causal shift"
+        assert np.array_equal(
+            shifted_series[0, :-1], time_series[0, 1:]
+        ), "Anti-causal shift did not work as expected"
