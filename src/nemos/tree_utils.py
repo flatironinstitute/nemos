@@ -1,7 +1,7 @@
 """Utilities for manipulating and checking PyTrees."""
 
 from functools import reduce
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
@@ -101,6 +101,7 @@ def pytree_map_and_reduce(
     map_fn: Callable,
     reduce_fn: Callable,
     *pytrees: Any,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
     """
     Apply a mapping function to each leaf of the pytrees and then reduce the results.
@@ -119,7 +120,8 @@ def pytree_map_and_reduce(
         iterable and return a single value.
     *pytrees :
         One or more pytrees to which the map and reduce functions are applied.
-
+    is_leaf :
+        Callable, returns true if sub-tree is a leaf.
     Returns
     -------
     The result of applying the reduce function to the mapped results. The type of the
@@ -134,6 +136,6 @@ def pytree_map_and_reduce(
     >>> # Example usage
     >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
     """
-    cond_tree = jax.tree_map(map_fn, *pytrees)
+    cond_tree = jax.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
     # for some reason, tree_reduce doesn't work well with any.
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
