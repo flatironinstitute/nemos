@@ -178,20 +178,18 @@ class Regularizer(Base, abc.ABC):
         # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
         # The proximal gradient is added to the kwargs if passed. This avoids issues with over-writing
         # the proximal operator.
+        if "prox" in self.solver_kwargs:
+            if prox is None:
+                raise ValueError(f"Regularizer of type {self.__class__.__name__} "
+                                 f"does not require a proximal operator!")
+            else:
+                warnings.warn("Overwritten the user-defined proximal operator! "
+                                 "There is only one valid proximal operator for each regularizer type.",
+                              UserWarning)
+        # update the kwargs if prox is passed
         if prox is not None:
             solver_kwargs = self.solver_kwargs.copy()
             solver_kwargs.update(prox=prox)
-            if "prox" in self.solver_kwargs:
-                warnings.warn(
-                    "Overwritten the user-defined proximal operator! "
-                    "There is only one valid proximal operator for each regularizer type.",
-                    UserWarning,
-                )
-        # hit this if users define a proximal operator for differentiable objectives.
-        elif "prox" in self.solver_kwargs:
-            raise ValueError(
-                f"Regularizer of type {self.__class__.__name__} does not require a proximal operator!"
-            )
         else:
             solver_kwargs = self.solver_kwargs
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_kwargs)
