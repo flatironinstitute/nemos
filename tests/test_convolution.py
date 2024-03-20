@@ -2,6 +2,7 @@ from contextlib import nullcontext as does_not_raise
 
 import jax
 import numpy as np
+import pynapple as nap
 import pytest
 
 from nemos import convolve, utils
@@ -362,3 +363,35 @@ class TestCreateConvolutionalPredictor:
         non_nans = np.take(res, other_idx, axis)
         assert np.all(np.isnan(nans))
         assert not np.any(np.isnan(non_nans))
+
+    @pytest.mark.parametrize(
+        "tsd",
+        [
+            nap.Tsd(t=np.arange(100), d=np.arange(100), time_support=nap.IntervalSet(start=[0, 50], end=[20, 75]))
+        ]
+    )
+    @pytest.mark.parametrize(
+        "window_size, shift, predictor_causality, nan_index",
+        [
+            (3, True, "causal", [0, 1, 2, 50, 51, 52]),
+            (2, True, "causal", [0, 1, 50, 51]),
+            (3, False, "causal", [0, 1, 50, 51]),
+            (2, False, "causal", [0, 50]),
+            (2, None, "causal", [0, 1, 50, 51]),
+            (3, True, "anti-causal", [20, 19, 18, 75, 74, 73]),
+            (2, True, "anti-causal", [20, 19, 75, 74]),
+            (3, False, "anti-causal", [20, 19, 75, 74]),
+            (2, False, "anti-causal", [20, 75]),
+            (2, None, "anti-causal", [20, 19, 75, 74]),
+            (3, False, "acausal", [0, 20, 50, 75]),
+            (2, False, "acausal", [20, 75]),
+        ],
+    )
+    def test_multi_epoch_pynapple(self, tsd, window_size, shift, predictor_causality, nan_index):
+        basis = np.zeros((window_size, 1))
+        res = convolve.create_convolutional_predictor(basis, tsd, predictor_causality=predictor_causality, shift=shift)
+
+        nan_index = np.sort(nan_index)
+        times_nan_found = res[np.isnan(res.d[:,0])].t
+        assert len(times_nan_found) == len(nan_index)
+        assert all(times_nan_found == np.array(nan_index))
