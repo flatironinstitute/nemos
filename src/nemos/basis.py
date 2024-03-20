@@ -11,6 +11,7 @@ import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
+from .type_casting import support_pynapple
 from .utils import row_wise_kron
 
 __all__ = [
@@ -327,6 +328,7 @@ class AdditiveBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
@@ -383,6 +385,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
@@ -526,6 +529,7 @@ class MSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
         super().__init__(n_basis_funcs, order)
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
@@ -603,6 +607,7 @@ class BSplineBasis(SplineBasis):
     def __init__(self, n_basis_funcs: int, order: int = 2):
         super().__init__(n_basis_funcs, order=order)
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
@@ -691,6 +696,7 @@ class CyclicBSplineBasis(SplineBasis):
                 f"order {self.order} specified instead!"
             )
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
@@ -824,6 +830,7 @@ class RaisedCosineBasisLinear(Basis):
                 f"2*width must be a positive integer, 2*width = {2 * width} instead!"
             )
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given samples.
 
@@ -1008,6 +1015,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             last_peak = 1
         return np.linspace(0, last_peak, self.n_basis_funcs)
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
@@ -1130,6 +1138,7 @@ class OrthExponentialBasis(Basis):
                 f"but only {sample_pts[0].size} samples provided!"
             )
 
+    @support_pynapple(conv_type="numpy")
     def evaluate(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 

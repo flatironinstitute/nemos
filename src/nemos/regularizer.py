@@ -5,6 +5,7 @@ This module provides a series of classes that facilitate the optimization of mod
 with different types of regularizations. Each `Regularizer` class in this module interfaces
 with various optimization methods, and they can be applied depending on the model's requirements.
 """
+
 import abc
 import inspect
 import warnings
@@ -14,7 +15,7 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
-from . import utils
+from . import tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
 from .pytrees import FeaturePytree
@@ -295,7 +296,7 @@ class Ridge(Regularizer):
             )
 
         # tree map the computation and sum over leaves
-        return utils.pytree_map_and_reduce(
+        return tree_utils.pytree_map_and_reduce(
             lambda x: l2_penalty(x, params[1]), sum, params[0]
         )
 
@@ -322,7 +323,7 @@ class Ridge(Regularizer):
         def penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
-        return super().instantiate_solver(penalized_loss)
+        return super().instantiate_solver(penalized_loss, *args, **kwargs)
 
 
 class ProxGradientRegularizer(Regularizer, abc.ABC):
@@ -381,7 +382,8 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
             A function that runs the solver with the provided loss and proximal operator.
         """
         return super().instantiate_solver(
-            loss, self.regularizer_strength, prox=self._get_proximal_operator()
+            loss, self.regularizer_strength,  *args,
+            prox=self._get_proximal_operator(), **kwargs
         )
 
 

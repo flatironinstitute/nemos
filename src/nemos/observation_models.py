@@ -9,8 +9,6 @@ import jax.numpy as jnp
 from . import utils
 from .base_class import Base
 
-KeyArray = Union[jnp.ndarray, jax.random.PRNGKeyArray]
-
 __all__ = ["PoissonObservations"]
 
 
@@ -138,7 +136,7 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def sample_generator(
-        self, key: KeyArray, predicted_rate: jnp.ndarray
+        self, key: jax.Array, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Sample from the estimated distribution.
@@ -343,6 +341,7 @@ class PoissonObservations(Observations):
     See Also
     --------
     [Observations](./#nemos.observation_models.Observations) : Base class for observation models.
+
     """
 
     def __init__(self, inverse_link_function=jnp.exp):
@@ -399,7 +398,7 @@ class PoissonObservations(Observations):
         return jnp.mean(predicted_rate - x)
 
     def sample_generator(
-        self, key: KeyArray, predicted_rate: jnp.ndarray
+        self, key: jax.Array, predicted_rate: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Sample from the Poisson distribution.
@@ -538,7 +537,7 @@ def check_observation_model(observation_model):
             "test_scalar_func": True,
         },
         "sample_generator": {
-            "input": [jax.random.PRNGKey(123), 0.5 * jnp.array([1.0, 1.0, 1.0])],
+            "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0])],
             "test_preserve_shape": True,
         },
     }

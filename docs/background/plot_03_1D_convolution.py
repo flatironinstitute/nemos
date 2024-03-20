@@ -13,7 +13,7 @@ import numpy as np
 import nemos as nmo
 
 np.random.seed(10)
-ws = 11
+ws = 10
 # samples
 n_samples = 100
 
@@ -69,13 +69,24 @@ print(f"Shape of the convolution output: {spk_conv[0].shape}")
 #
 # Finally, if one wants to capture both causal
 # and anti-causal effects one should use the acausal filters.
-# Below we provide a function that pads the convolution output for the different filter types.
+# Below we provide a function that runs the convolution in "valid" mode and pads the convolution output
+# for the different filter types.
 
 
-# pad according to the causal direction of the filter, after squeeze, the dimension is (n_filters, n_samples)
-spk_causal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="causal")[0])
-spk_anticausal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="anti-causal")[0])
-spk_acausal_utils = np.squeeze(nmo.utils.nan_pad_conv(spk_conv, ws, filter_type="acausal")[0])
+# pad according to the causal direction of the filter, after squeeze,
+# the dimension is (n_filters, n_samples)
+spk_causal_utils = np.squeeze(
+    nmo.utils.create_convolutional_predictor(
+        w, [spk], predictor_causality="causal")[0]
+)
+spk_anticausal_utils = np.squeeze(
+    nmo.utils.create_convolutional_predictor(
+        w, [spk], predictor_causality="anti-causal")[0]
+)
+spk_acausal_utils = np.squeeze(
+    nmo.utils.create_convolutional_predictor(
+        w, [spk], predictor_causality="acausal", shift=False)[0]
+)
 
 
 # %%

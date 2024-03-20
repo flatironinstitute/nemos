@@ -11,6 +11,9 @@ build:
   tools:
     python: "3.10"
 
+  apt_packages:
+    - ffmpeg
+
 mkdocs:
   configuration: mkdocs.yml
 

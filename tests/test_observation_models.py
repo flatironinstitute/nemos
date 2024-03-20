@@ -28,7 +28,7 @@ class TestPoissonObservations:
             poisson_observations(link_function)
 
     @pytest.mark.parametrize(
-        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log()]
+        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.Log()]
     )
     def test_initialization_link_is_jax(self, link_function, poisson_observations):
         """Check that the observation model initializes when a callable is passed."""
@@ -61,7 +61,7 @@ class TestPoissonObservations:
             observation_model.set_params(inverse_link_function=link_function)
 
     @pytest.mark.parametrize(
-        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.log()]
+        "link_function", [jnp.exp, np.exp, lambda x: x, sm.families.links.Log()]
     )
     def test_initialization_link_is_jax_set_params(
         self, link_function, poisson_observations
@@ -160,7 +160,7 @@ class TestPoissonObservations:
         Check that the emission probability is set to jax.random.poisson.
         """
         _, _, model, _, _ = poissonGLM_model_instantiation
-        key_array = jax.random.PRNGKey(123)
+        key_array = jax.random.key(123)
         counts = model.observation_model.sample_generator(key_array, np.arange(1, 11))
         if not jnp.all(counts == jax.random.poisson(key_array, np.arange(1, 11))):
             raise ValueError(

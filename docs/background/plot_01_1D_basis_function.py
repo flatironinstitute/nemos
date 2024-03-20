@@ -48,7 +48,7 @@ print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "
 # and then plotting the result. The method `Basis.evaluate_on_grid` is designed for this, as it generates and returns
 # the equi-spaced samples along with the evaluated basis functions. The benefits of using Basis.evaluate_on_grid become
 # particularly evident when working with multidimensional basis functions. You can find more details and visual
-# examples in the [2D basis elements plotting section](../plot_2D_basis_function/#2d-basis-elements-plotting).
+# background in the [2D basis elements plotting section](../plot_2D_basis_function/#2d-basis-elements-plotting).
 
 # Call evaluate on grid on 100 sample points to generate samples and evaluate the basis at those samples
 n_samples = 100

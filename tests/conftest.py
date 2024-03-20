@@ -8,6 +8,7 @@ Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
     and loading predefined parameters for testing various functionalities of the `nemos` library.
 """
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -62,8 +63,10 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
     X, spikes, model, true_params, rate = poissonGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
-        nmo.pytrees.FeaturePytree(input_1=true_params[0][:, :3], input_2=true_params[0][:, 3:]),
-        true_params[1]
+        nmo.pytrees.FeaturePytree(
+            input_1=true_params[0][:, :3], input_2=true_params[0][:, 3:]
+        ),
+        true_params[1],
     )
     model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
@@ -82,7 +85,7 @@ def poissonGLM_coupled_model_config_simulate():
             - coupling_basis (jax.numpy.ndarray): Coupling basis values from the config.
             - feedforward_input (jax.numpy.ndarray): Feedforward input values from the config.
             - init_spikes (jax.numpy.ndarray): Initial spike values from the config.
-            - jax.random.PRNGKey(123) (jax.random.PRNGKey): A pseudo-random number generator key.
+            - jax.random.key(123) (jax.Array): A pseudo-random number generator key.
     """
     observations = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.Ridge("BFGS", regularizer_strength=0.1)
@@ -94,8 +97,8 @@ def poissonGLM_coupled_model_config_simulate():
     coupling_filter_bank = np.zeros((coupling_duration, n_neurons, n_neurons))
     for unit_i in range(n_neurons):
         for unit_j in range(n_neurons):
-            coupling_filter_bank[:, unit_i, unit_j] = nmo.simulation.difference_of_gammas(
-                coupling_duration
+            coupling_filter_bank[:, unit_i, unit_j] = (
+                nmo.simulation.difference_of_gammas(coupling_duration)
             )
     # shrink the filters for simulation stability
     coupling_filter_bank *= 0.8
@@ -105,11 +108,13 @@ def poissonGLM_coupled_model_config_simulate():
     _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])
     coupling_coeff = nmo.simulation.regress_filter(coupling_filter_bank, coupling_basis)
 
-    model.coef_ = jnp.hstack((coupling_coeff.reshape(n_neurons, -1), np.ones((n_neurons, 2))))
+    model.coef_ = jnp.hstack(
+        (coupling_coeff.reshape(n_neurons, -1), np.ones((n_neurons, 2)))
+    )
     model.intercept_ = -3 * jnp.ones(n_neurons)
     feedforward_input = jnp.c_[
-        jnp.cos(jnp.linspace(0, np.pi*4, sim_duration)),
-        jnp.sin(jnp.linspace(0, np.pi*4, sim_duration))
+        jnp.cos(jnp.linspace(0, np.pi * 4, sim_duration)),
+        jnp.sin(jnp.linspace(0, np.pi * 4, sim_duration)),
     ]
     feedforward_input = jnp.tile(feedforward_input[:, None], (1, n_neurons, 1))
     init_spikes = jnp.zeros((coupling_duration, n_neurons))
@@ -119,7 +124,7 @@ def poissonGLM_coupled_model_config_simulate():
         coupling_basis,
         feedforward_input,
         init_spikes,
-        jax.random.PRNGKey(123),
+        jax.random.key(123),
     )
 
 

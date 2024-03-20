@@ -34,9 +34,6 @@ from sklearn import model_selection
 import nemos as nmo
 from nemos import simulation
 
-# enable float64 precision (optional)
-jax.config.update("jax_enable_x64", True)
-
 np.random.seed(111)
 # random design tensor. Shape (n_time_points, n_neurons, n_features).
 X = 0.5*np.random.normal(size=(100, 1, 5))
@@ -215,7 +212,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 # with the same number of neurons and features (mandatory)
 Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 # generate a random key given a seed
-random_key = jax.random.PRNGKey(123)
+random_key = jax.random.key(123)
 spikes, rates = model.simulate(random_key, Xnew)
 
 plt.figure()
@@ -243,7 +240,7 @@ coupling_filter_duration = 100
 
 np.random.seed(101)
 
-# Gamma parameter for the inhibitory component of the fi;ter
+# Gamma parameter for the inhibitory component of the filter
 inhib_a = 1
 inhib_b = 1
 
@@ -343,7 +340,7 @@ model.intercept_ = jax.numpy.asarray(intercept)
 # call simulate, with both the recurrent coupling
 # and the input
 spikes, rates = model.simulate_recurrent(
-    jax.random.PRNGKey(123),
+    jax.random.key(123),
     feedforward_input=feedforward_input,
     coupling_basis_matrix=coupling_basis,
     init_y=init_spikes

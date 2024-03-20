@@ -8,5 +8,7 @@ from . import (
     pytrees,
     regularizer,
     simulation,
+    tree_utils,
+    type_casting,
     utils,
 )

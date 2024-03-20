@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the preferred-citation metadata."
+title: ""NEural MOdelS, a statistical modeling framework for neuroscience."
+authors:
+  - family-names: Balzani
+    given-names: Edoardo
+    orcid: "https://orcid.org/0000-0002-3702-5856"
+  - family-names: Broderick
+    given-names: William
+    orcid: "https://orcid.org/0000-0002-8999-9003"
+  - family-names: Viejo
+    given-names: Guillaume
+    orcid: "https://orcid.org/0000-0002-2450-7397"
+  - family-names: Williams
+    given-names: Alex
+    orcid: "https://orcid.org/0000-0001-5853-103X"
+repository-code: "https://github.com/flatironinstitute/nemos"
+url: "https://nemos.readthedocs.io/"
+license: MIT
+keywords:
+  - neuroscience
+  - Poisson GLM
+  - spike counts modeling
