@@ -211,7 +211,7 @@ class TestPadding:
         ]
     )
     @pytest.mark.parametrize("array", [jnp.zeros((10,)), np.zeros((10, 11))])
-    def test_axis_compatibility(self, pad_size, array, causality, expectation):
+    def test_pad_size_type(self, pad_size, array, causality, expectation):
         with expectation:
             utils.nan_pad(array, pad_size, causality, axis=0)
 
