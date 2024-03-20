@@ -180,7 +180,7 @@ def _convolve_pad_and_shift(
     with warnings.catch_warnings(record=True) as warns:
         warnings.simplefilter("always")
         predictor = utils.nan_pad(
-            predictor, basis_matrix.shape[0] - 1, predictor_causality
+            predictor, basis_matrix.shape[0] - 1, predictor_causality, axis=axis
         )
 
     for w in warns:

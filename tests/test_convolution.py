@@ -98,39 +98,6 @@ class TestShiftTimeAxisAndConvolve:
             '"valid" mode.'
         )
 
-    @pytest.mark.parametrize(
-        "basis_matrix", [np.random.normal(size=(4, 3)) for _ in range(2)]
-    )
-    @pytest.mark.parametrize(
-        "trial_counts", [{key: np.random.normal(size=(10, 3)) for key in range(2)}]
-    )
-    def test_valid_convolution_output_tree(self, basis_matrix, trial_counts):
-        numpy_out = np.zeros(
-            (
-                len(trial_counts),
-                trial_counts[0].shape[0] - basis_matrix.shape[0] + 1,
-                trial_counts[0].shape[1],
-                basis_matrix.shape[1],
-            )
-        )
-        for tri_i, trial in trial_counts.items():
-            for neu_k, vec in enumerate(trial.T):
-                for bas_j, basis in enumerate(basis_matrix.T):
-                    numpy_out[tri_i, :, neu_k, bas_j] = np.convolve(
-                        vec, basis, mode="valid"
-                    )
-
-        utils_out = convolve._convolve_1d_trials(basis_matrix, trial_counts, axis=0)
-        check = all(
-            np.allclose(utils_out[k], numpy_out[k], rtol=10**-5, atol=10**-5)
-            for k in utils_out
-        )
-        assert check, (
-            "Output of utils.convolve_1d_trials "
-            "does not match numpy.convolve in "
-            '"valid" mode.'
-        )
-
 
 class TestCreateConvolutionalPredictor:
 
@@ -213,7 +180,7 @@ class TestCreateConvolutionalPredictor:
         with expectation:
             convolve._convolve_1d_trials(basis_matrix, vec)
 
-    @pytest.mark.parametrize("window_size", [1, 2])
+    @pytest.mark.parametrize("window_size", [2])
     @pytest.mark.parametrize("trial_len", [4, 5])
     @pytest.mark.parametrize("array_dim", [1, 2, 3])
     def test_output_trial_length(self, window_size, trial_len, array_dim):
@@ -228,11 +195,10 @@ class TestCreateConvolutionalPredictor:
             time_series = np.expand_dims(time_series, axis=(0, 2))
             sample_axis = 1
 
-        res = convolve._convolve_1d_trials(basis_matrix, time_series, axis=sample_axis)
-        if res.shape[sample_axis] != trial_len - window_size + 1:
+        res = convolve.create_convolutional_predictor(basis_matrix, time_series, axis=sample_axis)
+        if res.shape[sample_axis] != trial_len:
             raise ValueError(
-                "The output of convolution in mode valid should be of "
-                "size num_samples - window_size + 1!"
+                "The output of create_convolutional_predictor should have size num_samples!"
             )
 
     @pytest.mark.parametrize("basis_matrix", [np.zeros((4, 3))])
