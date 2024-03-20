@@ -72,10 +72,14 @@ def validate_axis(tree: Any, axis: int):
     Raises
     ------
     ValueError
-        If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
+        - If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
         within the tree. This ensures that operations intended for a specific axis can be safely performed
         on every array in the tree.
+        - If the axis is negative or non-integer.
     """
+    if axis < 0 or not isinstance(axis, int):
+        raise ValueError("`axis` must be a non negative integer.")
+
     if pytree_map_and_reduce(lambda x: x.ndim <= axis, any, tree):
         raise ValueError(
             "'axis' must be smaller than the number of dimensions of any array in 'tree'."
@@ -199,24 +203,11 @@ def _pad_dimension(
     :
         An array with padded last dimension.
     """
-    if axis < 0 or not isinstance(axis, int):
-        raise ValueError("`axis` must be a non negative integer.")
-    elif axis >= array.ndim:
-        raise IndexError(
-            "`axis` must be smaller than `array.ndim`. "
-            f"array.ndim is {array.ndim}, axis = {axis} provided!"
-        )
-
     padding_settings = {
         "causal": (pad_size, 0),
         "acausal": ((pad_size) // 2, pad_size - (pad_size) // 2),
         "anti-causal": (0, pad_size),
     }
-
-    if predictor_causality not in padding_settings:
-        raise ValueError(
-            f"predictor_causality must be {padding_settings.keys()}. {predictor_causality} provided instead!"
-        )
 
     pad_width = (
         ((0, 0),) * axis
