@@ -148,7 +148,7 @@ def _convolve_1d_trials(
            leaves. Note that neither `n_time_bins` nor `n_neurons` need to be
            identical across leaves.
     axis :
-        The sampple axis in time_series
+        The sample axis in time_series
 
     Returns
     -------
@@ -233,7 +233,6 @@ def _convolve_pad_and_shift(
     ValueError:
         - If `basis_matrix.shape[0] <= 0`
         - If shift == True` and `predictor_causality == "causal"`
-
     """
     predictor = _convolve_1d_trials(basis_matrix, time_series, axis=axis)
     with warnings.catch_warnings(record=True) as warns:
@@ -265,6 +264,52 @@ def create_convolutional_predictor(
     shift: Optional[bool] = None,
     axis: int = 0,
 ):
+    """Create a convolutional predictor by convolving a basis matrix with a time series.
+
+    To create the convolutional predictor, three steps are taken, convolve, pad and shift.
+
+    - Convolve `basis_matrix` with `time_series` (function: `_convolve_1d_trials`)
+    - Pad output with `basis_matrix.shape[0]-1` NaNs, with location based on
+      causality of intended predictor (function: `nemos.utils.nan_pad`).
+    - (Optional) Shift predictor based on causality (function: `nemos.utils.shift_time_series`)
+
+    The function is designed to handle both single arrays and pynapple time series with data
+     (across multiple epochs), as well as their combinations. For pynapple time series, it
+    treats each epoch separately, applies the convolution process, and then reassembles the time series.
+
+    Parameters
+    ----------
+    basis_matrix :
+        A 2D array representing the basis matrix to convolve with the time series.
+        The first dimension should represent the window size for the convolution.
+    time_series :
+        The time series data to convolve with the basis matrix. Can be a single
+        array/pynapple time series, a pytree of arrays/pynapple time series.
+        In case of Pynapple time series data, each epoch will be convolved separately.
+    predictor_causality :
+        The causality of the predictor, determining how the padding and shifting
+        should be applied to the convolution result.
+        - 'causal': Pads and/or shifts the result to be causal with respect to the input.
+        - 'acausal': Applies padding equally on both sides without shifting.
+        - 'anti-causal': Pads and/or shifts the result to be anti-causal with respect to the input.
+    shift :
+        Determines whether to shift the convolution result based on the causality.
+        If None, it defaults to True for 'causal' and 'anti-causal' and to False for 'acausal'.
+    axis :
+        The axis along which the convolution is applied.
+
+    Returns
+    -------
+    Any
+        The convolutional predictor, structured similarly to the input `time_series`, appropriately
+        padded and shifted according to the specified causality.
+
+    Raises
+    ------
+    ValueError
+        - If the `basis_matrix` is not at least 2D with a non-singleton first dimension.
+        - If shifting is enabled for 'acausal' causality.
+    """
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)
     utils.check_dimensionality(basis_matrix, 2)
