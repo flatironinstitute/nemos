@@ -16,7 +16,7 @@ _CORR_VEC = jax.vmap(_CORR_VEC, (None, 1), 2)
 
 
 @jax.jit
-def _reshape_convolve(array: NDArray, eval_basis: NDArray):
+def reshape_convolve(array: NDArray, eval_basis: NDArray):
     """
     Apply a convolution on the given array with the evaluation basis and reshapes the result.
 
@@ -89,7 +89,7 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
 
     # convolve
     if array.ndim > 1:
-        conv = _reshape_convolve(array, eval_basis)
+        conv = reshape_convolve(array, eval_basis)
     else:
         conv = _CORR_VEC_BASIS(array, eval_basis)
 
