@@ -202,12 +202,12 @@ window_size = int(window_size_sec * neuron_count.rate)
 
 # convolve the counts with the identity matrix.
 plt.close("all")
-input_feature = nmo.utils.create_convolutional_predictor(
-    np.eye(window_size), [count_tsdframe]
-)[0]
+input_feature = nmo.convolve.create_convolutional_predictor(
+    np.eye(window_size), count_tsdframe
+)
 
 # print the NaN indices along the time axis
-print("NaN indices:\n", np.where(np.isnan(input_feature[:, 0, 0]))[0])
+print("NaN indices:\n", np.where(np.isnan(input_feature[:, 0]))[0])
 
 # %%
 # The binned counts originally have shape "number of samples", we should check that the
@@ -400,7 +400,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 # This can be performed in nemos.
 
 
-conv_spk = nmo.utils.create_convolutional_predictor(basis_kernels, [count_tsdframe])[0]
+conv_spk = nmo.convolve.create_convolutional_predictor(basis_kernels, count_tsdframe)
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -511,7 +511,7 @@ plotting.plot_rates_and_smoothed_counts(
 # #### Preparing the features
 
 # convolve all the neurons
-convolved_count = nmo.utils.create_convolutional_predictor(basis_kernels, [count])[0]
+convolved_count = nmo.convolve.create_convolutional_predictor(basis_kernels, count)
 
 # %%
 # Check the dimension to make sure it make sense

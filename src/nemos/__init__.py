@@ -2,6 +2,7 @@
 
 from . import (
     basis,
+    convolve,
     exceptions,
     glm,
     observation_models,

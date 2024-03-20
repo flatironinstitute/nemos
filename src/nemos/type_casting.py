@@ -211,7 +211,7 @@ def all_same_time_info(*args, **kwargs) -> bool:
     return _has_same_time_axis(*args, **kwargs) and _has_same_support(*args, **kwargs)
 
 
-def _get_time_info(*args, **kwargs):
+def get_time_info(*args, **kwargs):
     """
     Extract time axis and support information from the first pynapple object.
 
@@ -364,7 +364,7 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     raise ValueError(
                         "Time axis mismatch. pynapple objects have mismatching time axis."
                     )
-                time, time_support = _get_time_info(*args, **kwargs)
+                time, time_support = get_time_info(*args, **kwargs)
 
                 def cast_out(tree):
                     # cast back to pynapple
