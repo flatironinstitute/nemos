@@ -326,7 +326,7 @@ class TestCreateConvolutionalPredictor:
         )
         assert jax.tree_util.tree_structure(trial_counts) == jax.tree_structure(conv)
 
-    @pytest.mark.parametrize("feature", [np.zeros((1, 30, 1))])
+    @pytest.mark.parametrize("axis", [0, 1, 2])
     @pytest.mark.parametrize(
         "window_size, shift, predictor_causality, nan_idx",
         [
@@ -345,67 +345,20 @@ class TestCreateConvolutionalPredictor:
         ],
     )
     def test_expected_nan(
-        self, feature, window_size, shift, predictor_causality, nan_idx
+        self, axis, window_size, shift, predictor_causality, nan_idx
     ):
+        shape = [1, 1, 1]
+        shape[axis] = 30
+        feature = np.zeros(shape)
         basis = np.zeros((window_size, 1))
         res = convolve.create_convolutional_predictor(
-            basis, feature, predictor_causality=predictor_causality, shift=shift, axis=1
+            basis, feature, predictor_causality=predictor_causality, shift=shift, axis=axis
         )
+        # get expected non-nan idxs
         other_idx = list(set(np.arange(res.shape[1])).difference(nan_idx))
-        assert np.all(np.isnan(res[:, nan_idx]))
-        assert not np.any(np.isnan(res[:, other_idx]))
-    #
-    #     def test_acausal_shift_error(self):
-    #         basis = np.zeros((3, 1))
-    #         feature = np.zeros((1, 30, 1))
-    #         with pytest.raises(
-    #             ValueError,
-    #             match="Cannot shift `predictor` when `predictor_causality` is `acausal`",
-    #         ):
-    #             utils.create_convolutional_predictor(
-    #                 basis, feature, predictor_causality="acausal", shift=True
-    #             )
-    #
-    #     def test_basis_len_one_error(self):
-    #         basis = np.zeros((1, 1))
-    #         feature = np.zeros((1, 30, 1))
-    #         with pytest.raises(
-    #             ValueError, match=r"`basis_matrix.shape\[0\]` should be at least 2"
-    #         ):
-    #             utils.create_convolutional_predictor(
-    #                 basis, feature, predictor_causality="acausal"
-    #             )
-    #
-    #     @pytest.mark.parametrize(
-    #         "feature", [{"1": [[np.ones((30, 1))]], "2": np.ones((20, 1))}]
-    #     )
-    #     @pytest.mark.parametrize(
-    #         "predictor_causality", ["causal", "acausal", "anti-causal"]
-    #     )
-    #     @pytest.mark.parametrize("shift", [True, False, None])
-    #     def test_conv_tree(self, feature, predictor_causality, shift):
-    #         if shift and predictor_causality == "acausal":
-    #             return
-    #         basis = np.zeros((2, 1))
-    #         with does_not_raise():
-    #             utils.create_convolutional_predictor(
-    #                 basis, feature, predictor_causality=predictor_causality, shift=shift
-    #             )
-    #
-    #     @pytest.mark.parametrize(
-    #         "feature", [{"1": [[np.ones((30, 1))]], "2": np.ones((20, 1))}]
-    #     )
-    #     @pytest.mark.parametrize(
-    #         "predictor_causality", ["causal", "acausal", "anti-causal"]
-    #     )
-    #     @pytest.mark.parametrize("shift", [True, False, None])
-    #     def test_conv_tree_shape(self, feature, predictor_causality, shift):
-    #         if shift and predictor_causality == "acausal":
-    #             return
-    #         basis = np.zeros((2, 1))
-    #         res = utils.create_convolutional_predictor(
-    #             basis, feature, predictor_causality=predictor_causality, shift=shift
-    #         )
-    #         arr1, arr2 = jax.tree_util.tree_flatten(res)[0]
-    #         assert arr1.shape[0] == 30
-    #         assert arr2.shape[0] == 20
+
+        # take values and check
+        nans = np.take(res, nan_idx, axis)
+        non_nans = np.take(res, other_idx, axis)
+        assert np.all(np.isnan(nans))
+        assert not np.any(np.isnan(non_nans))
