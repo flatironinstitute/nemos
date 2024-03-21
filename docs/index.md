@@ -73,6 +73,10 @@ Nemos also provides a variety of [basis functions][nemos.basis] for estimating
 more complicated, non-linear relationships between experimental variables and
 neuronal spiking.
 
+
+See [Quickstart](quickstart.md) for a slightly longer overview of basic nemos
+functionality.
+
 ## Navigating Our Tutorials and Guides
 
 Our "API Guide", "Background" and "Neural Modeling" sections are continuously evolving and expanding. 
