@@ -3,6 +3,7 @@
 import warnings
 from typing import Any
 
+from numpy.typing import NDArray
 import jax
 import jax.numpy as jnp
 
@@ -79,3 +80,50 @@ def error_all_invalid(*pytree: Any):
     """
     if all(~get_valid_multitree(*pytree)):
         raise ValueError("At least a NaN or an Inf at all sample points!")
+
+
+def check_length(x: Any, err_message: str):
+    if not hasattr(x, "__len__") or len(x) != 2:
+        raise ValueError(err_message)
+
+
+def convert_tree_leaves_to_jax_array(tree: Any, data_type: jnp.dtype):
+    try:
+        tree = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), tree)
+    except (ValueError, TypeError):
+        raise TypeError(
+            "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+        )
+    return tree
+
+
+def check_tree_leaves_dimensionality(tree: Any, expected_dim: int, err_message: str):
+    if pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, tree):
+        raise ValueError(err_message)
+
+
+def check_same_timepoints(*arrays: NDArray, axis: int = 0):
+    if len(arrays) > 1:
+        if any(arr.shape[axis] != arrays[0].shape[axis] for arr in arrays[1:]):
+            raise ValueError(
+                "The number of time-points in the arrays must agree. "
+                f"Mismatch in the number of time-points found!"
+            )
+
+
+def array_axis_consistency(
+        array_1: NDArray, array_2: NDArray, axis_1: int, axis_2: int, array_1_name: str, array_2_name,axis_label: str,
+
+):
+    if array_1.shape[axis_1] != array_2[axis_2]:
+        raise ValueError(f"The {axis_label} axis of {array_1_name} doesn't match that of {array_2_name}!")
+
+
+def compare_tree_structure(tree_1, tree_2, tree_1_name, tree_2_name):
+    if jax.tree_util.tree_structure(tree_1) != jax.tree_util.tree_structure(tree_2):
+        raise TypeError(
+            f"Mismatched tree structure. {tree_1_name} and {tree_2_name} must be the same tree structure."
+        )
+
+

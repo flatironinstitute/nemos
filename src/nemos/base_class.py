@@ -211,8 +211,9 @@ class BaseRegressor(Base, abc.ABC):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
 
-    @staticmethod
+    @abc.abstractmethod
     def _check_and_convert_params(
+        self,
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
@@ -224,29 +225,7 @@ class BaseRegressor(Base, abc.ABC):
         It ensures that the parameters and data are compatible for the model.
 
         """
-        if not hasattr(params, "__len__") or len(params) != 2:
-            raise ValueError("Params must have length two.")
-
-        try:
-            params = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), params)
-        except (ValueError, TypeError):
-            raise TypeError(
-                "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-                "with numeric data-type!"
-            )
-
-        if tree_utils.pytree_map_and_reduce(lambda x: x.ndim != 2, any, params[0]):
-            raise ValueError(
-                "params[0] must be an array or nemos.pytree.FeaturePytree with array leafs "
-                "of shape (n_neurons, n_features)."
-            )
-
-        if params[1].ndim != 1:
-            raise ValueError(
-                "params[1] must be of shape (n_neurons,) but "
-                f"params[1] has {params[1].ndim} dimensions!"
-            )
-        return params
+        pass
 
     @staticmethod
     def _check_input_dimensionality(

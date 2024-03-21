@@ -10,6 +10,7 @@ from . import convolve
 from . import observation_models as obs
 from . import regularizer as reg
 from . import tree_utils
+from . import validation
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
@@ -99,6 +100,40 @@ class GLM(BaseRegressor):
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+
+    def _check_and_convert_params(
+        self,
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        data_type: Optional[jnp.dtype] = None,
+    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
+        """
+        Validate the dimensions and consistency of parameters and data.
+
+        This function checks the consistency of shapes and dimensions for model
+        parameters.
+        It ensures that the parameters and data are compatible for the model.
+
+        """
+        # check that params has length two (coeff and intercept)
+        validation.check_length(params, "Params must have length two.")
+        # convert to jax array (specify type if needed)
+        params = validation.convert_tree_leaves_to_jax_array(params, data_type)
+        # check the dimensionality of coeff
+        validation.check_tree_leaves_dimensionality(
+            params[0],
+            expected_dim=2,
+            err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
+            "with array leafs of shape (n_neurons, n_features)."
+        )
+        # check the dimensionality of intercept
+        validation.check_tree_leaves_dimensionality(
+            params[1],
+            expected_dim=1,
+            err_message="params[1] must be of shape (n_neurons,) but "
+                        f"params[1] has {params[1].ndim} dimensions!"
+        )
+        return params
+
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
