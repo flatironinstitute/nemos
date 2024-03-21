@@ -101,8 +101,8 @@ class GLM(BaseRegressor):
         obs.check_observation_model(observation)
         self._observation_model = observation
 
+    @staticmethod
     def _check_and_convert_params(
-        self,
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
@@ -134,6 +134,25 @@ class GLM(BaseRegressor):
         )
         return params
 
+    @staticmethod
+    def _check_input_dimensionality(
+            X: Union[FeaturePytree, jnp.ndarray] = None,
+            y: jnp.ndarray = None
+    ):
+        if not (y is None):
+            validation.check_tree_leaves_dimensionality(
+                y,
+                expected_dim=2,
+                err_message="y must be two-dimensional, with shape (n_timebins, n_neurons)"
+            )
+
+        if not (X is None):
+            validation.check_tree_leaves_dimensionality(
+                X,
+                expected_dim=3,
+                err_message="X must be three-dimensional, with shape "
+                            "(n_timebins, n_neurons, n_features) or pytree of the same"
+            )
 
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""

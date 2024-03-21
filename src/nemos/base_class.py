@@ -211,9 +211,9 @@ class BaseRegressor(Base, abc.ABC):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
 
+    @staticmethod
     @abc.abstractmethod
     def _check_and_convert_params(
-        self,
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
@@ -228,22 +228,15 @@ class BaseRegressor(Base, abc.ABC):
         pass
 
     @staticmethod
+    @abc.abstractmethod
     def _check_input_dimensionality(
         X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
-        if not (y is None):
-            if y.ndim != 2:
-                raise ValueError(
-                    "y must be two-dimensional, with shape (n_timebins, n_neurons)"
-                )
-        if not (X is None):
-            if tree_utils.pytree_map_and_reduce(lambda x: x.ndim != 3, any, X):
-                raise ValueError(
-                    "X must be three-dimensional, with shape (n_timebins, n_neurons, n_features) or pytree of the same"
-                )
+        pass
 
     @staticmethod
+    @abc.abstractmethod
     def _check_input_and_params_consistency(
         params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
         X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
