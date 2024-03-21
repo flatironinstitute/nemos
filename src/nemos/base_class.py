@@ -254,52 +254,7 @@ class BaseRegressor(Base, abc.ABC):
               (when provided).
 
         """
-        n_neurons = params[1].shape[0]
-        if tree_utils.pytree_map_and_reduce(
-            lambda x: x.shape[0] != n_neurons, any, params[0]
-        ):
-            raise ValueError(
-                "Model parameters have inconsistent shapes. "
-                "Spike basis coefficients must be of shape (n_neurons, n_features), and "
-                "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both! "
-                f"Coefficients n_neurons: {jax.tree_map(lambda x: x.shape[0], params[0])}, "
-                f"bias n_neurons: {params[1].shape[0]}"
-            )
-
-        if y is not None:
-            if y.shape[1] != n_neurons:
-                raise ValueError(
-                    "The number of neurons in the model parameters and in the inputs"
-                    "must match."
-                    f"parameters has n_neurons: {n_neurons}, "
-                    f"the input provided has n_neurons: {y.shape[1]}"
-                )
-
-        if X is not None:
-            if tree_utils.pytree_map_and_reduce(
-                lambda x: x.shape[1] != n_neurons, any, X
-            ):
-                raise ValueError(
-                    "The number of neurons in the model parameters and in the inputs"
-                    "must match."
-                    f"parameters has n_neurons: {n_neurons}, "
-                    f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}"
-                )
-            X_structure = jax.tree_util.tree_structure(X)
-            params_structure = jax.tree_util.tree_structure(params[0])
-            if X_structure != params_structure:
-                raise TypeError(
-                    f"X and params[0] must be the same type, but X is {type(X)} and "
-                    f"params[0] is {type(params[0])}"
-                )
-            if tree_utils.pytree_map_and_reduce(
-                lambda p, x: p.shape[1] != x.shape[2], any, params[0], X
-            ):
-                raise ValueError(
-                    "Inconsistent number of features. "
-                    f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
-                    f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!"
-                )
+        pass
 
     @staticmethod
     def _check_input_n_timepoints(X: Union[FeaturePytree, jnp.ndarray], y: jnp.ndarray):
