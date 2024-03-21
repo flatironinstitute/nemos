@@ -9,8 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 from . import convolve
 from . import observation_models as obs
 from . import regularizer as reg
-from . import tree_utils
-from . import validation
+from . import tree_utils, validation
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
@@ -200,7 +199,7 @@ class GLM(BaseRegressor):
                 X,
                 params[0],
                 err_message=f"X and params[0] must be the same type, but X is "
-                            f"{type(X)} and params[0] is {type(params[0])}",
+                f"{type(X)} and params[0] is {type(params[0])}",
             )
             # check that X and coeff have the same n_neurons
             validation.check_tree_axis_consistency(
@@ -220,8 +219,8 @@ class GLM(BaseRegressor):
                 axis_1=1,
                 axis_2=2,
                 err_message="Inconsistent number of features. "
-                            f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
-                            f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!",
+                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
+                f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!",
             )
 
     def _check_is_fit(self):

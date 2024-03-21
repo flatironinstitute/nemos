@@ -1,14 +1,14 @@
 """Collection of methods utilities."""
 
 import warnings
-from typing import Optional, Any, Union
+from typing import Any, Optional, Union
 
-from numpy.typing import NDArray
 import jax
 import jax.numpy as jnp
+from numpy.typing import NDArray
 
-from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 from .pytrees import FeaturePytree
+from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 
 
 def warn_invalid_entry(*pytree: Any):
@@ -183,10 +183,7 @@ def check_same_shape_on_axis(*arrays: NDArray, axis: int = 0, err_message: str):
 
 
 def check_array_shape_match_tree(
-        tree: Any,
-        array: NDArray,
-        axis: int,
-        err_message: str
+    tree: Any, array: NDArray, axis: int, err_message: str
 ):
     """
     Check if the shape of an array matches the shape of arrays in a pytree along a specified axis.
@@ -207,7 +204,9 @@ def check_array_shape_match_tree(
     ValueError
         If the array's shape does not match the pytree leaves' shapes along the specified axis.
     """
-    if pytree_map_and_reduce(lambda arr: arr.shape[axis] != array.shape[axis], any, tree):
+    if pytree_map_and_reduce(
+        lambda arr: arr.shape[axis] != array.shape[axis], any, tree
+    ):
         raise ValueError(err_message)
 
 
@@ -242,7 +241,13 @@ def array_axis_consistency(
         return False
 
 
-def check_tree_axis_consistency(tree_1: Any, tree_2: Any, axis_1: int, axis_2: int, err_message: str, ):
+def check_tree_axis_consistency(
+    tree_1: Any,
+    tree_2: Any,
+    axis_1: int,
+    axis_2: int,
+    err_message: str,
+):
     """
     Check if two pytrees are consistent along specified axes for their respective leaves.
 
