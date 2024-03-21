@@ -115,7 +115,7 @@ class GLM(BaseRegressor):
 
         """
         # check that params has length two (coeff and intercept)
-        validation.check_length(params, "Params must have length two.")
+        validation.check_length(params, 2, "Params must have length two.")
         # convert to jax array (specify type if needed)
         params = validation.convert_tree_leaves_to_jax_array(params, data_type)
         # check the dimensionality of coeff

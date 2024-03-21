@@ -1,7 +1,7 @@
 """Collection of methods utilities."""
 
 import warnings
-from typing import Tuple, Any, Union
+from typing import Optional, Any, Union
 
 from numpy.typing import NDArray
 import jax
@@ -83,12 +83,50 @@ def error_all_invalid(*pytree: Any):
         raise ValueError("At least a NaN or an Inf at all sample points!")
 
 
-def check_length(x: Any, err_message: str):
-    if not hasattr(x, "__len__") or len(x) != 2:
+def check_length(x: Any, expected_len: int, err_message: str):
+    """
+    Check if the provided object has a length of two.
+
+    Parameters
+    ----------
+    x :
+        Object to check the length of.
+    expected_len :
+        The expected length of the object.
+    err_message :
+        Error message to raise if the length is not two.
+
+    Raises
+    ------
+    ValueError
+        If the object does not have the specified length.
+    """
+    if not hasattr(x, "__len__") or len(x) != expected_len:
         raise ValueError(err_message)
 
 
-def convert_tree_leaves_to_jax_array(tree: Any, data_type: jnp.dtype):
+def convert_tree_leaves_to_jax_array(tree: Any, data_type: Optional[jnp.dtype] = None):
+    """
+    Convert the leaves of a given pytree to JAX arrays with the specified data type.
+
+    Parameters
+    ----------
+    tree :
+        Pytree with leaves that are array-like objects.
+    data_type :
+        Data type to convert the leaves to.
+
+    Raises
+    ------
+    TypeError
+        If conversion to JAX arrays fails due to incompatible types.
+
+    Returns
+    -------
+    :
+        A tree of the same structure as the original, with leaves converted
+        to JAX arrays.
+    """
     try:
         tree = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), tree)
     except (ValueError, TypeError):
@@ -100,11 +138,45 @@ def convert_tree_leaves_to_jax_array(tree: Any, data_type: jnp.dtype):
 
 
 def check_tree_leaves_dimensionality(tree: Any, expected_dim: int, err_message: str):
+    """
+    Check if the leaves of the pytree have the specified dimensionality.
+
+    Parameters
+    ----------
+    tree :
+        Pytree to check the dimensionality of its leaves.
+    expected_dim :
+        Expected dimensionality of the leaves.
+    err_message :
+        Error message to raise if the dimensionality does not match.
+
+    Raises
+    ------
+    ValueError
+        If any leaf does not match the expected dimensionality.
+    """
     if pytree_map_and_reduce(lambda x: x.ndim != expected_dim, any, tree):
         raise ValueError(err_message)
 
 
 def check_same_shape_on_axis(*arrays: NDArray, axis: int = 0, err_message: str):
+    """
+    Check if the arrays have the same shape along a specified axis.
+
+    Parameters
+    ----------
+    *arrays :
+        Arrays to check shape consistency of.
+    axis :
+        Axis along which to check the shape consistency.
+    err_message :
+        Error message to raise if the shapes are inconsistent.
+
+    Raises
+    ------
+    ValueError
+        If the arrays do not have the same shape along the specified axis.
+    """
     if len(arrays) > 1:
         if any(arr.shape[axis] != arrays[0].shape[axis] for arr in arrays[1:]):
             raise ValueError(err_message)
@@ -116,6 +188,25 @@ def check_array_shape_match_tree(
         axis: int,
         err_message: str
 ):
+    """
+    Check if the shape of an array matches the shape of arrays in a pytree along a specified axis.
+
+    Parameters
+    ----------
+    tree :
+        Pytree with arrays as leaves.
+    array :
+        Array to compare the shape with.
+    axis :
+        Axis along which to compare the shape.
+    err_message :
+        Error message to raise if the shapes do not match.
+
+    Raises
+    ------
+    ValueError
+        If the array's shape does not match the pytree leaves' shapes along the specified axis.
+    """
     if pytree_map_and_reduce(lambda arr: arr.shape[axis] != array.shape[axis], any, tree):
         raise ValueError(err_message)
 
@@ -126,6 +217,25 @@ def array_axis_consistency(
     axis_1: int,
     axis_2: int,
 ):
+    """
+    Check if two arrays are consistent along specified axes.
+
+    Parameters
+    ----------
+    array_1 :
+        First array to check.
+    array_2 :
+        Second array to check.
+    axis_1 :
+        Axis to check in the first array.
+    axis_2 :
+        Axis to check in the second array.
+
+    Returns
+    -------
+    bool
+        True if inconsistent, otherwise False.
+    """
     if array_1.shape[axis_1] != array_2.shape[axis_2]:
         return True
     else:
@@ -133,6 +243,27 @@ def array_axis_consistency(
 
 
 def check_tree_axis_consistency(tree_1: Any, tree_2: Any, axis_1: int, axis_2: int, err_message: str, ):
+    """
+    Check if two pytrees are consistent along specified axes for their respective leaves.
+
+    Parameters
+    ----------
+    tree_1 :
+        First pytree to check.
+    tree_2 :
+        Second pytree to check.
+    axis_1 :
+        Axis to check in the first pytree.
+    axis_2 :
+        Axis to check in the second pytree.
+    err_message :
+        Error message to raise if the pytrees' leaves are inconsistent along the given axes.
+
+    Raises
+    ------
+    ValueError
+        If the pytrees' leaves are inconsistent along the specified axes.
+    """
     if pytree_map_and_reduce(
         lambda x, y: array_axis_consistency(x, y, axis_1, axis_2), any, tree_1, tree_2
     ):
@@ -140,5 +271,21 @@ def check_tree_axis_consistency(tree_1: Any, tree_2: Any, axis_1: int, axis_2: i
 
 
 def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
+    """Check if two pytrees have the same structure.
+
+    Parameters
+    ----------
+    tree_1 :
+     First pytree to compare.
+    tree_2 :
+     Second pytree to compare.
+    err_message :
+     Error message to raise if the structures of the pytrees do not match.
+
+    Raises
+    ------
+    TypeError
+        If the structures of the pytrees do not match.
+    """
     if jax.tree_util.tree_structure(tree_1) != jax.tree_util.tree_structure(tree_2):
         raise TypeError(err_message)

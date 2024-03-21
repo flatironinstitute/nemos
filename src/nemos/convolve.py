@@ -1,3 +1,4 @@
+"""Convolution utilities."""
 import re
 import warnings
 from functools import partial
@@ -37,6 +38,7 @@ def reshape_convolve(array: NDArray, eval_basis: NDArray):
     :
         The convolved array, reshaped to maintain the original dimensions except for the first one,
         which is adjusted based on the window size of `eval_basis`.
+
     Notes
     -----
         The convolution implemented here is in mode 'valid'. This implies that the time axis shrinks
@@ -100,8 +102,7 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
 
 
 def _list_epochs(tsd: Any):
-    """
-    Lists epochs from a time series with data object, supporting 'pynapple' TSD formats.
+    """List epochs from a time series with data object, supporting 'pynapple' TSD formats.
 
     If the input is recognized as a 'pynapple' TSD, it extracts epochs based on the TSD's
     time support. Otherwise, it returns the input as is, assuming it's a single epoch.
@@ -164,7 +165,6 @@ def _convolve_pad_and_shift(
     predictor :
         Predictor of with same shape and structure as `time_series`
     """
-
     # apply convolution
     def conv(x):
         return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)

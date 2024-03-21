@@ -961,6 +961,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
 
     @property
     def time_scaling(self):
+        """Getter property for time_scaling."""
         return self._time_scaling
 
     @staticmethod
@@ -996,7 +997,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
 
     def _compute_peaks(self):
         """
-        Peak location of each log-spaced cosine basis element
+        Peak location of each log-spaced cosine basis element.
 
         Compute the peak location for the log-spaced raised cosine basis.
         Enforcing that the last basis decays to zero is equivalent to
