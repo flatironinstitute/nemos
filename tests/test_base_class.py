@@ -6,53 +6,7 @@ import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base, BaseRegressor
-from nemos.tree_utils import pytree_map_and_reduce
-
-
-@pytest.fixture
-def mock_regressor():
-    return MockBaseRegressor()
-
-
-# Sample subclass to test instantiation and methods
-class MockBaseRegressor(BaseRegressor):
-    """
-    Mock implementation of the BaseRegressor abstract class for testing purposes.
-    Implements all required abstract methods as empty methods.
-    """
-
-    def __init__(self, std_param: int = 0):
-        """Initialize a MockBaseRegressor instance with optional standard parameters."""
-        self.std_param = std_param
-        super().__init__()
-
-    def fit(self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]):
-        pass
-
-    def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
-        pass
-
-    def score(
-        self,
-        X: Union[NDArray, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
-        **kwargs,
-    ) -> jnp.ndarray:
-        pass
-
-    def simulate(
-        self,
-        random_key: jax.Array,
-        feed_forward_input: Union[NDArray, jnp.ndarray],
-        **kwargs,
-    ):
-        pass
-
-
-class MockRegressorNested(MockBaseRegressor):
-    def __init__(self, other_param: int, std_param: int = 0):
-        super().__init__(std_param=std_param)
-        self.other_param = MockBaseRegressor(std_param=other_param)
+from nemos.glm import GLM
 
 
 class MockBaseRegressorInvalid(BaseRegressor):
@@ -68,9 +22,7 @@ class MockBaseRegressorInvalid(BaseRegressor):
     def predict(self, X: Union[NDArray, jnp.ndarray]) -> jnp.ndarray:
         pass
 
-    def score(
-        self, X: Union[NDArray, jnp.ndarray], y: Union[NDArray, jnp.ndarray]
-    ) -> jnp.ndarray:
+    def score(self, X, y, score_type="pseudo-r2-McFadden"):
         pass
 
 
@@ -80,39 +32,37 @@ class BadEstimator(Base):
         pass
 
 
-def test_init():
+def test_init(mock_regressor):
     """Test the initialization of the MockBaseRegressor class."""
-    model = MockBaseRegressor(std_param=2)
-    assert model.std_param == 2
+    assert mock_regressor.std_param == 2
 
 
-def test_get_params():
+def test_get_params(mock_regressor_nested):
     """Test the get_params method."""
-    model = MockRegressorNested(other_param=1, std_param=2)
-    params = model.get_params(deep=True)
+    params = mock_regressor_nested.get_params(deep=True)
     assert params["std_param"] == 2
     assert params["other_param__std_param"] == 1
 
 
-def set_params():
+def set_params(mock_regressor):
     """Test the set_params method."""
-    model = MockBaseRegressor()
+    model = mock_regressor
     model.set_params(std_param=1)
     assert model.std_param == 1
 
 
-def test_invalid_set_params():
+def test_invalid_set_params(mock_regressor):
     """Test invalid parameter setting using the set_params method."""
-    model = MockBaseRegressor()
+    model = mock_regressor
     with pytest.raises(
         ValueError, match="Invalid parameter 'invalid_param' for estimator"
     ):
         model.set_params(invalid_param="invalid")
 
 
-def test_get_param_names():
+def test_get_param_names(mock_regressor):
     """Test retrieval of parameter names using the _get_param_names method."""
-    param_names = MockBaseRegressor._get_param_names()
+    param_names = mock_regressor._get_param_names()
     # As per your implementation, _get_param_names should capture the constructor arguments
     assert "std_param" in param_names
 
@@ -194,47 +144,6 @@ def test_preprocess_fit_with_inf_in_y(mock_regressor):
         mock_regressor._preprocess_fit(X, y)
 
 
-def test_preprocess_fit_higher_dimensional_data_X(mock_regressor):
-    """Test behavior with higher-dimensional input data."""
-    X = jnp.array([[[[1, 2], [3, 4]]]])
-    y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_regressor._preprocess_fit(X, y)
-
-
-def test_preprocess_fit_higher_dimensional_data_y(mock_regressor):
-    """Test behavior with higher-dimensional input data."""
-    X = jnp.array([[[[1, 2], [3, 4]]]])
-    y = jnp.array([[[1, 2]]])
-    with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_regressor._preprocess_fit(X, y)
-
-
-def test_preprocess_fit_lower_dimensional_data_X(mock_regressor):
-    """Test behavior with lower-dimensional input data."""
-    X = jnp.array([[1, 2], [3, 4]])
-    y = jnp.array([[1, 2]])
-    with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_regressor._preprocess_fit(X, y)
-
-
-def test_preprocess_fit_lower_dimensional_data_y(mock_regressor):
-    """Test behavior with lower-dimensional input data."""
-    X = jnp.array([[[[1, 2], [3, 4]]]])
-    y = jnp.array([1, 2])
-    with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_regressor._preprocess_fit(X, y)
-
-
-# Preprocess Simulate Tests
-def test_preprocess_simulate_empty_data(mock_regressor):
-    """Test behavior with empty feedforward_input."""
-    feedforward_input = jnp.array([[[]]])
-    params_f = (jnp.array([[]]), jnp.array([]))
-    with pytest.raises(ValueError, match="Model parameters have inconsistent shapes."):
-        mock_regressor._preprocess_simulate(feedforward_input, params_f)
-
-
 def test_preprocess_simulate_invalid_datatypes(mock_regressor):
     """Test behavior with invalid feedforward_input datatype."""
     feedforward_input = "invalid_data_type"
@@ -260,34 +169,6 @@ def test_preprocess_simulate_with_inf(mock_regressor):
     params_f = (jnp.array([[1]]), jnp.array([1]))
     with pytest.raises(ValueError, match="The provided trees contain Inf"):
         mock_regressor._preprocess_simulate(feedforward_input, params_f)
-
-
-def test_preprocess_simulate_higher_dimensional_data(mock_regressor):
-    """Test behavior with improperly dimensional feedforward_input."""
-    feedforward_input = jnp.array([[[[1]]]])
-    params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_regressor._preprocess_simulate(feedforward_input, params_f)
-
-
-def test_preprocess_simulate_invalid_init_y(mock_regressor):
-    """Test behavior with invalid init_y provided."""
-    feedforward_input = jnp.array([[[1]]])
-    params_f = (jnp.array([[1]]), jnp.array([1]))
-    init_y = jnp.array([[[1]]])
-    params_r = (jnp.array([[1]]),)
-    with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_regressor._preprocess_simulate(
-            feedforward_input, params_f, init_y, params_r
-        )
-
-
-def test_preprocess_simulate_feedforward(mock_regressor):
-    """Test that the preprocessing works."""
-    feedforward_input = jnp.array([[[1]]])
-    params_f = (jnp.array([[1]]), jnp.array([1]))
-    (ff,) = mock_regressor._preprocess_simulate(feedforward_input, params_f)
-    assert jnp.all(ff == feedforward_input)
 
 
 def test_empty_set(mock_regressor):

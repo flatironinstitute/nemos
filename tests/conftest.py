@@ -17,6 +17,105 @@ import pytest
 import nemos as nmo
 
 
+# Sample subclass to test instantiation and methods
+class MockRegressor(nmo.base_class.BaseRegressor):
+    """
+    Mock implementation of the BaseRegressor abstract class for testing purposes.
+    Implements all required abstract methods as empty methods.
+    """
+
+    def __init__(self, std_param: int = 0):
+        """Initialize a MockBaseRegressor instance with optional standard parameters."""
+        self.std_param = std_param
+        super().__init__()
+
+    def fit(self, X, y):
+        pass
+
+    def predict(self, X) -> jnp.ndarray:
+        pass
+
+    def score(
+        self,
+        X,
+        y,
+        **kwargs,
+    ) -> jnp.ndarray:
+        pass
+
+    def simulate(
+        self,
+        random_key: jax.Array,
+        feed_forward_input,
+        **kwargs,
+    ):
+        pass
+
+    def _check_and_convert_params(self, *args, **kwargs):
+        pass
+
+    def _check_input_and_params_consistency(self, *args, **kwargs):
+        pass
+
+    def _check_input_dimensionality(self, *args, **kwargs):
+        pass
+
+
+class MockRegressorNested(MockRegressor):
+    def __init__(self, other_param: int, std_param: int = 0):
+        super().__init__(std_param=std_param)
+        self.other_param = MockGLM(std_param=other_param)
+
+
+class MockGLM(nmo.glm.GLM):
+    """
+    Mock implementation of the BaseRegressor abstract class for testing purposes.
+    Implements all required abstract methods as empty methods.
+    """
+
+    def __init__(self, std_param: int = 0):
+        """Initialize a MockBaseRegressor instance with optional standard parameters."""
+        self.std_param = std_param
+        super().__init__()
+
+    def fit(self, X, y):
+        pass
+
+    def predict(self, X) -> jnp.ndarray:
+        pass
+
+    def score(
+        self,
+        X,
+        y,
+        **kwargs,
+    ) -> jnp.ndarray:
+        pass
+
+    def simulate(
+        self,
+        random_key: jax.Array,
+        feed_forward_input,
+        **kwargs,
+    ):
+        pass
+
+
+@pytest.fixture
+def mock_regressor():
+    return MockRegressor(std_param=2)
+
+
+@pytest.fixture
+def mock_regressor_nested():
+    return MockRegressorNested(other_param=1, std_param=2)
+
+
+@pytest.fixture
+def mock_glm():
+    return MockGLM(std_param=2)
+
+
 @pytest.fixture
 def poissonGLM_model_instantiation():
     """Set up a Poisson GLM for testing purposes.
