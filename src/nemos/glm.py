@@ -123,27 +123,26 @@ class GLM(BaseRegressor):
             params[0],
             expected_dim=2,
             err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_neurons, n_features)."
+            "with array leafs of shape (n_neurons, n_features).",
         )
         # check the dimensionality of intercept
         validation.check_tree_leaves_dimensionality(
             params[1],
             expected_dim=1,
             err_message="params[1] must be of shape (n_neurons,) but "
-                        f"params[1] has {params[1].ndim} dimensions!"
+            f"params[1] has {params[1].ndim} dimensions!",
         )
         return params
 
     @staticmethod
     def _check_input_dimensionality(
-            X: Union[FeaturePytree, jnp.ndarray] = None,
-            y: jnp.ndarray = None
+        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
     ):
         if not (y is None):
             validation.check_tree_leaves_dimensionality(
                 y,
                 expected_dim=2,
-                err_message="y must be two-dimensional, with shape (n_timebins, n_neurons)"
+                err_message="y must be two-dimensional, with shape (n_timebins, n_neurons)",
             )
 
         if not (X is None):
@@ -151,7 +150,78 @@ class GLM(BaseRegressor):
                 X,
                 expected_dim=3,
                 err_message="X must be three-dimensional, with shape "
-                            "(n_timebins, n_neurons, n_features) or pytree of the same"
+                "(n_timebins, n_neurons, n_features) or pytree of the same",
+            )
+
+    @staticmethod
+    def _check_input_and_params_consistency(
+        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
+        """Validate the number of neurons in model parameters and input arguments.
+
+        Raises
+        ------
+        ValueError
+            - if the number of neurons is inconsistent across the model
+              parameters (`params`) and any additional inputs (`X` or `y` when
+              provided).
+            - if the number of features is inconsistent between params[1] and X
+              (when provided).
+
+        """
+        # check that coeff and intercept have the same n_neurons
+        validation.check_array_shape_match_tree(
+            *params,
+            axis=0,
+            err_message="Model parameters have inconsistent shapes. "
+            "Spike basis coefficients must be of shape (n_neurons, n_features), and "
+            "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both! "
+            f"Coefficients n_neurons: {jax.tree_map(lambda x: x.shape[0], params[0])}, "
+            f"bias n_neurons: {params[1].shape[0]}",
+        )
+
+        if y is not None:
+            # check that y and coeff have the same n_neurons
+            validation.check_tree_axis_consistency(
+                params[1],
+                y,
+                axis_1=0,
+                axis_2=1,
+                err_message="The number of neurons in the model parameters and in the inputs"
+                f"must match. Parameters have n_neurons: {params[1].shape[0]}, "
+                f"the input provided has n_neurons: {y.shape[1]}",
+            )
+
+        if X is not None:
+            # check that X and params[0] have the same structure
+            validation.check_tree_structure(
+                X,
+                params[0],
+                err_message=f"X and params[0] must be the same type, but X is "
+                            f"{type(X)} and params[0] is {type(params[0])}",
+            )
+            # check that X and coeff have the same n_neurons
+            validation.check_tree_axis_consistency(
+                params[0],
+                X,
+                axis_1=0,
+                axis_2=1,
+                err_message="The number of neurons in the model parameters and in the inputs"
+                "must match."
+                f"parameters has n_neurons: {params[1].shape[0]}, "
+                f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}",
+            )
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                params[0],
+                X,
+                axis_1=1,
+                axis_2=2,
+                err_message="Inconsistent number of features. "
+                            f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
+                            f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!",
             )
 
     def _check_is_fit(self):

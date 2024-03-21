@@ -1,13 +1,14 @@
 """Collection of methods utilities."""
 
 import warnings
-from typing import Any
+from typing import Tuple, Any, Union
 
 from numpy.typing import NDArray
 import jax
 import jax.numpy as jnp
 
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
+from .pytrees import FeaturePytree
 
 
 def warn_invalid_entry(*pytree: Any):
@@ -103,27 +104,41 @@ def check_tree_leaves_dimensionality(tree: Any, expected_dim: int, err_message: 
         raise ValueError(err_message)
 
 
-def check_same_timepoints(*arrays: NDArray, axis: int = 0):
+def check_same_shape_on_axis(*arrays: NDArray, axis: int = 0, err_message: str):
     if len(arrays) > 1:
         if any(arr.shape[axis] != arrays[0].shape[axis] for arr in arrays[1:]):
-            raise ValueError(
-                "The number of time-points in the arrays must agree. "
-                f"Mismatch in the number of time-points found!"
-            )
+            raise ValueError(err_message)
+
+
+def check_array_shape_match_tree(
+        tree: Any,
+        array: NDArray,
+        axis: int,
+        err_message: str
+):
+    if pytree_map_and_reduce(lambda arr: arr.shape[axis] != array.shape[axis], any, tree):
+        raise ValueError(err_message)
 
 
 def array_axis_consistency(
-        array_1: NDArray, array_2: NDArray, axis_1: int, axis_2: int, array_1_name: str, array_2_name,axis_label: str,
-
+    array_1: Union[FeaturePytree, jnp.ndarray, NDArray],
+    array_2: Union[FeaturePytree, jnp.ndarray, NDArray],
+    axis_1: int,
+    axis_2: int,
 ):
-    if array_1.shape[axis_1] != array_2[axis_2]:
-        raise ValueError(f"The {axis_label} axis of {array_1_name} doesn't match that of {array_2_name}!")
+    if array_1.shape[axis_1] != array_2.shape[axis_2]:
+        return True
+    else:
+        return False
 
 
-def compare_tree_structure(tree_1, tree_2, tree_1_name, tree_2_name):
+def check_tree_axis_consistency(tree_1: Any, tree_2: Any, axis_1: int, axis_2: int, err_message: str, ):
+    if pytree_map_and_reduce(
+        lambda x, y: array_axis_consistency(x, y, axis_1, axis_2), any, tree_1, tree_2
+    ):
+        raise ValueError(err_message)
+
+
+def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
     if jax.tree_util.tree_structure(tree_1) != jax.tree_util.tree_structure(tree_2):
-        raise TypeError(
-            f"Mismatched tree structure. {tree_1_name} and {tree_2_name} must be the same tree structure."
-        )
-
-
+        raise TypeError(err_message)
