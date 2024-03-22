@@ -196,7 +196,7 @@ class TestPoissonObservations:
         _, _, model, _, firing_rate = poissonGLM_model_instantiation
         assert model.observation_model.scale == 1
 
-    def test_non_differentiable_linl(self, poissonGLM_model_instantiation):
+    def test_non_differentiable_inverse_link(self, poissonGLM_model_instantiation):
         _, _, model, _, _ = poissonGLM_model_instantiation
 
         # define a jax non-diff function
