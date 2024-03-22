@@ -165,14 +165,12 @@ class GLM(BaseRegressor):
         X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
-        """Validate the number of neurons in model parameters and input arguments.
+        """Validate the number of features and structure in model parameters and input arguments.
 
         Raises
         ------
         ValueError
-            - if the number of neurons is inconsistent across the model
-              parameters (`params`) and any additional inputs (`X` or `y` when
-              provided).
+            - If param and X have different structures.
             - if the number of features is inconsistent between params[1] and X
               (when provided).
 
@@ -230,7 +228,7 @@ class GLM(BaseRegressor):
         Returns
         -------
         :
-            The predicted rates. Shape (n_time_bins, n_neurons).
+            The predicted rates. Shape (n_time_bins, ).
         """
         Ws, bs = params
         return self._observation_model.inverse_link_function(
@@ -250,12 +248,12 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
+            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
 
         Returns
         -------
         :
-            The predicted rates with shape (n_time_bins, n_neurons).
+            The predicted rates with shape (n_time_bins, ).
 
         Raises
         ------
@@ -264,7 +262,6 @@ class GLM(BaseRegressor):
         ValueError
             - If `params` is not a JAX pytree of size two.
             - If weights and bias terms in `params` don't have the expected dimensions.
-            - If the number of neurons in the model parameters and in the inputs do not match.
             - If `X` is not three-dimensional.
             - If there's an inconsistent number of features between spike basis coefficients and `X`.
 
@@ -347,10 +344,9 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            The exogenous variables. Shape (n_time_bins, n_neurons, n_features)
+            The exogenous variables. Shape (n_time_bins, n_features)
         y :
-            Neural activity arranged in a matrix. n_neurons must be the same as
-            during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
+            Neural activity. Shape (n_time_bins, ).
         score_type :
             Type of scoring: either log-likelihood or pseudo-r2.
 
@@ -364,9 +360,8 @@ class GLM(BaseRegressor):
         NotFittedError
             If ``fit`` has not been called first with this instance.
         ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_y.shape[0] !=
-            self.intercept_.shape[0]``).
+            If X structure doesn't match the params, and if X and y have different
+            number of samples.
 
         Notes
         -----
@@ -453,7 +448,7 @@ class GLM(BaseRegressor):
         If X is a FeaturePytree, the coefficients retain the pytree structure with arrays of zeros shaped
         according to the features in X. If X is a simple ndarray, the coefficients are initialized as a 2D
         array. The intercepts are initialized based on the log mean of the target data y across the first
-        axis, corresponding to the average log activity of neurons.
+        axis, corresponding to the average log activity of the neuron.
 
         Parameters
         ----------
@@ -492,12 +487,10 @@ class GLM(BaseRegressor):
         init_params = (
             # coeff, spike basis coeffs.
             # - If X is a FeaturePytree with n_features arrays of shape
-            #   (n_timebins, n_neurons, n_features), then this will be a
-            #   FeaturePytree with n_features arrays of shape (n_neurons,
-            #   n_features).
-            # - If X is an array of shape (n_timebins, n_neurons,
-            #   n_features), this will be an array of shape (n_neurons,
-            #   n_features).
+            #   (n_timebins, n_features), then this will be a
+            #   dict with n_features arrays of shape (n_features,).
+            # - If X is an array of shape (n_timebins,
+            #   n_features), this will be an array of shape (n_features,).
             jax.tree_map(lambda x: jnp.zeros_like(x[0]), data),
             # intercept, bias terms
             jnp.log(jnp.mean(y, axis=0, keepdims=True)),
@@ -535,7 +528,6 @@ class GLM(BaseRegressor):
         ValueError
             - If `init_params` is not of length two.
             - If dimensionality of `init_params` are not correct.
-            - If the number of neurons in the model parameters and in the inputs do not match.
             - If `X` is not two-dimensional.
             - If `y` is not one-dimensional.
             - If solver returns at least one NaN parameter, which means it found
@@ -618,15 +610,15 @@ class GLM(BaseRegressor):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Array of shape (n_time_bins, n_neurons, n_basis_input) or pytree of same.
+            Array of shape (n_time_bins, n_basis_input) or pytree of same.
 
         Returns
         -------
         simulated_activity :
             Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape: (n_time_bins, n_neurons).
+            Shape: (n_time_bins, ).
         firing_rates :
-            Simulated rates for each neuron over time. Shape, (n_neurons, n_time_bins).
+            Simulated rates for each neuron over time. Shape, (n_time_bins, ).
 
         Raises
         ------
@@ -634,8 +626,6 @@ class GLM(BaseRegressor):
             If the model hasn't been fitted prior to calling this method.
         ValueError
             - If the instance has not been previously fitted.
-            - If there's an inconsistency between the number of neurons in model parameters.
-            - If the number of neurons in input arguments doesn't match with model parameters.
 
 
         See Also
