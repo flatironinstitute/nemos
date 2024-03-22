@@ -51,7 +51,7 @@ class MockRegressor(nmo.base_class.BaseRegressor):
     ):
         pass
 
-    def _check_and_convert_params(self, *args, **kwargs):
+    def _check_params(self, *args, **kwargs):
         pass
 
     def _check_input_and_params_consistency(self, *args, **kwargs):

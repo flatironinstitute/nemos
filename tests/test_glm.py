@@ -143,6 +143,15 @@ class TestGLM:
         with expectation:
             glm_class(regularizer=ridge_regularizer, observation_model=observation)
 
+    @pytest.mark.parametrize("X, y", [(jnp.zeros((2, 3, 4)), jnp.zeros((2, 3))),
+                                      (jnp.zeros((2, 1, 4)), jnp.zeros((2, 1)))])
+    def test_parameter_initialization(self, X, y, poissonGLM_model_instantiation):
+        _, _, model, _, _ = poissonGLM_model_instantiation
+        coef, inter = model.initialize_params(X, y)
+        assert coef.shape[0] == y.shape[1]
+        assert coef.shape[1] == X.shape[2]
+        assert inter.shape[0] == y.shape[1]
+
     #######################
     # Test model.fit
     #######################

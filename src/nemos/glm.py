@@ -461,9 +461,44 @@ class GLM(BaseRegressor):
         return score
 
     @staticmethod
-    def initialize_params(X: Union[FeaturePytree, jnp.ndarray], y: jnp.ndarray)\
+    def initialize_params(X: DESIGN_INPUT_TYPE, y: jnp.ndarray)\
             -> Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]:
-        """Parameter initialization."""
+        """Initialize the parameters based on the structure and dimensions X and y.
+
+        This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
+        required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
+        If X is a FeaturePytree, the coefficients retain the pytree structure with arrays of zeros shaped
+        according to the features in X. If X is a simple ndarray, the coefficients are initialized as a 2D
+        array. The intercepts are initialized based on the log mean of the target data y across the first
+        axis, corresponding to the average log activity of neurons.
+
+        Parameters
+        ----------
+        X :
+            The input data which can be a FeaturePytree with n_features arrays of shape (n_timebins,
+            n_neurons, n_features), or a simple ndarray of shape (n_timebins, n_neurons, n_features).
+        y :
+            The target data array of shape (n_timebins, n_neurons), representing
+            the neuron firing rates or similar metrics.
+
+        Returns
+        -------
+        Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
+            A tuple containing the initialized parameters:
+            - The first element is the initialized coefficients
+            (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_neurons, n_features).
+            - The second element is the initialized intercept (bias terms) as an ndarray of shape (n_neurons,).
+
+        Example
+        -------
+        >>> X = jnp.zeros((100, 10, 5))  # Example input
+        >>> y = jnp.exp(jnp.random.normal(size=(100, 10)))  # Simulated firing rates
+        >>> coeff, intercept = YourModelClass.initialize_params(X, y)
+        >>> coeff.shape
+        (10, 5)
+        >>> intercept.shape
+        (10,)
+        """
         # Initialize parameters
         init_params = (
             # coeff, spike basis coeffs.
@@ -558,7 +593,7 @@ class GLM(BaseRegressor):
         ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
-                " Try tuning optimization hyperparameters."
+                " Try tuning optimization hyperparameters, specifically try decreasing the learning rate."
             )
 
         # Store parameters
