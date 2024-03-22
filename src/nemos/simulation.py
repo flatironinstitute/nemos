@@ -1,8 +1,15 @@
 """Utility functions for coupling filter definition."""
 
+from typing import Tuple, Union
+
+import jax
+import jax.numpy as jnp
 import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
+
+from . import convolve
+from .pytrees import FeaturePytree
 
 
 def difference_of_gammas(
@@ -149,3 +156,155 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     )
 
     return weights
+
+
+def simulate_recurrent(
+    model,
+    random_key: jax.Array,
+    feedforward_input: Union[NDArray, jnp.ndarray],
+    coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+    init_y: Union[NDArray, jnp.ndarray],
+):
+    """
+    Simulate neural activity using the GLM as a recurrent network.
+
+    This function projects neural activity into the future, employing the fitted
+    parameters of the GLM. It is capable of simulating activity based on a combination
+    of historical activity and external feedforward inputs like convolved currents, light
+    intensities, etc.
+
+    Parameters
+    ----------
+    random_key :
+        jax.random.key for seeding the simulation.
+    feedforward_input :
+        External input matrix to the model, representing factors like convolved currents,
+        light intensities, etc. When not provided, the simulation is done with coupling-only.
+        Expected shape: (n_time_bins, n_neurons, n_basis_input).
+    init_y :
+        Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
+        Expected shape: (window_size, n_neurons).
+    coupling_basis_matrix :
+        Basis matrix for coupling, representing between-neuron couplings
+        and auto-correlations. Expected shape: (window_size, n_basis_coupling).
+
+    Returns
+    -------
+    simulated_activity :
+        Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
+        Shape, (n_time_bins, n_neurons).
+    firing_rates :
+        Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
+
+    Raises
+    ------
+    NotFittedError
+        If the model hasn't been fitted prior to calling this method.
+    ValueError
+        - If the instance has not been previously fitted.
+        - If there's an inconsistency between the number of neurons in model parameters.
+        - If the number of neurons in input arguments doesn't match with model parameters.
+
+
+    See Also
+    --------
+    [predict](./#nemos.glm.GLM.predict) :
+    Method to predict rates based on the model's parameters.
+
+    Notes
+    -----
+    The model coefficients (`self.coef_`) are structured such that the first set of coefficients
+    (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
+    The remaining coefficients correspond to the weights for the feed-forward input.
+
+
+    The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
+    to ensure consistency in the model's input feature dimensionality.
+    """
+    if isinstance(feedforward_input, FeaturePytree):
+        raise ValueError(
+            "simulate_recurrent works only with arrays. "
+            "FeaturePytree provided instead!"
+        )
+    # check if the model is fit
+    model._check_is_fit()
+
+    # convert to jnp.ndarray
+    coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
+
+    n_basis_coupling = coupling_basis_matrix.shape[1]
+    n_neurons = model.intercept_.shape[0]
+
+    w_feedforward = model.coef_[:, n_basis_coupling * n_neurons:]
+    w_recurrent = model.coef_[:, : n_basis_coupling * n_neurons]
+    bs = model.intercept_
+
+    feedforward_input, init_y = model._preprocess_simulate(
+        feedforward_input,
+        params_feedforward=(w_feedforward, bs),
+        init_y=init_y,
+        params_recurrent=(w_recurrent, bs),
+    )
+
+    if init_y.shape[0] != coupling_basis_matrix.shape[0]:
+        raise ValueError(
+            "`init_y` and `coupling_basis_matrix`"
+            " should have the same window size! "
+            f"`init_y` window size: {init_y.shape[1]}, "
+            f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
+        )
+
+    subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
+    # (n_samples, n_neurons)
+    feed_forward_contrib = jnp.einsum(
+        "ik,tik->ti", w_feedforward, feedforward_input
+    )
+
+    def scan_fn(
+        data: Tuple[jnp.ndarray, int], key: jax.Array
+    ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
+        """Scan over time steps and simulate activity and rates.
+
+        This function simulates the neural activity and firing rates for each time step
+        based on the previous activity, feedforward input, and model coefficients.
+        """
+        activity, t_sample = data
+
+        # Convolve the neural activity with the coupling basis matrix
+        # Output of shape (1, n_neuron, n_basis_coupling)
+        # 1. The first dimension is time, and 1 is by construction since we are simulating 1
+        #    sample
+        # 2. Flatten to shape (n_neuron * n_basis_coupling, )
+        conv_act = convolve.reshape_convolve(
+            activity, coupling_basis_matrix
+        ).reshape(
+            -1,
+        )
+
+        # Extract the slice of the feedforward input for the current time step
+        input_slice = jax.lax.dynamic_slice(
+            feed_forward_contrib,
+            (t_sample, 0),
+            (1, feed_forward_contrib.shape[1]),
+        ).squeeze(axis=0)
+
+        # Predict the firing rate using the model coefficients
+        # Doesn't use predict because the non-linearity needs
+        # to be applied after we add the feed forward input
+        firing_rate = model._observation_model.inverse_link_function(
+            w_recurrent.dot(conv_act) + input_slice + bs
+        )
+
+        # Simulate activity based on the predicted firing rate
+        new_act = model._observation_model.sample_generator(key, firing_rate)
+
+        # Shift of one sample the spike count window
+        # for the next iteration (i.e. remove the first counts, and
+        # stack the newly generated sample)
+        # Increase the t_sample by one
+        carry = jnp.vstack((activity[1:], new_act)), t_sample + 1
+        return carry, (new_act, firing_rate)
+
+    _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+    simulated_activity, firing_rates = outputs
+    return simulated_activity, firing_rates
