@@ -615,10 +615,10 @@ class GLM(BaseRegressor):
         Returns
         -------
         simulated_activity :
-            Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
+            Simulated activity (spike counts for PoissonGLMs) for the neuron over time.
             Shape: (n_time_bins, ).
         firing_rates :
-            Simulated rates for each neuron over time. Shape, (n_time_bins, ).
+            Simulated rates for the neuron over time. Shape, (n_time_bins, ).
 
         Raises
         ------

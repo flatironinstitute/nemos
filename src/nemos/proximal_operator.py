@@ -130,7 +130,7 @@ def prox_group_lasso(
 
     """
     weights, intercepts = params
-    # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
+    # [(n_features), (n_groups, n_features)] -> (n_groups)
     l2_norm = _vmap_norm2_masked(weights, mask)
     factor = 1 - regularizer_strength * scaling / l2_norm
     factor = jax.nn.relu(factor)

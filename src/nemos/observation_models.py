@@ -361,9 +361,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
+            The predicted rate of the current model. Shape (n_time_bins, ).
         y :
-            The target spikes to compare against. Shape (n_time_bins, n_neurons).
+            The target spikes to compare against. Shape (n_time_bins, ).
 
         Returns
         -------
