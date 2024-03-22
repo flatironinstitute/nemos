@@ -539,73 +539,11 @@ class TestGLM:
     # Test model.score
     #######################
     @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_score_n_neuron_match_x(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `score` method when The number of neurons in X differs. Ensure the correct number of neurons.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        X = jnp.repeat(X, X.shape[1] + delta_n_neuron, axis=1)
-        with expectation:
-            model.score(X, y)
-
-    @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_score_n_neuron_match_y(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `score` method when The number of neurons in y differs. Ensure the correct number of neurons.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        y = jnp.repeat(y, y.shape[1] + delta_n_neuron, axis=1)
-        with expectation:
-            model.score(X, y)
-
-    @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
     def test_score_x_dimensionality(
@@ -618,9 +556,9 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], X.shape[1]))
+            X = np.zeros((X.shape[0], ))
         elif delta_dim == 1:
-            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+            X = np.zeros((X.shape[0], X.shape[1], 1))
         with expectation:
             model.score(X, y)
 
@@ -630,14 +568,14 @@ class TestGLM:
             (
                 -1,
                 pytest.raises(
-                    ValueError, match="y must be two-dimensional, with shape"
+                    ValueError, match="y must be one-dimensional, with shape"
                 ),
             ),
             (0, does_not_raise()),
             (
                 1,
                 pytest.raises(
-                    ValueError, match="y must be two-dimensional, with shape"
+                    ValueError, match="y must be one-dimensional, with shape"
                 ),
             ),
         ],
@@ -653,9 +591,9 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            y = np.zeros((X.shape[0],))
+            y = np.zeros([])
         elif delta_dim == 1:
-            y = np.zeros((X.shape[0], X.shape[1], 1))
+            y = np.zeros((X.shape[0], X.shape[1]))
         with expectation:
             model.score(X, y)
 
@@ -678,7 +616,7 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_n_features == 1:
-            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
@@ -812,43 +750,11 @@ class TestGLM:
     # Test model.predict
     #######################
     @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_predict_n_neuron_match_x(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `predict` method when The number of neurons in X differs.
-        Ensure that The number of neurons in X, y and params matches.
-        """
-        X, _, model, true_params, _ = poissonGLM_model_instantiation
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        X = jnp.repeat(X, X.shape[1] + delta_n_neuron, axis=1)
-        with expectation:
-            model.predict(X)
-
-    @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
     def test_predict_x_dimensionality(
@@ -862,9 +768,9 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], X.shape[1]))
+            X = np.zeros((X.shape[0], ))
         elif delta_dim == 1:
-            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+            X = np.zeros((X.shape[0], X.shape[1], 1))
         with expectation:
             model.predict(X)
 
@@ -887,7 +793,7 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_n_features == 1:
-            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
