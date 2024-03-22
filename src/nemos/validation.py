@@ -107,7 +107,9 @@ def check_length(x: Any, expected_len: int, err_message: str):
         raise ValueError(err_message)
 
 
-def convert_tree_leaves_to_jax_array(tree: Any, err_message: str, data_type: Optional[DTypeLike] = None):
+def convert_tree_leaves_to_jax_array(
+    tree: Any, err_message: str, data_type: Optional[DTypeLike] = None
+):
     """
     Convert the leaves of a given pytree to JAX arrays with the specified data type.
 

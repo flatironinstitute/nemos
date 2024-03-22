@@ -1,12 +1,10 @@
 from typing import Union
 
-import jax
 import jax.numpy as jnp
 import pytest
 from numpy.typing import NDArray
 
 from nemos.base_class import Base, BaseRegressor
-from nemos.glm import GLM
 
 
 class MockBaseRegressorInvalid(BaseRegressor):

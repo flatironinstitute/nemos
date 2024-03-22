@@ -120,7 +120,7 @@ class GLM(BaseRegressor):
             params,
             "Initial parameters must be array-like objects (or pytrees of array-like objects) "
             "with numeric data-type!",
-            data_type
+            data_type,
         )
         # check the dimensionality of coeff
         validation.check_tree_leaves_dimensionality(
@@ -461,8 +461,9 @@ class GLM(BaseRegressor):
         return score
 
     @staticmethod
-    def initialize_params(X: DESIGN_INPUT_TYPE, y: jnp.ndarray)\
-            -> Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]:
+    def initialize_params(
+        X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+    ) -> Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
@@ -558,15 +559,18 @@ class GLM(BaseRegressor):
         """
         # convert to jnp.ndarray & perform checks
         err_message = "X and y should be array-like object (or trees of array like object) with numeric data type!"
-        X, y = validation.convert_tree_leaves_to_jax_array((X, y), err_message=err_message,data_type=float)
+        X, y = validation.convert_tree_leaves_to_jax_array(
+            (X, y), err_message=err_message, data_type=float
+        )
 
         if init_params is None:
             init_params = self.initialize_params(X, y)  # initialize
         else:
             err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
             "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(init_params, err_message=err_message,
-                                                                     data_type=float)
+            init_params = validation.convert_tree_leaves_to_jax_array(
+                init_params, err_message=err_message, data_type=float
+            )
 
         # validate the params
         self._validate(X, y, init_params)

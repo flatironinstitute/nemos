@@ -257,7 +257,9 @@ class BaseRegressor(Base, abc.ABC):
         pass
 
     @staticmethod
-    def _check_input_n_timepoints(X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray):
+    def _check_input_n_timepoints(
+        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
+    ):
         if y.shape[0] != X.shape[0]:
             raise ValueError(
                 "The number of time-points in X and y must agree. "
@@ -265,10 +267,11 @@ class BaseRegressor(Base, abc.ABC):
                 f"y has {y.shape[0]} instead!"
             )
 
-    def _validate(self,
-                  X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
-                  y: Union[NDArray, jnp.ndarray],
-                  init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    def _validate(
+        self,
+        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
     ):
         # check input dimensionality
         self._check_input_dimensionality(X, y)

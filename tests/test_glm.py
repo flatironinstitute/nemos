@@ -67,9 +67,7 @@ def test_preprocess_simulate_invalid_init_y(mock_glm):
     init_y = jnp.array([[[1]]])
     params_r = (jnp.array([[1]]),)
     with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_glm._preprocess_simulate(
-            feedforward_input, params_f, init_y, params_r
-        )
+        mock_glm._preprocess_simulate(feedforward_input, params_f, init_y, params_r)
 
 
 def test_preprocess_simulate_feedforward(mock_glm):
@@ -143,8 +141,13 @@ class TestGLM:
         with expectation:
             glm_class(regularizer=ridge_regularizer, observation_model=observation)
 
-    @pytest.mark.parametrize("X, y", [(jnp.zeros((2, 3, 4)), jnp.zeros((2, 3))),
-                                      (jnp.zeros((2, 1, 4)), jnp.zeros((2, 1)))])
+    @pytest.mark.parametrize(
+        "X, y",
+        [
+            (jnp.zeros((2, 3, 4)), jnp.zeros((2, 3))),
+            (jnp.zeros((2, 1, 4)), jnp.zeros((2, 1))),
+        ],
+    )
     def test_parameter_initialization(self, X, y, poissonGLM_model_instantiation):
         _, _, model, _, _ = poissonGLM_model_instantiation
         coef, inter = model.initialize_params(X, y)
@@ -1464,8 +1467,9 @@ class TestGLM:
 
         # convolve basis and spikes
         # (n_trials, n_timepoints - ws + 1, n_neurons, n_coupling_basis)
-        conv_spikes = nmo.convolve._shift_time_axis_and_convolve(spikes, coupling_basis, axis=0)[jnp.newaxis]
-
+        conv_spikes = nmo.convolve._shift_time_axis_and_convolve(
+            spikes, coupling_basis, axis=0
+        )[jnp.newaxis]
 
         # create an individual neuron predictor by stacking the
         # two convolved spike trains in a single feature vector
