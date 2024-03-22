@@ -35,18 +35,18 @@ import nemos as nmo
 from nemos import simulation
 
 np.random.seed(111)
-# random design tensor. Shape (n_time_points, n_neurons, n_features).
-X = 0.5*np.random.normal(size=(100, 1, 5))
+# random design tensor. Shape (n_time_points, n_features).
+X = 0.5*np.random.normal(size=(100, 5))
 
-# log-rates & weights, shape (n_neurons, ) and (n_neurons, n_features) respectively.
+# log-rates & weights, shape (1, ) and (n_features, ) respectively.
 b_true = np.zeros((1, ))
-w_true = np.random.normal(size=(1, 5))
+w_true = np.random.normal(size=(5, ))
 
 # sparsify weights
-w_true[0, 1:4] = 0.
+w_true[1:4] = 0.
 
 # generate counts
-rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
+rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
 spikes = np.random.poisson(rate)
 
 # %%
@@ -208,7 +208,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 # through the `model.simulate` method.
 
 # here we are creating a new data input, of 20 timepoints (arbitrary)
-# with the same number of neurons and features (mandatory)
+# with the same number of features (mandatory)
 Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 # generate a random key given a seed
 random_key = jax.random.key(123)

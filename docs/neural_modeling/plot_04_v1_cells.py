@@ -59,7 +59,7 @@ stimulus.shape
 # %%
 # There are 73 neurons recorded together in V1. To fit the GLM faster, we will focus on one neuron.
 print(spikes)
-spikes = spikes[[34]]
+spikes = spikes[34]
 
 # %%
 # How could we predict neuron's response to white noise stimulus?
@@ -159,8 +159,6 @@ print(np.dot(receptive_field.flatten(), stimulus[0].flatten()))
 # different matrix operations:
 
 filtered_stimulus = np.einsum('t h w, h w -> t', stimulus, receptive_field)
-# add the extra dimension for feature
-filtered_stimulus = np.expand_dims(filtered_stimulus, 1)
 
 # %%
 #
@@ -247,7 +245,7 @@ model.fit(convolved_input, counts)
 # them to get the temporal time course of our input:
 
 
-temp_weights = np.einsum('i b, t b -> t', model.coef_, basis_kernels)
+temp_weights = np.einsum('b, t b -> t', model.coef_, basis_kernels)
 plt.plot(time, temp_weights)
 
 # %%

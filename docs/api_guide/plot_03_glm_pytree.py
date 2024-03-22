@@ -225,8 +225,7 @@ spikes = spikes.count(bin_size=1/head_dir.rate, ep=valid_data)
 head_dir = head_dir.interpolate(spikes)
 
 # add extra dim for n_neurons (here, 1)
-X = nmo.pytrees.FeaturePytree(head_direction=np.expand_dims(basis.evaluate(head_dir), 1))
-spikes = np.expand_dims(spikes, -1)
+X = nmo.pytrees.FeaturePytree(head_direction=basis.evaluate(head_dir))
 
 # %%
 #
@@ -237,9 +236,9 @@ model.fit(X, spikes)
 print(model.coef_['head_direction'])
 
 bs_vis = basis.evaluate(x)
-tuning = jnp.einsum('xb,nb->xn', model.coef_['head_direction'], bs_vis)
+tuning = jnp.einsum('b, tb->t', model.coef_['head_direction'], bs_vis)
 plt.figure()
-plt.polar(x, tuning.T)
+plt.polar(x, tuning)
 
 # %%
 #
@@ -280,14 +279,14 @@ spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data).values
 # normalize to lie on 0,1
 spatial_pos = (spatial_pos - spatial_pos.min()) / 100
 
-X['spatial_position'] = np.expand_dims(pos_basis.evaluate(*spatial_pos.T), 1)
+X['spatial_position'] = pos_basis.evaluate(*spatial_pos.T)
 
 # %%
 #
 # Running the GLM is identical to before, but we can see that our coef_
 # FeaturePytree now has two separate keys, one for each feature type.
 
-model = nmo.glm.GLM()
+model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
 model.fit(X, spikes)
 model.coef_
 
@@ -298,7 +297,7 @@ model.coef_
 # coefficients).
 
 bs_vis = basis.evaluate(x)
-tuning = jnp.einsum('xb,nb->xn', model.coef_['head_direction'], bs_vis)
+tuning = jnp.einsum('b,nb->n', model.coef_['head_direction'], bs_vis)
 print(model.coef_['head_direction'])
 plt.figure()
 plt.polar(x, tuning.T)
@@ -308,9 +307,9 @@ plt.polar(x, tuning.T)
 # And the spatial tuning again looks like a smoothed version of our earlier
 # tuning curves.
 _, _, pos_bs_vis = pos_basis.evaluate_on_grid(50, 50)
-pos_tuning = jnp.einsum('xb,ijb->xij', model.coef_['spatial_position'], pos_bs_vis)
+pos_tuning = jnp.einsum('b,ijb->ij', model.coef_['spatial_position'], pos_bs_vis)
 plt.figure()
-plt.imshow(pos_tuning[0])
+plt.imshow(pos_tuning)
 
 # %%
 #
