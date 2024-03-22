@@ -242,14 +242,11 @@ class BaseRegressor(Base, abc.ABC):
         X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
-        """Validate the number of neurons in model parameters and input arguments.
+        """Validate the number of features in model parameters and input arguments.
 
         Raises
         ------
         ValueError
-            - if the number of neurons is inconsistent across the model
-              parameters (`params`) and any additional inputs (`X` or `y` when
-              provided).
             - if the number of features is inconsistent between params[1] and X
               (when provided).
 
@@ -306,15 +303,15 @@ class BaseRegressor(Base, abc.ABC):
         ----------
         feedforward_input :
             Input data for the feedforward process. Array of shape
-            (n_timesteps, n_neurons, n_basis_input) or pytree of same.
+            (n_timesteps, n_basis_input) or pytree of same.
         params_feedforward :
             2-tuple of parameter values corresponding to feedforward input:
             (coefficients, intercepts). If coefficients is an array of shape
-            (n_neurons, n_features) or pytree of same, intercepts is an array
-            of shape (n_neurons,)
+            (n_features, ) or pytree of same, intercepts is an array
+            of shape (1,)
         init_y :
             Initial values for the feedback process. If provided, its dimensionality and consistency
-            with params_r will be checked. Expected shape if provided: (window_size, n_neurons).
+            with params_r will be checked. Expected shape if provided: (window_size, ).
         params_recurrent :
             Parameters corresponding to the feedback input (init_y). Required if init_y is provided.
             Expected shape if provided: (window_size, n_basis_coupling)
