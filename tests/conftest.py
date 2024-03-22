@@ -258,26 +258,25 @@ def group_sparse_poisson_glm_model_instantiation():
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
-    X = np.random.normal(size=(100, 1, 5))
+    X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
-    w_true = np.random.normal(size=(1, 5))
-    w_true[0, 1:4] = 0.0
+    w_true = np.random.normal(size=(5, ))
+    w_true[1:4] = 0.0
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
     mask[1, [0, 4]] = 1
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
     model = nmo.glm.GLM(observation_model, regularizer)
-    rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
+    rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
 
 @pytest.fixture
 def example_data_prox_operator():
-    n_neurons = 3
     n_features = 4
 
-    params = (jnp.ones((n_neurons, n_features)), jnp.zeros(n_neurons))
+    params = (jnp.ones((n_features)), jnp.zeros(1, ))
     regularizer_strength = 0.1
     mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
     scaling = 0.5

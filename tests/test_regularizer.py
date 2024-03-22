@@ -179,10 +179,10 @@ class TestUnRegularized:
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
-        model_skl.fit(X[:, 0], y[:, 0])
+        model_skl.fit(X, y)
 
-        match_weights = np.allclose(model_skl.coef_, weights_bfgs.flatten())
-        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs.flatten())
+        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
+        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM regularizer estimate does not match sklearn!")
 
@@ -346,10 +346,10 @@ class TestRidge:
         model_skl = PoissonRegressor(
             fit_intercept=True, tol=10**-12, alpha=regularizer.regularizer_strength
         )
-        model_skl.fit(X[:, 0], y[:, 0])
+        model_skl.fit(X, y)
 
-        match_weights = np.allclose(model_skl.coef_, weights_bfgs.flatten())
-        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs.flatten())
+        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
+        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM solver estimate does not match sklearn!")
 
@@ -456,11 +456,11 @@ class TestLasso:
 
         # instantiate the glm with statsmodels
         glm_sm = sm.GLM(
-            endog=y[:, 0], exog=sm.add_constant(X[:, 0]), family=sm.families.Poisson()
+            endog=y, exog=sm.add_constant(X), family=sm.families.Poisson()
         )
 
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[2] + 1) * regularizer.regularizer_strength
+        alpha_sm = np.ones(X.shape[1] + 1) * regularizer.regularizer_strength
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1
@@ -587,7 +587,7 @@ class TestGroupLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         # create a valid mask
-        mask = np.zeros((2, X.shape[2]))
+        mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
         mask = jnp.asarray(mask)
@@ -613,7 +613,7 @@ class TestGroupLasso:
         ) = group_sparse_poisson_glm_model_instantiation
 
         # create a valid mask
-        mask = np.zeros((2, X.shape[2]))
+        mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
 
@@ -644,7 +644,7 @@ class TestGroupLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         # create a valid mask
-        mask = np.zeros((2, X.shape[2]))
+        mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
         # assign an entry
@@ -662,7 +662,7 @@ class TestGroupLasso:
             )
 
     @pytest.mark.parametrize("n_dim", [0, 1, 2, 3])
-    def test_mask_dimension(self, n_dim, poissonGLM_model_instantiation):
+    def test_mask_dimension_1(self, n_dim, poissonGLM_model_instantiation):
         """Test that mask is composed of 0s and 1s."""
 
         raise_exception = n_dim != 2
@@ -674,11 +674,11 @@ class TestGroupLasso:
         elif n_dim == 1:
             mask = np.ones((1,))
         elif n_dim == 2:
-            mask = np.zeros((2, X.shape[2]))
+            mask = np.zeros((2, X.shape[1]))
             mask[0, :2] = 1
             mask[1, 2:] = 1
         else:
-            mask = np.zeros((2, X.shape[2]) + (1,) * (n_dim - 2))
+            mask = np.zeros((2, X.shape[1]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
 
@@ -701,7 +701,7 @@ class TestGroupLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         # create a mask
-        mask = np.zeros((n_groups, X.shape[2]))
+        mask = np.zeros((n_groups, X.shape[1]))
         if n_groups > 0:
             for i in range(n_groups - 1):
                 mask[i, i : i + 1] = 1
@@ -732,7 +732,7 @@ class TestGroupLasso:
             _,
         ) = group_sparse_poisson_glm_model_instantiation
         zeros_true = true_params[0].flatten() == 0
-        mask = np.zeros((2, X.shape[2]))
+        mask = np.zeros((2, X.shape[1]))
         mask[0, zeros_true] = 1
         mask[1, ~zeros_true] = 1
         mask = jnp.asarray(mask, dtype=jnp.float32)
@@ -765,7 +765,7 @@ class TestGroupLasso:
         ) = group_sparse_poisson_glm_model_instantiation
 
         # create a valid mask
-        mask = np.zeros((2, X.shape[2]))
+        mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
         regularizer = self.cls("ProximalGradient", mask)
@@ -795,7 +795,7 @@ class TestGroupLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
         # create a valid mask
-        mask = np.zeros((2, X.shape[2]))
+        mask = np.zeros((2, X.shape[1]))
         mask[0, :2] = 1
         mask[1, 2:] = 1
         regularizer = self.cls("ProximalGradient", mask)
@@ -817,7 +817,7 @@ class TestGroupLasso:
         raise_exception = n_dim != 2
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
 
-        valid_mask = np.zeros((2, X.shape[2]))
+        valid_mask = np.zeros((2, X.shape[1]))
         valid_mask[0, :1] = 1
         valid_mask[1, 1:] = 1
         regularizer = self.cls("ProximalGradient", valid_mask)
@@ -828,11 +828,11 @@ class TestGroupLasso:
         elif n_dim == 1:
             mask = np.ones((1,))
         elif n_dim == 2:
-            mask = np.zeros((2, X.shape[2]))
+            mask = np.zeros((2, X.shape[1]))
             mask[0, :2] = 1
             mask[1, 2:] = 1
         else:
-            mask = np.zeros((2, X.shape[2]) + (1,) * (n_dim - 2))
+            mask = np.zeros((2, X.shape[1]) + (1,) * (n_dim - 2))
             mask[0, :2] = 1
             mask[1, 2:] = 1
 
@@ -849,13 +849,13 @@ class TestGroupLasso:
         """Test that mask has at least 1 group."""
         raise_exception = n_groups < 1
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        valid_mask = np.zeros((2, X.shape[2]))
+        valid_mask = np.zeros((2, X.shape[1]))
         valid_mask[0, :1] = 1
         valid_mask[1, 1:] = 1
         regularizer = self.cls("ProximalGradient", valid_mask)
 
         # create a mask
-        mask = np.zeros((n_groups, X.shape[2]))
+        mask = np.zeros((n_groups, X.shape[1]))
         if n_groups > 0:
             for i in range(n_groups - 1):
                 mask[i, i : i + 1] = 1
