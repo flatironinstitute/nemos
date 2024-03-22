@@ -133,13 +133,13 @@ def poissonGLM_model_instantiation():
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
-    X = np.random.normal(size=(100, 1, 5))
+    X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
-    w_true = np.random.normal(size=(1, 5))
+    w_true = np.random.normal(size=(5, ))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
     model = nmo.glm.GLM(observation_model, regularizer)
-    rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
+    rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
 
 
@@ -162,8 +162,8 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
     X, spikes, model, true_params, rate = poissonGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
-        nmo.pytrees.FeaturePytree(
-            input_1=true_params[0][:, :3], input_2=true_params[0][:, 3:]
+        dict(
+            input_1=true_params[0][:3], input_2=true_params[0][3:]
         ),
         true_params[1],
     )

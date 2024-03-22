@@ -179,8 +179,13 @@ class GLM(BaseRegressor):
         """
         if X is not None:
             # check that X and params[0] have the same structure
+            if isinstance(X, FeaturePytree):
+                data = X.data
+            else:
+                data = X
+
             validation.check_tree_structure(
-                X,
+                data,
                 params[0],
                 err_message=f"X and params[0] must be the same type, but X is "
                 f"{type(X)} and params[0] is {type(params[0])}",
@@ -188,7 +193,7 @@ class GLM(BaseRegressor):
             # check the consistency of the feature axis
             validation.check_tree_axis_consistency(
                 params[0],
-                X,
+                data,
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
@@ -285,7 +290,11 @@ class GLM(BaseRegressor):
         self._check_input_dimensionality(X=X)
         # check consistency between X and params
         self._check_input_and_params_consistency((Ws, bs), X=X)
-        return self._predict((Ws, bs), X)
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+        return self._predict((Ws, bs), data)
 
     def _predict_and_compute_loss(
         self,
@@ -413,12 +422,17 @@ class GLM(BaseRegressor):
         X = jax.tree_map(lambda x: x[is_valid], X)
         y = jax.tree_map(lambda x: x[is_valid], y)
 
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-            score = -self._predict_and_compute_loss((Ws, bs), X, y) - norm_constant
+            score = -self._predict_and_compute_loss((Ws, bs), data, y) - norm_constant
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict((Ws, bs), X), y, score_type=score_type
+                self._predict((Ws, bs), data), y, score_type=score_type
             )
         else:
             raise NotImplementedError(
@@ -431,7 +445,7 @@ class GLM(BaseRegressor):
     @staticmethod
     def initialize_params(
         X: DESIGN_INPUT_TYPE, y: jnp.ndarray
-    ) -> Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]:
+    ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
@@ -470,6 +484,10 @@ class GLM(BaseRegressor):
         >>> intercept.shape
         (1, )
         """
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
         # Initialize parameters
         init_params = (
             # coeff, spike basis coeffs.
@@ -480,7 +498,7 @@ class GLM(BaseRegressor):
             # - If X is an array of shape (n_timebins, n_neurons,
             #   n_features), this will be an array of shape (n_neurons,
             #   n_features).
-            jax.tree_map(lambda x: jnp.zeros_like(x[0]), X),
+            jax.tree_map(lambda x: jnp.zeros_like(x[0]), data),
             # intercept, bias terms
             jnp.log(jnp.mean(y, axis=0, keepdims=True)),
         )
@@ -491,7 +509,7 @@ class GLM(BaseRegressor):
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
         init_params: Optional[
-            Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
+            Tuple[Union[dict, ArrayLike], ArrayLike]
         ] = None,
     ):
         """Fit GLM to neural activity.
@@ -554,10 +572,17 @@ class GLM(BaseRegressor):
 
         # Run optimization
         runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
-        params, state = runner(init_params, X, y)
+
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        params, state = runner(init_params, data, y)
 
         # estimate the GLM scale
-        self.observation_model.estimate_scale(self._predict(params, X))
+        self.observation_model.estimate_scale(self._predict(params, data))
 
         if (
             tree_utils.pytree_map_and_reduce(
@@ -748,7 +773,7 @@ class GLMRecurrent(GLM):
         n_basis_coupling = coupling_basis_matrix.shape[1]
         n_neurons = self.intercept_.shape[0]
 
-        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons :]
+        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons:]
         w_recurrent = self.coef_[:, : n_basis_coupling * n_neurons]
         bs = self.intercept_
 
