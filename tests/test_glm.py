@@ -508,6 +508,9 @@ class TestGLM:
         # assert equivalence of solutions
         assert np.allclose(model.coef_, flat_coef)
         assert np.allclose(model.intercept_, model_tree.intercept_)
+        assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
+        assert np.allclose(model.predict(X), model_tree.predict(X_tree))
+
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
