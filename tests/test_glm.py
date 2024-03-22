@@ -11,12 +11,12 @@ import nemos as nmo
 from nemos.pytrees import FeaturePytree
 
 
-def test_preprocess_fit_higher_dimensional_data_X(mock_glm):
+def test_validate_higher_dimensional_data_X(mock_glm):
     """Test behavior with higher-dimensional input data."""
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([[1, 2]])
     with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_glm._preprocess_fit(X, y)
+        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
 
 
 def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
@@ -24,23 +24,23 @@ def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([[[1, 2]]])
     with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_glm._preprocess_fit(X, y)
+        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
 
 
-def test_preprocess_fit_lower_dimensional_data_X(mock_glm):
+def test_validate_lower_dimensional_data_X(mock_glm):
     """Test behavior with lower-dimensional input data."""
     X = jnp.array([[1, 2], [3, 4]])
     y = jnp.array([[1, 2]])
     with pytest.raises(ValueError, match="X must be three-dimensional"):
-        mock_glm._preprocess_fit(X, y)
+        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
 
 
-def test_preprocess_fit_lower_dimensional_data_y(mock_glm):
+def test_validate_lower_dimensional_data_y(mock_glm):
     """Test behavior with lower-dimensional input data."""
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([1, 2])
     with pytest.raises(ValueError, match="y must be two-dimensional"):
-        mock_glm._preprocess_fit(X, y)
+        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
 
 
 # Preprocess Simulate Tests
@@ -291,7 +291,7 @@ class TestGLM:
         [
             ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
             (
-                iter([jnp.zeros((1, 5)), jnp.zeros((1,))]),
+                [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                 pytest.raises(ValueError, match="Params must have length two."),
             ),
             (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),

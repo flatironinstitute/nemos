@@ -213,7 +213,7 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def _check_and_convert_params(
+    def _check_params(
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
@@ -230,7 +230,7 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_input_dimensionality(
-        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
         pass
@@ -238,8 +238,8 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_input_and_params_consistency(
-        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
-        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+        params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
+        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
         y: Optional[jnp.ndarray] = None,
     ):
         """Validate the number of neurons in model parameters and input arguments.
@@ -257,7 +257,7 @@ class BaseRegressor(Base, abc.ABC):
         pass
 
     @staticmethod
-    def _check_input_n_timepoints(X: Union[FeaturePytree, jnp.ndarray], y: jnp.ndarray):
+    def _check_input_n_timepoints(X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray):
         if y.shape[0] != X.shape[0]:
             raise ValueError(
                 "The number of time-points in X and y must agree. "
@@ -265,52 +265,11 @@ class BaseRegressor(Base, abc.ABC):
                 f"y has {y.shape[0]} instead!"
             )
 
-    def _preprocess_fit(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: Union[NDArray, ArrayLike],
-        init_params: Optional[Tuple[DESIGN_INPUT_TYPE, ArrayLike]] = None,
-    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray, Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]]:
-        """Preprocess input data and initial parameters for the fit method.
-
-        This method carries out the following preprocessing steps:
-
-        - Convert to jax.numpy.ndarray
-
-        - Check the dimensionality of the inputs.
-
-        - Check for any NaNs or Infs in the inputs.
-
-        - If `init_params` is not provided, initialize it with default values.
-
-        - Validate the consistency of input dimensions with the initial parameters.
-
-        Parameters
-        ----------
-        X :
-            Input data, array of shape (n_timebins, n_neurons, n_features) or pytree of same.
-        y :
-            Target values, array of shape (n_timebins, n_neurons).
-        init_params :
-            Initial parameters for the model. If None, they are initialized with default values.
-
-        Returns
-        -------
-        X :
-            Preprocessed input data `X` converted to jnp.ndarray.
-        y :
-            Target values `y` converted to jnp.ndarray.
-        init_param :
-            Initialized parameters converted to jnp.ndarray.
-
-        Raises
-        ------
-        ValueError
-            If there are inconsistencies in the input shapes or if NaNs or Infs are detected.
-        """
-        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
-        y = jnp.asarray(y, dtype=float)
-
+    def _validate(self,
+                  X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
+                  y: Union[NDArray, jnp.ndarray],
+                  init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ):
         # check input dimensionality
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
@@ -318,39 +277,14 @@ class BaseRegressor(Base, abc.ABC):
         # error if all samples are invalid
         validation.error_all_invalid(X, y)
 
+        # validate input and params consistency
+        self._check_params(init_params)
+
         # validate input
         validation.warn_invalid_entry(X, y)
 
-        # get valid entries
-        is_valid = tree_utils.get_valid_multitree(X, y)
-
-        # filter for valid
-        X = jax.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_map(lambda x: x[is_valid], y)
-
-        # Initialize parameters
-        if init_params is None:
-            init_params = (
-                # coeff, spike basis coeffs.
-                # - If X is a FeaturePytree with n_features arrays of shape
-                #   (n_timebins, n_neurons, n_features), then this will be a
-                #   FeaturePytree with n_features arrays of shape (n_neurons,
-                #   n_features).
-                # - If X is an array of shape (n_timebins, n_neurons,
-                #   n_features), this will be an array of shape (n_neurons,
-                #   n_features).
-                jax.tree_map(lambda x: jnp.zeros_like(x[0]), X),
-                # intercept, bias terms
-                jnp.log(jnp.mean(y, axis=0)),
-            )
-        else:
-            # check parameter length, shape and dimensionality, convert to jnp.ndarray.
-            init_params = self._check_and_convert_params(init_params)
-
-        # check that the inputs and the parameters has consistent sizes
+        # validate input and params consistency
         self._check_input_and_params_consistency(init_params, X=X, y=y)
-
-        return X, y, init_params
 
     def _preprocess_simulate(
         self,

@@ -5,7 +5,7 @@ from typing import Any, Optional, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
+from numpy.typing import DTypeLike, NDArray
 
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
@@ -101,11 +101,13 @@ def check_length(x: Any, expected_len: int, err_message: str):
     ValueError
         If the object does not have the specified length.
     """
-    if not hasattr(x, "__len__") or len(x) != expected_len:
+    try:
+        assert len(x) == expected_len
+    except Exception:
         raise ValueError(err_message)
 
 
-def convert_tree_leaves_to_jax_array(tree: Any, err_message: str, data_type: Optional[jnp.dtype] = None):
+def convert_tree_leaves_to_jax_array(tree: Any, err_message: str, data_type: Optional[DTypeLike] = None):
     """
     Convert the leaves of a given pytree to JAX arrays with the specified data type.
 

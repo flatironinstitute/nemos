@@ -101,7 +101,7 @@ class GLM(BaseRegressor):
         self._observation_model = observation
 
     @staticmethod
-    def _check_and_convert_params(
+    def _check_params(
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
@@ -460,6 +460,26 @@ class GLM(BaseRegressor):
             )
         return score
 
+    @staticmethod
+    def initialize_params(X: Union[FeaturePytree, jnp.ndarray], y: jnp.ndarray)\
+            -> Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]:
+        """Parameter initialization."""
+        # Initialize parameters
+        init_params = (
+            # coeff, spike basis coeffs.
+            # - If X is a FeaturePytree with n_features arrays of shape
+            #   (n_timebins, n_neurons, n_features), then this will be a
+            #   FeaturePytree with n_features arrays of shape (n_neurons,
+            #   n_features).
+            # - If X is an array of shape (n_timebins, n_neurons,
+            #   n_features), this will be an array of shape (n_neurons,
+            #   n_features).
+            jax.tree_map(lambda x: jnp.zeros_like(x[0]), X),
+            # intercept, bias terms
+            jnp.log(jnp.mean(y, axis=0)),
+        )
+        return init_params
+
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
@@ -502,7 +522,26 @@ class GLM(BaseRegressor):
 
         """
         # convert to jnp.ndarray & perform checks
-        X, y, init_params = self._preprocess_fit(X, y, init_params)
+        err_message = "X and y should be array-like object (or trees of array like object) with numeric data type!"
+        X, y = validation.convert_tree_leaves_to_jax_array((X, y), err_message=err_message,data_type=float)
+
+        if init_params is None:
+            init_params = self.initialize_params(X, y)  # initialize
+        else:
+            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+            init_params = validation.convert_tree_leaves_to_jax_array(init_params, err_message=err_message,
+                                                                     data_type=float)
+
+        # validate the params
+        self._validate(X, y, init_params)
+
+        # find non-nans
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # drop nans
+        X = jax.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_map(lambda x: x[is_valid], y)
 
         # Run optimization
         runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
