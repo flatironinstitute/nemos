@@ -3,7 +3,10 @@
 """
 # Fit Place cell
 
+!!! warning
+    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
 
+The data for this example are from [Grosmark, Andres D., and György Buzsáki. "Diversity in neural firing dynamics supports both rigid and learned hippocampal sequences." Science 351.6280 (2016): 1440-1443](https://www.science.org/doi/full/10.1126/science.aad1935).
 
 """
 import matplotlib.pyplot as plt
@@ -21,9 +24,9 @@ plt.style.use("examples_utils/nemos.mplstyle")
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = data.download_data("Achilles_10252013.nwb", 
-                        "https://osf.io/hu5ma/download",
-                        '../data')
+path = data.download_data(
+    "Achilles_10252013.nwb", "https://osf.io/hu5ma/download", "../data"
+)
 
 path = "Achilles_10252013.nwb"
 
@@ -38,14 +41,14 @@ data
 # %%
 # Let's extract the spike times, the position and the theta phase.
 
-spikes = data['units']
-position = data['position']
-theta = data['theta_phase']
+spikes = data["units"]
+position = data["position"]
+theta = data["theta_phase"]
 
 # %%
 # The NWB file also contains the time at which the animal was traversing the linear track. We can use it to restrict the position and assign it as the `time_support` of position.
 
-position = position.restrict(data['trials'])
+position = position.restrict(data["trials"])
 
 # %%
 # The recording contains both inhibitory and excitatory neurons. Here we will focus of the excitatory cells. Neurons have already been labelled before.
@@ -71,13 +74,9 @@ order = pf.idxmax().sort_values().index.values
 plt.figure(figsize=(12, 10))
 gs = plt.GridSpec(len(spikes), 1)
 for i, n in enumerate(order):
-    plt.subplot(gs[i,0])
-    plt.fill_between(
-        pf.index.values,
-        np.zeros(len(pf)),
-        pf[n].values
-        )
-    if i < len(spikes)-1:
+    plt.subplot(gs[i, 0])
+    plt.fill_between(pf.index.values, np.zeros(len(pf)), pf[n].values)
+    if i < len(spikes) - 1:
         plt.xticks([])
     else:
         plt.xlabel("Position (cm)")
@@ -95,102 +94,92 @@ for i, n in enumerate(order):
 bin_size = 0.005
 
 theta = theta.bin_average(bin_size, position.time_support)
-theta = (theta+2*np.pi)%(2*np.pi)
+theta = (theta + 2 * np.pi) % (2 * np.pi)
 
-data = nap.TsdFrame(t = theta.t, 
-    d = np.vstack((
-        position.interpolate(theta, ep=position.time_support).values,
-        theta.values
-    )).T,
-    time_support = position.time_support,
-    columns = ['position', 'theta'])
+data = nap.TsdFrame(
+    t=theta.t,
+    d=np.vstack(
+        (position.interpolate(theta, ep=position.time_support).values, theta.values)
+    ).T,
+    time_support=position.time_support,
+    columns=["position", "theta"],
+)
 
 tc_pos_theta, xybins = nap.compute_2d_tuning_curves(spikes, data, 30, data.time_support)
 
 # %%
 # There are a lot of neurons but for this analysis, we will focus on one neuron only.
-# print(spikes.keys())
 
 neuron = 175
 
 # %%
-# To show the theta phase precession, we can also display the spike as a functin of both position and theta. In this case, we use the function `value_from` from pynapple.
+# To show the theta phase precession, we can also display the spike as a function of both position and theta. In this case, we use the function `value_from` from pynapple.
 
 theta_pos_spikes = spikes[neuron].value_from(data)
 
 plt.figure()
-gs = plt.GridSpec(2,2)
-plt.subplot(gs[0,0])
-plt.fill_between(
-    pf[neuron].index.values,
-    np.zeros(len(pf)),
-    pf[neuron].values
-    )
+gs = plt.GridSpec(2, 2)
+plt.subplot(gs[0, 0])
+plt.fill_between(pf[neuron].index.values, np.zeros(len(pf)), pf[neuron].values)
 plt.xlabel("Position (cm)")
 plt.ylabel("Firing rate (Hz)")
 
-plt.subplot(gs[1,0])
+plt.subplot(gs[1, 0])
 extent = (xybins[0][0], xybins[0][-1], xybins[1][0], xybins[1][-1])
-plt.imshow(
-    tc_pos_theta[neuron].T, 
-    aspect='auto',
-    origin='lower', 
-    extent=extent)
+plt.imshow(tc_pos_theta[neuron].T, aspect="auto", origin="lower", extent=extent)
 plt.xlabel("Position (cm)")
 plt.ylabel("Theta Phase (rad)")
 
-plt.subplot(gs[1,1])
-plt.plot(
-    theta_pos_spikes['position'], 
-    theta_pos_spikes['theta'], 
-    'o',
-    markersize=0.5
-    )
+plt.subplot(gs[1, 1])
+plt.plot(theta_pos_spikes["position"], theta_pos_spikes["theta"], "o", markersize=0.5)
 plt.xlabel("Position (cm)")
 plt.ylabel("Theta Phase (rad)")
 
 plt.tight_layout()
 
-plt.show()
 
 # %%
 # ## Speed modulation
-# The speed at which the animal traverse the field is not homogeneous. Does it influence the firing rate of hippocampal neurons. We can compute tuning curves for speed as well as average speed across the maze.
+# The speed at which the animal traverse the field is not homogeneous. Does it influence the firing rate of hippocampal neurons? We can compute tuning curves for speed as well as average speed across the maze.
 
-speed = [np.pad(np.abs(np.diff(data['position'].get(s, e))), [0, 1], mode='edge')*data.rate for s, e in data.time_support.values]
-speed = nap.Tsd(t=data.t, d=np.hstack(speed), time_support = data.time_support)
+speed = [
+    np.pad(np.abs(np.diff(data["position"].get(s, e))), [0, 1], mode="edge") * data.rate
+    for s, e in data.time_support.values
+]
+speed = nap.Tsd(t=data.t, d=np.hstack(speed), time_support=data.time_support)
 
 tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20)
 
-bins = np.linspace(np.min(data['position']), np.max(data['position']), 20)
-idx = np.digitize(data['position'].values, bins)
+bins = np.linspace(np.min(data["position"]), np.max(data["position"]), 20)
+idx = np.digitize(data["position"].values, bins)
 
 speed_mod = pd.DataFrame(
-    index = bins,
-    data = np.array([[np.mean(speed[idx==i]),np.std(speed[idx==i])] for i in np.unique(idx)]),
-    columns = ['mean', 'std']
-    )
+    index=bins,
+    data=np.array(
+        [[np.mean(speed[idx == i]), np.std(speed[idx == i])] for i in np.unique(idx)]
+    ),
+    columns=["mean", "std"],
+)
 
 # %%
 # Here we plot the tuning curve of one neuron for speed as well as the average speed as a function of the animal position
 
-plt.figure(figsize=(8,3))
+plt.figure(figsize=(8, 3))
 plt.subplot(121)
-plt.plot(speed_mod['mean'])
+plt.plot(speed_mod["mean"])
 plt.fill_between(
     speed_mod.index.values,
-    speed_mod['mean']-speed_mod['std'],
-    speed_mod['mean']+speed_mod['std'],
-    alpha=0.1)
+    speed_mod["mean"] - speed_mod["std"],
+    speed_mod["mean"] + speed_mod["std"],
+    alpha=0.1,
+)
 plt.xlabel("Position (cm)")
 plt.ylabel("Speed (cm/s)")
 plt.title("Animal speed")
 plt.subplot(122)
 plt.fill_between(
-    tc_speed.index.values,
-    np.zeros(len(tc_speed)),
-    tc_speed[neuron].values
-    )
+    tc_speed.index.values, np.zeros(len(tc_speed)), tc_speed[neuron].values
+)
 plt.xlabel("Speed (cm/s)")
 plt.ylabel("Firing rate (Hz)")
 plt.title("Neuron {}".format(neuron))
@@ -202,8 +191,8 @@ plt.tight_layout()
 # We will use speed, phase and position to model the activity of the neuron.
 # All the feature have already been brought to the same dimension thanks to `pynapple`.
 
-position = data['position']
-theta = data['theta']
+position = data["position"]
+theta = data["theta"]
 count = spikes[neuron].count(bin_size, data.time_support)
 
 print(position.shape)
@@ -227,7 +216,7 @@ speed_basis = nmo.basis.MSplineBasis(n_basis_funcs=15)
 # %%
 # In addition, we will consider position and phase to be a joint variable. In `nemos`, we can combine basis by multiplying them and adding them. In this case the final basis object for our model can be made in one line :
 
-basis = position_basis*phase_basis + speed_basis
+basis = position_basis * phase_basis + speed_basis
 
 # %%
 # The object basis only tell us how each basis covers the feature space. For each timestep, we need to _evaluate_ what are the features value. We can use the `evaluate` function of `nemos`:
@@ -245,60 +234,51 @@ print(X)
 # We can now use the Poisson GLM from nemos to learn the model.
 
 glm = nmo.glm.GLM(
-    regularizer=nmo.regularizer.UnRegularized(
-        "LBFGS", 
-        solver_kwargs=dict(tol=10**-10)
-        )
-    )
+    regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12))
+)
 
-glm.fit(X[:,np.newaxis,:], count[:,np.newaxis])
+glm.fit(X[:, np.newaxis, :], count[:, np.newaxis])
 
 # %%
 # ## Prediction
-# 
+#
 # Let's check first if our model can accurately predict the different tuning curves we displayed above. We can use the `predict` function of nemos and then compute new tuning curves
 
-predicted_rate = glm.predict(X[:,np.newaxis,:]) / bin_size
+predicted_rate = glm.predict(X[:, np.newaxis, :]) / bin_size
 
 glm_pf = nap.compute_1d_tuning_curves_continuous(predicted_rate, position, 50)
-glm_pos_theta, xybins = nap.compute_2d_tuning_curves_continuous(predicted_rate, data, 30)
+glm_pos_theta, xybins = nap.compute_2d_tuning_curves_continuous(
+    predicted_rate, data, 30
+)
 glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate, speed, 30)
 
 # %%
 # Let's display both tuning curves together.
 
 plt.figure()
-gs = plt.GridSpec(2,2)
-plt.subplot(gs[0,0])
+gs = plt.GridSpec(2, 2)
+plt.subplot(gs[0, 0])
 plt.plot(pf[neuron])
-plt.plot(glm_pf[0], label = 'GLM')
+plt.plot(glm_pf[0], label="GLM")
 plt.xlabel("Position (cm)")
 plt.ylabel("Firing rate (Hz)")
 plt.legend()
 
-plt.subplot(gs[0,1])
+plt.subplot(gs[0, 1])
 plt.plot(tc_speed[neuron])
-plt.plot(glm_speed[0], label = 'GLM')
+plt.plot(glm_speed[0], label="GLM")
 plt.xlabel("Speed (cm/s)")
 plt.ylabel("Firing rate (Hz)")
 plt.legend()
 
-plt.subplot(gs[1,0])
+plt.subplot(gs[1, 0])
 extent = (xybins[0][0], xybins[0][-1], xybins[1][0], xybins[1][-1])
-plt.imshow(
-    tc_pos_theta[neuron].T, 
-    aspect='auto',
-    origin='lower', 
-    extent=extent)
+plt.imshow(tc_pos_theta[neuron].T, aspect="auto", origin="lower", extent=extent)
 plt.xlabel("Position (cm)")
 plt.ylabel("Theta Phase (rad)")
 
-plt.subplot(gs[1,1])
-plt.imshow(
-    glm_pos_theta[0].T, 
-    aspect='auto',
-    origin='lower', 
-    extent=extent)
+plt.subplot(gs[1, 1])
+plt.imshow(glm_pos_theta[0].T, aspect="auto", origin="lower", extent=extent)
 plt.xlabel("Position (cm)")
 plt.ylabel("Theta Phase (rad)")
 plt.title("GLM")
@@ -306,73 +286,127 @@ plt.title("GLM")
 plt.tight_layout()
 
 # %%
-# The GLM captures the features-rate relationship. Yet we can examine the model's coefficients in order to determine the contribution from each different features. We can use the `evaluate_on_grid` method of `nemos`.
-# We can look at the speed basis and the position-phase basis separetely.
+# ## Model selection
+#
+# While this model captures nicely the features-rate relationship, it is not necessarily the simplest model. Let's construct several models and evaluate their score to determine the best model.
+#
+# !!! note "To shorten this notebook, only a few combination are tested. Feel free to expand this list."
+#
 
-# Position-phase
-n = position_basis.n_basis_funcs*phase_basis.n_basis_funcs
-
-XX, YY, Z = (position_basis*phase_basis).evaluate_on_grid(50, 50)
-weight_pos_theta = np.einsum('ijk,k->ij', Z, glm.coef_[0,0:n])
-
-# Speed
-samples, eval_basis_speed = speed_basis.evaluate_on_grid(100)
-weight_speed = np.dot(eval_basis_speed, glm.coef_[0,-speed_basis.n_basis_funcs:])
+models = {
+    "position": position_basis,
+    "position + speed": position_basis + speed_basis,
+    "position + phase": position_basis + phase_basis,
+    "position + phase + speed": position_basis + phase_basis + speed_basis,
+}
+features = {
+    "position": (position,),
+    "position + speed": (position, speed),
+    "position + phase": (position, theta),
+    "position + phase + speed": (position, theta, speed),
+}
 
 # %%
-# Let's plot the coefficients of the model
+# In a loop, we can (1) evaluate the basis, (2), fit the model, (3) compute the score and (4) predict the firing rate. For evaluating the score, we can define a train set of intervals and a test set of intervals.
 
-plt.figure(figsize = (6,2))
-gs = plt.GridSpec(1,2)
-plt.subplot(gs[0,0])
-plt.plot(weight_speed)
-plt.xlabel("Speed (a.u.)")
+train_iset = position.time_support[
+    0 : len(position.time_support) // 2
+]  # Taking the first half of the recording as the train set
+test_iset = position.time_support[
+    len(position.time_support) // 2 :
+]  # Taking the second half of the recording as the test set
 
-plt.subplot(gs[0,1])
-plt.imshow(
-    weight_pos_theta.T,
-    aspect='auto',
-    origin='lower')
-plt.xlabel("Position (a.u.)")
-plt.ylabel("Theta Phase (a.u.)")
+# %%
+# Let's train all the models.
+scores = {}
+predicted_rates = {}
+
+for m in models:
+    print("1. Evaluating basis : ", m)
+    X = models[m].evaluate(*features[m])
+
+    print("2. Fitting model : ", m)
+    # glm = nmo.glm.GLM()
+    glm.fit(
+        X.restrict(train_iset)[:, np.newaxis, :],
+        count.restrict(train_iset)[:, np.newaxis],
+    )
+
+    print("3. Scoring model : ", m)
+    scores[m] = glm.score(
+        X.restrict(test_iset)[:, np.newaxis, :],
+        count.restrict(test_iset)[:, np.newaxis],
+        score_type="pseudo-r2-McFadden",
+    )
+
+    print("4. Predicting rate")
+    predicted_rates[m] = glm.predict(X.restrict(test_iset)[:, np.newaxis, :]) / bin_size
+
+
+scores = pd.Series(scores)
+scores = scores.sort_values()
+
+# %%
+# Let's compute scores for each models.
+
+plt.figure(figsize=(5, 3))
+plt.barh(np.arange(len(scores)), scores)
+plt.yticks(np.arange(len(scores)), scores.index)
+plt.ylabel("Pseudo r2")
 plt.tight_layout()
 
-# %%
-# While the coefficients for the position-phase basis are very similar to the observed tuning curves, we do not observe the same relationship for the speed coefficients. 
-# 
-# To compare the contribution of the speed modulation to the prediciton of the model, we can set the average prediction of the position-phase basis and recompute a tuning curves.
-
-predicted_rate_from_speed = np.exp(
-        glm.intercept_ +
-        np.dot(np.mean((position_basis*phase_basis).evaluate(position, theta), axis=0), 
-            glm.coef_[0, 0:n]) +
-        np.dot(speed_basis.evaluate(speed), glm.coef_[0, -speed_basis.n_basis_funcs:])
-        )/bin_size
-
-glm_only_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate_from_speed[:,None], speed, 30)
-glm_pf_only_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate_from_speed[:,None], position, 30)
 
 # %%
-# Let's display both prediction and the observed tuning curves
+# Some models are clearly doing better than others.
+#
+# !!! warning " A proper model comparison should be done by scoring models repetitively on various train and test set. Here we are only doing partial models comparison for the sake of conciseness. "
+#
+# Alternatively, we can plot some tuning curves to compare each models visually.
 
-plt.figure(figsize = (10, 4))
-gs = plt.GridSpec(1,2)
-plt.subplot(gs[0,0])
-plt.plot(pf[neuron])
-plt.plot(glm_pf[0], label = 'GLM(position*phase + speed)')
-plt.plot(glm_pf_only_speed[0], label = 'GLM(speed)')
-plt.xlabel("Position (cm)")
-plt.ylabel("Firing rate (Hz)")
-plt.legend()
-plt.subplot(gs[0,1])
-plt.plot(tc_speed[neuron])
-plt.plot(glm_speed[0], label = 'GLM(position*phase + speed)')
-plt.plot(glm_only_speed[0], label = 'GLM(speed)')
-plt.xlabel("Speed (cm/s)")
-plt.ylabel("Firing rate (Hz)")
-# plt.legend()
+tuning_curves = {}
+
+for m in models:
+    tuning_curves[m] = {
+        "position": nap.compute_1d_tuning_curves_continuous(
+            predicted_rates[m], position, 50
+        ),
+        "speed": nap.compute_1d_tuning_curves_continuous(
+            predicted_rates[m], speed, 30, minmax=(0, 100)
+        ),
+    }
+
+
+def plot_tuning_curves(axis, tc, m):
+    gs = axis.subgridspec(1, 2)
+    plt.subplot(gs[0, 0])
+    plt.plot(pf[neuron], "--", label="Observed")
+    plt.plot(tc["position"][0])
+    plt.xlabel("Position (cm)")
+    plt.ylabel("Firing rate (Hz)")
+    plt.title("Model : {}".format(m))
+    plt.legend()
+
+    plt.subplot(gs[0, 1])
+    plt.plot(tc_speed[neuron], "--")
+    plt.plot(tc["speed"][0])
+    plt.xlabel("Speed (cm/s)")
+
+
+fig = plt.figure(figsize=(8, 4))
+outer_grid = fig.add_gridspec(2, 2)
+for i, m in enumerate(models):
+    plot_tuning_curves(outer_grid[i // 2, i % 2], tuning_curves[m], m)
+
 plt.tight_layout()
+plt.show()
 
 # %%
-# Using only the speed feature, we observe a strong discrepancy between the observed rate and the predicted rate for both speed modulation and position modulation.
-
+#
+# Various combinations of features can lead to different results. Feel free to explore more. To go beyond this notebook, you can check the following references :
+#
+#   - [Hardcastle, Kiah, et al. "A multiplexed, heterogeneous, and adaptive code for navigation in medial entorhinal cortex." Neuron 94.2 (2017): 375-387](https://www.cell.com/neuron/pdf/S0896-6273(17)30237-4.pdf)
+#
+#   - [McClain, Kathryn, et al. "Position–theta-phase model of hippocampal place cell activity applied to quantification of running speed modulation of firing rate." Proceedings of the National Academy of Sciences 116.52 (2019): 27035-27042](https://www.pnas.org/doi/abs/10.1073/pnas.1912792116)
+#
+#   - [Peyrache, Adrien, Natalie Schieferstein, and Gyorgy Buzsáki. "Transformation of the head-direction signal into a spatial code." Nature communications 8.1 (2017): 1752.](https://www.nature.com/articles/s41467-017-01908-3)
+#
