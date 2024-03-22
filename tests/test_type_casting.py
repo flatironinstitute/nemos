@@ -202,11 +202,11 @@ def test_predict_nap_output(iset, poissonGLM_model_instantiation):
     X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
     n_samp = X.shape[0]
     time = jnp.linspace(0, 1, n_samp)
-    tsd_X = nap.TsdTensor(t=time, d=X).restrict(iset)
+    tsd_X = nap.TsdFrame(t=time, d=X).restrict(iset)
     model.fit(X, y)
     # run predict on tsd
     pred_rate = model.predict(tsd_X)
-    assert isinstance(pred_rate, nap.TsdFrame)
+    assert isinstance(pred_rate, nap.Tsd)
     assert np.all(iset.values == pred_rate.time_support.values)
 
 
