@@ -125,17 +125,19 @@ class GLM(BaseRegressor):
         # check the dimensionality of coeff
         validation.check_tree_leaves_dimensionality(
             params[0],
-            expected_dim=2,
+            expected_dim=1,
             err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_neurons, n_features).",
+            "with array leafs of shape (n_features, ).",
         )
         # check the dimensionality of intercept
         validation.check_tree_leaves_dimensionality(
             params[1],
             expected_dim=1,
-            err_message="params[1] must be of shape (n_neurons,) but "
+            err_message="params[1] must be of shape (1,) but "
             f"params[1] has {params[1].ndim} dimensions!",
         )
+        if params[1].shape[0] != 1:
+            raise ValueError("Intercept term should be a single valued one-dimensional array.")
         return params
 
     @staticmethod
@@ -145,16 +147,16 @@ class GLM(BaseRegressor):
         if not (y is None):
             validation.check_tree_leaves_dimensionality(
                 y,
-                expected_dim=2,
-                err_message="y must be two-dimensional, with shape (n_timebins, n_neurons)",
+                expected_dim=1,
+                err_message="y must be one-dimensional, with shape (n_timebins, ).",
             )
 
         if not (X is None):
             validation.check_tree_leaves_dimensionality(
                 X,
-                expected_dim=3,
-                err_message="X must be three-dimensional, with shape "
-                "(n_timebins, n_neurons, n_features) or pytree of the same",
+                expected_dim=2,
+                err_message="X must be two-dimensional, with shape "
+                "(n_timebins, n_features) or pytree of the same shape.",
             )
 
     @staticmethod
@@ -175,29 +177,6 @@ class GLM(BaseRegressor):
               (when provided).
 
         """
-        # check that coeff and intercept have the same n_neurons
-        validation.check_array_shape_match_tree(
-            *params,
-            axis=0,
-            err_message="Model parameters have inconsistent shapes. "
-            "Spike basis coefficients must be of shape (n_neurons, n_features), and "
-            "bias terms must be of shape (n_neurons,) but n_neurons doesn't look the same in both! "
-            f"Coefficients n_neurons: {jax.tree_map(lambda x: x.shape[0], params[0])}, "
-            f"bias n_neurons: {params[1].shape[0]}",
-        )
-
-        if y is not None:
-            # check that y and coeff have the same n_neurons
-            validation.check_tree_axis_consistency(
-                params[1],
-                y,
-                axis_1=0,
-                axis_2=1,
-                err_message="The number of neurons in the model parameters and in the inputs"
-                f"must match. Parameters have n_neurons: {params[1].shape[0]}, "
-                f"the input provided has n_neurons: {y.shape[1]}",
-            )
-
         if X is not None:
             # check that X and params[0] have the same structure
             validation.check_tree_structure(
@@ -206,26 +185,15 @@ class GLM(BaseRegressor):
                 err_message=f"X and params[0] must be the same type, but X is "
                 f"{type(X)} and params[0] is {type(params[0])}",
             )
-            # check that X and coeff have the same n_neurons
+            # check the consistency of the feature axis
             validation.check_tree_axis_consistency(
                 params[0],
                 X,
                 axis_1=0,
                 axis_2=1,
-                err_message="The number of neurons in the model parameters and in the inputs"
-                "must match."
-                f"parameters has n_neurons: {params[1].shape[0]}, "
-                f"the input provided has n_neurons: {jax.tree_map(lambda x: x.shape[1], X)}",
-            )
-            # check the consistency of the feature axis
-            validation.check_tree_axis_consistency(
-                params[0],
-                X,
-                axis_1=1,
-                axis_2=2,
                 err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
-                f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!",
+                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
     def _check_is_fit(self):
@@ -265,9 +233,9 @@ class GLM(BaseRegressor):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, Ws, X
+                lambda w, x: jnp.einsum("k,tk->t", w, x), sum, Ws, X
             )
-            + bs[None, :]
+            + bs
         )
 
     @support_pynapple(conv_type="jax")
@@ -477,9 +445,9 @@ class GLM(BaseRegressor):
         ----------
         X :
             The input data which can be a FeaturePytree with n_features arrays of shape (n_timebins,
-            n_neurons, n_features), or a simple ndarray of shape (n_timebins, n_neurons, n_features).
+            n_features), or a simple ndarray of shape (n_timebins, n_features).
         y :
-            The target data array of shape (n_timebins, n_neurons), representing
+            The target data array of shape (n_timebins, ), representing
             the neuron firing rates or similar metrics.
 
         Returns
@@ -487,18 +455,20 @@ class GLM(BaseRegressor):
         Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
             A tuple containing the initialized parameters:
             - The first element is the initialized coefficients
-            (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_neurons, n_features).
-            - The second element is the initialized intercept (bias terms) as an ndarray of shape (n_neurons,).
+            (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
+            - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
 
         Example
         -------
-        >>> X = jnp.zeros((100, 10, 5))  # Example input
-        >>> y = jnp.exp(jnp.random.normal(size=(100, 10)))  # Simulated firing rates
-        >>> coeff, intercept = YourModelClass.initialize_params(X, y)
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> X = np.zeros((100, 5))  # Example input
+        >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
+        >>> coeff, intercept = nmo.glm.GLM.initialize_params(X, y)
         >>> coeff.shape
-        (10, 5)
+        (5, )
         >>> intercept.shape
-        (10,)
+        (1, )
         """
         # Initialize parameters
         init_params = (
@@ -512,7 +482,7 @@ class GLM(BaseRegressor):
             #   n_features).
             jax.tree_map(lambda x: jnp.zeros_like(x[0]), X),
             # intercept, bias terms
-            jnp.log(jnp.mean(y, axis=0)),
+            jnp.log(jnp.mean(y, axis=0, keepdims=True)),
         )
         return init_params
 
@@ -532,15 +502,15 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
+            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
         y :
-            Target neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+            Target neural activity arranged in a matrix, shape (n_time_bins, ).
         init_params :
             2-tuple of initial parameter values: (coefficients, intercepts). If
             None, we initialize coefficients with zeros, intercepts with the
             log of the mean neural activity. coefficients is an array of shape
-            (n_neurons, n_features) or pytree of same, intercepts is an array
-            of shape (n_neurons,)
+            (n_features,) or pytree of same, intercepts is an array
+            of shape (1, )
 
         Raises
         ------
@@ -548,8 +518,8 @@ class GLM(BaseRegressor):
             - If `init_params` is not of length two.
             - If dimensionality of `init_params` are not correct.
             - If the number of neurons in the model parameters and in the inputs do not match.
-            - If `X` is not three-dimensional.
-            - If `y` is not two-dimensional.
+            - If `X` is not two-dimensional.
+            - If `y` is not one-dimensional.
             - If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
         TypeError
