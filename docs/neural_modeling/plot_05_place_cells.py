@@ -28,8 +28,6 @@ path = data.download_data(
     "Achilles_10252013.nwb", "https://osf.io/hu5ma/download", "../data"
 )
 
-path = "Achilles_10252013.nwb"
-
 # %%
 # ## Pynapple
 # We are going to open the NWB file with pynapple
