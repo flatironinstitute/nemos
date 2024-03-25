@@ -172,7 +172,7 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
 
 
 @pytest.fixture
-def poissonGLM_coupled_model_config_simulate():
+def coupled_model_simulate():
     """Set up a Poisson GLM from a predefined configuration in a json file.
 
     This fixture reads parameters for a Poisson GLM from a json configuration file, initializes
@@ -180,17 +180,16 @@ def poissonGLM_coupled_model_config_simulate():
 
     Returns:
         tuple: A tuple containing:
-            - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - coupling_basis (jax.numpy.ndarray): Coupling basis values from the config.
-            - feedforward_input (jax.numpy.ndarray): Feedforward input values from the config.
-            - init_spikes (jax.numpy.ndarray): Initial spike values from the config.
+            - the coupling coeffs
+            - the feedforward coeffs
+            - the intercepts
             - jax.random.key(123) (jax.Array): A pseudo-random number generator key.
+            - feedforward_input (jax.numpy.ndarray): Feedforward input values from the config.
+            - coupling_basis (jax.numpy.ndarray): Coupling basis values from the config.
+            - init_spikes (jax.numpy.ndarray): Initial spike values from the config.
+            - a link function.
+
     """
-    observations = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.Ridge("BFGS", regularizer_strength=0.1)
-    model = nmo.glm.GLMRecurrent(
-        observation_model=observations, regularizer=regularizer
-    )
 
     n_neurons, coupling_duration, sim_duration = 2, 100, 1000
     coupling_filter_bank = np.zeros((coupling_duration, n_neurons, n_neurons))
@@ -206,24 +205,26 @@ def poissonGLM_coupled_model_config_simulate():
     # approximate the coupling filters in terms of the basis function
     _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])
     coupling_coeff = nmo.simulation.regress_filter(coupling_filter_bank, coupling_basis)
+    feedforward_coeff = np.ones((n_neurons, 2))
+    intercepts = -3 * jnp.ones(n_neurons)
 
-    model.coef_ = jnp.hstack(
-        (coupling_coeff.reshape(n_neurons, -1), np.ones((n_neurons, 2)))
-    )
-    model.intercept_ = -3 * jnp.ones(n_neurons)
     feedforward_input = jnp.c_[
         jnp.cos(jnp.linspace(0, np.pi * 4, sim_duration)),
         jnp.sin(jnp.linspace(0, np.pi * 4, sim_duration)),
     ]
+
     feedforward_input = jnp.tile(feedforward_input[:, None], (1, n_neurons, 1))
     init_spikes = jnp.zeros((coupling_duration, n_neurons))
 
     return (
-        model,
-        coupling_basis,
-        feedforward_input,
-        init_spikes,
+        coupling_coeff,
+        feedforward_coeff,
+        intercepts,
         jax.random.key(123),
+        feedforward_input,
+        coupling_basis,
+        init_spikes,
+        jnp.exp
     )
 
 

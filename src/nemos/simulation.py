@@ -181,7 +181,14 @@ def simulate_recurrent(
 
     Parameters
     ----------
-
+    coupling_coef :
+        Coefficients for the coupling (recurrent connections) between neurons.
+        Expected shape: (n_neurons (receiver), n_neurons (sender), n_basis_coupling).
+    feedforward_coef :
+        Coefficients for the feedforward inputs to each neuron.
+        Expected shape: (n_neurons, n_basis_input).
+    intercepts :
+        Bias term for each neuron. Expected shape: (n_neurons,).
     random_key :
         jax.random.key for seeding the simulation.
     feedforward_input :
@@ -206,28 +213,9 @@ def simulate_recurrent(
 
     Raises
     ------
-    NotFittedError
-        If the model hasn't been fitted prior to calling this method.
     ValueError
-        - If the instance has not been previously fitted.
         - If there's an inconsistency between the number of neurons in model parameters.
         - If the number of neurons in input arguments doesn't match with model parameters.
-
-
-    See Also
-    --------
-    [predict](./#nemos.glm.GLM.predict) :
-    Method to predict rates based on the model's parameters.
-
-    Notes
-    -----
-    The model coefficients (`self.coef_`) are structured such that the first set of coefficients
-    (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
-    The remaining coefficients correspond to the weights for the feed-forward input.
-
-
-    The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
-    to ensure consistency in the model's input feature dimensionality.
     """
     if isinstance(feedforward_input, FeaturePytree):
         raise ValueError(
@@ -244,17 +232,47 @@ def simulate_recurrent(
     )
     init_y = jnp.asarray(init_y, dtype=float)
 
+    # check that n_neurons is consistent
+    n_neurons = intercepts.shape[0]
+    if (
+            feedforward_input.shape[1] != n_neurons or
+            feedforward_coef.shape[0] != n_neurons or
+            init_y.shape[1] != n_neurons or
+            coupling_coef.shape[0] != n_neurons or
+            coupling_coef.shape[1] != n_neurons
+    ):
+        raise ValueError("The number of neurons provided in the inputs is inconsistent!")
 
-    for neu, coeff in enumerate(feedforward_coef):
-        glm.GLM._check_input_dimensionality(X=feedforward_input[:, neu])
-        glm.GLM._check_input_and_params_consistency((coeff, intercepts[neu]), X=feedforward_input[:, neu])
+    coupling_coef = coupling_coef.reshape(n_neurons, -1)
+
+    # checks the input size
+    validation.check_tree_leaves_dimensionality(
+        feedforward_input,
+        expected_dim=3,
+        err_message="`feedforward_input` must be three-dimensional, with shape "
+                    "(n_timebins, n_neurons, n_features) or pytree of the same shape.",
+    )
+    validation.check_tree_axis_consistency(
+        feedforward_coef,
+        feedforward_input,
+        axis_1=0,
+        axis_2=2,
+        err_message="Inconsistent number of features. "
+                    f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
+                    f"X has {jax.tree_map(lambda x: x.shape[2], feedforward_input)} features instead!",
+    )
 
     validation.error_invalid_entry(feedforward_input)
 
     # validate y
-    for neu, coeff in enumerate(coupling_coef):
-        glm.GLM._check_input_dimensionality(y=init_y[:, neu])
-        glm.GLM._check_input_and_params_consistency((coeff, intercepts[neu]), y=init_y)
+    validation.check_tree_leaves_dimensionality(
+        init_y,
+        expected_dim=2,
+        err_message="`init_y` must be two-dimensional, with shape (n_timebins, ).",
+    )
+
+    if coupling_basis_matrix.shape[1] * n_neurons != coupling_coef.shape[1]:
+        raise ValueError("")
 
     if init_y.shape[0] != coupling_basis_matrix.shape[0]:
         raise ValueError(
