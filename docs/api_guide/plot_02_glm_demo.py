@@ -305,6 +305,7 @@ stimulus_intensity = 1.5
 
 # create the input tensor of shape (n_samples, n_neurons, n_dimension_stimuli)
 feedforward_input = np.zeros((simulation_duration, n_neurons, 1))
+
 # inject square input to the first neuron only
 feedforward_input[stimulus_onset: stimulus_offset, 0] = stimulus_intensity
 
@@ -334,7 +335,7 @@ init_spikes = np.zeros((coupling_filter_duration, n_neurons))
 # call simulate, with both the recurrent coupling
 # and the input
 spikes, rates = nmo.simulation.simulate_recurrent(
-    coupling_coef=coupling_coeff.reshape(n_neurons, -1),
+    coupling_coef=coupling_coeff,
     feedforward_coef=input_coeff,
     intercepts=intercept,
     random_key=jax.random.key(123),

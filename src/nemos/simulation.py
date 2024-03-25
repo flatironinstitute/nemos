@@ -255,7 +255,7 @@ def simulate_recurrent(
     validation.check_tree_axis_consistency(
         feedforward_coef,
         feedforward_input,
-        axis_1=0,
+        axis_1=1,
         axis_2=2,
         err_message="Inconsistent number of features. "
         f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
