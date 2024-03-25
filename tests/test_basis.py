@@ -212,12 +212,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
