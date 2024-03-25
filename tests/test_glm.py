@@ -136,15 +136,15 @@ class TestGLM:
     @pytest.mark.parametrize(
         "X, y",
         [
-            (jnp.zeros((2, 4)), jnp.zeros((2, ))),
-            (jnp.zeros((2, 4)), jnp.zeros((2, ))),
+            (jnp.zeros((2, 4)), jnp.zeros((2,))),
+            (jnp.zeros((2, 4)), jnp.zeros((2,))),
         ],
     )
     def test_parameter_initialization(self, X, y, poissonGLM_model_instantiation):
         _, _, model, _, _ = poissonGLM_model_instantiation
         coef, inter = model.initialize_params(X, y)
-        assert coef.shape == (X.shape[1], )
-        assert inter.shape == (1, )
+        assert coef.shape == (X.shape[1],)
+        assert inter.shape == (1,)
 
     #######################
     # Test model.fit
@@ -234,10 +234,13 @@ class TestGLM:
                 1,
                 does_not_raise(),
             ),
-            (2,  pytest.raises(
+            (
+                2,
+                pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
-                )),
+                ),
+            ),
             (
                 3,
                 pytest.raises(
@@ -286,28 +289,28 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_features = X.shape
         init_b = jnp.zeros((1,) * dim_intercepts)
-        init_w = jnp.zeros((n_features, ))
+        init_w = jnp.zeros((n_features,))
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize(
         "init_params, expectation",
         [
-            ([jnp.zeros((5, )), jnp.zeros((1,))], does_not_raise()),
+            ([jnp.zeros((5,)), jnp.zeros((1,))], does_not_raise()),
             (
                 [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                 pytest.raises(ValueError, match="Params must have length two."),
             ),
-            (dict(p1=jnp.zeros((5, )), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
+            (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
             (
-                (dict(p1=jnp.zeros((5, )), p2=jnp.zeros((1, ))), jnp.zeros((1,))),
+                (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))),
                 pytest.raises(
                     TypeError, match=r"X and params\[0\] must be the same type"
                 ),
             ),
             (
                 (
-                    FeaturePytree(p1=jnp.zeros((5, )), p2=jnp.zeros((5, ))),
+                    FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
                     jnp.zeros((1,)),
                 ),
                 pytest.raises(
@@ -356,7 +359,7 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], ))
+            X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
@@ -401,7 +404,9 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         init_w = jnp.zeros((X.shape[1] + delta_n_features))
-        init_b = jnp.zeros(1, )
+        init_b = jnp.zeros(
+            1,
+        )
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
@@ -503,14 +508,15 @@ class TestGLM:
         model_tree.fit(X_tree, y, init_params=true_params_tree)
 
         # get the flat parameters
-        flat_coef = np.concatenate(jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=-1)
+        flat_coef = np.concatenate(
+            jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=-1
+        )
 
         # assert equivalence of solutions
         assert np.allclose(model.coef_, flat_coef)
         assert np.allclose(model.intercept_, model_tree.intercept_)
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
-
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -559,7 +565,7 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], ))
+            X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], X.shape[1], 1))
         with expectation:
@@ -771,7 +777,7 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], ))
+            X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], X.shape[1], 1))
         with expectation:
@@ -864,9 +870,7 @@ class TestGLM:
             ),
         ],
     )
-    def test_simulate_is_fit(
-        self, is_fit, expectation, poissonGLM_model_instantiation
-    ):
+    def test_simulate_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
         """
         Test if the model raises a ValueError when trying to simulate before it's fitted.
         """
@@ -981,4 +985,3 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
-

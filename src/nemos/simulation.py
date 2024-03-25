@@ -1,6 +1,6 @@
 """Utility functions for coupling filter definition."""
 
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -8,11 +8,8 @@ import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
 
-from . import convolve
-from . import glm
+from . import convolve, glm, validation
 from .pytrees import FeaturePytree
-from . import validation
-from typing import Callable
 
 
 def difference_of_gammas(
@@ -169,7 +166,7 @@ def simulate_recurrent(
     feedforward_input: Union[NDArray, jnp.ndarray],
     coupling_basis_matrix: Union[NDArray, jnp.ndarray],
     init_y: Union[NDArray, jnp.ndarray],
-    inverse_link_function: Callable = jax.nn.softplus
+    inverse_link_function: Callable = jax.nn.softplus,
 ):
     """
     Simulate neural activity using the GLM as a recurrent network.
@@ -235,14 +232,17 @@ def simulate_recurrent(
     # check that n_neurons is consistent
     n_neurons = intercepts.shape[0]
     if (
-            feedforward_input.shape[1] != n_neurons or
-            feedforward_coef.shape[0] != n_neurons or
-            init_y.shape[1] != n_neurons or
-            coupling_coef.shape[0] != n_neurons or
-            coupling_coef.shape[1] != n_neurons
+        feedforward_input.shape[1] != n_neurons
+        or feedforward_coef.shape[0] != n_neurons
+        or init_y.shape[1] != n_neurons
+        or coupling_coef.shape[0] != n_neurons
+        or coupling_coef.shape[1] != n_neurons
     ):
-        raise ValueError("The number of neurons provided in the inputs is inconsistent!")
+        raise ValueError(
+            "The number of neurons provided in the inputs is inconsistent!"
+        )
 
+    n_basis = coupling_coef.shape[-1]
     coupling_coef = coupling_coef.reshape(n_neurons, -1)
 
     # checks the input size
@@ -250,7 +250,7 @@ def simulate_recurrent(
         feedforward_input,
         expected_dim=3,
         err_message="`feedforward_input` must be three-dimensional, with shape "
-                    "(n_timebins, n_neurons, n_features) or pytree of the same shape.",
+        "(n_timebins, n_neurons, n_features) or pytree of the same shape.",
     )
     validation.check_tree_axis_consistency(
         feedforward_coef,
@@ -258,8 +258,8 @@ def simulate_recurrent(
         axis_1=0,
         axis_2=2,
         err_message="Inconsistent number of features. "
-                    f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
-                    f"X has {jax.tree_map(lambda x: x.shape[2], feedforward_input)} features instead!",
+        f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
+        f"X has {jax.tree_map(lambda x: x.shape[2], feedforward_input)} features instead!",
     )
 
     validation.error_invalid_entry(feedforward_input)
@@ -272,7 +272,11 @@ def simulate_recurrent(
     )
 
     if coupling_basis_matrix.shape[1] * n_neurons != coupling_coef.shape[1]:
-        raise ValueError("")
+        raise ValueError(
+            f"Inconsistent number of features. `coupling_basis_matrix` assumes "
+            f"{coupling_basis_matrix.shape[1]} basis functions for the coupling filters, "
+            f"`coupling_coef` assumes {n_basis} basis functions instead."
+        )
 
     if init_y.shape[0] != coupling_basis_matrix.shape[0]:
         raise ValueError(
@@ -284,9 +288,7 @@ def simulate_recurrent(
 
     subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
     # (n_samples, n_neurons)
-    feed_forward_contrib = jnp.einsum(
-        "ik,tik->ti", feedforward_coef, feedforward_input
-    )
+    feed_forward_contrib = jnp.einsum("ik,tik->ti", feedforward_coef, feedforward_input)
 
     def scan_fn(
         data: Tuple[jnp.ndarray, int], key: jax.Array
@@ -303,9 +305,7 @@ def simulate_recurrent(
         # 1. The first dimension is time, and 1 is by construction since we are simulating 1
         #    sample
         # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-        conv_act = convolve.reshape_convolve(
-            activity, coupling_basis_matrix
-        ).reshape(
+        conv_act = convolve.reshape_convolve(activity, coupling_basis_matrix).reshape(
             -1,
         )
 

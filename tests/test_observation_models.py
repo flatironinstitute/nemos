@@ -1,13 +1,15 @@
+from contextlib import nullcontext as does_not_raise
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 import scipy.stats as sts
-from numba import njit
 import statsmodels.api as sm
+from numba import njit
 
 import nemos as nmo
-from contextlib import nullcontext as does_not_raise
+
 
 @pytest.fixture()
 def poisson_observations():
@@ -172,10 +174,17 @@ class TestPoissonObservations:
         "score_type, expectation",
         [
             ("pseudo-r2-McFadden", does_not_raise()),
-            ("not-implemented", pytest.raises(NotImplementedError, match="Score not-implemented not implemented"))
-        ]
+            (
+                "not-implemented",
+                pytest.raises(
+                    NotImplementedError, match="Score not-implemented not implemented"
+                ),
+            ),
+        ],
     )
-    def test_not_implemented_score(self, score_type, expectation, poissonGLM_model_instantiation):
+    def test_not_implemented_score(
+        self, score_type, expectation, poissonGLM_model_instantiation
+    ):
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
         with expectation:
             model.observation_model.pseudo_r2(firing_rate, y, score_type)
@@ -184,8 +193,13 @@ class TestPoissonObservations:
         "scale, expectation",
         [
             (1, does_not_raise()),
-            ("invalid", pytest.raises(ValueError, match="The `scale` parameter must be of numeric type"))
-        ]
+            (
+                "invalid",
+                pytest.raises(
+                    ValueError, match="The `scale` parameter must be of numeric type"
+                ),
+            ),
+        ],
     )
     def test_scale_setter(self, scale, expectation, poissonGLM_model_instantiation):
         _, _, model, _, firing_rate = poissonGLM_model_instantiation
@@ -200,9 +214,10 @@ class TestPoissonObservations:
         _, _, model, _, _ = poissonGLM_model_instantiation
 
         # define a jax non-diff function
-        non_diff = lambda y: jnp.asarray(
-            njit(lambda x: x)(np.atleast_1d(y))
-        )
+        non_diff = lambda y: jnp.asarray(njit(lambda x: x)(np.atleast_1d(y)))
 
-        with pytest.raises(TypeError, match="The `inverse_link_function` function cannot be differentiated"):
+        with pytest.raises(
+            TypeError,
+            match="The `inverse_link_function` function cannot be differentiated",
+        ):
             model.observation_model.inverse_link_function = non_diff

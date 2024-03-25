@@ -135,7 +135,7 @@ def poissonGLM_model_instantiation():
     np.random.seed(123)
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
-    w_true = np.random.normal(size=(5, ))
+    w_true = np.random.normal(size=(5,))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
     model = nmo.glm.GLM(observation_model, regularizer)
@@ -162,9 +162,7 @@ def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
     X, spikes, model, true_params, rate = poissonGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
-        dict(
-            input_1=true_params[0][:3], input_2=true_params[0][3:]
-        ),
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
     model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
@@ -224,7 +222,7 @@ def coupled_model_simulate():
         feedforward_input,
         coupling_basis,
         init_spikes,
-        jnp.exp
+        jnp.exp,
     )
 
 
@@ -261,7 +259,7 @@ def group_sparse_poisson_glm_model_instantiation():
     np.random.seed(123)
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
-    w_true = np.random.normal(size=(5, ))
+    w_true = np.random.normal(size=(5,))
     w_true[1:4] = 0.0
     mask = np.zeros((2, 5))
     mask[0, 1:4] = 1
@@ -277,7 +275,12 @@ def group_sparse_poisson_glm_model_instantiation():
 def example_data_prox_operator():
     n_features = 4
 
-    params = (jnp.ones((n_features)), jnp.zeros(1, ))
+    params = (
+        jnp.ones((n_features)),
+        jnp.zeros(
+            1,
+        ),
+    )
     regularizer_strength = 0.1
     mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
     scaling = 0.5

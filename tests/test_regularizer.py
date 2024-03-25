@@ -455,9 +455,7 @@ class TestLasso:
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         # instantiate the glm with statsmodels
-        glm_sm = sm.GLM(
-            endog=y, exog=sm.add_constant(X), family=sm.families.Poisson()
-        )
+        glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
 
         # regularize everything except intercept
         alpha_sm = np.ones(X.shape[1] + 1) * regularizer.regularizer_strength

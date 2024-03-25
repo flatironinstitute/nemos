@@ -137,7 +137,9 @@ class GLM(BaseRegressor):
             f"params[1] has {params[1].ndim} dimensions!",
         )
         if params[1].shape[0] != 1:
-            raise ValueError("Intercept term should be a single valued one-dimensional array.")
+            raise ValueError(
+                "Intercept term should be a single valued one-dimensional array."
+            )
         return params
 
     @staticmethod
@@ -501,9 +503,7 @@ class GLM(BaseRegressor):
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[
-            Tuple[Union[dict, ArrayLike], ArrayLike]
-        ] = None,
+        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
     ):
         """Fit GLM to neural activity.
 
