@@ -46,7 +46,7 @@ print(dataset)
 # %%
 # Let's extract the data.
 epochs = dataset["epochs"]
-spikes = dataset["units"]
+units = dataset["units"]
 stimulus = dataset["whitenoise"]
 
 # %%
@@ -58,8 +58,9 @@ stimulus.shape
 
 # %%
 # There are 73 neurons recorded together in V1. To fit the GLM faster, we will focus on one neuron.
-print(spikes)
-spikes = spikes[34]
+print(units)
+# this returns TsGroup with one neuron only
+spikes = units[[34]]
 
 # %%
 # How could we predict neuron's response to white noise stimulus?
@@ -187,7 +188,7 @@ ax.plot(filtered_stimulus)
 # grab spikes from when we were showing our stimulus, and bin at 1 msec
 # resolution
 bin_size = .001
-counts = spikes.restrict(filtered_stimulus.time_support).count(bin_size)
+counts = spikes[34].restrict(filtered_stimulus.time_support).count(bin_size)
 print(counts.rate)
 print(filtered_stimulus.rate)
 
