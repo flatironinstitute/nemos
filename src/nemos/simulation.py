@@ -8,7 +8,7 @@ import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
 
-from . import convolve, glm, validation
+from . import convolve, validation
 from .pytrees import FeaturePytree
 
 
@@ -241,8 +241,6 @@ def simulate_recurrent(
         raise ValueError(
             "The number of neurons provided in the inputs is inconsistent!"
         )
-
-
 
     # checks the input size
     validation.check_tree_leaves_dimensionality(

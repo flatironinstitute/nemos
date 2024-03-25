@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import ArrayLike, NDArray
 
-from . import tree_utils, validation
+from . import validation
 from .pytrees import FeaturePytree
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]

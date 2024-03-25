@@ -4,9 +4,8 @@ from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike
 
-from . import convolve
 from . import observation_models as obs
 from . import regularizer as reg
 from . import tree_utils, validation
