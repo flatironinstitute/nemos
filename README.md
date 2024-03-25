@@ -8,19 +8,15 @@
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
 `nemos` ("NEural MOdelS") is a statistical modeling framework for systems
-neuroscience, built on top of [jax](jax.readthedocs.io/). nemos aims to provide
-well-tested, GPU-accelerated implementations of standard statistical modeling
-methods. nemos is not attempting to provide all the latest and greatest methods,
-but instead to provide a stable place to start, which you can build off of or
-compare against. For now, we are focusing on the Generalized Linear Model (GLM);
-the package is under active development and more methods will be added in the
-future.
+neuroscience, built on top of [jax](jax.readthedocs.io/). 
 
-To learn more about the Generalized Linear Model, we recommend [Neuromatch
-Academy's
-lesson](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Intro.html)
-and [Jonathan Pillow's Cosyne 2018
-tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
+`nemos` aims to provide well-tested, GPU-accelerated implementations of standard statistical modeling methods.
+
+For now, we are focusing on the Generalized Linear Model (GLM). The package is under active development and more methods will be added in the future.
+
+To learn more about the Generalized Linear Model, we recommend [Neuromatch Academy's
+lesson](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Intro.html) and [Jonathan Pillow's Cosyne 2018 tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
+
 
 ## Installation
 Run the following `pip` command in your virtual environment.
@@ -37,45 +33,52 @@ Run the following `pip` command in your virtual environment.
 
 For more details, including specifics for GPU users and developers, refer to `nemos` [docs](https://nemos.readthedocs.io/en/latest/installation/).
 
+
 ## Basic usage
 
-The core object of nemos is the
-[`GLM`](https://nemos.readthedocs.io/en/latest/reference/nemos/glm/) object,
-which is built as an extension of scikit-learn's
-[estimator](https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html#sklearn.base.BaseEstimator)
-object:
+Using basis functions, `nemos` facilitates building a set of predictors. Given a 1-dimensional `feature`, you can generate a set of predictor `X` with predefined basis:
+```python
+basis = nmo.basis.MSplineBasis(n_basis_funcs=10)
+X = basis.evaluate(feature)
+```
+Other basis are available depending on the type of feature :
+
+  * [`BSplineBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.BSplineBasis)
+
+  * [`CyclicBSplineBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.CyclicBSplineBasis) for angular features (i.e. head-direction)
+
+  * [`RaisedCosineBasisLinear`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.RaisedCosineBasisLinear) or [`RaisedCosineBasisLog`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.RaisedCosineBasisLog) for temporal feature (i.e. spiking activity)
+
+  * [`OrthExponentialBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.OrthExponentialBasis)
+  
+`nemos` makes it easy to combine features. Basis can be added or multiplied together and the returned object will still be a basis.
 
 ```python
-import nemos as nmo
-# Create predictors X and targets y
-X = ...
-y = ...
+basis_1 = nmo.basis.MSplineBasis(n_basis_funcs=10)
+basis_2 = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
+basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=15)
 
-glm = nmo.glm.GLM()
-glm.fit(X, y)
+basis = basis_1 * basis_2 + basis_3
 
-# Investigate GLM model parameters
-glm.coef_
-glm.intercept_
+X = basis.evaluate(feature_1, feature_2, feature_3)
 ```
 
-Nemos `GLM` objects predict spiking from a single neuron in response to
-user-specified predictors. The predictors `X` must be a 3d array with shape
-`(n_timebins, n_neurons, n_features)`, and `y` must be a 2d array with shape
-`(n_timebins, n_neurons)`. We recommend using
-[pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and
-reshaping of your data!
+For now, the core model of nemos is the
+[`Poisson GLM`](https://nemos.readthedocs.io/en/latest/reference/nemos/glm/) object that predict firing rate of a single neuron in response to
+user-specified predictors. 
+
+```python
+glm = nmo.glm.GLM()
+glm.fit(X, y)
+```
+We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
+
 
 When initializing the `GLM` object, users can optionally specify the
 [observation
 model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/)
 (also known as the noise model) and the
 [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
-
-Nemos also provides a variety of [basis
-functions](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/) for
-estimating more complicated, non-linear relationships between experimental
-variables and neuronal spiking.
 
 See [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/) for a
 slightly longer overview of basic nemos functionality.
