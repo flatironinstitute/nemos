@@ -78,33 +78,6 @@ def test_invalid_concrete_class():
         model = MockBaseRegressorInvalid()
 
 
-def test_preprocess_simulate_invalid_datatypes(mock_regressor):
-    """Test behavior with invalid feedforward_input datatype."""
-    feedforward_input = "invalid_data_type"
-    params_f = (jnp.array([[]]),)
-    with pytest.raises(
-        ValueError,
-        match="could not convert string",
-    ):
-        mock_regressor._preprocess_simulate(feedforward_input, params_f)
-
-
-def test_preprocess_simulate_with_nan(mock_regressor):
-    """Test behavior with NaN values in feedforward_input."""
-    feedforward_input = jnp.array([[[jnp.nan]]])
-    params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="The provided trees contain Nan"):
-        mock_regressor._preprocess_simulate(feedforward_input, params_f)
-
-
-def test_preprocess_simulate_with_inf(mock_regressor):
-    """Test behavior with infinite values in feedforward_input."""
-    feedforward_input = jnp.array([[[jnp.inf]]])
-    params_f = (jnp.array([[1]]), jnp.array([1]))
-    with pytest.raises(ValueError, match="The provided trees contain Inf"):
-        mock_regressor._preprocess_simulate(feedforward_input, params_f)
-
-
 def test_empty_set(mock_regressor):
     """Check that an empty set_params returns self."""
     assert mock_regressor.set_params() is mock_regressor

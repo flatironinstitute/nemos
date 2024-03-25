@@ -635,10 +635,21 @@ class GLM(BaseRegressor):
         """
         # check if the model is fit
         self._check_is_fit()
+
         Ws, bs = self.coef_, self.intercept_
-        (feedforward_input,) = self._preprocess_simulate(
-            feedforward_input, params_feedforward=(Ws, bs)
-        )
+
+        # if all invalid, raise error
+        validation.error_all_invalid(feedforward_input)
+
+        # check input dimensionality
+        self._check_input_dimensionality(X=feedforward_input)
+
+        # validate input and params consistency
+        self._check_input_and_params_consistency((Ws, bs), X=feedforward_input)
+
+        # warn if nans in the input
+        validation.warn_invalid_entry(feedforward_input)
+
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
             self._observation_model.sample_generator(

@@ -242,8 +242,7 @@ def simulate_recurrent(
             "The number of neurons provided in the inputs is inconsistent!"
         )
 
-    n_basis = coupling_coef.shape[-1]
-    coupling_coef = coupling_coef.reshape(n_neurons, -1)
+
 
     # checks the input size
     validation.check_tree_leaves_dimensionality(
@@ -270,6 +269,8 @@ def simulate_recurrent(
         expected_dim=2,
         err_message="`init_y` must be two-dimensional, with shape (n_timebins, ).",
     )
+    n_basis = coupling_coef.shape[-1]
+    coupling_coef = coupling_coef.reshape(n_neurons, -1)
 
     if coupling_basis_matrix.shape[1] * n_neurons != coupling_coef.shape[1]:
         raise ValueError(
