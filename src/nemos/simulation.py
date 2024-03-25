@@ -9,7 +9,10 @@ import scipy.stats as sts
 from numpy.typing import NDArray
 
 from . import convolve
+from . import glm
 from .pytrees import FeaturePytree
+from . import validation
+from typing import Callable
 
 
 def difference_of_gammas(
@@ -159,11 +162,14 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
 
 
 def simulate_recurrent(
-    model,
+    coupling_coef: NDArray,
+    feedforward_coef: NDArray,
+    intercepts: NDArray,
     random_key: jax.Array,
     feedforward_input: Union[NDArray, jnp.ndarray],
     coupling_basis_matrix: Union[NDArray, jnp.ndarray],
     init_y: Union[NDArray, jnp.ndarray],
+    inverse_link_function: Callable = jax.nn.softplus
 ):
     """
     Simulate neural activity using the GLM as a recurrent network.
@@ -175,6 +181,7 @@ def simulate_recurrent(
 
     Parameters
     ----------
+
     random_key :
         jax.random.key for seeding the simulation.
     feedforward_input :
@@ -187,6 +194,7 @@ def simulate_recurrent(
     coupling_basis_matrix :
         Basis matrix for coupling, representing between-neuron couplings
         and auto-correlations. Expected shape: (window_size, n_basis_coupling).
+
 
     Returns
     -------
@@ -226,38 +234,40 @@ def simulate_recurrent(
             "simulate_recurrent works only with arrays. "
             "FeaturePytree provided instead!"
         )
-    # check if the model is fit
-    model._check_is_fit()
-
-    # convert to jnp.ndarray
+    # convert to jnp.ndarray of floats
     coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
-
-    n_basis_coupling = coupling_basis_matrix.shape[1]
-    n_neurons = model.intercept_.shape[0]
-
-    w_feedforward = model.coef_[:, n_basis_coupling * n_neurons:]
-    w_recurrent = model.coef_[:, : n_basis_coupling * n_neurons]
-    bs = model.intercept_
-
-    feedforward_input, init_y = model._preprocess_simulate(
-        feedforward_input,
-        params_feedforward=(w_feedforward, bs),
-        init_y=init_y,
-        params_recurrent=(w_recurrent, bs),
+    coupling_coef = jnp.asarray(coupling_coef, dtype=float)
+    feedforward_coef = jnp.asarray(feedforward_coef, dtype=float)
+    intercepts = jnp.asarray(intercepts, dtype=float)
+    feedforward_input = jax.tree_map(
+        lambda x: jnp.asarray(x, dtype=float), feedforward_input
     )
+    init_y = jnp.asarray(init_y, dtype=float)
+
+
+    for neu, coeff in enumerate(feedforward_coef):
+        glm.GLM._check_input_dimensionality(X=feedforward_input[:, neu])
+        glm.GLM._check_input_and_params_consistency((coeff, intercepts[neu]), X=feedforward_input[:, neu])
+
+    validation.error_invalid_entry(feedforward_input)
+
+    # validate y
+    for neu, coeff in enumerate(coupling_coef):
+        glm.GLM._check_input_dimensionality(y=init_y[:, neu])
+        glm.GLM._check_input_and_params_consistency((coeff, intercepts[neu]), y=init_y)
 
     if init_y.shape[0] != coupling_basis_matrix.shape[0]:
         raise ValueError(
             "`init_y` and `coupling_basis_matrix`"
             " should have the same window size! "
-            f"`init_y` window size: {init_y.shape[1]}, "
-            f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
+            f"`init_y` window size: {init_y.shape[0]}, "
+            f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[0]}"
         )
 
     subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
     # (n_samples, n_neurons)
     feed_forward_contrib = jnp.einsum(
-        "ik,tik->ti", w_feedforward, feedforward_input
+        "ik,tik->ti", feedforward_coef, feedforward_input
     )
 
     def scan_fn(
@@ -291,12 +301,12 @@ def simulate_recurrent(
         # Predict the firing rate using the model coefficients
         # Doesn't use predict because the non-linearity needs
         # to be applied after we add the feed forward input
-        firing_rate = model._observation_model.inverse_link_function(
-            w_recurrent.dot(conv_act) + input_slice + bs
+        firing_rate = inverse_link_function(
+            coupling_coef.dot(conv_act) + input_slice + intercepts
         )
 
         # Simulate activity based on the predicted firing rate
-        new_act = model._observation_model.sample_generator(key, firing_rate)
+        new_act = jax.random.poisson(key, firing_rate)
 
         # Shift of one sample the spike count window
         # for the next iteration (i.e. remove the first counts, and
