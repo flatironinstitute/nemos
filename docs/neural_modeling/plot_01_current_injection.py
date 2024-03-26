@@ -276,7 +276,7 @@ ax.set_xlabel("Time (s)")
 
 # bin size in seconds
 bin_size = 0.001
-count = spikes[0].count(bin_size)
+count = spikes[0].count(bin_size) # Taking neuron 0 from the TsGroup
 count
 
 # %%

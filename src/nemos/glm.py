@@ -145,14 +145,14 @@ class GLM(BaseRegressor):
     def _check_input_dimensionality(
         X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
     ):
-        if not (y is None):
+        if y is not None:
             validation.check_tree_leaves_dimensionality(
                 y,
                 expected_dim=1,
                 err_message="y must be one-dimensional, with shape (n_timebins, ).",
             )
 
-        if not (X is None):
+        if X is not None:
             validation.check_tree_leaves_dimensionality(
                 X,
                 expected_dim=2,

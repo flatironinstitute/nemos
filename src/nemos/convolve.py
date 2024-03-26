@@ -103,7 +103,7 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
 
 
 def _list_epochs(tsd: Any):
-    """List epochs from a time series with data object, supporting 'pynapple' TSD formats.
+    """List epochs from a time series with data object, supporting 'pynapple' Tsd formats.
 
     If the input is recognized as a 'pynapple' TSD, it extracts epochs based on the TSD's
     time support. Otherwise, it returns the input as is, assuming it's a single epoch.
