@@ -9,7 +9,7 @@
 
 ## Introduction
 
-In this demo we will work through two toy example of a Poisson-GLM on synthetic data: a purely feed-forward input model
+In this demo we will work through two toy examples of a Poisson-GLM on synthetic data: a purely feed-forward input model
 and a recurrently coupled model.
 
 In particular, we will learn how to:
@@ -32,21 +32,20 @@ from matplotlib.patches import Rectangle
 from sklearn import model_selection
 
 import nemos as nmo
-from nemos import simulation
 
 np.random.seed(111)
-# random design tensor. Shape (n_time_points, n_neurons, n_features).
-X = 0.5*np.random.normal(size=(100, 1, 5))
+# random design tensor. Shape (n_time_points, n_features).
+X = 0.5*np.random.normal(size=(100, 5))
 
-# log-rates & weights, shape (n_neurons, ) and (n_neurons, n_features) respectively.
+# log-rates & weights, shape (1, ) and (n_features, ) respectively.
 b_true = np.zeros((1, ))
-w_true = np.random.normal(size=(1, 5))
+w_true = np.random.normal(size=(5, ))
 
 # sparsify weights
-w_true[0, 1:4] = 0.
+w_true[1:4] = 0.
 
 # generate counts
-rate = jax.numpy.exp(jax.numpy.einsum("ik,tik->ti", w_true, X) + b_true[None, :])
+rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
 spikes = np.random.poisson(rate)
 
 # %%
@@ -208,7 +207,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 # through the `model.simulate` method.
 
 # here we are creating a new data input, of 20 timepoints (arbitrary)
-# with the same number of neurons and features (mandatory)
+# with the same number of features (mandatory)
 Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 # generate a random key given a seed
 random_key = jax.random.key(123)
@@ -219,18 +218,24 @@ plt.eventplot(np.where(spikes)[0])
 
 
 # %%
-# ## Recurrently Coupled GLM
-# Defining a recurrent model follows the same syntax. In this example
-# we will simulate two coupled neurons, and we will inject a transient
-# input driving the rate of one of the neurons.
-
+# ## Simulate a Recurrently Coupled Network
+# In this section, we will show you how to generate spikes from a population; We assume that the coupling
+# filters are known or inferred.
+#
+# !!! warning
+#     Making sure that the dynamics of your recurrent neural network are stable is non-trivial[^1]. In particular,
+#     coupling weights obtained by fitting a GLM by maximum-likelihood can generate unstable dynamics. If the
+#     dynamics of your recurrently coupled model are unstable, you can try a `soft-plus` non-linearity
+#     instead of an exponential, and you can "shrink" your weights until stability is reached.
+#
+# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
 
 # Neural population parameters
 n_neurons = 2
 coupling_filter_duration = 100
 
 # %%
-# We can now to define coupling filters that we will use to simulate
+# Let's define the coupling filters that we will use to simulate
 # the pairwise interactions between the neurons. We will model the
 # filters as a difference of two Gamma probability density function.
 # The negative component will capture inhibitory effects such as the
@@ -262,17 +267,13 @@ for unit_i in range(n_neurons):
 # shrink the filters for simulation stability
 coupling_filter_bank *= 0.8
 
-# %%
-# If we represent our filters in terms of basis functions, we can simulate our network by
-# directly calling the `simulate` method of the `nmo.glm.GLMRecurrent` class.
-
 # define a basis function
 n_basis_funcs = 20
 basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs)
 
 # approximate the coupling filters in terms of the basis function
 _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])
-coupling_coeff = simulation.regress_filter(coupling_filter_bank, coupling_basis)
+coupling_coeff = nmo.simulation.regress_filter(coupling_filter_bank, coupling_basis)
 intercept = -4 * np.ones(n_neurons)
 
 # %%
@@ -304,6 +305,7 @@ stimulus_intensity = 1.5
 
 # create the input tensor of shape (n_samples, n_neurons, n_dimension_stimuli)
 feedforward_input = np.zeros((simulation_duration, n_neurons, 1))
+
 # inject square input to the first neuron only
 feedforward_input[stimulus_onset: stimulus_offset, 0] = stimulus_intensity
 
@@ -322,24 +324,21 @@ axs[1].set_ylim(axs[0].get_ylim())
 # of input_coeff with the feedforward_input
 input_coeff = np.ones((n_neurons, 1))
 
-# stack the coefficients in a single matrix
-basis_coeff = np.hstack((coupling_coeff.reshape(n_neurons, -1), input_coeff))
 
 # initialize the spikes for the recurrent simulation
 init_spikes = np.zeros((coupling_filter_duration, n_neurons))
 
+
 # %%
-# We can now simulate spikes by calling the `simulate_recurrent` method.
-
-model = nmo.glm.GLMRecurrent()
-model.coef_ = jax.numpy.asarray(basis_coeff)
-model.intercept_ = jax.numpy.asarray(intercept)
-
+# We can now simulate spikes by calling the `simulate_recurrent` function for the `nemos.simulate` module.
 
 # call simulate, with both the recurrent coupling
 # and the input
-spikes, rates = model.simulate_recurrent(
-    jax.random.key(123),
+spikes, rates = nmo.simulation.simulate_recurrent(
+    coupling_coef=coupling_coeff,
+    feedforward_coef=input_coeff,
+    intercepts=intercept,
+    random_key=jax.random.key(123),
     feedforward_input=feedforward_input,
     coupling_basis_matrix=coupling_basis,
     init_y=init_spikes
@@ -362,7 +361,7 @@ p1, = plt.plot(rates[:, 1])
 
 plt.vlines(np.where(spikes[:, 0])[0], 0.00, 0.01, color=p0.get_color(), label="rate neuron 0")
 plt.vlines(np.where(spikes[:, 1])[0], -0.01, 0.00, color=p1.get_color(), label="rate neuron 1")
-plt.plot(np.exp(basis_coeff[0, -1] * feedforward_input[:, 0, 0] + intercept[0]), color='k', lw=0.8, label="stimulus")
+plt.plot(jax.nn.softplus(input_coeff[0] * feedforward_input[:, 0, 0] + intercept[0]), color='k', lw=0.8, label="stimulus")
 ax.add_patch(patch)
 plt.ylim(-0.011, .13)
 plt.ylabel("count/bin")

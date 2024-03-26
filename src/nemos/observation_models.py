@@ -123,9 +123,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
+            The predicted rate of the current model. Shape (n_time_bins, ).
         y :
-            The target activity to compare against. Shape (n_time_bins, n_neurons).
+            The target activity to compare against. Shape (n_time_bins, ).
 
         Returns
         -------
@@ -149,7 +149,7 @@ class Observations(Base, abc.ABC):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate of the distribution. Shape (n_time_bins, n_neurons).
+            Expected rate of the distribution. Shape (n_time_bins, ).
 
         Returns
         -------
@@ -165,9 +165,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, n_neurons).
+            The predicted firing rates. Shape (n_time_bins, ).
         spike_counts:
-            The spike counts. Shape (n_time_bins, n_neurons).
+            The spike counts. Shape (n_time_bins, ).
 
         Returns
         -------
@@ -219,9 +219,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, n_neurons)
+            The mean neural activity. Expected shape: (n_time_bins, )
         y:
-            The neural activity. Expected shape: (n_time_bins, n_neurons)
+            The neural activity. Expected shape: (n_time_bins, )
         score_type:
             The pseudo-R$^2$ type.
 
@@ -280,9 +280,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, n_neurons)
+            The mean neural activity. Expected shape: (n_time_bins, )
         y:
-            The neural activity. Expected shape: (n_time_bins, n_neurons)
+            The neural activity. Expected shape: (n_time_bins, )
 
         Returns
         -------
@@ -308,9 +308,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, n_neurons)
+            The mean neural activity. Expected shape: (n_time_bins, )
         y:
-            The neural activity. Expected shape: (n_time_bins, n_neurons)
+            The neural activity. Expected shape: (n_time_bins, )
 
         Returns
         -------
@@ -361,9 +361,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, n_neurons).
+            The predicted rate of the current model. Shape (n_time_bins, ).
         y :
-            The target spikes to compare against. Shape (n_time_bins, n_neurons).
+            The target spikes to compare against. Shape (n_time_bins, ).
 
         Returns
         -------
@@ -411,7 +411,7 @@ class PoissonObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, n_neurons).
+            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ).
 
         Returns
         -------
@@ -428,9 +428,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, n_neurons).
+            The predicted firing rates. Shape (n_time_bins, ).
         spike_counts:
-            The spike counts. Shape (n_time_bins, n_neurons).
+            The spike counts. Shape (n_time_bins, ).
 
         Returns
         -------

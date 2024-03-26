@@ -21,12 +21,12 @@ Defining and fitting a `nemos` GLM model is straightforward:
 import nemos as nmo
 import numpy as np
 
-# predictors, shape (n_samples, n_neurons, n_features)
-X = 0.2 * np.random.normal(size=(100, 1, 1))
-# true coefficients, shape (n_neurons, n_features)
-coef = np.random.normal(size=(1, 1))
-# observed counts, shape (n_samples, n_neurons)
-y = np.random.poisson(np.exp(np.einsum("nf, tnf -> tn", coef, X)))
+# predictors, shape (n_samples, n_features)
+X = 0.2 * np.random.normal(size=(100, 1))
+# true coefficients, shape (n_features)
+coef = np.random.normal(size=(1, ))
+# observed counts, shape (n_samples, )
+y = np.random.poisson(np.exp(np.matmul(X, coef)))
 
 # model definition
 model = nmo.glm.GLM()
@@ -38,11 +38,11 @@ model.fit(X, y)
 Once fit, you can retrieve model parameters as follows,
 
 ```python
->>> # model coefficients, shape (n_neurons, n_features)
+>>> # model coefficients, shape (n_features, )
 >>> print(f"Model coefficients: {model.coef_}")
-Model coefficients: [[-1.5791758]] 
+Model coefficients: [-1.5791758]
 
->>> # model coefficients, shape (n_neurons, )
+>>> # model coefficients, shape (1, )
 >>> print(f"Model intercept: {model.intercept_}")
 Model intercept: [-0.0010547]
 ```
@@ -76,17 +76,17 @@ also be a `pynapple` time series.
 A canonical example of this behavior is the `predict` method of `GLM`. 
 
 ```python
->>> # Assume X is a pynapple TsdTensor
->>> print(type(X)) # shape (num samples, num neurons, num features)
-<class 'pynapple.core.time_series.TsdTensor'>
+>>> # Assume X is a pynapple TsdFrame
+>>> print(type(X)) # shape (num samples, num features)
+<class 'pynapple.core.time_series.TsdFrame'>
 
 >>> model.fit(X, y) # the following works
 
 >>> firing_rate = model.predict(X) # predict the firing rate of the neuron
 
 >>> # this will still be a pynapple time series
->>> print(type(firing_rate)) # shape (num_samples, num_neurons)
-<class 'pynapple.core.time_series.TsdFrame'>
+>>> print(type(firing_rate)) # shape (num_samples, )
+<class 'pynapple.core.time_series.Tsd'>
 ```
 
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
@@ -111,24 +111,25 @@ upsampled_head_dir = head_dir.bin_average(0.01) #  up-sample head direction
 X = nmo.basis.CyclicBSplineBasis(10).evaluate(upsampled_head_dir / (2 * np.pi))
 
 # add a neuron axis and fit model
-model = nmo.glm.GLM().fit(X[:, np.newaxis], counts[:, np.newaxis]) 
+model = nmo.glm.GLM().fit(X, counts) 
 ```
 
 Finally, let's compare the tuning curves
 
 ```python
+import numpy as np
 import matplotlib.pyplot as plt
 
 raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
-model_tuning =  nap.compute_1d_tuning_curves_continuous(
-    model.predict(X[:, np.newaxis]) * X.rate,  # scale by the sampling rate
-    head_dir, 
+model_tuning = nap.compute_1d_tuning_curves_continuous(
+    model.predict(X)[:, np.newaxis] * X.rate,  # scale by the sampling rate
+    head_dir,
     nb_bins=100
 )[0]
 
 # plot results
 plt.subplot(111, projection="polar")
-plt.plot(raw_tuning.index, raw_tuning.values,label="raw")
+plt.plot(raw_tuning.index, raw_tuning.values, label="raw")
 plt.plot(model_tuning.index, model_tuning.values, label="glm")
 plt.legend()
 plt.yticks([])
@@ -152,7 +153,7 @@ could easily run a `K-Fold` cross-validation using `scikit-learn`.
 import nemos as nmo
 from sklearn.model_selection import GridSearchCV
 
-# ...Assume X and y are available or generated as shown above
+# ...Assume X and counts are available or generated as shown above
 
 # model definition
 model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge())
@@ -167,7 +168,7 @@ param_grid = dict(regularizer__regularizer_strength=(0.01, 0.001))
 cls = GridSearchCV(model, param_grid=param_grid, cv=5)
 
 # - run the 5-fold cross-validation grid search
-cls.fit(X, y)
+cls.fit(X, counts)
 ```
 
 Now we can print the best coefficient.

@@ -113,7 +113,7 @@ intercepts = np.asarray([.5, -3, -2])
 input_feature = np.zeros(100)
 input_feature[50:] = 1
 input_feature *= np.random.rand(100)
-input_feature =  nap.Tsd(np.linspace(0, 100, 100), input_feature)
+input_feature = nap.Tsd(np.linspace(0, 100, 100), input_feature)
 
 fig = plotting.lnp_schematic(input_feature, weights, intercepts)
 

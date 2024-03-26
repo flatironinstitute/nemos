@@ -162,7 +162,7 @@ class GLM(nmo.glm.GLM):
                 )
 
     @staticmethod
-    def _check_and_convert_params(
+    def _check_params(
         params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
