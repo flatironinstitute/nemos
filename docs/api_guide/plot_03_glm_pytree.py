@@ -224,7 +224,6 @@ spikes = spikes.count(bin_size=1/head_dir.rate, ep=valid_data)
 # center.
 head_dir = head_dir.interpolate(spikes)
 
-# add extra dim for n_neurons (here, 1)
 X = nmo.pytrees.FeaturePytree(head_direction=basis.evaluate(head_dir))
 
 # %%
