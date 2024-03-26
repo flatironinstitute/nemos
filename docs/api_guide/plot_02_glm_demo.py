@@ -9,7 +9,7 @@
 
 ## Introduction
 
-In this demo we will work through two toy example of a Poisson-GLM on synthetic data: a purely feed-forward input model
+In this demo we will work through two toy examples of a Poisson-GLM on synthetic data: a purely feed-forward input model
 and a recurrently coupled model.
 
 In particular, we will learn how to:
