@@ -1,6 +1,7 @@
 import itertools
 from contextlib import nullcontext as does_not_raise
 
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -261,3 +262,391 @@ def test_least_square_correctness():
     weights_lsq = simulation.regress_filter(coupling_filt, eval_basis)
     # check the exact matching of the filters up to numerical error
     assert np.allclose(weights_lsq, weights)
+
+
+class TestSimulateRecurrent:
+    @pytest.mark.parametrize(
+        "delta_n_neuron, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of neurons"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of neurons"),
+            ),
+        ],
+    )
+    def test_simulate_n_neuron_match_input(
+        self, delta_n_neuron, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method to ensure that The number of neurons in the input
+        matches the model's parameters.
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        if delta_n_neuron != 0:
+            feedforward_input = np.zeros(
+                (
+                    feedforward_input.shape[0],
+                    feedforward_input.shape[1] + delta_n_neuron,
+                    feedforward_input.shape[2],
+                )
+            )
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (
+                -1,
+                pytest.raises(
+                    ValueError, match="`feedforward_input` must be three-dimensional"
+                ),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    ValueError, match="`feedforward_input` must be three-dimensional"
+                ),
+            ),
+        ],
+    )
+    def test_simulate_input_dimensionality(
+        self, delta_dim, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method with input data of different dimensionalities.
+        Ensure correct dimensionality for input.
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        if delta_dim == -1:
+            feedforward_input = np.zeros(feedforward_input.shape[:2])
+        elif delta_dim == 1:
+            feedforward_input = np.zeros(feedforward_input.shape + (1,))
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="`init_y` must be two-dimensional")),
+        ],
+    )
+    def test_simulate_y_dimensionality(
+        self, delta_dim, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method with init_spikes of different dimensionalities.
+        Ensure correct dimensionality for init_spikes.
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        if delta_dim == -1:
+            init_spikes = np.zeros((feedforward_input.shape[0],))
+        elif delta_dim == 1:
+            init_spikes = np.zeros(
+                (feedforward_input.shape[0], feedforward_input.shape[1], 1)
+            )
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_n_neuron, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of neurons"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of neurons"),
+            ),
+        ],
+    )
+    def test_simulate_n_neuron_match_y(
+        self, delta_n_neuron, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method to ensure that The number of neurons in init_spikes
+        matches the model's parameters.
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        init_spikes = jnp.zeros(
+            (init_spikes.shape[0], feedforward_input.shape[1] + delta_n_neuron)
+        )
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
+            ),
+        ],
+    )
+    def test_simulate_time_point_match_y(
+        self, delta_tp, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method to ensure that the time points in init_y
+        are consistent with the coupling_basis window size (they must be equal).
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        init_spikes = jnp.zeros((init_spikes.shape[0] + delta_tp, init_spikes.shape[1]))
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
+            ),
+        ],
+    )
+    def test_simulate_time_point_match_coupling_basis(
+        self, delta_tp, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method to ensure that the window size in coupling_basis
+        is consistent with the time-points in init_spikes (they must be equal).
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        coupling_basis = jnp.zeros(
+            (coupling_basis.shape[0] + delta_tp,) + coupling_basis.shape[1:]
+        )
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_features, expectation",
+        [
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="Inconsistent number of features. spike basis coefficients has",
+                ),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="Inconsistent number of features. spike basis coefficients has",
+                ),
+            ),
+        ],
+    )
+    def test_simulate_feature_consistency_input(
+        self, delta_features, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method ensuring the number of features in `feedforward_input` is
+        consistent with the model's expected number of features.
+
+        Notes
+        -----
+        The total feature number `model.coef_.shape[1]` must be equal to
+        `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        feedforward_input = jnp.zeros(
+            (
+                feedforward_input.shape[0],
+                feedforward_input.shape[1],
+                feedforward_input.shape[2] + delta_features,
+            )
+        )
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_simulate_feature_consistency_coupling_basis(
+        self, delta_features, expectation, coupled_model_simulate
+    ):
+        """
+        Test the `simulate` method ensuring the number of features in `coupling_basis` is
+        consistent with the model's expected number of features.
+
+        Notes
+        -----
+        The total feature number `model.coef_.shape[1]` must be equal to
+        `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
+        """
+        (
+            coupling_coeff,
+            feedforward_coeff,
+            intercepts,
+            random_key,
+            feedforward_input,
+            coupling_basis,
+            init_spikes,
+            inv_link_func,
+        ) = coupled_model_simulate
+        coupling_basis = jnp.zeros(
+            (coupling_basis.shape[0], coupling_basis.shape[1] + delta_features)
+        )
+        with expectation:
+            simulation.simulate_recurrent(
+                coupling_coeff,
+                feedforward_coeff,
+                intercepts,
+                random_key,
+                feedforward_input,
+                coupling_basis,
+                init_spikes,
+                inv_link_func,
+            )

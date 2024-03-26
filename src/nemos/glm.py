@@ -4,12 +4,11 @@ from typing import Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike
 
-from . import convolve
 from . import observation_models as obs
 from . import regularizer as reg
-from . import tree_utils
+from . import tree_utils, validation
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
@@ -100,6 +99,107 @@ class GLM(BaseRegressor):
         obs.check_observation_model(observation)
         self._observation_model = observation
 
+    @staticmethod
+    def _check_params(
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        data_type: Optional[jnp.dtype] = None,
+    ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
+        """
+        Validate the dimensions and consistency of parameters and data.
+
+        This function checks the consistency of shapes and dimensions for model
+        parameters.
+        It ensures that the parameters and data are compatible for the model.
+
+        """
+        # check that params has length two (coeff and intercept)
+        validation.check_length(params, 2, "Params must have length two.")
+        # convert to jax array (specify type if needed)
+        params = validation.convert_tree_leaves_to_jax_array(
+            params,
+            "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!",
+            data_type,
+        )
+        # check the dimensionality of coeff
+        validation.check_tree_leaves_dimensionality(
+            params[0],
+            expected_dim=1,
+            err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
+            "with array leafs of shape (n_features, ).",
+        )
+        # check the dimensionality of intercept
+        validation.check_tree_leaves_dimensionality(
+            params[1],
+            expected_dim=1,
+            err_message="params[1] must be of shape (1,) but "
+            f"params[1] has {params[1].ndim} dimensions!",
+        )
+        if params[1].shape[0] != 1:
+            raise ValueError(
+                "Intercept term should be a single valued one-dimensional array."
+            )
+        return params
+
+    @staticmethod
+    def _check_input_dimensionality(
+        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
+    ):
+        if y is not None:
+            validation.check_tree_leaves_dimensionality(
+                y,
+                expected_dim=1,
+                err_message="y must be one-dimensional, with shape (n_timebins, ).",
+            )
+
+        if X is not None:
+            validation.check_tree_leaves_dimensionality(
+                X,
+                expected_dim=2,
+                err_message="X must be two-dimensional, with shape "
+                "(n_timebins, n_features) or pytree of the same shape.",
+            )
+
+    @staticmethod
+    def _check_input_and_params_consistency(
+        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+        y: Optional[jnp.ndarray] = None,
+    ):
+        """Validate the number of features and structure in model parameters and input arguments.
+
+        Raises
+        ------
+        ValueError
+            - If param and X have different structures.
+            - if the number of features is inconsistent between params[1] and X
+              (when provided).
+
+        """
+        if X is not None:
+            # check that X and params[0] have the same structure
+            if isinstance(X, FeaturePytree):
+                data = X.data
+            else:
+                data = X
+
+            validation.check_tree_structure(
+                data,
+                params[0],
+                err_message=f"X and params[0] must be the same type, but X is "
+                f"{type(X)} and params[0] is {type(params[0])}",
+            )
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                params[0],
+                data,
+                axis_1=0,
+                axis_2=1,
+                err_message="Inconsistent number of features. "
+                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
+            )
+
     def _check_is_fit(self):
         """Ensure the instance has been fitted."""
         if (self.coef_ is None) or (self.intercept_ is None):
@@ -129,7 +229,7 @@ class GLM(BaseRegressor):
         Returns
         -------
         :
-            The predicted rates. Shape (n_time_bins, n_neurons).
+            The predicted rates. Shape (n_time_bins, ).
         """
         Ws, bs = params
         return self._observation_model.inverse_link_function(
@@ -137,9 +237,9 @@ class GLM(BaseRegressor):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, Ws, X
+                lambda w, x: jnp.einsum("k,tk->t", w, x), sum, Ws, X
             )
-            + bs[None, :]
+            + bs
         )
 
     @support_pynapple(conv_type="jax")
@@ -149,12 +249,12 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
+            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
 
         Returns
         -------
         :
-            The predicted rates with shape (n_time_bins, n_neurons).
+            The predicted rates with shape (n_time_bins, ).
 
         Raises
         ------
@@ -163,7 +263,6 @@ class GLM(BaseRegressor):
         ValueError
             - If `params` is not a JAX pytree of size two.
             - If weights and bias terms in `params` don't have the expected dimensions.
-            - If the number of neurons in the model parameters and in the inputs do not match.
             - If `X` is not three-dimensional.
             - If there's an inconsistent number of features between spike basis coefficients and `X`.
 
@@ -189,7 +288,11 @@ class GLM(BaseRegressor):
         self._check_input_dimensionality(X=X)
         # check consistency between X and params
         self._check_input_and_params_consistency((Ws, bs), X=X)
-        return self._predict((Ws, bs), X)
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+        return self._predict((Ws, bs), data)
 
     def _predict_and_compute_loss(
         self,
@@ -242,10 +345,9 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            The exogenous variables. Shape (n_time_bins, n_neurons, n_features)
+            The exogenous variables. Shape (n_time_bins, n_features)
         y :
-            Neural activity arranged in a matrix. n_neurons must be the same as
-            during the fitting of this GLM instance. Shape (n_time_bins, n_neurons).
+            Neural activity. Shape (n_time_bins, ).
         score_type :
             Type of scoring: either log-likelihood or pseudo-r2.
 
@@ -259,9 +361,8 @@ class GLM(BaseRegressor):
         NotFittedError
             If ``fit`` has not been called first with this instance.
         ValueError
-            If attempting to simulate a different number of neurons than were
-            present during fitting (i.e., if ``init_y.shape[0] !=
-            self.intercept_.shape[0]``).
+            If X structure doesn't match the params, and if X and y have different
+            number of samples.
 
         Notes
         -----
@@ -317,12 +418,17 @@ class GLM(BaseRegressor):
         X = jax.tree_map(lambda x: x[is_valid], X)
         y = jax.tree_map(lambda x: x[is_valid], y)
 
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-            score = -self._predict_and_compute_loss((Ws, bs), X, y) - norm_constant
+            score = -self._predict_and_compute_loss((Ws, bs), data, y) - norm_constant
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict((Ws, bs), X), y, score_type=score_type
+                self._predict((Ws, bs), data), y, score_type=score_type
             )
         else:
             raise NotImplementedError(
@@ -332,13 +438,71 @@ class GLM(BaseRegressor):
             )
         return score
 
+    @staticmethod
+    def _initialize_parameters(
+        X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+    ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
+        """Initialize the parameters based on the structure and dimensions X and y.
+
+        This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
+        required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
+        If X is a FeaturePytree, the coefficients retain the pytree structure with arrays of zeros shaped
+        according to the features in X. If X is a simple ndarray, the coefficients are initialized as a 2D
+        array. The intercepts are initialized based on the log mean of the target data y across the first
+        axis, corresponding to the average log activity of the neuron.
+
+        Parameters
+        ----------
+        X :
+            The input data which can be a FeaturePytree with n_features arrays of shape (n_timebins,
+            n_features), or a simple ndarray of shape (n_timebins, n_features).
+        y :
+            The target data array of shape (n_timebins, ), representing
+            the neuron firing rates or similar metrics.
+
+        Returns
+        -------
+        Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray]
+            A tuple containing the initialized parameters:
+            - The first element is the initialized coefficients
+            (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
+            - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
+
+        Example
+        -------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> X = np.zeros((100, 5))  # Example input
+        >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
+        >>> coeff, intercept = nmo.glm.GLM._initialize_parameters(X, y)
+        >>> coeff.shape
+        (5, )
+        >>> intercept.shape
+        (1, )
+        """
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+        # Initialize parameters
+        init_params = (
+            # coeff, spike basis coeffs.
+            # - If X is a FeaturePytree with n_features arrays of shape
+            #   (n_timebins, n_features), then this will be a
+            #   dict with n_features arrays of shape (n_features,).
+            # - If X is an array of shape (n_timebins,
+            #   n_features), this will be an array of shape (n_features,).
+            jax.tree_map(lambda x: jnp.zeros_like(x[0]), data),
+            # intercept, bias terms
+            jnp.log(jnp.mean(y, axis=0, keepdims=True)),
+        )
+        return init_params
+
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[
-            Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike]
-        ] = None,
+        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -348,24 +512,23 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_neurons, n_features) or pytree of same.
+            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
         y :
-            Target neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+            Target neural activity arranged in a matrix, shape (n_time_bins, ).
         init_params :
             2-tuple of initial parameter values: (coefficients, intercepts). If
             None, we initialize coefficients with zeros, intercepts with the
             log of the mean neural activity. coefficients is an array of shape
-            (n_neurons, n_features) or pytree of same, intercepts is an array
-            of shape (n_neurons,)
+            (n_features,) or pytree of same, intercepts is an array
+            of shape (1, )
 
         Raises
         ------
         ValueError
             - If `init_params` is not of length two.
             - If dimensionality of `init_params` are not correct.
-            - If the number of neurons in the model parameters and in the inputs do not match.
-            - If `X` is not three-dimensional.
-            - If `y` is not two-dimensional.
+            - If `X` is not two-dimensional.
+            - If `y` is not one-dimensional.
             - If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
         TypeError
@@ -374,14 +537,43 @@ class GLM(BaseRegressor):
 
         """
         # convert to jnp.ndarray & perform checks
-        X, y, init_params = self._preprocess_fit(X, y, init_params)
+        err_message = "X and y should be array-like object (or trees of array like object) with numeric data type!"
+        X, y = validation.convert_tree_leaves_to_jax_array(
+            (X, y), err_message=err_message, data_type=float
+        )
+
+        if init_params is None:
+            init_params = self._initialize_parameters(X, y)  # initialize
+        else:
+            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+            init_params = validation.convert_tree_leaves_to_jax_array(
+                init_params, err_message=err_message, data_type=float
+            )
+
+        # validate the params
+        self._validate(X, y, init_params)
+
+        # find non-nans
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # drop nans
+        X = jax.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_map(lambda x: x[is_valid], y)
 
         # Run optimization
         runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
-        params, state = runner(init_params, X, y)
+
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        params, state = runner(init_params, data, y)
 
         # estimate the GLM scale
-        self.observation_model.estimate_scale(self._predict(params, X))
+        self.observation_model.estimate_scale(self._predict(params, data))
 
         if (
             tree_utils.pytree_map_and_reduce(
@@ -391,7 +583,7 @@ class GLM(BaseRegressor):
         ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
-                " Try tuning optimization hyperparameters."
+                " Try tuning optimization hyperparameters, specifically try decreasing the learning rate."
             )
 
         # Store parameters
@@ -417,15 +609,15 @@ class GLM(BaseRegressor):
         feedforward_input :
             External input matrix to the model, representing factors like convolved currents,
             light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Array of shape (n_time_bins, n_neurons, n_basis_input) or pytree of same.
+            Array of shape (n_time_bins, n_basis_input) or pytree of same.
 
         Returns
         -------
         simulated_activity :
-            Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape: (n_time_bins, n_neurons).
+            Simulated activity (spike counts for PoissonGLMs) for the neuron over time.
+            Shape: (n_time_bins, ).
         firing_rates :
-            Simulated rates for each neuron over time. Shape, (n_neurons, n_time_bins).
+            Simulated rates for the neuron over time. Shape, (n_time_bins, ).
 
         Raises
         ------
@@ -433,8 +625,6 @@ class GLM(BaseRegressor):
             If the model hasn't been fitted prior to calling this method.
         ValueError
             - If the instance has not been previously fitted.
-            - If there's an inconsistency between the number of neurons in model parameters.
-            - If the number of neurons in input arguments doesn't match with model parameters.
 
 
         See Also
@@ -444,10 +634,21 @@ class GLM(BaseRegressor):
         """
         # check if the model is fit
         self._check_is_fit()
+
         Ws, bs = self.coef_, self.intercept_
-        (feedforward_input,) = self._preprocess_simulate(
-            feedforward_input, params_feedforward=(Ws, bs)
-        )
+
+        # if all invalid, raise error
+        validation.error_all_invalid(feedforward_input)
+
+        # check input dimensionality
+        self._check_input_dimensionality(X=feedforward_input)
+
+        # validate input and params consistency
+        self._check_input_and_params_consistency((Ws, bs), X=feedforward_input)
+
+        # warn if nans in the input
+        validation.warn_invalid_entry(feedforward_input)
+
         predicted_rate = self._predict((Ws, bs), feedforward_input)
         return (
             self._observation_model.sample_generator(
@@ -455,193 +656,3 @@ class GLM(BaseRegressor):
             ),
             predicted_rate,
         )
-
-
-class GLMRecurrent(GLM):
-    """
-    A Generalized Linear Model (GLM) with recurrent dynamics.
-
-    This class extends the basic GLM to capture recurrent dynamics between neurons and
-    self-connectivity, making it more suitable for simulating the activity of interconnected
-    neural populations. The recurrent GLM combines both feedforward inputs (like sensory
-    stimuli) and past neural activity to simulate or predict future neural activity.
-
-    Parameters
-    ----------
-    observation_model :
-        The observation model to use for the GLM. This defines how neural activity is generated
-        based on the underlying firing rate. Common choices include Poisson and Gaussian models.
-    regularizer :
-        The regularization scheme to use for fitting the GLM parameters.
-
-    See Also
-    --------
-    [GLM](./#nemos.glm.GLM) : Base class for the generalized linear model.
-
-    Notes
-    -----
-    - The recurrent GLM assumes that neural activity can be influenced by both feedforward
-    inputs and the past activity of the same and other neurons. This makes it particularly
-    powerful for capturing the dynamics of neural networks where neurons are interconnected.
-
-    - The attributes of `GLMRecurrent` are inherited from the parent `GLM` class, and include
-    coefficients, fitted status, and other model-related attributes.
-    """
-
-    def __init__(
-        self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.UnRegularized(),
-    ):
-        super().__init__(observation_model=observation_model, regularizer=regularizer)
-
-    def simulate_recurrent(
-        self,
-        random_key: jax.Array,
-        feedforward_input: Union[NDArray, jnp.ndarray],
-        coupling_basis_matrix: Union[NDArray, jnp.ndarray],
-        init_y: Union[NDArray, jnp.ndarray],
-    ):
-        """
-        Simulate neural activity using the GLM as a recurrent network.
-
-        This function projects neural activity into the future, employing the fitted
-        parameters of the GLM. It is capable of simulating activity based on a combination
-        of historical activity and external feedforward inputs like convolved currents, light
-        intensities, etc.
-
-        Parameters
-        ----------
-        random_key :
-            jax.random.key for seeding the simulation.
-        feedforward_input :
-            External input matrix to the model, representing factors like convolved currents,
-            light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Expected shape: (n_time_bins, n_neurons, n_basis_input).
-        init_y :
-            Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
-            Expected shape: (window_size, n_neurons).
-        coupling_basis_matrix :
-            Basis matrix for coupling, representing between-neuron couplings
-            and auto-correlations. Expected shape: (window_size, n_basis_coupling).
-
-        Returns
-        -------
-        simulated_activity :
-            Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-            Shape, (n_time_bins, n_neurons).
-        firing_rates :
-            Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
-
-        Raises
-        ------
-        NotFittedError
-            If the model hasn't been fitted prior to calling this method.
-        ValueError
-            - If the instance has not been previously fitted.
-            - If there's an inconsistency between the number of neurons in model parameters.
-            - If the number of neurons in input arguments doesn't match with model parameters.
-
-
-        See Also
-        --------
-        [predict](./#nemos.glm.GLM.predict) :
-        Method to predict rates based on the model's parameters.
-
-        Notes
-        -----
-        The model coefficients (`self.coef_`) are structured such that the first set of coefficients
-        (of size `n_basis_coupling * n_neurons`) are interpreted as the weights for the recurrent couplings.
-        The remaining coefficients correspond to the weights for the feed-forward input.
-
-
-        The sum of `n_basis_input` and `n_basis_coupling * n_neurons` should equal `self.coef_.shape[1]`
-        to ensure consistency in the model's input feature dimensionality.
-        """
-        if isinstance(feedforward_input, FeaturePytree):
-            raise ValueError(
-                "simulate_recurrent works only with arrays. "
-                "FeaturePytree provided instead!"
-            )
-        # check if the model is fit
-        self._check_is_fit()
-
-        # convert to jnp.ndarray
-        coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
-
-        n_basis_coupling = coupling_basis_matrix.shape[1]
-        n_neurons = self.intercept_.shape[0]
-
-        w_feedforward = self.coef_[:, n_basis_coupling * n_neurons :]
-        w_recurrent = self.coef_[:, : n_basis_coupling * n_neurons]
-        bs = self.intercept_
-
-        feedforward_input, init_y = self._preprocess_simulate(
-            feedforward_input,
-            params_feedforward=(w_feedforward, bs),
-            init_y=init_y,
-            params_recurrent=(w_recurrent, bs),
-        )
-
-        if init_y.shape[0] != coupling_basis_matrix.shape[0]:
-            raise ValueError(
-                "`init_y` and `coupling_basis_matrix`"
-                " should have the same window size! "
-                f"`init_y` window size: {init_y.shape[1]}, "
-                f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[1]}"
-            )
-
-        subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
-        # (n_samples, n_neurons)
-        feed_forward_contrib = jnp.einsum(
-            "ik,tik->ti", w_feedforward, feedforward_input
-        )
-
-        def scan_fn(
-            data: Tuple[jnp.ndarray, int], key: jax.Array
-        ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
-            """Scan over time steps and simulate activity and rates.
-
-            This function simulates the neural activity and firing rates for each time step
-            based on the previous activity, feedforward input, and model coefficients.
-            """
-            activity, t_sample = data
-
-            # Convolve the neural activity with the coupling basis matrix
-            # Output of shape (1, n_neuron, n_basis_coupling)
-            # 1. The first dimension is time, and 1 is by construction since we are simulating 1
-            #    sample
-            # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-            conv_act = convolve.reshape_convolve(
-                activity, coupling_basis_matrix
-            ).reshape(
-                -1,
-            )
-
-            # Extract the slice of the feedforward input for the current time step
-            input_slice = jax.lax.dynamic_slice(
-                feed_forward_contrib,
-                (t_sample, 0),
-                (1, feed_forward_contrib.shape[1]),
-            ).squeeze(axis=0)
-
-            # Predict the firing rate using the model coefficients
-            # Doesn't use predict because the non-linearity needs
-            # to be applied after we add the feed forward input
-            firing_rate = self._observation_model.inverse_link_function(
-                w_recurrent.dot(conv_act) + input_slice + bs
-            )
-
-            # Simulate activity based on the predicted firing rate
-            new_act = self._observation_model.sample_generator(key, firing_rate)
-
-            # Shift of one sample the spike count window
-            # for the next iteration (i.e. remove the first counts, and
-            # stack the newly generated sample)
-            # Increase the t_sample by one
-            carry = jnp.vstack((activity[1:], new_act)), t_sample + 1
-            return carry, (new_act, firing_rate)
-
-        _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
-        simulated_activity, firing_rates = outputs
-        return simulated_activity, firing_rates

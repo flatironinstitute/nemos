@@ -276,7 +276,7 @@ ax.set_xlabel("Time (s)")
 
 # bin size in seconds
 bin_size = 0.001
-count = spikes.count(bin_size)
+count = spikes[0].count(bin_size) # Taking neuron 0 from the TsGroup
 count
 
 # %%
@@ -378,16 +378,16 @@ plotting.tuning_curve_plot(tuning_curve)
 #
 # - predictors and spike counts must have the same number of time points.
 #
-# - predictors must be three-dimensional, with shape `(n_time_bins, n_neurons, n_features)`.
+# - predictors must be two-dimensional, with shape `(n_time_bins, n_features)`.
 #   In this example, we have a single feature (the injected current).
 #
-# - spike counts must be two-dimensional, with shape `(n_time_bins, n_neurons)`. As
+# - spike counts must be one-dimensional, with shape `(n_time_bins, )`. As
 #   discussed above, `n_time_bins` must be the same for both the predictors and
 #   spike counts.
 #
 # - predictors and spike counts must be
 #   [`jax.numpy`](https://jax.readthedocs.io/en/latest/jax-101/01-jax-basics.html)
-#   arrays, `numpy` arrays or `pynapple` `TsdTensor`/`TsdFrame`.
+#   arrays, `numpy` arrays or `pynapple` `TsdFrame`/`Tsd`.
 #
 # !!! info "What is jax?"
 #
@@ -401,7 +401,7 @@ plotting.tuning_curve_plot(tuning_curve)
 # First, we require that our predictors and our spike counts have the same
 # number of time bins. We can achieve this by down-sampling our current to the
 # spike counts to the proper resolution using the
-# [`bin_average`](https://pynapple-org.github.io/pynapple/reference/core/time_series/#pynapple.core.time_series.TsdTensor.bin_average)
+# [`bin_average`](https://pynapple-org.github.io/pynapple/reference/core/time_series/#pynapple.core.time_series.BaseTsd.bin_average)
 # method from pynapple:
 
 binned_current = current.bin_average(bin_size)
@@ -418,16 +418,16 @@ print(f"count sampling rate: {count.rate/1000:.02f} KHz")
 #
 # Secondly, we have to reshape our variables so that they are the proper shape:
 #
-# - `predictors`: `(n_time_bins, n_neurons, n_features)`
-# - `count`: `(n_time_bins, n_neurons)`
+# - `predictors`: `(n_time_bins, n_features)`
+# - `count`: `(n_time_bins, )`
 #
 # Because we only have a single predictor feature, we'll use
 # [`np.expand_dims`](https://numpy.org/doc/stable/reference/generated/numpy.expand_dims.html)
 # to handle .
 
 
-# add two dimensions for axis 1 and 2.
-predictor = np.expand_dims(binned_current, (1, 2))
+# add two dimensions for axis 1.
+predictor = np.expand_dims(binned_current, 1)
 
 # check that the dimensionality matches nemos expectation
 print(f"predictor shape: {predictor.shape}")
@@ -615,7 +615,7 @@ print(f"Predicted mean firing rate: {np.mean(predicted_fr)} Hz")
 #   - examine tuning curve -- what do we see?
 # </div>
 
-tuning_curve_model = nap.compute_1d_tuning_curves_continuous(predicted_fr, current, 15)
+tuning_curve_model = nap.compute_1d_tuning_curves_continuous(predicted_fr[:, np.newaxis], current, 15)
 fig = plotting.tuning_curve_plot(tuning_curve)
 fig.axes[0].plot(tuning_curve_model, color="tomato", label="glm")
 fig.axes[0].legend()
@@ -643,7 +643,7 @@ fig.axes[0].legend()
 #   - Finally, let's look at spiking and scoring/metrics
 # </div>
 
-spikes = jax.random.poisson(jax.random.PRNGKey(0), predicted_fr.values)
+spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 
 # %%
 #

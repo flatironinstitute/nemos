@@ -194,16 +194,13 @@ plotting.run_animation(neuron_count, epoch_one_spk.start[0])
 # [`nemos.utils.create_convolutional_predictor`](../../../reference/nemos/utils/#nemos.utils.create_convolutional_predictor)
 # function.
 
-# reshape counts to (num_samples, num_neurons)
-count_tsdframe = np.expand_dims(neuron_count, 1)
-
 # convert the prediction window to bins (by multiplying with the sampling rate)
 window_size = int(window_size_sec * neuron_count.rate)
 
 # convolve the counts with the identity matrix.
 plt.close("all")
 input_feature = nmo.convolve.create_convolutional_predictor(
-    np.eye(window_size), count_tsdframe
+    np.eye(window_size), neuron_count
 )
 
 # print the NaN indices along the time axis
@@ -263,7 +260,7 @@ model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
 # Fit over the training epochs
 model.fit(
     input_feature.restrict(first_half),
-    count_tsdframe.restrict(first_half)
+    neuron_count.restrict(first_half)
 )
 
 # %%
@@ -288,7 +285,7 @@ plt.legend()
 model_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
 model_second_half.fit(
     input_feature.restrict(second_half),
-    count_tsdframe.restrict(second_half)
+    neuron_count.restrict(second_half)
 )
 
 plt.figure()
@@ -400,7 +397,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 # This can be performed in nemos.
 
 
-conv_spk = nmo.convolve.create_convolutional_predictor(basis_kernels, count_tsdframe)
+conv_spk = nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -421,7 +418,7 @@ plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_mult
 
 # use restrict on interval set training
 model_basis = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_basis.fit(conv_spk.restrict(first_half), count_tsdframe.restrict(first_half))
+model_basis.fit(conv_spk.restrict(first_half), neuron_count.restrict(first_half))
 
 # %%
 # We can plot the resulting response, noting that the weights we just learned needs to be "expanded" back
@@ -455,7 +452,7 @@ plt.legend()
 # by visual comparison, as we did previously. Let's fit the second half of the dataset.
 
 model_basis_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
-model_basis_second_half.fit(conv_spk.restrict(second_half), count_tsdframe.restrict(second_half))
+model_basis_second_half.fit(conv_spk.restrict(second_half), neuron_count.restrict(second_half))
 
 # compute responses for the 2nd half fit
 self_connection_second_half = np.matmul(basis_kernels, np.squeeze(model_basis_second_half.coef_))
@@ -478,14 +475,14 @@ plt.legend()
 
 # compare model scores, as expected the training score is better with more parameters
 # this may could be over-fitting.
-print(f"full history train score: {model.score(input_feature.restrict(first_half), count_tsdframe.restrict(first_half), score_type='pseudo-r2-Cohen')}")
-print(f"basis train score: {model_basis.score(conv_spk.restrict(first_half), count_tsdframe.restrict(first_half), score_type='pseudo-r2-Cohen')}")
+print(f"full history train score: {model.score(input_feature.restrict(first_half), neuron_count.restrict(first_half), score_type='pseudo-r2-Cohen')}")
+print(f"basis train score: {model_basis.score(conv_spk.restrict(first_half), neuron_count.restrict(first_half), score_type='pseudo-r2-Cohen')}")
 
 # %%
 # To check that, let's try to see ho the model perform on unseen data and obtaining a test
 # score.
-print(f"\nfull history test score: {model.score(input_feature.restrict(second_half), count_tsdframe.restrict(second_half), score_type='pseudo-r2-Cohen')}")
-print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), count_tsdframe.restrict(second_half), score_type='pseudo-r2-Cohen')}")
+print(f"\nfull history test score: {model.score(input_feature.restrict(second_half), neuron_count.restrict(second_half), score_type='pseudo-r2-Cohen')}")
+print(f"basis test score: {model_basis.score(conv_spk.restrict(second_half), neuron_count.restrict(second_half), score_type='pseudo-r2-Cohen')}")
 
 # %%
 # Let's extract and plot the rates
@@ -517,8 +514,8 @@ convolved_count = nmo.convolve.create_convolutional_predictor(basis_kernels, cou
 # Check the dimension to make sure it make sense
 print(f"Convolved count shape: {convolved_count.shape}")
 
-# Reshape to (n_samples, 1, n_basis_func * n_neurons)
-convolved_count = np.reshape(convolved_count, (convolved_count.shape[0], 1, -1))
+# Reshape to (n_samples, n_basis_func * n_neurons)
+convolved_count = np.reshape(convolved_count, (convolved_count.shape[0], -1))
 print(f"Convolved count re-shaped: {convolved_count.shape}")
 
 # %%
@@ -535,7 +532,7 @@ print(f"Convolved count re-shaped: {convolved_count.shape}")
 models = []
 for neu in range(count.shape[1]):
     print(f"fitting neuron {neu}...")
-    count_neu = count[:, neu:neu+1]
+    count_neu = count[:, neu]
     model = nmo.glm.GLM(
         regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1, solver_name="LBFGS")
     )

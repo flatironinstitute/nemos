@@ -174,18 +174,18 @@ model = nmo.glm.GLM(
 
 neuron = 7
 
-model.fit(np.expand_dims(position_basis, 1), counts[:, neuron: neuron + 1])
+model.fit(position_basis, counts[:, neuron])
 
 # %%
 # We can compute the model predicted firing rate.
 
-rate_pos = model.predict(position_basis[:, np.newaxis])
+rate_pos = model.predict(position_basis)
 
 # %%
 # And compute the tuning curves/
 
 model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
-    tsdframe=rate_pos * rate_pos.rate, features=position, nb_bins=12
+    tsdframe=rate_pos[:, np.newaxis] * rate_pos.rate, features=position, nb_bins=12
 )
 
 # %%
@@ -221,7 +221,7 @@ param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-5, 1e-3])
 cls = GridSearchCV(model, param_grid=param_grid)
 
 # run the search, the default is a 5-fold cross-validation strategy
-cls.fit(np.expand_dims(position_basis, 1), counts[:, neuron : neuron + 1])
+cls.fit(position_basis, counts[:, neuron])
 
 # %%
 # Let's get the best estimator and see what we get.
@@ -232,11 +232,11 @@ best_model = cls.best_estimator_
 # Let's predict and compute the tuning curves once again.
 
 # predict the rate with the selected model
-best_rate_pos = best_model.predict(np.expand_dims(position_basis, 1))
+best_rate_pos = best_model.predict(position_basis)
 
 # compute the 2D tuning
 best_model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
-    tsdframe=best_rate_pos * best_rate_pos.rate, features=position, nb_bins=12
+    tsdframe=best_rate_pos[:, np.newaxis] * best_rate_pos.rate, features=position, nb_bins=12
 )
 
 # %%

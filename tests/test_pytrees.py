@@ -107,12 +107,10 @@ class TestFeaturePytree:
 
     def test_glm(self):
         """Validate the Generalized Linear Model (GLM) implementation with FeaturePytree."""
-        w_true = FeaturePytree(test=np.random.rand(1, 3), test2=np.random.rand(1, 2))
-        X = FeaturePytree(
-            test=np.random.rand(100, 1, 3), test2=np.random.rand(100, 1, 2)
-        )
+        w_true = dict(test=np.random.rand(3), test2=np.random.rand(2))
+        X = FeaturePytree(test=np.random.rand(100, 3), test2=np.random.rand(100, 2))
         rate = nmo.tree_utils.pytree_map_and_reduce(
-            lambda w, x: jnp.einsum("ik,tik->ti", w, x), sum, w_true, X
+            lambda w, x: jnp.einsum("k,tk->t", w, x), sum, w_true, X.data
         )
         spikes = np.random.poisson(rate)
         model = nmo.glm.GLM()

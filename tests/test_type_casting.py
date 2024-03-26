@@ -202,11 +202,11 @@ def test_predict_nap_output(iset, poissonGLM_model_instantiation):
     X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
     n_samp = X.shape[0]
     time = jnp.linspace(0, 1, n_samp)
-    tsd_X = nap.TsdTensor(t=time, d=X).restrict(iset)
+    tsd_X = nap.TsdFrame(t=time, d=X).restrict(iset)
     model.fit(X, y)
     # run predict on tsd
     pred_rate = model.predict(tsd_X)
-    assert isinstance(pred_rate, nap.TsdFrame)
+    assert isinstance(pred_rate, nap.Tsd)
     assert np.all(iset.values == pred_rate.time_support.values)
 
 
@@ -322,26 +322,34 @@ def test_check_all_close(inp, expected):
     """Evaluate conditional conversion to JAX array based on input characteristics."""
     assert nmo.type_casting._check_all_close(inp) == expected
 
+
 @pytest.mark.parametrize(
     "data, cls",
     [
-        (np.zeros((10, )), nap.Tsd),
+        (np.zeros((10,)), nap.Tsd),
         (np.zeros((10, 1)), nap.TsdFrame),
         (np.zeros((10, 1, 1)), nap.TsdTensor),
-    ]
+    ],
 )
 @pytest.mark.parametrize(
     "t1, t2, expectation",
     [
         (np.arange(10), np.arange(10), does_not_raise()),
-        (np.arange(10), np.arange(10) + 1, pytest.raises(ValueError,
-                                                    match="Time axis mismatch. pynapple objects have mismatching"))
-    ]
+        (
+            np.arange(10),
+            np.arange(10) + 1,
+            pytest.raises(
+                ValueError,
+                match="Time axis mismatch. pynapple objects have mismatching",
+            ),
+        ),
+    ],
 )
 def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
     @nmo.type_casting.support_pynapple(conv_type="jax")
     def func(*x):
         return x
+
     with expectation:
         func(cls(t=t1, d=data), cls(t=t2, d=data))
 
@@ -349,19 +357,35 @@ def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
 @pytest.mark.parametrize(
     "tsds, expectation",
     [
-        ([nap.Tsd(t=np.arange(10), d=np.arange(10)), nap.Tsd(t=np.arange(11), d=np.arange(11))],
-         pytest.raises(ValueError, match="Time axis mismatch. pynapple objects have mismatching")),
-        ([nap.Tsd(t=np.arange(10), d=np.arange(10)),
-          nap.Tsd(t=np.arange(1), d=np.arange(1)),
-          nap.Tsd(t=np.arange(10), d=np.arange(10))],
-         pytest.raises(ValueError,match="Time axis mismatch. pynapple objects have mismatching"))
-    ]
+        (
+            [
+                nap.Tsd(t=np.arange(10), d=np.arange(10)),
+                nap.Tsd(t=np.arange(11), d=np.arange(11)),
+            ],
+            pytest.raises(
+                ValueError,
+                match="Time axis mismatch. pynapple objects have mismatching",
+            ),
+        ),
+        (
+            [
+                nap.Tsd(t=np.arange(10), d=np.arange(10)),
+                nap.Tsd(t=np.arange(1), d=np.arange(1)),
+                nap.Tsd(t=np.arange(10), d=np.arange(10)),
+            ],
+            pytest.raises(
+                ValueError,
+                match="Time axis mismatch. pynapple objects have mismatching",
+            ),
+        ),
+    ],
 )
 @pytest.mark.parametrize("conv_type", ["numpy", "jax"])
 def test_equal_time_axis_different_len(tsds, conv_type, expectation):
     @nmo.type_casting.support_pynapple(conv_type=conv_type)
     def func(*x):
         return x
+
     with expectation:
         func(*tsds)
 
@@ -369,13 +393,20 @@ def test_equal_time_axis_different_len(tsds, conv_type, expectation):
 @pytest.mark.parametrize(
     "conv_type, expectation",
     [
-        ("numpy", does_not_raise()), ("jax", does_not_raise()), ("not_implemented", pytest.raises(
-        NotImplementedError, match="Conversion of type 'not_implemented'"))
-    ]
+        ("numpy", does_not_raise()),
+        ("jax", does_not_raise()),
+        (
+            "not_implemented",
+            pytest.raises(
+                NotImplementedError, match="Conversion of type 'not_implemented'"
+            ),
+        ),
+    ],
 )
 def test_conv_type(conv_type, expectation):
     @nmo.type_casting.support_pynapple(conv_type=conv_type)
     def func(*x):
         return x
+
     with expectation:
         func(nap.Tsd(t=np.arange(10), d=np.arange(10)))
