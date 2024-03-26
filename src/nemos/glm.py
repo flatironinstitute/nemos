@@ -152,7 +152,7 @@ class GLM(BaseRegressor):
                 err_message="y must be one-dimensional, with shape (n_timebins, ).",
             )
 
-        if not (X is None):
+        if X is not None:
             validation.check_tree_leaves_dimensionality(
                 X,
                 expected_dim=2,
