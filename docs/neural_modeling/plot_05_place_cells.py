@@ -265,20 +265,20 @@ glm = nmo.glm.GLM(
     regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12))
 )
 
-glm.fit(X[:, np.newaxis, :], count[:, np.newaxis])
+glm.fit(X, count)
 
 # %%
 # ## Prediction
 #
 # Let's check first if our model can accurately predict the different tuning curves we displayed above. We can use the `predict` function of nemos and then compute new tuning curves
 
-predicted_rate = glm.predict(X[:, np.newaxis, :]) / bin_size
+predicted_rate = glm.predict(X) / bin_size
 
-glm_pf = nap.compute_1d_tuning_curves_continuous(predicted_rate, position, 50)
+glm_pf = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis], position, 50)
 glm_pos_theta, xybins = nap.compute_2d_tuning_curves_continuous(
-    predicted_rate, data, 30, ep=within_ep
+    predicted_rate[:, np.newaxis], data, 30, ep=within_ep
 )
-glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate, speed, 30)
+glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis], speed, 30)
 
 # %%
 # Let's display both tuning curves together.
@@ -331,19 +331,19 @@ for m in models:
     print("2. Fitting model : ", m)
     # glm = nmo.glm.GLM()
     glm.fit(
-        X.restrict(train_iset)[:, np.newaxis, :],
-        count.restrict(train_iset)[:, np.newaxis],
+        X.restrict(train_iset),
+        count.restrict(train_iset),
     )
 
     print("3. Scoring model : ", m)
     scores[m] = glm.score(
-        X.restrict(test_iset)[:, np.newaxis, :],
-        count.restrict(test_iset)[:, np.newaxis],
+        X.restrict(test_iset),
+        count.restrict(test_iset),
         score_type="pseudo-r2-McFadden",
     )
 
     print("4. Predicting rate")
-    predicted_rates[m] = glm.predict(X.restrict(test_iset)[:, np.newaxis, :]) / bin_size
+    predicted_rates[m] = glm.predict(X.restrict(test_iset)) / bin_size
 
 
 scores = pd.Series(scores)
@@ -371,10 +371,10 @@ tuning_curves = {}
 for m in models:
     tuning_curves[m] = {
         "position": nap.compute_1d_tuning_curves_continuous(
-            predicted_rates[m], position, 50, ep=test_iset
+            predicted_rates[m][:, np.newaxis], position, 50, ep=test_iset
         ),
         "speed": nap.compute_1d_tuning_curves_continuous(
-            predicted_rates[m], speed, 30, minmax=(0, 100), ep=test_iset
+            predicted_rates[m][:, np.newaxis], speed, 30, minmax=(0, 100), ep=test_iset
         ),
     }
 
