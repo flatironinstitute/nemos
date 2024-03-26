@@ -439,7 +439,7 @@ class GLM(BaseRegressor):
         return score
 
     @staticmethod
-    def initialize_params(
+    def _initialize_parameters(
         X: DESIGN_INPUT_TYPE, y: jnp.ndarray
     ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
@@ -474,7 +474,7 @@ class GLM(BaseRegressor):
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
         >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
-        >>> coeff, intercept = nmo.glm.GLM.initialize_params(X, y)
+        >>> coeff, intercept = nmo.glm.GLM._initialize_parameters(X, y)
         >>> coeff.shape
         (5, )
         >>> intercept.shape
@@ -543,7 +543,7 @@ class GLM(BaseRegressor):
         )
 
         if init_params is None:
-            init_params = self.initialize_params(X, y)  # initialize
+            init_params = self._initialize_parameters(X, y)  # initialize
         else:
             err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
             "with numeric data-type!"

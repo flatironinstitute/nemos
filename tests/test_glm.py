@@ -16,7 +16,7 @@ def test_validate_higher_dimensional_data_X(mock_glm):
     X = jnp.array([[[[1, 2], [3, 4]]]])
     y = jnp.array([1, 2])
     with pytest.raises(ValueError, match="X must be two-dimensional"):
-        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
+        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
 
 
 def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
@@ -24,7 +24,7 @@ def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
     X = jnp.array([[[1, 2], [3, 4]]])
     y = jnp.array([[[1, 2]]])
     with pytest.raises(ValueError, match="y must be one-dimensional"):
-        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
+        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
 
 
 def test_validate_lower_dimensional_data_X(mock_glm):
@@ -32,7 +32,7 @@ def test_validate_lower_dimensional_data_X(mock_glm):
     X = jnp.array([1, 2])
     y = jnp.array([1, 2])
     with pytest.raises(ValueError, match="X must be two-dimensional"):
-        mock_glm._validate(X, y, mock_glm.initialize_params(X, y))
+        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
 
 
 class TestGLM:
@@ -107,7 +107,7 @@ class TestGLM:
     )
     def test_parameter_initialization(self, X, y, poissonGLM_model_instantiation):
         _, _, model, _, _ = poissonGLM_model_instantiation
-        coef, inter = model.initialize_params(X, y)
+        coef, inter = model._initialize_parameters(X, y)
         assert coef.shape == (X.shape[1],)
         assert inter.shape == (1,)
 
@@ -448,15 +448,15 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=true_params)
 
-    # def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
-    #     """Test that the group lasso fit goes through"""
-    #     X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
-    #     model.set_params(
-    #         regularizer=nmo.regularizer.GroupLasso(
-    #             solver_name="ProximalGradient", mask=mask
-    #         )
-    #     )
-    #     model.fit(X, y)
+    def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
+        """Test that the group lasso fit goes through"""
+        X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(
+                solver_name="ProximalGradient", mask=mask
+            )
+        )
+        model.fit(X, y)
 
     def test_fit_pytree_equivalence(
         self, poissonGLM_model_instantiation, poissonGLM_model_instantiation_pytree
