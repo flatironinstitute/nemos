@@ -379,31 +379,21 @@ for m in models:
     }
 
 
-def plot_tuning_curves(axis, tc, m):
-    gs = axis.subgridspec(1, 2)
-    plt.subplot(gs[0, 0])
-    plt.plot(pf[neuron], "--", label="Observed")
-    plt.plot(tc["position"][0])
-    plt.xlabel("Position (cm)")
-    plt.ylabel("Firing rate (Hz)")
-    plt.title("Model : {}".format(m))
-    plt.legend()
-
-    plt.subplot(gs[0, 1])
-    plt.plot(tc_speed[neuron], "--")
-    plt.plot(tc["speed"][0])
-    plt.xlabel("Speed (cm/s)")
-
-
 fig = plt.figure(figsize=(8, 4))
 outer_grid = fig.add_gridspec(2, 2)
 for i, m in enumerate(models):
-    plot_tuning_curves(outer_grid[i // 2, i % 2], tuning_curves[m], m)
+    plotting.plot_position_speed_tuning(
+        outer_grid[i // 2, i % 2], 
+        tuning_curves[m],
+        pf[neuron],
+        tc_speed[neuron],
+        m)
 
 plt.tight_layout()
 plt.show()
 
 # %%
+# ## Conclusion
 #
 # Various combinations of features can lead to different results. Feel free to explore more. To go beyond this notebook, you can check the following references :
 #

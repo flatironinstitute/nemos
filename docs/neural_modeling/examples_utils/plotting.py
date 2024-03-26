@@ -871,3 +871,18 @@ def plot_position_phase_speed_tuning(
     plt.tight_layout()
 
     return fig
+
+def plot_position_speed_tuning(axis, tc, pf, tc_speed, m):
+    gs = axis.subgridspec(1, 2)
+    plt.subplot(gs[0, 0])
+    plt.plot(pf, "--", label="Observed")
+    plt.plot(tc["position"][0])
+    plt.xlabel("Position (cm)")
+    plt.ylabel("Firing rate (Hz)")
+    plt.title("Model : {}".format(m))
+    plt.legend()
+
+    plt.subplot(gs[0, 1])
+    plt.plot(tc_speed, "--")
+    plt.plot(tc["speed"][0])
+    plt.xlabel("Speed (cm/s)")
