@@ -145,7 +145,7 @@ class GLM(BaseRegressor):
     def _check_input_dimensionality(
         X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
     ):
-        if not (y is None):
+        if y is not None:
             validation.check_tree_leaves_dimensionality(
                 y,
                 expected_dim=1,
