@@ -7,15 +7,19 @@
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
-`nemos` ("NEural MOdelS") is a statistical modeling framework for systems
-neuroscience, built on top of [jax](jax.readthedocs.io/). 
+`nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](jax.readthedocs.io/). 
+It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
 
-`nemos` aims to provide well-tested, GPU-accelerated implementations of standard statistical modeling methods.
+The core of `nemos` includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
+focusing on the Generalized Linear Model (GLM). 
 
-For now, we are focusing on the Generalized Linear Model (GLM). The package is under active development and more methods will be added in the future.
+The package is under active development and more methods will be added in the future.
 
-To learn more about the Generalized Linear Model, we recommend [Neuromatch Academy's
-lesson](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Intro.html) and [Jonathan Pillow's Cosyne 2018 tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
+For those looking to get a better grasp of the Generalized Linear Model, we recommend checking out the 
+Neuromatch Academy's lesson [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) and Jonathan Pillow's tutorial 
+from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
+
+
 
 
 ## Installation
