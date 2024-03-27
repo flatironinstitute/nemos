@@ -40,40 +40,44 @@ For more details, including specifics for GPU users and developers, refer to `ne
 
 ## Basic usage
 
-Using basis functions, `nemos` facilitates building a set of predictors. Given a 1-dimensional `feature`, you can generate a set of predictor `X` with predefined basis:
-```python
-basis = nmo.basis.MSplineBasis(n_basis_funcs=10)
-X = basis.evaluate(feature)
-```
-Other basis are available depending on the type of feature :
+`nemos` streamlines the design of a GLM model. To illustrate how, let's see how we can model
+a neuron that is driven by the activity of all the simultaneously recorded units. 
 
-  * [`BSplineBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.BSplineBasis)
+The model the neuron firing rate, one would need to,
 
-  * [`CyclicBSplineBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.CyclicBSplineBasis) for angular features (i.e. head-direction)
+1. Convolve the spike counts of each neuron with a bank of filters, called "basis function".
+2. Weight the convolution outputs and sum them together.
+3. Pass the result through a positive non-linearity to get the firing rate.
+4. Compute the Poisson likelihood of the observed count.
 
-  * [`RaisedCosineBasisLinear`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.RaisedCosineBasisLinear) or [`RaisedCosineBasisLog`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.RaisedCosineBasisLog) for temporal feature (i.e. spiking activity)
+This is schematized below,
 
-  * [`OrthExponentialBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.OrthExponentialBasis)
-  
-`nemos` makes it easy to combine features. Basis can be added or multiplied together and the returned object will still be a basis.
+<figure markdown>
+<img src="assets/glm_scheme.png" style="width: 100%"/>
+<figcaption>Population GLM model.</figcaption>
+</figure>
 
-```python
-basis_1 = nmo.basis.MSplineBasis(n_basis_funcs=10)
-basis_2 = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=15)
-
-basis = basis_1 * basis_2 + basis_3
-
-X = basis.evaluate(feature_1, feature_2, feature_3)
-```
-
-For now, the core model of nemos is the
-[`Poisson GLM`](https://nemos.readthedocs.io/en/latest/reference/nemos/glm/) object that predict firing rate of a single neuron in response to
-user-specified predictors. 
+With nemos you can define such a model with a few lines of code.
 
 ```python
-glm = nmo.glm.GLM()
-glm.fit(X, y)
+import nemos as nmo
+
+counts  = ...  # 2D array or TsdFrame
+
+# 100 time bin basis
+_, basis = nmo.basis.RaisedCosineBasisLog(10).evaluate_on_grid(100)
+
+# convolve
+conv_counts = nmo.convolve.create_convolutional_predictor(basis, counts)
+
+# fit a GLM to the first neuron counts
+glm = nmo.glm.GLM().fit(conv_counts, counts[:, 0])
+
+# compute rate
+firing_rate = glm.predict(conv_counts)
+
+# compute log-likelihood
+ll = glm.score(conv_counts)
 ```
 We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
 
