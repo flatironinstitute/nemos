@@ -55,7 +55,7 @@ nmo.glm.GLM().fit(X, y)
 
 ![glm-population-figure](assets/glm_population_scheme.svg)
 
-Building the [model](#glm-population-figure) above is more complicated. In this case, input spikes are convolved with a bank of basis functions that stretch in time. With nemos, you can convolve the basis functions with a few lines of code:
+Building the model above is more complicated. In this case, input spikes are convolved with a bank of basis functions that stretch in time. With nemos, you can convolve the basis functions with a few lines of code:
 
 ```python
 import nemos as nmo
