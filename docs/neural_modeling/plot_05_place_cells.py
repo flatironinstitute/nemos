@@ -85,7 +85,7 @@ for i, n in enumerate(order):
 # %%
 # ## Phase precession
 #
-# In addition to place modulation, place cells are also modulated by the theta oscillation. The phase at which neurons fire is dependant of the position. This phenomen is called "phase precession" (see "J. O’Keefe, M. L. Recce, Phase relationship between hippocampal place units and the EEG theta rhythm. Hippocampus 3, 317–330 (1993)."
+# In addition to place modulation, place cells are also modulated by the theta oscillation. The phase at which neurons fire is dependant of the position. This phenomen is called "phase precession" (see [J. O’Keefe, M. L. Recce, "Phase relationship between hippocampal place units and the EEG theta rhythm." Hippocampus 3, 317–330 (1993).](https://doi.org/10.1002/hipo.450030307)
 #
 # Let's compute the response of the neuron as a function of both theta and position. The phase of theta has already been computed but we have to bring it to the same dimension as the position feature. While the position has been sampled at 40Hz, the theta phase has been computed at 1250Hz.
 # Later on during the analysis, we will use a bin size of 5 ms for counting the spikes. Since this corresponds to an intermediate frequency between 40 and 1250 Hz, we will bring all the features to 200Hz already.
@@ -297,7 +297,8 @@ fig = plotting.plot_position_phase_speed_tuning(
 #
 # While this model captures nicely the features-rate relationship, it is not necessarily the simplest model. Let's construct several models and evaluate their score to determine the best model.
 #
-# !!! note "To shorten this notebook, only a few combination are tested. Feel free to expand this list."
+# !!! note
+#     To shorten this notebook, only a few combinations are tested. Feel free to expand this list.
 #
 
 models = {
