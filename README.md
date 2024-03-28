@@ -7,6 +7,12 @@
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
+<br><br>
+<figure id="glm-figure" markdown>
+<img src="docs/assets/glm_scheme.svg" style="width: 100%"/>
+<figcaption>Coupled GLM model.</figcaption>
+</figure>
+
 `nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](jax.readthedocs.io/). 
 It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
 
@@ -37,18 +43,10 @@ For more details, including specifics for GPU users and developers, refer to `ne
 
 ## Basic usage
 
-`nemos` streamlines the design of a GLM model. To illustrate how, let's see how we can model
-a neuron that is driven by the activity of all the simultaneously recorded units. 
+`nemos` streamlines the design of a GLM. To show how, let's assume that we want to implement and fit the model
+illustrated in the [figure](#glm-figure) above.
 
-The model we want to set up is illustrated below,
-
-<br><br>
-<figure markdown>
-<img src="docs/assets/glm_scheme.svg" style="width: 100%"/>
-<figcaption>Coupled GLM model.</figcaption>
-</figure>
-
-To implement the model one one needs to:
+For that, we need to:
 
 1. Convolve the spike counts of each neuron with a bank of filters, called "basis function".
 2. Weight the convolution outputs and sum them together.
