@@ -11,6 +11,30 @@ import nemos as nmo
 from nemos.pytrees import FeaturePytree
 
 
+def test_validate_higher_dimensional_data_X(mock_glm):
+    """Test behavior with higher-dimensional input data."""
+    X = jnp.array([[[[1, 2], [3, 4]]]])
+    y = jnp.array([1, 2])
+    with pytest.raises(ValueError, match="X must be two-dimensional"):
+        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
+
+
+def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
+    """Test behavior with higher-dimensional input data."""
+    X = jnp.array([[[1, 2], [3, 4]]])
+    y = jnp.array([[[1, 2]]])
+    with pytest.raises(ValueError, match="y must be one-dimensional"):
+        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
+
+
+def test_validate_lower_dimensional_data_X(mock_glm):
+    """Test behavior with lower-dimensional input data."""
+    X = jnp.array([1, 2])
+    y = jnp.array([1, 2])
+    with pytest.raises(ValueError, match="X must be two-dimensional"):
+        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
+
+
 class TestGLM:
     """
     Unit tests for the PoissonGLM class.
@@ -73,6 +97,19 @@ class TestGLM:
         """
         with expectation:
             glm_class(regularizer=ridge_regularizer, observation_model=observation)
+
+    @pytest.mark.parametrize(
+        "X, y",
+        [
+            (jnp.zeros((2, 4)), jnp.zeros((2,))),
+            (jnp.zeros((2, 4)), jnp.zeros((2,))),
+        ],
+    )
+    def test_parameter_initialization(self, X, y, poissonGLM_model_instantiation):
+        _, _, model, _, _ = poissonGLM_model_instantiation
+        coef, inter = model._initialize_parameters(X, y)
+        assert coef.shape == (X.shape[1],)
+        assert inter.shape == (1,)
 
     #######################
     # Test model.fit
@@ -155,22 +192,25 @@ class TestGLM:
                 0,
                 pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)",
+                    match=r"Inconsistent number of features",
                 ),
             ),
             (
                 1,
+                does_not_raise(),
+            ),
+            (
+                2,
                 pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)",
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
             ),
-            (2, does_not_raise()),
             (
                 3,
                 pytest.raises(
                     ValueError,
-                    match=r"params\[0\] must be an array or .* of shape \(n_neurons, n_features\)",
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
             ),
         ],
@@ -183,15 +223,16 @@ class TestGLM:
         Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
+        n_samples, n_features = X.shape
+        n_neurons = 4
         if dim_weights == 0:
             init_w = jnp.array([])
         elif dim_weights == 1:
-            init_w = jnp.zeros((n_neurons,))
+            init_w = jnp.zeros((n_features,))
         elif dim_weights == 2:
-            init_w = jnp.zeros((n_neurons, n_features))
+            init_w = jnp.zeros((n_features, n_neurons))
         else:
-            init_w = jnp.zeros((n_neurons, n_features) + (1,) * (dim_weights - 2))
+            init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
             model.fit(X, y, init_params=(init_w, true_params[1]))
 
@@ -211,30 +252,30 @@ class TestGLM:
         Test the `fit` method with intercepts of different dimensionalities. Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_b = jnp.zeros((n_neurons,) * dim_intercepts)
-        init_w = jnp.zeros((n_neurons, n_features))
+        n_samples, n_features = X.shape
+        init_b = jnp.zeros((1,) * dim_intercepts)
+        init_w = jnp.zeros((n_features,))
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize(
         "init_params, expectation",
         [
-            ([jnp.zeros((1, 5)), jnp.zeros((1,))], does_not_raise()),
+            ([jnp.zeros((5,)), jnp.zeros((1,))], does_not_raise()),
             (
-                iter([jnp.zeros((1, 5)), jnp.zeros((1,))]),
+                [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
                 pytest.raises(ValueError, match="Params must have length two."),
             ),
-            (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
+            (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
             (
-                (dict(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1, 1))), jnp.zeros((1,))),
+                (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))),
                 pytest.raises(
                     TypeError, match=r"X and params\[0\] must be the same type"
                 ),
             ),
             (
                 (
-                    FeaturePytree(p1=jnp.zeros((1, 5)), p2=jnp.zeros((1, 1))),
+                    FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
                     jnp.zeros((1,)),
                 ),
                 pytest.raises(
@@ -268,101 +309,11 @@ class TestGLM:
             model.fit(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="Model parameters have inconsistent shapes"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="Model parameters have inconsistent shapes"
-                ),
-            ),
-        ],
-    )
-    def test_fit_n_neuron_match_baseline_rate(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `fit` method ensuring The number of neurons in the baseline rate matches the expected number.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_samples, n_neurons, n_features = X.shape
-        init_b = jnp.zeros((n_neurons + delta_n_neuron,))
-        with expectation:
-            model.fit(X, y, init_params=(true_params[0], init_b))
-
-    @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_fit_n_neuron_match_x(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `fit` method ensuring The number of neurons in X matches The number of neurons in the model.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_neurons = X.shape[1]
-        X = jnp.repeat(X, n_neurons + delta_n_neuron, axis=1)
-        with expectation:
-            model.fit(X, y, init_params=true_params)
-
-    @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_fit_n_neuron_match_y(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `fit` method ensuring The number of neurons in y matches The number of neurons in the model.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        n_neurons = X.shape[1]
-        y = jnp.repeat(y, n_neurons + delta_n_neuron, axis=1)
-        with expectation:
-            model.fit(X, y, init_params=true_params)
-
-    @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
     def test_fit_x_dimensionality(
@@ -373,18 +324,18 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], X.shape[1]))
+            X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
-            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+            X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
             model.fit(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="y must be two-dimensional")),
+            (-1, pytest.raises(ValueError, match="y must be one-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="y must be two-dimensional")),
+            (1, pytest.raises(ValueError, match="y must be one-dimensional")),
         ],
     )
     def test_fit_y_dimensionality(
@@ -395,9 +346,9 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if delta_dim == -1:
-            y = np.zeros(X.shape[0])
+            y = np.zeros([])
         elif delta_dim == 1:
-            y = np.zeros((X.shape[0], X.shape[1], 1))
+            y = np.zeros((y.shape[0], 1))
         with expectation:
             model.fit(X, y, init_params=true_params)
 
@@ -417,8 +368,10 @@ class TestGLM:
         Ensure the number of features align.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        init_w = jnp.zeros((X.shape[1], X.shape[2] + delta_n_features))
-        init_b = jnp.zeros(X.shape[1])
+        init_w = jnp.zeros((X.shape[1] + delta_n_features))
+        init_b = jnp.zeros(
+            1,
+        )
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
@@ -439,7 +392,7 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if delta_n_features == 1:
-            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
@@ -520,11 +473,15 @@ class TestGLM:
         model_tree.fit(X_tree, y, init_params=true_params_tree)
 
         # get the flat parameters
-        flat_coef = np.concatenate(model_tree.coef_.tree_flatten()[0], axis=-1)
+        flat_coef = np.concatenate(
+            jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=-1
+        )
 
         # assert equivalence of solutions
         assert np.allclose(model.coef_, flat_coef)
         assert np.allclose(model.intercept_, model_tree.intercept_)
+        assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
+        assert np.allclose(model.predict(X), model_tree.predict(X_tree))
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -556,73 +513,11 @@ class TestGLM:
     # Test model.score
     #######################
     @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_score_n_neuron_match_x(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `score` method when The number of neurons in X differs. Ensure the correct number of neurons.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        X = jnp.repeat(X, X.shape[1] + delta_n_neuron, axis=1)
-        with expectation:
-            model.score(X, y)
-
-    @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_score_n_neuron_match_y(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `score` method when The number of neurons in y differs. Ensure the correct number of neurons.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        y = jnp.repeat(y, y.shape[1] + delta_n_neuron, axis=1)
-        with expectation:
-            model.score(X, y)
-
-    @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
     def test_score_x_dimensionality(
@@ -635,9 +530,9 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], X.shape[1]))
+            X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
-            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+            X = np.zeros((X.shape[0], X.shape[1], 1))
         with expectation:
             model.score(X, y)
 
@@ -647,14 +542,14 @@ class TestGLM:
             (
                 -1,
                 pytest.raises(
-                    ValueError, match="y must be two-dimensional, with shape"
+                    ValueError, match="y must be one-dimensional, with shape"
                 ),
             ),
             (0, does_not_raise()),
             (
                 1,
                 pytest.raises(
-                    ValueError, match="y must be two-dimensional, with shape"
+                    ValueError, match="y must be one-dimensional, with shape"
                 ),
             ),
         ],
@@ -670,9 +565,9 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            y = np.zeros((X.shape[0],))
+            y = np.zeros([])
         elif delta_dim == 1:
-            y = np.zeros((X.shape[0], X.shape[1], 1))
+            y = np.zeros((X.shape[0], X.shape[1]))
         with expectation:
             model.score(X, y)
 
@@ -695,7 +590,7 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_n_features == 1:
-            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
@@ -829,43 +724,11 @@ class TestGLM:
     # Test model.predict
     #######################
     @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_predict_n_neuron_match_x(
-        self, delta_n_neuron, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `predict` method when The number of neurons in X differs.
-        Ensure that The number of neurons in X, y and params matches.
-        """
-        X, _, model, true_params, _ = poissonGLM_model_instantiation
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        X = jnp.repeat(X, X.shape[1] + delta_n_neuron, axis=1)
-        with expectation:
-            model.predict(X)
-
-    @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
     def test_predict_x_dimensionality(
@@ -879,9 +742,9 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_dim == -1:
-            X = np.zeros((X.shape[0], X.shape[1]))
+            X = np.zeros((X.shape[0],))
         elif delta_dim == 1:
-            X = np.zeros((X.shape[0], X.shape[1], X.shape[2], 1))
+            X = np.zeros((X.shape[0], X.shape[1], 1))
         with expectation:
             model.predict(X)
 
@@ -904,7 +767,7 @@ class TestGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         if delta_n_features == 1:
-            X = jnp.concatenate((X, jnp.zeros((X.shape[0], X.shape[1], 1))), axis=2)
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
@@ -935,164 +798,31 @@ class TestGLM:
     # Test model.simulate
     #######################
     @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_simulate_n_neuron_match_input(
-        self, delta_n_neuron, expectation, poissonGLM_coupled_model_config_simulate
-    ):
-        """
-        Test the `simulate` method to ensure that The number of neurons in the input
-        matches the model's parameters.
-        """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        if delta_n_neuron != 0:
-            feedforward_input = np.zeros(
-                (
-                    feedforward_input.shape[0],
-                    feedforward_input.shape[1] + delta_n_neuron,
-                    feedforward_input.shape[2],
-                )
-            )
-        with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
-            )
-
-    @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="X must be three-dimensional")),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
         ],
     )
     def test_simulate_input_dimensionality(
-        self, delta_dim, expectation, poissonGLM_coupled_model_config_simulate
+        self, delta_dim, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `simulate` method with input data of different dimensionalities.
         Ensure correct dimensionality for input.
         """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         if delta_dim == -1:
-            feedforward_input = np.zeros(feedforward_input.shape[:2])
+            X = np.zeros(X.shape[:-1])
         elif delta_dim == 1:
-            feedforward_input = np.zeros(feedforward_input.shape + (1,))
+            X = np.zeros(X.shape + (1,))
         with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
-            )
-
-    @pytest.mark.parametrize(
-        "delta_dim, expectation",
-        [
-            (-1, pytest.raises(ValueError, match="y must be two-dimensional")),
-            (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="y must be two-dimensional")),
-        ],
-    )
-    def test_simulate_y_dimensionality(
-        self, delta_dim, expectation, poissonGLM_coupled_model_config_simulate
-    ):
-        """
-        Test the `simulate` method with init_spikes of different dimensionalities.
-        Ensure correct dimensionality for init_spikes.
-        """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        if delta_dim == -1:
-            init_spikes = np.zeros((feedforward_input.shape[0],))
-        elif delta_dim == 1:
-            init_spikes = np.zeros(
-                (feedforward_input.shape[0], feedforward_input.shape[1], 1)
-            )
-        with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
-            )
-
-    @pytest.mark.parametrize(
-        "delta_n_neuron, expectation",
-        [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(
-                    ValueError, match="The number of neurons in the model parameters"
-                ),
-            ),
-        ],
-    )
-    def test_simulate_n_neuron_match_y(
-        self, delta_n_neuron, expectation, poissonGLM_coupled_model_config_simulate
-    ):
-        """
-        Test the `simulate` method to ensure that The number of neurons in init_spikes
-        matches the model's parameters.
-        """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        init_spikes = jnp.zeros(
-            (init_spikes.shape[0], feedforward_input.shape[1] + delta_n_neuron)
-        )
-        with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
+            model.simulate(
+                random_key=jax.random.key(123),
+                feedforward_input=X,
             )
 
     @pytest.mark.parametrize(
@@ -1105,103 +835,18 @@ class TestGLM:
             ),
         ],
     )
-    def test_simulate_is_fit(
-        self, is_fit, expectation, poissonGLM_coupled_model_config_simulate
-    ):
+    def test_simulate_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
         """
         Test if the model raises a ValueError when trying to simulate before it's fitted.
         """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        if not is_fit:
-            model.intercept_ = None
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        if is_fit:
+            model.coef_ = true_params[0]
+            model.intercept_ = true_params[1]
         with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
-            )
-
-    @pytest.mark.parametrize(
-        "delta_tp, expectation",
-        [
-            (
-                -1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
-        ],
-    )
-    def test_simulate_time_point_match_y(
-        self, delta_tp, expectation, poissonGLM_coupled_model_config_simulate
-    ):
-        """
-        Test the `simulate` method to ensure that the time points in init_y
-        are consistent with the coupling_basis window size (they must be equal).
-        """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        init_spikes = jnp.zeros((init_spikes.shape[0] + delta_tp, init_spikes.shape[1]))
-        with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
-            )
-
-    @pytest.mark.parametrize(
-        "delta_tp, expectation",
-        [
-            (
-                -1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="`init_y` and `coupling_basis_matrix`"),
-            ),
-        ],
-    )
-    def test_simulate_time_point_match_coupling_basis(
-        self, delta_tp, expectation, poissonGLM_coupled_model_config_simulate
-    ):
-        """
-        Test the `simulate` method to ensure that the window size in coupling_basis
-        is consistent with the time-points in init_spikes (they must be equal).
-        """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        coupling_basis = jnp.zeros(
-            (coupling_basis.shape[0] + delta_tp,) + coupling_basis.shape[1:]
-        )
-        with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
+            model.simulate(
+                random_key=jax.random.key(123),
+                feedforward_input=X,
             )
 
     @pytest.mark.parametrize(
@@ -1225,7 +870,7 @@ class TestGLM:
         ],
     )
     def test_simulate_feature_consistency_input(
-        self, delta_features, expectation, poissonGLM_coupled_model_config_simulate
+        self, delta_features, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `simulate` method ensuring the number of features in `feedforward_input` is
@@ -1236,96 +881,41 @@ class TestGLM:
         The total feature number `model.coef_.shape[1]` must be equal to
         `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
         """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
         feedforward_input = jnp.zeros(
             (
-                feedforward_input.shape[0],
-                feedforward_input.shape[1],
-                feedforward_input.shape[2] + delta_features,
+                X.shape[0],
+                X.shape[1] + delta_features,
             )
         )
         with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
+            model.simulate(
+                random_key=jax.random.key(123),
                 feedforward_input=feedforward_input,
             )
 
-    @pytest.mark.parametrize(
-        "delta_features, expectation",
-        [
-            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
-            (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
-        ],
-    )
-    def test_simulate_feature_consistency_coupling_basis(
-        self, delta_features, expectation, poissonGLM_coupled_model_config_simulate
-    ):
-        """
-        Test the `simulate` method ensuring the number of features in `coupling_basis` is
-        consistent with the model's expected number of features.
-
-        Notes
-        -----
-        The total feature number `model.coef_.shape[1]` must be equal to
-        `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
-        """
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        coupling_basis = jnp.zeros(
-            (coupling_basis.shape[0], coupling_basis.shape[1] + delta_features)
-        )
-        with expectation:
-            model.simulate_recurrent(
-                random_key=random_key,
-                init_y=init_spikes,
-                coupling_basis_matrix=coupling_basis,
-                feedforward_input=feedforward_input,
-            )
-
-    def test_simulate_feedforward_GLM_not_fit(self, poissonGLM_model_instantiation):
-        X, y, model, params, rate = poissonGLM_model_instantiation
-        with pytest.raises(
-            nmo.exceptions.NotFittedError, match="This GLM instance is not fitted yet"
-        ):
-            model.simulate(jax.random.key(123), X)
-
-    def test_simulate_feedforward_GLM(self, poissonGLM_model_instantiation):
+    def test_simulate_feedforward_glm(self, poissonGLM_model_instantiation):
         """Test that simulate goes through"""
         X, y, model, params, rate = poissonGLM_model_instantiation
         model.coef_ = params[0]
         model.intercept_ = params[1]
         ysim, ratesim = model.simulate(jax.random.key(123), X)
         # check that the expected dimensionality is returned
-        assert ysim.ndim == 2
-        assert ratesim.ndim == 2
+        assert ysim.ndim == 1
+        assert ratesim.ndim == 1
         # check that the rates and spikes has the same shape
         assert ratesim.shape[0] == ysim.shape[0]
-        assert ratesim.shape[1] == ysim.shape[1]
         # check the time point number is that expected (same as the input)
         assert ysim.shape[0] == X.shape[0]
-        # check that the number if neurons is respected
-        assert ysim.shape[1] == y.shape[1]
 
     @pytest.mark.parametrize(
         "insert, expectation",
         [
             (0, does_not_raise()),
-            (np.nan, pytest.raises(ValueError, match=r"The provided trees contain")),
-            (np.inf, pytest.raises(ValueError, match=r"The provided trees contain")),
+            (np.nan, pytest.warns(UserWarning, match=r"The provided trees contain")),
+            (np.inf, pytest.warns(UserWarning, match=r"The provided trees contain")),
         ],
     )
     def test_simulate_invalid_feedforward(
@@ -1360,58 +950,3 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
-
-    def test_end_to_end_fit_and_simulate(
-        self, poissonGLM_coupled_model_config_simulate
-    ):
-        (
-            model,
-            coupling_basis,
-            feedforward_input,
-            init_spikes,
-            random_key,
-        ) = poissonGLM_coupled_model_config_simulate
-        window_size = coupling_basis.shape[0]
-        n_neurons = init_spikes.shape[1]
-        n_trials = 1
-        n_timepoints = feedforward_input.shape[0]
-
-        # generate spike trains
-        spikes, _ = model.simulate_recurrent(
-            random_key=random_key,
-            init_y=init_spikes,
-            coupling_basis_matrix=coupling_basis,
-            feedforward_input=feedforward_input,
-        )
-
-        # convolve basis and spikes
-        # (n_trials, n_timepoints - ws + 1, n_neurons, n_coupling_basis)
-        conv_spikes = nmo.convolve._shift_time_axis_and_convolve(spikes, coupling_basis, axis=0)[jnp.newaxis]
-
-
-        # create an individual neuron predictor by stacking the
-        # two convolved spike trains in a single feature vector
-        # and concatenate the trials.
-        conv_spikes = conv_spikes.reshape(
-            n_trials * (n_timepoints - window_size + 1), -1
-        )
-
-        # replicate for each neuron,
-        # (n_trials * (n_timepoints - ws + 1), n_neurons, n_neurons * n_coupling_basis)
-        conv_spikes = jnp.tile(conv_spikes, n_neurons).reshape(
-            conv_spikes.shape[0], n_neurons, conv_spikes.shape[1]
-        )
-
-        # add the feed-forward input to the predictors
-        X = jnp.concatenate((conv_spikes[1:], feedforward_input[:-window_size]), axis=2)
-
-        # fit the model
-        model.fit(X, spikes[:-window_size])
-
-        # simulate
-        model.simulate_recurrent(
-            random_key=random_key,
-            init_y=init_spikes,
-            coupling_basis_matrix=coupling_basis,
-            feedforward_input=feedforward_input,
-        )

@@ -196,7 +196,9 @@ class TestCreateConvolutionalPredictor:
             time_series = np.expand_dims(time_series, axis=(0, 2))
             sample_axis = 1
 
-        res = convolve.create_convolutional_predictor(basis_matrix, time_series, axis=sample_axis)
+        res = convolve.create_convolutional_predictor(
+            basis_matrix, time_series, axis=sample_axis
+        )
         if res.shape[sample_axis] != trial_len:
             raise ValueError(
                 "The output of create_convolutional_predictor should have size num_samples!"
@@ -298,9 +300,11 @@ class TestCreateConvolutionalPredictor:
                         vec, basis, mode="valid"
                     )
         ws = basis_matrix.shape[0]
-        utils_out = convolve.create_convolutional_predictor(basis_matrix, trial_counts, axis=0, shift=False)
+        utils_out = convolve.create_convolutional_predictor(
+            basis_matrix, trial_counts, axis=0, shift=False
+        )
         check = all(
-            np.allclose(utils_out[k][ws-1:], numpy_out[k], rtol=10**-5, atol=10**-5)
+            np.allclose(utils_out[k][ws - 1 :], numpy_out[k], rtol=10**-5, atol=10**-5)
             for k in utils_out
         )
         assert check, (
@@ -345,15 +349,17 @@ class TestCreateConvolutionalPredictor:
             (2, False, "acausal", [29]),
         ],
     )
-    def test_expected_nan(
-        self, axis, window_size, shift, predictor_causality, nan_idx
-    ):
+    def test_expected_nan(self, axis, window_size, shift, predictor_causality, nan_idx):
         shape = [1, 1, 1]
         shape[axis] = 30
         feature = np.zeros(shape)
         basis = np.zeros((window_size, 1))
         res = convolve.create_convolutional_predictor(
-            basis, feature, predictor_causality=predictor_causality, shift=shift, axis=axis
+            basis,
+            feature,
+            predictor_causality=predictor_causality,
+            shift=shift,
+            axis=axis,
         )
         # get expected non-nan idxs
         other_idx = list(set(np.arange(res.shape[1])).difference(nan_idx))
@@ -367,8 +373,12 @@ class TestCreateConvolutionalPredictor:
     @pytest.mark.parametrize(
         "tsd",
         [
-            nap.Tsd(t=np.arange(100), d=np.arange(100), time_support=nap.IntervalSet(start=[0, 50], end=[20, 75]))
-        ]
+            nap.Tsd(
+                t=np.arange(100),
+                d=np.arange(100),
+                time_support=nap.IntervalSet(start=[0, 50], end=[20, 75]),
+            )
+        ],
     )
     @pytest.mark.parametrize(
         "window_size, shift, predictor_causality, nan_index",
@@ -387,12 +397,16 @@ class TestCreateConvolutionalPredictor:
             (2, False, "acausal", [20, 75]),
         ],
     )
-    def test_multi_epoch_pynapple(self, tsd, window_size, shift, predictor_causality, nan_index):
+    def test_multi_epoch_pynapple(
+        self, tsd, window_size, shift, predictor_causality, nan_index
+    ):
         """Test nan location in multi-epoch pynapple tsd."""
         basis = np.zeros((window_size, 1))
-        res = convolve.create_convolutional_predictor(basis, tsd, predictor_causality=predictor_causality, shift=shift)
+        res = convolve.create_convolutional_predictor(
+            basis, tsd, predictor_causality=predictor_causality, shift=shift
+        )
 
         nan_index = np.sort(nan_index)
-        times_nan_found = res[np.isnan(res.d[:,0])].t
+        times_nan_found = res[np.isnan(res.d[:, 0])].t
         assert len(times_nan_found) == len(nan_index)
         assert all(times_nan_found == np.array(nan_index))

@@ -122,6 +122,7 @@ def pytree_map_and_reduce(
         One or more pytrees to which the map and reduce functions are applied.
     is_leaf :
         Callable, returns true if sub-tree is a leaf.
+
     Returns
     -------
     The result of applying the reduce function to the mapped results. The type of the

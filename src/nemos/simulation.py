@@ -1,8 +1,15 @@
 """Utility functions for coupling filter definition."""
 
+from typing import Callable, Tuple, Union
+
+import jax
+import jax.numpy as jnp
 import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
+
+from . import convolve, validation
+from .pytrees import FeaturePytree
 
 
 def difference_of_gammas(
@@ -149,3 +156,182 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     )
 
     return weights
+
+
+def simulate_recurrent(
+    coupling_coef: NDArray,
+    feedforward_coef: NDArray,
+    intercepts: NDArray,
+    random_key: jax.Array,
+    feedforward_input: Union[NDArray, jnp.ndarray],
+    coupling_basis_matrix: Union[NDArray, jnp.ndarray],
+    init_y: Union[NDArray, jnp.ndarray],
+    inverse_link_function: Callable = jax.nn.softplus,
+):
+    """
+    Simulate neural activity using the GLM as a recurrent network.
+
+    This function projects neural activity into the future, employing the fitted
+    parameters of the GLM. It is capable of simulating activity based on a combination
+    of historical activity and external feedforward inputs like convolved currents, light
+    intensities, etc.
+
+    Parameters
+    ----------
+    coupling_coef :
+        Coefficients for the coupling (recurrent connections) between neurons.
+        Expected shape: (n_neurons (receiver), n_neurons (sender), n_basis_coupling).
+    feedforward_coef :
+        Coefficients for the feedforward inputs to each neuron.
+        Expected shape: (n_neurons, n_basis_input).
+    intercepts :
+        Bias term for each neuron. Expected shape: (n_neurons,).
+    random_key :
+        jax.random.key for seeding the simulation.
+    feedforward_input :
+        External input matrix to the model, representing factors like convolved currents,
+        light intensities, etc. When not provided, the simulation is done with coupling-only.
+        Expected shape: (n_time_bins, n_neurons, n_basis_input).
+    init_y :
+        Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
+        Expected shape: (window_size, n_neurons).
+    coupling_basis_matrix :
+        Basis matrix for coupling, representing between-neuron couplings
+        and auto-correlations. Expected shape: (window_size, n_basis_coupling).
+
+
+    Returns
+    -------
+    simulated_activity :
+        Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
+        Shape, (n_time_bins, n_neurons).
+    firing_rates :
+        Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
+
+    Raises
+    ------
+    ValueError
+        - If there's an inconsistency between the number of neurons in model parameters.
+        - If the number of neurons in input arguments doesn't match with model parameters.
+    """
+    if isinstance(feedforward_input, FeaturePytree):
+        raise ValueError(
+            "simulate_recurrent works only with arrays. "
+            "FeaturePytree provided instead!"
+        )
+    # convert to jnp.ndarray of floats
+    coupling_basis_matrix = jnp.asarray(coupling_basis_matrix, dtype=float)
+    coupling_coef = jnp.asarray(coupling_coef, dtype=float)
+    feedforward_coef = jnp.asarray(feedforward_coef, dtype=float)
+    intercepts = jnp.asarray(intercepts, dtype=float)
+    feedforward_input = jax.tree_map(
+        lambda x: jnp.asarray(x, dtype=float), feedforward_input
+    )
+    init_y = jnp.asarray(init_y, dtype=float)
+
+    # check that n_neurons is consistent
+    n_neurons = intercepts.shape[0]
+    if (
+        feedforward_input.shape[1] != n_neurons
+        or feedforward_coef.shape[0] != n_neurons
+        or init_y.shape[1] != n_neurons
+        or coupling_coef.shape[0] != n_neurons
+        or coupling_coef.shape[1] != n_neurons
+    ):
+        raise ValueError(
+            "The number of neurons provided in the inputs is inconsistent!"
+        )
+
+    # checks the input size
+    validation.check_tree_leaves_dimensionality(
+        feedforward_input,
+        expected_dim=3,
+        err_message="`feedforward_input` must be three-dimensional, with shape "
+        "(n_timebins, n_neurons, n_features) or pytree of the same shape.",
+    )
+    validation.check_tree_axis_consistency(
+        feedforward_coef,
+        feedforward_input,
+        axis_1=1,
+        axis_2=2,
+        err_message="Inconsistent number of features. "
+        f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
+        f"X has {jax.tree_map(lambda x: x.shape[2], feedforward_input)} features instead!",
+    )
+
+    validation.error_invalid_entry(feedforward_input)
+
+    # validate y
+    validation.check_tree_leaves_dimensionality(
+        init_y,
+        expected_dim=2,
+        err_message="`init_y` must be two-dimensional, with shape (n_timebins, ).",
+    )
+    n_basis = coupling_coef.shape[-1]
+    coupling_coef = coupling_coef.reshape(n_neurons, -1)
+
+    if coupling_basis_matrix.shape[1] * n_neurons != coupling_coef.shape[1]:
+        raise ValueError(
+            f"Inconsistent number of features. `coupling_basis_matrix` assumes "
+            f"{coupling_basis_matrix.shape[1]} basis functions for the coupling filters, "
+            f"`coupling_coef` assumes {n_basis} basis functions instead."
+        )
+
+    if init_y.shape[0] != coupling_basis_matrix.shape[0]:
+        raise ValueError(
+            "`init_y` and `coupling_basis_matrix`"
+            " should have the same window size! "
+            f"`init_y` window size: {init_y.shape[0]}, "
+            f"`coupling_basis_matrix` window size: {coupling_basis_matrix.shape[0]}"
+        )
+
+    subkeys = jax.random.split(random_key, num=feedforward_input.shape[0])
+    # (n_samples, n_neurons)
+    feed_forward_contrib = jnp.einsum("ik,tik->ti", feedforward_coef, feedforward_input)
+
+    def scan_fn(
+        data: Tuple[jnp.ndarray, int], key: jax.Array
+    ) -> Tuple[Tuple[jnp.ndarray, int], Tuple[jnp.ndarray, jnp.ndarray]]:
+        """Scan over time steps and simulate activity and rates.
+
+        This function simulates the neural activity and firing rates for each time step
+        based on the previous activity, feedforward input, and model coefficients.
+        """
+        activity, t_sample = data
+
+        # Convolve the neural activity with the coupling basis matrix
+        # Output of shape (1, n_neuron, n_basis_coupling)
+        # 1. The first dimension is time, and 1 is by construction since we are simulating 1
+        #    sample
+        # 2. Flatten to shape (n_neuron * n_basis_coupling, )
+        conv_act = convolve.reshape_convolve(activity, coupling_basis_matrix).reshape(
+            -1,
+        )
+
+        # Extract the slice of the feedforward input for the current time step
+        input_slice = jax.lax.dynamic_slice(
+            feed_forward_contrib,
+            (t_sample, 0),
+            (1, feed_forward_contrib.shape[1]),
+        ).squeeze(axis=0)
+
+        # Predict the firing rate using the model coefficients
+        # Doesn't use predict because the non-linearity needs
+        # to be applied after we add the feed forward input
+        firing_rate = inverse_link_function(
+            coupling_coef.dot(conv_act) + input_slice + intercepts
+        )
+
+        # Simulate activity based on the predicted firing rate
+        new_act = jax.random.poisson(key, firing_rate)
+
+        # Shift of one sample the spike count window
+        # for the next iteration (i.e. remove the first counts, and
+        # stack the newly generated sample)
+        # Increase the t_sample by one
+        carry = jnp.vstack((activity[1:], new_act)), t_sample + 1
+        return carry, (new_act, firing_rate)
+
+    _, outputs = jax.lax.scan(scan_fn, (init_y, 0), subkeys)
+    simulated_activity, firing_rates = outputs
+    return simulated_activity, firing_rates

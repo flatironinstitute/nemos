@@ -51,26 +51,27 @@ The model we want to set up is illustrated below,
 <figcaption>Coupled GLM model.</figcaption>
 </figure>
 
-The model component are,
+
+To implement the model one needs to:
 
 1. Convolve the spike counts of each neuron with a bank of filters, called "basis function".
 2. Weight the convolution outputs and sum them together.
 3. Pass the result through a positive non-linearity to get the firing rate.
 4. Compute the Poisson likelihood of the observed count.
 
-Fitting a GLM means learning the weights that maximizes the likelihood of the observed counts.
+Fitting the GLM means learning the weights that maximizes the likelihood of the observed counts.
 
-With nemos you can define such a model and learn the weights with a few lines of code.
+With nemos you can define this model and learn the weights with a few lines of code.
 
 ```python
 import nemos as nmo
 
-counts  = ...  # 2D array or TsdFrame, shape (num samples, num neurons).
+counts  = ...  # 2D array or TsdFrame, shape (n_timebins, n_neurons).
 
 # generate 10 basis functions of 100 time-bin
 _, basis = nmo.basis.RaisedCosineBasisLog(10).evaluate_on_grid(100)
 
-# convolve the counts with the all the basis, output shape (num samples, num neurons, num basis).
+# convolve the counts with the all the basis, output shape (n_timebins, n_neurons, n_basis).
 conv_counts = nmo.convolve.create_convolutional_predictor(basis, counts)
 
 # fit a GLM to the first neuron spike counts
@@ -82,13 +83,19 @@ firing_rate = glm.predict(conv_counts)
 # compute log-likelihood
 ll = glm.score(conv_counts)
 ```
-We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
 
+!!! note "`nemos` GLM object"
+    `GLM` objects predict spiking from a single neuron in response to  user-specified predictors. 
+    The predictors `X` must be a 2d array with shape  `(n_timebins, n_features)`, and `y` must be 
+    a 1d array with shape  `(n_timebins, )`. In the example, `n_features = n_neurons *  n_basis`.
+
+
+We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
 
 When initializing the `GLM` object, users can optionally specify the
 [observation
 model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/)
-(also known as the noise model) and the
+ and the
 [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
 
 See [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/) for a

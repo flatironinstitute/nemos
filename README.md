@@ -37,52 +37,61 @@ For more details, including specifics for GPU users and developers, refer to `ne
 
 ## Basic usage
 
-### Feature Design
+`nemos` streamlines the design of a GLM model. To illustrate how, let's see how we can model
+a neuron that is driven by the activity of all the simultaneously recorded units. 
 
-Using basis functions, `nemos` facilitates building a set of predictors. Given a 1-dimensional `feature`, you can generate a set of predictor `X` with predefined basis:
-```python
-basis = nmo.basis.MSplineBasis(n_basis_funcs=10)
-X = basis.evaluate(feature)
-```
-Other basis are available depending on the type of feature :
+The model we want to set up is illustrated below,
 
-  * [`BSplineBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.BSplineBasis)
+<br><br>
+<figure markdown>
+<img src="docs/assets/glm_scheme.svg" style="width: 100%"/>
+<figcaption>Coupled GLM model.</figcaption>
+</figure>
 
-  * [`CyclicBSplineBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.CyclicBSplineBasis) for angular features (i.e. head-direction)
+To implement the model one one needs to:
 
-  * [`RaisedCosineBasisLinear`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.RaisedCosineBasisLinear) or [`RaisedCosineBasisLog`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.RaisedCosineBasisLog) for temporal feature (i.e. spiking activity)
+1. Convolve the spike counts of each neuron with a bank of filters, called "basis function".
+2. Weight the convolution outputs and sum them together.
+3. Pass the result through a positive non-linearity to get the firing rate.
+4. Compute the Poisson likelihood of the observed count.
 
-  * [`OrthExponentialBasis`](https://nemos.readthedocs.io/en/latest/reference/nemos/basis/#nemos.basis.OrthExponentialBasis)
-  
-`nemos` makes it easy to combine features. Basis can be added or multiplied together and the returned object will still be a basis.
+Fitting the GLM means learning the weights that maximizes the likelihood of the observed counts.
 
-```python
-basis_1 = nmo.basis.MSplineBasis(n_basis_funcs=10)
-basis_2 = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=15)
-
-basis = basis_1 * basis_2 + basis_3
-
-X = basis.evaluate(feature_1, feature_2, feature_3)
-```
-
-### Model Fitting
-
-For now, the core model of nemos is the
-[`Poisson GLM`](https://nemos.readthedocs.io/en/latest/reference/nemos/glm/) object that predict firing rate of a single neuron in response to
-user-specified predictors. 
+With nemos you can define this model and learn the weights with a few lines of code.
 
 ```python
-glm = nmo.glm.GLM()
-glm.fit(X, y)
+import nemos as nmo
+
+counts  = ...  # 2D array or TsdFrame, shape (n_timebins, n_neurons).
+
+# generate 10 basis functions of 100 time-bin
+_, basis = nmo.basis.RaisedCosineBasisLog(10).evaluate_on_grid(100)
+
+# convolve the counts with the all the basis, output shape (n_timebins, n_neurons, n_basis).
+conv_counts = nmo.convolve.create_convolutional_predictor(basis, counts)
+
+# fit a GLM to the first neuron spike counts
+glm = nmo.glm.GLM().fit(conv_counts.reshape(counts.shape[0], -1), counts[:, 0])
+
+# compute the rate
+firing_rate = glm.predict(conv_counts)
+
+# compute log-likelihood
+ll = glm.score(conv_counts)
 ```
+
+!!! note "`nemos` GLM object"
+    `GLM` objects predict spiking from a single neuron in response to  user-specified predictors. 
+    The predictors `X` must be a 2d array with shape  `(n_timebins, n_features)`, and `y` must be 
+    a 1d array with shape  `(n_timebins, )`. In the example, `n_features = n_neurons *  n_basis`.
+
+
 We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
-
 
 When initializing the `GLM` object, users can optionally specify the
 [observation
 model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/)
-(also known as the noise model) and the
+ and the
 [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
 
 See [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/) for a
