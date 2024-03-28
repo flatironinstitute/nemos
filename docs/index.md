@@ -43,7 +43,15 @@ For more details, including specifics for GPU users and developers, refer to `ne
 `nemos` streamlines the design of a GLM model. To illustrate how, let's see how we can model
 a neuron that is driven by the activity of all the simultaneously recorded units. 
 
-The model the neuron firing rate, one would need to,
+The model we want to set up is illustrated below,
+
+<br><br>
+<figure markdown>
+<img src="assets/glm_scheme.svg" style="width: 100%"/>
+<figcaption>Coupled GLM model.</figcaption>
+</figure>
+
+Specifically, this model requires
 
 1. Convolve the spike counts of each neuron with a bank of filters, called "basis function".
 2. Weight the convolution outputs and sum them together.
@@ -52,28 +60,26 @@ The model the neuron firing rate, one would need to,
 
 This is schematized below,
 
-<figure markdown>
-<img src="assets/glm_scheme.png" style="width: 100%"/>
-<figcaption>Population GLM model.</figcaption>
-</figure>
+
+
 
 With nemos you can define such a model with a few lines of code.
 
 ```python
 import nemos as nmo
 
-counts  = ...  # 2D array or TsdFrame
+counts  = ...  # 2D array or TsdFrame, shape (num samples, num neurons).
 
-# 100 time bin basis
+# generate 10 basis functions of 100 time-bin
 _, basis = nmo.basis.RaisedCosineBasisLog(10).evaluate_on_grid(100)
 
-# convolve
+# convolve the counts with the all the basis, output shape (num samples, num neurons, num basis).
 conv_counts = nmo.convolve.create_convolutional_predictor(basis, counts)
 
-# fit a GLM to the first neuron counts
+# fit a GLM to the first neuron spike counts
 glm = nmo.glm.GLM().fit(conv_counts, counts[:, 0])
 
-# compute rate
+# compute the rate
 firing_rate = glm.predict(conv_counts)
 
 # compute log-likelihood
