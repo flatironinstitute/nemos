@@ -7,7 +7,7 @@
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
-
+<br>
 <figure id="glm-figure" markdown>
 <img src="docs/assets/glm_scheme.svg" style="width: 100%"/>
 </figure>
