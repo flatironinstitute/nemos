@@ -86,7 +86,7 @@ ll = glm.score(X, counts[:, 0])
 [^1]: **`nemos` GLM object:** 
  `GLM` objects predict spiking from a single neuron in response to user-specified predictors. 
  The predictors `X` must be a 2d array with shape `(n_timebins, n_features)`, and `y` must be 
- a 1d array with shape `(n_timebins, )`, This is why we reshape the convolved counts.
+ a 1d array with shape `(n_timebins, )`.
 
 We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
 
