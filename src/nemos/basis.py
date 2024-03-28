@@ -46,15 +46,21 @@ class Basis(abc.ABC):
 
     """
 
-    def __init__(self, n_basis_funcs: int) -> None:
+    def __init__(self, n_basis_funcs: int, *args, mode="eval", window_size=None, **kwargs) -> None:
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._check_n_basis_min()
+        self._conv_args = args
+        self._conv_kwargs = kwargs
 
     @abc.abstractmethod
-    def evaluate(self, *xi: ArrayLike) -> NDArray:
+    def transform(self, *xi: ArrayLike) -> NDArray:
         """
-        Evaluate the basis set at the given samples x1,...,xn using the subclass-specific "evaluate" method.
+        Transform the basis set at the given samples x1,...,xn using the subclass-specific "transform" method.
+
+        Depending on the basis configuration, this can result in either of evaluating the basis element "at" the
+        samples, or convolving the time series of samples with each basis evaluated over an equi-spaced set of points
+        covering a fixed time-window.
 
         Parameters
         ----------
@@ -62,6 +68,13 @@ class Basis(abc.ABC):
             The input samples xi[0],...,xi[n] .
         """
         pass
+
+    def fit_transform(self, *xi: ArrayLike) -> NDArray:
+        self.fit(*xi)
+        return self.transform(*xi)
+
+    def fit(self, *xi: ArrayLike) -> Basis:
+        return self
 
     @staticmethod
     def _get_samples(*n_samples: int) -> Generator[NDArray]:
@@ -82,8 +95,8 @@ class Basis(abc.ABC):
         """
         return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
 
-    def _check_evaluate_input(self, *xi: ArrayLike) -> Tuple[NDArray]:
-        """Check evaluate input.
+    def _check_transform_input(self, *xi: ArrayLike) -> Tuple[NDArray]:
+        """Check transform input.
 
         Parameters
         ----------
@@ -163,8 +176,8 @@ class Basis(abc.ABC):
         sample_tuple = self._get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
-        # call evaluate to evaluate the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self.evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        # call transform to evaluate the basis on a flat NDArray and reshape to match meshgrid output
+        Y = self.transform(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
@@ -329,7 +342,7 @@ class AdditiveBasis(Basis):
         pass
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, *xi: ArrayLike) -> NDArray:
+    def transform(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -345,11 +358,11 @@ class AdditiveBasis(Basis):
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
         """
-        xi = self._check_evaluate_input(*xi)
+        xi = self._check_transform_input(*xi)
         return np.hstack(
             (
-                self._basis1.evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.evaluate(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1.transform(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.transform(*xi[self._basis1._n_input_dimensionality:]),
             )
         )
 
@@ -386,7 +399,7 @@ class MultiplicativeBasis(Basis):
         pass
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, *xi: ArrayLike) -> NDArray:
+    def transform(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -401,11 +414,11 @@ class MultiplicativeBasis(Basis):
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
-        xi = self._check_evaluate_input(*xi)
+        xi = self._check_transform_input(*xi)
         return np.array(
             row_wise_kron(
-                self._basis1.evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.evaluate(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1.transform(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.transform(*xi[self._basis1._n_input_dimensionality:]),
                 transpose=False,
             )
         )
@@ -530,7 +543,7 @@ class MSplineBasis(SplineBasis):
         super().__init__(n_basis_funcs, order)
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
+    def transform(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -544,7 +557,7 @@ class MSplineBasis(SplineBasis):
             Evaluated spline basis functions, shape (n_samples, n_basis_funcs).
 
         """
-        (sample_pts,) = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_transform_input(sample_pts)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -608,7 +621,7 @@ class BSplineBasis(SplineBasis):
         super().__init__(n_basis_funcs, order=order)
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
+    def transform(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -632,7 +645,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        (sample_pts,) = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_transform_input(sample_pts)
 
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
@@ -697,7 +710,7 @@ class CyclicBSplineBasis(SplineBasis):
             )
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
+    def transform(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
@@ -717,7 +730,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
-        (sample_pts,) = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_transform_input(sample_pts)
 
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
@@ -831,7 +844,7 @@ class RaisedCosineBasisLinear(Basis):
             )
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
+    def transform(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -850,7 +863,7 @@ class RaisedCosineBasisLinear(Basis):
             If the sample provided do not lie in [0,1].
 
         """
-        (sample_pts,) = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_transform_input(sample_pts)
         if any(sample_pts < 0) or any(sample_pts > 1):
             raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
 
@@ -1017,7 +1030,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         return np.linspace(0, last_peak, self.n_basis_funcs)
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, sample_pts: ArrayLike) -> NDArray:
+    def transform(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
@@ -1035,8 +1048,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        (sample_pts,) = self._check_evaluate_input(sample_pts)
-        return super().evaluate(self._transform_samples(sample_pts))
+        (sample_pts,) = self._check_transform_input(sample_pts)
+        return super().transform(self._transform_samples(sample_pts))
 
 
 class OrthExponentialBasis(Basis):
@@ -1140,7 +1153,7 @@ class OrthExponentialBasis(Basis):
             )
 
     @support_pynapple(conv_type="numpy")
-    def evaluate(self, sample_pts: NDArray) -> NDArray:
+    def transform(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -1156,7 +1169,7 @@ class OrthExponentialBasis(Basis):
             orthogonalized, shape (n_samples, n_basis_funcs)
 
         """
-        (sample_pts,) = self._check_evaluate_input(sample_pts)
+        (sample_pts,) = self._check_transform_input(sample_pts)
         self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of

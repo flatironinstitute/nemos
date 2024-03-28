@@ -210,7 +210,7 @@ spikes = nwb['units'][unit_no]
 basis = nmo.basis.CyclicBSplineBasis(10, 5)
 x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
-plt.plot(x, basis.evaluate(x))
+plt.plot(x, basis.transform(x))
 
 # Find the interval on which head_dir has no NaNs
 head_dir = head_dir.dropna()
@@ -224,7 +224,7 @@ spikes = spikes.count(bin_size=1/head_dir.rate, ep=valid_data)
 # center.
 head_dir = head_dir.interpolate(spikes)
 
-X = nmo.pytrees.FeaturePytree(head_direction=basis.evaluate(head_dir))
+X = nmo.pytrees.FeaturePytree(head_direction=basis.transform(head_dir))
 
 # %%
 #
@@ -234,7 +234,7 @@ model = nmo.glm.GLM(regularizer=ridge)
 model.fit(X, spikes)
 print(model.coef_['head_direction'])
 
-bs_vis = basis.evaluate(x)
+bs_vis = basis.transform(x)
 tuning = jnp.einsum('b, tb->t', model.coef_['head_direction'], bs_vis)
 plt.figure()
 plt.polar(x, tuning)
@@ -278,7 +278,7 @@ spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data).values
 # normalize to lie on 0,1
 spatial_pos = (spatial_pos - spatial_pos.min()) / 100
 
-X['spatial_position'] = pos_basis.evaluate(*spatial_pos.T)
+X['spatial_position'] = pos_basis.transform(*spatial_pos.T)
 
 # %%
 #
@@ -295,7 +295,7 @@ model.coef_
 # the values are slightly different, as we can see when printing out the
 # coefficients).
 
-bs_vis = basis.evaluate(x)
+bs_vis = basis.transform(x)
 tuning = jnp.einsum('b,nb->n', model.coef_['head_direction'], bs_vis)
 print(model.coef_['head_direction'])
 plt.figure()

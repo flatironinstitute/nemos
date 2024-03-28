@@ -66,19 +66,19 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5).evaluate(samples)
+                self.cls(5).transform(samples)
         else:
-            self.cls(5).evaluate(samples)
+            self.cls(5).transform(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.evaluate(eval_input)
+        basis_obj.transform(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
@@ -90,7 +90,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         the expected number of basis functions.
         """
         basis_obj = self.cls(**args)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != args["n_basis_funcs"]:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
@@ -108,7 +108,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
@@ -145,30 +145,30 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="Sample points for RaisedCosine basis must lie in"
             ):
-                basis_obj.evaluate(np.linspace(*sample_range, 100))
+                basis_obj.transform(np.linspace(*sample_range, 100))
         else:
-            basis_obj.evaluate(np.linspace(*sample_range, 100))
+            basis_obj.transform(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
+    def test_number_of_required_inputs_transform(self, n_input):
         """
-        Confirms that the evaluate() method correctly handles the number of input samples that are provided.
+        Confirms that the transform() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="evaluate\(\) missing 1 required positional argument"
+                TypeError, match="transform\(\) missing 1 required positional argument"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -302,14 +302,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_evaluate(self, n_basis, sample_size):
+    def test_pynapple_support_transform(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).evaluate(inp)
+        out = self.cls(n_basis).transform(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -323,53 +323,53 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5).evaluate(samples)
+                self.cls(5).transform(samples)
         else:
-            self.cls(5).evaluate(samples)
+            self.cls(5).transform(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.evaluate(eval_input)
+        basis_obj.transform(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
     )
-    def test_evaluate_returns_expected_number_of_basis(self, args, sample_size):
+    def test_transform_returns_expected_number_of_basis(self, args, sample_size):
         """
-        Verifies that the evaluate() method returns the expected number of basis functions.
+        Verifies that the transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(**args)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != args["n_basis_funcs"]:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {args['n_basis_funcs']}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[1]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_funcs, sample_size
     ):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -393,7 +393,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     )
     def test_samples_range_matches_evaluate_requirements(self, sample_range: tuple):
         """
-        Ensures that the evaluate() method correctly handles sample range inputs that are outside of its required bounds (0, 1).
+        Ensures that the transform() method correctly handles sample range inputs that are outside of its required bounds (0, 1).
         """
         raise_exception = (sample_range[0] < 0) | (sample_range[1] > 1)
         basis_obj = self.cls(n_basis_funcs=5)
@@ -401,30 +401,30 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="Sample points for RaisedCosine basis must lie in"
             ):
-                basis_obj.evaluate(np.linspace(*sample_range, 100))
+                basis_obj.transform(np.linspace(*sample_range, 100))
         else:
-            basis_obj.evaluate(np.linspace(*sample_range, 100))
+            basis_obj.transform(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
+    def test_number_of_required_inputs_transform(self, n_input):
         """
-        Confirms that the evaluate() method correctly handles the number of input samples that are provided.
+        Confirms that the transform() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="evaluate\(\) missing 1 required positional argument"
+                TypeError, match="transform\(\) missing 1 required positional argument"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -499,14 +499,14 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_evaluate(self, n_basis, sample_size):
+    def test_pynapple_support_transform(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).evaluate(inp)
+        out = self.cls(n_basis).transform(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -520,54 +520,54 @@ class TestMSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5).evaluate(samples)
+                self.cls(5).transform(samples)
         else:
-            self.cls(5).evaluate(samples)
+            self.cls(5).transform(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.evaluate(eval_input)
+        basis_obj.transform(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
-    def test_evaluate_returns_expected_number_of_basis(
+    def test_transform_returns_expected_number_of_basis(
         self, n_basis_funcs: int, order: int
     ):
         """
-        Verifies that the evaluate() method returns the expected number of basis functions.
+        Verifies that the transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, 100))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[1]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [4, 10, 100])
     @pytest.mark.parametrize("order", [1, 2, 3])
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_funcs, sample_size, order
     ):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -585,41 +585,41 @@ class TestMSplineBasis(BasisFuncsTesting):
                 rf"{self.cls.__name__} `order` parameter cannot be larger than",
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.evaluate(np.linspace(0, 1, 10))
+                basis_obj.transform(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.evaluate(np.linspace(0, 1, 10))
+            basis_obj.transform(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_evaluate_requirements(self, sample_range: tuple):
+    def test_samples_range_matches_transform_requirements(self, sample_range: tuple):
         """
-        Verifies that the evaluate() method can handle input range.
+        Verifies that the transform() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        basis_obj.evaluate(np.linspace(*sample_range, 100))
+        basis_obj.transform(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
+    def test_number_of_required_inputs_transform(self, n_input):
         """
-        Confirms that the evaluate() method correctly handles the number of input samples that are provided.
+        Confirms that the transform() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="evaluate\(\) missing 1 required positional argument"
+                TypeError, match="transform\(\) missing 1 required positional argument"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -677,14 +677,14 @@ class TestMSplineBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_evaluate(self, n_basis, sample_size):
+    def test_pynapple_support_transform(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).evaluate(inp)
+        out = self.cls(n_basis).transform(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -699,17 +699,17 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
+                self.cls(5, decay_rates=np.arange(1, 6)).transform(samples)
         else:
-            self.cls(5, decay_rates=np.arange(1, 6)).evaluate(samples)
+            self.cls(5, decay_rates=np.arange(1, 6)).transform(samples)
 
     @pytest.mark.parametrize(
         "eval_input",
         [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)],
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         if isinstance(eval_input, int):
@@ -718,41 +718,41 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 ValueError,
                 match="OrthExponentialBasis requires at least as many samples",
             ):
-                basis_obj.evaluate(eval_input)
+                basis_obj.transform(eval_input)
         else:
-            basis_obj.evaluate(eval_input)
+            basis_obj.transform(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
-    def test_evaluate_returns_expected_number_of_basis(
+    def test_transform_returns_expected_number_of_basis(
         self, n_basis_funcs, sample_size
     ):
         """Tests whether the evaluate method returns the expected number of basis functions."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[1]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 20])
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_funcs, sample_size
     ):
-        """Tests whether the sample size of the evaluated result matches that of the input."""
+        """Tests whether the sample size of the transformed result matches that of the input."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -773,9 +773,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_evaluate_requirements(self, sample_range: tuple):
+    def test_samples_range_matches_transform_requirements(self, sample_range: tuple):
         """
-        Tests whether the evaluate method correctly processes the given sample range.
+        Tests whether the transform method correctly processes the given sample range.
         Raises an exception for negative samples
         """
         raise_exception = sample_range[0] < 0
@@ -786,32 +786,32 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 match=rf"{self.cls.__name__} requires positive samples\. "
                 r"Negative values provided instead\!",
             ):
-                basis_obj.evaluate(np.linspace(*sample_range, 100))
+                basis_obj.transform(np.linspace(*sample_range, 100))
         else:
-            basis_obj.evaluate(np.linspace(*sample_range, 100))
+            basis_obj.transform(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
-        """Tests whether the evaluate method correctly processes the number of required inputs."""
+    def test_number_of_required_inputs_transform(self, n_input):
+        """Tests whether the transform method correctly processes the number of required inputs."""
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="evaluate\(\) missing 1 required positional argument"
+                TypeError, match="transform\(\) missing 1 required positional argument"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 2, 3, 4, 5, 6, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
-        """Tests whether the evaluate_on_grid method correctly outputs the grid mesh size."""
+        """Tests whether the transform_on_grid method correctly outputs the grid mesh size."""
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         raise_exception = sample_size < 5
         if raise_exception:
@@ -899,14 +899,14 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_evaluate(self, n_basis, sample_size):
+    def test_pynapple_support_transform(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis, np.arange(1, n_basis + 1)).evaluate(inp)
+        out = self.cls(n_basis, np.arange(1, n_basis + 1)).transform(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -920,54 +920,54 @@ class TestBSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5).evaluate(samples)
+                self.cls(5).transform(samples)
         else:
-            self.cls(5).evaluate(samples)
+            self.cls(5).transform(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.evaluate(eval_input)
+        basis_obj.transform(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
-    def test_evaluate_returns_expected_number_of_basis(
+    def test_transform_returns_expected_number_of_basis(
         self, n_basis_funcs: int, order: int
     ):
         """
-        Verifies that the evaluate() method returns the expected number of basis functions.
+        Verifies that the transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, 100))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[1]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [4, 10, 100])
     @pytest.mark.parametrize("order", [1, 2, 3])
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_funcs, sample_size, order
     ):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -984,10 +984,10 @@ class TestBSplineBasis(BasisFuncsTesting):
                 match=rf"{self.cls.__name__} `order` parameter cannot be larger than",
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.evaluate(np.linspace(0, 1, 10))
+                basis_obj.transform(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.evaluate(np.linspace(0, 1, 10))
+            basis_obj.transform(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
     @pytest.mark.parametrize("order", [-1, 0, 1, 2])
@@ -1000,46 +1000,46 @@ class TestBSplineBasis(BasisFuncsTesting):
         if raise_exception:
             with pytest.raises(ValueError, match=r"Spline order must be positive!"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.evaluate(np.linspace(0, 1, 10))
+                basis_obj.transform(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.evaluate(np.linspace(0, 1, 10))
+            basis_obj.transform(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_evaluate_requirements(self, sample_range: tuple):
+    def test_samples_range_matches_transform_requirements(self, sample_range: tuple):
         """
-        Verifies that the evaluate() method can handle input range.
+        Verifies that the transform() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        basis_obj.evaluate(np.linspace(*sample_range, 100))
+        basis_obj.transform(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
+    def test_number_of_required_inputs_transform(self, n_input):
         """
-        Confirms that the evaluate() method correctly handles the number of input samples that are provided.
+        Confirms that the transform() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="evaluate\(\) missing 1 required positional argument"
+                TypeError, match="transform\(\) missing 1 required positional argument"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
         """
-        Checks that the evaluate_on_grid() method returns a grid of the expected size.
+        Checks that the transform_on_grid() method returns a grid of the expected size.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         raise_exception = sample_size <= 0
@@ -1096,14 +1096,14 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_evaluate(self, n_basis, sample_size):
+    def test_pynapple_support_transform(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).evaluate(inp)
+        out = self.cls(n_basis).transform(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1117,54 +1117,54 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5).evaluate(samples)
+                self.cls(5).transform(samples)
         else:
-            self.cls(5).evaluate(samples)
+            self.cls(5).transform(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.evaluate(eval_input)
+        basis_obj.transform(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [8, 10])
     @pytest.mark.parametrize("order", range(2, 6))
-    def test_evaluate_returns_expected_number_of_basis(
+    def test_transform_returns_expected_number_of_basis(
         self, n_basis_funcs: int, order: int
     ):
         """
-        Verifies that the evaluate() method returns the expected number of basis functions.
+        Verifies that the transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, 100))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[0]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [8, 10, 100])
     @pytest.mark.parametrize("order", [2, 3])
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_funcs, sample_size, order
     ):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-        eval_basis = basis_obj.evaluate(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.transform(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -1181,10 +1181,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 match=rf"{self.cls.__name__} `order` parameter cannot be larger than",
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.evaluate(np.linspace(0, 1, 10))
+                basis_obj.transform(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.evaluate(np.linspace(0, 1, 10))
+            basis_obj.transform(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
     @pytest.mark.parametrize("order", [-1, 0, 2, 3])
@@ -1197,10 +1197,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         if raise_exception:
             with pytest.raises(ValueError, match=r"Spline order must be positive!"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.evaluate(np.linspace(0, 1, 10))
+                basis_obj.transform(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.evaluate(np.linspace(0, 1, 10))
+            basis_obj.transform(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
     @pytest.mark.parametrize("order", [1, 2, 3])
@@ -1215,41 +1215,41 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 ValueError, match=r"Order >= 2 required for cyclic B-spline"
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.evaluate(np.linspace(0, 1, 10))
+                basis_obj.transform(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.evaluate(np.linspace(0, 1, 10))
+            basis_obj.transform(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_evaluate_requirements(self, sample_range: tuple):
+    def test_samples_range_matches_transform_requirements(self, sample_range: tuple):
         """
-        Verifies that the evaluate() method can handle input range.
+        Verifies that the transform() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        basis_obj.evaluate(np.linspace(*sample_range, 100))
+        basis_obj.transform(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    def test_number_of_required_inputs_evaluate(self, n_input):
+    def test_number_of_required_inputs_transform(self, n_input):
         """
-        Confirms that the evaluate() method correctly handles the number of input samples that are provided.
+        Confirms that the transform() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="evaluate\(\) missing 1 required positional argument"
+                TypeError, match="transform\(\) missing 1 required positional argument"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -1311,14 +1311,14 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_evaluate(self, n_basis, sample_size):
+    def test_pynapple_support_transform(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).evaluate(inp)
+        out = self.cls(n_basis).transform(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1375,9 +1375,9 @@ class TestAdditiveBasis(CombinedBasis):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                basis_obj.evaluate(*samples)
+                basis_obj.transform(*samples)
         else:
-            basis_obj.evaluate(*samples)
+            basis_obj.transform(*samples)
 
     @pytest.mark.parametrize(
         "eval_input",
@@ -1389,12 +1389,12 @@ class TestAdditiveBasis(CombinedBasis):
             [jax.numpy.array([0]), [0]],
         ],
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) + basis.MSplineBasis(5)
-        basis_obj.evaluate(*eval_input)
+        basis_obj.transform(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -1407,7 +1407,7 @@ class TestAdditiveBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_evaluate_returns_expected_number_of_basis(
+    def test_transform_returns_expected_number_of_basis(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
@@ -1419,14 +1419,14 @@ class TestAdditiveBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
 
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.evaluate(
+        eval_basis = basis_obj.transform(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {n_basis_a + n_basis_b}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
@@ -1440,23 +1440,23 @@ class TestAdditiveBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
-        Test whether the output sample size from the `AdditiveBasis` evaluate function matches the input sample size.
+        Test whether the output sample size from the `AdditiveBasis` transform function matches the input sample size.
         """
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.evaluate(
+        eval_basis = basis_obj.transform(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize(
@@ -1470,11 +1470,11 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    def test_number_of_required_inputs_evaluate(
+    def test_number_of_required_inputs_transform(
         self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
-        Test whether the number of required inputs for the `evaluate` function matches
+        Test whether the number of required inputs for the `transform` function matches
         the sum of the number of input samples from the two bases.
         """
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
@@ -1491,7 +1491,7 @@ class TestAdditiveBasis(CombinedBasis):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
     @pytest.mark.parametrize(
@@ -1589,7 +1589,7 @@ class TestAdditiveBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_pynapple_support_evaluate(
+    def test_pynapple_support_transform(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
     ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
@@ -1601,8 +1601,8 @@ class TestAdditiveBasis(CombinedBasis):
         basis_add = self.instantiate_basis(n_basis_a, basis_a) + self.instantiate_basis(
             n_basis_b, basis_b
         )
-        # evaluate the basis over pynapple Tsd objects
-        out = basis_add.evaluate(*([inp] * basis_add._n_input_dimensionality))
+        # transform the basis over pynapple Tsd objects
+        out = basis_add.transform(*([inp] * basis_add._n_input_dimensionality))
         # check type
         assert isinstance(out, nap.TsdFrame)
         # check value
@@ -1621,9 +1621,9 @@ class TestMultiplicativeBasis(CombinedBasis):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                basis_obj.evaluate(*samples)
+                basis_obj.transform(*samples)
         else:
-            basis_obj.evaluate(*samples)
+            basis_obj.transform(*samples)
 
     @pytest.mark.parametrize(
         "eval_input",
@@ -1635,12 +1635,12 @@ class TestMultiplicativeBasis(CombinedBasis):
             [jax.numpy.array([0]), [0]],
         ],
     )
-    def test_evaluate_input(self, eval_input):
+    def test_transform_input(self, eval_input):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the transform() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) * basis.MSplineBasis(5)
-        basis_obj.evaluate(*eval_input)
+        basis_obj.transform(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -1653,7 +1653,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_evaluate_returns_expected_number_of_basis(
+    def test_transform_returns_expected_number_of_basis(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
@@ -1665,14 +1665,14 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
 
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.evaluate(
+        eval_basis = basis_obj.transform(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the transformed basis."
                 f"The number of basis is {n_basis_a * n_basis_b}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
+                f"The first dimension of the transformed basis is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("sample_size", [12, 30, 35])
@@ -1686,23 +1686,23 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_sample_size_of_evaluate_matches_that_of_input(
+    def test_sample_size_of_transform_matches_that_of_input(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b
     ):
         """
-        Test whether the output sample size from the `MultiplicativeBasis` evaluate function matches the input sample size.
+        Test whether the output sample size from the `MultiplicativeBasis` transform function matches the input sample size.
         """
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.evaluate(
+        eval_basis = basis_obj.transform(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the transformed basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
+                f"The second dimension of the transformed basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize(
@@ -1716,11 +1716,11 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    def test_number_of_required_inputs_evaluate(
+    def test_number_of_required_inputs_transform(
         self, n_input, n_basis_a, n_basis_b, basis_a, basis_b
     ):
         """
-        Test whether the number of required inputs for the `evaluate` function matches
+        Test whether the number of required inputs for the `transform` function matches
         the sum of the number of input samples from the two bases.
         """
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
@@ -1737,7 +1737,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.evaluate(*inputs)
+            basis_obj.transform(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
     @pytest.mark.parametrize(
@@ -1833,7 +1833,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_inconsistent_sample_sizes(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size_a, sample_size_b
     ):
-        """Test that the inputs of inconsistent sample sizes result in an exception when evaluate is called"""
+        """Test that the inputs of inconsistent sample sizes result in an exception when transform is called"""
         raise_exception = sample_size_a != sample_size_b
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
@@ -1843,11 +1843,11 @@ class TestMultiplicativeBasis(CombinedBasis):
                 ValueError,
                 match=r"Sample size mismatch\. Input elements have inconsistent",
             ):
-                basis_obj.evaluate(
+                basis_obj.transform(
                     np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
                 )
         else:
-            basis_obj.evaluate(
+            basis_obj.transform(
                 np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
             )
 
@@ -1862,7 +1862,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_pynapple_support_evaluate(
+    def test_pynapple_support_transform(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
     ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
@@ -1874,7 +1874,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_prod = self.instantiate_basis(
             n_basis_a, basis_a
         ) * self.instantiate_basis(n_basis_b, basis_b)
-        out = basis_prod.evaluate(*([inp] * basis_prod._n_input_dimensionality))
+        out = basis_prod.transform(*([inp] * basis_prod._n_input_dimensionality))
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1908,7 +1908,7 @@ def test_power_of_basis(exponent, basis_class):
     else:
         basis_pow = basis_obj**exponent
         samples = np.linspace(0, 1, 10)
-        eval_pow = basis_pow.evaluate(*[samples] * basis_pow._n_input_dimensionality)
+        eval_pow = basis_pow.transform(*[samples] * basis_pow._n_input_dimensionality)
 
         if exponent == 2:
             basis_obj = basis_obj * basis_obj
@@ -1916,5 +1916,5 @@ def test_power_of_basis(exponent, basis_class):
             basis_obj = basis_obj * basis_obj * basis_obj
 
         assert np.allclose(
-            eval_pow, basis_obj.evaluate(*[samples] * basis_obj._n_input_dimensionality)
+            eval_pow, basis_obj.transform(*[samples] * basis_obj._n_input_dimensionality)
         )
