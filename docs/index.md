@@ -51,19 +51,16 @@ The model we want to set up is illustrated below,
 <figcaption>Coupled GLM model.</figcaption>
 </figure>
 
-Specifically, this model requires
+The model component are,
 
 1. Convolve the spike counts of each neuron with a bank of filters, called "basis function".
 2. Weight the convolution outputs and sum them together.
 3. Pass the result through a positive non-linearity to get the firing rate.
 4. Compute the Poisson likelihood of the observed count.
 
-This is schematized below,
+Fitting a GLM means learning the weights that maximizes the likelihood of the observed counts.
 
-
-
-
-With nemos you can define such a model with a few lines of code.
+With nemos you can define such a model and learn the weights with a few lines of code.
 
 ```python
 import nemos as nmo
@@ -77,7 +74,7 @@ _, basis = nmo.basis.RaisedCosineBasisLog(10).evaluate_on_grid(100)
 conv_counts = nmo.convolve.create_convolutional_predictor(basis, counts)
 
 # fit a GLM to the first neuron spike counts
-glm = nmo.glm.GLM().fit(conv_counts, counts[:, 0])
+glm = nmo.glm.GLM().fit(conv_counts.reshape(counts.shape[0], -1), counts[:, 0])
 
 # compute the rate
 firing_rate = glm.predict(conv_counts)
