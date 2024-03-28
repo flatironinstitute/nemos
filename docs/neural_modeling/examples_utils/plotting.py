@@ -836,3 +836,53 @@ def plot_basis(n_basis_funcs=8, window_size_sec=0.8):
     plt.plot(time, basis_kernels)
     plt.xlabel("time (sec)")
     return fig
+
+def plot_position_phase_speed_tuning(
+    pf, glm_pf, tc_speed, glm_speed, tc_pos_theta, glm_pos_theta, xybins
+    ):
+    fig = plt.figure()
+    gs = plt.GridSpec(2, 2)
+    plt.subplot(gs[0, 0])
+    plt.plot(pf)
+    plt.plot(glm_pf, label="GLM")
+    plt.xlabel("Position (cm)")
+    plt.ylabel("Firing rate (Hz)")
+    plt.legend()
+
+    plt.subplot(gs[0, 1])
+    plt.plot(tc_speed)
+    plt.plot(glm_speed, label="GLM")
+    plt.xlabel("Speed (cm/s)")
+    plt.ylabel("Firing rate (Hz)")
+    plt.legend()
+
+    plt.subplot(gs[1, 0])
+    extent = (xybins[0][0], xybins[0][-1], xybins[1][0], xybins[1][-1])
+    plt.imshow(tc_pos_theta.T, aspect="auto", origin="lower", extent=extent)
+    plt.xlabel("Position (cm)")
+    plt.ylabel("Theta Phase (rad)")
+
+    plt.subplot(gs[1, 1])
+    plt.imshow(glm_pos_theta.T, aspect="auto", origin="lower", extent=extent)
+    plt.xlabel("Position (cm)")
+    plt.ylabel("Theta Phase (rad)")
+    plt.title("GLM")
+
+    plt.tight_layout()
+
+    return fig
+
+def plot_position_speed_tuning(axis, tc, pf, tc_speed, m):
+    gs = axis.subgridspec(1, 2)
+    plt.subplot(gs[0, 0])
+    plt.plot(pf, "--", label="Observed")
+    plt.plot(tc["position"][0])
+    plt.xlabel("Position (cm)")
+    plt.ylabel("Firing rate (Hz)")
+    plt.title("Model : {}".format(m))
+    plt.legend()
+
+    plt.subplot(gs[0, 1])
+    plt.plot(tc_speed, "--")
+    plt.plot(tc["speed"][0])
+    plt.xlabel("Speed (cm/s)")
