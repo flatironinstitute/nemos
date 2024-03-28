@@ -7,11 +7,11 @@
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
-<br><br>
+
 <figure id="glm-figure" markdown>
 <img src="assets/glm_scheme.svg" style="width: 100%"/>
-<figcaption>Coupled GLM model.</figcaption>
 </figure>
+<br><br>
 
 `nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](jax.readthedocs.io/). 
 It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.

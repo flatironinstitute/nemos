@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="188.41281mm"
-   height="70.498985mm"
-   viewBox="0 0 188.41281 70.498985"
+   width="188.41283mm"
+   height="80.370232mm"
+   viewBox="0 0 188.41283 80.370231"
    version="1.1"
    id="svg1"
    xml:space="preserve"
@@ -24,8 +24,8 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="0.75343253"
-     inkscape:cx="217.00682"
-     inkscape:cy="108.1716"
+     inkscape:cx="416.09565"
+     inkscape:cy="142.68033"
      inkscape:window-width="1888"
      inkscape:window-height="1212"
      inkscape:window-x="363"
@@ -34,13 +34,13 @@
      inkscape:current-layer="g1"><inkscape:page
        x="0"
        y="0"
-       width="188.41281"
-       height="70.498985"
+       width="188.41284"
+       height="80.370232"
        id="page1"
        margin="0"
        bleed="0" /><inkscape:page
        x="219.47108"
-       y="-18.519726"
+       y="-8.6484785"
        width="162.56"
        height="121.92"
        id="page2"
@@ -531,11 +531,11 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(-0.52891941,-18.519725)" /><g
+     transform="translate(-0.52891882,-8.6484779)" /><g
      id="g1"
      inkscape:groupmode="layer"
      inkscape:label="1"
-     transform="matrix(0.26458333,0,0,0.26458334,219.47109,-18.519725)"><g
+     transform="matrix(0.26458333,0,0,0.26458334,219.47109,-8.6484779)"><g
        id="g73"><g
          id="g15"
          transform="matrix(0.68807916,0,0,0.68807916,-74.899965,15.209963)"><path
@@ -1154,4 +1154,13 @@
          sodipodi:role="line"
          x="-786.91669"
          y="73.204071"
-         id="tspan2" /></text></g></svg>
+         id="tspan2" /></text><text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:24px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.88976;stroke-dasharray:none;stroke-opacity:1"
+       x="-473.1835"
+       y="50.159817"
+       id="text73"><tspan
+         sodipodi:role="line"
+         id="tspan73"
+         x="-473.1835"
+         y="50.159817">Coupled GLM Model</tspan></text></g></svg>
