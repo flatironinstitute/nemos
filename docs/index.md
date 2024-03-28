@@ -63,31 +63,35 @@ Fitting the GLM means learning the weights that maximizes the likelihood of the 
 
 With nemos you can define this model and learn the weights with a few lines of code.
 
+
 ```python
 import nemos as nmo
 
 counts  = ...  # 2D array or TsdFrame, shape (n_timebins, n_neurons).
 
-# generate 10 basis functions of 100 time-bin
-_, basis = nmo.basis.RaisedCosineBasisLog(10).evaluate_on_grid(100)
+# generate 5 basis functions of 100 time-bin
+_, basis = nmo.basis.RaisedCosineBasisLog(5).evaluate_on_grid(100)
 
 # convolve the counts with the all the basis, output shape (n_timebins, n_neurons, n_basis).
 conv_counts = nmo.convolve.create_convolutional_predictor(basis, counts)
 
+# predictors, shape (n_timebins, n_neurons * n_basis).
+X = conv_counts.reshape(counts.shape[0], -1)
+
 # fit a GLM to the first neuron spike counts
-glm = nmo.glm.GLM().fit(conv_counts.reshape(counts.shape[0], -1), counts[:, 0])
+glm = nmo.glm.GLM().fit(X, counts[:, 0])
 
 # compute the rate
-firing_rate = glm.predict(conv_counts)
+firing_rate = glm.predict(X)
 
 # compute log-likelihood
-ll = glm.score(conv_counts)
+ll = glm.score(X, counts[:, 0])
 ```
 
 !!! note "`nemos` GLM object"
     `GLM` objects predict spiking from a single neuron in response to  user-specified predictors. 
     The predictors `X` must be a 2d array with shape  `(n_timebins, n_features)`, and `y` must be 
-    a 1d array with shape  `(n_timebins, )`. In the example, `n_features = n_neurons *  n_basis`.
+    a 1d array with shape  `(n_timebins, )`, This is why we reshape the convolved counts.
 
 
 We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
