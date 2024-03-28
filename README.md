@@ -57,7 +57,7 @@ To implement the model one one needs to:
 
 Fitting the GLM means learning the weights that maximizes the likelihood of the observed counts.
 
-With nemos you can define this model and learn the weights with a few lines of code.
+With nemos you can define this model and learn the weights with a few lines of code[^1].
 
 ```python
 import nemos as nmo
@@ -83,7 +83,10 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, counts[:, 0])
 ```
 
-> **`nemos` GLM object:** `GLM` objects predict spiking from a single neuron in response to user-specified predictors. The predictors `X` must be a 2d array with shape `(n_timebins, n_features)`, and `y` must be a 1d array with shape `(n_timebins, )`, This is why we reshape the convolved counts.
+[^1]: `nemos` GLM object:** 
+ `GLM` objects predict spiking from a single neuron in response to user-specified predictors. 
+ The predictors `X` must be a 2d array with shape `(n_timebins, n_features)`, and `y` must be 
+ a 1d array with shape `(n_timebins, )`, This is why we reshape the convolved counts.
 
 We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
 
