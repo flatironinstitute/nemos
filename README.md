@@ -11,7 +11,7 @@
 <figure id="glm-figure" markdown>
 <img src="docs/assets/glm_scheme.svg" style="width: 100%"/>
 </figure>
-<br><br>
+<br>
 
 `nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](jax.readthedocs.io/). 
 It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
