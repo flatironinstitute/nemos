@@ -261,7 +261,7 @@ def cast_to_pynapple(
     Returns
     -------
     :
-     A pynapple time series object based on the input array.
+    A pynapple time series object based on the input array.
     """
     # keep time on CPU, pynapple numba operations on time are more efficient
     time = np.asarray(time)

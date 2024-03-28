@@ -282,11 +282,11 @@ def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
     Parameters
     ----------
     tree_1 :
-     First pytree to compare.
+        First pytree to compare.
     tree_2 :
-     Second pytree to compare.
+        Second pytree to compare.
     err_message :
-     Error message to raise if the structures of the pytrees do not match.
+        Error message to raise if the structures of the pytrees do not match.
 
     Raises
     ------
