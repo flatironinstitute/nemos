@@ -304,13 +304,13 @@ models = {
     "position": position_basis,
     "position + speed": position_basis + speed_basis,
     "position + phase": position_basis + phase_basis,
-    "position + phase + speed": position_basis + phase_basis + speed_basis,
+    "position * phase + speed": position_basis * phase_basis + speed_basis,
 }
 features = {
     "position": (position,),
     "position + speed": (position, speed),
     "position + phase": (position, theta),
-    "position + phase + speed": (position, theta, speed),
+    "position * phase + speed": (position, theta, speed),
 }
 
 # %%
@@ -362,7 +362,8 @@ plt.tight_layout()
 # %%
 # Some models are doing better than others.
 #
-# !!! warning " A proper model comparison should be done by scoring models repetitively on various train and test set. Here we are only doing partial models comparison for the sake of conciseness. "
+# !!! warning
+#     A proper model comparison should be done by scoring models repetitively on various train and test set. Here we are only doing partial models comparison for the sake of conciseness.
 #
 # Alternatively, we can plot some tuning curves to compare each models visually.
 
@@ -374,9 +375,13 @@ for m in models:
             predicted_rates[m][:, np.newaxis], position, 50, ep=test_iset
         ),
         "speed": nap.compute_1d_tuning_curves_continuous(
-            predicted_rates[m][:, np.newaxis], speed, 30, minmax=(0, 100), ep=test_iset
+            predicted_rates[m][:, np.newaxis], speed, 20, ep=test_iset
         ),
     }
+
+# recompute tuning from spikes restricting to the test-set
+pf = nap.compute_1d_tuning_curves(spikes, position, 50, ep=test_iset)
+tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20, ep=test_iset)
 
 
 fig = plt.figure(figsize=(8, 4))
