@@ -321,8 +321,8 @@ class Basis(abc.ABC):
         sample_tuple = self._get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
-        # call transform to evaluate the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self.transform(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        # evaluates the basis on a flat NDArray and reshape to match meshgrid output
+        Y = self.__call__(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
