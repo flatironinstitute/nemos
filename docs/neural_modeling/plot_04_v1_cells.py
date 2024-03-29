@@ -228,7 +228,7 @@ convolved_input = basis.fit_transform(filtered_stimulus)
 
 # %%
 #
-# convolved_input has shape (n_time_pts, n_features, n_basis_funcs), and
+# convolved_input has shape (n_time_pts, n_features * n_basis_funcs), because
 # n_features is the singleton dimension from filtered_stimulus.
 #
 # ## Fitting the GLM
