@@ -54,7 +54,7 @@ nmo.glm.GLM().fit(X, y)
 
 ### Poisson GLM for neural population
 
-![glm-population-figure](docs/assets/glm_population_scheme.svg)
+<img src="docs/assets/glm_features_scheme.svg" width="100%">
 
 Building the model above is more complicated. In this case, input spikes are convolved with a bank of basis functions that stretch in time. With nemos, you can convolve the basis functions with a few lines of code:
 
