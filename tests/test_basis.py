@@ -158,12 +158,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="transform\(\) missing 1 required positional argument"
+                TypeError, match="Input dimensionality mismatch"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
@@ -414,12 +414,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError, match="transform\(\) missing 1 required positional argument"
+                TypeError, match="Input dimensionality mismatch"
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
@@ -607,14 +607,10 @@ class TestMSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
-        if n_input == 0:
-            expectation = pytest.raises(
-                TypeError, match="transform\(\) missing 1 required positional argument"
-            )
-        elif n_input != basis_obj._n_input_dimensionality:
+        if n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
@@ -795,14 +791,10 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         """Tests whether the transform method correctly processes the number of required inputs."""
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         inputs = [np.linspace(0, 1, 20)] * n_input
-        if n_input == 0:
-            expectation = pytest.raises(
-                TypeError, match="transform\(\) missing 1 required positional argument"
-            )
-        elif n_input != basis_obj._n_input_dimensionality:
+        if n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
@@ -1022,14 +1014,10 @@ class TestBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
-        if n_input == 0:
-            expectation = pytest.raises(
-                TypeError, match="transform\(\) missing 1 required positional argument"
-            )
-        elif n_input != basis_obj._n_input_dimensionality:
+        if n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
@@ -1237,14 +1225,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         inputs = [np.linspace(0, 1, 20)] * n_input
-        if n_input == 0:
-            expectation = pytest.raises(
-                TypeError, match="transform\(\) missing 1 required positional argument"
-            )
-        elif n_input != basis_obj._n_input_dimensionality:
+        if n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="transform\(\) takes [0-9] positional arguments but [0-9] were given",
+                match="Input dimensionality mismatch",
             )
         else:
             expectation = does_not_raise()
