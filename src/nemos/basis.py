@@ -35,7 +35,7 @@ def check_transform_input(func):
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
-    when the wrong number of input is provided to a recursive call.
+    when the wrong number of input is provided to __call__.
     """
     def wrapper(self: Basis, *xi: ArrayLike):
         xi = self._check_transform_input(*xi)
