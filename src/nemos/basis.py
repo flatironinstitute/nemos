@@ -33,17 +33,27 @@ def __dir__() -> list[str]:
 
 class Basis(abc.ABC):
     """
-    Abstract class for basis functions.
+    Abstract base class for defining basis functions for feature transformation.
+
+    Basis functions are mathematical constructs that can represent data in alternative,
+    often more compact or interpretable forms. This class provides a template for such
+    transformations, with specific implementations defining the actual behavior.
 
     Parameters
     ----------
-    n_basis_funcs :
-        Number of basis functions.
-
-    Attributes
-    ----------
     n_basis_funcs : int
-        Number of basis functions.
+        The number of basis functions.
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     """
 
@@ -81,17 +91,40 @@ class Basis(abc.ABC):
         return self._window_size
 
     def transform(self, *xi: ArrayLike) -> NDArray:
-        """
-        Transform the basis set at the given samples x1,...,xn using the subclass-specific "transform" method.
+        r"""
+        Applies the basis transformation to the input data.
 
-        Depending on the basis configuration, this can result in either of evaluating the basis element "at" the
-        samples, or convolving the time series of samples with each basis evaluated over an equi-spaced set of points
-        covering a fixed time-window.
+        This method operates in two modes:
+        - 'eval': Evaluates the basis functions at the given sample points.
+        - 'conv': Applies a convolution operation between the input data and the basis functions,
+          using a window size defined at initialization.
 
         Parameters
         ----------
-        *xi: (n_samples,)
-            The input samples xi[0],...,xi[n] .
+        *xi:
+            The input samples over which to apply the basis transformation. The samples can be passed
+            as multiple arguments, each representing a different dimension for multivariate inputs.
+
+        Returns
+        -------
+        :
+            A matrix with the transformed features. The shape of the output depends on the operation mode:
+                - If `mode == 'eval'`, the basis evaluated at the samples, or $b_i(*xi)$, where $b_i$ is a
+                basis element. xi[k] must be a one-dimensional array or a pynapple Tsd.
+
+                - If `mode == 'conv'`, a bank of basis filters (created by calling fit) is convolved with the
+                samples. Samples can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
+                except for the sample-axis are flattened, so that the method always returns a matrix.
+                For example, if samples are of shape (num_samples, 2, 3), the output will be
+                (num_samples, num_basis_funcs * 2 * 3).
+                The time-axis can be specified at basis initialization by setting the keyword argument `axis`.
+                For example, if `axis == 1` your samples should be (N1, num_samples N3, ...), the output of
+                transform will be (num_samples, num_basis_funcs * N1 * N3 *...).
+
+        Raises
+        ------
+        ValueError:
+            If an invalid mode is specified or necessary parameters for the chosen mode are missing.
         """
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
@@ -100,25 +133,92 @@ class Basis(abc.ABC):
                 axis = 0
             else:
                 axis = self._conv_kwargs["axis"]
-            # convolve
+            # convolve called at the end of any recursive call
+            # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(self._kernel, xi[0], *self._conv_args, **self._conv_kwargs)
             # move the time axis to the first dimension
             new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
             conv = np.transpose(conv, new_axis)
             # make sure to return a matrix
-            return np.reshape(conv, (conv.shape[0], -1))
+            return np.reshape(conv, newshape=(conv.shape[0], -1))
 
     def fit_transform(self, *xi: ArrayLike) -> NDArray:
+        """Fits the basis to the input data, then applies the transformation.
+
+        This method is particularly relevant for modes of operation that require an initial fitting
+        step (e.g., 'conv' mode for convolutional basis functions). It calls the `fit` method to
+        prepare the basis functions for the convolution and applies the transformation.
+
+        Parameters
+        ----------
+        *xi :
+            Input data to fit and then transform.
+
+        Returns
+        -------
+        :
+            The transformed features after fitting the basis to the input data.
+
+        See Also
+        --------
+        [fit](#fit) : Fits the basis to the input data.
+        [transform](#transform) : Applies the basis transformation to the input data.
+        """
         self.fit(*xi)
         return self.transform(*xi)
 
     def fit(self, *xi: ArrayLike) -> Basis:
+        """
+        Fits the basis to the input data.
+
+        In 'conv' mode, this method prepares the convolutional kernel based on the input data characteristics.
+        For other modes, this method may simply return the instance itself without modifying its state, as no
+        fitting is necessary.
+
+        Parameters
+        ----------
+        *xi :
+            The input data. This is not altered or used in any way, but it is necessary to conform to
+            `scikit-learn` transformer API.
+
+        Returns
+        -------
+        self :
+            The instance itself, potentially modified to reflect the fitted state.
+
+        Notes
+        -----
+        This method must be overridden by subclasses that require fitting before transformation, particularly
+        in 'conv' mode.
+        """
         if self.mode == "conv":
             self._kernel = self.__call__(np.linspace(0, 1, self.window_size))
         return self
 
     @abc.abstractmethod
     def __call__(self, *xi: ArrayLike) -> NDArray:
+        """
+        Evaluate the basis functions at given points.
+
+        This method must be implemented by subclasses to define the specific behavior of the basis
+        function evaluation.
+
+        Parameters
+        ----------
+        *xi : ArrayLike
+            The points at which to evaluate the basis functions. For multivariate bases, each
+            argument corresponds to a different dimension.
+
+        Returns
+        -------
+        NDArray
+            The evaluated values of the basis functions at the input points.
+
+        Notes
+        -----
+        The implementation of this method is specific to the subclass and defines the core behavior
+        of the basis transformation.
+        """
         pass
 
     @staticmethod
@@ -229,7 +329,7 @@ class Basis(abc.ABC):
         return *Xs, Y
 
     @staticmethod
-    def _has_zero_samples(n_samples: Tuple[int]) -> bool:
+    def _has_zero_samples(n_samples: Tuple[int, ...]) -> bool:
         return any([n <= 0 for n in n_samples])
 
     def _check_input_dimensionality(self, xi: Tuple) -> None:
@@ -406,12 +506,51 @@ class AdditiveBasis(Basis):
         xi = self._check_transform_input(*xi)
         return np.hstack(
             (
+                self._basis1(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2(*xi[self._basis1._n_input_dimensionality:]),
+            )
+        )
+
+    @support_pynapple(conv_type="numpy")
+    def transform(self, *xi: ArrayLike) -> NDArray:
+        """
+        Apply transform and concatenate.
+
+        Parameters
+        ----------
+        xi[0], ..., xi[n] : (n_samples,)
+            Tuple of input samples, each with the same number of samples. The
+            number of input arrays must equal the number of combined bases.
+
+        Returns
+        -------
+        :
+            The transformed features, shape (n_samples, n_basis_funcs)
+
+        """
+        xi = self._check_transform_input(*xi)
+        return np.hstack(
+            (
                 self._basis1.transform(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2.transform(*xi[self._basis1._n_input_dimensionality:]),
             )
         )
 
     def fit(self, *xi):
+        """Call fit on the added basis.
+
+        If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
+
+        Parameters
+        ----------
+        *xi:
+            The sample inputs. Unused, necessary to conform to `scikit-learn` API.
+
+        Returns
+        -------
+        :
+            The AdditiveBasis ready to be evaluated.
+        """
         self._basis1.fit(*xi)
         self._basis2.fit(*xi)
         return self
@@ -449,6 +588,20 @@ class MultiplicativeBasis(Basis):
         pass
 
     def fit(self, *xi):
+        """Call fit on the multiplied basis.
+
+        If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
+
+        Parameters
+        ----------
+        *xi:
+            The sample inputs. Unused, necessary to conform to `scikit-learn` API.
+
+        Returns
+        -------
+        :
+            The MultiplicativeBasis ready to be evaluated.
+        """
         self._basis1.fit(*xi)
         self._basis2.fit(*xi)
         return self
@@ -472,12 +625,37 @@ class MultiplicativeBasis(Basis):
         xi = self._check_transform_input(*xi)
         return np.array(
             row_wise_kron(
+                self._basis1(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2(*xi[self._basis1._n_input_dimensionality:]),
+                transpose=False,
+            )
+        )
+
+    @support_pynapple(conv_type="numpy")
+    def transform(self, *xi: ArrayLike) -> NDArray:
+        """
+        Apply transform and concatenate.
+
+        Parameters
+        ----------
+        xi[0], ..., xi[n] : (n_samples,)
+            Tuple of input samples, each with the same number of samples. The
+            number of input arrays must equal the number of combined bases.
+
+        Returns
+        -------
+        :
+            The transformed features, shape (n_samples, n_basis_funcs)
+
+        """
+        xi = self._check_transform_input(*xi)
+        return np.array(
+            row_wise_kron(
                 self._basis1.transform(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2.transform(*xi[self._basis1._n_input_dimensionality:]),
                 transpose=False,
             )
         )
-
 
 class SplineBasis(Basis, abc.ABC):
     """
