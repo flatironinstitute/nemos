@@ -349,8 +349,8 @@ plotting.plot_basis()
 # represent the effect of the corresponding input with the higher precision, at
 # the cost of adding additional parameters.
 
-
-basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=8)
+# a basis object can be instantiated in "conv" mode for convolving  the input.
+basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=8, mode="conv", window_size=window_size)
 
 # `basis.evaluate_on_grid` is a convenience method to view all basis functions
 # across their whole domain:
@@ -394,10 +394,11 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 #
 # Let's see our basis in action. We can "compress" spike history feature by convolving the basis
 # with the counts (without creating the large spike history feature matrix).
-# This can be performed in nemos.
+# This can be performed in nemos by calling the "fit_transform" method of basis.
 
 
-conv_spk = nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)
+# equivalent to `nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)`
+conv_spk = basis.fit_transform(neuron_count)
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -508,15 +509,12 @@ plotting.plot_rates_and_smoothed_counts(
 # #### Preparing the features
 
 # convolve all the neurons
-convolved_count = nmo.convolve.create_convolutional_predictor(basis_kernels, count)
+convolved_count = basis.fit_transform(count)
 
 # %%
 # Check the dimension to make sure it make sense
+# Shape should be (n_samples, n_basis_func * n_neurons)
 print(f"Convolved count shape: {convolved_count.shape}")
-
-# Reshape to (n_samples, n_basis_func * n_neurons)
-convolved_count = np.reshape(convolved_count, (convolved_count.shape[0], -1))
-print(f"Convolved count re-shaped: {convolved_count.shape}")
 
 # %%
 # #### Fitting the Model
