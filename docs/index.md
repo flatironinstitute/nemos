@@ -30,7 +30,7 @@ from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
 ### Poisson GLM for features analysis
 
-<img src="docs/assets/glm_features.svg" width="100%">
+<img src="assets/glm_features.svg" width="100%">
 
 `nemos` streamlines the design of a GLM with multiples features. Implementing the model in the figure above can be done in a few lines of code :
 
@@ -53,7 +53,7 @@ nmo.glm.GLM().fit(X, y)
 
 ### Poisson GLM for neural population
 
-<img src="docs/assets/glm_population_scheme.svg" width="100%">
+<img src="assets/glm_population_scheme.svg" width="100%">
 
 Building the model above is more complicated. In this case, input spikes are convolved with a bank of basis functions that stretch in time. With nemos, you can convolve the basis functions with a few lines of code:
 
