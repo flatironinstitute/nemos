@@ -95,8 +95,18 @@ class Basis(abc.ABC):
         """
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
-        else:  # convolve
-            return create_convolutional_predictor(self._kernel, *xi, *self._conv_args, **self._conv_kwargs)
+        else:  # convolve, called only at the last layer
+            if "axis" not in self._conv_kwargs:
+                axis = 0
+            else:
+                axis = self._conv_kwargs["axis"]
+            # convolve
+            conv = create_convolutional_predictor(self._kernel, xi[0], *self._conv_args, **self._conv_kwargs)
+            # move the time axis to the first dimension
+            new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
+            conv = np.transpose(conv, new_axis)
+            # make sure to return a matrix
+            return np.reshape(conv, (conv.shape[0], -1))
 
     def fit_transform(self, *xi: ArrayLike) -> NDArray:
         self.fit(*xi)
@@ -1006,7 +1016,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         self,
         n_basis_funcs: int,
         *args,
-        mode="conv",
+        mode="eval",
         width: float = 2.0,
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,

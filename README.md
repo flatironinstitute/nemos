@@ -61,14 +61,10 @@ Building the model above is more complicated. In this case, input spikes are con
 ```python
 import nemos as nmo
 
-# generate 5 basis functions of 100 time-bin
-_, basis = nmo.basis.RaisedCosineBasisLog(5).evaluate_on_grid(100)
-
-# convolve the counts with the all the basis
-conv_counts = nmo.convolve.create_convolutional_predictor(basis, spike_counts)
-
-# predictors, shape (n_timebins, n_neurons * n_basis).
-X = conv_counts.reshape(spike_counts.shape[0], -1)
+# generate 5 basis functions of 100 time-bin, and convolve the counts with the basis.
+X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100).fit_transform(
+    spike_counts
+)
 
 # fit a GLM to the first neuron spike counts
 glm = nmo.glm.GLM().fit(X, spike_counts[:, 0])
