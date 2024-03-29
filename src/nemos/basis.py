@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Generator, Tuple
+from typing import Literal, Generator, Optional, Tuple
 
 import numpy as np
 import scipy.linalg
@@ -13,6 +13,7 @@ from scipy.interpolate import splev
 
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
+from .convolve import create_convolutional_predictor
 
 __all__ = [
     "MSplineBasis",
@@ -46,14 +47,39 @@ class Basis(abc.ABC):
 
     """
 
-    def __init__(self, n_basis_funcs: int, *args, mode="eval", window_size=None, **kwargs) -> None:
+    def __init__(
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode: Literal["eval", "conv"] = "eval",
+        window_size: Optional[int] = None,
+        **kwargs,
+    ) -> None:
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._check_n_basis_min()
         self._conv_args = args
         self._conv_kwargs = kwargs
+        # check mode
+        if mode not in ["conv", "eval"]:
+            raise ValueError(f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!")
+        if mode == "conv" and window_size is None:
+            raise ValueError(
+                "If the basis is in `conv` mode, you must provide a window_size!"
+            )
 
-    @abc.abstractmethod
+        self._window_size = window_size
+        self._mode = mode
+        self._kernel = None
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @property
+    def window_size(self):
+        return self._window_size
+
     def transform(self, *xi: ArrayLike) -> NDArray:
         """
         Transform the basis set at the given samples x1,...,xn using the subclass-specific "transform" method.
@@ -67,14 +93,23 @@ class Basis(abc.ABC):
         *xi: (n_samples,)
             The input samples xi[0],...,xi[n] .
         """
-        pass
+        if self.mode == "eval":  # evaluate at the sample
+            return self.__call__(*xi)
+        else:  # convolve
+            return create_convolutional_predictor(self._kernel, *xi, *self._conv_args, **self._conv_kwargs)
 
     def fit_transform(self, *xi: ArrayLike) -> NDArray:
         self.fit(*xi)
         return self.transform(*xi)
 
     def fit(self, *xi: ArrayLike) -> Basis:
+        if self.mode == "conv":
+            self._kernel = self.__call__(np.linspace(0, 1, self.window_size))
         return self
+
+    @abc.abstractmethod
+    def __call__(self, *xi: ArrayLike) -> NDArray:
+        pass
 
     @staticmethod
     def _get_samples(*n_samples: int) -> Generator[NDArray]:
@@ -328,9 +363,9 @@ class AdditiveBasis(Basis):
 
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis) -> None:
+    def __init__(self, basis1: Basis, basis2: Basis, *args, **kwargs) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs)
+        super().__init__(self.n_basis_funcs, *args, mode="eval", **kwargs)
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
@@ -342,7 +377,7 @@ class AdditiveBasis(Basis):
         pass
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, *xi: ArrayLike) -> NDArray:
+    def __call__(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -366,6 +401,11 @@ class AdditiveBasis(Basis):
             )
         )
 
+    def fit(self, *xi):
+        self._basis1.fit(*xi)
+        self._basis2.fit(*xi)
+        return self
+
 
 class MultiplicativeBasis(Basis):
     """
@@ -385,9 +425,9 @@ class MultiplicativeBasis(Basis):
 
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis) -> None:
+    def __init__(self, basis1: Basis, basis2: Basis, *args, **kwargs) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs)
+        super().__init__(self.n_basis_funcs, *args, mode="eval", **kwargs)
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
@@ -398,8 +438,13 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
+    def fit(self, *xi):
+        self._basis1.fit(*xi)
+        self._basis2.fit(*xi)
+        return self
+
     @support_pynapple(conv_type="numpy")
-    def transform(self, *xi: ArrayLike) -> NDArray:
+    def __call__(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
 
@@ -442,9 +487,9 @@ class SplineBasis(Basis, abc.ABC):
 
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
+    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs) -> None:
         self.order = order
-        super().__init__(n_basis_funcs)
+        super().__init__(n_basis_funcs, *args, mode=mode, **kwargs)
         self._n_input_dimensionality = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
@@ -539,11 +584,11 @@ class MSplineBasis(SplineBasis):
         Statistical science, 3(4), 425-441.
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 2) -> None:
-        super().__init__(n_basis_funcs, order)
+    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs) -> None:
+        super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -617,11 +662,11 @@ class BSplineBasis(SplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 4):
-        super().__init__(n_basis_funcs, order=order)
+    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs):
+        super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -701,8 +746,8 @@ class CyclicBSplineBasis(SplineBasis):
         Order of the splines used in basis functions.
     """
 
-    def __init__(self, n_basis_funcs: int, order: int = 4):
-        super().__init__(n_basis_funcs, order=order)
+    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs):
+        super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
         if self.order < 2:
             raise ValueError(
                 f"Order >= 2 required for cyclic B-spline, "
@@ -710,7 +755,7 @@ class CyclicBSplineBasis(SplineBasis):
             )
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
@@ -809,8 +854,8 @@ class RaisedCosineBasisLinear(Basis):
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
     """
 
-    def __init__(self, n_basis_funcs: int, width: float = 2.0) -> None:
-        super().__init__(n_basis_funcs)
+    def __init__(self, n_basis_funcs: int, *args, mode="eval", width: float = 2.0, **kwargs) -> None:
+        super().__init__(n_basis_funcs, *args, mode=mode, **kwargs)
         self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
@@ -844,7 +889,7 @@ class RaisedCosineBasisLinear(Basis):
             )
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -960,11 +1005,14 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def __init__(
         self,
         n_basis_funcs: int,
+        *args,
+        mode="conv",
         width: float = 2.0,
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
+        **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, width=width)
+        super().__init__(n_basis_funcs, *args, mode=mode, width=width, **kwargs)
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self._time_scaling = 50.0
@@ -1030,7 +1078,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         return np.linspace(0, last_peak, self.n_basis_funcs)
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
@@ -1049,7 +1097,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         (sample_pts,) = self._check_transform_input(sample_pts)
-        return super().transform(self._transform_samples(sample_pts))
+        return super().__call__(self._transform_samples(sample_pts))
 
 
 class OrthExponentialBasis(Basis):
@@ -1063,8 +1111,8 @@ class OrthExponentialBasis(Basis):
             Decay rates of the exponentials, shape (n_basis_funcs,).
     """
 
-    def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating]):
-        super().__init__(n_basis_funcs=n_basis_funcs)
+    def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating], *args, mode="eval", **kwargs):
+        super().__init__(n_basis_funcs=n_basis_funcs, *args, mode=mode, **kwargs)
         self._decay_rates = np.asarray(decay_rates)
         if self._decay_rates.shape[0] != n_basis_funcs:
             raise ValueError(
@@ -1153,7 +1201,7 @@ class OrthExponentialBasis(Basis):
             )
 
     @support_pynapple(conv_type="numpy")
-    def transform(self, sample_pts: NDArray) -> NDArray:
+    def __call__(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
         Parameters
