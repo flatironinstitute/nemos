@@ -43,7 +43,6 @@ def check_transform_input(func):
     return wrapper
 
 
-
 class Basis(abc.ABC):
     """
     Abstract base class for defining basis functions for feature transformation.
@@ -103,7 +102,6 @@ class Basis(abc.ABC):
     def window_size(self):
         return self._window_size
 
-    @support_pynapple(conv_type="numpy")
     @check_transform_input
     def transform(self, *xi: ArrayLike) -> NDArray:
         r"""
@@ -255,6 +253,7 @@ class Basis(abc.ABC):
         """
         return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
 
+    @support_pynapple(conv_type="numpy")
     def _check_transform_input(self, *xi: ArrayLike) -> Tuple[NDArray]:
         """Check transform input.
 
