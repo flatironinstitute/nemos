@@ -249,7 +249,7 @@ basis = position_basis * phase_basis + speed_basis
 # %%
 # The object basis only tell us how each basis covers the feature space. For each timestep, we need to _evaluate_ what are the features value. We can use the `evaluate` function of `nemos`:
 
-X = basis.evaluate(position, theta, speed)
+X = basis(position, theta, speed)
 
 # %%
 # `X` is our design matrix. For each timestamps, it contains the information about the current position, speed and theta phase of the experiment. Notice how passing a pynapple object to `evaluate` also returns a `pynapple` object.
@@ -327,7 +327,7 @@ predicted_rates = {}
 
 for m in models:
     print("1. Evaluating basis : ", m)
-    X = models[m].evaluate(*features[m])
+    X = models[m](*features[m])
 
     print("2. Fitting model : ", m)
     # glm = nmo.glm.GLM()

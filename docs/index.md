@@ -45,7 +45,7 @@ basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=7)
 basis = basis_1 * basis_2 + basis_3
 
 # Generate the design matrix
-X = basis.evaluate(feature_1, feature_2, feature_3)
+X = basis(feature_1, feature_2, feature_3)
 
 # Fit the model
 nmo.glm.GLM().fit(X, y)
