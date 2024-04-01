@@ -46,7 +46,7 @@ basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=7)
 basis = basis_1 * basis_2 + basis_3
 
 # Generate the design matrix
-X = basis(feature_1, feature_2, feature_3)
+X = basis.compute_features(feature_1, feature_2, feature_3)
 
 # Fit the model
 nmo.glm.GLM().fit(X, y)
@@ -62,9 +62,9 @@ Building the model above is more complicated. In this case, input spikes are con
 import nemos as nmo
 
 # generate 5 basis functions of 100 time-bin, and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100).compute_features(
-    spike_counts
-)
+X = nmo.basis.RaisedCosineBasisLog(
+    5, mode="conv", window_size=100
+    ).compute_features(spike_counts)
 
 # fit a GLM to the first neuron spike counts
 glm = nmo.glm.GLM().fit(X, spike_counts[:, 0])
