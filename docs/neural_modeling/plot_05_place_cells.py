@@ -11,11 +11,12 @@ The data for this example are from [Grosmark, Andres D., and György Buzsáki. "
 """
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pynapple as nap
 from examples_utils import data, plotting
-import pandas as pd
-import nemos as nmo
 from scipy.ndimage import gaussian_filter
+
+import nemos as nmo
 
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")
