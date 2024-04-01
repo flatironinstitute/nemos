@@ -224,7 +224,7 @@ filtered_stimulus
 window_size = 100
 basis = nmo.basis.RaisedCosineBasisLog(8, mode="conv", window_size=window_size)
 
-convolved_input = basis.get_kernel_and_features(filtered_stimulus)
+convolved_input = basis.compute_features(filtered_stimulus)
 
 # %%
 #

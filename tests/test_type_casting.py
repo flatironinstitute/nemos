@@ -203,7 +203,7 @@ def test_predict_nap_output(iset, poissonGLM_model_instantiation):
     n_samp = X.shape[0]
     time = jnp.linspace(0, 1, n_samp)
     tsd_X = nap.TsdFrame(t=time, d=X).restrict(iset)
-    model.get_kernel(X, y)
+    model.set_kernel(X, y)
     # run predict on tsd
     pred_rate = model.predict(tsd_X)
     assert isinstance(pred_rate, nap.Tsd)

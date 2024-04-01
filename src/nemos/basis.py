@@ -95,7 +95,7 @@ class TransformerBasis:
         self :
             The transformer object.
         """
-        self._basis.get_kernel(*X.T)
+        self._basis.set_kernel(*X.T)
         return self
 
     def transform(self, X: NDArray, y=None) -> NDArray:
@@ -114,7 +114,7 @@ class TransformerBasis:
         :
             The data transformed by the basis functions.
         """
-        return self._basis.get_features(*X.T)
+        return self._basis._compute_features(*X.T)
 
     def fit_transform(self, X: NDArray, y=None):
         """
@@ -136,7 +136,7 @@ class TransformerBasis:
             The data transformed by the basis functions, after fitting the basis
             functions to the data.
         """
-        return self._basis.get_kernel_and_features(*X.T)
+        return self._basis.compute_features(*X.T)
 
 
 class Basis(abc.ABC):
@@ -203,7 +203,7 @@ class Basis(abc.ABC):
         return self._window_size
 
     @check_transform_input
-    def get_features(self, *xi: ArrayLike) -> NDArray:
+    def _compute_features(self, *xi: ArrayLike) -> NDArray:
         r"""
         Applies the basis transformation to the input data.
 
@@ -257,7 +257,7 @@ class Basis(abc.ABC):
             # make sure to return a matrix
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
-    def get_kernel_and_features(self, *xi: ArrayLike) -> NDArray:
+    def compute_features(self, *xi: ArrayLike) -> NDArray:
         """Fits the basis to the input data, then applies the transformation.
 
         This method is particularly relevant for modes of operation that require an initial fitting
@@ -279,10 +279,11 @@ class Basis(abc.ABC):
         [fit](#fit) : Fits the basis to the input data.
         [transform](#transform) : Applies the basis transformation to the input data.
         """
-        self.get_kernel(*xi)
-        return self.get_features(*xi)
+        if self._kernel is None:
+            self.set_kernel(*xi)
+        return self._compute_features(*xi)
 
-    def get_kernel(self, *xi: ArrayLike) -> Basis:
+    def set_kernel(self, *xi: ArrayLike) -> Basis:
         """
         Fits the basis to the input data.
 
@@ -635,7 +636,7 @@ class AdditiveBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def get_features(self, *xi: ArrayLike) -> NDArray:
+    def _compute_features(self, *xi: ArrayLike) -> NDArray:
         """
         Apply transform and concatenate.
 
@@ -653,12 +654,12 @@ class AdditiveBasis(Basis):
         """
         return np.hstack(
             (
-                self._basis1.get_features(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.get_features(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality:]),
             )
         )
 
-    def get_kernel(self, *xi):
+    def set_kernel(self, *xi):
         """Call fit on the added basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -673,8 +674,8 @@ class AdditiveBasis(Basis):
         :
             The AdditiveBasis ready to be evaluated.
         """
-        self._basis1.get_kernel(*xi)
-        self._basis2.get_kernel(*xi)
+        self._basis1.set_kernel(*xi)
+        self._basis2.set_kernel(*xi)
         return self
 
 
@@ -709,7 +710,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def get_kernel(self, *xi):
+    def set_kernel(self, *xi):
         """Call fit on the multiplied basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -724,8 +725,8 @@ class MultiplicativeBasis(Basis):
         :
             The MultiplicativeBasis ready to be evaluated.
         """
-        self._basis1.get_kernel(*xi)
-        self._basis2.get_kernel(*xi)
+        self._basis1.set_kernel(*xi)
+        self._basis2.set_kernel(*xi)
         return self
 
     @support_pynapple(conv_type="numpy")
@@ -756,7 +757,7 @@ class MultiplicativeBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def get_features(self, *xi: ArrayLike) -> NDArray:
+    def _compute_features(self, *xi: ArrayLike) -> NDArray:
         """
         Apply transform and concatenate.
 
@@ -774,8 +775,8 @@ class MultiplicativeBasis(Basis):
         """
         return np.array(
             row_wise_kron(
-                self._basis1.get_features(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.get_features(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality:]),
                 transpose=False,
             )
         )

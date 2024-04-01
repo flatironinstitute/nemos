@@ -82,7 +82,7 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 
 class 'pynapple.core.time_series.TsdFrame'>
 
->> > model.get_kernel(X, y)  # the following works
+>> > model.set_kernel(X, y)  # the following works
 
 >> > firing_rate = model.predict(X)  # predict the firing rate of the neuron
 
@@ -112,7 +112,7 @@ counts = spikes[6].count(0.01, ep=head_dir.time_support)  # restrict and bin
 upsampled_head_dir = head_dir.bin_average(0.01)  # up-sample head direction
 
 # create your features
-X = nmo.basis.CyclicBSplineBasis(10).get_features(upsampled_head_dir / (2 * np.pi))
+X = nmo.basis.CyclicBSplineBasis(10)._compute_features(upsampled_head_dir / (2 * np.pi))
 
 # add a neuron axis and fit model
 model = nmo.glm.GLM().fit(X, counts) 

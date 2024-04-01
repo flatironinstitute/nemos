@@ -129,7 +129,7 @@ position = position / np.max(position, axis=0)  # scale to [0, 1]
 # %%
 # Now we can "evaluate" the basis for each position of the animal
 
-position_basis = basis_2d.get_features(position["x"], position["y"])
+position_basis = basis_2d._compute_features(position["x"], position["y"])
 
 # %%
 # Now try to make sense of what it is

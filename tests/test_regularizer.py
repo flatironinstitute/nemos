@@ -207,7 +207,7 @@ class TestUnRegularized:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         with expectation:
             model.regularizer.solver_kwargs = kwargs
-            model.get_kernel(X, y)
+            model.set_kernel(X, y)
 
 
 class TestRidge:
@@ -374,7 +374,7 @@ class TestRidge:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         with expectation:
             model.regularizer.solver_kwargs = kwargs
-            model.get_kernel(X, y)
+            model.set_kernel(X, y)
 
 
 class TestLasso:
@@ -492,7 +492,7 @@ class TestLasso:
         model.regularizer = nmo.regularizer.Lasso()
         with expectation:
             model.regularizer.solver_kwargs = kwargs
-            model.get_kernel(X, y)
+            model.set_kernel(X, y)
 
 
 class TestGroupLasso:
@@ -887,4 +887,4 @@ class TestGroupLasso:
         model.regularizer = nmo.regularizer.Lasso()
         with expectation:
             model.regularizer.solver_kwargs = kwargs
-            model.get_kernel(X, y)
+            model.set_kernel(X, y)

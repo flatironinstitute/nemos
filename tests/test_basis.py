@@ -71,9 +71,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+                self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
         else:
-            self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+            self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
@@ -83,7 +83,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.get_kernel_and_features(eval_input)
+        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
@@ -96,7 +96,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         the expected number of basis functions.
         """
         basis_obj = self.cls(mode=mode, window_size=window_size, **args)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != args["n_basis_funcs"]:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
@@ -115,7 +115,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
@@ -154,9 +154,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             with pytest.warns(
                 UserWarning, match="Rescaling sample points"
             ):
-                basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+                basis_obj.compute_features(np.linspace(*sample_range, 100))
         else:
-            basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+            basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
@@ -178,7 +178,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -319,7 +319,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).get_kernel_and_features(inp)
+        out = self.cls(n_basis).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -403,18 +403,18 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
-            bas.get_features(np.linspace(0, 1, 10))
+            bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()),
                                                    ("conv", does_not_raise()),
@@ -450,7 +450,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
-        conv = bas.get_kernel_and_features(x)
+        conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
@@ -469,9 +469,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             with pytest.raises(
                     ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+                self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
         else:
-            self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+            self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
@@ -481,7 +481,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.get_kernel_and_features(eval_input)
+        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
@@ -493,7 +493,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(mode=mode, window_size=window_size, **args)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != args["n_basis_funcs"]:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
@@ -512,7 +512,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
@@ -550,9 +550,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             with pytest.warns(
                 UserWarning, match="sample points for"
             ):
-                basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+                basis_obj.compute_features(np.linspace(*sample_range, 100))
         else:
-            basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+            basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
@@ -574,7 +574,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -656,7 +656,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).get_kernel_and_features(inp)
+        out = self.cls(n_basis).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -741,18 +741,18 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
-            bas.get_features(np.linspace(0, 1, 10))
+            bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()),
                                                    ("conv", does_not_raise()),
@@ -789,7 +789,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
-        conv = bas.get_kernel_and_features(x)
+        conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
@@ -808,9 +808,9 @@ class TestMSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                     ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+                self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
         else:
-            self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+            self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
@@ -820,7 +820,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.get_kernel_and_features(eval_input)
+        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
@@ -832,7 +832,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, 100))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
@@ -851,7 +851,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
@@ -875,10 +875,10 @@ class TestMSplineBasis(BasisFuncsTesting):
                 rf"{self.cls.__name__} `order` parameter cannot be larger than",
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-                basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+                basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-            basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
@@ -888,7 +888,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+        basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
@@ -906,7 +906,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -971,7 +971,7 @@ class TestMSplineBasis(BasisFuncsTesting):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).get_kernel_and_features(inp)
+        out = self.cls(n_basis).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1055,18 +1055,18 @@ class TestMSplineBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
-            bas.get_features(np.linspace(0, 1, 10))
+            bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()),
                                                    ("conv", does_not_raise()),
@@ -1103,7 +1103,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
-        conv = bas.get_kernel_and_features(x)
+        conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
@@ -1123,9 +1123,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             with pytest.raises(
                     ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, decay_rates=np.arange(1, 6), mode=mode, window_size=window_size).get_kernel_and_features(samples)
+                self.cls(5, decay_rates=np.arange(1, 6), mode=mode, window_size=window_size).compute_features(samples)
         else:
-            self.cls(5,decay_rates=np.arange(1, 6), mode=mode, window_size=window_size).get_kernel_and_features(samples)
+            self.cls(5,decay_rates=np.arange(1, 6), mode=mode, window_size=window_size).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input",
@@ -1142,9 +1142,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 ValueError,
                 match="OrthExponentialBasis requires at least as many samples",
             ):
-                basis_obj.get_kernel_and_features(eval_input)
+                basis_obj.compute_features(eval_input)
         else:
-            basis_obj.get_kernel_and_features(eval_input)
+            basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
@@ -1155,7 +1155,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         """Tests whether the evaluate method returns the expected number of basis functions."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
@@ -1173,7 +1173,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         """Tests whether the sample size of the fit_transformed result matches that of the input."""
         decay_rates = np.arange(1, 1 + n_basis_funcs)
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, decay_rates=decay_rates, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
@@ -1213,9 +1213,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 match=rf"{self.cls.__name__} requires positive samples\. "
                 r"Negative values provided instead\!",
             ):
-                basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+                basis_obj.compute_features(np.linspace(*sample_range, 100))
         else:
-            basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+            basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
@@ -1231,7 +1231,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 2, 3, 4, 5, 6, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -1330,7 +1330,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis, np.arange(1, n_basis + 1)).get_kernel_and_features(inp)
+        out = self.cls(n_basis, np.arange(1, n_basis + 1)).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1415,18 +1415,18 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel.shape == (10, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
-            bas.get_features(np.linspace(0, 1, 10))
+            bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()),
                                                    ("conv", does_not_raise()),
@@ -1464,7 +1464,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         x = np.random.normal(size=100)
-        conv = bas.get_kernel_and_features(x)
+        conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
@@ -1483,9 +1483,9 @@ class TestBSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                     ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+                self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
         else:
-            self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+            self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
@@ -1495,7 +1495,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.get_kernel_and_features(eval_input)
+        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
@@ -1507,7 +1507,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, 100))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
@@ -1527,7 +1527,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
@@ -1550,10 +1550,10 @@ class TestBSplineBasis(BasisFuncsTesting):
                 match=rf"{self.cls.__name__} `order` parameter cannot be larger than",
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-                basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+                basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-            basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
     @pytest.mark.parametrize("order", [-1, 0, 1, 2])
@@ -1566,10 +1566,10 @@ class TestBSplineBasis(BasisFuncsTesting):
         if raise_exception:
             with pytest.raises(ValueError, match=r"Spline order must be positive!"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+                basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
@@ -1579,7 +1579,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+        basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
@@ -1597,7 +1597,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -1666,7 +1666,7 @@ class TestBSplineBasis(BasisFuncsTesting):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).get_kernel_and_features(inp)
+        out = self.cls(n_basis).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -1750,18 +1750,18 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
-            bas.get_features(np.linspace(0, 1, 10))
+            bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()),
                                                    ("conv", does_not_raise()),
@@ -1797,7 +1797,7 @@ class TestBSplineBasis(BasisFuncsTesting):
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
-        conv = bas.get_kernel_and_features(x)
+        conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
@@ -1816,9 +1816,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                     ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+                self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
         else:
-            self.cls(5, mode=mode, window_size=window_size).get_kernel_and_features(samples)
+            self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
@@ -1828,7 +1828,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
-        basis_obj.get_kernel_and_features(eval_input)
+        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize("n_basis_funcs", [8, 10])
     @pytest.mark.parametrize("order", range(2, 6))
@@ -1840,7 +1840,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, 100))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
                 "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
@@ -1860,7 +1860,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-        eval_basis = basis_obj.get_kernel_and_features(np.linspace(0, 1, sample_size))
+        eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
                 f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
@@ -1883,10 +1883,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 match=rf"{self.cls.__name__} `order` parameter cannot be larger than",
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-                basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+                basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size)
-            basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
     @pytest.mark.parametrize("order", [-1, 0, 2, 3])
@@ -1899,10 +1899,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         if raise_exception:
             with pytest.raises(ValueError, match=r"Spline order must be positive!"):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+                basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
     @pytest.mark.parametrize("order", [1, 2, 3])
@@ -1917,10 +1917,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 ValueError, match=r"Order >= 2 required for cyclic B-spline"
             ):
                 basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-                basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+                basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
-            basis_obj.get_kernel_and_features(np.linspace(0, 1, 10))
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
@@ -1930,7 +1930,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Verifies that the fit_transform() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
-        basis_obj.get_kernel_and_features(np.linspace(*sample_range, 100))
+        basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
@@ -1948,7 +1948,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
@@ -2017,7 +2017,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).get_kernel_and_features(inp)
+        out = self.cls(n_basis).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -2101,18 +2101,18 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.get_kernel(None)
+        bas.set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
-            bas.get_features(np.linspace(0, 1, 10))
+            bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()),
                                                    ("conv", does_not_raise()),
@@ -2148,7 +2148,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
-        conv = bas.get_kernel_and_features(x)
+        conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
@@ -2212,9 +2212,9 @@ class TestAdditiveBasis(CombinedBasis):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                basis_obj.get_kernel_and_features(*samples)
+                basis_obj.compute_features(*samples)
         else:
-            basis_obj.get_kernel_and_features(*samples)
+            basis_obj.compute_features(*samples)
 
     @pytest.mark.parametrize(
         "eval_input",
@@ -2231,7 +2231,7 @@ class TestAdditiveBasis(CombinedBasis):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) + basis.MSplineBasis(5)
-        basis_obj.get_kernel_and_features(*eval_input)
+        basis_obj.compute_features(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -2257,7 +2257,7 @@ class TestAdditiveBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, mode=mode, window_size=window_size)
 
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.get_kernel_and_features(
+        eval_basis = basis_obj.compute_features(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs:
@@ -2288,7 +2288,7 @@ class TestAdditiveBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, mode=mode, window_size=window_size)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, mode=mode, window_size=window_size)
         basis_obj = basis_a_obj + basis_b_obj
-        eval_basis = basis_obj.get_kernel_and_features(
+        eval_basis = basis_obj.compute_features(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[0] != sample_size:
@@ -2331,7 +2331,7 @@ class TestAdditiveBasis(CombinedBasis):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
     @pytest.mark.parametrize(
@@ -2442,7 +2442,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b
         )
         # fit_transform the basis over pynapple Tsd objects
-        out = basis_add.get_kernel_and_features(*([inp] * basis_add._n_input_dimensionality))
+        out = basis_add.compute_features(*([inp] * basis_add._n_input_dimensionality))
         # check type
         assert isinstance(out, nap.TsdFrame)
         # check value
@@ -2660,7 +2660,7 @@ class TestAdditiveBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, mode="conv", window_size=10)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, mode="conv", window_size=10)
         bas = basis_a_obj + basis_b_obj
-        bas.get_kernel(None)
+        bas.set_kernel(None)
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -2689,7 +2689,7 @@ class TestAdditiveBasis(CombinedBasis):
         bas = basis_a_obj + basis_b_obj
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
-            bas.get_features(*x)
+            bas._compute_features(*x)
 
 
 class TestMultiplicativeBasis(CombinedBasis):
@@ -2708,9 +2708,9 @@ class TestMultiplicativeBasis(CombinedBasis):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                basis_obj.get_kernel_and_features(*samples)
+                basis_obj.compute_features(*samples)
         else:
-            basis_obj.get_kernel_and_features(*samples)
+            basis_obj.compute_features(*samples)
 
     @pytest.mark.parametrize(
         "eval_input",
@@ -2727,7 +2727,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         Checks that the sample size of the output from the fit_transform() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) * basis.MSplineBasis(5)
-        basis_obj.get_kernel_and_features(*eval_input)
+        basis_obj.compute_features(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -2753,7 +2753,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, mode=mode, window_size=window_size)
 
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.get_kernel_and_features(
+        eval_basis = basis_obj.compute_features(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs:
@@ -2784,7 +2784,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, mode=mode, window_size=window_size)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, mode=mode, window_size=window_size)
         basis_obj = basis_a_obj * basis_b_obj
-        eval_basis = basis_obj.get_kernel_and_features(
+        eval_basis = basis_obj.compute_features(
             *[np.linspace(0, 1, sample_size)] * basis_obj._n_input_dimensionality
         )
         if eval_basis.shape[0] != sample_size:
@@ -2827,7 +2827,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         else:
             expectation = does_not_raise()
         with expectation:
-            basis_obj.get_kernel_and_features(*inputs)
+            basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
     @pytest.mark.parametrize(
@@ -2933,11 +2933,11 @@ class TestMultiplicativeBasis(CombinedBasis):
                 ValueError,
                 match=r"Sample size mismatch\. Input elements have inconsistent",
             ):
-                basis_obj.get_kernel_and_features(
+                basis_obj.compute_features(
                     np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
                 )
         else:
-            basis_obj.get_kernel_and_features(
+            basis_obj.compute_features(
                 np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
             )
 
@@ -2964,7 +2964,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_prod = self.instantiate_basis(
             n_basis_a, basis_a
         ) * self.instantiate_basis(n_basis_b, basis_b)
-        out = basis_prod.get_kernel_and_features(*([inp] * basis_prod._n_input_dimensionality))
+        out = basis_prod.compute_features(*([inp] * basis_prod._n_input_dimensionality))
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -3180,7 +3180,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, mode="conv", window_size=10)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, mode="conv", window_size=10)
         bas = basis_a_obj * basis_b_obj
-        bas.get_kernel(None)
+        bas.set_kernel(None)
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -3209,7 +3209,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas = basis_a_obj * basis_b_obj
         with pytest.raises(ValueError, match="You must call `fit` before `transform`"):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
-            bas.get_features(*x)
+            bas._compute_features(*x)
 
 
 @pytest.mark.parametrize(
@@ -3241,7 +3241,7 @@ def test_power_of_basis(exponent, basis_class):
     else:
         basis_pow = basis_obj**exponent
         samples = np.linspace(0, 1, 10)
-        eval_pow = basis_pow.get_kernel_and_features(*[samples] * basis_pow._n_input_dimensionality)
+        eval_pow = basis_pow.compute_features(*[samples] * basis_pow._n_input_dimensionality)
 
         if exponent == 2:
             basis_obj = basis_obj * basis_obj
@@ -3249,7 +3249,7 @@ def test_power_of_basis(exponent, basis_class):
             basis_obj = basis_obj * basis_obj * basis_obj
 
         assert np.allclose(
-            eval_pow, basis_obj.get_kernel_and_features(*[samples] * basis_obj._n_input_dimensionality)
+            eval_pow, basis_obj.compute_features(*[samples] * basis_obj._n_input_dimensionality)
         )
 
 @pytest.mark.parametrize(
