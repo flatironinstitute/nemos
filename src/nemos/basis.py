@@ -102,10 +102,14 @@ class Basis(abc.ABC):
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!")
-        if mode == "conv" and window_size is None:
-            raise ValueError(
-                "If the basis is in `conv` mode, you must provide a window_size!"
-            )
+        if mode == "conv":
+            if window_size is None:
+                raise ValueError(
+                    "If the basis is in `conv` mode, you must provide a window_size!"
+                )
+            elif not (isinstance(window_size, int) and window_size > 0):
+                raise ValueError(f"`window_size` must be a positive integer. {window_size} provided instead!")
+
 
         self._window_size = window_size
         self._mode = mode
@@ -156,6 +160,8 @@ class Basis(abc.ABC):
         ValueError:
             If an invalid mode is specified or necessary parameters for the chosen mode are missing.
         """
+        # check if self._kernel is not None for mode="conv"
+        self._check_is_fit()
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
         else:  # convolve, called only at the last layer
@@ -304,6 +310,10 @@ class Basis(abc.ABC):
         self._check_samples_consistency(*xi)
         self._check_input_dimensionality(xi)
         return xi
+
+    def _check_is_fit(self):
+        if self.mode == "conv" and self._kernel is None:
+            raise ValueError("You must call `fit` before `transform` when mode =`conv`.")
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
