@@ -350,7 +350,9 @@ plotting.plot_basis()
 # the cost of adding additional parameters.
 
 # a basis object can be instantiated in "conv" mode for convolving  the input.
-basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=8, mode="conv", window_size=window_size)
+basis = nmo.basis.RaisedCosineBasisLog(
+    n_basis_funcs=8, mode="conv", window_size=window_size
+)
 
 # `basis.evaluate_on_grid` is a convenience method to view all basis functions
 # across their whole domain:
@@ -394,7 +396,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 #
 # Let's see our basis in action. We can "compress" spike history feature by convolving the basis
 # with the counts (without creating the large spike history feature matrix).
-# This can be performed in nemos by calling the "fit_transform" method of basis.
+# This can be performed in nemos by calling the "compute_features" method of basis.
 
 
 # equivalent to `nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)`
