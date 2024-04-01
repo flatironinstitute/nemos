@@ -1145,7 +1145,12 @@ class RaisedCosineBasisLinear(Basis):
         if rescale_samples:
             # note that sample points is converted to NDArray
             # with the decorator.
-            sample_pts = min_max_rescale_samples(sample_pts)
+            # copy is necessary otherwise:
+            # basis1 = nmo.basis.RaisedCosineBasisLinear(5)
+            # basis2 = nmo.basis.RaisedCosineBasisLog(5)
+            # additive_basis = basis1 + basis2
+            # additive_basis(*([x] * 2)) would modify both inputs
+            sample_pts = min_max_rescale_samples(np.copy(sample_pts))
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
@@ -1283,7 +1288,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             shape (n_samples, ).
         """
         # rescale to [0,1]
-        sample_pts = min_max_rescale_samples(sample_pts)
+        # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
+        sample_pts = min_max_rescale_samples(np.copy(sample_pts))
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -1598,7 +1604,7 @@ def bspline(
     n_basis = nk - order
 
     # initialize the basis element container
-    basis_eval = np.zeros((n_basis - 2 * reps, sample_pts.shape[0]))
+    basis_eval = np.full((n_basis - 2 * reps, sample_pts.shape[0]), np.nan)
 
     # loop one element at the time and evaluate the basis using splev
     id_basis = np.eye(n_basis, nk, dtype=np.int8)
