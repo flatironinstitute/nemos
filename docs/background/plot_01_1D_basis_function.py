@@ -35,7 +35,7 @@ mspline_basis = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
 samples = np.random.uniform(0, 10, size=1000)
 
 # Evaluate the basis at the sample points
-eval_basis = mspline_basis.transform(samples)
+eval_basis = mspline_basis.get_features(samples)
 
 # Output information about the evaluated basis
 print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "

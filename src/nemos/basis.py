@@ -60,6 +60,85 @@ def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
     return sample_pts
 
 
+class TransformerBasis:
+    """Basis as `scikit-learn` transformers.
+
+    This class abstracts the underlying basis function details, offering methods
+    similar to scikit-learn's transformers but specifically designed for basis
+    transformations. It supports fitting to data (calculating any necessary parameters
+    of the basis functions), transforming data (applying the basis functions to
+    data), and both fitting and transforming in one step.
+
+    Parameters
+    ----------
+    basis : Basis
+        An instance of a Basis class or any subclass thereof.
+    """
+    def __init__(self, basis: Basis):
+        self._basis = basis
+
+    def fit(self, X: NDArray, y=None):
+        """
+        Compute the convolutional kernels.
+
+        If any of the 1D basis in self._basis is in "conv" mode, it computes the convolutional kernels.
+
+        Parameters
+        ----------
+        X :
+           The data to fit the basis functions to, shape (num_samples, num_input).
+        y : ignored
+           Not used, present for API consistency by convention.
+
+        Returns
+        -------
+        self :
+            The transformer object.
+        """
+        self._basis.get_kernel(*X.T)
+        return self
+
+    def transform(self, X: NDArray, y=None) -> NDArray:
+        """
+        Transforms the data using the fitted basis functions.
+
+        Parameters
+        ----------
+        X : array-like
+            The data to transform using the basis functions, shape (num_samples, num_input).
+        y : ignored
+            Not used, present for API consistency by convention.
+
+        Returns
+        -------
+        :
+            The data transformed by the basis functions.
+        """
+        return self._basis.get_features(*X.T)
+
+    def fit_transform(self, X: NDArray, y=None):
+        """
+        Compute the kernels and the features.
+
+        This method is a convenience that combines fit and transform into
+        one step.
+
+        Parameters
+        ----------
+        X : array-like
+            The data to fit the basis functions to and then transform.
+        y : ignored
+            Not used, present for API consistency by convention.
+
+        Returns
+        -------
+        array-like
+            The data transformed by the basis functions, after fitting the basis
+            functions to the data.
+        """
+        return self._basis.get_kernel_and_features(*X.T)
+
+
 class Basis(abc.ABC):
     """
     Abstract base class for defining basis functions for feature transformation.
@@ -124,7 +203,7 @@ class Basis(abc.ABC):
         return self._window_size
 
     @check_transform_input
-    def transform(self, *xi: ArrayLike) -> NDArray:
+    def get_features(self, *xi: ArrayLike) -> NDArray:
         r"""
         Applies the basis transformation to the input data.
 
@@ -171,14 +250,14 @@ class Basis(abc.ABC):
                 axis = self._conv_kwargs["axis"]
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
-            conv = create_convolutional_predictor(self._kernel, xi[0], *self._conv_args, **self._conv_kwargs)
+            conv = create_convolutional_predictor(self._kernel, *xi, *self._conv_args, **self._conv_kwargs)
             # move the time axis to the first dimension
             new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
             conv = np.transpose(conv, new_axis)
             # make sure to return a matrix
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
-    def fit_transform(self, *xi: ArrayLike) -> NDArray:
+    def get_kernel_and_features(self, *xi: ArrayLike) -> NDArray:
         """Fits the basis to the input data, then applies the transformation.
 
         This method is particularly relevant for modes of operation that require an initial fitting
@@ -200,10 +279,10 @@ class Basis(abc.ABC):
         [fit](#fit) : Fits the basis to the input data.
         [transform](#transform) : Applies the basis transformation to the input data.
         """
-        self.fit(*xi)
-        return self.transform(*xi)
+        self.get_kernel(*xi)
+        return self.get_features(*xi)
 
-    def fit(self, *xi: ArrayLike) -> Basis:
+    def get_kernel(self, *xi: ArrayLike) -> Basis:
         """
         Fits the basis to the input data.
 
@@ -309,6 +388,7 @@ class Basis(abc.ABC):
         # checks on input and outputs
         self._check_samples_consistency(*xi)
         self._check_input_dimensionality(xi)
+
         return xi
 
     def _check_is_fit(self):
@@ -555,7 +635,7 @@ class AdditiveBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def transform(self, *xi: ArrayLike) -> NDArray:
+    def get_features(self, *xi: ArrayLike) -> NDArray:
         """
         Apply transform and concatenate.
 
@@ -573,12 +653,12 @@ class AdditiveBasis(Basis):
         """
         return np.hstack(
             (
-                self._basis1.transform(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.transform(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis1.get_features(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.get_features(*xi[self._basis1._n_input_dimensionality:]),
             )
         )
 
-    def fit(self, *xi):
+    def get_kernel(self, *xi):
         """Call fit on the added basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -593,8 +673,8 @@ class AdditiveBasis(Basis):
         :
             The AdditiveBasis ready to be evaluated.
         """
-        self._basis1.fit(*xi)
-        self._basis2.fit(*xi)
+        self._basis1.get_kernel(*xi)
+        self._basis2.get_kernel(*xi)
         return self
 
 
@@ -629,7 +709,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def fit(self, *xi):
+    def get_kernel(self, *xi):
         """Call fit on the multiplied basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -644,8 +724,8 @@ class MultiplicativeBasis(Basis):
         :
             The MultiplicativeBasis ready to be evaluated.
         """
-        self._basis1.fit(*xi)
-        self._basis2.fit(*xi)
+        self._basis1.get_kernel(*xi)
+        self._basis2.get_kernel(*xi)
         return self
 
     @support_pynapple(conv_type="numpy")
@@ -676,7 +756,7 @@ class MultiplicativeBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def transform(self, *xi: ArrayLike) -> NDArray:
+    def get_features(self, *xi: ArrayLike) -> NDArray:
         """
         Apply transform and concatenate.
 
@@ -694,8 +774,8 @@ class MultiplicativeBasis(Basis):
         """
         return np.array(
             row_wise_kron(
-                self._basis1.transform(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.transform(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis1.get_features(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.get_features(*xi[self._basis1._n_input_dimensionality:]),
                 transpose=False,
             )
         )

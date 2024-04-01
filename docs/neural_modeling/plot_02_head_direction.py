@@ -398,7 +398,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 
 
 # equivalent to `nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)`
-conv_spk = basis.fit_transform(neuron_count)
+conv_spk = basis.get_kernel_and_features(neuron_count)
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -509,7 +509,7 @@ plotting.plot_rates_and_smoothed_counts(
 # #### Preparing the features
 
 # convolve all the neurons
-convolved_count = basis.fit_transform(count)
+convolved_count = basis.get_kernel_and_features(count)
 
 # %%
 # Check the dimension to make sure it make sense

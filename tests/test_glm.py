@@ -138,7 +138,7 @@ class TestGLM:
         else:
             init_params = true_params + (true_params[0],) * (n_params - 2)
         with expectation:
-            model.fit(X, y, init_params=init_params)
+            model.get_kernel(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
         "add_entry, add_to, expectation",
@@ -183,7 +183,7 @@ class TestGLM:
             y = np.asarray(y, dtype=np.float32)
             y[idx] = add_entry
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.get_kernel(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -234,7 +234,7 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            model.fit(X, y, init_params=(init_w, true_params[1]))
+            model.get_kernel(X, y, init_params=(init_w, true_params[1]))
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -256,7 +256,7 @@ class TestGLM:
         init_b = jnp.zeros((1,) * dim_intercepts)
         init_w = jnp.zeros((n_features,))
         with expectation:
-            model.fit(X, y, init_params=(init_w, init_b))
+            model.get_kernel(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize(
         "init_params, expectation",
@@ -306,7 +306,7 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         with expectation:
-            model.fit(X, y, init_params=init_params)
+            model.get_kernel(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -328,7 +328,7 @@ class TestGLM:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.get_kernel(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -350,7 +350,7 @@ class TestGLM:
         elif delta_dim == 1:
             y = np.zeros((y.shape[0], 1))
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.get_kernel(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -373,7 +373,7 @@ class TestGLM:
             1,
         )
         with expectation:
-            model.fit(X, y, init_params=(init_w, init_b))
+            model.get_kernel(X, y, init_params=(init_w, init_b))
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -396,7 +396,7 @@ class TestGLM:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.get_kernel(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -421,7 +421,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.get_kernel(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -446,7 +446,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.get_kernel(X, y, init_params=true_params)
 
     def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
         """Test that the group lasso fit goes through"""
@@ -456,7 +456,7 @@ class TestGLM:
                 solver_name="ProximalGradient", mask=mask
             )
         )
-        model.fit(X, y)
+        model.get_kernel(X, y)
 
     def test_fit_pytree_equivalence(
         self, poissonGLM_model_instantiation, poissonGLM_model_instantiation_pytree
@@ -469,8 +469,8 @@ class TestGLM:
             poissonGLM_model_instantiation_pytree
         )
         # fit both models
-        model.fit(X, y, init_params=true_params)
-        model_tree.fit(X_tree, y, init_params=true_params_tree)
+        model.get_kernel(X, y, init_params=true_params)
+        model_tree.get_kernel(X_tree, y, init_params=true_params_tree)
 
         # get the flat parameters
         flat_coef = np.concatenate(
@@ -507,7 +507,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X.fill(fill_val)
         with expectation:
-            model.fit(X, y)
+            model.get_kernel(X, y)
 
     #######################
     # Test model.score
@@ -613,7 +613,7 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if is_fit:
-            model.fit(X, y)
+            model.get_kernel(X, y)
         with expectation:
             model.predict(X)
 
@@ -790,7 +790,7 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if is_fit:
-            model.fit(X, y)
+            model.get_kernel(X, y)
         with expectation:
             model.predict(X)
 
