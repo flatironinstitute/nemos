@@ -5,16 +5,16 @@ from __future__ import annotations
 
 import abc
 import warnings
-from typing import Callable, Literal, Generator, Optional, Tuple
+from typing import Callable, Generator, Literal, Optional, Tuple
 
 import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
+from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
-from .convolve import create_convolutional_predictor
 
 __all__ = [
     "MSplineBasis",
@@ -38,9 +38,11 @@ def check_transform_input(func: Callable) -> Callable:
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to __call__.
     """
+
     def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
         xi = self._check_transform_input(*xi)
         return func(self, *xi, **kwargs)  # Call the basis
+
     return wrapper
 
 
@@ -49,6 +51,7 @@ def check_one_dimensional(func: Callable) -> Callable:
         if any(x.ndim != 1 for x in xi):
             raise ValueError("Input sample must be one dimensional!")
         return func(self, *xi, **kwargs)
+
     return wrapper
 
 
@@ -56,7 +59,9 @@ def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
     if np.any(sample_pts < 0) or np.any(sample_pts > 1):
         sample_pts -= np.min(sample_pts)
         sample_pts /= np.max(sample_pts)
-        warnings.warn("Rescaling sample points for RaisedCosine basis to [0,1]!", UserWarning)
+        warnings.warn(
+            "Rescaling sample points for RaisedCosine basis to [0,1]!", UserWarning
+        )
     return sample_pts
 
 
@@ -74,6 +79,7 @@ class TransformerBasis:
     basis : Basis
         An instance of a Basis class or any subclass thereof.
     """
+
     def __init__(self, basis: Basis):
         self._basis = basis
 
@@ -180,15 +186,18 @@ class Basis(abc.ABC):
         self._conv_kwargs = kwargs
         # check mode
         if mode not in ["conv", "eval"]:
-            raise ValueError(f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!")
+            raise ValueError(
+                f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!"
+            )
         if mode == "conv":
             if window_size is None:
                 raise ValueError(
                     "If the basis is in `conv` mode, you must provide a window_size!"
                 )
             elif not (isinstance(window_size, int) and window_size > 0):
-                raise ValueError(f"`window_size` must be a positive integer. {window_size} provided instead!")
-
+                raise ValueError(
+                    f"`window_size` must be a positive integer. {window_size} provided instead!"
+                )
 
         self._window_size = window_size
         self._mode = mode
@@ -250,7 +259,9 @@ class Basis(abc.ABC):
                 axis = self._conv_kwargs["axis"]
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
-            conv = create_convolutional_predictor(self._kernel, *xi, *self._conv_args, **self._conv_kwargs)
+            conv = create_convolutional_predictor(
+                self._kernel, *xi, *self._conv_args, **self._conv_kwargs
+            )
             # move the time axis to the first dimension
             new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
             conv = np.transpose(conv, new_axis)
@@ -394,7 +405,9 @@ class Basis(abc.ABC):
 
     def _check_is_fit(self):
         if self.mode == "conv" and self._kernel is None:
-            raise ValueError("You must call `fit` before `transform` when mode =`conv`.")
+            raise ValueError(
+                "You must call `fit` before `transform` when mode =`conv`."
+            )
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -630,7 +643,7 @@ class AdditiveBasis(Basis):
         return np.hstack(
             (
                 self._basis1(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis2(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
 
@@ -654,8 +667,12 @@ class AdditiveBasis(Basis):
         """
         return np.hstack(
             (
-                self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis1._compute_features(
+                    *xi[: self._basis1._n_input_dimensionality]
+                ),
+                self._basis2._compute_features(
+                    *xi[self._basis1._n_input_dimensionality :]
+                ),
             )
         )
 
@@ -750,7 +767,7 @@ class MultiplicativeBasis(Basis):
         return np.array(
             row_wise_kron(
                 self._basis1(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis2(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
@@ -775,11 +792,16 @@ class MultiplicativeBasis(Basis):
         """
         return np.array(
             row_wise_kron(
-                self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality:]),
+                self._basis1._compute_features(
+                    *xi[: self._basis1._n_input_dimensionality]
+                ),
+                self._basis2._compute_features(
+                    *xi[self._basis1._n_input_dimensionality :]
+                ),
                 transpose=False,
             )
         )
+
 
 class SplineBasis(Basis, abc.ABC):
     """
@@ -799,7 +821,9 @@ class SplineBasis(Basis, abc.ABC):
 
     """
 
-    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs) -> None:
+    def __init__(
+        self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs
+    ) -> None:
         self.order = order
         super().__init__(n_basis_funcs, *args, mode=mode, **kwargs)
         self._n_input_dimensionality = 1
@@ -896,7 +920,9 @@ class MSplineBasis(SplineBasis):
         Statistical science, 3(4), 425-441.
     """
 
-    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs) -> None:
+    def __init__(
+        self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs
+    ) -> None:
         super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
 
     @support_pynapple(conv_type="numpy")
@@ -975,7 +1001,9 @@ class BSplineBasis(SplineBasis):
 
     """
 
-    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs):
+    def __init__(
+        self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs
+    ):
         super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
 
     @support_pynapple(conv_type="numpy")
@@ -1059,7 +1087,9 @@ class CyclicBSplineBasis(SplineBasis):
         Order of the splines used in basis functions.
     """
 
-    def __init__(self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs):
+    def __init__(
+        self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs
+    ):
         super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
         if self.order < 2:
             raise ValueError(
@@ -1167,7 +1197,9 @@ class RaisedCosineBasisLinear(Basis):
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
     """
 
-    def __init__(self, n_basis_funcs: int, *args, mode="eval", width: float = 2.0, **kwargs) -> None:
+    def __init__(
+        self, n_basis_funcs: int, *args, mode="eval", width: float = 2.0, **kwargs
+    ) -> None:
         super().__init__(n_basis_funcs, *args, mode=mode, **kwargs)
         self._n_input_dimensionality = 1
         self._check_width(width)
@@ -1422,7 +1454,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super().__call__(self._transform_samples(sample_pts), rescale_samples=False)
+        return super().__call__(
+            self._transform_samples(sample_pts), rescale_samples=False
+        )
 
 
 class OrthExponentialBasis(Basis):
@@ -1436,7 +1470,14 @@ class OrthExponentialBasis(Basis):
             Decay rates of the exponentials, shape (n_basis_funcs,).
     """
 
-    def __init__(self, n_basis_funcs: int, decay_rates: NDArray[np.floating], *args, mode="eval", **kwargs):
+    def __init__(
+        self,
+        n_basis_funcs: int,
+        decay_rates: NDArray[np.floating],
+        *args,
+        mode="eval",
+        **kwargs,
+    ):
         super().__init__(n_basis_funcs=n_basis_funcs, *args, mode=mode, **kwargs)
         self._decay_rates = np.asarray(decay_rates)
         if self._decay_rates.shape[0] != n_basis_funcs:
