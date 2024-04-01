@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import abc
-from typing import Literal, Generator, Optional, Tuple
+import warnings
+from typing import Callable, Literal, Generator, Optional, Tuple
 
 import numpy as np
 import scipy.linalg
@@ -31,16 +32,32 @@ def __dir__() -> list[str]:
     return __all__
 
 
-def check_transform_input(func):
+def check_transform_input(func: Callable) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
     when the wrong number of input is provided to __call__.
     """
-    def wrapper(self: Basis, *xi: ArrayLike):
+    def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
         xi = self._check_transform_input(*xi)
-        return func(self, *xi)  # Call the basis
+        return func(self, *xi, **kwargs)  # Call the basis
     return wrapper
+
+
+def check_one_dimensional(func: Callable) -> Callable:
+    def wrapper(self: Basis, *xi: ArrayLike, **kwargs):
+        if any(x.ndim != 1 for x in xi):
+            raise ValueError("Input sample must be one dimensional!")
+        return func(self, *xi, **kwargs)
+    return wrapper
+
+
+def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
+    if np.any(sample_pts < 0) or np.any(sample_pts > 1):
+        sample_pts -= np.min(sample_pts)
+        sample_pts /= np.max(sample_pts)
+        warnings.warn("Rescaling sample points for RaisedCosine basis to [0,1]!", UserWarning)
+    return sample_pts
 
 
 class Basis(abc.ABC):
@@ -502,6 +519,7 @@ class AdditiveBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
@@ -622,6 +640,7 @@ class MultiplicativeBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, *xi: ArrayLike) -> NDArray:
         """
         Evaluate the basis at the input samples.
@@ -791,6 +810,7 @@ class MSplineBasis(SplineBasis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Generate basis functions with given spacing.
 
@@ -869,6 +889,7 @@ class BSplineBasis(SplineBasis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """
         Evaluate the B-spline basis functions with given sample points.
@@ -957,6 +978,7 @@ class CyclicBSplineBasis(SplineBasis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
@@ -1090,7 +1112,8 @@ class RaisedCosineBasisLinear(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def __call__(self, sample_pts: ArrayLike) -> NDArray:
+    @check_one_dimensional
+    def __call__(self, sample_pts: ArrayLike, rescale_samples=True) -> NDArray:
         """Generate basis functions with given samples.
 
         Parameters
@@ -1109,8 +1132,10 @@ class RaisedCosineBasisLinear(Basis):
             If the sample provided do not lie in [0,1].
 
         """
-        if any(sample_pts < 0) or any(sample_pts > 1):
-            raise ValueError("Sample points for RaisedCosine basis must lie in [0,1]!")
+        if rescale_samples:
+            # note that sample points is converted to NDArray
+            # with the decorator.
+            sample_pts = min_max_rescale_samples(sample_pts)
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
@@ -1232,7 +1257,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
                 f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
             )
 
-    def _transform_samples(self, sample_pts: NDArray) -> NDArray:
+    def _transform_samples(self, sample_pts: ArrayLike) -> NDArray:
         """
         Map the sample domain to log-space.
 
@@ -1247,6 +1272,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             Transformed version of the sample points that matches the Raised Cosine basis domain,
             shape (n_samples, ).
         """
+        # rescale to [0,1]
+        sample_pts = min_max_rescale_samples(sample_pts)
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -1279,6 +1306,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, sample_pts: ArrayLike) -> NDArray:
         """Generate log-spaced raised cosine basis with given samples.
 
@@ -1297,7 +1325,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super().__call__(self._transform_samples(sample_pts))
+        return super().__call__(self._transform_samples(sample_pts), rescale_samples=False)
 
 
 class OrthExponentialBasis(Basis):
@@ -1402,6 +1430,7 @@ class OrthExponentialBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
+    @check_one_dimensional
     def __call__(self, sample_pts: NDArray) -> NDArray:
         """Generate basis functions with given spacing.
 
