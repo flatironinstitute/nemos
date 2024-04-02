@@ -10,12 +10,12 @@ from typing import Callable, Generator, Literal, Optional, Tuple, Union
 import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
 
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
-from pynapple import Tsd, TsdFrame
 
 FeatureMatrix = Union[NDArray, TsdFrame]
 
@@ -410,7 +410,9 @@ class Basis(abc.ABC):
         return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
 
     @support_pynapple(conv_type="numpy")
-    def _check_transform_input(self, *xi: ArrayLike) -> Tuple[Union[NDArray, Tsd, TsdFrame]]:
+    def _check_transform_input(
+        self, *xi: ArrayLike
+    ) -> Tuple[Union[NDArray, Tsd, TsdFrame]]:
         """Check transform input.
 
         Parameters
@@ -449,7 +451,7 @@ class Basis(abc.ABC):
         """Check that the kernel is pre-computed."""
         if self.mode == "conv" and self._kernel is None:
             raise ValueError(
-                "You must call `set_kernel` before `_compute_features` when mode =`conv`."
+                "You must call `_set_kernel` before `_compute_features` when mode =`conv`."
             )
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
@@ -685,8 +687,8 @@ class AdditiveBasis(Basis):
         """
         return np.hstack(
             (
-                self._basis1(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
 

@@ -428,7 +428,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -804,7 +804,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -1164,7 +1164,7 @@ class TestMSplineBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -1603,7 +1603,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -1986,7 +1986,7 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -2386,7 +2386,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -3105,7 +3105,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, mode="conv", window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
@@ -3730,7 +3730,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, mode="conv", window_size=10
         )
         bas = basis_a_obj * basis_b_obj
-        with pytest.raises(ValueError, match="You must call `set_kernel` before `_compute_features`"):
+        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
