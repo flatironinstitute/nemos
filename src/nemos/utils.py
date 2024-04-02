@@ -11,7 +11,6 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
@@ -461,7 +460,9 @@ def plot_spike_raster(
     return ax
 
 
-def row_wise_kron(A: jnp.ndarray, C: jnp.ndarray, jit=False, transpose=True) -> jnp.ndarray:
+def row_wise_kron(
+    A: jnp.ndarray, C: jnp.ndarray, jit=False, transpose=True
+) -> jnp.ndarray:
     r"""Compute the row-wise Kronecker product.
 
     Compute the row-wise Kronecker product between two matrices using JAX.

@@ -14,7 +14,7 @@ from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
 
 from .convolve import create_convolutional_predictor
-from .type_casting import support_pynapple, np_asarray_if
+from .type_casting import np_asarray_if, support_pynapple
 from .utils import row_wise_kron
 
 FeatureMatrix = Union[NDArray, TsdFrame]
@@ -838,15 +838,10 @@ class MultiplicativeBasis(Basis):
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
         return kron(
-            self._basis1._compute_features(
-                *xi[: self._basis1._n_input_dimensionality]
-                ),
-            self._basis2._compute_features(
-                *xi[self._basis1._n_input_dimensionality:]
-            ),
-            transpose=False
+            self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
+            self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality :]),
+            transpose=False,
         )
-
 
 
 class SplineBasis(Basis, abc.ABC):

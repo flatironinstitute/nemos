@@ -11,6 +11,7 @@ import utils_testing
 
 import nemos.basis as basis
 import nemos.convolve as convolve
+from nemos.utils import pynapple_concatenate_numpy
 
 # automatic define user accessible basis and check the methods
 
@@ -428,7 +429,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -804,7 +807,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -1164,7 +1169,9 @@ class TestMSplineBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -1603,7 +1610,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -1986,7 +1995,9 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -2386,7 +2397,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
@@ -3105,7 +3118,9 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, mode="conv", window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
@@ -3730,7 +3745,9 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, mode="conv", window_size=10
         )
         bas = basis_a_obj * basis_b_obj
-        with pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`"):
+        with pytest.raises(
+            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+        ):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
@@ -3798,6 +3815,7 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 
     pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
 
+
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
@@ -3810,15 +3828,35 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
         (basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5), 0),
         (basis.MSplineBasis(5, mode="conv", window_size=3), 6),
         (basis.BSplineBasis(5, mode="conv", window_size=3), 6),
-        (basis.CyclicBSplineBasis(5, mode="conv", window_size=3, predictor_causality="acausal"), 4),
-        (basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6), mode="conv", window_size=7), 14),
+        (
+            basis.CyclicBSplineBasis(
+                5, mode="conv", window_size=3, predictor_causality="acausal"
+            ),
+            4,
+        ),
+        (
+            basis.OrthExponentialBasis(
+                5, decay_rates=np.arange(1, 6), mode="conv", window_size=7
+            ),
+            14,
+        ),
         (basis.RaisedCosineBasisLinear(5, mode="conv", window_size=3), 6),
         (basis.RaisedCosineBasisLog(5, mode="conv", window_size=3), 6),
-        (basis.RaisedCosineBasisLog(5, mode="conv", window_size=3) + basis.MSplineBasis(5), 6),
-        (basis.RaisedCosineBasisLog(5, mode="conv", window_size=3) * basis.MSplineBasis(5), 6)
+        (
+            basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
+            + basis.MSplineBasis(5),
+            6,
+        ),
+        (
+            basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
+            * basis.MSplineBasis(5),
+            6,
+        ),
     ],
 )
-def test_sklearn_transformer_pipeline_pynapple(bas, poissonGLM_model_instantiation, expected_nans):
+def test_sklearn_transformer_pipeline_pynapple(
+    bas, poissonGLM_model_instantiation, expected_nans
+):
     X, y, model, _, _ = poissonGLM_model_instantiation
 
     # transform input to pynapple
@@ -3841,15 +3879,15 @@ def test_sklearn_transformer_pipeline_pynapple(bas, poissonGLM_model_instantiati
 
 
 @pytest.mark.parametrize(
-        "tsd",
-        [
-            nap.Tsd(
-                t=np.arange(100),
-                d=np.arange(100),
-                time_support=nap.IntervalSet(start=[0, 50], end=[20, 75]),
-            )
-        ],
-    )
+    "tsd",
+    [
+        nap.Tsd(
+            t=np.arange(100),
+            d=np.arange(100),
+            time_support=nap.IntervalSet(start=[0, 50], end=[20, 75]),
+        )
+    ],
+)
 @pytest.mark.parametrize(
     "window_size, shift, predictor_causality, nan_index",
     [
@@ -3876,31 +3914,146 @@ def test_sklearn_transformer_pipeline_pynapple(bas, poissonGLM_model_instantiati
         basis.RaisedCosineBasisLinear,
         basis.RaisedCosineBasisLog,
         basis.AdditiveBasis,
-        basis.MultiplicativeBasis
-    ]
+        basis.MultiplicativeBasis,
+    ],
 )
-def test_multi_epoch_pynapple(
+def test_multi_epoch_pynapple_basis(
     basis_cls, tsd, window_size, shift, predictor_causality, nan_index
 ):
     """Test nan location in multi-epoch pynapple tsd."""
     if basis_cls == basis.AdditiveBasis:
         bas = basis.BSplineBasis(
-            5, mode="conv", window_size=window_size, predictor_causality=predictor_causality, shift=shift
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
         )
         bas = bas + basis.RaisedCosineBasisLinear(
-            5, mode="conv", window_size=window_size, predictor_causality=predictor_causality, shift=shift)
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
+        )
     elif basis_cls == basis.MultiplicativeBasis:
         bas = basis.RaisedCosineBasisLog(
-            5, mode="conv", window_size=window_size, predictor_causality=predictor_causality, shift=shift
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
         )
         bas = basis.MSplineBasis(3) * bas
     else:
-        bas = basis_cls(5, mode="conv", window_size=window_size, predictor_causality=predictor_causality, shift=shift)
+        bas = basis_cls(
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
+        )
 
     n_input = bas._n_input_dimensionality
 
-    res = bas.compute_features(*([tsd]*n_input))
+    res = bas.compute_features(*([tsd] * n_input))
 
+    nan_index = np.sort(nan_index)
+    times_nan_found = res[np.isnan(res.d[:, 0])].t
+    assert len(times_nan_found) == len(nan_index)
+    assert np.all(times_nan_found == np.array(nan_index))
+    idx_nan = [np.where(res.t == k)[0][0] for k in nan_index]
+    assert np.all(np.isnan(res.d[idx_nan]))
+
+
+@pytest.mark.parametrize(
+    "tsd",
+    [
+        nap.Tsd(
+            t=np.arange(100),
+            d=np.arange(100),
+            time_support=nap.IntervalSet(start=[0, 50], end=[20, 75]),
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "window_size, shift, predictor_causality, nan_index",
+    [
+        (3, True, "causal", [0, 1, 2, 50, 51, 52]),
+        (2, True, "causal", [0, 1, 50, 51]),
+        (3, False, "causal", [0, 1, 50, 51]),
+        (2, False, "causal", [0, 50]),
+        (2, None, "causal", [0, 1, 50, 51]),
+        (3, True, "anti-causal", [20, 19, 18, 75, 74, 73]),
+        (2, True, "anti-causal", [20, 19, 75, 74]),
+        (3, False, "anti-causal", [20, 19, 75, 74]),
+        (2, False, "anti-causal", [20, 75]),
+        (2, None, "anti-causal", [20, 19, 75, 74]),
+        (3, False, "acausal", [0, 20, 50, 75]),
+        (2, False, "acausal", [20, 75]),
+    ],
+)
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+        basis.AdditiveBasis,
+        basis.MultiplicativeBasis,
+    ],
+)
+def test_multi_epoch_pynapple_basis_transformer(
+    basis_cls, tsd, window_size, shift, predictor_causality, nan_index
+):
+    """Test nan location in multi-epoch pynapple tsd."""
+    if basis_cls == basis.AdditiveBasis:
+        bas = basis.BSplineBasis(
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
+        )
+        bas = bas + basis.RaisedCosineBasisLinear(
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
+        )
+    elif basis_cls == basis.MultiplicativeBasis:
+        bas = basis.RaisedCosineBasisLog(
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
+        )
+        bas = basis.MSplineBasis(3) * bas
+    else:
+        bas = basis_cls(
+            5,
+            mode="conv",
+            window_size=window_size,
+            predictor_causality=predictor_causality,
+            shift=shift,
+        )
+
+    n_input = bas._n_input_dimensionality
+
+    # pass through transformer
+    bas = basis.TransformerBasis(bas)
+
+    # concat input
+    X = pynapple_concatenate_numpy([tsd[:, None]] * n_input, axis=1)
+
+    # run convolutions
+    res = bas.fit_transform(X)
+
+    # check nans
     nan_index = np.sort(nan_index)
     times_nan_found = res[np.isnan(res.d[:, 0])].t
     assert len(times_nan_found) == len(nan_index)

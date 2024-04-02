@@ -120,7 +120,12 @@ def test_concatenate_axis(arrays, axis, expected_shape):
 def test_concatenate_type(arrays, dtype):
     """Test various combination of arrays and pyapple time series."""
     assert utils.pynapple_concatenate_jax(arrays, dtype=dtype, axis=1).dtype == dtype
-    assert utils.pynapple_concatenate_numpy(arrays, dtype=dtype, axis=1,  casting="unsafe").dtype == dtype
+    assert (
+        utils.pynapple_concatenate_numpy(
+            arrays, dtype=dtype, axis=1, casting="unsafe"
+        ).dtype
+        == dtype
+    )
 
 
 class TestPadding:
