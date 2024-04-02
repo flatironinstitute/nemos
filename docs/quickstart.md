@@ -108,7 +108,7 @@ counts = spikes[6].count(0.01, ep=head_dir.time_support)  # restrict and bin
 upsampled_head_dir = head_dir.bin_average(0.01)  # up-sample head direction
 
 # create your features
-X = nmo.basis.CyclicBSplineBasis(10)._compute_features(upsampled_head_dir / (2 * np.pi))
+X = nmo.basis.CyclicBSplineBasis(10).compute_features(upsampled_head_dir / (2 * np.pi))
 
 # add a neuron axis and fit model
 model = nmo.glm.GLM().fit(X, counts) 
