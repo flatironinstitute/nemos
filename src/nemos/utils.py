@@ -461,7 +461,7 @@ def plot_spike_raster(
     return ax
 
 
-def row_wise_kron(A: jnp.array, C: jnp.array, jit=False, transpose=True) -> jnp.array:
+def row_wise_kron(A: jnp.ndarray, C: jnp.ndarray, jit=False, transpose=True) -> jnp.ndarray:
     r"""Compute the row-wise Kronecker product.
 
     Compute the row-wise Kronecker product between two matrices using JAX.
@@ -563,32 +563,6 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
         )
 
 
-@support_pynapple(conv_type="jax")
-def pynapple_concatenate(
-    arrays: Union[Tsd, TsdFrame, TsdTensor, jnp.ndarray, NDArray],
-    axis: int = 1,
-    dtype: type = None,
-):
-    """Concatenation  for arrays and pynapple Tsd, TsdGroup, TsdFrame.
-
-    Pynapple doesn't allow concatenation. With this function,
-    we relax this, allowing concatenation when the time axis and support matches.
-
-    Parameters
-    ----------
-    arrays:
-        Sequence of ndarrays or pynapple time series with data.
-        The arrays must have the same shape along all but the second axis,
-        except 1-D arrays which can be any length.
-
-    axis:
-        Concatenation axis.
-
-    dtype:
-        The data type of the concatenated array.
-
-    Returns
-    -------
-        The array/pynapple time series with data, stacked horizontally.
-    """
-    return jnp.concatenate(arrays, axis=axis, dtype=dtype)
+# enable concatenation for pynapple objects.
+pynapple_concatenate_jax = support_pynapple(conv_type="jax")(jnp.concatenate)
+pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)

@@ -14,7 +14,7 @@ from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
 
 from .convolve import create_convolutional_predictor
-from .type_casting import support_pynapple
+from .type_casting import support_pynapple, np_asarray_if
 from .utils import row_wise_kron
 
 FeatureMatrix = Union[NDArray, TsdFrame]
@@ -692,7 +692,6 @@ class AdditiveBasis(Basis):
             )
         )
 
-    @support_pynapple(conv_type="numpy")
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
@@ -710,7 +709,10 @@ class AdditiveBasis(Basis):
             The features, shape (n_samples, n_basis_funcs)
 
         """
-        return np.hstack(
+        # the numpy conversion is important, there is some in-place
+        # array modification in basis.
+        hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
+        return hstack_pynapple(
             (
                 self._basis1._compute_features(
                     *xi[: self._basis1._n_input_dimensionality]
@@ -718,7 +720,7 @@ class AdditiveBasis(Basis):
                 self._basis2._compute_features(
                     *xi[self._basis1._n_input_dimensionality :]
                 ),
-            )
+            ),
         )
 
     def _set_kernel(self, *xi: ArrayLike) -> Basis:
@@ -809,15 +811,14 @@ class MultiplicativeBasis(Basis):
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
-        return np.array(
+        return np.asarray(
             row_wise_kron(
-                self._basis1(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
 
-    @support_pynapple(conv_type="numpy")
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
@@ -835,17 +836,17 @@ class MultiplicativeBasis(Basis):
             The  features, shape (n_samples, n_basis_funcs)
 
         """
-        return np.array(
-            row_wise_kron(
-                self._basis1._compute_features(
-                    *xi[: self._basis1._n_input_dimensionality]
+        kron = support_pynapple(conv_type="numpy")(row_wise_kron)
+        return kron(
+            self._basis1._compute_features(
+                *xi[: self._basis1._n_input_dimensionality]
                 ),
-                self._basis2._compute_features(
-                    *xi[self._basis1._n_input_dimensionality :]
-                ),
-                transpose=False,
-            )
+            self._basis2._compute_features(
+                *xi[self._basis1._n_input_dimensionality:]
+            ),
+            transpose=False
         )
+
 
 
 class SplineBasis(Basis, abc.ABC):

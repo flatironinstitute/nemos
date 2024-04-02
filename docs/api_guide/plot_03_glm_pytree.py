@@ -316,7 +316,7 @@ plt.imshow(pos_tuning)
 # indices in a way that is annoying:
 from nemos.type_casting import support_pynapple
 
-X_mat = nmo.utils.pynapple_concatenate([X['head_direction'], X['spatial_position']], -1)
+X_mat = nmo.utils.pynapple_concatenate_jax([X['head_direction'], X['spatial_position']], -1)
 
 model = nmo.glm.GLM()
 model.fit(X_mat, spikes)
