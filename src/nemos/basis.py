@@ -106,7 +106,7 @@ class TransformerBasis:
 
     def transform(self, X: NDArray, y=None) -> NDArray:
         """
-        Transforms the data using the fitted basis functions.
+        Transform the data using the fitted basis functions.
 
         Parameters
         ----------
@@ -214,7 +214,7 @@ class Basis(abc.ABC):
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> NDArray:
         r"""
-        Applies the basis transformation to the input data.
+        Apply the basis transformation to the input data.
 
         This method operates in two modes:
         - 'eval': Evaluates the basis functions at the given sample points.
@@ -955,6 +955,7 @@ class MSplineBasis(SplineBasis):
     [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
     """
+
     def __init__(
         self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs
     ) -> None:
