@@ -76,21 +76,17 @@ also be a `pynapple` time series.
 A canonical example of this behavior is the `predict` method of `GLM`.
 
 ```python
->> >  # Assume X is a pynapple TsdFrame
->> > print(type(X))  # shape (num samples, num features)
-<
+>>>  # Assume X is a pynapple TsdFrame
+>>> print(type(X))  # shape (num samples, num features)
+<class 'pynapple.core.time_series.TsdFrame'>
 
-class 'pynapple.core.time_series.TsdFrame'>
+>>> model._set_kernel(X, y)  # the following works
 
->> > model._set_kernel(X, y)  # the following works
+>>> firing_rate = model.predict(X)  # predict the firing rate of the neuron
 
->> > firing_rate = model.predict(X)  # predict the firing rate of the neuron
-
->> >  # this will still be a pynapple time series
->> > print(type(firing_rate))  # shape (num_samples, )
-<
-
-class 'pynapple.core.time_series.Tsd'>
+>>>  # this will still be a pynapple time series
+>>> print(type(firing_rate))  # shape (num_samples, )
+<class 'pynapple.core.time_series.Tsd'>
 ```
 
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
