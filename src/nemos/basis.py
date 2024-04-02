@@ -669,7 +669,7 @@ class AdditiveBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, *xi: ArrayLike) -> NDArray:
+    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
