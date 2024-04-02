@@ -101,7 +101,7 @@ class TransformerBasis:
         self :
             The transformer object.
         """
-        self._basis.set_kernel(*X.T)
+        self._basis._set_kernel(*X.T)
         return self
 
     def transform(self, X: NDArray, y=None) -> NDArray:
@@ -269,54 +269,80 @@ class Basis(abc.ABC):
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
     def compute_features(self, *xi: ArrayLike) -> NDArray:
-        """Compute the basis kernel, then applies the input transformation.
+        """
+        Compute the basis functions and transform input data into model features.
 
-        This method calls the `set_kernel` method to prepare the basis functions if `mode= "conv"`,
-        and applies the transforms input.
+        This method is designed to be a high-level interface for transforming input
+        data using the basis functions defined by the subclass. Depending on the basis'
+        mode ('eval' or 'conv'), it either evaluates the basis functions at the sample
+        points or performs a convolution operation between the input data and the
+        basis functions.
 
         Parameters
         ----------
-        *xi :
-            Input data to be transformed into model features.
+        *xi : ArrayLike
+            Input data arrays to be transformed. The shape and content requirements
+            depend on the subclass and mode of operation ('eval' or 'conv').
 
         Returns
         -------
-        :
-            The transformed features. In `mode = "eval"`, the transformation consists of evaluating
-            the basis at the input samples. In `mode = "conv"` it consists of convolving the input
-            samples with the basis kernel.
+        NDArray
+            Transformed features. In 'eval' mode, it corresponds to the basis functions
+            evaluated at the input samples. In 'conv' mode, it consists of convolved
+            input samples with the basis functions. The output shape varies based on
+            the subclass and mode.
+
+        Notes
+        -----
+        Subclasses should implement how to handle the transformation specific to their
+        basis function types and operation modes.
+
+        Examples
+        --------
+        Given a specific subclass implementation, usage might look like:
+
+        >>> basis = MyBasisSubclass(...)
+        >>> data = np.array([...])
+        >>> features = basis.compute_features(data)
 
         See Also
         --------
         [set_kernel](#set_kernel) : Compute the basis kernel for convolution.
         """
         if self._kernel is None:
-            self.set_kernel(*xi)
+            self._set_kernel(*xi)
         return self._compute_features(*xi)
 
-    def set_kernel(self, *xi: ArrayLike) -> Basis:
+    def _set_kernel(self, *xi: ArrayLike) -> Basis:
         """
-        Compute the convolutional kernel if `mode="conv"`.
+        Prepare or compute the convolutional kernel for the basis functions.
 
-        In 'conv' mode, this method prepares the convolutional kernel based on the input data characteristics.
-        For other modes, this method may simply return the instance itself without modifying its state, as no
-        fitting is necessary.
+        This method is called to prepare the basis functions for convolution operations
+        in subclasses where the 'conv' mode is used. It typically involves computing a
+        kernel based on the basis functions that will be used for convolution with the
+        input data. The specifics of kernel computation depend on the subclass implementation
+        and the nature of the basis functions.
+
+        In 'eval' mode, this method might not perform any operation but simply return the
+        instance itself, as no kernel preparation is necessary.
 
         Parameters
         ----------
         *xi :
-            The input data. This is not altered or used in any way, but it is necessary to conform to
-            `scikit-learn` transformer API.
+            The input data based on which the kernel might be computed. The actual use of
+            these inputs is subclass-specific and might not be applicable for all basis types.
 
         Returns
         -------
         self :
-            The instance itself, potentially modified to reflect the fitted state.
+            The instance itself, modified to include the computed kernel if applicable. This
+            allows for method chaining and integration into transformation pipelines.
 
         Notes
         -----
-        This method must be overridden by subclasses that require fitting before transformation, particularly
-        in 'conv' mode.
+        Subclasses implementing this method should detail the specifics of how the kernel is
+        computed and how the input parameters are utilized. If the basis operates in 'eval'
+        mode exclusively, this method should simply return `self` without modification.
         """
         if self.mode == "conv":
             self._kernel = self.__call__(np.linspace(0, 1, self.window_size))
@@ -325,26 +351,26 @@ class Basis(abc.ABC):
     @abc.abstractmethod
     def __call__(self, *xi: ArrayLike) -> NDArray:
         """
-        Evaluate the basis functions at given points.
+        Abstract method to evaluate the basis functions at given points.
 
-        This method must be implemented by subclasses to define the specific behavior of the basis
-        function evaluation.
+        This method must be implemented by subclasses to define the specific behavior
+        of the basis transformation. The implementation depends on the type of basis
+        (e.g., spline, raised cosine), and it should evaluate the basis functions at
+        the specified points in the domain.
 
         Parameters
         ----------
-        *xi : ArrayLike
-            The points at which to evaluate the basis functions. For multivariate bases, each
-            argument corresponds to a different dimension.
+        *xi :
+            Variable number of arguments, each representing an array of points at which
+            to evaluate the basis functions. The dimensions and requirements of these
+            inputs vary depending on the specific basis implementation.
 
         Returns
         -------
-        NDArray
-            The evaluated values of the basis functions at the input points.
-
-        Notes
-        -----
-        The implementation of this method is specific to the subclass and defines the core behavior
-        of the basis transformation.
+        :
+            An array containing the evaluated values of the basis functions at the input
+            points. The shape and structure of this array are specific to the subclass
+            implementation.
         """
         pass
 
@@ -677,7 +703,7 @@ class AdditiveBasis(Basis):
             )
         )
 
-    def set_kernel(self, *xi):
+    def _set_kernel(self, *xi):
         """Call fit on the added basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -692,8 +718,8 @@ class AdditiveBasis(Basis):
         :
             The AdditiveBasis ready to be evaluated.
         """
-        self._basis1.set_kernel(*xi)
-        self._basis2.set_kernel(*xi)
+        self._basis1._set_kernel(*xi)
+        self._basis2._set_kernel(*xi)
         return self
 
 
@@ -728,7 +754,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def set_kernel(self, *xi):
+    def _set_kernel(self, *xi):
         """Call fit on the multiplied basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -743,8 +769,8 @@ class MultiplicativeBasis(Basis):
         :
             The MultiplicativeBasis ready to be evaluated.
         """
-        self._basis1.set_kernel(*xi)
-        self._basis2.set_kernel(*xi)
+        self._basis1._set_kernel(*xi)
+        self._basis2._set_kernel(*xi)
         return self
 
     @support_pynapple(conv_type="numpy")
@@ -903,24 +929,44 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """M-spline[$^1$](#references) 1-dimensional basis functions.
+    """
+    M-spline[$^1$](#references) basis functions for modeling and data transformation.
+
+    M-splines are a type of spline basis function used for smooth curve fitting
+    and data representation. They are positive and integrate to one, making them
+    suitable for probabilistic models and density estimation. The order of an
+    M-spline defines its smoothness, with higher orders resulting in smoother
+    splines.
+
+    This class provides functionality to create M-spline basis functions, allowing
+    for flexible and smooth modeling of data. It inherits from the `SplineBasis`
+    abstract class, providing specific implementations for M-splines.
 
     Parameters
     ----------
     n_basis_funcs :
-        Number of basis functions.
+        The number of basis functions to generate. More basis functions allow for
+        more flexible data modeling but can lead to overfitting.
     order :
-        Order of the splines used in basis functions. Must lie within [1,
-        n_basis_funcs]. The m-splines have ``order-2`` continuous derivatives
-        at each interior knot. The higher this number, the smoother the basis
-        representation will be.
+        The order of the splines used in basis functions. Must be between [1,
+        n_basis_funcs]. Default is 2. Higher order splines have more continuous
+        derivatives at each interior knot, resulting in smoother basis functions.
+
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import MSplineBasis
+    >>> n_basis_funcs = 5
+    >>> order = 3
+    >>> mspline_basis = MSplineBasis(n_basis_funcs, order=order)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = mspline_basis(sample_points)
 
     References
     ----------
-    1. Ramsay, J. O. (1988). Monotone regression splines in action.
-        Statistical science, 3(4), 425-441.
+    [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+        3(4), 425-441.
     """
-
     def __init__(
         self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs
     ) -> None:
@@ -930,18 +976,27 @@ class MSplineBasis(SplineBasis):
     @check_transform_input
     @check_one_dimensional
     def __call__(self, sample_pts: ArrayLike) -> NDArray:
-        """Generate basis functions with given spacing.
+        """
+        Evaluate the M-spline basis functions at given sample points.
 
         Parameters
         ----------
         sample_pts :
-            Spacing for basis functions, shape (n_samples,)
+            An array of sample points where the M-spline basis functions are to be
+            evaluated.
 
         Returns
         -------
-        basis_funcs :
-            Evaluated spline basis functions, shape (n_samples, n_basis_funcs).
+        :
+            An array where each column corresponds to one M-spline basis function
+            evaluated at the input sample points. The shape of the array is
+            (len(sample_pts), n_basis_funcs).
 
+        Notes
+        -----
+        The implementation uses a recursive definition of M-splines. Boundary
+        conditions are handled such that the basis functions are positive and
+        integrate to one over the domain defined by the sample points.
         """
         # add knots if not passed
         knot_locs = self._generate_knots(
@@ -957,21 +1012,45 @@ class MSplineBasis(SplineBasis):
         )
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
-        """Evaluate the M-spline basis set on a grid of equi-spaced sample points.
+        """
+        Evaluate the M-spline basis functions on a uniformly spaced grid.
+
+        This method creates a uniformly spaced grid of sample points within the domain
+        [0, 1] and evaluates all the M-spline basis functions at these points. It is
+        particularly useful for visualizing the shape and distribution of the basis
+        functions across their domain.
 
         Parameters
         ----------
         n_samples :
-            The number of samples.
+            The number of points in the uniformly spaced grid. A higher number of
+            samples will result in a more detailed visualization of the basis functions.
 
         Returns
         -------
-        X :
-            Array of shape (n_samples,) containing the equi-spaced sample
-            points where we've evaluated the basis.
-        basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+        X : NDArray
+            A 1D array of uniformly spaced sample points within the domain [0, 1].
+            Shape: `(n_samples,)`.
+        Y : NDArray
+            A 2D array where each row corresponds to the evaluated M-spline basis
+            function values at the points in X. Shape: `(n_samples, n_basis_funcs)`.
 
+        Examples
+        --------
+        Evaluate and visualize 4 M-spline basis functions of order 3:
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import MSplineBasis
+        >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+        >>> for i in range(4):
+        ...     plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+        >>> plt.title('M-Spline Basis Functions')
+        >>> plt.xlabel('Domain')
+        >>> plt.ylabel('Basis Function Value')
+        >>> plt.legend()
+        >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 

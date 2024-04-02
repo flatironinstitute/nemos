@@ -418,12 +418,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
@@ -794,12 +794,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
@@ -1154,12 +1154,12 @@ class TestMSplineBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
@@ -1593,12 +1593,12 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel.shape == (10, 5)
 
     def test_transform_fails(self):
@@ -1976,12 +1976,12 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
@@ -2376,12 +2376,12 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
-        bas.set_kernel(None)
+        bas._set_kernel(None)
         assert bas._kernel.shape == (3, 5)
 
     def test_transform_fails(self):
@@ -3072,7 +3072,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, mode="conv", window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        bas.set_kernel(None)
+        bas._set_kernel(None)
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -3697,7 +3697,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, mode="conv", window_size=10
         )
         bas = basis_a_obj * basis_b_obj
-        bas.set_kernel(None)
+        bas._set_kernel(None)
 
         def check_kernel(basis_obj):
             has_kern = []
