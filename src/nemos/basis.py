@@ -296,18 +296,6 @@ class Basis(abc.ABC):
         -----
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
-
-        Examples
-        --------
-        Given a specific subclass implementation, usage might look like:
-
-        >>> basis = MyBasisSubclass(...)
-        >>> data = np.array([...])
-        >>> features = basis.compute_features(data)
-
-        See Also
-        --------
-        [set_kernel](#set_kernel) : Compute the basis kernel for convolution.
         """
         if self._kernel is None:
             self._set_kernel(*xi)
