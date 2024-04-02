@@ -27,19 +27,72 @@ mspline_basis = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
 # %%
 # Evaluating a Basis
 # ------------------------------------
-# The `Basis.evaluate` method enables us to evaluate a basis function. For `SplineBasis`, the domain is defined by
-# the samples that we input to the `evaluate` method. This results in an equi-spaced set of knots, which spans
+# The `Basis` object is callable, and can be evaluated as a function. For `SplineBasis`, the domain is defined by
+# the samples that we input to the `__call__` method. This results in an equi-spaced set of knots, which spans
 # the range from the smallest to the largest sample. These knots are then used to construct a uniformly spaced basis.
 
 # Generate an array of sample points
 samples = np.random.uniform(0, 10, size=1000)
 
 # Evaluate the basis at the sample points
-eval_basis = mspline_basis.evaluate(samples)
+eval_basis = mspline_basis(samples)
 
 # Output information about the evaluated basis
 print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples.")
+
+# %%
+# ## Basis `mode`
+# In constructing features, `Basis` objects can be used in two modalities: `"eval"` for evaluate or `"conv"`
+# for convolve. These two modalities change the behavior of the `construct_features` method of `Basis`, in particular,
+#
+# - If a basis is in mode `"eval"`, then `construct_features` simply returns the evaluated basis.
+# - If a basis is in mode `"conv"`, then `construct_features` will convolve the input with a kernel of basis
+#   with `window_size` specified by the user.
+#
+# Let's see how this two modalities operate.
+
+eval_mode = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, mode="eval")
+conv_mode = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, mode="conv", window_size=100)
+
+# define an input
+angles = np.linspace(0, np.pi*4, 201)
+y = np.cos(angles)
+
+# compute features in the two modalities
+eval_feature = eval_mode.compute_features(y)
+conv_feature = conv_mode.compute_features(y)
+
+# plot results
+fig, axs = plt.subplots( 3, 1, sharex="all", figsize=(6, 4))
+
+# plot signal
+axs[0].set_title("Input")
+axs[0].plot(y)
+axs[0].set_xticks([])
+axs[0].set_ylabel("signal", fontsize=12)
+
+# plot eval results
+axs[1].set_title("eval features")
+axs[1].imshow(eval_feature.T, aspect="auto")
+axs[1].set_xticks([])
+axs[1].set_ylabel("basis", fontsize=12)
+
+# plot conv results
+axs[2].set_title("convolutional features")
+axs[2].imshow(conv_feature.T, aspect="auto")
+axs[2].set_xlabel("time", fontsize=12)
+axs[2].set_ylabel("basis", fontsize=12)
+plt.tight_layout()
+
+# %%
+#
+# !!! note "NaN-Padding"
+#     Convolution is performed in "valid" mode, and then NaN-padded. The default behavior
+#     is padding left, which makes the output feature causal.
+#     This is why the first half of the `conv_feature` is full of NaNs and appears as white.
+#     If you want to learn more about convolutions, as well as how and when to change defaults
+#     check out the tutorial on [1D convolutions](../plot_03_1D_convolution).
 
 # %%
 # Plotting the Basis Function Elements:

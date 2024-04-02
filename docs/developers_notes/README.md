@@ -1,5 +1,8 @@
 # Introduction
 
+!!! warning
+    This note is out-of-sync with the current API. Please, do not rely on this yet for contributing to `nemos`.
+
 Welcome to the Developer Notes of the `nemos` project. These notes aim to provide detailed technical information about the various modules, classes, and functions that make up this library, as well as guidelines on how to write code that integrates nicely with our package. They are intended to help current and future developers understand the design decisions, structure, and functioning of the library, and to provide guidance on how to modify, extend, and maintain the codebase.
 
 

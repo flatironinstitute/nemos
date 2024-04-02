@@ -69,13 +69,13 @@ print(f"Shape of the convolution output: {spk_conv.shape}")
 
 # pad according to the causal direction of the filter, after squeeze,
 # the dimension is (n_filters, n_samples)
-spk_causal_utils = nmo.convolve.create_convolutional_predictor(
+spk_causal_conv = nmo.convolve.create_convolutional_predictor(
         w, spk, predictor_causality="causal"
 )
-spk_anticausal_utils = nmo.convolve.create_convolutional_predictor(
+spk_anticausal_conv = nmo.convolve.create_convolutional_predictor(
         w, spk, predictor_causality="anti-causal"
 )
-spk_acausal_utils = nmo.convolve.create_convolutional_predictor(
+spk_acausal_conv = nmo.convolve.create_convolutional_predictor(
         w, spk, predictor_causality="acausal"
 )
 
@@ -100,19 +100,47 @@ ax = plt.subplot(311)
 plt.title('valid + nan-pad')
 ax.add_patch(rect_causal)
 plt.vlines(np.arange(spk.shape[0]), 0, shift_spk, color='k')
-plt.plot(np.arange(spk.shape[0]), spk_causal_utils)
+plt.plot(np.arange(spk.shape[0]), spk_causal_conv)
 plt.ylabel('causal')
 
 ax = plt.subplot(312)
 ax.add_patch(rect_anticausal)
 plt.vlines(np.arange(spk.shape[0]), 0, shift_spk, color='k')
-plt.plot(np.arange(spk.shape[0]), spk_anticausal_utils)
+plt.plot(np.arange(spk.shape[0]), spk_anticausal_conv)
 plt.ylabel('anti-causal')
 
 ax = plt.subplot(313)
 ax.add_patch(rect_acausal_left)
 ax.add_patch(rect_acausal_right)
 plt.vlines(np.arange(spk.shape[0]), 0, shift_spk, color='k')
-plt.plot(np.arange(spk.shape[0]), spk_acausal_utils)
+plt.plot(np.arange(spk.shape[0]), spk_acausal_conv)
 plt.ylabel('acausal')
 plt.tight_layout()
+
+# %%
+# ## Convolve using `Basis.create_features`
+# All the parameters of `create_convolutional_predictor` can be passed to a `Basis` directly
+# at initialization. Note that you must set `mode == "conv"` to actually perform convolution
+# with `Basis.create_features`. Let's see how we can get the same results through `Basis`.
+
+# define basis with different predictor causality
+causal_basis = nmo.basis.RaisedCosineBasisLinear(
+        n_basis_funcs=3, mode="conv", window_size=ws,
+        predictor_causality="causal"
+)
+
+acausal_basis = nmo.basis.RaisedCosineBasisLinear(
+        n_basis_funcs=3, mode="conv", window_size=ws,
+        predictor_causality="acausal"
+)
+
+anticausal_basis = nmo.basis.RaisedCosineBasisLinear(
+        n_basis_funcs=3, mode="conv", window_size=ws,
+        predictor_causality="anti-causal"
+)
+
+# compute convolutions
+basis_causal_conv = causal_basis.compute_features(spk)
+basis_acausal_conv = acausal_basis.compute_features(spk)
+basis_anticausal_conv = anticausal_basis.compute_features(spk)
+

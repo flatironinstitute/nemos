@@ -120,16 +120,10 @@ for k in range(2):
 plt.tight_layout()
 
 # %%
-# Each basis element represent a possible position of the animal in an arena whose borders are between 0 and 1.
-# To make sure that we evaluate the true position of the animal, we need to rescale the position between 0 and 1.
-
-position = position - np.min(position, axis=0)  # shift to positive values
-position = position / np.max(position, axis=0)  # scale to [0, 1]
-
-# %%
+# Each basis element represent a possible position of the animal in an arena.
 # Now we can "evaluate" the basis for each position of the animal
 
-position_basis = basis_2d.evaluate(position["x"], position["y"])
+position_basis = basis_2d(position["x"], position["y"])
 
 # %%
 # Now try to make sense of what it is

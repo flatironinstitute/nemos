@@ -73,19 +73,19 @@ others. All these operations can be easily concatenated for a quick and easy dat
 In `nemos`, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
 also be a `pynapple` time series.
 
-A canonical example of this behavior is the `predict` method of `GLM`. 
+A canonical example of this behavior is the `predict` method of `GLM`.
 
 ```python
->>> # Assume X is a pynapple TsdFrame
->>> print(type(X)) # shape (num samples, num features)
+>>>  # Assume X is a pynapple TsdFrame
+>>> print(type(X))  # shape (num samples, num features)
 <class 'pynapple.core.time_series.TsdFrame'>
 
->>> model.fit(X, y) # the following works
+>>> model.fit(X, y)  # the following works
 
->>> firing_rate = model.predict(X) # predict the firing rate of the neuron
+>>> firing_rate = model.predict(X)  # predict the firing rate of the neuron
 
->>> # this will still be a pynapple time series
->>> print(type(firing_rate)) # shape (num_samples, )
+>>>  # this will still be a pynapple time series
+>>> print(type(firing_rate))  # shape (num_samples, )
 <class 'pynapple.core.time_series.Tsd'>
 ```
 
@@ -105,10 +105,10 @@ spikes = data["units"]
 head_dir = data["ry"]
 
 counts = spikes[6].count(0.01, ep=head_dir.time_support)  # restrict and bin
-upsampled_head_dir = head_dir.bin_average(0.01) #  up-sample head direction
+upsampled_head_dir = head_dir.bin_average(0.01)  # up-sample head direction
 
 # create your features
-X = nmo.basis.CyclicBSplineBasis(10).evaluate(upsampled_head_dir / (2 * np.pi))
+X = nmo.basis.CyclicBSplineBasis(10).compute_features(upsampled_head_dir)
 
 # add a neuron axis and fit model
 model = nmo.glm.GLM().fit(X, counts) 

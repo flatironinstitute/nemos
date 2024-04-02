@@ -344,13 +344,16 @@ plotting.plot_basis()
 # nemos includes `Basis` objects to handle the construction and use of these
 # basis functions.
 #
-# When we instantiate this object, the only argument we need to specify is the
-# number of functions we want: with more basis functions, we'll be able to
+# When we instantiate this object, the only arguments we need to specify is the
+# number of functions we want, the mode of operation of the basis (`"conv"`),
+# and the window size for the convolution. With more basis functions, we'll be able to
 # represent the effect of the corresponding input with the higher precision, at
 # the cost of adding additional parameters.
 
-
-basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=8)
+# a basis object can be instantiated in "conv" mode for convolving  the input.
+basis = nmo.basis.RaisedCosineBasisLog(
+    n_basis_funcs=8, mode="conv", window_size=window_size
+)
 
 # `basis.evaluate_on_grid` is a convenience method to view all basis functions
 # across their whole domain:
@@ -394,10 +397,12 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 #
 # Let's see our basis in action. We can "compress" spike history feature by convolving the basis
 # with the counts (without creating the large spike history feature matrix).
-# This can be performed in nemos.
+# This can be performed in nemos by calling the "compute_features" method of basis.
 
 
-conv_spk = nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)
+# equivalent to
+# `nmo.convolve.create_convolutional_predictor(basis_kernels, neuron_count)`
+conv_spk = basis.compute_features(neuron_count)
 
 print(f"Raw count history as feature: {input_feature.shape}")
 print(f"Compressed count history as feature: {conv_spk.shape}")
@@ -503,20 +508,17 @@ plotting.plot_rates_and_smoothed_counts(
 # The same approach can be applied to the whole population. Now the firing rate of a neuron
 # is predicted not only by its own count history, but also by the rest of the
 # simultaneously recorded population. We can convolve the basis with the counts of each neuron
-# to get an array of predictors of shape, `(num_time_points, num_neurons, num_basis_funcs)`.
+# to get an array of predictors of shape, `(num_time_points, num_neurons * num_basis_funcs)`.
 #
 # #### Preparing the features
 
 # convolve all the neurons
-convolved_count = nmo.convolve.create_convolutional_predictor(basis_kernels, count)
+convolved_count = basis.compute_features(count)
 
 # %%
 # Check the dimension to make sure it make sense
+# Shape should be (n_samples, n_basis_func * n_neurons)
 print(f"Convolved count shape: {convolved_count.shape}")
-
-# Reshape to (n_samples, n_basis_func * n_neurons)
-convolved_count = np.reshape(convolved_count, (convolved_count.shape[0], -1))
-print(f"Convolved count re-shaped: {convolved_count.shape}")
 
 # %%
 # #### Fitting the Model
@@ -568,11 +570,6 @@ plotting.plot_rates_and_smoothed_counts(
      "Self-connection: bsais": rate_basis,
      "All-to-all: basis": predicted_firing_rate[:, 0]}
 )
-
-# %%
-# Compute the responses by multiplying the coefficients with the basis and adding
-# the result. This can be done in a single line of code with numpy.einsum.
-
 
 # %%
 # #### Visualizing the connectivity

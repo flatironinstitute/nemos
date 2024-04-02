@@ -5,11 +5,6 @@
 !!! warning
     To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
 
-## Learning objectives
-
- - Learn how to combine GLM with other modeling approach.
- - Review previous background.
-
 """
 
 import matplotlib.pyplot as plt
@@ -221,15 +216,14 @@ filtered_stimulus
 # use the log-stretched raised cosine basis to create the predictor for our
 # GLM:
 
-basis = nmo.basis.RaisedCosineBasisLog(8)
 window_size = 100
-time, basis_kernels = basis.evaluate_on_grid(window_size)
-time *= bin_size * window_size
-convolved_input = nmo.convolve.create_convolutional_predictor(basis_kernels, filtered_stimulus)
+basis = nmo.basis.RaisedCosineBasisLog(8, mode="conv", window_size=window_size)
+
+convolved_input = basis.compute_features(filtered_stimulus)
 
 # %%
 #
-# convolved_input has shape (n_time_pts, n_features, n_basis_funcs), and
+# convolved_input has shape (n_time_pts, n_features * n_basis_funcs), because
 # n_features is the singleton dimension from filtered_stimulus.
 #
 # ## Fitting the GLM
@@ -245,9 +239,12 @@ model.fit(convolved_input, counts)
 # We have our coefficients for each of our 8 basis functions, let's combine
 # them to get the temporal time course of our input:
 
-
+time, basis_kernels = basis.evaluate_on_grid(window_size)
+time *= bin_size * window_size
 temp_weights = np.einsum('b, t b -> t', model.coef_, basis_kernels)
 plt.plot(time, temp_weights)
+plt.xlabel("time[sec]")
+plt.ylabel("amplitude")
 
 # %%
 #
