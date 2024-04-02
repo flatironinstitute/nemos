@@ -249,7 +249,7 @@ class Basis(abc.ABC):
             If an invalid mode is specified or necessary parameters for the chosen mode are missing.
         """
         # check if self._kernel is not None for mode="conv"
-        self._check_is_fit()
+        self._check_has_kernel()
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
         else:  # convolve, called only at the last layer
@@ -269,26 +269,26 @@ class Basis(abc.ABC):
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
     def compute_features(self, *xi: ArrayLike) -> NDArray:
-        """Fits the basis to the input data, then applies the transformation.
+        """Compute the basis kernel, then applies the input transformation.
 
-        This method is particularly relevant for modes of operation that require an initial fitting
-        step (e.g., 'conv' mode for convolutional basis functions). It calls the `fit` method to
-        prepare the basis functions for the convolution and applies the transformation.
+        This method calls the `set_kernel` method to prepare the basis functions if `mode= "conv"`,
+        and applies the transforms input.
 
         Parameters
         ----------
         *xi :
-            Input data to fit and then transform.
+            Input data to be transformed into model features.
 
         Returns
         -------
         :
-            The transformed features after fitting the basis to the input data.
+            The transformed features. In `mode = "eval"`, the transformation consists of evaluating
+            the basis at the input samples. In `mode = "conv"` it consists of convolving the input
+            samples with the basis kernel.
 
         See Also
         --------
-        [fit](#fit) : Fits the basis to the input data.
-        [transform](#transform) : Applies the basis transformation to the input data.
+        [set_kernel](#set_kernel) : Compute the basis kernel for convolution.
         """
         if self._kernel is None:
             self.set_kernel(*xi)
@@ -296,7 +296,7 @@ class Basis(abc.ABC):
 
     def set_kernel(self, *xi: ArrayLike) -> Basis:
         """
-        Fits the basis to the input data.
+        Compute the convolutional kernel if `mode="conv"`.
 
         In 'conv' mode, this method prepares the convolutional kernel based on the input data characteristics.
         For other modes, this method may simply return the instance itself without modifying its state, as no
@@ -403,10 +403,11 @@ class Basis(abc.ABC):
 
         return xi
 
-    def _check_is_fit(self):
+    def _check_has_kernel(self):
+        """Check that the kernel is pre-computed."""
         if self.mode == "conv" and self._kernel is None:
             raise ValueError(
-                "You must call `fit` before `transform` when mode =`conv`."
+                "You must call `set_kernel` before `_compute_features` when mode =`conv`."
             )
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
@@ -651,7 +652,7 @@ class AdditiveBasis(Basis):
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> NDArray:
         """
-        Apply transform and concatenate.
+        Compute features for added bases and concatenate.
 
         Parameters
         ----------
@@ -662,7 +663,7 @@ class AdditiveBasis(Basis):
         Returns
         -------
         :
-            The transformed features, shape (n_samples, n_basis_funcs)
+            The features, shape (n_samples, n_basis_funcs)
 
         """
         return np.hstack(
@@ -776,7 +777,7 @@ class MultiplicativeBasis(Basis):
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> NDArray:
         """
-        Apply transform and concatenate.
+        Compute the features for the multiplied bases, and compute their outer product.
 
         Parameters
         ----------
@@ -787,7 +788,7 @@ class MultiplicativeBasis(Basis):
         Returns
         -------
         :
-            The transformed features, shape (n_samples, n_basis_funcs)
+            The  features, shape (n_samples, n_basis_funcs)
 
         """
         return np.array(
