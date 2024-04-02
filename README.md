@@ -61,7 +61,8 @@ Building the model above is more complicated. In this case, input spikes are con
 ```python
 import nemos as nmo
 
-# generate 5 basis functions of 100 time-bin, and convolve the counts with the basis.
+# generate 5 basis functions of 100 time-bin, 
+# and convolve the counts with the basis.
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
 
