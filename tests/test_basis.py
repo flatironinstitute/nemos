@@ -3797,3 +3797,42 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
     pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+
+@pytest.mark.parametrize(
+    "bas",
+    [
+        basis.MSplineBasis(5),
+        basis.BSplineBasis(5),
+        basis.CyclicBSplineBasis(5),
+        basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)),
+        basis.RaisedCosineBasisLinear(5),
+        basis.RaisedCosineBasisLog(5),
+        basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5),
+        basis.MSplineBasis(5, mode="conv", window_size=3),
+        basis.BSplineBasis(5, mode="conv", window_size=3),
+        basis.CyclicBSplineBasis(5, mode="conv", window_size=3),
+        basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6), mode="conv", window_size=7),
+        basis.RaisedCosineBasisLinear(5, mode="conv", window_size=3),
+        basis.RaisedCosineBasisLog(5, mode="conv", window_size=3),
+        basis.RaisedCosineBasisLog(5, mode="conv", window_size=3) + basis.MSplineBasis(5),
+    ],
+)
+def test_sklearn_transformer_pipeline_pynapple(bas, poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+
+    # transform input to pynapple
+    ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
+    X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
+    y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
+
+    bas = basis.TransformerBasis(bas)
+    # fit a pipeline & predict from pynapple
+    pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
+    pipe.fit(X_nap[:, : bas._basis._n_input_dimensionality] ** 2, y_nap)
+
+    # get rate
+    rate = pipe.predict(X_nap[:, : bas._basis._n_input_dimensionality] ** 2)
+    # check rate is Tsd with same time info
+    assert isinstance(rate, nap.Tsd)
+    assert np.all(rate.t == X_nap.t)
+    assert np.all(rate.time_support == X_nap.time_support)

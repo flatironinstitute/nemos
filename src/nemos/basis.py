@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import abc
 import warnings
-from typing import Callable, Generator, Literal, Optional, Tuple
+from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
 import scipy.linalg
@@ -15,6 +15,9 @@ from scipy.interpolate import splev
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
+from pynapple import Tsd, TsdFrame
+
+FeatureMatrix = Union[NDArray, TsdFrame]
 
 __all__ = [
     "MSplineBasis",
@@ -56,6 +59,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 
 
 def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
+    """Rescale samples to [0,1]."""
     if np.any(sample_pts < 0) or np.any(sample_pts > 1):
         sample_pts -= np.min(sample_pts)
         sample_pts /= np.max(sample_pts)
@@ -76,14 +80,35 @@ class TransformerBasis:
 
     Parameters
     ----------
-    basis : Basis
-        An instance of a Basis class or any subclass thereof.
+    basis :
+        A concrete subclass of `Basis`.
     """
 
     def __init__(self, basis: Basis):
         self._basis = basis
 
-    def fit(self, X: NDArray, y=None):
+    @staticmethod
+    def _unpack_inputs(X: FeatureMatrix):
+        """Unpack impute without using transpose.
+
+        Unpack horizontally stacked inputs using slicing. This works gracefully with `pynapple`,
+        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a `pynapple`
+        exception since `pynapple` assumes that the time axis is the first axis.
+
+        Parameters
+        ----------
+        X:
+            The inputs horizontally stacked.
+
+        Returns
+        -------
+        :
+            A tuple of each individual input.
+
+        """
+        return (X[:, k] for k in range(X.shape[1]))
+
+    def fit(self, X: FeatureMatrix, y=None):
         """
         Compute the convolutional kernels.
 
@@ -101,18 +126,18 @@ class TransformerBasis:
         self :
             The transformer object.
         """
-        self._basis._set_kernel(*X.T)
+        self._basis._set_kernel(*self._unpack_inputs(X))
         return self
 
-    def transform(self, X: NDArray, y=None) -> NDArray:
+    def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
         """
         Transform the data using the fitted basis functions.
 
         Parameters
         ----------
-        X : array-like
+        X :
             The data to transform using the basis functions, shape (num_samples, num_input).
-        y : ignored
+        y :
             Not used, present for API consistency by convention.
 
         Returns
@@ -120,9 +145,12 @@ class TransformerBasis:
         :
             The data transformed by the basis functions.
         """
-        return self._basis._compute_features(*X.T)
+        # transpose does not work with pynapple
+        # can't use func(*X.T) to unwrap
 
-    def fit_transform(self, X: NDArray, y=None):
+        return self._basis._compute_features(*self._unpack_inputs(X))
+
+    def fit_transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
         """
         Compute the kernels and the features.
 
@@ -131,9 +159,9 @@ class TransformerBasis:
 
         Parameters
         ----------
-        X : array-like
+        X :
             The data to fit the basis functions to and then transform.
-        y : ignored
+        y :
             Not used, present for API consistency by convention.
 
         Returns
@@ -142,7 +170,7 @@ class TransformerBasis:
             The data transformed by the basis functions, after fitting the basis
             functions to the data.
         """
-        return self._basis.compute_features(*X.T)
+        return self._basis.compute_features(*self._unpack_inputs(X))
 
 
 class Basis(abc.ABC):
@@ -155,7 +183,7 @@ class Basis(abc.ABC):
 
     Parameters
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         The number of basis functions.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
@@ -212,7 +240,7 @@ class Basis(abc.ABC):
         return self._window_size
 
     @check_transform_input
-    def _compute_features(self, *xi: ArrayLike) -> NDArray:
+    def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         r"""
         Apply the basis transformation to the input data.
 
@@ -268,7 +296,7 @@ class Basis(abc.ABC):
             # make sure to return a matrix
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
-    def compute_features(self, *xi: ArrayLike) -> NDArray:
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute the basis functions and transform input data into model features.
 
@@ -280,13 +308,13 @@ class Basis(abc.ABC):
 
         Parameters
         ----------
-        *xi : ArrayLike
+        *xi :
             Input data arrays to be transformed. The shape and content requirements
             depend on the subclass and mode of operation ('eval' or 'conv').
 
         Returns
         -------
-        NDArray
+        :
             Transformed features. In 'eval' mode, it corresponds to the basis functions
             evaluated at the input samples. In 'conv' mode, it consists of convolved
             input samples with the basis functions. The output shape varies based on
@@ -337,7 +365,7 @@ class Basis(abc.ABC):
         return self
 
     @abc.abstractmethod
-    def __call__(self, *xi: ArrayLike) -> NDArray:
+    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -382,7 +410,7 @@ class Basis(abc.ABC):
         return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
 
     @support_pynapple(conv_type="numpy")
-    def _check_transform_input(self, *xi: ArrayLike) -> Tuple[NDArray]:
+    def _check_transform_input(self, *xi: ArrayLike) -> Tuple[Union[NDArray, Tsd, TsdFrame]]:
         """Check transform input.
 
         Parameters
@@ -417,7 +445,7 @@ class Basis(abc.ABC):
 
         return xi
 
-    def _check_has_kernel(self):
+    def _check_has_kernel(self) -> None:
         """Check that the kernel is pre-computed."""
         if self.mode == "conv" and self._kernel is None:
             raise ValueError(
@@ -664,7 +692,7 @@ class AdditiveBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _compute_features(self, *xi: ArrayLike) -> NDArray:
+    def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute features for added bases and concatenate.
 
@@ -691,7 +719,7 @@ class AdditiveBasis(Basis):
             )
         )
 
-    def _set_kernel(self, *xi):
+    def _set_kernel(self, *xi: ArrayLike) -> Basis:
         """Call fit on the added basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -742,7 +770,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def _set_kernel(self, *xi):
+    def _set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -764,7 +792,7 @@ class MultiplicativeBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, *xi: ArrayLike) -> NDArray:
+    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -789,7 +817,7 @@ class MultiplicativeBasis(Basis):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _compute_features(self, *xi: ArrayLike) -> NDArray:
+    def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute the features for the multiplied bases, and compute their outer product.
 
@@ -964,7 +992,7 @@ class MSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the M-spline basis functions at given sample points.
 
@@ -1078,7 +1106,7 @@ class BSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -1169,7 +1197,7 @@ class CyclicBSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
@@ -1280,7 +1308,7 @@ class RaisedCosineBasisLinear(Basis):
         return self._width
 
     @staticmethod
-    def _check_width(width: float):
+    def _check_width(width: float) -> None:
         """Validate the width value.
 
         Parameters
@@ -1305,7 +1333,7 @@ class RaisedCosineBasisLinear(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike, rescale_samples=True) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike, rescale_samples=True) -> FeatureMatrix:
         """Generate basis functions with given samples.
 
         Parameters
@@ -1352,7 +1380,7 @@ class RaisedCosineBasisLinear(Basis):
 
         return basis_funcs
 
-    def _compute_peaks(self):
+    def _compute_peaks(self) -> NDArray:
         """
         Compute the location of raised cosine peaks.
 
@@ -1448,7 +1476,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         return self._time_scaling
 
     @staticmethod
-    def _check_time_scaling(time_scaling):
+    def _check_time_scaling(time_scaling: float) -> None:
         if time_scaling <= 0:
             raise ValueError(
                 f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
@@ -1481,7 +1509,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         )
         return log_spaced_pts
 
-    def _compute_peaks(self):
+    def _compute_peaks(self) -> NDArray:
         """
         Peak location of each log-spaced cosine basis element.
 
@@ -1505,7 +1533,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> NDArray:
+    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
@@ -1575,7 +1603,7 @@ class OrthExponentialBasis(Basis):
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
 
-    def _check_rates(self):
+    def _check_rates(self) -> None:
         """
         Check if the decay rates list has duplicate entries.
 
@@ -1592,7 +1620,7 @@ class OrthExponentialBasis(Basis):
             )
 
     @staticmethod
-    def _check_sample_range(sample_pts: NDArray):
+    def _check_sample_range(sample_pts: NDArray) -> None:
         """
         Check if the sample points are all positive.
 
@@ -1612,7 +1640,7 @@ class OrthExponentialBasis(Basis):
                 "OrthExponentialBasis requires positive samples. Negative values provided instead!"
             )
 
-    def _check_sample_size(self, *sample_pts: NDArray):
+    def _check_sample_size(self, *sample_pts: NDArray) -> None:
         """Check that the sample size is greater than the number of basis.
 
         This is necessary for the orthogonalization procedure,
@@ -1638,7 +1666,7 @@ class OrthExponentialBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: NDArray) -> NDArray:
+    def __call__(self, sample_pts: NDArray) -> FeatureMatrix:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -1685,7 +1713,7 @@ class OrthExponentialBasis(Basis):
         return super().evaluate_on_grid(n_samples)
 
 
-def mspline(x: NDArray, k: int, i: int, T: NDArray):
+def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     """Compute M-spline basis function.
 
     Parameters
@@ -1732,7 +1760,7 @@ def bspline(
     order: int = 4,
     der: int = 0,
     outer_ok: bool = False,
-):
+) -> NDArray:
     """
     Calculate and return the evaluation of B-spline basis.
 
