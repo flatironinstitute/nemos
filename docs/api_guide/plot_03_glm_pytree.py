@@ -274,11 +274,9 @@ model.coef_
 # our data similarly.
 
 pos_basis = nmo.basis.RaisedCosineBasisLinear(10) * nmo.basis.RaisedCosineBasisLinear(10)
-spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data).values
-# normalize to lie on 0,1
-spatial_pos = (spatial_pos - spatial_pos.min()) / 100
+spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data)
 
-X['spatial_position'] = pos_basis(*spatial_pos.T)
+X['spatial_position'] = pos_basis(*spatial_pos.values.T)
 
 # %%
 #

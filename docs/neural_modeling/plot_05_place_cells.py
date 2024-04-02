@@ -248,12 +248,14 @@ speed_basis = nmo.basis.MSplineBasis(n_basis_funcs=15)
 basis = position_basis * phase_basis + speed_basis
 
 # %%
-# The object basis only tell us how each basis covers the feature space. For each timestep, we need to _evaluate_ what are the features value. We can use the `evaluate` function of `nemos`:
+# The object basis only tell us how each basis covers the feature space. For each timestep, we need to _evaluate_ what are the features value. For that we can call `nemos` basis:
 
 X = basis(position, theta, speed)
 
 # %%
-# `X` is our design matrix. For each timestamps, it contains the information about the current position, speed and theta phase of the experiment. Notice how passing a pynapple object to `evaluate` also returns a `pynapple` object.
+# `X` is our design matrix. For each timestamps, it contains the information about the current position,
+# speed and theta phase of the experiment. Notice how passing a pynapple object to the basis
+# also returns a `pynapple` object.
 
 print(X)
 

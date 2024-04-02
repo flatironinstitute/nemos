@@ -5,11 +5,6 @@
 !!! warning
     To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
 
-## Learning objectives
-
- - Learn how to combine GLM with other modeling approach.
- - Review previous background.
-
 """
 
 import matplotlib.pyplot as plt
@@ -248,6 +243,8 @@ time, basis_kernels = basis.evaluate_on_grid(window_size)
 time *= bin_size * window_size
 temp_weights = np.einsum('b, t b -> t', model.coef_, basis_kernels)
 plt.plot(time, temp_weights)
+plt.xlabel("time[sec]")
+plt.ylabel("amplitude")
 
 # %%
 #
