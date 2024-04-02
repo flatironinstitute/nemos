@@ -80,7 +80,7 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 >>> print(type(X))  # shape (num samples, num features)
 <class 'pynapple.core.time_series.TsdFrame'>
 
->>> model._set_kernel(X, y)  # the following works
+>>> model.fit(X, y)  # the following works
 
 >>> firing_rate = model.predict(X)  # predict the firing rate of the neuron
 
