@@ -14,7 +14,7 @@ from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
 
 from .convolve import create_convolutional_predictor
-from .type_casting import np_asarray_if, support_pynapple
+from .type_casting import support_pynapple
 from .utils import row_wise_kron
 
 FeatureMatrix = Union[NDArray, TsdFrame]
