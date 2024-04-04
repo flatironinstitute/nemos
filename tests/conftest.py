@@ -60,11 +60,18 @@ class MockRegressor(nmo.base_class.BaseRegressor):
     def _check_input_dimensionality(self, *args, **kwargs):
         pass
 
+    def _get_coef_and_intercept(self):
+        pass
+
+    def _set_coef_and_intercept(self, params):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
         super().__init__(std_param=std_param)
         self.other_param = MockGLM(std_param=other_param)
+
 
 
 class MockGLM(nmo.glm.GLM):
@@ -98,6 +105,12 @@ class MockGLM(nmo.glm.GLM):
         feed_forward_input,
         **kwargs,
     ):
+        pass
+
+    def _get_coef_and_intercept(self):
+        pass
+
+    def _set_coef_and_intercept(self, params):
         pass
 
 
