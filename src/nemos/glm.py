@@ -574,7 +574,7 @@ class GLM(BaseRegressor):
         self.observation_model.estimate_scale(self._predict(params, data))
 
         if tree_utils.pytree_map_and_reduce(
-                lambda x: jnp.any(jnp.isnan(x)), any, params
+            lambda x: jnp.any(jnp.isnan(x)), any, params
         ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
