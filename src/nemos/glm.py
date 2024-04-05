@@ -279,20 +279,19 @@ class GLM(BaseRegressor):
         # check that the model is fitted
         self._check_is_fit()
         # extract model params
-        Ws = self.coef_
-        bs = self.intercept_
+        params = self._get_coef_and_intercept()
 
         X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
         # check consistency between X and params
-        self._check_input_and_params_consistency((Ws, bs), X=X)
+        self._check_input_and_params_consistency(params, X=X)
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
-        return self._predict((Ws, bs), data)
+        return self._predict(params, data)
 
     def _predict_and_compute_loss(
         self,
@@ -401,15 +400,14 @@ class GLM(BaseRegressor):
 
         """
         self._check_is_fit()
-        Ws = self.coef_
-        bs = self.intercept_
+        params = self._get_coef_and_intercept()
 
         X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
         y = jnp.asarray(y, dtype=float)
 
         self._check_input_dimensionality(X, y)
         self._check_input_n_timepoints(X, y)
-        self._check_input_and_params_consistency((Ws, bs), X=X, y=y)
+        self._check_input_and_params_consistency(params, X=X, y=y)
 
         # get valid entries
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -425,10 +423,10 @@ class GLM(BaseRegressor):
 
         if score_type == "log-likelihood":
             norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-            score = -self._predict_and_compute_loss((Ws, bs), data, y) - norm_constant
+            score = -self._predict_and_compute_loss(params, data, y) - norm_constant
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict((Ws, bs), data), y, score_type=score_type
+                self._predict(params, data), y, score_type=score_type
             )
         else:
             raise NotImplementedError(
@@ -575,25 +573,39 @@ class GLM(BaseRegressor):
         # estimate the GLM scale
         self.observation_model.estimate_scale(self._predict(params, data))
 
-        if (
-            tree_utils.pytree_map_and_reduce(
-                jnp.any, any, jax.tree_map(jnp.isnan, params[0])
-            )
-            or jnp.isnan(params[1]).any()
+        if tree_utils.pytree_map_and_reduce(
+            lambda x: jnp.any(jnp.isnan(x)), any, params
         ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
                 " Try tuning optimization hyperparameters, specifically try decreasing the learning rate."
             )
 
-        # Store parameters
-        self.coef_: DESIGN_INPUT_TYPE = params[0]
-        self.intercept_: jnp.ndarray = params[1]
+        self._set_coef_and_intercept(params)
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
         self.solver_state = state
         return self
+
+    def _get_coef_and_intercept(self):
+        """Pack coef_ and intercept_  into a params pytree.
+
+        This method should be overwritten in case the parameter structure changes,
+        or if new regression models will have a different parameter structure.
+        """
+        # Retrieve parameter tree
+        return self.coef_, self.intercept_
+
+    def _set_coef_and_intercept(self, params):
+        """Unpack and store params pytree to coef_ and intercept_.
+
+        This method should be overwritten in case the parameter structure changes,
+        or if new regression models will have a different parameter structure.
+        """
+        # Store parameters
+        self.coef_: DESIGN_INPUT_TYPE = params[0]
+        self.intercept_: jnp.ndarray = params[1]
 
     def simulate(
         self,
@@ -635,7 +647,7 @@ class GLM(BaseRegressor):
         # check if the model is fit
         self._check_is_fit()
 
-        Ws, bs = self.coef_, self.intercept_
+        params = self._get_coef_and_intercept()
 
         # if all invalid, raise error
         validation.error_all_invalid(feedforward_input)
@@ -644,12 +656,12 @@ class GLM(BaseRegressor):
         self._check_input_dimensionality(X=feedforward_input)
 
         # validate input and params consistency
-        self._check_input_and_params_consistency((Ws, bs), X=feedforward_input)
+        self._check_input_and_params_consistency(params, X=feedforward_input)
 
         # warn if nans in the input
         validation.warn_invalid_entry(feedforward_input)
 
-        predicted_rate = self._predict((Ws, bs), feedforward_input)
+        predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
                 key=random_key, predicted_rate=predicted_rate
