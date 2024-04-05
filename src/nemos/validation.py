@@ -184,19 +184,20 @@ def check_same_shape_on_axis(*arrays: NDArray, axis: int = 0, err_message: str):
 
 
 def check_array_shape_match_tree(
-    tree: Any, array: NDArray, axis: int, err_message: str
+    tree1: Any, tree2: Any, axis: Union[int, slice], err_message: str
 ):
     """
     Check if the shape of an array matches the shape of arrays in a pytree along a specified axis.
 
     Parameters
     ----------
-    tree :
+    tree1 :
         Pytree with arrays as leaves.
-    array :
-        Array to compare the shape with.
+    tree2 :
+        Pytree to compare the shape with.
     axis :
-        Axis along which to compare the shape.
+        Axis along which to compare the shape, could be a slice used to select elements of the shape
+        tuple.
     err_message :
         Error message to raise if the shapes do not match.
 
@@ -205,9 +206,9 @@ def check_array_shape_match_tree(
     ValueError
         If the array's shape does not match the pytree leaves' shapes along the specified axis.
     """
-    if pytree_map_and_reduce(
-        lambda arr: arr.shape[axis] != array.shape[axis], any, tree
-    ):
+    arr1 = jax.tree_util.tree_leaves(tree1)
+    arr2 = jax.tree_util.tree_leaves(tree2)
+    if any(arr.shape[axis] != arr2[k].shape[axis] for k, arr in enumerate(arr1)):
         raise ValueError(err_message)
 
 

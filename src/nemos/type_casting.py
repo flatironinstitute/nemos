@@ -10,7 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
-from typing import Any, Callable, List, Literal, Union
+from typing import Any, Callable, List, Literal, Optional, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -274,7 +274,7 @@ def cast_to_pynapple(
 
 
 def jnp_asarray_if(
-    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like
+    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like, dtype: type = Optional[Type]
 ) -> Any:
     """
     Conditionally convert an object to a JAX array.
@@ -288,6 +288,8 @@ def jnp_asarray_if(
         Object to potentially convert.
     condition:
         A callable that determines whether conversion should occur.
+    dtype:
+        dtype for the conversion.
 
     Returns
     -------
@@ -295,7 +297,7 @@ def jnp_asarray_if(
         The original object or its conversion to a JAX array, based on the condition.
     """
     if condition(x):
-        x = jnp.asarray(x)
+        x = jnp.asarray(x, dtype=dtype)
     return x
 
 
