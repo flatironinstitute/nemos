@@ -507,8 +507,8 @@ class GLM(BaseRegressor):
             # - If X is an array of shape (n_timebins,
             #   n_features), this will be an array of shape (n_features,).
             jax.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data),
-            # intercept, bias terms
-            jnp.log(jnp.mean(y, axis=0, keepdims=False)),
+            # intercept, bias terms, keepdims=False needed by PopulationGLM
+            jnp.atleast_1d(jnp.log(jnp.mean(y, axis=0))),
         )
         return init_params
 
