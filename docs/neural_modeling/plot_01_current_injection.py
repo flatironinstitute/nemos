@@ -287,8 +287,8 @@ count
 
 # the inputs to this function are the standard deviation of the gaussian and
 # the full width of the window, given in bins. So std=50 corresponds to a
-# standard deviation of 50*.001=.05 seconds
-firing_rate = count.smooth(std=50, size=1000)
+# standard deviation of .05 seconds, total size of the filter, 0.05 sec *20 = 1 sec.
+firing_rate = count.smooth(std=0.05, size_factor=20)
 # convert from spikes per bin to spikes per second (Hz)
 firing_rate = firing_rate / bin_size
 
@@ -559,7 +559,7 @@ predicted_fr = predicted_fr / bin_size
 
 # and let's smooth the firing rate the same way that we smoothed the smoothed
 # spike train
-smooth_predicted_fr = predicted_fr.smooth(50, 1000)
+smooth_predicted_fr = predicted_fr.smooth(0.05, size_factor=20)
 
 # and plot!
 plotting.current_injection_plot(current, spikes, firing_rate,
