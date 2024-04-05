@@ -502,9 +502,9 @@ class GLM(BaseRegressor):
             #   dict with n_features arrays of shape (n_features,).
             # - If X is an array of shape (n_timebins,
             #   n_features), this will be an array of shape (n_features,).
-            jax.tree_map(lambda x: jnp.zeros_like(x[0]), data),
+            jax.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data),
             # intercept, bias terms
-            jax.tree_map(lambda x: jnp.log(jnp.mean(x, axis=0, keepdims=True)), y),
+            jnp.log(jnp.mean(y, axis=0, keepdims=False)),
         )
         return init_params
 
@@ -693,7 +693,7 @@ class PopulationGLM(GLM):
 
     @feature_mask.setter
     def feature_mask(self, feature_mask: jax.numpy.ndarray):
-        if self._check_is_fit():
+        if (self.coef_ is not None) and (self.intercept_ is not None):
             raise AttributeError("property 'feature_mask' of 'populationGLM' cannot be set fitting.")
         if feature_mask.ndim != 2:
             raise ValueError("'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons).")
@@ -832,7 +832,7 @@ class PopulationGLM(GLM):
     def fit(self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,):
+        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None):
 
         self._initialize_feature_mask(X, y)
 
