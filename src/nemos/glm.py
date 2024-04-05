@@ -12,16 +12,20 @@ from . import tree_utils, validation
 from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
-from .type_casting import support_pynapple, jnp_asarray_if
+from .type_casting import jnp_asarray_if, support_pynapple
 
 
 def cast_to_jax(func):
     def wrapper(*args, **kwargs):
         try:
-            args, kwargs = jax.tree_map(lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs))
+            args, kwargs = jax.tree_map(
+                lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
+            )
         except Exception:
-            raise TypeError("X and y should be array-like object (or trees of array like object) "
-                            "with numeric data type!")
+            raise TypeError(
+                "X and y should be array-like object (or trees of array like object) "
+                "with numeric data type!"
+            )
         return func(*args, **kwargs)
 
     return wrapper
@@ -678,14 +682,14 @@ class GLM(BaseRegressor):
 
 
 class PopulationGLM(GLM):
-    def __init__(self,
+    def __init__(
+        self,
         observation_model: obs.Observations = obs.PoissonObservations(),
         regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
-        feature_mask: Optional[jnp.ndarray] = None
+        feature_mask: Optional[jnp.ndarray] = None,
     ):
         super().__init__(observation_model=observation_model, regularizer=regularizer)
         self._feature_mask = feature_mask
-
 
     @property
     def feature_mask(self):
@@ -694,14 +698,18 @@ class PopulationGLM(GLM):
     @feature_mask.setter
     def feature_mask(self, feature_mask: jax.numpy.ndarray):
         if (self.coef_ is not None) and (self.intercept_ is not None):
-            raise AttributeError("property 'feature_mask' of 'populationGLM' cannot be set fitting.")
+            raise AttributeError(
+                "property 'feature_mask' of 'populationGLM' cannot be set fitting."
+            )
         if feature_mask.ndim != 2:
-            raise ValueError("'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons).")
+            raise ValueError(
+                "'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons)."
+            )
         self._feature_mask = jax.tree_map(lambda x: jnp.asarray(x, float), feature_mask)
 
     @staticmethod
     def _check_input_dimensionality(
-            X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
+        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
     ):
         if y is not None:
             validation.check_tree_leaves_dimensionality(
@@ -715,13 +723,13 @@ class PopulationGLM(GLM):
                 X,
                 expected_dim=2,
                 err_message="X must be two-dimensional, with shape "
-                            "(n_timebins, n_features) or pytree of the same shape.",
+                "(n_timebins, n_features) or pytree of the same shape.",
             )
 
     @staticmethod
     def _check_params(
-            params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-            data_type: Optional[jnp.dtype] = None,
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -745,19 +753,21 @@ class PopulationGLM(GLM):
             params[0],
             expected_dim=2,
             err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
-                        "with array leafs of shape (n_features, n_neurons).",
+            "with array leafs of shape (n_features, n_neurons).",
         )
         # check the dimensionality of intercept
         validation.check_tree_leaves_dimensionality(
             params[1],
             expected_dim=1,
             err_message="params[1] must be of shape (n_neurons,) but "
-                        f"params[1] has {params[1].ndim} dimensions!",
+            f"params[1] has {params[1].ndim} dimensions!",
         )
         if params[0].shape[1] != params[1].shape[0]:
-            raise ValueError("Inconsistent number of neurons. "
-                             f"The intercept assumes {params[1].shape[0]} neurons, "
-                             f"the coefficients {params[0].shape[1]} instead!")
+            raise ValueError(
+                "Inconsistent number of neurons. "
+                f"The intercept assumes {params[1].shape[0]} neurons, "
+                f"the coefficients {params[0].shape[1]} instead!"
+            )
         return params
 
     def _check_input_and_params_consistency(
@@ -808,14 +818,14 @@ class PopulationGLM(GLM):
                 axis_1=1,
                 axis_2=1,
                 err_message="Inconsistent number of neurons. "
-                            f"spike basis coefficients assumes {jax.tree_map(lambda p: p.shape[1], params[0])} neurons, "
-                            f"y has {jax.tree_map(lambda x: x.shape[1], y)} neurons instead!",
+                f"spike basis coefficients assumes {jax.tree_map(lambda p: p.shape[1], params[0])} neurons, "
+                f"y has {jax.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
             validation.check_tree_structure(
                 self.feature_mask,
                 y,
                 err_message=f"'feature_mask' and 'y' must have the same tree structure. "
-                            f"{type(y)} and params[0] is {type(params[0])}",
+                f"{type(y)} and params[0] is {type(params[0])}",
             )
         # the ndim of feature_matrix is checked by the setter.
         # the ndim of params[0] is checked by the method _check_input_dimensionality
@@ -824,15 +834,17 @@ class PopulationGLM(GLM):
             params[0],
             axis=slice(0, self.feature_mask.ndim),
             err_message=f"'feature_mask' and 'y' must have the same shape. "
-                        f"'params[0]' has shape{jax.tree_map(lambda p: p.shape, params[0])} and '"
-                        f"feature_mask' has shape {jax.tree_map(lambda p: p.shape, self.feature_mask)}",
+            f"'params[0]' has shape{jax.tree_map(lambda p: p.shape, params[0])} and '"
+            f"feature_mask' has shape {jax.tree_map(lambda p: p.shape, self.feature_mask)}",
         )
 
     @cast_to_jax
-    def fit(self,
+    def fit(
+        self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
         y: ArrayLike,
-        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None):
+        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
+    ):
 
         self._initialize_feature_mask(X, y)
 
@@ -841,10 +853,12 @@ class PopulationGLM(GLM):
     def _initialize_feature_mask(self, X, y):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
-            self.feature_mask = jax.tree_map(lambda x: jnp.ones((x.shape[1], y.shape[1])), X)
+            self.feature_mask = jax.tree_map(
+                lambda x: jnp.ones((x.shape[1], y.shape[1])), X
+            )
 
     def _predict(
-            self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.

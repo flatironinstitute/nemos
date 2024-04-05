@@ -274,7 +274,9 @@ def cast_to_pynapple(
 
 
 def jnp_asarray_if(
-    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like, dtype: type = Optional[Type]
+    x: Any,
+    condition: Callable[[Any], bool] = is_numpy_array_like,
+    dtype: type = Optional[Type],
 ) -> Any:
     """
     Conditionally convert an object to a JAX array.
