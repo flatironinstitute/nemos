@@ -899,7 +899,7 @@ class PopulationGLM(GLM):
                         f"params[0] is of {jax.tree_util.tree_structure(params[0])} structure instead!",
         )
         if isinstance(params[0], dict):
-            neural_axis = 1
+            neural_axis = 0
         else:
             neural_axis = 1
             # check the consistency of the feature axis
@@ -909,7 +909,7 @@ class PopulationGLM(GLM):
                 axis_1=0,
                 axis_2=0,
                 err_message="Inconsistent number of features. "
-                            f"feature_mask has {jax.tree_map(lambda m: m.shape[1], self.feature_mask)} neurons, "
+                            f"feature_mask has {jax.tree_map(lambda m: m.shape[0], self.feature_mask)} neurons, "
                             f"model coefficients have {jax.tree_map(lambda x: x.shape[1], X)}  instead!",
             )
         # check the consistency of the feature axis
@@ -981,9 +981,17 @@ class PopulationGLM(GLM):
     def _initialize_feature_mask(self, X, y):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
-            self._feature_mask = jax.tree_map(
-                lambda x: jnp.ones((x.shape[1], y.shape[1])), X
-            )
+            if isinstance(X, FeaturePytree):
+                self._feature_mask = jax.tree_map(
+                    lambda x: jnp.ones((y.shape[1], )), X.data
+                )
+            elif isinstance(X, dict):
+                self._feature_mask = jax.tree_map(
+                    lambda x: jnp.ones((y.shape[1],)), X
+                )
+            else:
+                self._feature_mask = jnp.ones((X.shape[1], y.shape[1]))
+
 
     def _predict(
         self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
