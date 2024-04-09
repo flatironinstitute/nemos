@@ -328,6 +328,24 @@ def example_data_prox_operator():
 
 
 @pytest.fixture
+def example_data_prox_operator_multineuron():
+    n_features = 4
+    n_neurons = 3
+
+    params = (
+        jnp.ones((n_features, n_neurons)),
+        jnp.zeros(
+            n_neurons,
+        ),
+    )
+    regularizer_strength = 0.1
+    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    scaling = 0.5
+
+    return params, regularizer_strength, mask, scaling
+
+
+@pytest.fixture
 def poisson_observation_model():
     return nmo.observation_models.PoissonObservations(jnp.exp)
 
