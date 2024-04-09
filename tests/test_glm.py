@@ -663,230 +663,236 @@ class TestGLM:
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
             model.score(X, y)
-#
-#     @pytest.mark.parametrize(
-#         "score_type, expectation",
-#         [
-#             ("pseudo-r2-McFadden", does_not_raise()),
-#             ("pseudo-r2-Cohen", does_not_raise()),
-#             ("log-likelihood", does_not_raise()),
-#             (
-#                 "not-implemented",
-#                 pytest.raises(
-#                     NotImplementedError,
-#                     match="Scoring method not-implemented not implemented",
-#                 ),
-#             ),
-#         ],
-#     )
-#     def test_score_type_r2(
-#         self, score_type, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `score` method for unsupported scoring types.
-#         Ensure only valid score types are used.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         with expectation:
-#             model.score(X, y, score_type=score_type)
-#
-#     def test_loglikelihood_against_scipy_stats(self, poissonGLM_model_instantiation):
-#         """
-#         Compare the model's log-likelihood computation against `jax.scipy`.
-#         Ensure consistent and correct calculations.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         # set model coeff
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         # get the rate
-#         mean_firing = model.predict(X)
-#         # compute the log-likelihood using jax.scipy
-#         mean_ll_jax = jax.scipy.stats.poisson.logpmf(y, mean_firing).mean()
-#         model_ll = model.score(X, y, score_type="log-likelihood")
-#         if not np.allclose(mean_ll_jax, model_ll):
-#             raise ValueError(
-#                 "Log-likelihood of PoissonModel does not match" "that of jax.scipy!"
-#             )
-#
-#     #######################
-#     # Test model.predict
-#     #######################
-#     @pytest.mark.parametrize(
-#         "delta_dim, expectation",
-#         [
-#             (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
-#             (0, does_not_raise()),
-#             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
-#         ],
-#     )
-#     def test_predict_x_dimensionality(
-#         self, delta_dim, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `predict` method with x input data of different dimensionalities.
-#         Ensure correct dimensionality for x.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         if delta_dim == -1:
-#             X = np.zeros((X.shape[0],))
-#         elif delta_dim == 1:
-#             X = np.zeros((X.shape[0], X.shape[1], 1))
-#         with expectation:
-#             model.predict(X)
-#
-#     @pytest.mark.parametrize(
-#         "delta_n_features, expectation",
-#         [
-#             (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
-#             (0, does_not_raise()),
-#             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
-#         ],
-#     )
-#     def test_predict_n_feature_consistency_x(
-#         self, delta_n_features, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `predict` method ensuring the number of features in x input data
-#         is consistent with the model's `model.coef_`.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         if delta_n_features == 1:
-#             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
-#         elif delta_n_features == -1:
-#             X = X[..., :-1]
-#         with expectation:
-#             model.predict(X)
-#
-#     @pytest.mark.parametrize(
-#         "is_fit, expectation",
-#         [
-#             (True, does_not_raise()),
-#             (
-#                 False,
-#                 pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-#             ),
-#         ],
-#     )
-#     def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
-#         """
-#         Test the `score` method on models based on their fit status.
-#         Ensure scoring is only possible on fitted models.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         if is_fit:
-#             model.fit(X, y)
-#         with expectation:
-#             model.predict(X)
-#
-#     #######################
-#     # Test model.simulate
-#     #######################
-#     @pytest.mark.parametrize(
-#         "delta_dim, expectation",
-#         [
-#             (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
-#             (0, does_not_raise()),
-#             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
-#         ],
-#     )
-#     def test_simulate_input_dimensionality(
-#         self, delta_dim, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `simulate` method with input data of different dimensionalities.
-#         Ensure correct dimensionality for input.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         if delta_dim == -1:
-#             X = np.zeros(X.shape[:-1])
-#         elif delta_dim == 1:
-#             X = np.zeros(X.shape + (1,))
-#         with expectation:
-#             model.simulate(
-#                 random_key=jax.random.key(123),
-#                 feedforward_input=X,
-#             )
-#
-#     @pytest.mark.parametrize(
-#         "is_fit, expectation",
-#         [
-#             (True, does_not_raise()),
-#             (
-#                 False,
-#                 pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-#             ),
-#         ],
-#     )
-#     def test_simulate_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
-#         """
-#         Test if the model raises a ValueError when trying to simulate before it's fitted.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         if is_fit:
-#             model.coef_ = true_params[0]
-#             model.intercept_ = true_params[1]
-#         with expectation:
-#             model.simulate(
-#                 random_key=jax.random.key(123),
-#                 feedforward_input=X,
-#             )
-#
-#     @pytest.mark.parametrize(
-#         "delta_features, expectation",
-#         [
-#             (
-#                 -1,
-#                 pytest.raises(
-#                     ValueError,
-#                     match="Inconsistent number of features. spike basis coefficients has",
-#                 ),
-#             ),
-#             (0, does_not_raise()),
-#             (
-#                 1,
-#                 pytest.raises(
-#                     ValueError,
-#                     match="Inconsistent number of features. spike basis coefficients has",
-#                 ),
-#             ),
-#         ],
-#     )
-#     def test_simulate_feature_consistency_input(
-#         self, delta_features, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `simulate` method ensuring the number of features in `feedforward_input` is
-#         consistent with the model's expected number of features.
-#
-#         Notes
-#         -----
-#         The total feature number `model.coef_.shape[1]` must be equal to
-#         `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         feedforward_input = jnp.zeros(
-#             (
-#                 X.shape[0],
-#                 X.shape[1] + delta_features,
-#             )
-#         )
-#         with expectation:
-#             model.simulate(
-#                 random_key=jax.random.key(123),
-#                 feedforward_input=feedforward_input,
-#             )
-#
+
+    @pytest.mark.parametrize(
+        "score_type, expectation",
+        [
+            ("pseudo-r2-McFadden", does_not_raise()),
+            ("pseudo-r2-Cohen", does_not_raise()),
+            ("log-likelihood", does_not_raise()),
+            (
+                "not-implemented",
+                pytest.raises(
+                    NotImplementedError,
+                    match="Scoring method not-implemented not implemented",
+                ),
+            ),
+        ],
+    )
+    def test_score_type_r2(
+        self, score_type, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `score` method for unsupported scoring types.
+        Ensure only valid score types are used.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        with expectation:
+            model.score(X, y, score_type=score_type)
+
+    def test_loglikelihood_against_scipy_stats(self, poisson_population_GLM_model):
+        """
+        Compare the model's log-likelihood computation against `jax.scipy`.
+        Ensure consistent and correct calculations.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        # set model coeff
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._initialize_feature_mask(X, y)
+        # get the rate
+        mean_firing = model.predict(X)
+        # compute the log-likelihood using jax.scipy
+        mean_ll_jax = jax.scipy.stats.poisson.logpmf(y, mean_firing).mean()
+        model_ll = model.score(X, y, score_type="log-likelihood")
+        if not np.allclose(mean_ll_jax, model_ll):
+            raise ValueError(
+                "Log-likelihood of PoissonModel does not match" "that of jax.scipy!"
+            )
+
+    #######################
+    # Test model.predict
+    #######################
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+        ],
+    )
+    def test_predict_x_dimensionality(
+        self, delta_dim, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `predict` method with x input data of different dimensionalities.
+        Ensure correct dimensionality for x.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._initialize_feature_mask(X, y)
+        if delta_dim == -1:
+            X = np.zeros((X.shape[0],))
+        elif delta_dim == 1:
+            X = np.zeros((X.shape[0], X.shape[1], 1))
+        with expectation:
+            model.predict(X)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_predict_n_feature_consistency_x(
+        self, delta_n_features, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `predict` method ensuring the number of features in x input data
+        is consistent with the model's `model.coef_`.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._initialize_feature_mask(X, y)
+        if delta_n_features == 1:
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+        elif delta_n_features == -1:
+            X = X[..., :-1]
+        with expectation:
+            model.predict(X)
+
+    @pytest.mark.parametrize(
+        "is_fit, expectation",
+        [
+            (True, does_not_raise()),
+            (
+                False,
+                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
+            ),
+        ],
+    )
+    def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
+        """
+        Test the `score` method on models based on their fit status.
+        Ensure scoring is only possible on fitted models.
+        """
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        if is_fit:
+            model.fit(X, y)
+        with expectation:
+            model.predict(X)
+
+    #######################
+    # Test model.simulate
+    #######################
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+        ],
+    )
+    def test_simulate_input_dimensionality(
+        self, delta_dim, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `simulate` method with input data of different dimensionalities.
+        Ensure correct dimensionality for input.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._initialize_feature_mask(X, y)
+        if delta_dim == -1:
+            X = np.zeros(X.shape[:-1])
+        elif delta_dim == 1:
+            X = np.zeros(X.shape + (1,))
+        with expectation:
+            model.simulate(
+                random_key=jax.random.key(123),
+                feedforward_input=X,
+            )
+
+    @pytest.mark.parametrize(
+        "is_fit, expectation",
+        [
+            (True, does_not_raise()),
+            (
+                False,
+                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
+            ),
+        ],
+    )
+    def test_simulate_is_fit(self, is_fit, expectation, poisson_population_GLM_model):
+        """
+        Test if the model raises a ValueError when trying to simulate before it's fitted.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if is_fit:
+            model.coef_ = true_params[0]
+            model.intercept_ = true_params[1]
+            model._initialize_feature_mask(X, y)
+        with expectation:
+            model.simulate(
+                random_key=jax.random.key(123),
+                feedforward_input=X,
+            )
+
+    @pytest.mark.parametrize(
+        "delta_features, expectation",
+        [
+            (
+                -1,
+                pytest.raises(
+                    ValueError,
+                    match="Inconsistent number of features. spike basis coefficients has",
+                ),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="Inconsistent number of features. spike basis coefficients has",
+                ),
+            ),
+        ],
+    )
+    def test_simulate_feature_consistency_input(
+        self, delta_features, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `simulate` method ensuring the number of features in `feedforward_input` is
+        consistent with the model's expected number of features.
+
+        Notes
+        -----
+        The total feature number `model.coef_.shape[1]` must be equal to
+        `feedforward_input.shape[2] + coupling_basis.shape[1]*n_neurons`
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._initialize_feature_mask(X, y)
+        feedforward_input = jnp.zeros(
+            (
+                X.shape[0],
+                X.shape[1] + delta_features,
+            )
+        )
+        with expectation:
+            model.simulate(
+                random_key=jax.random.key(123),
+                feedforward_input=feedforward_input,
+            )
+
 #     def test_simulate_feedforward_glm(self, poissonGLM_model_instantiation):
 #         """Test that simulate goes through"""
 #         X, y, model, params, rate = poissonGLM_model_instantiation
