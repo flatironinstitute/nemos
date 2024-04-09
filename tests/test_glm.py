@@ -473,196 +473,196 @@ class TestGLM:
         assert np.allclose(model.intercept_, model_tree.intercept_)
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
-#
-#     @pytest.mark.parametrize(
-#         "fill_val, expectation",
-#         [
-#             (0, does_not_raise()),
-#             (
-#                 jnp.inf,
-#                 pytest.raises(
-#                     ValueError, match="At least a NaN or an Inf at all sample points"
-#                 ),
-#             ),
-#             (
-#                 jnp.nan,
-#                 pytest.raises(
-#                     ValueError, match="At least a NaN or an Inf at all sample points"
-#                 ),
-#             ),
-#         ],
-#     )
-#     def test_fit_all_invalid_X(
-#         self, fill_val, expectation, poissonGLM_model_instantiation
-#     ):
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         X.fill(fill_val)
-#         with expectation:
-#             model.fit(X, y)
-#
-#     #######################
-#     # Test model.score
-#     #######################
-#     @pytest.mark.parametrize(
-#         "delta_dim, expectation",
-#         [
-#             (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
-#             (0, does_not_raise()),
-#             (1, pytest.raises(ValueError, match="X must be two-dimensional")),
-#         ],
-#     )
-#     def test_score_x_dimensionality(
-#         self, delta_dim, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `score` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         if delta_dim == -1:
-#             X = np.zeros((X.shape[0],))
-#         elif delta_dim == 1:
-#             X = np.zeros((X.shape[0], X.shape[1], 1))
-#         with expectation:
-#             model.score(X, y)
-#
-#     @pytest.mark.parametrize(
-#         "delta_dim, expectation",
-#         [
-#             (
-#                 -1,
-#                 pytest.raises(
-#                     ValueError, match="y must be one-dimensional, with shape"
-#                 ),
-#             ),
-#             (0, does_not_raise()),
-#             (
-#                 1,
-#                 pytest.raises(
-#                     ValueError, match="y must be one-dimensional, with shape"
-#                 ),
-#             ),
-#         ],
-#     )
-#     def test_score_y_dimensionality(
-#         self, delta_dim, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `score` method with y of different dimensionalities.
-#         Ensure correct dimensionality for y.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         if delta_dim == -1:
-#             y = np.zeros([])
-#         elif delta_dim == 1:
-#             y = np.zeros((X.shape[0], X.shape[1]))
-#         with expectation:
-#             model.score(X, y)
-#
-#     @pytest.mark.parametrize(
-#         "delta_n_features, expectation",
-#         [
-#             (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
-#             (0, does_not_raise()),
-#             (1, pytest.raises(ValueError, match="Inconsistent number of features")),
-#         ],
-#     )
-#     def test_score_n_feature_consistency_x(
-#         self, delta_n_features, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `score` method for inconsistencies in features of X.
-#         Ensure the number of features in X aligns with the model params.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         if delta_n_features == 1:
-#             X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
-#         elif delta_n_features == -1:
-#             X = X[..., :-1]
-#         with expectation:
-#             model.score(X, y)
-#
-#     @pytest.mark.parametrize(
-#         "is_fit, expectation",
-#         [
-#             (True, does_not_raise()),
-#             (
-#                 False,
-#                 pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-#             ),
-#         ],
-#     )
-#     def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
-#         """
-#         Test the `score` method on models based on their fit status.
-#         Ensure scoring is only possible on fitted models.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         if is_fit:
-#             model.fit(X, y)
-#         with expectation:
-#             model.predict(X)
-#
-#     @pytest.mark.parametrize(
-#         "delta_tp, expectation",
-#         [
-#             (
-#                 -1,
-#                 pytest.raises(ValueError, match="The number of time-points in X and y"),
-#             ),
-#             (0, does_not_raise()),
-#             (
-#                 1,
-#                 pytest.raises(ValueError, match="The number of time-points in X and y"),
-#             ),
-#         ],
-#     )
-#     def test_score_time_points_x(
-#         self, delta_tp, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `score` method for inconsistencies in time-points in X.
-#         Ensure that the number of time-points in X and y matches.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
-#         with expectation:
-#             model.score(X, y)
-#
-#     @pytest.mark.parametrize(
-#         "delta_tp, expectation",
-#         [
-#             (
-#                 -1,
-#                 pytest.raises(ValueError, match="The number of time-points in X and y"),
-#             ),
-#             (0, does_not_raise()),
-#             (
-#                 1,
-#                 pytest.raises(ValueError, match="The number of time-points in X and y"),
-#             ),
-#         ],
-#     )
-#     def test_score_time_points_y(
-#         self, delta_tp, expectation, poissonGLM_model_instantiation
-#     ):
-#         """
-#         Test the `score` method for inconsistencies in time-points in y.
-#         Ensure that the number of time-points in X and y matches.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
-#         with expectation:
-#             model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    def test_fit_all_invalid_X(
+        self, fill_val, expectation, poisson_population_GLM_model
+    ):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        X.fill(fill_val)
+        with expectation:
+            model.fit(X, y)
+
+    #######################
+    # Test model.score
+    #######################
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+        ],
+    )
+    def test_score_x_dimensionality(
+        self, delta_dim, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `score` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        if delta_dim == -1:
+            X = np.zeros((X.shape[0],))
+        elif delta_dim == 1:
+            X = np.zeros((X.shape[0], X.shape[1], 1))
+        with expectation:
+            model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (
+                -1,
+                pytest.raises(
+                    ValueError, match="y must be two-dimensional, with shape"
+                ),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(
+                    ValueError, match="y must be two-dimensional, with shape"
+                ),
+            ),
+        ],
+    )
+    def test_score_y_dimensionality(
+        self, delta_dim, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `score` method with y of different dimensionalities.
+        Ensure correct dimensionality for y.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        if delta_dim == -1:
+            y = y[:, 0]
+        elif delta_dim == 1:
+            y = np.zeros((*y.shape, 1))
+        with expectation:
+            model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_score_n_feature_consistency_x(
+        self, delta_n_features, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `score` method for inconsistencies in features of X.
+        Ensure the number of features in X aligns with the model params.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        if delta_n_features == 1:
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+        elif delta_n_features == -1:
+            X = X[..., :-1]
+        with expectation:
+            model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "is_fit, expectation",
+        [
+            (True, does_not_raise()),
+            (
+                False,
+                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
+            ),
+        ],
+    )
+    def test_predict_is_fit(self, is_fit, expectation, poisson_population_GLM_model):
+        """
+        Test the `score` method on models based on their fit status.
+        Ensure scoring is only possible on fitted models.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if is_fit:
+            model.fit(X, y)
+        with expectation:
+            model.predict(X)
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_score_time_points_x(
+        self, delta_tp, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `score` method for inconsistencies in time-points in X.
+        Ensure that the number of time-points in X and y matches.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+        with expectation:
+            model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_score_time_points_y(
+        self, delta_tp, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `score` method for inconsistencies in time-points in y.
+        Ensure that the number of time-points in X and y matches.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+        with expectation:
+            model.score(X, y)
 #
 #     @pytest.mark.parametrize(
 #         "score_type, expectation",

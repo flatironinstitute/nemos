@@ -739,7 +739,7 @@ class PopulationGLM(GLM):
     def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
         if (self.coef_ is not None) and (self.intercept_ is not None):
             raise AttributeError(
-                "property 'feature_mask' of 'populationGLM' cannot be set fitting."
+                "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
             )
         # check the mask type and ndim
         if feature_mask is None:
@@ -981,7 +981,7 @@ class PopulationGLM(GLM):
     def _initialize_feature_mask(self, X, y):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
-            self.feature_mask = jax.tree_map(
+            self._feature_mask = jax.tree_map(
                 lambda x: jnp.ones((x.shape[1], y.shape[1])), X
             )
 
