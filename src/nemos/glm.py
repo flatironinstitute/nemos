@@ -527,7 +527,8 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
+            Predictors, array of shape (n_time_bins, n_features) or pytree of the same
+            shape.
         y :
             Target neural activity arranged in a matrix, shape (n_time_bins, ).
         init_params :
@@ -731,23 +732,27 @@ class PopulationGLM(GLM):
         self.feature_mask = feature_mask
 
     @property
-    def feature_mask(self):
+    def feature_mask(self) -> Union[jnp.ndarray, dict]:
         return self._feature_mask
 
     @feature_mask.setter
-    def feature_mask(self, feature_mask: jax.numpy.ndarray):
+    def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
         if (self.coef_ is not None) and (self.intercept_ is not None):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set fitting."
             )
+        # check the mask type and ndim
         if feature_mask is None:
             self._feature_mask = feature_mask
-        elif feature_mask.ndim != 2:
+        elif not isinstance(feature_mask, (FeaturePytree, dict)) and feature_mask.ndim != 2:
             raise ValueError(
-                "'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons)."
+                "'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons) "
+                "or a `FeaturePytree` of shape (n_neurons, )."
             )
-        else:
-            self._feature_mask = jax.tree_map(lambda x: jnp.asarray(x, float), feature_mask)
+
+        self._feature_mask = jax.tree_map(lambda x: jnp.asarray(jnp.squeeze(x), float), feature_mask)
+        if isinstance(self._feature_mask, FeaturePytree):
+            self._feature_mask = self._feature_mask.data
 
     @staticmethod
     def _check_input_dimensionality(
@@ -804,7 +809,7 @@ class PopulationGLM(GLM):
             err_message="params[1] must be of shape (n_neurons,) but "
             f"params[1] has {params[1].ndim} dimensions!",
         )
-        if params[0].shape[1] != params[1].shape[0]:
+        if tree_utils.pytree_map_and_reduce(lambda x: x.shape[1] != params[1].shape[0], all, params[0]):
             raise ValueError(
                 "Inconsistent number of neurons. "
                 f"The intercept assumes {params[1].shape[0]} neurons, "
@@ -830,6 +835,40 @@ class PopulationGLM(GLM):
               (when provided).
 
         """
+        # check the consistency of the feature axis
+        validation.check_tree_structure(
+            self.feature_mask,
+            params[0],
+            err_message="feature_mask and params[0] must have the same structure, but feature_mask has structure "
+                        f"of type {jax.tree_util.tree_structure(self.feature_mask)}, "
+                        f"params[0] is of {jax.tree_util.tree_structure(params[0])}  instead!",
+        )
+        if isinstance(params[0], dict):
+            neural_axis = 0
+        else:
+            neural_axis = 1
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                self.feature_mask,
+                params[0],
+                axis_1=0,
+                axis_2=0,
+                err_message="Inconsistent number of features. "
+                            f"feature_mask has {jax.tree_map(lambda m: m.shape[1], self.feature_mask)} neurons, "
+                            f"model coefficients have {jax.tree_map(lambda x: x.shape[1], X)}  instead!",
+            )
+        # check the consistency of the feature axis
+        validation.check_tree_axis_consistency(
+            self.feature_mask,
+            params[0],
+            axis_1=neural_axis,
+            axis_2=1,
+            err_message="Inconsistent number of neurons. "
+                        f"feature_mask has {jax.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
+                        f"model coefficients have {jax.tree_map(lambda x: x.shape[1], X)}  instead!",
+        )
+
+        # check params and X compatibility
         if X is not None:
             # check that X and params[0] have the same structure
             if isinstance(X, FeaturePytree):
@@ -843,6 +882,12 @@ class PopulationGLM(GLM):
                 err_message=f"X and params[0] must be the same type, but X is "
                 f"{type(X)} and params[0] is {type(params[0])}",
             )
+            validation.check_tree_structure(
+                data,
+                self.feature_mask,
+                err_message=f"X and feature_mask must be the same type, but X is "
+                            f"{type(X)} and params[0] is {type(self.feature_mask)}",
+            )
             # check the consistency of the feature axis
             validation.check_tree_axis_consistency(
                 params[0],
@@ -853,32 +898,16 @@ class PopulationGLM(GLM):
                 f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
                 f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
+
         if y is not None:
-            validation.check_tree_axis_consistency(
+            validation.check_array_shape_match_tree(
                 params[0],
                 y,
-                axis_1=1,
-                axis_2=1,
+                axis=1,
                 err_message="Inconsistent number of neurons. "
                 f"spike basis coefficients assumes {jax.tree_map(lambda p: p.shape[1], params[0])} neurons, "
                 f"y has {jax.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
-            validation.check_tree_structure(
-                self.feature_mask,
-                y,
-                err_message=f"'feature_mask' and 'y' must have the same tree structure. "
-                f"{type(y)} and params[0] is {type(params[0])}",
-            )
-        # the ndim of feature_matrix is checked by the setter.
-        # the ndim of params[0] is checked by the method _check_input_dimensionality
-        validation.check_array_shape_match_tree(
-            self.feature_mask,
-            params[0],
-            axis=slice(0, self.feature_mask.ndim),
-            err_message=f"'feature_mask' and 'y' must have the same shape. "
-            f"'params[0]' has shape{jax.tree_map(lambda p: p.shape, params[0])} and '"
-            f"feature_mask' has shape {jax.tree_map(lambda p: p.shape, self.feature_mask)}",
-        )
 
     @cast_to_jax
     def fit(
@@ -887,6 +916,52 @@ class PopulationGLM(GLM):
         y: ArrayLike,
         init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
     ):
+        """Fit GLM to the activity of a population of neurons.
+
+        Fit and store the model parameters as attributes `coef_` and ``coef_``.
+        Each neuron can have different predictors. tThe `feature_mask` will determine which
+        feature will be used for which neurons. See the note below for more information on
+        the `feature_mask`.
+
+        Parameters
+        ----------
+        X :
+            Predictors, array of shape (n_time_bins, n_features) or pytree of the same
+            shape.
+        y :
+            Target neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+        init_params :
+            2-tuple of initial parameter values: (coefficients, intercepts). If
+            None, we initialize coefficients with zeros, intercepts with the
+            log of the mean neural activity. coefficients is an array of shape
+            (n_features, n_neurons) or pytree of the same shape, intercepts is an array
+            of shape (n_neurons, )
+
+        Raises
+        ------
+        ValueError
+            - If `init_params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
+            - If `X` is not two-dimensional.
+            - If `y` is not two-dimensional.
+            - If the `feature_mask` is not of the right shape.
+            - If solver returns at least one NaN parameter, which means it found
+              an invalid solution. Try tuning optimization hyperparameters.
+        TypeError
+            - If `init_params` are not array-like
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+
+        Notes
+        -----
+        The `feature_mask` is used to select features for each neuron, and it is
+        an NDArray or a `FeaturePytree` of 0s and 1s. In particular,
+
+        - If the mask is in array format, feature `j` is a predictor for neuron `i` if
+        `feature_mask[i, j] == 1`.
+        - If the mask is a `FeaturePytree`, then `"feature_name"` is a predictor of neuron `i` if
+        `feature_mask["feature_name"][i] == 1`.
+
+        """
 
         self._initialize_feature_mask(X, y)
 
@@ -930,7 +1005,9 @@ class PopulationGLM(GLM):
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
             tree_utils.pytree_map_and_reduce(
-                lambda x, w: jnp.dot(x, w * self._feature_mask), sum, X, Ws
+                lambda x, w, m: jnp.dot(x, w * m), sum, X, Ws, self._feature_mask
             )
             + bs
         )
+
+
