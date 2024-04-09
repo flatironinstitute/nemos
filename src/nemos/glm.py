@@ -835,13 +835,68 @@ class PopulationGLM(GLM):
               (when provided).
 
         """
+        # check params and X compatibility
+        if X is not None:
+            # check that X and params[0] have the same structure
+            if isinstance(X, FeaturePytree):
+                data = X.data
+            else:
+                data = X
+
+            validation.check_tree_structure(
+                data,
+                params[0],
+                err_message=f"X and params[0] must be the same type, but X is "
+                f"{type(X)} and params[0] is {type(params[0])}",
+            )
+            # check the consistency of the feature axis
+            validation.check_tree_axis_consistency(
+                params[0],
+                data,
+                axis_1=0,
+                axis_2=1,
+                err_message="Inconsistent number of features. "
+                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
+            )
+
+        if y is not None:
+            validation.check_array_shape_match_tree(
+                params[0],
+                y,
+                axis=1,
+                err_message="Inconsistent number of neurons. "
+                f"spike basis coefficients assumes {jax.tree_map(lambda p: p.shape[1], params[0])} neurons, "
+                f"y has {jax.tree_map(lambda x: x.shape[1], y)} neurons instead!",
+            )
+        self._check_mask(X, y, params)
+
+    def _check_mask(self, X, y, params):
+
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+
+        if self.feature_mask is None:
+            self._initialize_feature_mask(X, y)
+
+        if X is not None:
+            validation.check_tree_structure(
+                data,
+                self.feature_mask,
+                err_message=f"feature_mask and X must have the same structure, but feature_mask has structure  "
+                            f"{jax.tree_util.tree_structure(X)}, params[0] is of "
+                            f"{jax.tree_util.tree_structure(self.feature_mask)} structure instead!",
+            )
+
         # check the consistency of the feature axis
         validation.check_tree_structure(
             self.feature_mask,
             params[0],
             err_message="feature_mask and params[0] must have the same structure, but feature_mask has structure "
                         f"of type {jax.tree_util.tree_structure(self.feature_mask)}, "
-                        f"params[0] is of {jax.tree_util.tree_structure(params[0])}  instead!",
+                        f"params[0] is of {jax.tree_util.tree_structure(params[0])} structure instead!",
         )
         if isinstance(params[0], dict):
             neural_axis = 0
@@ -867,47 +922,6 @@ class PopulationGLM(GLM):
                         f"feature_mask has {jax.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
                         f"model coefficients have {jax.tree_map(lambda x: x.shape[1], X)}  instead!",
         )
-
-        # check params and X compatibility
-        if X is not None:
-            # check that X and params[0] have the same structure
-            if isinstance(X, FeaturePytree):
-                data = X.data
-            else:
-                data = X
-
-            validation.check_tree_structure(
-                data,
-                params[0],
-                err_message=f"X and params[0] must be the same type, but X is "
-                f"{type(X)} and params[0] is {type(params[0])}",
-            )
-            validation.check_tree_structure(
-                data,
-                self.feature_mask,
-                err_message=f"X and feature_mask must be the same type, but X is "
-                            f"{type(X)} and params[0] is {type(self.feature_mask)}",
-            )
-            # check the consistency of the feature axis
-            validation.check_tree_axis_consistency(
-                params[0],
-                data,
-                axis_1=0,
-                axis_2=1,
-                err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
-                f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
-            )
-
-        if y is not None:
-            validation.check_array_shape_match_tree(
-                params[0],
-                y,
-                axis=1,
-                err_message="Inconsistent number of neurons. "
-                f"spike basis coefficients assumes {jax.tree_map(lambda p: p.shape[1], params[0])} neurons, "
-                f"y has {jax.tree_map(lambda x: x.shape[1], y)} neurons instead!",
-            )
 
     @cast_to_jax
     def fit(
@@ -962,9 +976,6 @@ class PopulationGLM(GLM):
         `feature_mask["feature_name"][i] == 1`.
 
         """
-
-        self._initialize_feature_mask(X, y)
-
         return super().fit(X, y, init_params)
 
     def _initialize_feature_mask(self, X, y):

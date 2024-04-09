@@ -157,6 +157,32 @@ def poissonGLM_model_instantiation():
 
 
 @pytest.fixture
+def poisson_population_GLM_model():
+    """Set up a population Poisson GLM for testing purposes.
+
+    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5))
+    b_true = np.zeros((3,))
+    w_true = np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+
+@pytest.fixture
 def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
     """Set up a Poisson GLM for testing purposes.
 
@@ -336,3 +362,7 @@ def mock_data():
 @pytest.fixture()
 def glm_class():
     return nmo.glm.GLM
+
+@pytest.fixture()
+def population_glm_class():
+    return nmo.glm.PopulationGLM
