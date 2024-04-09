@@ -899,7 +899,7 @@ class PopulationGLM(GLM):
                         f"params[0] is of {jax.tree_util.tree_structure(params[0])} structure instead!",
         )
         if isinstance(params[0], dict):
-            neural_axis = 0
+            neural_axis = 1
         else:
             neural_axis = 1
             # check the consistency of the feature axis
