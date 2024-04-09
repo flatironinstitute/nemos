@@ -737,6 +737,7 @@ class PopulationGLM(GLM):
 
     @feature_mask.setter
     def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
+        # do not allow reassignment after fit
         if (self.coef_ is not None) and (self.intercept_ is not None):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
@@ -744,13 +745,20 @@ class PopulationGLM(GLM):
         # check the mask type and ndim
         if feature_mask is None:
             self._feature_mask = feature_mask
-        elif not isinstance(feature_mask, (FeaturePytree, dict)) and feature_mask.ndim != 2:
-            raise ValueError(
-                "'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons) "
-                "or a `FeaturePytree` of shape (n_neurons, )."
-            )
+            raise_exception = False
+        elif isinstance(feature_mask, (FeaturePytree, dict)):
+            raise_exception = tree_utils.pytree_map_and_reduce(lambda x: x.ndim != 1, any, feature_mask)
+        elif hasattr(feature_mask, "ndim"):
+            raise_exception = feature_mask.ndim != 2
+        else:
+            raise_exception = True
 
-        self._feature_mask = jax.tree_map(lambda x: jnp.asarray(jnp.squeeze(x), float), feature_mask)
+        if raise_exception:
+            raise ValueError("'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons) "
+                             "or a `FeaturePytree` of shape (n_neurons, ).")
+
+        self._feature_mask = jax.tree_map(lambda x: jnp.asarray(x, float), feature_mask)
+
         if isinstance(self._feature_mask, FeaturePytree):
             self._feature_mask = self._feature_mask.data
 
