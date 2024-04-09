@@ -905,11 +905,12 @@ class PopulationGLM(GLM):
         """
         Predicts firing rates based on given parameters and design matrix.
 
-        This function computes the predicted firing rates using the provided parameters
-        and model design matrix `X`. It is a streamlined version used internally within
+        This function computes the predicted firing rates using the provided parameters, the feature
+        mask and model design matrix `X`. It is a streamlined version used internally within
         optimization routines, where it serves as the loss function. Unlike the `GLM.predict`
         method, it does not perform any input validation, assuming that the inputs are pre-validated.
-
+        The parameters are first element-wise multiplied with the mask, then the canonical
+        linear-non-linear GLM map is applied.
 
         Parameters
         ----------
