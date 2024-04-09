@@ -682,6 +682,45 @@ class GLM(BaseRegressor):
 
 
 class PopulationGLM(GLM):
+    """
+    Population Generalized Linear Model.
+
+    This class implements a Generalized Linear Model for a neural population.
+    This GLM implementation allows users to model the activity of a population of neurons based on a
+    combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
+    It is suitable for scenarios where the relationship between predictors and the response
+    variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
+    stored in tabular format, shape (num_samples, num_features) or as [FeaturePytree](../pytrees).
+
+    Parameters
+    ----------
+    observation_model :
+        Observation model to use. The model describes the distribution of the neural activity.
+        Default is the Poisson model.
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        and related parameters.
+        Default is UnRegularized regression with gradient descent.
+    feature_mask :
+        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s.
+        The mask will be used to select which features are used as predictors for which neuron.
+
+    Attributes
+    ----------
+    intercept_ :
+        Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
+        firing rate will be `jnp.exp(model.intercept_)`.
+    coef_ :
+        Basis coefficients for the model.
+    solver_state :
+        State of the solver after fitting. May include details like optimization error.
+
+    Raises
+    ------
+    TypeError
+        - If provided `regularizer` or `observation_model` are not valid.
+        - If provided `feature_mask` is not an array-like of dimension two.
+    """
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
@@ -689,7 +728,7 @@ class PopulationGLM(GLM):
         feature_mask: Optional[jnp.ndarray] = None,
     ):
         super().__init__(observation_model=observation_model, regularizer=regularizer)
-        self._feature_mask = feature_mask
+        self.feature_mask = feature_mask
 
     @property
     def feature_mask(self):
@@ -701,11 +740,14 @@ class PopulationGLM(GLM):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set fitting."
             )
-        if feature_mask.ndim != 2:
+        if feature_mask is None:
+            self._feature_mask = feature_mask
+        elif feature_mask.ndim != 2:
             raise ValueError(
                 "'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons)."
             )
-        self._feature_mask = jax.tree_map(lambda x: jnp.asarray(x, float), feature_mask)
+        else:
+            self._feature_mask = jax.tree_map(lambda x: jnp.asarray(x, float), feature_mask)
 
     @staticmethod
     def _check_input_dimensionality(
