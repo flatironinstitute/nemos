@@ -893,38 +893,39 @@ class TestGLM:
                 feedforward_input=feedforward_input,
             )
 
-#     def test_simulate_feedforward_glm(self, poissonGLM_model_instantiation):
-#         """Test that simulate goes through"""
-#         X, y, model, params, rate = poissonGLM_model_instantiation
-#         model.coef_ = params[0]
-#         model.intercept_ = params[1]
-#         ysim, ratesim = model.simulate(jax.random.key(123), X)
-#         # check that the expected dimensionality is returned
-#         assert ysim.ndim == 1
-#         assert ratesim.ndim == 1
-#         # check that the rates and spikes has the same shape
-#         assert ratesim.shape[0] == ysim.shape[0]
-#         # check the time point number is that expected (same as the input)
-#         assert ysim.shape[0] == X.shape[0]
-#
-#     @pytest.mark.parametrize(
-#         "insert, expectation",
-#         [
-#             (0, does_not_raise()),
-#             (np.nan, pytest.warns(UserWarning, match=r"The provided trees contain")),
-#             (np.inf, pytest.warns(UserWarning, match=r"The provided trees contain")),
-#         ],
-#     )
-#     def test_simulate_invalid_feedforward(
-#         self, insert, expectation, poissonGLM_model_instantiation
-#     ):
-#         X, y, model, params, rate = poissonGLM_model_instantiation
-#         model.coef_ = params[0]
-#         model.intercept_ = params[1]
-#         X[0] = insert
-#         with expectation:
-#             model.simulate(jax.random.key(123), X)
-#
+    def test_simulate_feedforward_glm(self, poissonGLM_model_instantiation):
+        """Test that simulate goes through"""
+        X, y, model, params, rate = poissonGLM_model_instantiation
+        model.coef_ = params[0]
+        model.intercept_ = params[1]
+        ysim, ratesim = model.simulate(jax.random.key(123), X)
+        # check that the expected dimensionality is returned
+        assert ysim.ndim == 1
+        assert ratesim.ndim == 1
+        # check that the rates and spikes has the same shape
+        assert ratesim.shape[0] == ysim.shape[0]
+        # check the time point number is that expected (same as the input)
+        assert ysim.shape[0] == X.shape[0]
+
+    @pytest.mark.parametrize(
+        "insert, expectation",
+        [
+            (0, does_not_raise()),
+            (np.nan, pytest.warns(UserWarning, match=r"The provided trees contain")),
+            (np.inf, pytest.warns(UserWarning, match=r"The provided trees contain")),
+        ],
+    )
+    def test_simulate_invalid_feedforward(
+        self, insert, expectation, poisson_population_GLM_model
+    ):
+        X, y, model, params, rate = poisson_population_GLM_model
+        model.coef_ = params[0]
+        model.intercept_ = params[1]
+        model._initialize_feature_mask(X, y)
+        X[0] = insert
+        with expectation:
+            model.simulate(jax.random.key(123), X)
+
 #     #######################################
 #     # Compare with standard implementation
 #     #######################################
