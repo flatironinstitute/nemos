@@ -1843,26 +1843,26 @@ class TestPopulationGLM:
         with expectation:
             model.simulate(jax.random.key(123), X)
 
-#     #######################################
-#     # Compare with standard implementation
-#     #######################################
-#     def test_deviance_against_statsmodels(self, poissonGLM_model_instantiation):
-#         """
-#         Compare fitted parameters to statsmodels.
-#         Assesses if the model estimates are close to statsmodels' results.
-#         """
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         # set model coeff
-#         model.coef_ = true_params[0]
-#         model.intercept_ = true_params[1]
-#         # get the rate
-#         dev = sm.families.Poisson().deviance(y, firing_rate)
-#         dev_model = model.observation_model.deviance(firing_rate, y).sum()
-#         if not np.allclose(dev, dev_model):
-#             raise ValueError("Deviance doesn't match statsmodels!")
-#
-#     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
-#         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-#         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
-#         GridSearchCV(model, param_grid).fit(X, y)
+    #######################################
+    # Compare with standard implementation
+    #######################################
+    def test_deviance_against_statsmodels(self, poisson_population_GLM_model):
+        """
+        Compare fitted parameters to statsmodels.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        # set model coeff
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        # get the rate
+        dev = sm.families.Poisson().deviance(y, firing_rate)
+        dev_model = model.observation_model.deviance(firing_rate, y).sum()
+        if not np.allclose(dev, dev_model):
+            raise ValueError("Deviance doesn't match statsmodels!")
+
+    def test_compatibility_with_sklearn_cv(self, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        GridSearchCV(model, param_grid).fit(X, y)
 
