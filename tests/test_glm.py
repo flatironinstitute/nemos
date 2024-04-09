@@ -439,15 +439,15 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=true_params)
 
-#     def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
-#         """Test that the group lasso fit goes through"""
-#         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
-#         model.set_params(
-#             regularizer=nmo.regularizer.GroupLasso(
-#                 solver_name="ProximalGradient", mask=mask
-#             )
-#         )
-#         model.fit(X, y)
+    def test_fit_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
+        """Test that the group lasso fit goes through"""
+        X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(
+                solver_name="ProximalGradient", mask=mask
+            )
+        )
+        model.fit(X, y)
 #
 #     def test_fit_pytree_equivalence(
 #         self, poissonGLM_model_instantiation, poissonGLM_model_instantiation_pytree
