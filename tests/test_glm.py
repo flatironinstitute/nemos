@@ -2019,3 +2019,78 @@ class TestPopulationGLM:
         model._feature_mask = mask
         with expectation:
             model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "regularizer",
+        [
+            nmo.regularizer.UnRegularized(solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}),
+            nmo.regularizer.UnRegularized(solver_name="GradientDescent", solver_kwargs={"tol": 10 ** -14}),
+            nmo.regularizer.Ridge(solver_name="GradientDescent", regularizer_strength=0.001, solver_kwargs={"tol": 10**-14}),
+            nmo.regularizer.Ridge(solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10 ** -14}),
+            nmo.regularizer.Lasso(regularizer_strength=0.001, solver_kwargs={"tol": 10**-14})
+        ]
+    )
+    @pytest.mark.parametrize(
+        "mask",
+        [
+            np.ones((5, 3)),
+            np.array([
+                [0, 0, 1],
+                [0, 1, 0],
+                [1, 1, 1],
+                [1, 0, 1],
+                [0, 1, 0],
+            ]),
+            {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}
+    ])
+    def test_masked_fit_vs_loop(self, regularizer, mask, poisson_population_GLM_model, poisson_population_GLM_model_pytree):
+        jax.config.update("jax_enable_x64", True)
+        if isinstance(mask, dict):
+            X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+            def map_neu(k, coef_):
+                key_ind = {"input_1": [0, 1, 2], "input_2": [3, 4]}
+                ind_array = np.zeros((0, ), dtype=int)
+                coef_stack = np.zeros((0, ), dtype=int)
+                for key, msk in mask.items():
+                    if msk[k]:
+                        ind_array = np.hstack((ind_array, key_ind[key]))
+                        coef_stack = np.hstack((coef_stack, coef_[key]))
+                return ind_array, coef_stack
+        else:
+            X, y, model, true_params, firing_rate = poisson_population_GLM_model
+            def map_neu(k, coef_):
+                ind_array = np.where(mask[:, k])[0]
+                coef_stack = coef_
+                return ind_array, coef_stack
+
+
+
+        mask_bool = jax.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
+        # fit pop glm
+        model.feature_mask = mask
+        model.regularizer = regularizer
+        model.fit(X, y)
+        coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
+
+        coef_loop = np.zeros((5, 3))
+        intercept_loop = np.zeros((3, ))
+        # loop over neuron
+        for k in range(y.shape[1]):
+            model_single_neu = nmo.glm.GLM(regularizer=regularizer)
+            if isinstance(mask_bool, dict):
+                X_neu = {}
+                for key, xx in X.items():
+                    if mask_bool[key][k]:
+                        X_neu[key] = X[key]
+                X_neu = FeaturePytree(**X_neu)
+            else:
+                X_neu = X[:, mask_bool[k]]
+
+            model_single_neu.fit(X_neu, y[:, k])
+            idx, coef = map_neu(k, model_single_neu.coef_)
+            coef_loop[idx, k] = coef
+            intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
+        print(f"\n MAX ERR {regularizer} - {regularizer.solver_name}: {np.max(np.abs(coef_loop - coef_vectorized))}")
+        assert np.allclose(coef_loop, coef_vectorized, atol=10**-4, rtol=0)
+
+

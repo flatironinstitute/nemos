@@ -173,8 +173,8 @@ def poisson_population_GLM_model():
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
     np.random.seed(123)
-    X = np.random.normal(size=(100, 5))
-    b_true = np.zeros((3,))
+    X = np.random.normal(size=(500, 5))
+    b_true = -2 * np.ones((3,))
     w_true = np.random.normal(size=(5, 3))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
     regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
