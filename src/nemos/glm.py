@@ -742,6 +742,12 @@ class PopulationGLM(GLM):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
             )
+        feature_mask = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), feature_mask)
+
+        # check if the mask is of 0s and 1s
+        if tree_utils.pytree_map_and_reduce(lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask):
+            raise ValueError("'feature_mask' must contain only 0s and 1s!")
+
         # check the mask type and ndim
         if feature_mask is None:
             self._feature_mask = feature_mask
@@ -754,10 +760,10 @@ class PopulationGLM(GLM):
             raise_exception = True
 
         if raise_exception:
-            raise ValueError("'feature_mask' of 'populationGLM' must be 2-dimensional, (n_features, n_neurons) "
+            raise ValueError("'feature_mask' of 'populationGLM' must be a 2-dimensional array, (n_features, n_neurons) "
                              "or a `FeaturePytree` of shape (n_neurons, ).")
 
-        self._feature_mask = jax.tree_map(lambda x: jnp.asarray(x, float), feature_mask)
+        self._feature_mask = feature_mask
 
         if isinstance(self._feature_mask, FeaturePytree):
             self._feature_mask = self._feature_mask.data
@@ -898,14 +904,6 @@ class PopulationGLM(GLM):
                             f"{jax.tree_util.tree_structure(self.feature_mask)} structure instead!",
             )
 
-        # check the consistency of the feature axis
-        validation.check_tree_structure(
-            self.feature_mask,
-            params[0],
-            err_message="feature_mask and params[0] must have the same structure, but feature_mask has structure "
-                        f"of type {jax.tree_util.tree_structure(self.feature_mask)}, "
-                        f"params[0] is of {jax.tree_util.tree_structure(params[0])} structure instead!",
-        )
         if isinstance(params[0], dict):
             neural_axis = 0
         else:

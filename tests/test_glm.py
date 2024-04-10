@@ -1866,3 +1866,156 @@ class TestPopulationGLM:
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
+            ({"input_1": [0, 1, 0], "input_2": [1, 0, 1]},
+             pytest.raises(ValueError, match="'feature_mask' of 'populationGLM' must be a 2-dimensional array")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}, does_not_raise()),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1.1])},
+             pytest.raises(ValueError, match="'feature_mask' must contain only 0s and 1s")),
+            (np.array([0.1, 1, 1] * 5).reshape(5, 3),
+             pytest.raises(ValueError, match="'feature_mask' must contain only 0s and 1s"))
+        ]
+    )
+    def test_feature_mask_setter(self, mask, expectation, poisson_population_GLM_model):
+        _, _, model, _, _ = poisson_population_GLM_model
+        with expectation:
+            model.feature_mask = mask
+
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
+            (np.array([0, 1, 1] * 4).reshape(4, 3), pytest.raises(ValueError, match="Inconsistent number of features")),
+            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),  pytest.raises(ValueError, match="Inconsistent number of neurons")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+        ]
+    )
+    def test_feature_mask_compatibility_fit(self, mask, expectation, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.feature_mask = mask
+        with expectation:
+            model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            (np.array([0, 1, 1] * 4).reshape(4, 3),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}, does_not_raise()),
+            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+             pytest.raises(ValueError, match="Inconsistent number of neurons")),
+            ({"input_1": np.array([0, 1, 0])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0, 1])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure"))
+        ]
+    )
+    def test_feature_mask_compatibility_fit_tree(self, mask, expectation, poisson_population_GLM_model_pytree):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+        model.feature_mask = mask
+        with expectation:
+            model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
+            (np.array([0, 1, 1] * 4).reshape(4, 3), pytest.raises(ValueError, match="Inconsistent number of features")),
+            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+             pytest.raises(ValueError, match="Inconsistent number of neurons")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+        ]
+    )
+    def test_feature_mask_compatibility_predict(self, mask, expectation, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._feature_mask = mask
+        with expectation:
+            model.predict(X)
+
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            (np.array([0, 1, 1] * 4).reshape(4, 3),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}, does_not_raise()),
+            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+             pytest.raises(ValueError, match="Inconsistent number of neurons")),
+            ({"input_1": np.array([0, 1, 0])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0, 1])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure"))
+        ]
+    )
+    def test_feature_mask_compatibility_fit_tree(self, mask, expectation, poisson_population_GLM_model_pytree):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._feature_mask = mask
+        with expectation:
+            model.predict(X)
+
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
+            (np.array([0, 1, 1] * 4).reshape(4, 3), pytest.raises(ValueError, match="Inconsistent number of features")),
+            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+             pytest.raises(ValueError, match="Inconsistent number of neurons")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+        ]
+    )
+    def test_feature_mask_compatibility_score(self, mask, expectation, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._feature_mask = mask
+        with expectation:
+            model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "mask, expectation",
+        [
+            (np.array([0, 1, 1] * 5).reshape(5, 3),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            (np.array([0, 1, 1] * 4).reshape(4, 3),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}, does_not_raise()),
+            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+             pytest.raises(ValueError, match="Inconsistent number of neurons")),
+            ({"input_1": np.array([0, 1, 0])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
+            ({"input_1": np.array([0, 1, 0, 1])},
+             pytest.raises(TypeError, match="feature_mask and X must have the same structure"))
+        ]
+    )
+    def test_feature_mask_compatibility_score_tree(self, mask, expectation, poisson_population_GLM_model_pytree):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._feature_mask = mask
+        with expectation:
+            model.score(X, y)
