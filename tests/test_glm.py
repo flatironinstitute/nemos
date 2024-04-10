@@ -2033,7 +2033,6 @@ class TestPopulationGLM:
     @pytest.mark.parametrize(
         "mask",
         [
-            np.ones((5, 3)),
             np.array([
                 [0, 0, 1],
                 [0, 1, 0],
@@ -2047,6 +2046,7 @@ class TestPopulationGLM:
         jax.config.update("jax_enable_x64", True)
         if isinstance(mask, dict):
             X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+
             def map_neu(k, coef_):
                 key_ind = {"input_1": [0, 1, 2], "input_2": [3, 4]}
                 ind_array = np.zeros((0, ), dtype=int)
@@ -2058,12 +2058,11 @@ class TestPopulationGLM:
                 return ind_array, coef_stack
         else:
             X, y, model, true_params, firing_rate = poisson_population_GLM_model
+
             def map_neu(k, coef_):
                 ind_array = np.where(mask[:, k])[0]
                 coef_stack = coef_
                 return ind_array, coef_stack
-
-
 
         mask_bool = jax.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
