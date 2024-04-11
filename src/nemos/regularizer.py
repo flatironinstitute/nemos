@@ -11,6 +11,7 @@ import inspect
 import warnings
 from typing import Any, Callable, Optional, Tuple, Union
 
+import jax
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
@@ -430,8 +431,11 @@ class Lasso(ProxGradientRegularizer):
             Ws, bs = params
             # if Ws is a pytree, l1reg needs to be a pytree with the same
             # structure
-            if isinstance(Ws, FeaturePytree):
-                l1reg = FeaturePytree(**{k: l1reg for k in Ws.keys()})
+            if isinstance(Ws, (dict, FeaturePytree)):
+                struct = jax.tree_util.tree_structure(Ws)
+                l1reg = jax.tree_util.tree_unflatten(
+                    struct, [l1reg] * struct.num_leaves
+                )
             return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
 
         return prox_op

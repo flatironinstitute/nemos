@@ -494,6 +494,25 @@ class TestLasso:
             model.regularizer.solver_kwargs = kwargs
             model.fit(X, y)
 
+    def test_lasso_pytree(self, poissonGLM_model_instantiation_pytree):
+        """Check pytree X can be fit."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+        model.regularizer = nmo.regularizer.Lasso()
+        model.fit(X, y)
+
+    @pytest.mark.parametrize("reg_str", [0.001, 0.01, 0.1, 1, 10])
+    def test_lasso_pytree_match(self, reg_str, poissonGLM_model_instantiation_pytree, poissonGLM_model_instantiation):
+        """Check pytree and array find same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, _, model, _, _ = poissonGLM_model_instantiation_pytree
+        X_array, y, model_array, _, _ = poissonGLM_model_instantiation
+
+        model.regularizer = nmo.regularizer.Lasso(regularizer_strength=reg_str)
+        model_array.regularizer = nmo.regularizer.Lasso(regularizer_strength=reg_str)
+        model.fit(X, y)
+        model_array.fit(X_array, y)
+        assert np.allclose(np.hstack(jax.tree_util.tree_leaves(model.coef_)), model_array.coef_)
+
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
