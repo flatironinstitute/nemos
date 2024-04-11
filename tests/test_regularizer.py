@@ -494,6 +494,11 @@ class TestLasso:
             model.regularizer.solver_kwargs = kwargs
             model.fit(X, y)
 
+    def test_lasso_pytree(self, poissonGLM_model_instantiation_pytree):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+        model.regularizer = nmo.regularizer.Lasso()
+        model.fit(X, y)
+
 
 class TestGroupLasso:
     cls = nmo.regularizer.GroupLasso
