@@ -429,6 +429,7 @@ class Lasso(ProxGradientRegularizer):
 
         def prox_op(params, l1reg, scaling=1.0):
             Ws, bs = params
+            l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
             # structure
             if isinstance(Ws, (dict, FeaturePytree)):
