@@ -987,10 +987,10 @@ class PopulationGLM(GLM):
         The `feature_mask` is used to select features for each neuron, and it is
         an NDArray or a `FeaturePytree` of 0s and 1s. In particular,
 
-        - If the mask is in array format, feature `j` is a predictor for neuron `i` if
+        - If the mask is in array format, feature `i` is a predictor for neuron `j` if
         `feature_mask[i, j] == 1`.
-        - If the mask is a `FeaturePytree`, then `"feature_name"` is a predictor of neuron `i` if
-        `feature_mask["feature_name"][i] == 1`.
+        - If the mask is a `FeaturePytree`, then `"feature_name"` is a predictor of neuron `j` if
+        `feature_mask["feature_name"][j] == 1`.
 
         """
         return super().fit(X, y, init_params)
