@@ -739,15 +739,13 @@ class PopulationGLM(GLM):
         return self._feature_mask
 
     @feature_mask.setter
+    @cast_to_jax
     def feature_mask(self, feature_mask: Union[DESIGN_INPUT_TYPE, dict]):
         # do not allow reassignment after fit
         if (self.coef_ is not None) and (self.intercept_ is not None):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
             )
-        feature_mask = jax.tree_util.tree_map(
-            lambda x: jnp.asarray(x, dtype=float), feature_mask
-        )
 
         # check if the mask is of 0s and 1s
         if tree_utils.pytree_map_and_reduce(
@@ -761,7 +759,7 @@ class PopulationGLM(GLM):
             raise_exception = False
         elif isinstance(feature_mask, (FeaturePytree, dict)):
             raise_exception = tree_utils.pytree_map_and_reduce(
-                lambda x: x.ndim != 1, any, feature_mask
+                lambda x: x.ndim != 1 if hasattr(x, "ndim") else True, any, feature_mask
             )
         elif hasattr(feature_mask, "ndim"):
             raise_exception = feature_mask.ndim != 2
