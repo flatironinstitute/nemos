@@ -261,7 +261,7 @@ def nan_pad(
         )
 
     # convert to jax ndarray
-    conv_time_series = jax.tree_map(jnp.asarray, conv_time_series)
+    conv_time_series = jax.tree_util.tree_map(jnp.asarray, conv_time_series)
 
     # validate the axis
     validate_axis(conv_time_series, axis)
@@ -284,7 +284,7 @@ def nan_pad(
             conv_time_series,
         ):
             raise ValueError("All leaves of conv_time_series must have a float dtype!")
-        return jax.tree_map(
+        return jax.tree_util.tree_map(
             lambda trial: _pad_dimension(
                 trial, axis, pad_size, predictor_causality, constant_values=jnp.nan
             ),
@@ -357,12 +357,12 @@ def shift_time_series(
         )
 
     # compute the start, end indices tree
-    adjust_idx = jax.tree_map(
+    adjust_idx = jax.tree_util.tree_map(
         lambda x: _compute_index_adjust(x, predictor_causality, axis), time_series
     )
 
     # convert to jax ndarray
-    time_series = jax.tree_map(jnp.asarray, time_series)
+    time_series = jax.tree_util.tree_map(jnp.asarray, time_series)
 
     if is_numpy_array_like(time_series):
 
@@ -380,7 +380,7 @@ def shift_time_series(
             lambda trial: not np.issubdtype(trial.dtype, np.floating), any, time_series
         ):
             raise ValueError("All leaves of time_series must have a float dtype!")
-        return jax.tree_map(
+        return jax.tree_util.tree_map(
             lambda trial, idx: _pad_dimension(
                 jnp.take(trial, jnp.arange(*idx), axis=axis),
                 axis,

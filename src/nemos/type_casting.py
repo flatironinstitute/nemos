@@ -230,7 +230,9 @@ def get_time_info(*args, **kwargs):
         Time axis and support information of the first pynapple object detected.
     """
     # list of bool
-    flat, _ = jax.tree_util.tree_flatten(jax.tree_map(is_pynapple_tsd, (args, kwargs)))
+    flat, _ = jax.tree_util.tree_flatten(
+        jax.tree_util.tree_map(is_pynapple_tsd, (args, kwargs))
+    )
 
     idx = flat.index(True)
 
@@ -372,7 +374,7 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
 
                 def cast_out(tree):
                     # cast back to pynapple
-                    return jax.tree_map(
+                    return jax.tree_util.tree_map(
                         lambda x: cast_to_pynapple(x, time, time_support), tree
                     )
 
@@ -382,10 +384,10 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
 
             if conv_type == "jax":
                 # cast to jax
-                args, kwargs = jax.tree_map(jnp_asarray_if, (args, kwargs))
+                args, kwargs = jax.tree_util.tree_map(jnp_asarray_if, (args, kwargs))
             elif conv_type == "numpy":
                 # cast to numpy
-                args, kwargs = jax.tree_map(np_asarray_if, (args, kwargs))
+                args, kwargs = jax.tree_util.tree_map(np_asarray_if, (args, kwargs))
             else:
                 raise NotImplementedError(
                     f"Conversion of type '{conv_type}' not implemented!"

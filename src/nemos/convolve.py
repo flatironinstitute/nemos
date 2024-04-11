@@ -171,7 +171,7 @@ def _convolve_pad_and_shift(
     def conv(x):
         return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)
 
-    predictor = jax.tree_map(conv, time_series)
+    predictor = jax.tree_util.tree_map(conv, time_series)
 
     with warnings.catch_warnings(record=True) as warns:
         warnings.simplefilter("always")
@@ -300,13 +300,13 @@ def create_convolutional_predictor(
     ]
 
     # split epochs (adds one layer to pytree)
-    two_layer = jax.tree_map(_list_epochs, flat_tree)
+    two_layer = jax.tree_util.tree_map(_list_epochs, flat_tree)
 
     # check trial size (after splitting)
     utils.check_trials_longer_than_time_window(two_layer, basis_matrix.shape[0], axis)
 
     # convert to array
-    two_layer = jax.tree_map(jnp.asarray, two_layer)
+    two_layer = jax.tree_util.tree_map(jnp.asarray, two_layer)
 
     # convolve
     conv = _convolve_pad_and_shift(

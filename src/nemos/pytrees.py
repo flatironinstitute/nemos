@@ -16,7 +16,7 @@ class FeaturePytree(UserDict):
     n-dimensional array-like objects as its values. FeaturePytree objects can
     only have a depth of 1, and we allow joint slicing.
 
-    This is intended to be used with jax.tree_map and similar functionality.
+    This is intended to be used with jax.tree_util.tree_map and similar functionality.
 
     """
 
@@ -68,7 +68,7 @@ class FeaturePytree(UserDict):
             return self.data[key]
         # Or the time dimension
         else:
-            return jax.tree_map(lambda x: x[key], self)
+            return jax.tree_util.tree_map(lambda x: x[key], self)
 
     def __repr__(self):
         # Show the shape and data type of each array

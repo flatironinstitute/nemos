@@ -18,7 +18,7 @@ from .type_casting import jnp_asarray_if, support_pynapple
 def cast_to_jax(func):
     def wrapper(*args, **kwargs):
         try:
-            args, kwargs = jax.tree_map(
+            args, kwargs = jax.tree_util.tree_map(
                 lambda x: jnp_asarray_if(x, dtype=float), (args, kwargs)
             )
         except Exception:
@@ -212,8 +212,8 @@ class GLM(BaseRegressor):
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
-                f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
+                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
     def _check_is_fit(self):
@@ -297,7 +297,7 @@ class GLM(BaseRegressor):
         # extract model params
         params = self._get_coef_and_intercept()
 
-        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
+        X = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
 
         # check input dimensionality
         self._check_input_dimensionality(X=X)
@@ -418,7 +418,7 @@ class GLM(BaseRegressor):
         self._check_is_fit()
         params = self._get_coef_and_intercept()
 
-        X = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
+        X = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=float), X)
         y = jnp.asarray(y, dtype=float)
 
         self._check_input_dimensionality(X, y)
@@ -429,8 +429,8 @@ class GLM(BaseRegressor):
         is_valid = tree_utils.get_valid_multitree(X, y)
 
         # filter for valid
-        X = jax.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_map(lambda x: x[is_valid], y)
+        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
 
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -506,7 +506,9 @@ class GLM(BaseRegressor):
             #   dict with n_features arrays of shape (n_features,).
             # - If X is an array of shape (n_timebins,
             #   n_features), this will be an array of shape (n_features,).
-            jax.tree_map(lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data),
+            jax.tree_util.tree_map(
+                lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data
+            ),
             # intercept, bias terms, keepdims=False needed by PopulationGLM
             jnp.atleast_1d(jnp.log(jnp.mean(y, axis=0, keepdims=False))),
         )
@@ -568,8 +570,8 @@ class GLM(BaseRegressor):
         is_valid = tree_utils.get_valid_multitree(X, y)
 
         # drop nans
-        X = jax.tree_map(lambda x: x[is_valid], X)
-        y = jax.tree_map(lambda x: x[is_valid], y)
+        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
 
         # Run optimization
         runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
@@ -743,7 +745,9 @@ class PopulationGLM(GLM):
             raise AttributeError(
                 "property 'feature_mask' of 'populationGLM' cannot be set after fitting."
             )
-        feature_mask = jax.tree_map(lambda x: jnp.asarray(x, dtype=float), feature_mask)
+        feature_mask = jax.tree_util.tree_map(
+            lambda x: jnp.asarray(x, dtype=float), feature_mask
+        )
 
         # check if the mask is of 0s and 1s
         if tree_utils.pytree_map_and_reduce(
@@ -879,8 +883,8 @@ class PopulationGLM(GLM):
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], params[0])} features, "
-                f"X has {jax.tree_map(lambda x: x.shape[1], X)} features instead!",
+                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
+                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
         if y is not None:
@@ -889,8 +893,8 @@ class PopulationGLM(GLM):
                 y,
                 axis=1,
                 err_message="Inconsistent number of neurons. "
-                f"spike basis coefficients assumes {jax.tree_map(lambda p: p.shape[1], params[0])} neurons, "
-                f"y has {jax.tree_map(lambda x: x.shape[1], y)} neurons instead!",
+                f"spike basis coefficients assumes {jax.tree_util.tree_map(lambda p: p.shape[1], params[0])} neurons, "
+                f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
         self._check_mask(X, y, params)
 
@@ -924,8 +928,8 @@ class PopulationGLM(GLM):
                 axis_1=0,
                 axis_2=0,
                 err_message="Inconsistent number of features. "
-                f"feature_mask has {jax.tree_map(lambda m: m.shape[0], self.feature_mask)} neurons, "
-                f"model coefficients have {jax.tree_map(lambda x: x.shape[1], X)}  instead!",
+                f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[0], self.feature_mask)} neurons, "
+                f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
             )
         # check the consistency of the feature axis
         validation.check_tree_axis_consistency(
@@ -934,8 +938,8 @@ class PopulationGLM(GLM):
             axis_1=neural_axis,
             axis_2=1,
             err_message="Inconsistent number of neurons. "
-            f"feature_mask has {jax.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
-            f"model coefficients have {jax.tree_map(lambda x: x.shape[1], X)}  instead!",
+            f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
+            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
         )
 
     @cast_to_jax
@@ -997,11 +1001,13 @@ class PopulationGLM(GLM):
         if self.feature_mask is None:
             # static checker does not realize conversion to ndarray happened in cast_to_jax.
             if isinstance(X, FeaturePytree):
-                self._feature_mask = jax.tree_map(
+                self._feature_mask = jax.tree_util.tree_map(
                     lambda x: jnp.ones((y.shape[1],)), X.data
                 )
             elif isinstance(X, dict):
-                self._feature_mask = jax.tree_map(lambda x: jnp.ones((y.shape[1],)), X)
+                self._feature_mask = jax.tree_util.tree_map(
+                    lambda x: jnp.ones((y.shape[1],)), X
+                )
             else:
                 self._feature_mask = jnp.ones((X.shape[1], y.shape[1]))
 

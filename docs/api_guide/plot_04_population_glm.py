@@ -103,8 +103,8 @@ print(feature_mask)
 # The mask can be passed at initialization or set after the model is initialized, but cannot be changed
 # after the model is fit.
 
-# set a quasi-newton solver for better numerical precision
-model = nmo.glm.PopulationGLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+# set a quasi-newton solver and low tolerance for better numerical precision
+model = nmo.glm.PopulationGLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs={"tol": 10**-12}))
 
 # set the mask
 model.feature_mask = feature_mask
@@ -134,7 +134,9 @@ coeff = np.zeros((2, 2))
 
 # loop over the neurons and fit a GLM
 for neuron in range(2):
-    model_neu = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+    model_neu = nmo.glm.GLM(
+        regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs={"tol":10**-12})
+    )
     model_neu.fit(input_features[:, features_by_neuron[neuron]], spikes[:, neuron])
     coeff[:, neuron] = model_neu.coef_
 
@@ -142,8 +144,9 @@ for neuron in range(2):
 fig, axs = plt.subplots(1, 2, figsize=(6, 3))
 for neuron in range(2):
     axs[neuron].set_title(f"neuron {neuron}")
-    axs[neuron].bar([0, 3], coeff[:, neuron], width=0.8, label="single neuron GLM")
-    axs[neuron].bar([1, 4], model.coef_[features_by_neuron[neuron], neuron], width=0.8, label="population GLM")
+    axs[neuron].bar([0, 4], w_true[features_by_neuron[neuron], neuron], width=0.8, label="true")
+    axs[neuron].bar([1, 5], coeff[:, neuron], width=0.8, label="single neuron GLM")
+    axs[neuron].bar([2, 6], model.coef_[features_by_neuron[neuron], neuron], width=0.8, label="population GLM")
     axs[neuron].set_ylabel("coefficient")
     axs[neuron].set_ylim(0, 0.8)
     axs[neuron].set_xticks([0.5, 3.5])
