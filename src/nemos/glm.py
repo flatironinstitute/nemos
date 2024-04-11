@@ -693,7 +693,7 @@ class PopulationGLM(GLM):
     combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
-    stored in tabular format, shape (num_samples, num_features) or as [FeaturePytree](../pytrees).
+    stored in tabular format, shape (n_timebins, num_features) or as [FeaturePytree](../pytrees).
 
     Parameters
     ----------
@@ -957,10 +957,10 @@ class PopulationGLM(GLM):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_features) or pytree of the same
+            Predictors, array of shape (n_timebins, n_features) or pytree of the same
             shape.
         y :
-            Target neural activity arranged in a matrix, shape (n_time_bins, n_neurons).
+            Target neural activity arranged in a matrix, shape (n_timebins, n_neurons).
         init_params :
             2-tuple of initial parameter values: (coefficients, intercepts). If
             None, we initialize coefficients with zeros, intercepts with the
@@ -1032,7 +1032,7 @@ class PopulationGLM(GLM):
         Returns
         -------
         :
-            The predicted rates. Shape (n_time_bins, ).
+            The predicted rates. Shape (n_timebins, n_neurons).
         """
         Ws, bs = params
         return self._observation_model.inverse_link_function(
