@@ -54,13 +54,13 @@ class GLM(nmo.glm.GLM):
             if len(init_params) != 2:
                 raise ValueError("Params must have length two.")
             init_params = (
-                jax.tree_map(lambda x: np.expand_dims(np.asarray(x, dtype=float), axis=0), init_params[0]),
-                jax.tree_map(lambda x: np.expand_dims(np.asarray(x, dtype=float), axis=0), init_params[1]),
+                jax.tree_util.tree_map(lambda x: np.expand_dims(np.asarray(x, dtype=float), axis=0), init_params[0]),
+                jax.tree_util.tree_map(lambda x: np.expand_dims(np.asarray(x, dtype=float), axis=0), init_params[1]),
             )
-        X = jax.tree_map(
+        X = jax.tree_util.tree_map(
             lambda x: jax.numpy.expand_dims(jax.numpy.asarray(x), axis=1), X
         )
-        y = jax.tree_map(
+        y = jax.tree_util.tree_map(
             lambda x: jax.numpy.expand_dims(jax.numpy.asarray(x), axis=1), y
         )
         if isinstance(X, nmo.pytrees.FeaturePytree):
@@ -68,23 +68,23 @@ class GLM(nmo.glm.GLM):
         try:
             super().fit(X, y, init_params=init_params)
         finally:
-            self.coef_ = jax.tree_map(lambda x: jnp.atleast_1d(np.squeeze(x)), self.coef_)
-            self.intercept_ = jax.tree_map(np.squeeze, self.intercept_)
+            self.coef_ = jax.tree_util.tree_map(lambda x: jnp.atleast_1d(np.squeeze(x)), self.coef_)
+            self.intercept_ = jax.tree_util.tree_map(np.squeeze, self.intercept_)
         return self
 
     def predict(self, X: DESIGN_INPUT_TYPE) -> jnp.ndarray:
-        X = jax.tree_map(
+        X = jax.tree_util.tree_map(
             lambda x: jax.numpy.expand_dims(jax.numpy.asarray(x), axis=1), X
         )
         if isinstance(X, nmo.pytrees.FeaturePytree):
             X = X.data
-        self.coef_ = jax.tree_map(lambda x: np.expand_dims(x, axis=0), self.coef_)
-        self.intercept_ = jax.tree_map(lambda x: np.expand_dims(x, axis=0), self.intercept_)
+        self.coef_ = jax.tree_util.tree_map(lambda x: np.expand_dims(x, axis=0), self.coef_)
+        self.intercept_ = jax.tree_util.tree_map(lambda x: np.expand_dims(x, axis=0), self.intercept_)
         try:
             rate = super().predict(X)
         finally:
-            self.coef_ = jax.tree_map(lambda x: jnp.atleast_1d(np.squeeze(x)), self.coef_)
-            self.intercept_ = jax.tree_map(np.squeeze, self.intercept_)
+            self.coef_ = jax.tree_util.tree_map(lambda x: jnp.atleast_1d(np.squeeze(x)), self.coef_)
+            self.intercept_ = jax.tree_util.tree_map(np.squeeze, self.intercept_)
         return jax.numpy.squeeze(rate)
 
     def score(
@@ -95,21 +95,21 @@ class GLM(nmo.glm.GLM):
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
     ) -> jnp.ndarray:
-        X = jax.tree_map(
+        X = jax.tree_util.tree_map(
             lambda x: jax.numpy.expand_dims(jax.numpy.asarray(x), axis=1), X
         )
-        y = jax.tree_map(
+        y = jax.tree_util.tree_map(
             lambda x: jax.numpy.expand_dims(jax.numpy.asarray(x), axis=1), y
         )
         if isinstance(X, nmo.pytrees.FeaturePytree):
             X = X.data
-        self.coef_ = jax.tree_map(lambda x: np.expand_dims(x, axis=0), self.coef_)
-        self.intercept_ = jax.tree_map(lambda x: np.expand_dims(x, axis=0), self.intercept_)
+        self.coef_ = jax.tree_util.tree_map(lambda x: np.expand_dims(x, axis=0), self.coef_)
+        self.intercept_ = jax.tree_util.tree_map(lambda x: np.expand_dims(x, axis=0), self.intercept_)
         try:
             score = super().score(X, y, score_type=score_type)
         finally:
-            self.coef_ = jax.tree_map(lambda x: jnp.atleast_1d(np.squeeze(x)), self.coef_)
-            self.intercept_ = jax.tree_map(np.squeeze, self.intercept_)
+            self.coef_ = jax.tree_util.tree_map(lambda x: jnp.atleast_1d(np.squeeze(x)), self.coef_)
+            self.intercept_ = jax.tree_util.tree_map(np.squeeze, self.intercept_)
         return score
 
     @staticmethod
@@ -157,8 +157,8 @@ class GLM(nmo.glm.GLM):
             ):
                 raise ValueError(
                     "Inconsistent number of features. "
-                    f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[1], params[0])} features, "
-                    f"X has {jax.tree_map(lambda x: x.shape[2], X)} features instead!"
+                    f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[1], params[0])} features, "
+                    f"X has {jax.tree_util.tree_map(lambda x: x.shape[2], X)} features instead!"
                 )
 
     @staticmethod
@@ -178,7 +178,7 @@ class GLM(nmo.glm.GLM):
             raise ValueError("Params must have length two.")
 
         try:
-            params = jax.tree_map(lambda x: jnp.asarray(x, dtype=data_type), params)
+            params = jax.tree_util.tree_map(lambda x: jnp.asarray(x, dtype=data_type), params)
         except (ValueError, TypeError):
             raise TypeError(
                 "Initial parameters must be array-like objects (or pytrees of array-like objects) "
@@ -206,7 +206,7 @@ class GLM(nmo.glm.GLM):
     @staticmethod
     def _check_input_n_timepoints(X: Union[nmo.pytrees.FeaturePytree, jnp.ndarray], y: jnp.ndarray):
         if nmo.utils.pytree_map_and_reduce(
-                lambda x: jax.tree_map(lambda array: y.shape[0] != array.shape[0], x),
+                lambda x: jax.tree_util.tree_map(lambda array: y.shape[0] != array.shape[0], x),
                 any,
                 X
                 ):

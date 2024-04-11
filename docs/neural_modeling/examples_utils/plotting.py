@@ -654,7 +654,7 @@ class PlotSlidingWindow():
 
     @staticmethod
     def set_lines_visible(line_tree, visible: bool):
-        jax.tree_map(lambda line: line.set_visible(visible), line_tree)
+        jax.tree_util.tree_map(lambda line: line.set_visible(visible), line_tree)
 
     def run(self):
         anim = FuncAnimation(self.fig, self.update_fig, self.n_shift, interval=self.interval, repeat=True)

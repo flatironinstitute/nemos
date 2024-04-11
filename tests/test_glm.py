@@ -2064,7 +2064,7 @@ class TestPopulationGLM:
                 coef_stack = coef_
                 return ind_array, coef_stack
 
-        mask_bool = jax.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
+        mask_bool = jax.tree_util.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
         model.feature_mask = mask
         model.regularizer = regularizer
