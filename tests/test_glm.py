@@ -2089,7 +2089,6 @@ class TestPopulationGLM:
             idx, coef = map_neu(k, model_single_neu.coef_)
             coef_loop[idx, k] = coef
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
-        print(f"\n MAX ERR {regularizer} - {regularizer.solver_name}: {np.max(np.abs(coef_loop - coef_vectorized))}")
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-4, rtol=0)
 
 
