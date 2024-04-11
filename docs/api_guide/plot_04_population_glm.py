@@ -17,8 +17,7 @@ neuron in a loop. The reason for this is that `nemos` leverages the powerful GPU
 
  1. The `y` input to the methods `fit` and `score` must be a two-dimensional array of shape `(n_samples, n_neurons)`.
  2. You can optionally pass a `feature_mask` in the form of an array of 0s and 1s with shape `(n_features, n_neurons)`
- that determines what features are used as regression for each neurons. The default is that each neuron has all the
- features as predictors. More on this later.
+ that specifies which features are used as predictors for each neuron. More on this [later](#neuron-specific-features).
 
 Let's generate some synthetic data and fit a population model.
 """
@@ -68,6 +67,7 @@ input_features = X[:, :3]
 
 # %%
 # Let's assume that:
+#
 #   - `input_features[:, 0]` is shared.
 #   - `input_features[:, 1]` is an input only for the first neuron.
 #   - `input_features[:, 2]` is an input only for the second neuron.
@@ -103,8 +103,10 @@ print(feature_mask)
 # The mask can be passed at initialization or set after the model is initialized, but cannot be changed
 # after the model is fit.
 
+# set a quasi-newton solver for better numerical precision
+model = nmo.glm.PopulationGLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+
 # set the mask
-model = nmo.glm.PopulationGLM()
 model.feature_mask = feature_mask
 
 # fit the model
@@ -118,18 +120,21 @@ print(model.coef_)
 # %%
 # The coefficient for the first neuron corresponding to the last feature is zero, as well as
 # the coefficient of the second neuron corresponding to the second feature.
+#
 # To convince ourselves that this is equivalent to fit each neuron individually with the correct features,
-# let's go ahead try.
+# let's go ahead and try.
 
-# select the feature to use for each neuron
+# features for each neuron
 features_by_neuron = {
     0: [0, 1],
     1: [0, 2]
 }
 # initialize the coefficients
 coeff = np.zeros((2, 2))
+
+# loop over the neurons and fit a GLM
 for neuron in range(2):
-    model_neu = nmo.glm.GLM()
+    model_neu = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
     model_neu.fit(input_features[:, features_by_neuron[neuron]], spikes[:, neuron])
     coeff[:, neuron] = model_neu.coef_
 
@@ -137,7 +142,6 @@ for neuron in range(2):
 fig, axs = plt.subplots(1, 2, figsize=(6, 3))
 for neuron in range(2):
     axs[neuron].set_title(f"neuron {neuron}")
-    axs[neuron].axhline(0, color="k")
     axs[neuron].bar([0, 3], coeff[:, neuron], width=0.8, label="single neuron GLM")
     axs[neuron].bar([1, 4], model.coef_[features_by_neuron[neuron], neuron], width=0.8, label="population GLM")
     axs[neuron].set_ylabel("coefficient")
@@ -147,3 +151,31 @@ for neuron in range(2):
     if neuron == 1:
         plt.legend()
 plt.tight_layout()
+
+# %%
+# ## FeaturePytree
+# `PopulationGLM` is compatible with [`FeaturePytree`](../plot_03_glm_pytree). If you structured your predictors
+# in a `FeaturePytree`, the `feature_mask` needs to be a dictionary of the same structure, containing arrays
+# of shape `(n_neurons, )`.
+# The example above can be reformulated as follows,
+
+# restructure the input as FeaturePytree
+pytree_features = nmo.pytrees.FeaturePytree(
+    shared=input_features[:, :1],
+    neu_0=input_features[:, 1:2],
+    neu_1=input_features[:, 2:]
+)
+
+# Define a mask as a dictionary
+pytree_mask = dict(
+    shared=np.array([1, 1]),
+    neu_0=np.array([1, 0]),
+    neu_1=np.array([0, 1])
+)
+
+# fit a model
+model_tree = nmo.glm.PopulationGLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"), feature_mask=pytree_mask)
+model_tree.fit(pytree_features, spikes)
+
+# print the coefficients
+print(model_tree.coef_)

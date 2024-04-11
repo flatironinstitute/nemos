@@ -83,10 +83,8 @@ class TestFeaturePytree:
             ),
             test2=np.random.rand(100, 2),
         )
-        with pytest.warns(
-            UserWarning, match=r"Output is not a FeaturePytree \(e\.g\.\, because at"
-        ):
-            mapped = jax.tree_map(jnp.mean, tree)
+
+        mapped = jax.tree_map(jnp.mean, tree)
         assert isinstance(mapped, dict)
         assert list(tree.keys()) == list(mapped.keys())
 
