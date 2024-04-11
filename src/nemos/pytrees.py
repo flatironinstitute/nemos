@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import warnings
 from collections import UserDict
 
 import jax
