@@ -2007,6 +2007,6 @@ class TestPopulationGLM:
             idx, coef = map_neu(k, model_single_neu.coef_)
             coef_loop[idx, k] = coef
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
-        assert np.allclose(coef_loop, coef_vectorized, atol=10**-4, rtol=0)
+        assert np.allclose(coef_loop, coef_vectorized, atol=10**-6, rtol=0)
 
 
