@@ -949,7 +949,7 @@ class PopulationGLM(GLM):
     ):
         """Fit GLM to the activity of a population of neurons.
 
-        Fit and store the model parameters as attributes `coef_` and ``coef_``.
+        Fit and store the model parameters as attributes `coef_` and `intercept_`.
         Each neuron can have different predictors. tThe `feature_mask` will determine which
         feature will be used for which neurons. See the note below for more information on
         the `feature_mask`.
