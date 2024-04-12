@@ -118,10 +118,10 @@ plt.ylabel('acausal')
 plt.tight_layout()
 
 # %%
-# ## Convolve using `Basis.create_features`
+# ## Convolve using `Basis.compute_features`
 # All the parameters of `create_convolutional_predictor` can be passed to a `Basis` directly
 # at initialization. Note that you must set `mode == "conv"` to actually perform convolution
-# with `Basis.create_features`. Let's see how we can get the same results through `Basis`.
+# with `Basis.compute_features`. Let's see how we can get the same results through `Basis`.
 
 # define basis with different predictor causality
 causal_basis = nmo.basis.RaisedCosineBasisLinear(
