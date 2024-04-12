@@ -157,6 +157,59 @@ def poissonGLM_model_instantiation():
 
 
 @pytest.fixture
+def poisson_population_GLM_model():
+    """Set up a population Poisson GLM for testing purposes.
+
+    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(500, 5))
+    b_true = -2 * np.ones((3,))
+    w_true = np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    return X, np.random.poisson(rate), model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def poisson_population_GLM_model_pytree(poisson_population_GLM_model):
+    """Set up a population Poisson GLM for testing purposes.
+
+    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = poisson_population_GLM_model
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.PopulationGLM(model.observation_model, model.regularizer)
+    return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
 def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
     """Set up a Poisson GLM for testing purposes.
 
@@ -285,6 +338,37 @@ def group_sparse_poisson_glm_model_instantiation():
 
 
 @pytest.fixture
+def group_sparse_poisson_glm_population():
+    """Set up a Poisson GLM for testing purposes with group sparse weights.
+
+    This fixture initializes a Poisson GLM with random, group sparse, parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5))
+    b_true = np.zeros((3,))
+    w_true = np.random.normal(size=(5, 3))
+    w_true[1:4, 0] = 0.0
+    mask = np.zeros((2, 5))
+    mask[0, 1:4] = 1
+    mask[1, [0, 4]] = 1
+    observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
+    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+    return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
+
+
+@pytest.fixture
 def example_data_prox_operator():
     n_features = 4
 
@@ -292,6 +376,24 @@ def example_data_prox_operator():
         jnp.ones((n_features)),
         jnp.zeros(
             1,
+        ),
+    )
+    regularizer_strength = 0.1
+    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    scaling = 0.5
+
+    return params, regularizer_strength, mask, scaling
+
+
+@pytest.fixture
+def example_data_prox_operator_multineuron():
+    n_features = 4
+    n_neurons = 3
+
+    params = (
+        jnp.ones((n_features, n_neurons)),
+        jnp.zeros(
+            n_neurons,
         ),
     )
     regularizer_strength = 0.1
@@ -336,3 +438,7 @@ def mock_data():
 @pytest.fixture()
 def glm_class():
     return nmo.glm.GLM
+
+@pytest.fixture()
+def population_glm_class():
+    return nmo.glm.PopulationGLM

@@ -224,7 +224,7 @@ def simulate_recurrent(
     coupling_coef = jnp.asarray(coupling_coef, dtype=float)
     feedforward_coef = jnp.asarray(feedforward_coef, dtype=float)
     intercepts = jnp.asarray(intercepts, dtype=float)
-    feedforward_input = jax.tree_map(
+    feedforward_input = jax.tree_util.tree_map(
         lambda x: jnp.asarray(x, dtype=float), feedforward_input
     )
     init_y = jnp.asarray(init_y, dtype=float)
@@ -255,8 +255,8 @@ def simulate_recurrent(
         axis_1=1,
         axis_2=2,
         err_message="Inconsistent number of features. "
-        f"spike basis coefficients has {jax.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
-        f"X has {jax.tree_map(lambda x: x.shape[2], feedforward_input)} features instead!",
+        f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], feedforward_coef)} features, "
+        f"X has {jax.tree_util.tree_map(lambda x: x.shape[2], feedforward_input)} features instead!",
     )
 
     validation.error_invalid_entry(feedforward_input)

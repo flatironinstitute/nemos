@@ -10,7 +10,7 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 """
 
 from functools import wraps
-from typing import Any, Callable, List, Literal, Union
+from typing import Any, Callable, List, Literal, Optional, Type, Union
 
 import jax
 import jax.numpy as jnp
@@ -230,7 +230,9 @@ def get_time_info(*args, **kwargs):
         Time axis and support information of the first pynapple object detected.
     """
     # list of bool
-    flat, _ = jax.tree_util.tree_flatten(jax.tree_map(is_pynapple_tsd, (args, kwargs)))
+    flat, _ = jax.tree_util.tree_flatten(
+        jax.tree_util.tree_map(is_pynapple_tsd, (args, kwargs))
+    )
 
     idx = flat.index(True)
 
@@ -274,7 +276,9 @@ def cast_to_pynapple(
 
 
 def jnp_asarray_if(
-    x: Any, condition: Callable[[Any], bool] = is_numpy_array_like
+    x: Any,
+    condition: Callable[[Any], bool] = is_numpy_array_like,
+    dtype: Optional[Type] = None,
 ) -> Any:
     """
     Conditionally convert an object to a JAX array.
@@ -288,6 +292,8 @@ def jnp_asarray_if(
         Object to potentially convert.
     condition:
         A callable that determines whether conversion should occur.
+    dtype:
+        dtype for the conversion.
 
     Returns
     -------
@@ -295,7 +301,7 @@ def jnp_asarray_if(
         The original object or its conversion to a JAX array, based on the condition.
     """
     if condition(x):
-        x = jnp.asarray(x)
+        x = jnp.asarray(x, dtype=dtype)
     return x
 
 
@@ -368,7 +374,7 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
 
                 def cast_out(tree):
                     # cast back to pynapple
-                    return jax.tree_map(
+                    return jax.tree_util.tree_map(
                         lambda x: cast_to_pynapple(x, time, time_support), tree
                     )
 
@@ -378,10 +384,10 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
 
             if conv_type == "jax":
                 # cast to jax
-                args, kwargs = jax.tree_map(jnp_asarray_if, (args, kwargs))
+                args, kwargs = jax.tree_util.tree_map(jnp_asarray_if, (args, kwargs))
             elif conv_type == "numpy":
                 # cast to numpy
-                args, kwargs = jax.tree_map(np_asarray_if, (args, kwargs))
+                args, kwargs = jax.tree_util.tree_map(np_asarray_if, (args, kwargs))
             else:
                 raise NotImplementedError(
                     f"Conversion of type '{conv_type}' not implemented!"

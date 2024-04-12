@@ -65,9 +65,11 @@ def _norm2_masked(weight_neuron: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
     return jnp.linalg.norm(weight_neuron * mask, 2) / jnp.sqrt(mask.sum())
 
 
-# # vectorize the norm function above
-# [(n_features), (n_groups, n_features)] -> (n_groups, )
-_vmap_norm2_masked = jax.vmap(_norm2_masked, in_axes=(None, 0), out_axes=0)
+# vectorize the norm function above
+# [(n_neurons, n_features), (n_features)] -> (n_neurons, )
+_vmap_norm2_masked_1 = jax.vmap(_norm2_masked, in_axes=(0, None), out_axes=0)
+# [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
+_vmap_norm2_masked_2 = jax.vmap(_vmap_norm2_masked_1, in_axes=(None, 0), out_axes=1)
 
 
 def prox_group_lasso(
@@ -81,8 +83,8 @@ def prox_group_lasso(
     Parameters
     ----------
     params:
-        Weights, shape (n_features, ) or pytree of same; intercept,
-        shape (1, ).
+        Weights, shape (n_neurons, n_features) or pytree of same; intercept,
+        shape (n_neurons, )
     regularizer_strength:
         The regularization hyperparameter.
     mask:
@@ -130,11 +132,15 @@ def prox_group_lasso(
 
     """
     weights, intercepts = params
-    # [(n_features), (n_groups, n_features)] -> (n_groups)
-    l2_norm = _vmap_norm2_masked(weights, mask)
+    # divide the reg strength by the number of neurons
+    regularizer_strength /= intercepts.shape[0]
+    # add an extra dim if not 2D, do nothing otherwise.
+    weights = jnp.atleast_2d(weights.T)
+    # [(n_neurons, n_features), (n_groups, n_features)] -> (n_neurons, n_groups)
+    l2_norm = _vmap_norm2_masked_2(weights, mask)
     factor = 1 - regularizer_strength * scaling / l2_norm
     factor = jax.nn.relu(factor)
     # Avoid shrinkage of features that do not belong to any group
     # by setting the shrinkage factor to 1.
-    not_regularized = 1 - mask.sum(axis=0)
-    return weights * (factor @ mask + not_regularized), intercepts
+    not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
+    return jnp.squeeze(weights * (factor @ mask + not_regularized)).T, intercepts

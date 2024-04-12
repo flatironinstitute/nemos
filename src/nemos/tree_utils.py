@@ -71,7 +71,7 @@ def _get_valid_tree(tree: Any) -> jnp.ndarray:
         while False indicates an invalid (NaN or infinite) entry.
     """
     valid = jax.tree_util.tree_leaves(
-        jax.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), tree)
+        jax.tree_util.tree_map(lambda x: _get_not_inf(x) & _get_not_nan(x), tree)
     )
     return reduce(jnp.logical_and, valid)
 
@@ -137,6 +137,6 @@ def pytree_map_and_reduce(
     >>> # Example usage
     >>> result_any = pytree_map_and_reduce(map_fn, any, pytree1, pytree2)
     """
-    cond_tree = jax.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
+    cond_tree = jax.tree_util.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
     # for some reason, tree_reduce doesn't work well with any.
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))

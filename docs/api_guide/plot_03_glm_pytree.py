@@ -86,36 +86,36 @@ except ValueError as e:
 # %%
 #
 # FeaturePytrees are intended to be used with
-# [jax.tree_map](https://jax.readthedocs.io/en/latest/_autosummary/jax.tree_util.tree_map.html),
+# [jax.tree_util.tree_map](https://jax.readthedocs.io/en/latest/_autosummary/jax.tree_util.tree_map.html),
 # a useful function for performing computations on arbitrary pytrees,
 # preserving their structure.
 
 # %%
 # We can map lambda functions:
-mapped = jax.tree_map(lambda x: x**2, example_pytree)
+mapped = jax.tree_util.tree_map(lambda x: x**2, example_pytree)
 print(mapped)
 mapped['feature_1']
 # %%
 # Or functions from jax or numpy that operate on arrays:
-mapped = jax.tree_map(jnp.exp, example_pytree)
+mapped = jax.tree_util.tree_map(jnp.exp, example_pytree)
 print(mapped)
 mapped['feature_1']
 # %%
 # We can change the dimensionality of our pytree:
-mapped = jax.tree_map(lambda x: jnp.mean(x, axis=-1), example_pytree)
+mapped = jax.tree_util.tree_map(lambda x: jnp.mean(x, axis=-1), example_pytree)
 print(mapped)
 mapped['feature_1']
 # %%
 # Or the number of time points:
-mapped = jax.tree_map(lambda x: x[::10], example_pytree)
+mapped = jax.tree_util.tree_map(lambda x: x[::10], example_pytree)
 print(mapped)
 mapped['feature_1']
 # %%
 #
 # If we map something whose output cannot be a FeaturePytree (because its
 # values are scalars or non-arrays), we return a dictionary of arrays instead:
-print(jax.tree_map(jnp.mean, example_pytree))
-print(jax.tree_map(lambda x: x.shape, example_pytree))
+print(jax.tree_util.tree_map(jnp.mean, example_pytree))
+print(jax.tree_util.tree_map(lambda x: x.shape, example_pytree))
 import fsspec
 import h5py
 import matplotlib.pyplot as plt

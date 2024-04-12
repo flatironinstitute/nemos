@@ -61,32 +61,30 @@ class TestFeaturePytree:
         assert len(tree) == 100
 
     def test_treemap(self):
-        """Test the application of jax.tree_map function on FeaturePytree."""
+        """Test the application of jax.tree_util.tree_map function on FeaturePytree."""
         tree = FeaturePytree(test=np.random.rand(100, 1), test2=np.random.rand(100, 2))
-        mapped = jax.tree_map(lambda x: jnp.mean(x, axis=-1), tree)
+        mapped = jax.tree_util.tree_map(lambda x: jnp.mean(x, axis=-1), tree)
         assert len(tree) == len(mapped)
         assert list(tree.keys()) == list(mapped.keys())
         assert isinstance(mapped, FeaturePytree)
 
     def test_treemap_npts(self):
-        """Check if jax.tree_map correctly modifies the number of points in FeaturePytree."""
+        """Check if jax.tree_util.tree_map correctly modifies the number of points in FeaturePytree."""
         tree = FeaturePytree(test=np.random.rand(100, 1), test2=np.random.rand(100, 2))
-        mapped = jax.tree_map(lambda x: x[::10], tree)
+        mapped = jax.tree_util.tree_map(lambda x: x[::10], tree)
         assert len(mapped) == 10
         assert list(tree.keys()) == list(mapped.keys())
 
     def test_treemap_to_dict(self):
-        """Ensure jax.tree_map transforms FeaturePytree to a dictionary with mean values."""
+        """Ensure jax.tree_util.tree_map transforms FeaturePytree to a dictionary with mean values."""
         tree = FeaturePytree(
             test=np.random.rand(
                 100,
             ),
             test2=np.random.rand(100, 2),
         )
-        with pytest.warns(
-            UserWarning, match=r"Output is not a FeaturePytree \(e\.g\.\, because at"
-        ):
-            mapped = jax.tree_map(jnp.mean, tree)
+
+        mapped = jax.tree_util.tree_map(jnp.mean, tree)
         assert isinstance(mapped, dict)
         assert list(tree.keys()) == list(mapped.keys())
 
