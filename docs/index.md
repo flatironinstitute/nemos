@@ -41,10 +41,11 @@ The basis objects can perform two types of transformations on the inputs:
    capture linear temporal effects. This transformation is particularly useful when analyzing data with 
    inherent time dependencies or when the temporal dynamics of the input are significant.
 
-Both transformations produce a transformed time-series of features `X`, with a shape of `(n_samples, n_features)`.
+Both transformations produce a vector of features `X` that changes over time, with a shape 
+of `(n_time_points, n_features)`.
 
-On the other hand, the `glm` module is responsible for learning GLM parameters, predicting neuronal firing rates, 
-and evaluating model performance.
+On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights, 
+evaluating the model performance, and explore its behavior on new input.
 
 ### Examples
 
