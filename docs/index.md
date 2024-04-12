@@ -26,24 +26,25 @@ from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
 At his core, `nemos` consists of two primary modules: the `basis` and the `glm` module.
 
-The `basis` module focuses on designing model features (inputs) for the GLM, while the `glm` module is responsible 
-for learning GLM parameters, predicting neuronal firing rates, and evaluating model performance.
+The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature 
+constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented 
+stimuli, head direction, position, or spike counts. 
 
-### `basis` Module
-The basis module includes a suite of composable feature constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented stimuli, head direction, position, or spike counts. The basis objects can perform two types of transformations on these inputs:
+The basis objects can perform two types of transformations on the inputs:
 
-1. **Non-linear Mapping:** Transforms the input data through a non-linear function.
-2. **Convolution:** Applies a convolution of the input data with a bank of filters.
+1. **Non-linear Mapping:** This process transforms the input data through a non-linear function, 
+   allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates. 
+   Importantly, this transformation preserves the properties that makes GLM easy to fit and guarantee a 
+   single optimal solution (e.g. convexity).
 
-Both transformations produce a transformed time-series of features X, with a shape of (n_samples, n_features).
+2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to 
+   capture linear temporal effects. This transformation is particularly useful when analyzing data with 
+   inherent time dependencies or when the temporal dynamics of the input are significant.
 
-### `glm` Module
+Both transformations produce a transformed time-series of features `X`, with a shape of `(n_samples, n_features)`.
 
-The `glm` objects implements three key methods:
-
-- **`fit`:** This method takes the feature matrix `X` and the spike counts time-series `y`. It learns the GLM coefficients that best map `X` to the firing rate, maximizing the likelihood of observing the spike counts `y`.
-- **`predict`:** Receives the feature matrix `X` and uses the learned coefficients to predict the firing rate.
-- **`score`:** Takes both the feature matrix X and the spike counts y, returning the log-likelihood and other metrics to assess model fit.
+On the other hand, the `glm` module is responsible for learning GLM parameters, predicting neuronal firing rates, 
+and evaluating model performance.
 
 ### Examples
 
@@ -52,7 +53,8 @@ Here's a brief demonstration of how the basis and glm modules work together with
 
 <img src="assets/glm_features_scheme.svg" width="100%">
 
-In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping by default:
+In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping
+(default behavior):
 
 ```python
 import nemos as nmo
