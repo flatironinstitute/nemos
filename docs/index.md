@@ -9,7 +9,7 @@
 
 
 `nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
-It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
+It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
 The core of `nemos` includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
 focusing on the Generalized Linear Model (GLM). 
@@ -22,17 +22,37 @@ from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
 
 
-## Usage
+## Overview
 
- The `glm.GLM` object from `nemos` predict spiking from a single neuron in response to user-specified predictors. 
- The predictors `X` must be a 2d array with shape `(n_timebins, n_features)`, and `y` (or spike count) must be 
- a 1d array with shape `(n_timebins, )`.
+At his core, `nemos` consists of two primary modules: the `basis` and the `glm` module.
 
-### Poisson GLM for features analysis
+The `basis` module focuses on designing model features (inputs) for the GLM, while the `glm` module is responsible 
+for learning GLM parameters, predicting neuronal firing rates, and evaluating model performance.
+
+### `basis` Module
+The basis module includes a suite of composable feature constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented stimuli, head direction, position, or spike counts. The basis objects can perform two types of transformations on these inputs:
+
+1. **Non-linear Mapping:** Transforms the input data through a non-linear function.
+2. **Convolution:** Applies a convolution of the input data with a bank of filters.
+
+Both transformations produce a transformed time-series of features X, with a shape of (n_samples, n_features).
+
+### `glm` Module
+
+The `glm` objects implements three key methods:
+
+- **`fit`:** This method takes the feature matrix `X` and the spike counts time-series `y`. It learns the GLM coefficients that best map `X` to the firing rate, maximizing the likelihood of observing the spike counts `y`.
+- **`predict`:** Receives the feature matrix `X` and uses the learned coefficients to predict the firing rate.
+- **`score`:** Takes both the feature matrix X and the spike counts y, returning the log-likelihood and other metrics to assess model fit.
+
+### Examples
+
+Here's a brief demonstration of how the basis and glm modules work together within nemos.
+#### Poisson GLM for features analysis
 
 <img src="assets/glm_features_scheme.svg" width="100%">
 
-`nemos` streamlines the design of a GLM with multiples features. Implementing the model in the figure above can be done in a few lines of code :
+In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping by default:
 
 ```python
 import nemos as nmo
@@ -44,28 +64,42 @@ basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=7)
 
 basis = basis_1 * basis_2 + basis_3
 
-# Generate the design matrix
-X = basis.compute_features(feature_1, feature_2, feature_3)
+# Generate the design matrix starting from some raw 
+# input time series, i.e. LFP phase, position, etc.
+X = basis.compute_features(input_1, input_2, input_3)
 
-# Fit the model
-nmo.glm.GLM().fit(X, y)
+# Fit the model mapping X to the spike count
+# time-series y
+glm = nmo.glm.GLM().fit(X, y)
+
+# Inspect the learned coefficients
+print(glm.coef_, glm.intercept_)
+
+# compute the rate
+firing_rate = glm.predict(X)
+
+# compute log-likelihood
+ll = glm.score(X, y)
 ```
 
-### Poisson GLM for neural population
+#### Poisson GLM for neural population
 
 <img src="assets/glm_population_scheme.svg" width="100%">
 
-Building the model above is more complicated. In this case, input spikes are convolved with a bank of basis functions that stretch in time. With nemos, you can convolve the basis functions with a few lines of code:
+This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode:
 
 ```python
 import nemos as nmo
+
+# assume that the population spike counts time-series is stored 
+# in a 2D array spike_counts, shape (n_samples, n_neurons).
 
 # generate 5 basis functions of 100 time-bin, 
 # and convolve the counts with the basis.
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
 
-# fit a GLM to the first neuron spike counts
+# fit a GLM to the first neuron counts time-series
 glm = nmo.glm.GLM().fit(X, spike_counts[:, 0])
 
 # compute the rate
@@ -74,19 +108,12 @@ firing_rate = glm.predict(X)
 # compute log-likelihood
 ll = glm.score(X, spike_counts[:, 0])
 ```
+For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
+model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/) and a [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
 
-
-See [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/) for an overview of basic nemos functionality.
-
-We recommend using [pynapple](https://github.com/pynapple-org/pynapple) for initial exploration and reshaping of your data!
-
-When initializing the `GLM` object, users can optionally specify the
-[observation
-model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/)
- and the
-[regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
-
-
+!!! note "Multi-epoch convolution"
+    If your data is formatted as a `pynapple` time-series, the convolution performed by the basis objects will be 
+    executed epoch-by-epoch, avoiding the risk of introducing artifacts from gaps in your time-series.
 
 ## Installation
 Run the following `pip` command in your virtual environment.
