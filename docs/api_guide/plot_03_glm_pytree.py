@@ -179,6 +179,7 @@ fig, axes = plt.subplots(3, 3, figsize=(9, 9))
 for i, ax in zip(tc.keys(), axes.flatten()):
     ax.imshow(tc[i], origin="lower", aspect="auto")
     ax.set_title("Unit {}".format(i))
+axes[-1,-1].remove()
 plt.tight_layout()
 
 # compute head direction.
@@ -192,6 +193,7 @@ fig, axes = plt.subplots(3, 3, figsize=(9, 9), subplot_kw={'projection': 'polar'
 for i, ax in zip(tune_head.columns, axes.flatten()):
     ax.plot(tune_head.index, tune_head[i])
     ax.set_title("Unit {}".format(i))
+axes[-1,-1].remove()
 
 # %%
 #

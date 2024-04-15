@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# Fit Place cell
+# Fit place cell
 
 !!! warning
     To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.

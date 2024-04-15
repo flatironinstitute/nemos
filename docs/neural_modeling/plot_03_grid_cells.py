@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# Fit Grid Cells population
+# Fit grid cell
 
 !!! warning
     To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
@@ -251,3 +251,6 @@ axs[1].imshow(smooth_model, vmin=vmin, vmax=vmax)
 axs[2].set_title(f"Ridge - strength: {best_model.regularizer.regularizer_strength}")
 axs[2].imshow(smooth_best_model, vmin=vmin, vmax=vmax)
 plt.tight_layout()
+
+
+

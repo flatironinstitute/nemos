@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# Fit Head-direction population
+# Fit head-direction population
 
 !!! warning
     To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
@@ -522,8 +522,8 @@ print(f"Convolved count shape: {convolved_count.shape}")
 
 # %%
 # #### Fitting the Model
-# This is all neuron to one neuron. We can fit a neuron at the time, this is mathematically equivalent
-# to fit the population jointly and easier to parallelize.
+# This is an all-to-all neurons model.
+# We are using the class `PopulationGLM` to fit the whole population at once.
 #
 # !!! note
 #     Once we condition on past activity, log-likelihood of the population is the sum of the log-likelihood
@@ -531,28 +531,15 @@ print(f"Convolved count shape: {convolved_count.shape}")
 #     maximizing each individual term separately (i.e. fitting one neuron at the time).
 #
 
-models = []
-for neu in range(count.shape[1]):
-    print(f"fitting neuron {neu}...")
-    count_neu = count[:, neu]
-    model = nmo.glm.GLM(
-        regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1, solver_name="LBFGS")
-    )
-    model.fit(convolved_count, count_neu.restrict(convolved_count.time_support))
-    models.append(model)
-
+model = nmo.glm.PopulationGLM(
+    regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1, solver_name="LBFGS"),
+    ).fit(convolved_count, count)
 
 # %%
 # #### Comparing model predictions.
 # Predict the rate (counts are already sorted by tuning prefs)
 
-predicted_firing_rate = np.zeros((count.shape[0], count.shape[1]))
-for receiver_neu in range(count.shape[1]):
-    predicted_firing_rate[:, receiver_neu] = np.squeeze(models[receiver_neu].predict(
-        convolved_count
-    )) * conv_spk.rate
-
-predicted_firing_rate = nap.TsdFrame(t=count.t, d=predicted_firing_rate)
+predicted_firing_rate = model.predict(convolved_count) * conv_spk.rate
 
 # %%
 # Plot fit predictions over a short window not used for training.
@@ -583,16 +570,13 @@ tuning = nap.compute_1d_tuning_curves_continuous(predicted_firing_rate,
 # %%
 # Extract the weights and store it in a (n_neurons, n_neurons, n_basis_funcs) array.
 
-weights = np.zeros((count.shape[1], count.shape[1], basis.n_basis_funcs))
-for receiver_neu in range(count.shape[1]):
-    weights[receiver_neu] = models[receiver_neu].coef_.reshape(
-        count.shape[1], basis.n_basis_funcs
-    )
+weights = model.coef_.reshape(count.shape[1], basis.n_basis_funcs, count.shape[1])
+
 
 # %%
 # Multiply the weights by the basis, to get the history filters.
 
-responses = np.einsum("ijk, tk->ijt", weights, basis_kernels)
+responses = np.einsum("jki,tk->ijt", weights, basis_kernels)
 
 print(responses.shape)
 

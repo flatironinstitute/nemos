@@ -251,3 +251,5 @@ plt.ylabel("amplitude")
 # When taken together, the results of the GLM and the spike-triggered average
 # give us the linear component of our LNP model: the separable spatio-temporal
 # filter.
+
+
