@@ -49,7 +49,7 @@ evaluating the model performance, and explore its behavior on new input.
 
 Here's a brief demonstration of how the basis and glm modules work together within nemos.
 
-#### Poisson GLM for features analysis
+### Poisson GLM for features analysis
 
 <img src="docs/assets/glm_features_scheme.svg" width="100%">
 
@@ -91,7 +91,7 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, y)
 ```
 
-#### Poisson GLM for neural population
+### Poisson GLM for neural population
 
 <img src="docs/assets/glm_population_scheme.svg" width="100%">
 
