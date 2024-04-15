@@ -20,8 +20,6 @@ For those looking to get a better grasp of the Generalized Linear Model, we reco
 Neuromatch Academy's lesson [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) and Jonathan Pillow's tutorial 
 from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
-
-
 ## Overview
 
 At his core, `nemos` consists of two primary modules: the `basis` and the `glm` module.
@@ -113,7 +111,7 @@ import nemos as nmo
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
 ```
-###xw# Population GLM
+#### Population GLM
 
 ```python
 # fit a GLM to the first neuron counts time-series
