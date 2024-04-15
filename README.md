@@ -112,9 +112,11 @@ ll = glm.score(X, spike_counts[:, 0])
 For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
 model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/) and a [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
 
-> [!NOTE] "Multi-epoch convolution"
+> **Note: Multi-epoch Convolution**
+>
 > If your data is formatted as a `pynapple` time-series, the convolution performed by the basis objects will be 
 > executed epoch-by-epoch, avoiding the risk of introducing artifacts from gaps in your time-series.
+
 
 ## Installation
 Run the following `pip` command in your virtual environment.
