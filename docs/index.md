@@ -97,7 +97,8 @@ ll = glm.score(X, y)
 
 <img src="assets/glm_population_scheme.svg" width="100%">
 
-This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode:
+This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
+The figure above show the GLM scheme for a single neuron, however in `nemos` you can fit jointly the whole population with the [`PopulationGLM`](generated/api_guide/plot_04_population_glm) object.
 
 ##### Feature Representation
 
@@ -112,18 +113,19 @@ import nemos as nmo
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
 ```
-##### GLM
+##### Population GLM
 
 ```python
 # fit a GLM to the first neuron counts time-series
-glm = nmo.glm.GLM().fit(X, spike_counts[:, 0])
+glm = nmo.glm.PopulationGLM().fit(X, spike_counts)
 
 # compute the rate
 firing_rate = glm.predict(X)
 
 # compute log-likelihood
-ll = glm.score(X, spike_counts[:, 0])
+ll = glm.score(X, spike_counts)
 ```
+
 For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
 model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/) and a [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
 
