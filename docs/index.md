@@ -105,9 +105,9 @@ This second example demonstrates feature construction by convolving the simultan
 import nemos as nmo
 
 # assume that the population spike counts time-series is stored 
-# in a 2D array spike_counts, shape (n_samples, n_neurons).
+# in a 2D array spike_counts of shape (n_samples, n_neurons).
 
-# generate 5 basis functions of 100 time-bin, 
+# generate 5 basis functions of 100 time-bins, 
 # and convolve the counts with the basis.
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
