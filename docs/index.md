@@ -50,12 +50,15 @@ evaluating the model performance, and explore its behavior on new input.
 ### Examples
 
 Here's a brief demonstration of how the basis and glm modules work together within nemos.
+
 #### Poisson GLM for features analysis
 
 <img src="assets/glm_features_scheme.svg" width="100%">
 
 In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping
 (default behavior):
+
+##### Feature Representation
 
 ```python
 import nemos as nmo
@@ -70,6 +73,11 @@ basis = basis_1 * basis_2 + basis_3
 # Generate the design matrix starting from some raw 
 # input time series, i.e. LFP phase, position, etc.
 X = basis.compute_features(input_1, input_2, input_3)
+```
+
+##### GLM
+
+```python
 
 # Fit the model mapping X to the spike count
 # time-series y
@@ -91,6 +99,8 @@ ll = glm.score(X, y)
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode:
 
+##### Feature Representation
+
 ```python
 import nemos as nmo
 
@@ -101,7 +111,10 @@ import nemos as nmo
 # and convolve the counts with the basis.
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
+```
+##### GLM
 
+```python
 # fit a GLM to the first neuron counts time-series
 glm = nmo.glm.GLM().fit(X, spike_counts[:, 0])
 
