@@ -151,12 +151,12 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="1.4102804"
-     inkscape:cx="382.90258"
-     inkscape:cy="132.24321"
+     inkscape:cx="387.15705"
+     inkscape:cy="132.2432"
      inkscape:window-width="2248"
      inkscape:window-height="1212"
      inkscape:window-x="163"
-     inkscape:window-y="48"
+     inkscape:window-y="25"
      inkscape:window-maximized="0"
      inkscape:current-layer="layer-oc1">
     <inkscape:page
@@ -705,25 +705,25 @@
     <text
        id="text90"
        xml:space="preserve"
-       x="41.029297"
+       x="44.779041"
        y="24.829124"
        style="font-size:16px;stroke-width:1.33333"><tspan
          style="font-variant:normal;font-weight:normal;font-size:16px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:0.909804;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
-         x="41.029297 45.474098 54.373299 63.272495 72.1717 76.616501"
+         x="44.779041 49.223843 58.123043 67.02224 75.92144"
          y="24.829124"
          sodipodi:role="line"
-         id="tspan90">Inputs</tspan></text>
+         id="tspan90">Input</tspan></text>
     <text
        id="text91"
        xml:space="preserve"
-       x="538.50238"
+       x="542.52618"
        y="24.729124"
        style="font-size:16px;stroke-width:1.33333"><tspan
          style="font-variant:normal;font-weight:normal;font-size:16px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:0.909804;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
-         x="538.50238 550.05756 558.95679 566.95514 575.85437 584.75354 593.65277 601.65118 610.55035"
+         x="542.52618 554.08136 562.98059 570.97894 579.87817 588.77734 597.67657 605.67499"
          y="24.729124"
          sodipodi:role="line"
-         id="tspan91">Responses</tspan></text>
+         id="tspan91">Response</tspan></text>
     <text
        id="text92"
        xml:space="preserve"
