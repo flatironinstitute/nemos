@@ -47,7 +47,7 @@ evaluating the model performance, and explore its behavior on new input.
 
 ## Examples
 
-Here's a brief demonstration of how the basis and glm modules work together within nemos.
+Here's a brief demonstration of how the `basis` and `glm` modules work together within nemos.
 
 ### Poisson GLM for features analysis
 
