@@ -45,7 +45,7 @@ of `(n_time_points, n_features)`.
 On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights, 
 evaluating the model performance, and explore its behavior on new input.
 
-### Examples
+## Examples
 
 Here's a brief demonstration of how the basis and glm modules work together within nemos.
 
@@ -56,7 +56,7 @@ Here's a brief demonstration of how the basis and glm modules work together with
 In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping
 (default behavior):
 
-##### Feature Representation
+#### Feature Representation
 
 ```python
 import nemos as nmo
@@ -73,7 +73,7 @@ basis = basis_1 * basis_2 + basis_3
 X = basis.compute_features(input_1, input_2, input_3)
 ```
 
-##### GLM
+#### GLM
 
 ```python
 
@@ -98,7 +98,7 @@ ll = glm.score(X, y)
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
 The figure above show the GLM scheme for a single neuron, however in `nemos` you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/api_guide/plot_04_population_glm/) object.
 
-##### Feature Representation
+#### Feature Representation
 
 ```python
 import nemos as nmo
@@ -111,7 +111,7 @@ import nemos as nmo
 X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
 ```
-##### Population GLM
+#### Population GLM
 
 ```python
 # fit a GLM to the first neuron counts time-series
