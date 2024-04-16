@@ -252,9 +252,7 @@ class GLM(BaseRegressor):
             # First, multiply each feature by its corresponding coefficient,
             # then sum across all features and add the intercept, before
             # passing to the inverse link function
-            tree_utils.pytree_map_and_reduce(
-                lambda w, x: jnp.einsum("k,tk->t", w, x), sum, Ws, X
-            )
+            tree_utils.pytree_map_and_reduce(lambda x, w: jnp.dot(x, w), sum, X, Ws)
             + bs
         )
 
