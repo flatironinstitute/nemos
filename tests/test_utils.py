@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 import pytest
+from scipy.interpolate import splev
 
 from nemos import utils
 
@@ -479,3 +480,81 @@ class TestShiftTimeSeries:
         assert np.array_equal(
             shifted_series[0, :-1], time_series[0, 1:]
         ), "Anti-causal shift did not work as expected"
+
+
+# Sample functions to test
+def correct_function(x):
+    return jnp.sin(x)  # Returns a jax.numpy.ndarray and is differentiable
+
+
+def non_ndarray_function(x):
+    return [x, x]  # Not returning a jax.numpy.ndarray
+
+
+def nondifferentiable_function(x):
+    knots = np.linspace(0, 1, 10)
+    tck = np.zeros(10)
+    tck[0] = 1
+    return splev(x, (knots, tck, 3), 0)  # Not differentiable
+
+
+def non_preserving_shape_function(x):
+    return jnp.sum(x)  # Does not preserve input shape, returns scalar
+
+
+def scalar_function(x):
+    return jnp.sum(x)  # Returns a scalar
+
+
+# Test cases with the match parameter
+def test_assert_returns_ndarray():
+    # Should pass
+    utils.assert_returns_ndarray(
+        correct_function, [jnp.array([1.0])], "correct_function"
+    )
+
+    # Should fail and match the error message
+    with pytest.raises(TypeError, match="must return a jax.numpy.ndarray"):
+        utils.assert_returns_ndarray(
+            non_ndarray_function, [jnp.array([1.0])], "non_ndarray_function"
+        )
+
+
+def test_assert_differentiable():
+    # Should pass
+    utils.assert_differentiable(correct_function, "correct_function")
+
+    # Should fail and match the error message
+    with pytest.raises(TypeError, match="is not differentiable"):
+        utils.assert_differentiable(
+            nondifferentiable_function, "nondifferentiable_function"
+        )
+
+
+def test_assert_preserve_shape():
+    # Should pass
+    utils.assert_preserve_shape(
+        correct_function, [jnp.array([1.0, 2.0])], "correct_function", 0
+    )
+
+    # Should fail and match the error message
+    with pytest.raises(ValueError, match="must preserve the input array shape"):
+        utils.assert_preserve_shape(
+            non_preserving_shape_function,
+            [jnp.array([1.0, 2.0])],
+            "non_preserving_shape_function",
+            0,
+        )
+
+
+def test_assert_scalar_func():
+    # Should pass
+    utils.assert_scalar_func(
+        scalar_function, [jnp.array([1.0, 2.0])], "scalar_function"
+    )
+
+    # Should fail and match the error message
+    with pytest.raises(TypeError, match="should return a scalar"):
+        utils.assert_scalar_func(
+            correct_function, [jnp.array([1.0])], "correct_function"
+        )
