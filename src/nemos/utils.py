@@ -70,41 +70,6 @@ def validate_axis(tree: Any, axis: int):
         )
 
 
-def check_convolve_input_dims(basis_matrix: jnp.ndarray, time_series: Any):
-    """
-    Check the dimensions of inputs for convolution operation.
-
-    This function validates that the `basis_matrix` is 2-dimensional and the `time_series`
-    is either a pytree of 2-dimensional arrays or a single 3-dimensional array.
-
-    Parameters
-    ----------
-    basis_matrix :
-        A 2-dimensional array representing the basis matrix.
-    time_series :
-        A pytree of 2-dimensional arrays or a single 3-dimensional array representing the time series.
-
-    Raises
-    ------
-    ValueError
-        If `basis_matrix` is not a 2-dimensional array or if `time_series` is not a pytree of
-        2-dimensional arrays or a single 3-dimensional array.
-    """
-    # check input size
-    if not check_dimensionality(basis_matrix, expected_dim=2):
-        raise ValueError("basis_matrix must be a 2 dimensional array-like object.")
-
-    try:
-        if time_series.ndim != 3:
-            raise AttributeError
-    except AttributeError:
-        if not check_dimensionality(time_series, 2):
-            raise ValueError(
-                "time_series must be a pytree of 2 dimensional array-like objects or a"
-                " 3 dimensional array-like object."
-            )
-
-
 def check_non_empty(pytree: Any, pytree_name: str):
     """
     Check if any array in the pytree is empty.
