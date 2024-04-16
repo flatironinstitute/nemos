@@ -93,7 +93,7 @@ ll = glm.score(X, y)
 
 ### Poisson GLM for neural population
 
-<img src="docs/assets/glm_population_scheme.svg" width="100%">
+<img src="docs/assets/glm_population_scheme.svg" width="84%">
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
 The figure above show the GLM scheme for a single neuron, however in `nemos` you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/api_guide/plot_04_population_glm/) object.
