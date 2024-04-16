@@ -62,7 +62,8 @@ docs = [
     "mkdocs-autorefs>=0.5",
     "scikit-learn",
     "dandi",
-    "ipython"
+    "ipython",
+    "matplotlib>=3.7"
 ]
 
 
