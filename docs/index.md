@@ -136,12 +136,12 @@ Run the following `pip` command in your virtual environment.
 
 **For macOS/Linux users:**
  ```bash
- pip install git+https://github.com/flatironinstitute/nemos.git
+ pip install nemos
  ```
 
 **For Windows users:**
  ```
- python -m pip install git+https://github.com/flatironinstitute/nemos.git
+ python -m pip install nemos
  ```
 
 For more details, including specifics for GPU users and developers, refer to `nemos` [docs](https://nemos.readthedocs.io/en/latest/installation/).
