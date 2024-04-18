@@ -194,9 +194,9 @@ vmax = max(smooth_pos_tuning.max(), smooth_model.max())
 fig = plt.figure(figsize=(12, 4))
 gs = plt.GridSpec(1, 2)
 ax = plt.subplot(gs[0, 0])
-ax.imshow(gaussian_filter(pos_tuning[neuron], sigma=1), vmin=vmin, vmax=vmax)
+ax.imshow(smooth_pos_tuning, vmin=vmin, vmax=vmax)
 ax = plt.subplot(gs[0, 1])
-ax.imshow(gaussian_filter(model_tuning[0], sigma=1), vmin=vmin, vmax=vmax)
+ax.imshow(smooth_model, vmin=vmin, vmax=vmax)
 plt.tight_layout()
 
 # %%
