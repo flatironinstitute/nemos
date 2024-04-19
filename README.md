@@ -18,7 +18,7 @@ focusing on the Generalized Linear Model (GLM).
 The package is under active development and more methods will be added in the future.
 
 For those looking to get a better grasp of the Generalized Linear Model, we recommend checking out the 
-Neuromatch Academy's lesson [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) and Jonathan Pillow's tutorial 
+Neuromatch Academy's lesson [here](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.htmls) and Jonathan Pillow's tutorial 
 from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
 ## Overview
