@@ -441,8 +441,7 @@ class GLM(BaseRegressor):
             data = X
 
         if score_type == "log-likelihood":
-            norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-            score = -self._predict_and_compute_loss(params, data, y) - norm_constant
+            score = self._observation_model.log_likelihood(self._predict(params, data), y, self.scale)
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
                 self._predict(params, data), y, score_type=score_type
