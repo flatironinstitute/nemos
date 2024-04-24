@@ -681,7 +681,7 @@ class GLM(BaseRegressor):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate
+                key=random_key, predicted_rate=predicted_rate, scale=self.scale
             ),
             predicted_rate,
         )

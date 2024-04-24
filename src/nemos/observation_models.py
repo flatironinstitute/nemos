@@ -137,7 +137,7 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: float = 1.
+        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
     ) -> jnp.ndarray:
         """
         Sample from the estimated distribution.
@@ -403,7 +403,7 @@ class PoissonObservations(Observations):
         return jnp.mean(predicted_rate - x)
 
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: float = 1.
+        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
     ) -> jnp.ndarray:
         """
         Sample from the Poisson distribution.
@@ -532,7 +532,7 @@ class GammaObservations(Observations):
         Returns
         -------
         :
-            The Gamma negative log-likehood. Shape (1,).
+            The Gamma negative log-likelihood. Shape (1,).
 
         """
         predicted_rate = jnp.clip(
@@ -543,7 +543,7 @@ class GammaObservations(Observations):
         return -jnp.mean(y * x + jnp.log(-x))
 
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: float
+        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
     ) -> jnp.ndarray:
         """
         Sample from the Poisson distribution.
