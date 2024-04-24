@@ -465,7 +465,8 @@ class PoissonObservations(Observations):
         The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
-        pass
+        ll = self._negative_log_likelihood(predicted_rate, y)
+        return ll - jax.scipy.special.gammaln(y + 1).mean()
 
     def sample_generator(
         self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
