@@ -124,14 +124,35 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ).
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         y :
-            The target activity to compare against. Shape (n_time_bins, ).
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
 
         Returns
         -------
         :
             The negative log-likehood. Shape (1,).
+        """
+        pass
+
+    @abc.abstractmethod
+    def log_likelihood(self, predicted_rate, y):
+        r"""Compute the observation model log-likelihood.
+
+        This computes the log-likelihood of the predicted rates
+        for the observed neural activity including the normalization constant
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+        y :
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+
+        Returns
+        -------
+        :
+            The log-likehood. Shape (1,).
         """
         pass
 
@@ -150,7 +171,7 @@ class Observations(Base, abc.ABC):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate of the distribution. Shape (n_time_bins, ).
+            Expected rate of the distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         scale:
             Scale parameter for the distribution.
 
@@ -366,9 +387,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ).
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         y :
-            The target spikes to compare against. Shape (n_time_bins, ).
+            The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
 
         Returns
         -------
@@ -402,6 +423,46 @@ class PoissonObservations(Observations):
         # see above for derivation of this.
         return jnp.mean(predicted_rate - x)
 
+    def log_likelihood(self, predicted_rate, y):
+        r"""Compute the Poisson negative log-likelihood.
+
+        This computes the Poisson negative log-likelihood of the predicted rates
+        for the observed spike counts up to a constant.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        y :
+            The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The Poisson negative log-likehood. Shape (1,).
+
+        Notes
+        -----
+        The formula for the Poisson mean log-likelihood is the following,
+
+        $$
+        \begin{aligned}
+        \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+        [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
+        \hat{\lambda}\_{tn} - \Gamma({y\_{tn}+1})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
+        \hat{\lambda}\_{tn}] + \\text{const}
+        \end{aligned}
+        $$
+
+        Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for explanation.
+
+        The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
+        when computing the loss-function. This is why we incorporated it into the `const` term.
+        """
+        pass
+
     def sample_generator(
         self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
     ) -> jnp.ndarray:
@@ -416,7 +477,7 @@ class PoissonObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ).
+            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale :
             Scale parameter. For Poisson should be equal to 1.
         Returns
@@ -525,9 +586,9 @@ class GammaObservations(Observations):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ).
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         y :
-            The target activity to compare against. Shape (n_time_bins, ).
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
 
         Returns
         -------
@@ -541,6 +602,27 @@ class GammaObservations(Observations):
         x = jnp.power(-predicted_rate, -1)
         # see above for derivation of this.
         return -jnp.mean(y * x + jnp.log(-x))
+
+    def log_likelihood(self, predicted_rate, y):
+        r"""Compute the Gamma negative log-likelihood.
+
+        This computes the Gamma negative log-likelihood of the predicted rates
+        for the observed neural activity including the normalization constant.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+        y :
+            The target activity to compare against. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+
+        Returns
+        -------
+        :
+            The Gamma negative log-likelihood. Shape (1,).
+
+        """
+        pass
 
     def sample_generator(
         self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
@@ -556,7 +638,7 @@ class GammaObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ).
+            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
         scale:
             The scale parameter for the distribution.
 
