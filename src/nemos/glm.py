@@ -340,7 +340,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model.negative_log_likelihood(predicted_rate, y)
+        return self._observation_model._negative_log_likelihood(predicted_rate, y)
 
     def score(
         self,

@@ -123,7 +123,7 @@ class TestPoissonObservations:
         """
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
         ll_model = (
-            -model.observation_model.negative_log_likelihood(firing_rate, y).sum()
+            -model.observation_model._negative_log_likelihood(firing_rate, y).sum()
             - jax.scipy.special.gammaln(y + 1).mean()
         )
         ll_scipy = sts.poisson(firing_rate).logpmf(y).mean()

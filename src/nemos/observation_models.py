@@ -22,7 +22,7 @@ class Observations(Base, abc.ABC):
 
     This is an abstract base class used to implement observation models for neural data.
     Specific observation models that inherit from this class should define their versions
-    of the abstract methods: negative_log_likelihood, emission_probability, and
+    of the abstract methods: _negative_log_likelihood, emission_probability, and
     residual_deviance.
 
     Attributes
@@ -115,7 +115,7 @@ class Observations(Base, abc.ABC):
             )
 
     @abc.abstractmethod
-    def negative_log_likelihood(self, predicted_rate, y):
+    def _negative_log_likelihood(self, predicted_rate, y):
         r"""Compute the observation model negative log-likelihood.
 
         This computes the negative log-likelihood of the predicted rates
@@ -325,8 +325,8 @@ class Observations(Base, abc.ABC):
         """
         norm = -jax.scipy.special.gammaln(y + 1).mean()
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
-        ll_null = -self.negative_log_likelihood(mean_y, y) + norm
-        ll_model = -self.negative_log_likelihood(predicted_rate, y) + norm
+        ll_null = -self._negative_log_likelihood(mean_y, y) + norm
+        ll_model = -self._negative_log_likelihood(predicted_rate, y) + norm
         return 1 - ll_model / ll_null
 
 
@@ -353,7 +353,7 @@ class PoissonObservations(Observations):
         super().__init__(inverse_link_function=inverse_link_function)
         self.scale = 1
 
-    def negative_log_likelihood(
+    def _negative_log_likelihood(
         self,
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
@@ -512,7 +512,7 @@ class GammaObservations(Observations):
         super().__init__(inverse_link_function=inverse_link_function)
         self.scale = 1.
 
-    def negative_log_likelihood(
+    def _negative_log_likelihood(
         self,
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
@@ -667,11 +667,11 @@ def check_observation_model(observation_model):
     >>> class MyObservationModel:
     ...     def inverse_link_function(self, x):
     ...         return jax.scipy.special.expit(x)
-    ...     def negative_log_likelihood(self, params, y_true):
+    ...     def _negative_log_likelihood(self, params, y_true):
     ...         return -jnp.sum(y_true * jax.scipy.special.logit(params) + \
     ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
     ...     def pseudo_r2(self, params, y_true):
-    ...         return 1 - (self.negative_log_likelihood(params, y_true) /
+    ...         return 1 - (self._negative_log_likelihood(params, y_true) /
     ...                     jnp.sum((y_true - y_true.mean()) ** 2))
     ...     def sample_generator(self, key, params):
     ...         return jax.random.bernoulli(key, params)
@@ -685,7 +685,7 @@ def check_observation_model(observation_model):
             "test_differentiable": True,
             "test_preserve_shape": False,
         },
-        "negative_log_likelihood": {
+        "_negative_log_likelihood": {
             "input": [0.5 * jnp.array([1.0, 1.0, 1.0]), jnp.array([1.0, 1.0, 1.0])],
             "test_scalar_func": True,
         },
