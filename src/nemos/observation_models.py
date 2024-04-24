@@ -493,7 +493,7 @@ class GammaObservations(Observations):
     """
     Model observations as Gamma random variables.
 
-    The PoissonObservations is designed to model the observed spike counts based on a Poisson distribution
+    The GammaObservations is designed to model the observed spike counts based on a Gamma distribution
     with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
     and computing the residual deviance for the given spike count data.
 
@@ -607,15 +607,15 @@ class GammaObservations(Observations):
 
     def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
         r"""
-        Assign 1 to the scale parameter of the Poisson model.
+        Estimate the scale of the model based on the GLM residuals.
 
-        For the Poisson exponential family distribution, the scale parameter $\phi$ is always 1.
-        This property is consistent with the fact that the variance equals the mean in a Poisson distribution.
-        As given in the general exponential family expression:
+        For $y \sim \Gamma$ the scale is equal to,
         $$
-        \text{var}(Y) = \frac{V(\mu)}{a(\phi)},
+        \Phi = frac{\text{Var(y)}}{V(\mu)}
         $$
-        for the Poisson family, it simplifies to $\text{var}(Y) = \mu$ since $a(\phi) = 1$ and $V(\mu) = \mu$.
+        with $V(\mu) = \mu^2$.
+
+        Therefore, the scale can be estimated as the ratio of the sample variance to the squared rate.
 
         Parameters
         ----------
