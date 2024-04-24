@@ -58,11 +58,12 @@ class Observations(Base, abc.ABC):
         return self._scale
 
     @scale.setter
-    def scale(self, value: Union[int, float]):
+    def scale(self, value: Union[int, float, jnp.ndarray]):
         """Setter for the scale parameter of the model."""
-        if not isinstance(value, (int, float)):
+        try:
+            self._scale = float(value)
+        except:
             raise ValueError("The `scale` parameter must be of numeric type.")
-        self._scale = value
 
     @staticmethod
     def check_inverse_link_function(inverse_link_function: Callable):
@@ -136,7 +137,7 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray
+        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: float = 1.
     ) -> jnp.ndarray:
         """
         Sample from the estimated distribution.
@@ -150,6 +151,8 @@ class Observations(Base, abc.ABC):
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
             Expected rate of the distribution. Shape (n_time_bins, ).
+        scale:
+            Scale parameter for the distribution.
 
         Returns
         -------
@@ -177,7 +180,7 @@ class Observations(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def estimate_scale(self, predicted_rate: jnp.ndarray) -> None:
+    def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
         r"""Estimate the scale parameter for the model.
 
         This method estimates the scale parameter, often denoted as $\phi$, which determines the dispersion
@@ -196,6 +199,8 @@ class Observations(Base, abc.ABC):
         ----------
         predicted_rate :
             The predicted rate values.
+        y :
+            Observed activity.
         """
         pass
 
@@ -398,7 +403,7 @@ class PoissonObservations(Observations):
         return jnp.mean(predicted_rate - x)
 
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray
+        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: float = 1.
     ) -> jnp.ndarray:
         """
         Sample from the Poisson distribution.
@@ -412,7 +417,8 @@ class PoissonObservations(Observations):
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
             Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ).
-
+        scale :
+            Scale parameter. For Poisson should be equal to 1.
         Returns
         -------
         jnp.ndarray
@@ -460,7 +466,7 @@ class PoissonObservations(Observations):
         deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
         return deviance
 
-    def estimate_scale(self, predicted_rate: jnp.ndarray) -> None:
+    def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
         r"""
         Assign 1 to the scale parameter of the Poisson model.
 
@@ -477,8 +483,162 @@ class PoissonObservations(Observations):
         predicted_rate :
             The predicted rate values. This is not used in the Poisson model for estimating scale,
             but is retained for compatibility with the abstract method signature.
+        y :
+            Observed spike counts.
         """
-        self.scale = 1.0
+        return 1.0
+
+
+class GammaObservations(Observations):
+    """
+    Model observations as Gamma random variables.
+
+    The PoissonObservations is designed to model the observed spike counts based on a Poisson distribution
+    with a given rate. It provides methods for computing the negative log-likelihood, generating samples,
+    and computing the residual deviance for the given spike count data.
+
+    Attributes
+    ----------
+    inverse_link_function :
+        A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to jnp.exp.
+
+    See Also
+    --------
+    [Observations](./#nemos.observation_models.Observations) : Base class for observation models.
+
+    """
+
+    def __init__(self, inverse_link_function = lambda x: jnp.power(x, -1)):
+        super().__init__(inverse_link_function=inverse_link_function)
+        self.scale = 1.
+
+    def negative_log_likelihood(
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+    ) -> jnp.ndarray:
+        r"""Compute the Gamma negative log-likelihood.
+
+        This computes the Gamma negative log-likelihood of the predicted rates
+        for the observed neural activity up to a constant.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate of the current model. Shape (n_time_bins, ).
+        y :
+            The target activity to compare against. Shape (n_time_bins, ).
+
+        Returns
+        -------
+        :
+            The Gamma negative log-likehood. Shape (1,).
+
+        """
+        predicted_rate = jnp.clip(
+            predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+        )
+        x = jnp.power(-predicted_rate, -1)
+        # see above for derivation of this.
+        return -jnp.mean(y * x + jnp.log(-x))
+
+    def sample_generator(
+        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: float
+    ) -> jnp.ndarray:
+        """
+        Sample from the Poisson distribution.
+
+        This method generates random numbers from a Poisson distribution based on the given
+        `predicted_rate` and scale.
+
+        Parameters
+        ----------
+        key :
+            Random key used for the generation of random numbers in JAX.
+        predicted_rate :
+            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ).
+        scale:
+            The scale parameter for the distribution.
+
+        Returns
+        -------
+        jnp.ndarray
+            Random numbers generated from the Poisson distribution based on the `predicted_rate`.
+        """
+        return jax.random.gamma(key, predicted_rate / scale) * scale
+
+    def deviance(
+        self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray
+    ) -> jnp.ndarray:
+        r"""Compute the residual deviance for a Poisson model.
+
+        Parameters
+        ----------
+        predicted_rate:
+            The predicted firing rates. Shape (n_time_bins, ).
+        spike_counts:
+            The spike counts. Shape (n_time_bins, ).
+
+        Returns
+        -------
+        :
+            The residual deviance of the model.
+
+        Notes
+        -----
+        The deviance is a measure of the goodness of fit of a statistical model.
+        For a Poisson model, the residual deviance is computed as:
+
+        $$
+        \begin{aligned}
+            D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right)
+            - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
+            &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right)\right)
+        \end{aligned}
+        $$
+
+        where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
+        log-likelihood. Lower values of deviance indicate a better fit.
+        """
+        pass
+        # # this takes care of 0s in the log
+        # ratio = jnp.clip(
+        #     spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
+        # )
+        # deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
+        # return deviance
+
+    def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
+        r"""
+        Assign 1 to the scale parameter of the Poisson model.
+
+        For the Poisson exponential family distribution, the scale parameter $\phi$ is always 1.
+        This property is consistent with the fact that the variance equals the mean in a Poisson distribution.
+        As given in the general exponential family expression:
+        $$
+        \text{var}(Y) = \frac{V(\mu)}{a(\phi)},
+        $$
+        for the Poisson family, it simplifies to $\text{var}(Y) = \mu$ since $a(\phi) = 1$ and $V(\mu) = \mu$.
+
+        Parameters
+        ----------
+        predicted_rate :
+            The predicted rate values. This is not used in the Poisson model for estimating scale,
+            but is retained for compatibility with the abstract method signature.
+        y :
+            Observed spike counts.
+
+        Returns
+        -------
+        :
+            The scale parameter. If predicted_rate is (n_samples, n_neurons), this method will return a
+            scale for each neuron.
+        """
+        predicted_rate = jnp.clip(
+            predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+        )
+        resid = jnp.power(y - predicted_rate, 2)
+        return jnp.mean(resid * jnp.power(predicted_rate, -2), axis=0)  # mean over time
 
 
 def check_observation_model(observation_model):
@@ -537,7 +697,7 @@ def check_observation_model(observation_model):
             "test_scalar_func": True,
         },
         "sample_generator": {
-            "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0])],
+            "input": [jax.random.key(123), 0.5 * jnp.array([1.0, 1.0, 1.0]), 1],
             "test_preserve_shape": True,
         },
     }

@@ -32,7 +32,7 @@ def cast_to_jax(func):
 
 
 class GLM(BaseRegressor):
-    """
+    r"""
     Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -59,6 +59,10 @@ class GLM(BaseRegressor):
         Basis coefficients for the model.
     solver_state :
         State of the solver after fitting. May include details like optimization error.
+    scale:
+        Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
+        $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
+        of the mean $\mu$ fully specifies the distribution of the activity $y$.
 
     Raises
     ------
@@ -80,6 +84,7 @@ class GLM(BaseRegressor):
         self.intercept_ = None
         self.coef_ = None
         self.solver_state = None
+        self.scale = None
 
     @property
     def regularizer(self):
@@ -583,7 +588,7 @@ class GLM(BaseRegressor):
         params, state = runner(init_params, data, y)
 
         # estimate the GLM scale
-        self.observation_model.estimate_scale(self._predict(params, data))
+        self.scale = self.observation_model.estimate_scale(self._predict(params, data), y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
