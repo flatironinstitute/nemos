@@ -568,7 +568,7 @@ class GammaObservations(Observations):
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
     def deviance(
-        self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray
+        self, predicted_rate: jnp.ndarray, neural_activity: jnp.ndarray
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Gamma model.
 
@@ -576,7 +576,7 @@ class GammaObservations(Observations):
         ----------
         predicted_rate:
             The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
-        spike_counts:
+        neural_activity:
             The neural activity. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
 
         Returns
@@ -587,12 +587,11 @@ class GammaObservations(Observations):
         Notes
         -----
         The deviance is a measure of the goodness of fit of a statistical model.
-        For a Poisson model, the residual deviance is computed as:
+        For a Gamma model, the residual deviance is computed as:
 
         $$
         \begin{aligned}
-            D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right)
-            - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
+            D(y\_{tn}, \hat{y}\_{tn}) &=  2 \left[ -\log \frac{y\_{tn}}{\hat{y}\_{tn}} + \frac{y\_{tn} - \hat{y}\_{tn}} \right]\\\
             &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right)\right)
         \end{aligned}
         $$
@@ -600,13 +599,11 @@ class GammaObservations(Observations):
         where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
         log-likelihood. Lower values of deviance indicate a better fit.
         """
-        pass
-        # # this takes care of 0s in the log
-        # ratio = jnp.clip(
-        #     spike_counts / predicted_rate, jnp.finfo(predicted_rate.dtype).eps, jnp.inf
-        # )
-        # deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
-        # return deviance
+        y_mu = jnp.clip(
+            neural_activity / predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+        )
+        resid_dev = 2 * (-jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate)
+        return jnp.sum(resid_dev, axis=0)
 
     def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
         r"""
