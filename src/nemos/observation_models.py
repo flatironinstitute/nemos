@@ -136,7 +136,7 @@ class Observations(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def log_likelihood(self, predicted_rate, y):
+    def log_likelihood(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
         r"""Compute the observation model log-likelihood.
 
         This computes the log-likelihood of the predicted rates
@@ -145,9 +145,11 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         y :
-            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            The target activity to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model
 
         Returns
         -------
@@ -423,7 +425,7 @@ class PoissonObservations(Observations):
         # see above for derivation of this.
         return jnp.mean(predicted_rate - x)
 
-    def log_likelihood(self, predicted_rate, y):
+    def log_likelihood(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1):
         r"""Compute the Poisson negative log-likelihood.
 
         This computes the Poisson negative log-likelihood of the predicted rates
@@ -435,6 +437,8 @@ class PoissonObservations(Observations):
             The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         y :
             The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model.
 
         Returns
         -------
@@ -603,7 +607,7 @@ class GammaObservations(Observations):
         # see above for derivation of this.
         return -jnp.mean(y * x + jnp.log(-x))
 
-    def log_likelihood(self, predicted_rate, y):
+    def log_likelihood(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
         r"""Compute the Gamma negative log-likelihood.
 
         This computes the Gamma negative log-likelihood of the predicted rates
@@ -615,6 +619,8 @@ class GammaObservations(Observations):
             The predicted rate of the current model. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
         y :
             The target activity to compare against. Shape (n_time_bins, ) or (n_time_bins, n_neurons).
+        scale :
+            The scale parameter of the model.
 
         Returns
         -------
@@ -622,7 +628,9 @@ class GammaObservations(Observations):
             The Gamma negative log-likelihood. Shape (1,).
 
         """
-        pass
+        k = 1 / scale
+        norm = (k - 1) * jnp.mean(jnp.log(y)) + k * jnp.log(k) - jax.scipy.special.gammaln(k)
+        return norm - k * self._negative_log_likelihood(predicted_rate, y)
 
     def sample_generator(
         self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
