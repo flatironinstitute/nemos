@@ -168,9 +168,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, ).
+            The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         spike_counts:
-            The spike counts. Shape (n_time_bins, ).
+            The spike counts. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
 
         Returns
         -------
@@ -434,9 +434,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, ).
+            The predicted firing rates. Shape (n_time_bins, )  or (n_time_bins, n_neurons) for population models.
         spike_counts:
-            The spike counts. Shape (n_time_bins, ).
+            The spike counts. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
 
         Returns
         -------
@@ -546,10 +546,10 @@ class GammaObservations(Observations):
         self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
     ) -> jnp.ndarray:
         """
-        Sample from the Poisson distribution.
+        Sample from the Gamma distribution.
 
-        This method generates random numbers from a Poisson distribution based on the given
-        `predicted_rate` and scale.
+        This method generates random numbers from a Gamma distribution based on the given
+        `predicted_rate` and `scale`.
 
         Parameters
         ----------
@@ -563,21 +563,21 @@ class GammaObservations(Observations):
         Returns
         -------
         jnp.ndarray
-            Random numbers generated from the Poisson distribution based on the `predicted_rate`.
+            Random numbers generated from the Gamma distribution based on the `predicted_rate` and the `scale`.
         """
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
     def deviance(
         self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray
     ) -> jnp.ndarray:
-        r"""Compute the residual deviance for a Poisson model.
+        r"""Compute the residual deviance for a Gamma model.
 
         Parameters
         ----------
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, ).
+            The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
         spike_counts:
-            The spike counts. Shape (n_time_bins, ).
+            The neural activity. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
 
         Returns
         -------
