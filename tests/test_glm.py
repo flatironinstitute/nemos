@@ -509,6 +509,19 @@ class TestGLM:
         with expectation:
             model.fit(X, y)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1/x])
+    def test_fit_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_set_scale(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+        assert model.scale != 1
+
     #######################
     # Test model.score
     #######################
@@ -720,6 +733,15 @@ class TestGLM:
                 "Log-likelihood of PoissonModel does not match" "that of jax.scipy!"
             )
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_score_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = 1.
+        model.score(X, y)
+
     #######################
     # Test model.predict
     #######################
@@ -928,6 +950,17 @@ class TestGLM:
         with expectation:
             model.simulate(jax.random.key(123), X)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_simulate_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = 1.
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
+
     #######################################
     # Compare with standard implementation
     #######################################
@@ -948,6 +981,11 @@ class TestGLM:
 
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        GridSearchCV(model, param_grid).fit(X, y)
+
+    def test_compatibility_with_sklearn_cv_gamma(self, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
@@ -1417,6 +1455,24 @@ class TestPopulationGLM:
         with expectation:
             model.fit(X, y)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_gamma_glm(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_set_scale(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+        assert np.all(model.scale != 1)
+
+    def test_fit_scale_array(self, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.fit(X, y)
+        assert model.scale.size == y.shape[1]
+
     #######################
     # Test model.score
     #######################
@@ -1628,6 +1684,15 @@ class TestPopulationGLM:
             raise ValueError(
                 "Log-likelihood of PoissonModel does not match" "that of jax.scipy!"
             )
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_score_gamma_glm(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = np.ones((y.shape[1]))
+        model.score(X, y)
 
     #######################
     # Test model.predict
@@ -1843,6 +1908,18 @@ class TestPopulationGLM:
         with expectation:
             model.simulate(jax.random.key(123), X)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_simulate_gamma_glm(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = jnp.ones((y.shape[1]))
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
+
     #######################################
     # Compare with standard implementation
     #######################################
@@ -1865,6 +1942,12 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
+
+    def test_compatibility_with_sklearn_cv_gamma(self, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        GridSearchCV(model, param_grid).fit(X, y)
+
 
     @pytest.mark.parametrize(
         "mask, expectation",

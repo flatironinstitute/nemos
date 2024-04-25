@@ -1,6 +1,6 @@
 """GLM core module."""
 
-from typing import Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -350,6 +350,7 @@ class GLM(BaseRegressor):
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
@@ -369,6 +370,8 @@ class GLM(BaseRegressor):
             Neural activity. Shape (n_time_bins, ).
         score_type :
             Type of scoring: either log-likelihood or pseudo-r2.
+        aggregate_sample_scores :
+            Function that aggregates the score of all samples.
 
         Returns
         -------
@@ -443,11 +446,12 @@ class GLM(BaseRegressor):
 
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
-                self._predict(params, data), y, self.scale
+                self._predict(params, data), y, self.scale, aggregate_sample_scores=aggregate_sample_scores
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict(params, data), y, score_type=score_type, scale=self.scale
+                self._predict(params, data), y, score_type=score_type, scale=self.scale,
+                aggregate_sample_scores=aggregate_sample_scores
             )
         else:
             raise NotImplementedError(

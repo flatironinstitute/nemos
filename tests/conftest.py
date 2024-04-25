@@ -468,4 +468,21 @@ def gammaGLM_model_instantiation():
     regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = (jax.numpy.einsum("k,tk->t", w_true, X) + b_true) ** -1
-    return X, np.random.gamma(rate, 1), model, (w_true, b_true), rate
+    theta = 3
+    k = rate / theta
+    return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
+
+
+@pytest.fixture()
+def gamma_population_GLM_model():
+    np.random.seed(123)
+    X = np.random.uniform(size=(500, 5))
+    b_true = 0.5 * np.ones((3,))
+    w_true = np.random.uniform(size=(5, 3))
+    observation_model = nmo.observation_models.GammaObservations()
+    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    rate = 1 / (jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    theta = 3
+    k = rate / theta
+    return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
