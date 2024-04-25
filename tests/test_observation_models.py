@@ -407,9 +407,15 @@ class TestGammaObservations:
         """
         Compute the pseudo-r2 and check that is < 1.
         """
-        _, y, model, _, firing_rate = gammaGLM_model_instantiation
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = 0.5
+
+        rate = model.predict(X)
+        ysim, _ = model.simulate(jax.random.PRNGKey(123), X)
         pseudo_r2 = model.observation_model.pseudo_r2(
-            firing_rate, y, score_type=score_type
+            rate, ysim, score_type=score_type
         )
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
