@@ -224,6 +224,23 @@ class TestPoissonObservations:
         ):
             model.observation_model.inverse_link_function = non_diff
 
+    def test_pseudo_r2_vs_statsmodels(self, poissonGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, _, firing_rate = poissonGLM_model_instantiation
+
+        # statsmodels mcfadden
+        mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Poisson()).fit()
+        pr2_sms = mdl.pseudo_rsquared("mcf")
+
+        # set params
+        pr2_model = model.observation_model.pseudo_r2(mdl.mu, y, score_type="pseudo-r2-McFadden")
+
+        if not np.allclose(pr2_model, pr2_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
+
 
 class TestGammaObservations:
     @pytest.mark.parametrize("link_function", [jnp.exp, lambda x: 1 / x, 1])
@@ -336,7 +353,7 @@ class TestGammaObservations:
         )
         ll_sms = sm.families.Gamma().loglike(y, firing_rate) / y.shape[0]
         if not np.allclose(ll_model, ll_sms):
-            raise ValueError("Log-likelihood doesn't match scipy!")
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-Cohen", "pseudo-r2-McFadden"])
     def test_pseudo_r2_range(self, score_type, gammaGLM_model_instantiation):
@@ -429,3 +446,20 @@ class TestGammaObservations:
             match="The `inverse_link_function` function cannot be differentiated",
         ):
             model.observation_model.inverse_link_function = non_diff
+
+    def test_pseudo_r2_vs_statsmodels(self, gammaGLM_model_instantiation):
+        """
+        Compare log-likelihood to scipy.
+        Assesses if the model estimates are close to statsmodels' results.
+        """
+        X, y, model, _, firing_rate = gammaGLM_model_instantiation
+
+        # statsmodels mcfadden
+        mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Gamma()).fit()
+        pr2_sms = mdl.pseudo_rsquared("mcf")
+
+        # set params
+        pr2_model = model.observation_model.pseudo_r2(mdl.mu, y, score_type="pseudo-r2-McFadden", scale=mdl.scale)
+
+        if not np.allclose(pr2_model, pr2_sms):
+            raise ValueError("Log-likelihood doesn't match statsmodels!")
