@@ -15,6 +15,9 @@ It streamlines the process of creating and selecting models, through a collectio
 The core of `nemos` includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
 focusing on the Generalized Linear Model (GLM). 
 
+We provide a Poisson GLM for the analysis of spike count time series, and a Gamma GLM for 
+calcium or voltage imaging traces.
+
 The package is under active development and more methods will be added in the future.
 
 For those looking to get a better grasp of the Generalized Linear Model, we recommend checking out the 
