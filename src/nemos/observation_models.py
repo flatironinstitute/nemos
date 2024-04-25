@@ -116,7 +116,9 @@ class Observations(Base, abc.ABC):
             )
 
     @abc.abstractmethod
-    def _negative_log_likelihood(self, predicted_rate, y, aggregate_sample_scores: Callable = jnp.mean):
+    def _negative_log_likelihood(
+        self, predicted_rate, y, aggregate_sample_scores: Callable = jnp.mean
+    ):
         r"""Compute the observation model negative log-likelihood.
 
         This computes the negative log-likelihood of the predicted rates
@@ -142,7 +144,7 @@ class Observations(Base, abc.ABC):
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean
+        aggregate_sample_scores: Callable = jnp.mean,
     ):
         r"""Compute the observation model log-likelihood.
 
@@ -197,7 +199,12 @@ class Observations(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def deviance(self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
+    def deviance(
+        self,
+        predicted_rate: jnp.ndarray,
+        spike_counts: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ):
         r"""Compute the residual deviance for the observation model.
 
         Parameters
@@ -310,17 +317,25 @@ class Observations(Base, abc.ABC):
         3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
         if score_type == "pseudo-r2-McFadden":
-            pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y, scale=scale,
-                                                 aggregate_sample_scores=aggregate_sample_scores)
+            pseudo_r2 = self._pseudo_r2_mcfadden(
+                predicted_rate,
+                y,
+                scale=scale,
+                aggregate_sample_scores=aggregate_sample_scores,
+            )
         elif score_type == "pseudo-r2-Cohen":
-            pseudo_r2 = self._pseudo_r2_cohen(predicted_rate, y,
-                                              aggregate_sample_scores=aggregate_sample_scores)
+            pseudo_r2 = self._pseudo_r2_cohen(
+                predicted_rate, y, aggregate_sample_scores=aggregate_sample_scores
+            )
         else:
             raise NotImplementedError(f"Score {score_type} not implemented!")
         return pseudo_r2
 
     def _pseudo_r2_cohen(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, aggregate_sample_scores: Callable = jnp.mean
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Cohen's pseudo-$R^2$.
 
@@ -353,7 +368,7 @@ class Observations(Base, abc.ABC):
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1.0,
-        aggregate_sample_scores: Callable = jnp.mean
+        aggregate_sample_scores: Callable = jnp.mean,
     ):
         """
         McFadden's pseudo-$R^2$.
@@ -377,8 +392,15 @@ class Observations(Base, abc.ABC):
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
-        ll_null = self.log_likelihood(mean_y, y, scale=scale, aggregate_sample_scores=aggregate_sample_scores)
-        ll_model = self.log_likelihood(predicted_rate, y, scale=scale, aggregate_sample_scores=aggregate_sample_scores)
+        ll_null = self.log_likelihood(
+            mean_y, y, scale=scale, aggregate_sample_scores=aggregate_sample_scores
+        )
+        ll_model = self.log_likelihood(
+            predicted_rate,
+            y,
+            scale=scale,
+            aggregate_sample_scores=aggregate_sample_scores,
+        )
         return 1 - ll_model / ll_null
 
 
@@ -409,7 +431,7 @@ class PoissonObservations(Observations):
         self,
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean
+        aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Compute the Poisson negative log-likelihood.
 
@@ -460,7 +482,7 @@ class PoissonObservations(Observations):
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
         scale: Union[float, jnp.ndarray] = 1,
-        aggregate_sample_scores: Callable = jnp.mean
+        aggregate_sample_scores: Callable = jnp.mean,
     ):
         r"""Compute the Poisson negative log-likelihood.
 
@@ -535,7 +557,10 @@ class PoissonObservations(Observations):
         return jax.random.poisson(key, predicted_rate)
 
     def deviance(
-        self, predicted_rate: jnp.ndarray, spike_counts: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
+        self,
+        predicted_rate: jnp.ndarray,
+        spike_counts: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Poisson model.
 
@@ -628,7 +653,7 @@ class GammaObservations(Observations):
         self,
         predicted_rate: jnp.ndarray,
         y: jnp.ndarray,
-        aggregate_sample_scores: Callable = jnp.mean
+        aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Compute the Gamma negative log-likelihood.
 
@@ -692,7 +717,9 @@ class GammaObservations(Observations):
             + k * jnp.log(k)
             - jax.scipy.special.gammaln(k)
         )
-        return aggregate_sample_scores(norm - k * self._negative_log_likelihood(predicted_rate, y, lambda x: x))
+        return aggregate_sample_scores(
+            norm - k * self._negative_log_likelihood(predicted_rate, y, lambda x: x)
+        )
 
     def sample_generator(
         self,
@@ -723,7 +750,10 @@ class GammaObservations(Observations):
         return jax.random.gamma(key, predicted_rate / scale) * scale
 
     def deviance(
-        self, predicted_rate: jnp.ndarray, neural_activity: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
+        self,
+        predicted_rate: jnp.ndarray,
+        neural_activity: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         r"""Compute the residual deviance for a Gamma model.
 

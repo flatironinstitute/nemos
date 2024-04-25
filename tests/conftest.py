@@ -73,7 +73,6 @@ class MockRegressorNested(MockRegressor):
         self.other_param = MockGLM(std_param=other_param)
 
 
-
 class MockGLM(nmo.glm.GLM):
     """
     Mock implementation of the BaseRegressor abstract class for testing purposes.
@@ -438,6 +437,7 @@ def mock_data():
 @pytest.fixture()
 def glm_class():
     return nmo.glm.GLM
+
 
 @pytest.fixture()
 def population_glm_class():

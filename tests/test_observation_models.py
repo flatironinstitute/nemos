@@ -251,27 +251,43 @@ class TestPoissonObservations:
 
     def test_aggregation_score_ll(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model.log_likelihood(firing_rate, y, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model.log_likelihood(firing_rate, y, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model.log_likelihood(
+            firing_rate, y, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model.log_likelihood(
+            firing_rate, y, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn * y.shape[0])
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
     def test_aggregation_score_pr2(self, score_type, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model.pseudo_r2(firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model.pseudo_r2(firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model.pseudo_r2(
+            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model.pseudo_r2(
+            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_mcfadden(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_mcfadden(firing_rate, y, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model._pseudo_r2_mcfadden(firing_rate, y, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model._pseudo_r2_mcfadden(
+            firing_rate, y, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model._pseudo_r2_mcfadden(
+            firing_rate, y, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_choen(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_cohen(firing_rate, y, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model._pseudo_r2_cohen(firing_rate, y, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model._pseudo_r2_cohen(
+            firing_rate, y, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model._pseudo_r2_cohen(
+            firing_rate, y, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn)
 
 
@@ -505,25 +521,41 @@ class TestGammaObservations:
 
     def test_aggregation_score_ll(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model.log_likelihood(firing_rate, y, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model.log_likelihood(firing_rate, y, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model.log_likelihood(
+            firing_rate, y, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model.log_likelihood(
+            firing_rate, y, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn * y.shape[0])
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
     def test_aggregation_score_pr2(self, score_type, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model.pseudo_r2(firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model.pseudo_r2(firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model.pseudo_r2(
+            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model.pseudo_r2(
+            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_mcfadden(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_mcfadden(firing_rate, y, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model._pseudo_r2_mcfadden(firing_rate, y, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model._pseudo_r2_mcfadden(
+            firing_rate, y, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model._pseudo_r2_mcfadden(
+            firing_rate, y, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_choen(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_cohen(firing_rate, y, aggregate_sample_scores=jnp.sum)
-        mn = model.observation_model._pseudo_r2_cohen(firing_rate, y, aggregate_sample_scores=jnp.mean)
+        sm = model.observation_model._pseudo_r2_cohen(
+            firing_rate, y, aggregate_sample_scores=jnp.sum
+        )
+        mn = model.observation_model._pseudo_r2_cohen(
+            firing_rate, y, aggregate_sample_scores=jnp.mean
+        )
         assert np.allclose(sm, mn)

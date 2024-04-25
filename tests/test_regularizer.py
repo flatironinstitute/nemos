@@ -501,7 +501,12 @@ class TestLasso:
         model.fit(X, y)
 
     @pytest.mark.parametrize("reg_str", [0.001, 0.01, 0.1, 1, 10])
-    def test_lasso_pytree_match(self, reg_str, poissonGLM_model_instantiation_pytree, poissonGLM_model_instantiation):
+    def test_lasso_pytree_match(
+        self,
+        reg_str,
+        poissonGLM_model_instantiation_pytree,
+        poissonGLM_model_instantiation,
+    ):
         """Check pytree and array find same solution."""
         jax.config.update("jax_enable_x64", True)
         X, _, model, _, _ = poissonGLM_model_instantiation_pytree
@@ -511,7 +516,9 @@ class TestLasso:
         model_array.regularizer = nmo.regularizer.Lasso(regularizer_strength=reg_str)
         model.fit(X, y)
         model_array.fit(X_array, y)
-        assert np.allclose(np.hstack(jax.tree_util.tree_leaves(model.coef_)), model_array.coef_)
+        assert np.allclose(
+            np.hstack(jax.tree_util.tree_leaves(model.coef_)), model_array.coef_
+        )
 
 
 class TestGroupLasso:
