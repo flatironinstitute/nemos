@@ -470,6 +470,7 @@ def gammaGLM_model_instantiation():
     rate = (jax.numpy.einsum("k,tk->t", w_true, X) + b_true) ** -1
     theta = 3
     k = rate / theta
+    model.scale = theta
     return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
 
 
@@ -484,5 +485,6 @@ def gamma_population_GLM_model():
     model = nmo.glm.PopulationGLM(observation_model, regularizer)
     rate = 1 / (jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     theta = 3
-    k = rate / theta
-    return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
+    model.scale = theta
+    y = jax.random.gamma(jax.random.PRNGKey(123), rate / theta) * theta
+    return X, y, model, (w_true, b_true), rate

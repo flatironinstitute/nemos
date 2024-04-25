@@ -414,7 +414,7 @@ class TestGammaObservations:
 
         rate = model.predict(X)
         ysim, _ = model.simulate(jax.random.PRNGKey(123), X)
-        pseudo_r2 = model.observation_model.pseudo_r2(
+        pseudo_r2 = nmo.observation_models.GammaObservations(inverse_link_function=lambda x: 1/x).pseudo_r2(
             rate, ysim, score_type=score_type
         )
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
