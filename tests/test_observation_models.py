@@ -236,7 +236,9 @@ class TestPoissonObservations:
         pr2_sms = mdl.pseudo_rsquared("mcf")
 
         # set params
-        pr2_model = model.observation_model.pseudo_r2(mdl.mu, y, score_type="pseudo-r2-McFadden")
+        pr2_model = model.observation_model.pseudo_r2(
+            mdl.mu, y, score_type="pseudo-r2-McFadden"
+        )
 
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
@@ -257,7 +259,7 @@ class TestGammaObservations:
             gamma_observations(link_function)
 
     @pytest.mark.parametrize(
-        "link_function", [jnp.exp, np.exp, lambda x: 1/x, sm.families.links.Log()]
+        "link_function", [jnp.exp, np.exp, lambda x: 1 / x, sm.families.links.Log()]
     )
     def test_initialization_link_is_jax(self, link_function, gamma_observations):
         """Check that the observation model initializes when a callable is passed."""
@@ -348,9 +350,7 @@ class TestGammaObservations:
         Assesses if the model estimates are close to statsmodels' results.
         """
         _, y, model, _, firing_rate = gammaGLM_model_instantiation
-        ll_model = (
-            model.observation_model.log_likelihood(firing_rate, y)
-        )
+        ll_model = model.observation_model.log_likelihood(firing_rate, y)
         ll_sms = sm.families.Gamma().loglike(y, firing_rate) / y.shape[0]
         if not np.allclose(ll_model, ll_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
@@ -459,7 +459,9 @@ class TestGammaObservations:
         pr2_sms = mdl.pseudo_rsquared("mcf")
 
         # set params
-        pr2_model = model.observation_model.pseudo_r2(mdl.mu, y, score_type="pseudo-r2-McFadden", scale=mdl.scale)
+        pr2_model = model.observation_model.pseudo_r2(
+            mdl.mu, y, score_type="pseudo-r2-McFadden", scale=mdl.scale
+        )
 
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")

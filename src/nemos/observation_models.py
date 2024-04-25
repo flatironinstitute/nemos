@@ -63,7 +63,7 @@ class Observations(Base, abc.ABC):
         """Setter for the scale parameter of the model."""
         try:
             self._scale = float(value)
-        except:
+        except Exception:
             raise ValueError("The `scale` parameter must be of numeric type.")
 
     @staticmethod
@@ -137,7 +137,12 @@ class Observations(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def log_likelihood(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
+    def log_likelihood(
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ):
         r"""Compute the observation model log-likelihood.
 
         This computes the log-likelihood of the predicted rates
@@ -161,7 +166,10 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         """
         Sample from the estimated distribution.
@@ -204,7 +212,9 @@ class Observations(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
+    def estimate_scale(
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+    ) -> Union[float, jnp.ndarray]:
         r"""Estimate the scale parameter for the model.
 
         This method estimates the scale parameter, often denoted as $\phi$, which determines the dispersion
@@ -235,7 +245,7 @@ class Observations(Base, abc.ABC):
         score_type: Literal[
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
-        scale: Union[float, jnp.ndarray, NDArray] = 1.
+        scale: Union[float, jnp.ndarray, NDArray] = 1.0,
     ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
@@ -330,7 +340,12 @@ class Observations(Base, abc.ABC):
         null_deviance = jnp.sum(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
 
-    def _pseudo_r2_mcfadden(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
+    def _pseudo_r2_mcfadden(
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ):
         """
         McFadden's pseudo-$R^2$.
 
@@ -430,7 +445,12 @@ class PoissonObservations(Observations):
         # see above for derivation of this.
         return jnp.mean(predicted_rate - x)
 
-    def log_likelihood(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1):
+    def log_likelihood(
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1,
+    ):
         r"""Compute the Poisson negative log-likelihood.
 
         This computes the Poisson negative log-likelihood of the predicted rates
@@ -474,7 +494,10 @@ class PoissonObservations(Observations):
         return -nll - jax.scipy.special.gammaln(y + 1).mean()
 
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         """
         Sample from the Poisson distribution.
@@ -490,6 +513,7 @@ class PoissonObservations(Observations):
             Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         scale :
             Scale parameter. For Poisson should be equal to 1.
+
         Returns
         -------
         jnp.ndarray
@@ -537,7 +561,9 @@ class PoissonObservations(Observations):
         deviance = 2 * (spike_counts * jnp.log(ratio) - (spike_counts - predicted_rate))
         return deviance
 
-    def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
+    def estimate_scale(
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+    ) -> Union[float, jnp.ndarray]:
         r"""
         Assign 1 to the scale parameter of the Poisson model.
 
@@ -579,9 +605,9 @@ class GammaObservations(Observations):
 
     """
 
-    def __init__(self, inverse_link_function = lambda x: jnp.power(x, -1)):
+    def __init__(self, inverse_link_function=lambda x: jnp.power(x, -1)):
         super().__init__(inverse_link_function=inverse_link_function)
-        self.scale = 1.
+        self.scale = 1.0
 
     def _negative_log_likelihood(
         self,
@@ -613,7 +639,12 @@ class GammaObservations(Observations):
         # see above for derivation of this.
         return -jnp.mean(y * x + jnp.log(-x))
 
-    def log_likelihood(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
+    def log_likelihood(
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
+    ):
         r"""Compute the Gamma negative log-likelihood.
 
         This computes the Gamma negative log-likelihood of the predicted rates
@@ -635,11 +666,18 @@ class GammaObservations(Observations):
 
         """
         k = 1 / scale
-        norm = (k - 1) * jnp.mean(jnp.log(y)) + k * jnp.log(k) - jax.scipy.special.gammaln(k)
+        norm = (
+            (k - 1) * jnp.mean(jnp.log(y))
+            + k * jnp.log(k)
+            - jax.scipy.special.gammaln(k)
+        )
         return norm - k * self._negative_log_likelihood(predicted_rate, y)
 
     def sample_generator(
-        self, key: jax.Array, predicted_rate: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.
+        self,
+        key: jax.Array,
+        predicted_rate: jnp.ndarray,
+        scale: Union[float, jnp.ndarray] = 1.0,
     ) -> jnp.ndarray:
         """
         Sample from the Gamma distribution.
@@ -687,7 +725,8 @@ class GammaObservations(Observations):
 
         $$
         \begin{aligned}
-            D(y\_{tn}, \hat{y}\_{tn}) &=  2 \left[ -\log \frac{y\_{tn}}{\hat{y}\_{tn}} + \frac{y\_{tn} - \hat{y}\_{tn}} \right]\\\
+            D(y\_{tn}, \hat{y}\_{tn}) &=  2 \left[ -\log \frac{y\_{tn}}{\hat{y}\_{tn}} + \frac{y\_{tn} -
+            \hat{y}\_{tn}} \right]\\\
             &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right)\right)
         \end{aligned}
         $$
@@ -698,10 +737,14 @@ class GammaObservations(Observations):
         y_mu = jnp.clip(
             neural_activity / predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
         )
-        resid_dev = 2 * (-jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate)
+        resid_dev = 2 * (
+            -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
+        )
         return jnp.sum(resid_dev, axis=0)
 
-    def estimate_scale(self, predicted_rate: jnp.ndarray, y: jnp.ndarray) -> Union[float, jnp.ndarray]:
+    def estimate_scale(
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+    ) -> Union[float, jnp.ndarray]:
         r"""
         Estimate the scale of the model based on the GLM residuals.
 

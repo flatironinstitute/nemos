@@ -16,6 +16,7 @@ from .type_casting import jnp_asarray_if, support_pynapple
 
 
 def cast_to_jax(func):
+    """Cast argument to jax."""
     def wrapper(*args, **kwargs):
         try:
             args, kwargs = jax.tree_util.tree_map(
@@ -441,7 +442,9 @@ class GLM(BaseRegressor):
             data = X
 
         if score_type == "log-likelihood":
-            score = self._observation_model.log_likelihood(self._predict(params, data), y, self.scale)
+            score = self._observation_model.log_likelihood(
+                self._predict(params, data), y, self.scale
+            )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
                 self._predict(params, data), y, score_type=score_type, scale=self.scale
@@ -587,7 +590,9 @@ class GLM(BaseRegressor):
         params, state = runner(init_params, data, y)
 
         # estimate the GLM scale
-        self.scale = self.observation_model.estimate_scale(self._predict(params, data), y)
+        self.scale = self.observation_model.estimate_scale(
+            self._predict(params, data), y
+        )
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -738,6 +743,7 @@ class PopulationGLM(GLM):
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:
+        """Define a feature mask of shape (n_features, n_neurons)."""
         return self._feature_mask
 
     @feature_mask.setter
