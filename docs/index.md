@@ -16,8 +16,7 @@ It streamlines the process of defining and selecting models, through a collectio
 The core of `nemos` includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
 focusing on the Generalized Linear Model (GLM). 
 
-We provide a Poisson GLM for the analysis of spike count time series, and a Gamma GLM for 
-calcium or voltage imaging traces.
+We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
 
 The package is under active development and more methods will be added in the future.
 
@@ -129,8 +128,8 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, spike_counts)
 ```
 
-For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
-model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/) and a [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
+For a deeper dive, see our [Quickstart](quickstart)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
+model](reference/nemos/observation_models) and a [regularizer](reference/nemos/regularizer).
 
 !!! note "Multi-epoch convolution"
     If your data is formatted as a `pynapple` time-series, the convolution performed by the basis objects will be 
