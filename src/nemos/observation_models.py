@@ -326,7 +326,7 @@ class Observations(Base, abc.ABC):
         null_deviance = jnp.sum(null_dev_t)
         return (null_deviance - model_deviance) / null_deviance
 
-    def _pseudo_r2_mcfadden(self, predicted_rate: jnp.ndarray, y: jnp.ndarray):
+    def _pseudo_r2_mcfadden(self, predicted_rate: jnp.ndarray, y: jnp.ndarray, scale: Union[float, jnp.ndarray] = 1.):
         """
         McFadden's pseudo-$R^2$.
 
@@ -336,9 +336,11 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, )
+            The mean neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
         y:
-            The neural activity. Expected shape: (n_time_bins, )
+            The neural activity. Expected shape: (n_time_bins, ), or (n_time_bins, n_neurons).
+        scale:
+            The scale parameter of the model.
 
         Returns
         -------
@@ -346,10 +348,9 @@ class Observations(Base, abc.ABC):
             The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
-        norm = -jax.scipy.special.gammaln(y + 1).mean()
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
-        ll_null = -self._negative_log_likelihood(mean_y, y) + norm
-        ll_model = -self._negative_log_likelihood(predicted_rate, y) + norm
+        ll_null = self.log_likelihood(mean_y, y, scale=scale)
+        ll_model = self.log_likelihood(predicted_rate, y, scale=scale)
         return 1 - ll_model / ll_null
 
 
@@ -389,9 +390,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
         y :
-            The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons)..
+            The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
 
         Returns
         -------
