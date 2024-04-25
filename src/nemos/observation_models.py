@@ -5,6 +5,7 @@ from typing import Callable, Literal, Union
 
 import jax
 import jax.numpy as jnp
+from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base
@@ -234,6 +235,7 @@ class Observations(Base, abc.ABC):
         score_type: Literal[
             "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
+        scale: Union[float, jnp.ndarray, NDArray] = 1.
     ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
@@ -252,6 +254,8 @@ class Observations(Base, abc.ABC):
             The neural activity. Expected shape: (n_time_bins, )
         score_type:
             The pseudo-R$^2$ type.
+        scale:
+            The scale parameter of the model.
 
         Returns
         -------
@@ -290,7 +294,7 @@ class Observations(Base, abc.ABC):
         3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
         if score_type == "pseudo-r2-McFadden":
-            pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y)
+            pseudo_r2 = self._pseudo_r2_mcfadden(predicted_rate, y, scale=scale)
         elif score_type == "pseudo-r2-Cohen":
             pseudo_r2 = self._pseudo_r2_cohen(predicted_rate, y)
         else:
