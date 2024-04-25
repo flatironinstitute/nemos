@@ -1694,6 +1694,22 @@ class TestPopulationGLM:
         model.scale = np.ones((y.shape[1]))
         model.score(X, y)
 
+    @pytest.mark.parametrize("score_type", ["log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"])
+    def test_score_aggregation_ndim(
+        self, score_type, poisson_population_GLM_model
+    ):
+        """
+        Test that the aggregate samples returns the right dimensional object.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        mn = model.score(X, y, score_type=score_type, aggregate_sample_scores=jnp.mean)
+        mn_n = model.score(X, y, score_type=score_type, aggregate_sample_scores=lambda x: jnp.mean(x, axis=0))
+        assert mn.ndim == 0
+        assert mn_n.ndim == 1
+
+
     #######################
     # Test model.predict
     #######################
@@ -2092,5 +2108,3 @@ class TestPopulationGLM:
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
-
-
