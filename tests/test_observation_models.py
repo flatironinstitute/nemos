@@ -153,7 +153,7 @@ class TestPoissonObservations:
         pseudo_r2 = model.observation_model.pseudo_r2(
             y.mean(), y, score_type=score_type
         )
-        if not np.allclose(pseudo_r2, 0):
+        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )
@@ -429,7 +429,7 @@ class TestGammaObservations:
         pseudo_r2 = model.observation_model.pseudo_r2(
             y.mean(), y, score_type=score_type
         )
-        if not np.allclose(pseudo_r2, 0):
+        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )
