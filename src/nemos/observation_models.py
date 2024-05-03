@@ -225,7 +225,7 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def estimate_scale(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, dof_resid: Union[float, jnp.ndarray]
     ) -> Union[float, jnp.ndarray]:
         r"""Estimate the scale parameter for the model.
 
@@ -247,6 +247,8 @@ class Observations(Base, abc.ABC):
             The predicted rate values.
         y :
             Observed activity.
+        dof_resid :
+            The DOF of the residual.
         """
         pass
 
@@ -602,7 +604,7 @@ class PoissonObservations(Observations):
         return deviance
 
     def estimate_scale(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, dof_resid: Union[float, jnp.ndarray]
     ) -> Union[float, jnp.ndarray]:
         r"""
         Assign 1 to the scale parameter of the Poisson model.
@@ -622,6 +624,8 @@ class PoissonObservations(Observations):
             but is retained for compatibility with the abstract method signature.
         y :
             Observed spike counts.
+        dof_resid :
+            The DOF of the residuals.
         """
         return 1.0
 
@@ -796,7 +800,7 @@ class GammaObservations(Observations):
         return resid_dev / scale
 
     def estimate_scale(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray
+        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, dof_resid: Union[float, jnp.ndarray]
     ) -> Union[float, jnp.ndarray]:
         r"""
         Estimate the scale of the model based on the GLM residuals.
@@ -816,6 +820,8 @@ class GammaObservations(Observations):
             but is retained for compatibility with the abstract method signature.
         y :
             Observed spike counts.
+        dof_resid :
+            The DOF of the residuals.
 
         Returns
         -------
@@ -827,7 +833,7 @@ class GammaObservations(Observations):
             predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
         )
         resid = jnp.power(y - predicted_rate, 2)
-        return jnp.mean(resid * jnp.power(predicted_rate, -2), axis=0)  # mean over time
+        return jnp.sum(resid * jnp.power(predicted_rate, -2), axis=0) / dof_resid  # pearson residuals
 
 
 def check_observation_model(observation_model):

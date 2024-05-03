@@ -4,6 +4,7 @@ from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import jaxopt
 from numpy.typing import ArrayLike
 
 from . import observation_models as obs
@@ -468,8 +469,8 @@ class GLM(BaseRegressor):
             )
         return score
 
-    @staticmethod
     def _initialize_parameters(
+        self,
         X: DESIGN_INPUT_TYPE, y: jnp.ndarray
     ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
@@ -514,6 +515,17 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
+
+        # find numerically zeros of the link
+        func = lambda x: jnp.sum(
+            jnp.power(self.observation_model.inverse_link_function(x) - y.mean(axis=0, keepdims=False), 2)
+        )
+        initial_intercept, _ = jaxopt.ScipyRootFinding(method="hybr", optimality_fun=func).run(
+            jnp.atleast_1d(jnp.ones_like(y[0])) * 0.001
+        )
+
+        #jaxopt.LBFGS(func).run(jnp.ones())
+
         # Initialize parameters
         init_params = (
             # coeff, spike basis coeffs.
@@ -526,7 +538,7 @@ class GLM(BaseRegressor):
                 lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data
             ),
             # intercept, bias terms, keepdims=False needed by PopulationGLM
-            jnp.atleast_1d(jnp.log(jnp.mean(y, axis=0, keepdims=False))),
+            initial_intercept,
         )
         return init_params
 
@@ -600,11 +612,6 @@ class GLM(BaseRegressor):
 
         params, state = runner(init_params, data, y)
 
-        # estimate the GLM scale
-        self.scale = self.observation_model.estimate_scale(
-            self._predict(params, data), y
-        )
-
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
         ):
@@ -614,6 +621,22 @@ class GLM(BaseRegressor):
             )
 
         self._set_coef_and_intercept(params)
+
+        coef, _ = self._get_coef_and_intercept()
+
+        # estimate the GLM scale
+        if isinstance(self.regularizer, reg.Ridge):
+            dof = 1 + jnp.sum(coef / (coef + self.regularizer.regularizer_strength))
+            dof_resid = X.shape[0] - dof
+        elif isinstance(self.regularizer, reg.Lasso):
+            dof_resid = X.shape[0] - (~jnp.isclose(coef, jnp.zeros_like(coef))).sum()
+        else:
+            dof_resid = X.shape[0] - X.shape[1]
+
+        self.scale = self.observation_model.estimate_scale(
+            self._predict(params, data), y, dof_resid=dof_resid
+        )
+
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
