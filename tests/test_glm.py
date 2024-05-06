@@ -24,7 +24,8 @@ def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
     X = jnp.array([[[1, 2], [3, 4]]])
     y = jnp.array([[[1, 2]]])
     with pytest.raises(ValueError, match="y must be one-dimensional"):
-        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
+        p0 = jnp.zeros((X.shape[1])), jnp.atleast_1d(jnp.log(y.mean()))
+        mock_glm._validate(X, y, p0)
 
 
 def test_validate_lower_dimensional_data_X(mock_glm):

@@ -524,11 +524,10 @@ class GLM(BaseRegressor):
                 2,
             )
         )
-        initial_intercept, _ = jaxopt.ScipyRootFinding(
-            method="hybr", optimality_fun=func
-        ).run(jnp.atleast_1d(jnp.ones_like(y[0])) * 0.001)
-
-        # jaxopt.LBFGS(func).run(jnp.ones())
+        initial_intercept, _ = jaxopt.GradientDescent(
+            func
+        ).run(y.mean(axis=0, keepdims=False))
+        initial_intercept = jnp.atleast_1d(initial_intercept)
 
         # Initialize parameters
         init_params = (

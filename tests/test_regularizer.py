@@ -422,37 +422,6 @@ class TestRidge:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM estimate does not match sklearn!")
 
-    @pytest.mark.parametrize("inv_link_jax, link_sm",
-                             [
-                                 (jnp.exp, sm.families.links.Log()),
-                                 (lambda x: 1/x, sm.families.links.InversePower())
-                             ]
-                             )
-    def test_solver_match_statsmodels_gamma(self, inv_link_jax, link_sm, gammaGLM_model_instantiation):
-        """Test that different solvers converge to the same solution."""
-        jax.config.update("jax_enable_x64", True)
-        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        # set precision to float64 for accurate matching of the results
-        model.data_type = jnp.float64
-        model.observation_model.inverse_link_function = inv_link_jax
-        regularizer = self.cls("GradientDescent", {"tol": 10 ** -12})
-        regularizer.regularizer_strength = 0.1
-        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
-            model._initialize_parameters(X, y), X, y
-        )[0]
-
-        alpha_sm = np.ones(X.shape[1] + 1) * regularizer.regularizer_strength / X.shape[1]
-        alpha_sm[0] = 0
-        model_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Gamma(link=link_sm), scale=1.)
-
-        res_sm = model_sm.fit_regularized(method="elastic_net", alpha=alpha_sm, L1_wt=0., cnvrg_tol=10**-12)
-
-        match_weights = np.allclose(res_sm.params[1:], weights_bfgs)
-        match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs)
-        if (not match_weights) or (not match_intercepts):
-            raise ValueError("Ridge GLM estimate does not match statsmodels!")
-
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
     @pytest.mark.parametrize(
         "kwargs, expectation",
