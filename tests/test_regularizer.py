@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import statsmodels.api as sm
-from sklearn.linear_model import PoissonRegressor
+from sklearn.linear_model import GammaRegressor, PoissonRegressor
 
 import nemos as nmo
 
@@ -186,6 +186,54 @@ class TestUnRegularized:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM regularizer estimate does not match sklearn!")
 
+    def test_solver_match_sklearn_gamma(self, gammaGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.observation_model.inverse_link_function = jnp.exp
+        regularizer = self.cls("GradientDescent", {"tol": 10**-12})
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
+        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("Unregularized GLM estimate does not match sklearn!")
+
+    @pytest.mark.parametrize("inv_link_jax, link_sm",
+                             [
+                                 (jnp.exp, sm.families.links.Log()),
+                                 (lambda x: 1/x, sm.families.links.InversePower())
+                             ]
+                             )
+    def test_solver_match_statsmodels_gamma(self, inv_link_jax, link_sm, gammaGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.observation_model.inverse_link_function = inv_link_jax
+        regularizer = self.cls("LBFGS", {"tol": 10**-13})
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            model._initialize_parameters(X, y), X, y
+        )[0]
+
+        model_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Gamma(link=link_sm))
+
+        res_sm = model_sm.fit(cnvrg_tol=10**-12)
+
+        match_weights = np.allclose(res_sm.params[1:], weights_bfgs)
+        match_intercepts = np.allclose(res_sm.params[:1], intercepts_bfgs)
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("Unregularized GLM estimate does not match statsmodels!")
+
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
     @pytest.mark.parametrize(
         "kwargs, expectation",
@@ -353,6 +401,27 @@ class TestRidge:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM solver estimate does not match sklearn!")
 
+    def test_solver_match_sklearn_gamma(self, gammaGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.observation_model.inverse_link_function = jnp.exp
+        regularizer = self.cls("GradientDescent", {"tol": 10 ** -12})
+        regularizer.regularizer_strength = 0.1
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        weights_bfgs, intercepts_bfgs = runner_bfgs(
+            (true_params[0] * 0.0, true_params[1]), X, y
+        )[0]
+        model_skl = GammaRegressor(fit_intercept=True, tol=10 ** -12, alpha=regularizer.regularizer_strength)
+        model_skl.fit(X, y)
+
+        match_weights = np.allclose(model_skl.coef_, weights_bfgs)
+        match_intercepts = np.allclose(model_skl.intercept_, intercepts_bfgs)
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("Ridge GLM estimate does not match sklearn!")
+
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
     @pytest.mark.parametrize(
         "kwargs, expectation",
@@ -501,7 +570,12 @@ class TestLasso:
         model.fit(X, y)
 
     @pytest.mark.parametrize("reg_str", [0.001, 0.01, 0.1, 1, 10])
-    def test_lasso_pytree_match(self, reg_str, poissonGLM_model_instantiation_pytree, poissonGLM_model_instantiation):
+    def test_lasso_pytree_match(
+        self,
+        reg_str,
+        poissonGLM_model_instantiation_pytree,
+        poissonGLM_model_instantiation,
+    ):
         """Check pytree and array find same solution."""
         jax.config.update("jax_enable_x64", True)
         X, _, model, _, _ = poissonGLM_model_instantiation_pytree
@@ -511,7 +585,9 @@ class TestLasso:
         model_array.regularizer = nmo.regularizer.Lasso(regularizer_strength=reg_str)
         model.fit(X, y)
         model_array.fit(X_array, y)
-        assert np.allclose(np.hstack(jax.tree_util.tree_leaves(model.coef_)), model_array.coef_)
+        assert np.allclose(
+            np.hstack(jax.tree_util.tree_leaves(model.coef_)), model_array.coef_
+        )
 
 
 class TestGroupLasso:

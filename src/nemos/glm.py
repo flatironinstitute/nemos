@@ -1,9 +1,10 @@
 """GLM core module."""
 
-from typing import Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import jaxopt
 from numpy.typing import ArrayLike
 
 from . import observation_models as obs
@@ -16,6 +17,8 @@ from .type_casting import jnp_asarray_if, support_pynapple
 
 
 def cast_to_jax(func):
+    """Cast argument to jax."""
+
     def wrapper(*args, **kwargs):
         try:
             args, kwargs = jax.tree_util.tree_map(
@@ -32,7 +35,7 @@ def cast_to_jax(func):
 
 
 class GLM(BaseRegressor):
-    """
+    r"""
     Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
@@ -59,6 +62,10 @@ class GLM(BaseRegressor):
         Basis coefficients for the model.
     solver_state :
         State of the solver after fitting. May include details like optimization error.
+    scale:
+        Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
+        $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
+        of the mean $\mu$ fully specifies the distribution of the activity $y$.
 
     Raises
     ------
@@ -80,6 +87,7 @@ class GLM(BaseRegressor):
         self.intercept_ = None
         self.coef_ = None
         self.solver_state = None
+        self.scale = None
 
     @property
     def regularizer(self):
@@ -335,7 +343,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model.negative_log_likelihood(predicted_rate, y)
+        return self._observation_model._negative_log_likelihood(predicted_rate, y)
 
     def score(
         self,
@@ -344,6 +352,7 @@ class GLM(BaseRegressor):
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
         ] = "pseudo-r2-McFadden",
+        aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
@@ -363,6 +372,8 @@ class GLM(BaseRegressor):
             Neural activity. Shape (n_time_bins, ).
         score_type :
             Type of scoring: either log-likelihood or pseudo-r2.
+        aggregate_sample_scores :
+            Function that aggregates the score of all samples.
 
         Returns
         -------
@@ -436,11 +447,19 @@ class GLM(BaseRegressor):
             data = X
 
         if score_type == "log-likelihood":
-            norm_constant = jax.scipy.special.gammaln(y + 1).mean()
-            score = -self._predict_and_compute_loss(params, data, y) - norm_constant
+            score = self._observation_model.log_likelihood(
+                self._predict(params, data),
+                y,
+                self.scale,
+                aggregate_sample_scores=aggregate_sample_scores,
+            )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict(params, data), y, score_type=score_type
+                self._predict(params, data),
+                y,
+                score_type=score_type,
+                scale=self.scale,
+                aggregate_sample_scores=aggregate_sample_scores,
             )
         else:
             raise NotImplementedError(
@@ -450,9 +469,8 @@ class GLM(BaseRegressor):
             )
         return score
 
-    @staticmethod
     def _initialize_parameters(
-        X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
     ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
 
@@ -496,6 +514,22 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
+
+        # find numerically zeros of the link
+        def func(x):
+            return jnp.sum(
+                jnp.power(
+                    self.observation_model.inverse_link_function(x)
+                    - y.mean(axis=0, keepdims=False),
+                    2,
+                )
+            )
+
+        initial_intercept, _ = jaxopt.GradientDescent(func).run(
+            y.mean(axis=0, keepdims=False)
+        )
+        initial_intercept = jnp.atleast_1d(initial_intercept)
+
         # Initialize parameters
         init_params = (
             # coeff, spike basis coeffs.
@@ -508,7 +542,7 @@ class GLM(BaseRegressor):
                 lambda x: jnp.zeros((*x[0].shape, *y.shape[1:])), data
             ),
             # intercept, bias terms, keepdims=False needed by PopulationGLM
-            jnp.atleast_1d(jnp.log(jnp.mean(y, axis=0, keepdims=False))),
+            initial_intercept,
         )
         return init_params
 
@@ -582,9 +616,6 @@ class GLM(BaseRegressor):
 
         params, state = runner(init_params, data, y)
 
-        # estimate the GLM scale
-        self.observation_model.estimate_scale(self._predict(params, data))
-
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
         ):
@@ -594,6 +625,12 @@ class GLM(BaseRegressor):
             )
 
         self._set_coef_and_intercept(params)
+
+        dof_resid = self.estimate_resid_degrees_of_freedom(X)
+        self.scale = self.observation_model.estimate_scale(
+            self._predict(params, data), y, dof_resid=dof_resid
+        )
+
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
@@ -676,10 +713,43 @@ class GLM(BaseRegressor):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate
+                key=random_key, predicted_rate=predicted_rate, scale=self.scale
             ),
             predicted_rate,
         )
+
+    def estimate_resid_degrees_of_freedom(self, X: DESIGN_INPUT_TYPE):
+        """
+        Estimate the degrees of freedom of the residuals.
+
+        Parameters
+        ----------
+        self :
+            A fitted GLM model.
+        X :
+            The design matrix.
+
+        Returns
+        -------
+        :
+            An estimate of the degrees of freedom of the residuals.
+        """
+        if isinstance(self.observation_model, obs.PoissonObservations):
+            return 1.0  # scale is fix, residual not used
+
+        # if the regularizer is lasso use the non-zero
+        # coeff as an estimate of the dof
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
+            coef, _ = self._get_coef_and_intercept()
+            return X.shape[0] - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
+        elif isinstance(self.regularizer, reg.Ridge):
+            # for Ridge, use the tot parameters (X.shape[1] + intercept)
+            return X.shape[0] - X.shape[1] - 1
+        else:
+            # for UnRegularized, use the rank
+            rank = jnp.linalg.matrix_rank(X)
+            return X.shape[0] - rank - 1
 
 
 class PopulationGLM(GLM):
@@ -734,6 +804,7 @@ class PopulationGLM(GLM):
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:
+        """Define a feature mask of shape (n_features, n_neurons)."""
         return self._feature_mask
 
     @feature_mask.setter

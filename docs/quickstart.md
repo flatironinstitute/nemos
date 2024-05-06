@@ -52,11 +52,21 @@ Model intercept: [-0.0010547]
 
 During initialization, the `GLM` class accepts the following optional input arguments,
 
-1. `model.observation_model`: The statistical model for the observed variable. The only available option so far is `nemos.observation_models.PoissonObservation`, which is the most common choice for modeling spike counts.
+1. `model.observation_model`: The statistical model for the observed variable. The available option so far are `nemos.observation_models.PoissonObservation` and  `nemos.observation_models.GammaObservations`, which are the most common choices for modeling spike counts and calcium imaging traces respectively.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`.
 
 For more information on how to change default arguments, see the API guide for [`observation_models`](../reference/nemos/observation_models/) and
 [`regularizer`](../reference/nemos/regularizer/).
+
+```python
+import nemos as nmo
+
+# initialize a Gamma GLM with Ridge regularization
+model = nmo.glm.GLM(
+    regularizer=nmo.regularizer.Ridge(), 
+    observation_model=nmo.observation_models.GammaObservations()
+)
+```
 
 
 ### Pre-processing with `pynapple`

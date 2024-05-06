@@ -24,7 +24,8 @@ def test_preprocess_fit_higher_dimensional_data_y(mock_glm):
     X = jnp.array([[[1, 2], [3, 4]]])
     y = jnp.array([[[1, 2]]])
     with pytest.raises(ValueError, match="y must be one-dimensional"):
-        mock_glm._validate(X, y, mock_glm._initialize_parameters(X, y))
+        p0 = jnp.zeros((X.shape[1])), jnp.atleast_1d(jnp.log(y.mean()))
+        mock_glm._validate(X, y, p0)
 
 
 def test_validate_lower_dimensional_data_X(mock_glm):
@@ -509,6 +510,19 @@ class TestGLM:
         with expectation:
             model.fit(X, y)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_set_scale(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+        assert model.scale != 1
+
     #######################
     # Test model.score
     #######################
@@ -720,6 +734,15 @@ class TestGLM:
                 "Log-likelihood of PoissonModel does not match" "that of jax.scipy!"
             )
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_score_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = 1.0
+        model.score(X, y)
+
     #######################
     # Test model.predict
     #######################
@@ -928,6 +951,17 @@ class TestGLM:
         with expectation:
             model.simulate(jax.random.key(123), X)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_simulate_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = 1.0
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
+
     #######################################
     # Compare with standard implementation
     #######################################
@@ -948,6 +982,11 @@ class TestGLM:
 
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        GridSearchCV(model, param_grid).fit(X, y)
+
+    def test_compatibility_with_sklearn_cv_gamma(self, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
@@ -1013,7 +1052,9 @@ class TestPopulationGLM:
         when the regularizer name is not present in jaxopt.
         """
         with expectation:
-            population_glm_class(regularizer=ridge_regularizer, observation_model=observation)
+            population_glm_class(
+                regularizer=ridge_regularizer, observation_model=observation
+            )
 
     @pytest.mark.parametrize(
         "X, y",
@@ -1373,9 +1414,7 @@ class TestPopulationGLM:
         # required for numerical precision of coeffs
         jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        X_tree, _, model_tree, true_params_tree, _ = (
-            poisson_population_GLM_model_pytree
-        )
+        X_tree, _, model_tree, true_params_tree, _ = poisson_population_GLM_model_pytree
         # fit both models
         model.fit(X, y, init_params=true_params)
         model_tree.fit(X_tree, y, init_params=true_params_tree)
@@ -1416,6 +1455,24 @@ class TestPopulationGLM:
         X.fill(fill_val)
         with expectation:
             model.fit(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_gamma_glm(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_set_scale(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+        assert np.all(model.scale != 1)
+
+    def test_fit_scale_array(self, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.fit(X, y)
+        assert model.scale.size == y.shape[1]
 
     #######################
     # Test model.score
@@ -1596,9 +1653,7 @@ class TestPopulationGLM:
             ),
         ],
     )
-    def test_score_type_r2(
-        self, score_type, expectation, poisson_population_GLM_model
-    ):
+    def test_score_type_r2(self, score_type, expectation, poisson_population_GLM_model):
         """
         Test the `score` method for unsupported scoring types.
         Ensure only valid score types are used.
@@ -1628,6 +1683,35 @@ class TestPopulationGLM:
             raise ValueError(
                 "Log-likelihood of PoissonModel does not match" "that of jax.scipy!"
             )
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_score_gamma_glm(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = np.ones((y.shape[1]))
+        model.score(X, y)
+
+    @pytest.mark.parametrize(
+        "score_type", ["log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"]
+    )
+    def test_score_aggregation_ndim(self, score_type, poisson_population_GLM_model):
+        """
+        Test that the aggregate samples returns the right dimensional object.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        mn = model.score(X, y, score_type=score_type, aggregate_sample_scores=jnp.mean)
+        mn_n = model.score(
+            X,
+            y,
+            score_type=score_type,
+            aggregate_sample_scores=lambda x: jnp.mean(x, axis=0),
+        )
+        assert mn.ndim == 0
+        assert mn_n.ndim == 1
 
     #######################
     # Test model.predict
@@ -1843,6 +1927,18 @@ class TestPopulationGLM:
         with expectation:
             model.simulate(jax.random.key(123), X)
 
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_simulate_gamma_glm(self, inv_link, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        model.observation_model.inverse_link_function = inv_link
+        model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale = jnp.ones((y.shape[1]))
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
+
     #######################################
     # Compare with standard implementation
     #######################################
@@ -1866,18 +1962,39 @@ class TestPopulationGLM:
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
+    def test_compatibility_with_sklearn_cv_gamma(self, gamma_population_GLM_model):
+        X, y, model, true_params, firing_rate = gamma_population_GLM_model
+        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        GridSearchCV(model, param_grid).fit(X, y)
+
     @pytest.mark.parametrize(
         "mask, expectation",
         [
             (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
-            ({"input_1": [0, 1, 0], "input_2": [1, 0, 1]},
-             pytest.raises(ValueError, match="'feature_mask' of 'populationGLM' must be a 2-dimensional array")),
-            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}, does_not_raise()),
-            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1.1])},
-             pytest.raises(ValueError, match="'feature_mask' must contain only 0s and 1s")),
-            (np.array([0.1, 1, 1] * 5).reshape(5, 3),
-             pytest.raises(ValueError, match="'feature_mask' must contain only 0s and 1s"))
-        ]
+            (
+                {"input_1": [0, 1, 0], "input_2": [1, 0, 1]},
+                pytest.raises(
+                    ValueError,
+                    match="'feature_mask' of 'populationGLM' must be a 2-dimensional array",
+                ),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+                does_not_raise(),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1.1])},
+                pytest.raises(
+                    ValueError, match="'feature_mask' must contain only 0s and 1s"
+                ),
+            ),
+            (
+                np.array([0.1, 1, 1] * 5).reshape(5, 3),
+                pytest.raises(
+                    ValueError, match="'feature_mask' must contain only 0s and 1s"
+                ),
+            ),
+        ],
     )
     def test_feature_mask_setter(self, mask, expectation, poisson_population_GLM_model):
         _, _, model, _, _ = poisson_population_GLM_model
@@ -1888,16 +2005,32 @@ class TestPopulationGLM:
         "mask, expectation",
         [
             (np.array([0, 1, 1] * 5).reshape(5, 3), does_not_raise()),
-            (np.array([0, 1, 1] * 4).reshape(4, 3), pytest.raises(ValueError, match="Inconsistent number of features")),
-            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),  pytest.raises(ValueError, match="Inconsistent number of neurons")),
-            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
-            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
-        ]
+            (
+                np.array([0, 1, 1] * 4).reshape(4, 3),
+                pytest.raises(ValueError, match="Inconsistent number of features"),
+            ),
+            (
+                np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+                pytest.raises(ValueError, match="Inconsistent number of neurons"),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+        ],
     )
     @pytest.mark.parametrize("attr_name", ["fit", "predict", "score"])
-    def test_feature_mask_compatibility_fit(self, mask, expectation, attr_name, poisson_population_GLM_model):
+    def test_feature_mask_compatibility_fit(
+        self, mask, expectation, attr_name, poisson_population_GLM_model
+    ):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         model.feature_mask = mask
         model.coef_ = true_params[0]
@@ -1911,23 +2044,50 @@ class TestPopulationGLM:
     @pytest.mark.parametrize(
         "mask, expectation",
         [
-            (np.array([0, 1, 1] * 5).reshape(5, 3),
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
-            (np.array([0, 1, 1] * 4).reshape(4, 3),
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
-            (np.array([0, 1, 1, 1] * 5).reshape(5, 4),
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
-            ({"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}, does_not_raise()),
-            ({"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
-             pytest.raises(ValueError, match="Inconsistent number of neurons")),
-            ({"input_1": np.array([0, 1, 0])},
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure")),
-            ({"input_1": np.array([0, 1, 0, 1])},
-             pytest.raises(TypeError, match="feature_mask and X must have the same structure"))
-        ]
+            (
+                np.array([0, 1, 1] * 5).reshape(5, 3),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                np.array([0, 1, 1] * 4).reshape(4, 3),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+                does_not_raise(),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
+                pytest.raises(ValueError, match="Inconsistent number of neurons"),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0])},
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                {"input_1": np.array([0, 1, 0, 1])},
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+        ],
     )
     @pytest.mark.parametrize("attr_name", ["fit", "predict", "score"])
-    def test_feature_mask_compatibility_fit_tree(self, mask, expectation, attr_name, poisson_population_GLM_model_pytree):
+    def test_feature_mask_compatibility_fit_tree(
+        self, mask, expectation, attr_name, poisson_population_GLM_model_pytree
+    ):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
         model.feature_mask = mask
         model.coef_ = true_params[0]
@@ -1941,39 +2101,61 @@ class TestPopulationGLM:
     @pytest.mark.parametrize(
         "regularizer",
         [
-            nmo.regularizer.UnRegularized(solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}),
-            nmo.regularizer.UnRegularized(solver_name="GradientDescent", solver_kwargs={"tol": 10 ** -14}),
-            nmo.regularizer.Ridge(solver_name="GradientDescent", regularizer_strength=0.001, solver_kwargs={"tol": 10**-14}),
-            nmo.regularizer.Ridge(solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10 ** -14}),
-            nmo.regularizer.Lasso(regularizer_strength=0.001, solver_kwargs={"tol": 10**-14})
-        ]
+            nmo.regularizer.UnRegularized(
+                solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}
+            ),
+            nmo.regularizer.UnRegularized(
+                solver_name="GradientDescent", solver_kwargs={"tol": 10**-14}
+            ),
+            nmo.regularizer.Ridge(
+                solver_name="GradientDescent",
+                regularizer_strength=0.001,
+                solver_kwargs={"tol": 10**-14},
+            ),
+            nmo.regularizer.Ridge(
+                solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}
+            ),
+            nmo.regularizer.Lasso(
+                regularizer_strength=0.001, solver_kwargs={"tol": 10**-14}
+            ),
+        ],
     )
     @pytest.mark.parametrize(
         "mask",
         [
-            np.array([
-                [0, 0, 1],
-                [0, 1, 0],
-                [1, 1, 1],
-                [1, 0, 1],
-                [0, 1, 0],
-            ]),
-            {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])}
-    ])
-    def test_masked_fit_vs_loop(self, regularizer, mask, poisson_population_GLM_model, poisson_population_GLM_model_pytree):
+            np.array(
+                [
+                    [0, 0, 1],
+                    [0, 1, 0],
+                    [1, 1, 1],
+                    [1, 0, 1],
+                    [0, 1, 0],
+                ]
+            ),
+            {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
+        ],
+    )
+    def test_masked_fit_vs_loop(
+        self,
+        regularizer,
+        mask,
+        poisson_population_GLM_model,
+        poisson_population_GLM_model_pytree,
+    ):
         jax.config.update("jax_enable_x64", True)
         if isinstance(mask, dict):
             X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
 
             def map_neu(k, coef_):
                 key_ind = {"input_1": [0, 1, 2], "input_2": [3, 4]}
-                ind_array = np.zeros((0, ), dtype=int)
-                coef_stack = np.zeros((0, ), dtype=int)
+                ind_array = np.zeros((0,), dtype=int)
+                coef_stack = np.zeros((0,), dtype=int)
                 for key, msk in mask.items():
                     if msk[k]:
                         ind_array = np.hstack((ind_array, key_ind[key]))
                         coef_stack = np.hstack((coef_stack, coef_[key]))
                 return ind_array, coef_stack
+
         else:
             X, y, model, true_params, firing_rate = poisson_population_GLM_model
 
@@ -1990,7 +2172,7 @@ class TestPopulationGLM:
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
         coef_loop = np.zeros((5, 3))
-        intercept_loop = np.zeros((3, ))
+        intercept_loop = np.zeros((3,))
         # loop over neuron
         for k in range(y.shape[1]):
             model_single_neu = nmo.glm.GLM(regularizer=regularizer)
@@ -2009,5 +2191,3 @@ class TestPopulationGLM:
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
-
-
