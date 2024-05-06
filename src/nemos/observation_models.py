@@ -225,7 +225,10 @@ class Observations(Base, abc.ABC):
 
     @abc.abstractmethod
     def estimate_scale(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, dof_resid: Union[float, jnp.ndarray]
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
         r"""Estimate the scale parameter for the model.
 
@@ -604,7 +607,10 @@ class PoissonObservations(Observations):
         return deviance
 
     def estimate_scale(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, dof_resid: Union[float, jnp.ndarray]
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
         r"""
         Assign 1 to the scale parameter of the Poisson model.
@@ -800,7 +806,10 @@ class GammaObservations(Observations):
         return resid_dev / scale
 
     def estimate_scale(
-        self, predicted_rate: jnp.ndarray, y: jnp.ndarray, dof_resid: Union[float, jnp.ndarray]
+        self,
+        predicted_rate: jnp.ndarray,
+        y: jnp.ndarray,
+        dof_resid: Union[float, jnp.ndarray],
     ) -> Union[float, jnp.ndarray]:
         r"""
         Estimate the scale of the model based on the GLM residuals.
@@ -833,7 +842,9 @@ class GammaObservations(Observations):
             predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
         )
         resid = jnp.power(y - predicted_rate, 2)
-        return jnp.sum(resid * jnp.power(predicted_rate, -2), axis=0) / dof_resid  # pearson residuals
+        return (
+            jnp.sum(resid * jnp.power(predicted_rate, -2), axis=0) / dof_resid
+        )  # pearson residuals
 
 
 def check_observation_model(observation_model):

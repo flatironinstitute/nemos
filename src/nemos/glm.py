@@ -5,6 +5,7 @@ from typing import Callable, Literal, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 import jaxopt
+import numpy as np
 from numpy.typing import ArrayLike
 
 from . import observation_models as obs
@@ -470,8 +471,7 @@ class GLM(BaseRegressor):
         return score
 
     def _initialize_parameters(
-        self,
-        X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
     ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
 
@@ -518,13 +518,17 @@ class GLM(BaseRegressor):
 
         # find numerically zeros of the link
         func = lambda x: jnp.sum(
-            jnp.power(self.observation_model.inverse_link_function(x) - y.mean(axis=0, keepdims=False), 2)
+            jnp.power(
+                self.observation_model.inverse_link_function(x)
+                - y.mean(axis=0, keepdims=False),
+                2,
+            )
         )
-        initial_intercept, _ = jaxopt.ScipyRootFinding(method="hybr", optimality_fun=func).run(
-            jnp.atleast_1d(jnp.ones_like(y[0])) * 0.001
-        )
+        initial_intercept, _ = jaxopt.ScipyRootFinding(
+            method="hybr", optimality_fun=func
+        ).run(jnp.atleast_1d(jnp.ones_like(y[0])) * 0.001)
 
-        #jaxopt.LBFGS(func).run(jnp.ones())
+        # jaxopt.LBFGS(func).run(jnp.ones())
 
         # Initialize parameters
         init_params = (
@@ -622,17 +626,7 @@ class GLM(BaseRegressor):
 
         self._set_coef_and_intercept(params)
 
-        coef, _ = self._get_coef_and_intercept()
-
-        # estimate the GLM scale
-        if isinstance(self.regularizer, reg.Ridge):
-            dof = 1 + jnp.sum(coef / (coef + self.regularizer.regularizer_strength))
-            dof_resid = X.shape[0] - dof
-        elif isinstance(self.regularizer, reg.Lasso):
-            dof_resid = X.shape[0] - (~jnp.isclose(coef, jnp.zeros_like(coef))).sum()
-        else:
-            dof_resid = X.shape[0] - X.shape[1]
-
+        dof_resid = self.estimate_resid_degrees_of_freedom(X)
         self.scale = self.observation_model.estimate_scale(
             self._predict(params, data), y, dof_resid=dof_resid
         )
@@ -723,6 +717,39 @@ class GLM(BaseRegressor):
             ),
             predicted_rate,
         )
+
+    def estimate_resid_degrees_of_freedom(self, X: DESIGN_INPUT_TYPE):
+        """
+        Estimate the degrees of freedom of the residuals.
+
+        Parameters
+        ----------
+        self :
+            A fitted GLM model.
+        X :
+            The design matrix.
+
+        Returns
+        -------
+        :
+            An estimate of the degrees of freedom of the residuals.
+        """
+        if isinstance(self.observation_model, obs.PoissonObservations):
+            return 1.0  # scale is fix, residual not used
+
+        # if the regularizer is lasso use the non-zero
+        # coeff as an estimate of the dof
+        # see https://arxiv.org/abs/0712.0881
+        if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
+            coef, _ = self._get_coef_and_intercept()
+            return X.shape[0] - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
+        elif isinstance(self.regularizer, reg.Ridge):
+            # for Ridge, use the tot parameters (X.shape[1] + intercept)
+            return X.shape[0] - X.shape[1] - 1
+        else:
+            # for UnRegularized, use the rank
+            rank = jnp.linalg.matrix_rank(X)
+            return X.shape[0] - rank - 1
 
 
 class PopulationGLM(GLM):
