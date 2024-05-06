@@ -5,7 +5,6 @@ from typing import Callable, Literal, Optional, Tuple, Union
 import jax
 import jax.numpy as jnp
 import jaxopt
-import numpy as np
 from numpy.typing import ArrayLike
 
 from . import observation_models as obs
@@ -517,16 +516,18 @@ class GLM(BaseRegressor):
             data = X
 
         # find numerically zeros of the link
-        func = lambda x: jnp.sum(
-            jnp.power(
-                self.observation_model.inverse_link_function(x)
-                - y.mean(axis=0, keepdims=False),
-                2,
+        def func(x):
+            return jnp.sum(
+                jnp.power(
+                    self.observation_model.inverse_link_function(x)
+                    - y.mean(axis=0, keepdims=False),
+                    2,
+                )
             )
+
+        initial_intercept, _ = jaxopt.GradientDescent(func).run(
+            y.mean(axis=0, keepdims=False)
         )
-        initial_intercept, _ = jaxopt.GradientDescent(
-            func
-        ).run(y.mean(axis=0, keepdims=False))
         initial_intercept = jnp.atleast_1d(initial_intercept)
 
         # Initialize parameters
