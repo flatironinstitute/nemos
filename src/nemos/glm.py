@@ -131,17 +131,54 @@ class GLM(BaseRegressor):
 
     @property
     def solver_init_state(self) -> Union[None, reg.SolverInit]:
-        """The init_state function for the jaxopt solver."""
+        """
+        Provides the initialization function for the solver's state.
+
+        This function is responsible for initializing the solver's state, necessary for the start
+        of the optimization process. It sets up initial values for parameters like gradients and step
+        sizes based on the model configuration and input data.
+
+        Returns
+        -------
+        :
+            The function to initialize the state of the solver, if available; otherwise, None if
+            the solver has not yet been instantiated.
+        """
         return self._solver_init_state
 
     @property
     def solver_update(self) -> Union[None, reg.SolverUpdate]:
-        """The update function for the jaxopt solver."""
+        """
+        Provides the function for updating the solver's state during the optimization process.
+
+        This function is used to perform a single update step in the optimization process. It updates
+        the model's parameters based on the current state, data, and gradients. It is typically used
+        in scenarios where fine-grained control over each optimization step is necessary, such as in
+        online learning or complex optimization scenarios.
+
+        Returns
+        -------
+        :
+            The function to update the solver's state, if available; otherwise, None if the solver
+            has not yet been instantiated.
+        """
         return self._solver_update
 
     @property
     def solver_run(self) -> Union[None, reg.SolverRun]:
-        """The run function for the jaxopt solver."""
+        """
+        Provides the function to execute the solver's optimization process.
+
+        This function runs the solver using the initialized parameters and state, performing the
+        optimization to fit the model to the data. It iteratively updates the model parameters until
+        a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
+
+        Returns
+        -------
+        :
+            The function to run the solver's optimization process, if available; otherwise, None if
+            the solver has not yet been instantiated.
+        """
         return self._solver_run
 
     @staticmethod
