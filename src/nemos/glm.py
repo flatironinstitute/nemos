@@ -96,7 +96,7 @@ class GLM(BaseRegressor):
         self._solver_run = None
 
     @property
-    def regularizer(self):
+    def regularizer(self) -> Union[None, reg.Regularizer]:
         """Getter for the regularizer attribute."""
         return self._regularizer
 
@@ -118,7 +118,7 @@ class GLM(BaseRegressor):
         self._regularizer = regularizer
 
     @property
-    def observation_model(self):
+    def observation_model(self) -> Union[None, obs.Observations]:
         """Getter for the observation_model attribute."""
         return self._observation_model
 
@@ -130,15 +130,15 @@ class GLM(BaseRegressor):
         self._observation_model = observation
 
     @property
-    def solver_update(self):
+    def solver_update(self) -> Union[None, reg.SolverUpdate]:
         return self._solver_update
 
     @property
-    def solver_init_state(self):
+    def solver_init_state(self) -> Union[None, reg.SolverInit]:
         return self._solver_init_state
 
     @property
-    def solver_run(self):
+    def solver_run(self) -> Union[None, reg.SolverRun]:
         return self._solver_run
 
     @staticmethod
@@ -769,7 +769,7 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return X.shape[0] - rank - 1
 
-    def update(self, params: Tuple[jnp.ndarray, jnp.ndarray], opt_state: NamedTuple, X, y, *args, **kwargs) -> jaxopt.OptStep:
+    def update(self, params: Tuple[jnp.ndarray, jnp.ndarray], opt_state: NamedTuple, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, **kwargs) -> jaxopt.OptStep:
         """
         Update the model parameters and solver state.
 
@@ -813,7 +813,15 @@ class GLM(BaseRegressor):
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state)
         """
         if params is None:
-            self._initialize_parameters()
+            params = self._initialize_parameters(X, y)
+
+        # find non-nans
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # drop nans
+        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+
         if self.solver_update is None:
             # instantiate the solver
             self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)

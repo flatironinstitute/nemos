@@ -22,7 +22,7 @@ from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
 from .pytrees import FeaturePytree
 
-SolverRunner = Callable[
+SolverRun = Callable[
     [
         Tuple[
             jnp.ndarray, jnp.ndarray
@@ -176,7 +176,7 @@ class Regularizer(Base, abc.ABC):
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRunner]:
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
         Instantiate the solver with the provided loss function, and return callable functions
         that initialize the solver state, update the model parameters, and run the optimization.
@@ -349,7 +349,7 @@ class Ridge(Regularizer):
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRunner]:
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
         Instantiate the solver with the provided loss function, and return callable functions
         that initialize the solver state, update the model parameters, and run the optimization.
@@ -423,7 +423,7 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRunner]:
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
         Instantiate the solver with the provided loss function, and return callable functions
         that initialize the solver state, update the model parameters, and run the optimization.
