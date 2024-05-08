@@ -15,7 +15,6 @@ from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import jnp_asarray_if, support_pynapple
 
-
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 
@@ -664,7 +663,9 @@ class GLM(BaseRegressor):
         y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
 
         # Run optimization
-        self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        self._solver_init_state, self._solver_update, self._solver_run = (
+            self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        )
 
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
         if isinstance(X, FeaturePytree):
@@ -809,13 +810,21 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return X.shape[0] - rank - 1
 
-    def initialize_update(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, params: Optional[ModelParams] = None, **kwargs) -> Tuple[ModelParams, NamedTuple]:
+    def initialize_update(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        params: Optional[ModelParams] = None,
+        **kwargs,
+    ) -> Tuple[ModelParams, NamedTuple]:
         """
         Initializes the solver's state and optionally sets initial model parameters for the optimization process.
 
-        This method prepares the solver by instantiating its components (initial state, update function, and run function)
-        and initializes model parameters if they are not provided. It is typically called before starting the optimization
-        process to ensure that all necessary components and states are correctly configured.
+        This method prepares the solver by instantiating its components (initial state, update function,
+        and run function) and initializes model parameters if they are not provided. It is typically called
+        before starting the optimization process to ensure that all necessary
+        components and states are correctly configured.
 
         Parameters
         ----------
@@ -844,13 +853,23 @@ class GLM(BaseRegressor):
         >>> params, opt_state = model.initialize_update(X, y)
         >>> # Now ready to run optimization or update steps
         """
-        self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        self._solver_init_state, self._solver_update, self._solver_run = (
+            self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        )
         if params is None:
             params = self._initialize_parameters(X, y)
         opt_state = self.solver_init_state(params, X, y, *args, **kwargs)
         return params, opt_state
 
-    def update(self, params: Tuple[jnp.ndarray, jnp.ndarray], opt_state: NamedTuple, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, **kwargs) -> jaxopt.OptStep:
+    def update(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> jaxopt.OptStep:
         """
         Update the model parameters and solver state.
 
@@ -1277,13 +1296,21 @@ class PopulationGLM(GLM):
             + bs
         )
 
-    def initialize_update(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, params: Optional[ModelParams] = None, **kwargs) -> Tuple[ModelParams, NamedTuple]:
+    def initialize_update(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        params: Optional[ModelParams] = None,
+        **kwargs,
+    ) -> Tuple[ModelParams, NamedTuple]:
         """
         Initializes the solver's state and optionally sets initial model parameters for the optimization process.
 
-        This method prepares the solver by instantiating its components (initial state, update function, and run function)
-        and initializes model parameters if they are not provided. It is typically called before starting the optimization
-        process to ensure that all necessary components and states are correctly configured.
+        This method prepares the solver by instantiating its components (initial state, update function, and
+        run function) and initializes model parameters if they are not provided. It is typically called
+        before starting the optimization process to ensure that all necessary components and states are
+        correctly configured.
 
         Parameters
         ----------

@@ -15,7 +15,6 @@ import jax
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
-from jaxopt.base import IterativeSolver, StochasticSolver
 
 from . import tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, Base
@@ -206,8 +205,10 @@ class Regularizer(Base, abc.ABC):
         :
             A tuple containing three callable functions:
             - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
-            - solver_update: Function to perform a single update step in the optimization process, returning new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until a stopping criterion is met.
+            - solver_update: Function to perform a single update step in the optimization process,
+            returning new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until a
+            stopping criterion is met.
         """
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
@@ -243,10 +244,14 @@ class Regularizer(Base, abc.ABC):
             return solver.run(init_params, *args, *run_args, **kwargs)
 
         def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
-            return solver.update(params, state, *args, *run_args, **kwargs, **run_kwargs)
+            return solver.update(
+                params, state, *args, *run_args, **kwargs, **run_kwargs
+            )
 
         def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
-            return solver.init_state(params, state, *args, *run_args, **kwargs, **run_kwargs)
+            return solver.init_state(
+                params, state, *args, *run_args, **kwargs, **run_kwargs
+            )
 
         return solver_init_state, solver_update, solver_run
 
@@ -368,9 +373,12 @@ class Ridge(Regularizer):
         -------
         :
             A tuple containing three callable functions:
-            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
-            - solver_update: Function to perform a single update step in the optimization process, returning new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until a stopping criterion is met.
+            - solver_init_state: Function to initialize the solver's state, necessary before starting
+            the optimization.
+            - solver_update: Function to perform a single update step in the optimization process, returning
+            new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until a
+            stopping criterion is met.
         """
         # this check has be performed here because the penalized loss will
         # always be a callable independently of which loss is passed!
@@ -443,9 +451,12 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         -------
         :
             A tuple containing three callable functions:
-            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
-            - solver_update: Function to perform a single update step in the optimization process, returning new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until a stopping criterion is met.
+            - solver_init_state: Function to initialize the solver's state, necessary before starting
+            the optimization.
+            - solver_update: Function to perform a single update step in the optimization process,
+            returning new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until
+            a stopping criterion is met.
         """
         return super().instantiate_solver(
             loss,
