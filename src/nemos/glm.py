@@ -1,6 +1,6 @@
 """GLM core module."""
 
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -14,6 +14,9 @@ from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import jnp_asarray_if, support_pynapple
+
+
+ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 
 def cast_to_jax(func):
@@ -88,6 +91,9 @@ class GLM(BaseRegressor):
         self.coef_ = None
         self.solver_state = None
         self.scale = None
+        self._solver_update = None
+        self._solver_init_state = None
+        self._solver_run = None
 
     @property
     def regularizer(self):
@@ -122,6 +128,18 @@ class GLM(BaseRegressor):
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+
+    @property
+    def solver_update(self):
+        return self._solver_update
+
+    @property
+    def solver_init_state(self):
+        return self._solver_init_state
+
+    @property
+    def solver_run(self):
+        return self._solver_run
 
     @staticmethod
     def _check_params(
@@ -606,7 +624,7 @@ class GLM(BaseRegressor):
         y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
 
         # Run optimization
-        runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
 
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
         if isinstance(X, FeaturePytree):
@@ -614,7 +632,7 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        params, state = runner(init_params, data, y)
+        params, state = self._solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -750,6 +768,65 @@ class GLM(BaseRegressor):
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
             return X.shape[0] - rank - 1
+
+    def update(self, params: Tuple[jnp.ndarray, jnp.ndarray], opt_state: NamedTuple, X, y, *args, **kwargs) -> jaxopt.OptStep:
+        """
+        Update the model parameters and solver state.
+
+        This method performs a single optimization step using the model's current solver.
+        It updates the model's coefficients and intercept based on the provided parameters and
+        optimization state. This method is particularly useful for iterative model fitting,
+        especially in scenarios where model parameters need to be updated incrementally,
+        such as online learning or when dealing with very large datasets that do not fit into memory at once.
+
+        Parameters
+        ----------
+        params : Tuple[jnp.ndarray, jnp.ndarray]
+            The current model parameters, typically a tuple of coefficients and intercepts.
+        opt_state : NamedTuple
+            The current state of the optimizer, encapsulating information necessary for the
+            optimization algorithm to continue from the current state. This includes gradients,
+            step sizes, and other optimizer-specific metrics.
+        *args
+            Additional positional arguments to be passed to the solver's update method.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's update method.
+
+        Returns
+        -------
+        jaxopt.OptStep
+            A tuple containing the updated parameters and optimization state. This tuple is
+            typically used to continue the optimization process in subsequent steps.
+
+        Raises
+        ------
+        ValueError
+            If the solver has not been instantiated or if the solver returns NaN values
+            indicating an invalid update step, typically due to numerical instabilities
+            or inappropriate solver configurations.
+
+        Example
+        -------
+        >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
+        >>> params = glm_instance.coef_, glm_instance.intercept_
+        >>> opt_state = glm_instance.solver_state
+        >>> new_params, new_opt_state = glm_instance.update(params, opt_state)
+        """
+        if params is None:
+            self._initialize_parameters()
+        if self.solver_update is None:
+            # instantiate the solver
+            self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+            # initialize state
+            opt_state = self.solver_init_state(params, X, y, *args, **kwargs)
+
+        # perform a one-step update
+        opt_step = self.solver_update(params, opt_state, X, y, *args, **kwargs)
+
+        # store params and state
+        self._set_coef_and_intercept(opt_step[0])
+        self.solver_state = opt_step[1]
+        return opt_step
 
 
 class PopulationGLM(GLM):

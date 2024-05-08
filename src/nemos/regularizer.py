@@ -9,12 +9,13 @@ with various optimization methods, and they can be applied depending on the mode
 import abc
 import inspect
 import warnings
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
+from jaxopt.base import IterativeSolver, StochasticSolver
 
 from . import tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, Base
@@ -32,6 +33,29 @@ SolverRunner = Callable[
     jaxopt.OptStep,
 ]
 
+SolverInit = Callable[
+    [
+        Tuple[
+            jnp.ndarray, jnp.ndarray
+        ],  # Model parameters (for now tuple, eventually pytree)
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    NamedTuple,
+]
+
+SolverUpdate = Callable[
+    [
+        Tuple[
+            jnp.ndarray, jnp.ndarray
+        ],  # Model parameters (for now tuple, eventually pytree)
+        NamedTuple,
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    jaxopt.OptStep,
+]
+
 ProximalOperator = Callable[
     [
         Tuple[
@@ -42,6 +66,7 @@ ProximalOperator = Callable[
     ],  # Step-size for optimization (must be a float)
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
+
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
@@ -151,10 +176,16 @@ class Regularizer(Base, abc.ABC):
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
-    ) -> SolverRunner:
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRunner]:
         """
-        Instantiate the solver with the provided loss function.
+        Instantiate the solver with the provided loss function, and return callable functions
+        that initialize the solver state, update the model parameters, and run the optimization.
 
+        This method creates a solver instance from jaxopt library, tailored to the specific loss
+        function and regularization approach defined by the Regularizer instance. It also handles
+        the proximal operator if required for the optimization method. The returned functions are
+         directly usable in optimization loops, simplifying the syntax by pre-setting
+        common arguments like regularization strength and other hyperparameters.
         Parameters
         ----------
         loss :
@@ -173,7 +204,10 @@ class Regularizer(Base, abc.ABC):
         Returns
         -------
         :
-            A function that runs the solver with the provided loss and proximal operator.
+            A tuple containing three callable functions:
+            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
+            - solver_update: Function to perform a single update step in the optimization process, returning new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until a stopping criterion is met.
         """
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
@@ -208,7 +242,13 @@ class Regularizer(Base, abc.ABC):
         ) -> jaxopt.OptStep:
             return solver.run(init_params, *args, *run_args, **kwargs)
 
-        return solver_run
+        def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
+            return solver.update(params, state, *args, *run_args, **kwargs, **run_kwargs)
+
+        def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
+            return solver.init_state(params, state, *args, *run_args, **kwargs, **run_kwargs)
+
+        return solver_init_state, solver_update, solver_run
 
 
 class UnRegularized(Regularizer):
@@ -309,10 +349,16 @@ class Ridge(Regularizer):
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
-    ) -> SolverRunner:
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRunner]:
         """
-        Instantiate the solver with a penalized loss function.
+        Instantiate the solver with the provided loss function, and return callable functions
+        that initialize the solver state, update the model parameters, and run the optimization.
 
+        This method creates a solver instance from jaxopt library, tailored to the specific loss
+        function and regularization approach defined by the Regularizer instance. It also handles
+        the proximal operator if required for the optimization method. The returned functions are
+         directly usable in optimization loops, simplifying the syntax by pre-setting
+        common arguments like regularization strength and other hyperparameters.
         Parameters
         ----------
         loss :
@@ -320,8 +366,11 @@ class Ridge(Regularizer):
 
         Returns
         -------
-        Callable
-            A function that runs the solver with the penalized loss.
+        :
+            A tuple containing three callable functions:
+            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
+            - solver_update: Function to perform a single update step in the optimization process, returning new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until a stopping criterion is met.
         """
         # this check has be performed here because the penalized loss will
         # always be a callable independently of which loss is passed!
@@ -374,9 +423,16 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
 
     def instantiate_solver(
         self, loss: Callable, *args: Any, **kwargs: Any
-    ) -> SolverRunner:
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRunner]:
         """
-        Instantiate the solver with the provided loss function and proximal operator.
+        Instantiate the solver with the provided loss function, and return callable functions
+        that initialize the solver state, update the model parameters, and run the optimization.
+
+        This method creates a solver instance from jaxopt library, tailored to the specific loss
+        function and regularization approach defined by the Regularizer instance. It also handles
+        the proximal operator if required for the optimization method. The returned functions are
+         directly usable in optimization loops, simplifying the syntax by pre-setting
+        common arguments like regularization strength and other hyperparameters.
 
         Parameters
         ----------
@@ -386,7 +442,10 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         Returns
         -------
         :
-            A function that runs the solver with the provided loss and proximal operator.
+            A tuple containing three callable functions:
+            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
+            - solver_update: Function to perform a single update step in the optimization process, returning new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until a stopping criterion is met.
         """
         return super().instantiate_solver(
             loss,
