@@ -643,17 +643,9 @@ class GLM(BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
         """
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
 
-        # validate the params
-        self._validate(X, y, init_params)
+        # validate the inputs & initialize solver
+        init_params, _ = self.initialize_solver(X, y, params=init_params)
 
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -661,11 +653,6 @@ class GLM(BaseRegressor):
         # drop nans
         X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
         y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
-
-        # Run optimization
-        self._solver_init_state, self._solver_update, self._solver_run = (
-            self.regularizer.instantiate_solver(self._predict_and_compute_loss)
-        )
 
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
         if isinstance(X, FeaturePytree):
@@ -810,7 +797,7 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return X.shape[0] - rank - 1
 
-    def initialize_update(
+    def initialize_solver(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
@@ -847,18 +834,44 @@ class GLM(BaseRegressor):
             A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
             to be used for running the solver's optimization routines.
 
+        Raises
+        ------
+        ValueError
+            - If `params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
+            - If `X` is not two-dimensional.
+            - If `y` is not correct (1D for GLM, 2D for populationGLM).
+
+        TypeError
+            - If `params` are not array-like when provided.
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+
         Example
         -------
         >>> X, y = load_data()  # Hypothetical function to load data
-        >>> params, opt_state = model.initialize_update(X, y)
+        >>> params, opt_state = model.initialize_solver(X, y)
         >>> # Now ready to run optimization or update steps
         """
+        if params is None:
+            params = self._initialize_parameters(X, y)  # initialize
+        else:
+            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+            params = validation.convert_tree_leaves_to_jax_array(
+                params, err_message=err_message, data_type=float
+            )
+
+        # validate input
+        self._validate(X, y, params)
+
         self._solver_init_state, self._solver_update, self._solver_run = (
             self.regularizer.instantiate_solver(self._predict_and_compute_loss)
         )
-        if params is None:
-            params = self._initialize_parameters(X, y)
-        opt_state = self.solver_init_state(params, X, y, *args, **kwargs)
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+        opt_state = self.solver_init_state(params, data, y, *args, **kwargs)
         return params, opt_state
 
     def update(
@@ -1295,50 +1308,3 @@ class PopulationGLM(GLM):
             )
             + bs
         )
-
-    def initialize_update(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        params: Optional[ModelParams] = None,
-        **kwargs,
-    ) -> Tuple[ModelParams, NamedTuple]:
-        """
-        Initializes the solver's state and optionally sets initial model parameters for the optimization process.
-
-        This method prepares the solver by instantiating its components (initial state, update function, and
-        run function) and initializes model parameters if they are not provided. It is typically called
-        before starting the optimization process to ensure that all necessary components and states are
-        correctly configured.
-
-        Parameters
-        ----------
-        X :
-            The predictors used in the model fitting process. This can include feature matrices or other structures
-            compatible with the model's design.
-        y :
-            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
-            they are not provided.
-        params :
-            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
-        *args
-            Additional positional arguments to be passed to the solver's init_state method.
-        **kwargs
-            Additional keyword arguments to be passed to the solver's init_state method.
-
-        Returns
-        -------
-        Tuple[ModelParams, NamedTuple]
-            A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
-            to be used for running the solver's optimization routines.
-
-        Example
-        -------
-        >>> X, y = load_data()  # Hypothetical function to load data
-        >>> params, opt_state = model.initialize_update(X, y)
-        >>> # Now ready to run optimization or update steps
-        """
-        if self.feature_mask is None:
-            self._initialize_feature_mask(X, y)
-        return super().initialize_update(X, y, *args, params=params, **kwargs)
