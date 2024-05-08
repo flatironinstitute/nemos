@@ -774,19 +774,25 @@ class GLM(BaseRegressor):
         Update the model parameters and solver state.
 
         This method performs a single optimization step using the model's current solver.
-        It updates the model's coefficients and intercept based on the provided parameters and
-        optimization state. This method is particularly useful for iterative model fitting,
-        especially in scenarios where model parameters need to be updated incrementally,
+        It updates the model's coefficients and intercept based on the provided parameters, predictors (X),
+        responses (y), and the current optimization state. This method is particularly useful for iterative
+        model fitting, especially in scenarios where model parameters need to be updated incrementally,
         such as online learning or when dealing with very large datasets that do not fit into memory at once.
 
         Parameters
         ----------
-        params : Tuple[jnp.ndarray, jnp.ndarray]
+        params :
             The current model parameters, typically a tuple of coefficients and intercepts.
-        opt_state : NamedTuple
+        opt_state :
             The current state of the optimizer, encapsulating information necessary for the
             optimization algorithm to continue from the current state. This includes gradients,
             step sizes, and other optimizer-specific metrics.
+        X :
+            The predictors used in the model fitting process, which may include feature matrices
+            or FeaturePytree objects.
+        y :
+            The response variable or output data corresponding to the predictors, used in the model
+            fitting process.
         *args
             Additional positional arguments to be passed to the solver's update method.
         **kwargs
@@ -810,7 +816,7 @@ class GLM(BaseRegressor):
         >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state
-        >>> new_params, new_opt_state = glm_instance.update(params, opt_state)
+        >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
         """
         if params is None:
             params = self._initialize_parameters(X, y)
