@@ -809,6 +809,47 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return X.shape[0] - rank - 1
 
+    def initialize_update(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, params: Optional[ModelParams] = None, **kwargs) -> Tuple[ModelParams, NamedTuple]:
+        """
+        Initializes the solver's state and optionally sets initial model parameters for the optimization process.
+
+        This method prepares the solver by instantiating its components (initial state, update function, and run function)
+        and initializes model parameters if they are not provided. It is typically called before starting the optimization
+        process to ensure that all necessary components and states are correctly configured.
+
+        Parameters
+        ----------
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+        params :
+            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
+        *args
+            Additional positional arguments to be passed to the solver's init_state method.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's init_state method.
+
+        Returns
+        -------
+        Tuple[ModelParams, NamedTuple]
+            A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
+            to be used for running the solver's optimization routines.
+
+        Example
+        -------
+        >>> X, y = load_data()  # Hypothetical function to load data
+        >>> params, opt_state = model.initialize_update(X, y)
+        >>> # Now ready to run optimization or update steps
+        """
+        self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        if params is None:
+            params = self._initialize_parameters(X, y)
+        opt_state = self.solver_init_state(params, X, y, *args, **kwargs)
+        return params, opt_state
+
     def update(self, params: Tuple[jnp.ndarray, jnp.ndarray], opt_state: NamedTuple, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, **kwargs) -> jaxopt.OptStep:
         """
         Update the model parameters and solver state.
@@ -858,21 +899,12 @@ class GLM(BaseRegressor):
         >>> opt_state = glm_instance.solver_state
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
         """
-        if params is None:
-            params = self._initialize_parameters(X, y)
-
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
 
         # drop nans
         X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
         y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
-
-        if self.solver_update is None:
-            # instantiate the solver
-            self._solver_init_state, self._solver_update, self._solver_run = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
-            # initialize state
-            opt_state = self.solver_init_state(params, X, y, *args, **kwargs)
 
         # perform a one-step update
         opt_step = self.solver_update(params, opt_state, X, y, *args, **kwargs)
@@ -1244,3 +1276,42 @@ class PopulationGLM(GLM):
             )
             + bs
         )
+
+    def initialize_update(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray, *args, params: Optional[ModelParams] = None, **kwargs) -> Tuple[ModelParams, NamedTuple]:
+        """
+        Initializes the solver's state and optionally sets initial model parameters for the optimization process.
+
+        This method prepares the solver by instantiating its components (initial state, update function, and run function)
+        and initializes model parameters if they are not provided. It is typically called before starting the optimization
+        process to ensure that all necessary components and states are correctly configured.
+
+        Parameters
+        ----------
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+        params :
+            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
+        *args
+            Additional positional arguments to be passed to the solver's init_state method.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's init_state method.
+
+        Returns
+        -------
+        Tuple[ModelParams, NamedTuple]
+            A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
+            to be used for running the solver's optimization routines.
+
+        Example
+        -------
+        >>> X, y = load_data()  # Hypothetical function to load data
+        >>> params, opt_state = model.initialize_update(X, y)
+        >>> # Now ready to run optimization or update steps
+        """
+        if self.feature_mask is None:
+            self._initialize_feature_mask(X, y)
+        return super().initialize_update(X, y, *args, params=params, **kwargs)
