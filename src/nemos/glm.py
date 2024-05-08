@@ -131,14 +131,17 @@ class GLM(BaseRegressor):
 
     @property
     def solver_update(self) -> Union[None, reg.SolverUpdate]:
+        """The update function for the jaxopt solver."""
         return self._solver_update
 
     @property
     def solver_init_state(self) -> Union[None, reg.SolverInit]:
+        """The init_state function for the jaxopt solver."""
         return self._solver_init_state
 
     @property
     def solver_run(self) -> Union[None, reg.SolverRun]:
+        """The run function for the jaxopt solver."""
         return self._solver_run
 
     @staticmethod
