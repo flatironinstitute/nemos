@@ -8,8 +8,8 @@ from typing import Any, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import ArrayLike, NDArray
 from jaxopt import OptStep
+from numpy.typing import ArrayLike, NDArray
 
 from . import validation
 from .pytrees import FeaturePytree
@@ -299,14 +299,14 @@ class BaseRegressor(Base, abc.ABC):
 
     @abc.abstractmethod
     def update(
-            self,
-            params: Tuple[jnp.ndarray, jnp.ndarray],
-            opt_state: NamedTuple,
-            X: DESIGN_INPUT_TYPE,
-            y: jnp.ndarray,
-            *args,
-            **kwargs,
-        ) -> OptStep:
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> OptStep:
         """Run a single update step of the jaxopt solver"""
         pass
 
