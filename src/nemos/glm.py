@@ -673,7 +673,7 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        params, state = self._solver_run(init_params, data, y)
+        params, state = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
