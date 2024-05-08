@@ -91,8 +91,8 @@ class GLM(BaseRegressor):
         self.coef_ = None
         self.solver_state = None
         self.scale = None
-        self._solver_update = None
         self._solver_init_state = None
+        self._solver_update = None
         self._solver_run = None
 
     @property
@@ -130,14 +130,14 @@ class GLM(BaseRegressor):
         self._observation_model = observation
 
     @property
-    def solver_update(self) -> Union[None, reg.SolverUpdate]:
-        """The update function for the jaxopt solver."""
-        return self._solver_update
-
-    @property
     def solver_init_state(self) -> Union[None, reg.SolverInit]:
         """The init_state function for the jaxopt solver."""
         return self._solver_init_state
+
+    @property
+    def solver_update(self) -> Union[None, reg.SolverUpdate]:
+        """The update function for the jaxopt solver."""
+        return self._solver_update
 
     @property
     def solver_run(self) -> Union[None, reg.SolverRun]:
