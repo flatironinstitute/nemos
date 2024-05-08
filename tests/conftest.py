@@ -66,6 +66,11 @@ class MockRegressor(nmo.base_class.BaseRegressor):
     def _set_coef_and_intercept(self, params):
         pass
 
+    def update(self, *args, **kwargs):
+        pass
+
+    def initialize_solver(self, *args, **kwargs):
+        pass
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
