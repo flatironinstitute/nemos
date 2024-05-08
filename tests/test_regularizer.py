@@ -128,7 +128,7 @@ class TestUnRegularized:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         runner = self.cls("GradientDescent").instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
@@ -139,13 +139,13 @@ class TestUnRegularized:
         model.data_type = jnp.float64
         runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner_scipy = self.cls(
             "ScipyMinimize", {"method": "BFGS", "tol": 10**-12}
-        ).instantiate_solver(model._predict_and_compute_loss)
+        ).instantiate_solver(model._predict_and_compute_loss)[2]
         weights_gd, intercepts_gd = runner_gd(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -174,7 +174,7 @@ class TestUnRegularized:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
-        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -194,7 +194,7 @@ class TestUnRegularized:
         model.data_type = jnp.float64
         model.observation_model.inverse_link_function = jnp.exp
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
-        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -220,7 +220,7 @@ class TestUnRegularized:
         model.data_type = jnp.float64
         model.observation_model.inverse_link_function = inv_link_jax
         regularizer = self.cls("LBFGS", {"tol": 10**-13})
-        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             model._initialize_parameters(X, y), X, y
         )[0]
@@ -341,7 +341,7 @@ class TestRidge:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         runner = self.cls("GradientDescent").instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
@@ -352,13 +352,13 @@ class TestRidge:
         model.data_type = jnp.float64
         runner_gd = self.cls("GradientDescent", {"tol": 10**-12}).instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner_bfgs = self.cls("BFGS", {"tol": 10**-12}).instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner_scipy = self.cls(
             "ScipyMinimize", {"method": "BFGS", "tol": 10**-12}
-        ).instantiate_solver(model._predict_and_compute_loss)
+        ).instantiate_solver(model._predict_and_compute_loss)[2]
         weights_gd, intercepts_gd = runner_gd(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -387,7 +387,7 @@ class TestRidge:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         regularizer = self.cls("GradientDescent", {"tol": 10**-12})
-        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -410,7 +410,7 @@ class TestRidge:
         model.observation_model.inverse_link_function = jnp.exp
         regularizer = self.cls("GradientDescent", {"tol": 10 ** -12})
         regularizer.regularizer_strength = 0.1
-        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -510,7 +510,7 @@ class TestLasso:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         runner = self.cls("ProximalGradient").instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_solver_match_statsmodels(self, poissonGLM_model_instantiation):
@@ -520,7 +520,7 @@ class TestLasso:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         regularizer = self.cls("ProximalGradient", {"tol": 10**-12})
-        runner = regularizer.instantiate_solver(model._predict_and_compute_loss)
+        runner = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         # instantiate the glm with statsmodels
@@ -687,7 +687,7 @@ class TestGroupLasso:
 
         runner = self.cls("ProximalGradient", mask).instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
@@ -832,7 +832,7 @@ class TestGroupLasso:
 
         runner = self.cls("ProximalGradient", mask).instantiate_solver(
             model._predict_and_compute_loss
-        )
+        )[2]
         params, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
 
         zeros_est = params[0] == 0
