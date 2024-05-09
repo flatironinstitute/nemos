@@ -901,7 +901,7 @@ class TestGLM:
             self, add_entry, add_to, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `fit` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
+        Test the `initialize_solver` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if add_to == "X":
@@ -1151,7 +1151,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.fit(X, y, init_params=true_params)
+            model.initialize_solver(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1167,7 +1167,7 @@ class TestGLM:
             ),
         ],
     )
-    def test_fit_time_points_y(
+    def test_initialize_solver_time_points_y(
             self, delta_tp, expectation, poissonGLM_model_instantiation
     ):
         """
@@ -1213,6 +1213,57 @@ class TestGLM:
         X.fill(fill_val)
         with expectation:
             model.initialize_solver(X, y)
+
+    #######################
+    # Test model.update
+    #######################
+    @pytest.mark.parametrize(
+        "n_samples, expectation",
+        [
+            (None, does_not_raise()),
+            (100, does_not_raise()),
+            (1., pytest.raises(TypeError, match="`n_samples` must either `None` or")),
+            ("str", pytest.raises(TypeError, match="`n_samples` must either `None` or"))
+        ]
+    )
+    @pytest.mark.parametrize("batch_size", [1, 10])
+    def test_update_n_samples(self, n_samples, expectation, batch_size, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        params, state = model.initialize_solver(X, y)
+        with expectation:
+            model.update(params, state, X[:batch_size], y[:batch_size], n_samples=n_samples)
+
+    @pytest.mark.parametrize("batch_size", [1, 10])
+    def test_update_params_stored(self, batch_size, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        params, state = model.initialize_solver(X, y)
+        assert model.coef_ is None
+        assert model.intercept_ is None
+        assert model.scale is None
+        _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
+        assert model.coef_ is not None
+        assert model.intercept_ is not None
+        assert model.scale is not None
+
+    @pytest.mark.parametrize("batch_size", [2, 10])
+    def test_update_nan_drop_at_jit_comp(self, batch_size, poissonGLM_model_instantiation):
+        """Test that jit compilation does not affect the update in the presence of nans."""
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        params, state = model.initialize_solver(X, y)
+
+        # extract batch and add nans
+        Xnan = X[:batch_size]
+        Xnan[:batch_size//2] = np.nan
+
+        jit_update, _ = model.update(params, state, Xnan, y[:batch_size])
+        # make sure there is an update
+        assert any(~jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(params))
+        # update without jitting
+        with jax.disable_jit(True):
+            nojit_update, _ = model.update(params, state, Xnan, y[:batch_size])
+        # check for equivalence update
+        assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
+
 
     #######################
     # Test model.simulate

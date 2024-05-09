@@ -788,6 +788,10 @@ class GLM(BaseRegressor):
 
         if n_samples is None:
             n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError("`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                                "instead!")
 
         if isinstance(self.observation_model, obs.PoissonObservations):
             return 1.0  # scale is fix, residual not used
