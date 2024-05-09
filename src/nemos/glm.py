@@ -1,6 +1,6 @@
 """GLM core module."""
 
-from typing import Callable, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -14,6 +14,8 @@ from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import jnp_asarray_if, support_pynapple
+
+ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 
 def cast_to_jax(func):
@@ -88,9 +90,12 @@ class GLM(BaseRegressor):
         self.coef_ = None
         self.solver_state = None
         self.scale = None
+        self._solver_init_state = None
+        self._solver_update = None
+        self._solver_run = None
 
     @property
-    def regularizer(self):
+    def regularizer(self) -> Union[None, reg.Regularizer]:
         """Getter for the regularizer attribute."""
         return self._regularizer
 
@@ -112,7 +117,7 @@ class GLM(BaseRegressor):
         self._regularizer = regularizer
 
     @property
-    def observation_model(self):
+    def observation_model(self) -> Union[None, obs.Observations]:
         """Getter for the observation_model attribute."""
         return self._observation_model
 
@@ -122,6 +127,58 @@ class GLM(BaseRegressor):
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
+
+    @property
+    def solver_init_state(self) -> Union[None, reg.SolverInit]:
+        """
+        Provides the initialization function for the solver's state.
+
+        This function is responsible for initializing the solver's state, necessary for the start
+        of the optimization process. It sets up initial values for parameters like gradients and step
+        sizes based on the model configuration and input data.
+
+        Returns
+        -------
+        :
+            The function to initialize the state of the solver, if available; otherwise, None if
+            the solver has not yet been instantiated.
+        """
+        return self._solver_init_state
+
+    @property
+    def solver_update(self) -> Union[None, reg.SolverUpdate]:
+        """
+        Provides the function for updating the solver's state during the optimization process.
+
+        This function is used to perform a single update step in the optimization process. It updates
+        the model's parameters based on the current state, data, and gradients. It is typically used
+        in scenarios where fine-grained control over each optimization step is necessary, such as in
+        online learning or complex optimization scenarios.
+
+        Returns
+        -------
+        :
+            The function to update the solver's state, if available; otherwise, None if the solver
+            has not yet been instantiated.
+        """
+        return self._solver_update
+
+    @property
+    def solver_run(self) -> Union[None, reg.SolverRun]:
+        """
+        Provides the function to execute the solver's optimization process.
+
+        This function runs the solver using the initialized parameters and state, performing the
+        optimization to fit the model to the data. It iteratively updates the model parameters until
+        a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
+
+        Returns
+        -------
+        :
+            The function to run the solver's optimization process, if available; otherwise, None if
+            the solver has not yet been instantiated.
+        """
+        return self._solver_run
 
     @staticmethod
     def _check_params(
@@ -586,17 +643,8 @@ class GLM(BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
         """
-        if init_params is None:
-            init_params = self._initialize_parameters(X, y)  # initialize
-        else:
-            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
-            "with numeric data-type!"
-            init_params = validation.convert_tree_leaves_to_jax_array(
-                init_params, err_message=err_message, data_type=float
-            )
-
-        # validate the params
-        self._validate(X, y, init_params)
+        # validate the inputs & initialize solver
+        init_params, _ = self.initialize_solver(X, y, init_params=init_params)
 
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -605,16 +653,13 @@ class GLM(BaseRegressor):
         X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
         y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
 
-        # Run optimization
-        runner = self.regularizer.instantiate_solver(self._predict_and_compute_loss)
-
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
 
-        params, state = runner(init_params, data, y)
+        params, state = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
             lambda x: jnp.any(jnp.isnan(x)), any, params
@@ -718,7 +763,9 @@ class GLM(BaseRegressor):
             predicted_rate,
         )
 
-    def estimate_resid_degrees_of_freedom(self, X: DESIGN_INPUT_TYPE):
+    def estimate_resid_degrees_of_freedom(
+        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
+    ):
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -728,12 +775,27 @@ class GLM(BaseRegressor):
             A fitted GLM model.
         X :
             The design matrix.
+        n_samples :
+            The number of samples observed. If not provided, n_samples is set to `X.shape[0]`. If the fit is
+            batched, the n_samples could be larger than `X.shape[0]`.
 
         Returns
         -------
         :
             An estimate of the degrees of freedom of the residuals.
         """
+        # Convert a pytree to a design-matrix with pytrees
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+        else:
+            if not isinstance(n_samples, int):
+                raise TypeError(
+                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    "instead!"
+                )
+
         if isinstance(self.observation_model, obs.PoissonObservations):
             return 1.0  # scale is fix, residual not used
 
@@ -742,14 +804,179 @@ class GLM(BaseRegressor):
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
             coef, _ = self._get_coef_and_intercept()
-            return X.shape[0] - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
+            return n_samples - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
         elif isinstance(self.regularizer, reg.Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return X.shape[0] - X.shape[1] - 1
+            return n_samples - X.shape[1] - 1
         else:
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return X.shape[0] - rank - 1
+            return n_samples - rank - 1
+
+    @cast_to_jax
+    def initialize_solver(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        init_params: Optional[ModelParams] = None,
+        **kwargs,
+    ) -> Tuple[ModelParams, NamedTuple]:
+        """
+        Initialize the solver's state and optionally sets initial model parameters for the optimization process.
+
+        This method prepares the solver by instantiating its components (initial state, update function,
+        and run function) and initializes model parameters if they are not provided. It is typically called
+        before starting the optimization process to ensure that all necessary
+        components and states are correctly configured.
+
+        Parameters
+        ----------
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+        init_params :
+            Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
+        *args
+            Additional positional arguments to be passed to the solver's init_state method.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's init_state method.
+
+        Returns
+        -------
+        Tuple[ModelParams, NamedTuple]
+            A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
+            to be used for running the solver's optimization routines.
+
+        Raises
+        ------
+        ValueError
+            - If `params` is not of length two.
+            - If dimensionality of `init_params` are not correct.
+            - If `X` is not two-dimensional.
+            - If `y` is not correct (1D for GLM, 2D for populationGLM).
+
+        TypeError
+            - If `params` are not array-like when provided.
+            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+
+        Example
+        -------
+        >>> X, y = load_data()  # Hypothetical function to load data
+        >>> params, opt_state = model.initialize_solver(X, y)
+        >>> # Now ready to run optimization or update steps
+        """
+        if init_params is None:
+            init_params = self._initialize_parameters(X, y)  # initialize
+        else:
+            err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
+            "with numeric data-type!"
+            init_params = validation.convert_tree_leaves_to_jax_array(
+                init_params, err_message=err_message, data_type=float
+            )
+
+        # validate input
+        self._validate(X, y, init_params)
+
+        self._solver_init_state, self._solver_update, self._solver_run = (
+            self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+        )
+        if isinstance(X, FeaturePytree):
+            data = X.data
+        else:
+            data = X
+        opt_state = self.solver_init_state(init_params, data, y, *args, **kwargs)
+        return init_params, opt_state
+
+    @cast_to_jax
+    def update(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        n_samples: Optional[int] = None,
+        **kwargs,
+    ) -> jaxopt.OptStep:
+        """
+        Update the model parameters and solver state.
+
+        This method performs a single optimization step using the model's current solver.
+        It updates the model's coefficients and intercept based on the provided parameters, predictors (X),
+        responses (y), and the current optimization state. This method is particularly useful for iterative
+        model fitting, especially in scenarios where model parameters need to be updated incrementally,
+        such as online learning or when dealing with very large datasets that do not fit into memory at once.
+
+        Parameters
+        ----------
+        params :
+            The current model parameters, typically a tuple of coefficients and intercepts.
+        opt_state :
+            The current state of the optimizer, encapsulating information necessary for the
+            optimization algorithm to continue from the current state. This includes gradients,
+            step sizes, and other optimizer-specific metrics.
+        X :
+            The predictors used in the model fitting process, which may include feature matrices
+            or FeaturePytree objects.
+        y :
+            The response variable or output data corresponding to the predictors, used in the model
+            fitting process.
+        *args
+            Additional positional arguments to be passed to the solver's update method.
+        n_samples:
+            The tot number of samples. Usually larger than the samples of an indivisual batch,
+            the `n_samples` are used to estimate the scale parameter of the GLM.
+        **kwargs
+            Additional keyword arguments to be passed to the solver's update method.
+
+        Returns
+        -------
+        jaxopt.OptStep
+            A tuple containing the updated parameters and optimization state. This tuple is
+            typically used to continue the optimization process in subsequent steps.
+
+        Raises
+        ------
+        ValueError
+            If the solver has not been instantiated or if the solver returns NaN values
+            indicating an invalid update step, typically due to numerical instabilities
+            or inappropriate solver configurations.
+
+        Example
+        -------
+        >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
+        >>> params = glm_instance.coef_, glm_instance.intercept_
+        >>> opt_state = glm_instance.solver_state
+        >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
+        """
+        # find non-nans
+        is_valid = tree_utils.get_valid_multitree(X, y)
+
+        # drop nans
+        X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
+        y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
+
+        # grab the data
+        data = X.data if isinstance(X, FeaturePytree) else X
+
+        # perform a one-step update
+        opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
+
+        # store params and state
+        self._set_coef_and_intercept(opt_step[0])
+        self.solver_state = opt_step[1]
+
+        # estimate the scale
+        dof_resid = self.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        self.scale = self.observation_model.estimate_scale(
+            self._predict(params, data), y, dof_resid=dof_resid
+        )
+
+        return opt_step
 
 
 class PopulationGLM(GLM):
