@@ -22,7 +22,7 @@ from examples_utils import data, plotting
 import nemos as nmo
 
 # configure pynapple to ignore conversion warning
-nap.config.nap_config.suppress_conversion_warnings = True
+nap.nap_config.suppress_conversion_warnings = True
 
 # configure plots some
 plt.style.use("examples_utils/nemos.mplstyle")

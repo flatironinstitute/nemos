@@ -307,7 +307,7 @@ class BaseRegressor(Base, abc.ABC):
         *args,
         **kwargs,
     ) -> OptStep:
-        """Run a single update step of the jaxopt solver"""
+        """Run a single update step of the jaxopt solver."""
         pass
 
     @abc.abstractmethod
@@ -319,7 +319,5 @@ class BaseRegressor(Base, abc.ABC):
         params: Optional = None,
         **kwargs,
     ) -> Tuple[Any, NamedTuple]:
-        """
-        Initializes the solver's state and optionally sets initial model parameters for the optimization process.
-        """
+        """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
         pass

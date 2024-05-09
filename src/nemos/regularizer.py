@@ -177,6 +177,8 @@ class Regularizer(Base, abc.ABC):
         self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
     ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
+        Instantiate the solver with the provided loss function.
+
         Instantiate the solver with the provided loss function, and return callable functions
         that initialize the solver state, update the model parameters, and run the optimization.
 
@@ -185,6 +187,7 @@ class Regularizer(Base, abc.ABC):
         the proximal operator if required for the optimization method. The returned functions are
          directly usable in optimization loops, simplifying the syntax by pre-setting
         common arguments like regularization strength and other hyperparameters.
+
         Parameters
         ----------
         loss :
@@ -356,7 +359,9 @@ class Ridge(Regularizer):
         self, loss: Callable, *args: Any, **kwargs: Any
     ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
-        Instantiate the solver with the provided loss function, and return callable functions
+        Instantiate the solver with the provided loss function.
+
+        Instantiate the solver with the provided loss function and return callable functions
         that initialize the solver state, update the model parameters, and run the optimization.
 
         This method creates a solver instance from jaxopt library, tailored to the specific loss
@@ -364,6 +369,7 @@ class Ridge(Regularizer):
         the proximal operator if required for the optimization method. The returned functions are
          directly usable in optimization loops, simplifying the syntax by pre-setting
         common arguments like regularization strength and other hyperparameters.
+
         Parameters
         ----------
         loss :
@@ -433,7 +439,9 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         self, loss: Callable, *args: Any, **kwargs: Any
     ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
-        Instantiate the solver with the provided loss function, and return callable functions
+        Instantiate the solver with the provided loss function.
+
+        Instantiate the solver with the provided loss function and return callable functions
         that initialize the solver state, update the model parameters, and run the optimization.
 
         This method creates a solver instance from jaxopt library, tailored to the specific loss

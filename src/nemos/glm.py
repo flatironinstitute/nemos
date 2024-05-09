@@ -643,7 +643,6 @@ class GLM(BaseRegressor):
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
         """
-
         # validate the inputs & initialize solver
         init_params, _ = self.initialize_solver(X, y, init_params=init_params)
 
@@ -823,7 +822,7 @@ class GLM(BaseRegressor):
         **kwargs,
     ) -> Tuple[ModelParams, NamedTuple]:
         """
-        Initializes the solver's state and optionally sets initial model parameters for the optimization process.
+        Initialize the solver's state and optionally sets initial model parameters for the optimization process.
 
         This method prepares the solver by instantiating its components (initial state, update function,
         and run function) and initializes model parameters if they are not provided. It is typically called
