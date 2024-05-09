@@ -493,3 +493,14 @@ def gamma_population_GLM_model():
     model.scale = theta
     y = jax.random.gamma(jax.random.PRNGKey(123), rate / theta) * theta
     return X, y, model, (w_true, b_true), rate
+
+@pytest.fixture()
+def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
+    X, spikes, model, true_params, rate = gamma_population_GLM_model
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.PopulationGLM(model.observation_model, model.regularizer)
+    return X_tree, spikes, model_tree, true_params_tree, rate

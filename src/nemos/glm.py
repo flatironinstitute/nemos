@@ -645,7 +645,7 @@ class GLM(BaseRegressor):
         """
 
         # validate the inputs & initialize solver
-        init_params, _ = self.initialize_solver(X, y, params=init_params)
+        init_params, _ = self.initialize_solver(X, y, init_params=init_params)
 
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -764,7 +764,7 @@ class GLM(BaseRegressor):
             predicted_rate,
         )
 
-    def estimate_resid_degrees_of_freedom(self, X: DESIGN_INPUT_TYPE):
+    def estimate_resid_degrees_of_freedom(self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None):
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -774,12 +774,21 @@ class GLM(BaseRegressor):
             A fitted GLM model.
         X :
             The design matrix.
+        n_samples :
+            The number of samples observed. If not provided, n_samples is set to `X.shape[0]`. If the fit is
+            batched, the n_samples could be larger than `X.shape[0]`.
 
         Returns
         -------
         :
             An estimate of the degrees of freedom of the residuals.
         """
+        # Convert a pytree to a design-matrix with pytrees
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
+
+        if n_samples is None:
+            n_samples = X.shape[0]
+
         if isinstance(self.observation_model, obs.PoissonObservations):
             return 1.0  # scale is fix, residual not used
 
@@ -788,21 +797,21 @@ class GLM(BaseRegressor):
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
             coef, _ = self._get_coef_and_intercept()
-            return X.shape[0] - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
+            return n_samples - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
         elif isinstance(self.regularizer, reg.Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return X.shape[0] - X.shape[1] - 1
+            return n_samples - X.shape[1] - 1
         else:
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return X.shape[0] - rank - 1
+            return n_samples - rank - 1
 
     def initialize_solver(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
-        params: Optional[ModelParams] = None,
+        init_params: Optional[ModelParams] = None,
         **kwargs,
     ) -> Tuple[ModelParams, NamedTuple]:
         """
@@ -821,7 +830,7 @@ class GLM(BaseRegressor):
         y :
             The response variables or outputs corresponding to the predictors. Used to initialize parameters when
             they are not provided.
-        params :
+        init_params :
             Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
         *args
             Additional positional arguments to be passed to the solver's init_state method.
@@ -852,17 +861,17 @@ class GLM(BaseRegressor):
         >>> params, opt_state = model.initialize_solver(X, y)
         >>> # Now ready to run optimization or update steps
         """
-        if params is None:
-            params = self._initialize_parameters(X, y)  # initialize
+        if init_params is None:
+            init_params = self._initialize_parameters(X, y)  # initialize
         else:
             err_message = "Initial parameters must be array-like objects (or pytrees of array-like objects) "
             "with numeric data-type!"
-            params = validation.convert_tree_leaves_to_jax_array(
-                params, err_message=err_message, data_type=float
+            init_params = validation.convert_tree_leaves_to_jax_array(
+                init_params, err_message=err_message, data_type=float
             )
 
         # validate input
-        self._validate(X, y, params)
+        self._validate(X, y, init_params)
 
         self._solver_init_state, self._solver_update, self._solver_run = (
             self.regularizer.instantiate_solver(self._predict_and_compute_loss)
@@ -871,8 +880,8 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
-        opt_state = self.solver_init_state(params, data, y, *args, **kwargs)
-        return params, opt_state
+        opt_state = self.solver_init_state(init_params, data, y, *args, **kwargs)
+        return init_params, opt_state
 
     def update(
         self,
@@ -881,6 +890,7 @@ class GLM(BaseRegressor):
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
         *args,
+        n_samples: Optional[int] = None,
         **kwargs,
     ) -> jaxopt.OptStep:
         """
@@ -908,6 +918,9 @@ class GLM(BaseRegressor):
             fitting process.
         *args
             Additional positional arguments to be passed to the solver's update method.
+        n_samples:
+            The tot number of samples. Usually larger than the samples of an indivisual batch,
+            the `n_samples` are used to estimate the scale parameter of the GLM.
         **kwargs
             Additional keyword arguments to be passed to the solver's update method.
 
@@ -938,12 +951,22 @@ class GLM(BaseRegressor):
         X = jax.tree_util.tree_map(lambda x: x[is_valid], X)
         y = jax.tree_util.tree_map(lambda x: x[is_valid], y)
 
+        # grab the data
+        data = X.data if isinstance(X, FeaturePytree) else X
+
         # perform a one-step update
-        opt_step = self.solver_update(params, opt_state, X, y, *args, **kwargs)
+        opt_step = self.solver_update(params, opt_state, data, y, *args, **kwargs)
 
         # store params and state
         self._set_coef_and_intercept(opt_step[0])
         self.solver_state = opt_step[1]
+
+        # estimate the scale
+        dof_resid = self.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        self.scale = self.observation_model.estimate_scale(
+            self._predict(params, data), y, dof_resid=dof_resid
+        )
+
         return opt_step
 
 
