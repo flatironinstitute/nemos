@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
+from typing import Callable
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
@@ -1214,6 +1215,16 @@ class TestGLM:
         with expectation:
             model.initialize_solver(X, y)
 
+    def test_initializer_solver_set_solver_callable(self, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        assert model.solver_init_state is None
+        assert model.solver_update is None
+        assert model.solver_run is None
+        model.initialize_solver(X, y)
+        assert isinstance(model.solver_init_state, Callable)
+        assert isinstance(model.solver_update, Callable)
+        assert isinstance(model.solver_run, Callable)
+
     #######################
     # Test model.update
     #######################
@@ -1946,6 +1957,402 @@ class TestPopulationGLM:
         model.fit(X, y)
         assert model.scale.size == y.shape[1]
 
+
+    #######################
+    # Test model.initialize_solver
+    #######################
+    @pytest.mark.parametrize(
+        "n_params, expectation",
+        [
+            (0, pytest.raises(ValueError, match="Params must have length two.")),
+            (1, pytest.raises(ValueError, match="Params must have length two.")),
+            (2, does_not_raise()),
+            (3, pytest.raises(ValueError, match="Params must have length two.")),
+        ],
+    )
+    def test_initialize_solver_param_length(
+        self, n_params, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with different numbers of initial parameters.
+        Check for correct number of parameters.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if n_params == 0:
+            init_params = tuple()
+        elif n_params == 1:
+            init_params = (true_params[0],)
+        else:
+            init_params = true_params + (true_params[0],) * (n_params - 2)
+        with expectation:
+            model.initialize_solver(X, y, init_params=init_params)
+
+    @pytest.mark.parametrize(
+        "add_entry, add_to, expectation",
+        [
+            (0, "X", does_not_raise()),
+            (
+                np.nan,
+                "X",
+                pytest.warns(UserWarning, match="The provided trees contain"),
+            ),
+            (
+                np.inf,
+                "X",
+                pytest.warns(UserWarning, match="The provided trees contain"),
+            ),
+            (0, "y", does_not_raise()),
+            (
+                np.nan,
+                "y",
+                pytest.warns(UserWarning, match="The provided trees contain"),
+            ),
+            (
+                np.inf,
+                "y",
+                pytest.warns(UserWarning, match="The provided trees contain"),
+            ),
+        ],
+    )
+    def test_initialize_solver_param_values(
+        self, add_entry, add_to, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if add_to == "X":
+            # get an index to be edited
+            idx = np.unravel_index(np.random.choice(X.size), X.shape)
+            X[idx] = add_entry
+        elif add_to == "y":
+            idx = np.unravel_index(np.random.choice(y.size), y.shape)
+            y = np.asarray(y, dtype=np.float32)
+            y[idx] = add_entry
+        with expectation:
+            model.initialize_solver(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "dim_weights, expectation",
+        [
+            (
+                0,
+                pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+            ),
+            (
+                1,
+                pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+            ),
+            (
+                2,
+                does_not_raise(),
+            ),
+            (
+                3,
+                pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
+            ),
+        ],
+    )
+    def test_initialize_solver_weights_dimensionality(
+        self, dim_weights, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with weight matrices of different dimensionalities.
+        Check for correct dimensionality.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        n_samples, n_features = X.shape
+        n_neurons = 3
+        if dim_weights == 0:
+            init_w = jnp.array([])
+        elif dim_weights == 1:
+            init_w = jnp.zeros((n_features,))
+        elif dim_weights == 2:
+            init_w = jnp.zeros((n_features, n_neurons))
+        else:
+            init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
+        with expectation:
+            model.initialize_solver(X, y, init_params=(init_w, true_params[1]))
+
+    @pytest.mark.parametrize(
+        "dim_intercepts, expectation",
+        [
+            (0, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+            (1, does_not_raise()),
+            (2, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+            (3, pytest.raises(ValueError, match=r"params\[1\] must be of shape")),
+        ],
+    )
+    def test_initialize_solver_intercepts_dimensionality(
+        self, dim_intercepts, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with intercepts of different dimensionalities. Check for correct dimensionality.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        n_samples, n_features = X.shape
+        init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
+        init_w = jnp.zeros((n_features, y.shape[1]))
+        with expectation:
+            model.initialize_solver(X, y, init_params=(init_w, init_b))
+
+    @pytest.mark.parametrize(
+        "init_params, expectation",
+        [
+            ([jnp.zeros((5, 3)), jnp.zeros((3,))], does_not_raise()),
+            (
+                [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+                pytest.raises(ValueError, match="Params must have length two."),
+            ),
+            (dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))), pytest.raises(KeyError)),
+            (
+                (dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))),
+                pytest.raises(
+                    TypeError, match=r"X and params\[0\] must be the same type"
+                ),
+            ),
+            (0, pytest.raises(ValueError, match="Params must have length two.")),
+            (
+                {0, 1},
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+            ),
+            (
+                [jnp.zeros((1, 5)), ""],
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+            ),
+            (
+                ["", jnp.zeros((1,))],
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+            ),
+        ],
+    )
+    def test_initialize_solver_init_params_type(
+        self, init_params, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with various types of initial parameters. Ensure that the provided initial parameters
+        are array-like.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        with expectation:
+            model.initialize_solver(X, y, init_params=init_params)
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="X must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="X must be two-dimensional")),
+        ],
+    )
+    def test_initialize_solver_x_dimensionality(
+        self, delta_dim, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if delta_dim == -1:
+            X = np.zeros((X.shape[0],))
+        elif delta_dim == 1:
+            X = np.zeros((X.shape[0], 1, X.shape[1]))
+        with expectation:
+            model.initialize_solver(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_dim, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="y must be two-dimensional")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="y must be two-dimensional")),
+        ],
+    )
+    def test_initialize_solver_y_dimensionality(
+        self, delta_dim, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if delta_dim == -1:
+            y = y[:, 0]
+        elif delta_dim == 1:
+            y = np.zeros((*y.shape, 1))
+        with expectation:
+            model.initialize_solver(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_initialize_solver_n_feature_consistency_weights(
+        self, delta_n_features, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
+        Ensure the number of features align.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        init_w = jnp.zeros((X.shape[1] + delta_n_features, y.shape[1]))
+        init_b = jnp.zeros(
+            y.shape[1],
+        )
+        with expectation:
+            model.initialize_solver(X, y, init_params=(init_w, init_b))
+
+    @pytest.mark.parametrize(
+        "delta_n_features, expectation",
+        [
+            (-1, pytest.raises(ValueError, match="Inconsistent number of features")),
+            (0, does_not_raise()),
+            (1, pytest.raises(ValueError, match="Inconsistent number of features")),
+        ],
+    )
+    def test_initialize_solver_n_feature_consistency_x(
+        self, delta_n_features, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
+        Ensure the number of features in X aligns.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        if delta_n_features == 1:
+            X = jnp.concatenate((X, jnp.zeros((X.shape[0], 1))), axis=1)
+        elif delta_n_features == -1:
+            X = X[..., :-1]
+        with expectation:
+            model.initialize_solver(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_initialize_solver_time_points_x(
+        self, delta_tp, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
+        with expectation:
+            model.initialize_solver(X, y, init_params=true_params)
+
+    @pytest.mark.parametrize(
+        "delta_tp, expectation",
+        [
+            (
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+            (0, does_not_raise()),
+            (
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
+            ),
+        ],
+    )
+    def test_initialize_solver_time_points_y(
+        self, delta_tp, expectation, poisson_population_GLM_model
+    ):
+        """
+        Test the `initialize_solver` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
+        with expectation:
+            model.initialize_solver(X, y, init_params=true_params)
+
+    def test_initialize_solver_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
+        """Test that the group lasso initialize_solver goes through"""
+        X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
+        model.set_params(
+            regularizer=nmo.regularizer.GroupLasso(
+                solver_name="ProximalGradient", mask=mask
+            )
+        )
+        model.initialize_solver(X, y)
+
+    @pytest.mark.parametrize(
+        "fill_val, expectation",
+        [
+            (0, does_not_raise()),
+            (
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+            (
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
+            ),
+        ],
+    )
+    def test_initialize_solver_all_invalid_X(
+        self, fill_val, expectation, poisson_population_GLM_model
+    ):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        X.fill(fill_val)
+        with expectation:
+            model.initialize_solver(X, y)
+
+    #######################
+    # Test model.update
+    #######################
+    @pytest.mark.parametrize(
+        "n_samples, expectation",
+        [
+            (None, does_not_raise()),
+            (100, does_not_raise()),
+            (1., pytest.raises(TypeError, match="`n_samples` must either `None` or")),
+            ("str", pytest.raises(TypeError, match="`n_samples` must either `None` or"))
+        ]
+    )
+    @pytest.mark.parametrize("batch_size", [1, 10])
+    def test_update_n_samples(self, n_samples, expectation, batch_size, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        params, state = model.initialize_solver(X, y)
+        with expectation:
+            model.update(params, state, X[:batch_size], y[:batch_size], n_samples=n_samples)
+
+    @pytest.mark.parametrize("batch_size", [1, 10])
+    def test_update_params_stored(self, batch_size, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        params, state = model.initialize_solver(X, y)
+        assert model.coef_ is None
+        assert model.intercept_ is None
+        assert model.scale is None
+        _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
+        assert model.coef_ is not None
+        assert model.intercept_ is not None
+        assert model.scale is not None
+
     #######################
     # Test model.score
     #######################
@@ -2053,6 +2460,7 @@ class TestPopulationGLM:
             model.fit(X, y)
         with expectation:
             model.predict(X)
+
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
