@@ -813,6 +813,7 @@ class GLM(BaseRegressor):
             rank = jnp.linalg.matrix_rank(X)
             return n_samples - rank - 1
 
+    @cast_to_jax
     def initialize_solver(
         self,
         X: DESIGN_INPUT_TYPE,
@@ -890,6 +891,7 @@ class GLM(BaseRegressor):
         opt_state = self.solver_init_state(init_params, data, y, *args, **kwargs)
         return init_params, opt_state
 
+    @cast_to_jax
     def update(
         self,
         params: Tuple[jnp.ndarray, jnp.ndarray],
