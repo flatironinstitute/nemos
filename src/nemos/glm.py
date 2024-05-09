@@ -764,7 +764,9 @@ class GLM(BaseRegressor):
             predicted_rate,
         )
 
-    def estimate_resid_degrees_of_freedom(self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None):
+    def estimate_resid_degrees_of_freedom(
+        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
+    ):
         """
         Estimate the degrees of freedom of the residuals.
 
@@ -790,8 +792,10 @@ class GLM(BaseRegressor):
             n_samples = X.shape[0]
         else:
             if not isinstance(n_samples, int):
-                raise TypeError("`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
-                                "instead!")
+                raise TypeError(
+                    "`n_samples` must either `None` or of type `int`. Type {type(n_sample)} provided "
+                    "instead!"
+                )
 
         if isinstance(self.observation_model, obs.PoissonObservations):
             return 1.0  # scale is fix, residual not used
