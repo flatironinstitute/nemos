@@ -1570,6 +1570,27 @@ class TestPopulationGLM:
             model.fit(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
+        "reg",
+        [
+            nmo.regularizer.UnRegularized(),
+            nmo.regularizer.Lasso(),
+            nmo.regularizer.Ridge()
+        ]
+    )
+    @pytest.mark.parametrize("n_samples", [1, 20])
+    def test_estimate_dof_resid(
+        self, n_samples, reg, poisson_population_GLM_model
+    ):
+        """
+        Test that the dof is an integer.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.regularizer = reg
+        num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        assert int(num) == num
+
+
+    @pytest.mark.parametrize(
         "add_entry, add_to, expectation",
         [
             (0, "X", does_not_raise()),
