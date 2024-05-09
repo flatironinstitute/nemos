@@ -1,4 +1,5 @@
 from contextlib import nullcontext as does_not_raise
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -6,7 +7,6 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.model_selection import GridSearchCV
-from typing import Callable
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
@@ -855,7 +855,7 @@ class TestGLM:
         ],
     )
     def test_initialize_solver_param_length(
-            self, n_params, expectation, poissonGLM_model_instantiation
+        self, n_params, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with different numbers of initial parameters.
@@ -876,30 +876,30 @@ class TestGLM:
         [
             (0, "X", does_not_raise()),
             (
-                    np.nan,
-                    "X",
-                    pytest.warns(UserWarning, match="The provided trees contain"),
+                np.nan,
+                "X",
+                pytest.warns(UserWarning, match="The provided trees contain"),
             ),
             (
-                    np.inf,
-                    "X",
-                    pytest.warns(UserWarning, match="The provided trees contain"),
+                np.inf,
+                "X",
+                pytest.warns(UserWarning, match="The provided trees contain"),
             ),
             (0, "y", does_not_raise()),
             (
-                    np.nan,
-                    "y",
-                    pytest.warns(UserWarning, match="The provided trees contain"),
+                np.nan,
+                "y",
+                pytest.warns(UserWarning, match="The provided trees contain"),
             ),
             (
-                    np.inf,
-                    "y",
-                    pytest.warns(UserWarning, match="The provided trees contain"),
+                np.inf,
+                "y",
+                pytest.warns(UserWarning, match="The provided trees contain"),
             ),
         ],
     )
     def test_initialize_solver_param_values(
-            self, add_entry, add_to, expectation, poissonGLM_model_instantiation
+        self, add_entry, add_to, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
@@ -920,34 +920,34 @@ class TestGLM:
         "dim_weights, expectation",
         [
             (
-                    0,
-                    pytest.raises(
-                        ValueError,
-                        match=r"Inconsistent number of features",
-                    ),
+                0,
+                pytest.raises(
+                    ValueError,
+                    match=r"Inconsistent number of features",
+                ),
             ),
             (
-                    1,
-                    does_not_raise(),
+                1,
+                does_not_raise(),
             ),
             (
-                    2,
-                    pytest.raises(
-                        ValueError,
-                        match=r"params\[0\] must be an array or .* of shape \(n_features",
-                    ),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
             ),
             (
-                    3,
-                    pytest.raises(
-                        ValueError,
-                        match=r"params\[0\] must be an array or .* of shape \(n_features",
-                    ),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match=r"params\[0\] must be an array or .* of shape \(n_features",
+                ),
             ),
         ],
     )
     def test_initialize_solver_weights_dimensionality(
-            self, dim_weights, expectation, poissonGLM_model_instantiation
+        self, dim_weights, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with weight matrices of different dimensionalities.
@@ -977,7 +977,7 @@ class TestGLM:
         ],
     )
     def test_initialize_solver_intercepts_dimensionality(
-            self, dim_intercepts, expectation, poissonGLM_model_instantiation
+        self, dim_intercepts, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with intercepts of different dimensionalities. Check for correct dimensionality.
@@ -994,42 +994,42 @@ class TestGLM:
         [
             ([jnp.zeros((5,)), jnp.zeros((1,))], does_not_raise()),
             (
-                    [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
-                    pytest.raises(ValueError, match="Params must have length two."),
+                [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
+                pytest.raises(ValueError, match="Params must have length two."),
             ),
             (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), pytest.raises(KeyError)),
             (
-                    (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))),
-                    pytest.raises(
-                        TypeError, match=r"X and params\[0\] must be the same type"
-                    ),
+                (dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))),
+                pytest.raises(
+                    TypeError, match=r"X and params\[0\] must be the same type"
+                ),
             ),
             (
-                    (
-                            FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
-                            jnp.zeros((1,)),
-                    ),
-                    pytest.raises(
-                        TypeError, match=r"X and params\[0\] must be the same type"
-                    ),
+                (
+                    FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
+                    jnp.zeros((1,)),
+                ),
+                pytest.raises(
+                    TypeError, match=r"X and params\[0\] must be the same type"
+                ),
             ),
             (0, pytest.raises(ValueError, match="Params must have length two.")),
             (
-                    {0, 1},
-                    pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                {0, 1},
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
             ),
             (
-                    [jnp.zeros((1, 5)), ""],
-                    pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                [jnp.zeros((1, 5)), ""],
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
             ),
             (
-                    ["", jnp.zeros((1,))],
-                    pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                ["", jnp.zeros((1,))],
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
             ),
         ],
     )
     def test_initialize_solver_init_params_type(
-            self, init_params, expectation, poissonGLM_model_instantiation
+        self, init_params, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with various types of initial parameters. Ensure that the provided initial parameters
@@ -1048,7 +1048,7 @@ class TestGLM:
         ],
     )
     def test_initialize_solver_x_dimensionality(
-            self, delta_dim, expectation, poissonGLM_model_instantiation
+        self, delta_dim, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
@@ -1070,7 +1070,7 @@ class TestGLM:
         ],
     )
     def test_initialize_solver_y_dimensionality(
-            self, delta_dim, expectation, poissonGLM_model_instantiation
+        self, delta_dim, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
@@ -1092,7 +1092,7 @@ class TestGLM:
         ],
     )
     def test_initialize_solver_n_feature_consistency_weights(
-            self, delta_n_features, expectation, poissonGLM_model_instantiation
+        self, delta_n_features, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method for inconsistencies between data features and initial weights provided.
@@ -1115,7 +1115,7 @@ class TestGLM:
         ],
     )
     def test_initialize_solver_n_feature_consistency_x(
-            self, delta_n_features, expectation, poissonGLM_model_instantiation
+        self, delta_n_features, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method for inconsistencies between data features and model's expectations.
@@ -1133,18 +1133,18 @@ class TestGLM:
         "delta_tp, expectation",
         [
             (
-                    -1,
-                    pytest.raises(ValueError, match="The number of time-points in X and y"),
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
             ),
             (0, does_not_raise()),
             (
-                    1,
-                    pytest.raises(ValueError, match="The number of time-points in X and y"),
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
             ),
         ],
     )
     def test_initialize_solver_time_points_x(
-            self, delta_tp, expectation, poissonGLM_model_instantiation
+        self, delta_tp, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
@@ -1158,18 +1158,18 @@ class TestGLM:
         "delta_tp, expectation",
         [
             (
-                    -1,
-                    pytest.raises(ValueError, match="The number of time-points in X and y"),
+                -1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
             ),
             (0, does_not_raise()),
             (
-                    1,
-                    pytest.raises(ValueError, match="The number of time-points in X and y"),
+                1,
+                pytest.raises(ValueError, match="The number of time-points in X and y"),
             ),
         ],
     )
     def test_initialize_solver_time_points_y(
-            self, delta_tp, expectation, poissonGLM_model_instantiation
+        self, delta_tp, expectation, poissonGLM_model_instantiation
     ):
         """
         Test the `initialize_solver` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
@@ -1179,7 +1179,9 @@ class TestGLM:
         with expectation:
             model.initialize_solver(X, y, init_params=true_params)
 
-    def test_initialize_solver_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
+    def test_initialize_solver_mask_grouplasso(
+        self, group_sparse_poisson_glm_model_instantiation
+    ):
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
@@ -1194,28 +1196,30 @@ class TestGLM:
         [
             (0, does_not_raise()),
             (
-                    jnp.inf,
-                    pytest.raises(
-                        ValueError, match="At least a NaN or an Inf at all sample points"
-                    ),
+                jnp.inf,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
             ),
             (
-                    jnp.nan,
-                    pytest.raises(
-                        ValueError, match="At least a NaN or an Inf at all sample points"
-                    ),
+                jnp.nan,
+                pytest.raises(
+                    ValueError, match="At least a NaN or an Inf at all sample points"
+                ),
             ),
         ],
     )
     def test_initialize_solver_all_invalid_X(
-            self, fill_val, expectation, poissonGLM_model_instantiation
+        self, fill_val, expectation, poissonGLM_model_instantiation
     ):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X.fill(fill_val)
         with expectation:
             model.initialize_solver(X, y)
 
-    def test_initializer_solver_set_solver_callable(self, poissonGLM_model_instantiation):
+    def test_initializer_solver_set_solver_callable(
+        self, poissonGLM_model_instantiation
+    ):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         assert model.solver_init_state is None
         assert model.solver_update is None
@@ -1233,16 +1237,23 @@ class TestGLM:
         [
             (None, does_not_raise()),
             (100, does_not_raise()),
-            (1., pytest.raises(TypeError, match="`n_samples` must either `None` or")),
-            ("str", pytest.raises(TypeError, match="`n_samples` must either `None` or"))
-        ]
+            (1.0, pytest.raises(TypeError, match="`n_samples` must either `None` or")),
+            (
+                "str",
+                pytest.raises(TypeError, match="`n_samples` must either `None` or"),
+            ),
+        ],
     )
     @pytest.mark.parametrize("batch_size", [1, 10])
-    def test_update_n_samples(self, n_samples, expectation, batch_size, poissonGLM_model_instantiation):
+    def test_update_n_samples(
+        self, n_samples, expectation, batch_size, poissonGLM_model_instantiation
+    ):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         params, state = model.initialize_solver(X, y)
         with expectation:
-            model.update(params, state, X[:batch_size], y[:batch_size], n_samples=n_samples)
+            model.update(
+                params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
+            )
 
     @pytest.mark.parametrize("batch_size", [1, 10])
     def test_update_params_stored(self, batch_size, poissonGLM_model_instantiation):
@@ -1257,14 +1268,16 @@ class TestGLM:
         assert model.scale is not None
 
     @pytest.mark.parametrize("batch_size", [2, 10])
-    def test_update_nan_drop_at_jit_comp(self, batch_size, poissonGLM_model_instantiation):
+    def test_update_nan_drop_at_jit_comp(
+        self, batch_size, poissonGLM_model_instantiation
+    ):
         """Test that jit compilation does not affect the update in the presence of nans."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         params, state = model.initialize_solver(X, y)
 
         # extract batch and add nans
         Xnan = X[:batch_size]
-        Xnan[:batch_size//2] = np.nan
+        Xnan[: batch_size // 2] = np.nan
 
         jit_update, _ = model.update(params, state, Xnan, y[:batch_size])
         # make sure there is an update
@@ -1274,7 +1287,6 @@ class TestGLM:
             nojit_update, _ = model.update(params, state, Xnan, y[:batch_size])
         # check for equivalence update
         assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
-
 
     #######################
     # Test model.simulate
@@ -1957,7 +1969,6 @@ class TestPopulationGLM:
         model.fit(X, y)
         assert model.scale.size == y.shape[1]
 
-
     #######################
     # Test model.initialize_solver
     #######################
@@ -2286,7 +2297,9 @@ class TestPopulationGLM:
         with expectation:
             model.initialize_solver(X, y, init_params=true_params)
 
-    def test_initialize_solver_mask_grouplasso(self, group_sparse_poisson_glm_model_instantiation):
+    def test_initialize_solver_mask_grouplasso(
+        self, group_sparse_poisson_glm_model_instantiation
+    ):
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
@@ -2330,16 +2343,23 @@ class TestPopulationGLM:
         [
             (None, does_not_raise()),
             (100, does_not_raise()),
-            (1., pytest.raises(TypeError, match="`n_samples` must either `None` or")),
-            ("str", pytest.raises(TypeError, match="`n_samples` must either `None` or"))
-        ]
+            (1.0, pytest.raises(TypeError, match="`n_samples` must either `None` or")),
+            (
+                "str",
+                pytest.raises(TypeError, match="`n_samples` must either `None` or"),
+            ),
+        ],
     )
     @pytest.mark.parametrize("batch_size", [1, 10])
-    def test_update_n_samples(self, n_samples, expectation, batch_size, poisson_population_GLM_model):
+    def test_update_n_samples(
+        self, n_samples, expectation, batch_size, poisson_population_GLM_model
+    ):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         params, state = model.initialize_solver(X, y)
         with expectation:
-            model.update(params, state, X[:batch_size], y[:batch_size], n_samples=n_samples)
+            model.update(
+                params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
+            )
 
     @pytest.mark.parametrize("batch_size", [1, 10])
     def test_update_params_stored(self, batch_size, poisson_population_GLM_model):
@@ -2460,7 +2480,6 @@ class TestPopulationGLM:
             model.fit(X, y)
         with expectation:
             model.predict(X)
-
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
