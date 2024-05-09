@@ -478,6 +478,31 @@ def gammaGLM_model_instantiation():
     model.scale = theta
     return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
 
+@pytest.fixture
+def gammaGLM_model_instantiation_pytree(gammaGLM_model_instantiation):
+    """Set up a Gamma GLM for testing purposes.
+
+    This fixture initializes a Gamma GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = gammaGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    return X_tree, spikes, model_tree, true_params_tree, rate
+
 
 @pytest.fixture()
 def gamma_population_GLM_model():

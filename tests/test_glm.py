@@ -484,6 +484,30 @@ class TestGLM:
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
 
+    def test_fit_pytree_equivalence_gamma(
+        self, gammaGLM_model_instantiation, gammaGLM_model_instantiation_pytree
+    ):
+        """Check that the glm fit with pytree learns the same parameters."""
+        # required for numerical precision of coeffs
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        X_tree, _, model_tree, true_params_tree, _ = gammaGLM_model_instantiation_pytree
+        # fit both models
+        model.fit(X, y, init_params=true_params)
+        model_tree.fit(X_tree, y, init_params=true_params_tree)
+
+        # get the flat parameters
+        flat_coef = np.concatenate(
+            jax.tree_util.tree_flatten(model_tree.coef_)[0], axis=0
+        )
+
+        # assert equivalence of solutions
+        assert np.allclose(model.coef_, flat_coef)
+        assert np.allclose(model.intercept_, model_tree.intercept_)
+        assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
+        assert np.allclose(model.predict(X), model_tree.predict(X_tree))
+        assert np.allclose(model.scale, model_tree.scale)
+
     @pytest.mark.parametrize(
         "fill_val, expectation",
         [
