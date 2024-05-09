@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
+from typing import NamedTuple
 
 import nemos as nmo
 
@@ -206,13 +207,16 @@ class TestUnRegularized:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Unregularized GLM estimate does not match sklearn!")
 
-    @pytest.mark.parametrize("inv_link_jax, link_sm",
-                             [
-                                 (jnp.exp, sm.families.links.Log()),
-                                 (lambda x: 1/x, sm.families.links.InversePower())
-                             ]
-                             )
-    def test_solver_match_statsmodels_gamma(self, inv_link_jax, link_sm, gammaGLM_model_instantiation):
+    @pytest.mark.parametrize(
+        "inv_link_jax, link_sm",
+        [
+            (jnp.exp, sm.families.links.Log()),
+            (lambda x: 1 / x, sm.families.links.InversePower()),
+        ],
+    )
+    def test_solver_match_statsmodels_gamma(
+        self, inv_link_jax, link_sm, gammaGLM_model_instantiation
+    ):
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
@@ -225,7 +229,9 @@ class TestUnRegularized:
             model._initialize_parameters(X, y), X, y
         )[0]
 
-        model_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Gamma(link=link_sm))
+        model_sm = sm.GLM(
+            endog=y, exog=sm.add_constant(X), family=sm.families.Gamma(link=link_sm)
+        )
 
         res_sm = model_sm.fit(cnvrg_tol=10**-12)
 
@@ -408,13 +414,15 @@ class TestRidge:
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
         model.observation_model.inverse_link_function = jnp.exp
-        regularizer = self.cls("GradientDescent", {"tol": 10 ** -12})
+        regularizer = self.cls("GradientDescent", {"tol": 10**-12})
         regularizer.regularizer_strength = 0.1
         runner_bfgs = regularizer.instantiate_solver(model._predict_and_compute_loss)[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
-        model_skl = GammaRegressor(fit_intercept=True, tol=10 ** -12, alpha=regularizer.regularizer_strength)
+        model_skl = GammaRegressor(
+            fit_intercept=True, tol=10**-12, alpha=regularizer.regularizer_strength
+        )
         model_skl.fit(X, y)
 
         match_weights = np.allclose(model_skl.coef_, weights_bfgs)
@@ -689,6 +697,61 @@ class TestGroupLasso:
             model._predict_and_compute_loss
         )[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
+
+    def test_init_solver(self, poissonGLM_model_instantiation):
+        """Test that the solver initialization returns a state."""
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # create a valid mask
+        mask = np.zeros((2, X.shape[1]))
+        mask[0, :2] = 1
+        mask[1, 2:] = 1
+        mask = jnp.asarray(mask)
+
+        init, _, _ = self.cls("ProximalGradient", mask).instantiate_solver(
+            model._predict_and_compute_loss
+        )
+        state = init(true_params, X, y)
+        # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
+        # specific namespace attributes
+        assert isinstance(state, tuple)
+        assert (
+            hasattr(state, "_fields")
+            and hasattr(state, "_field_defaults")
+            and hasattr(state, "_asdict")
+        )
+
+    def test_update_solver(self, poissonGLM_model_instantiation):
+        """Test that the solver initialization returns a state."""
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        # create a valid mask
+        mask = np.zeros((2, X.shape[1]))
+        mask[0, :2] = 1
+        mask[1, 2:] = 1
+        mask = jnp.asarray(mask)
+
+        init, update, _ = self.cls("ProximalGradient", mask).instantiate_solver(
+            model._predict_and_compute_loss
+        )
+        state = init((true_params[0] * 0.0, true_params[1]), X, y)
+        params, state = update(true_params, state, X, y)
+        # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
+        # specific namespace attributes
+        assert isinstance(state, tuple)
+        assert (
+            hasattr(state, "_fields")
+            and hasattr(state, "_field_defaults")
+            and hasattr(state, "_asdict")
+        )
+        # check params struct and shapes
+        assert jax.tree_util.tree_structure(params) == jax.tree_structure(true_params)
+        assert all(
+            jax.tree_util.tree_leaves(params)[k].shape == p.shape
+            for k, p in enumerate(jax.tree_util.tree_leaves(true_params))
+        )
 
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
     def test_mask_validity_groups(
