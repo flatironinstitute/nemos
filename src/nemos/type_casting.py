@@ -20,7 +20,7 @@ from numpy.typing import NDArray
 
 from . import tree_utils
 
-_NAP_TIME_PRECISION = 10 ** (-nap.config.nap_config.time_index_precision)
+_NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
 
 
 def is_numpy_array_like(obj) -> bool:
