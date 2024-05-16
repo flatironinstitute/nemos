@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 # jax.config.update("jax_enable_x64", True)
-nap.config.nap_config.suppress_conversion_warnings = True
+nap.nap_config.suppress_conversion_warnings = True
 
 # set random seed
 np.random.seed(123)
