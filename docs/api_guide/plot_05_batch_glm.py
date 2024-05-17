@@ -99,7 +99,7 @@ params, state = glm.initialize_solver(*batcher())
 #
 # Let's do a few iterations of gradient descent calling the `batcher` function at every step.
 # At each step, we store the log-likelihood of the model for each neuron evaluated on the batch
-n_step = 5000
+n_step = 500
 logl = np.zeros(n_step)
 
 for i in range(n_step):	
