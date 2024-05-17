@@ -99,7 +99,7 @@ params, state = glm.initialize_solver(*batcher())
 #
 # Let's do a few iterations of gradient descent calling the `batcher` function at every step.
 # At each step, we store the log-likelihood of the model for each neuron evaluated on the batch
-n_step = 500
+n_step = 5000
 logl = np.zeros(n_step)
 
 for i in range(n_step):	
@@ -163,7 +163,7 @@ batch_scores = glm.score(X, Y, aggregate_sample_scores=lambda x:np.mean(x, axis=
 # %%
 # Let's compare scores for each neurons as well as the coefficients.
 
-plt.figure(figsize=(10, 10))
+plt.figure(figsize=(10, 8))
 gs = plt.GridSpec(3,2)
 plt.subplot(gs[0,:])
 plt.bar(np.arange(0, n_neurons), full_scores, 0.4, label="Full model")
