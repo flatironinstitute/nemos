@@ -7,6 +7,7 @@ import numpy as np
 import pynapple as nap
 import pytest
 import sklearn.pipeline as pipeline
+import statsmodels.api as sm
 import utils_testing
 
 import nemos.basis as basis
@@ -498,6 +499,20 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
+    def test_identifiability_constraint_setter(self):
+        bas = self.cls(5, mode="conv", window_size=10)
+        bas.identifiability_constraints = True
+        assert bas.identifiability_constraints
+        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+            bas.identifiability_constraints = "True"
+
+    def test_identifiability_constraint_apply(self):
+        bas = self.cls(5, mode="conv", window_size=10)
+        bas.identifiability_constraints = True
+        # identifiability constraint should mean center only for this basis
+        X = bas(np.linspace(0, 1, 20))
+        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+        assert X.shape[1] == bas.n_basis_funcs
 
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     cls = basis.RaisedCosineBasisLinear
@@ -876,6 +891,20 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
+    def test_identifiability_constraint_setter(self):
+        bas = self.cls(5, mode="conv", window_size=10)
+        bas.identifiability_constraints = True
+        assert bas.identifiability_constraints
+        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+            bas.identifiability_constraints = "True"
+
+    def test_identifiability_constraint_apply(self):
+        bas = self.cls(5)
+        bas.identifiability_constraints = True
+        X = bas(np.linspace(0, 1, 20))
+        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+        assert X.shape[1] == bas.n_basis_funcs - 1
+
 
 class TestMSplineBasis(BasisFuncsTesting):
     cls = basis.MSplineBasis
@@ -1237,6 +1266,20 @@ class TestMSplineBasis(BasisFuncsTesting):
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
+
+    def test_identifiability_constraint_setter(self):
+        bas = self.cls(5, mode="conv", window_size=10)
+        bas.identifiability_constraints = True
+        assert bas.identifiability_constraints
+        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+            bas.identifiability_constraints = "True"
+
+    def test_identifiability_constraint_apply(self):
+        bas = self.cls(5)
+        bas.identifiability_constraints = True
+        X = bas(np.linspace(0, 1, 20))
+        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+        assert X.shape[1] == bas.n_basis_funcs - 1
 
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
@@ -1680,6 +1723,20 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
+    def test_identifiability_constraint_setter(self):
+        bas = self.cls(5, decay_rates=[1,2,3,4,5])
+        bas.identifiability_constraints = True
+        assert bas.identifiability_constraints
+        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+            bas.identifiability_constraints = "True"
+
+    def test_identifiability_constraint_apply(self):
+        bas = self.cls(5, decay_rates=[1,2,3,4,5])
+        bas.identifiability_constraints = True
+        X = bas(np.linspace(0, 1, 20))
+        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+        assert X.shape[1] == bas.n_basis_funcs
+
 
 class TestBSplineBasis(BasisFuncsTesting):
     cls = basis.BSplineBasis
@@ -2063,6 +2120,20 @@ class TestBSplineBasis(BasisFuncsTesting):
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
+
+    def test_identifiability_constraint_setter(self):
+        bas = self.cls(5, mode="conv", window_size=10)
+        bas.identifiability_constraints = True
+        assert bas.identifiability_constraints
+        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+            bas.identifiability_constraints = "True"
+
+    def test_identifiability_constraint_apply(self):
+        bas = self.cls(5)
+        bas.identifiability_constraints = True
+        X = bas(np.linspace(0, 1, 20))
+        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+        assert X.shape[1] == bas.n_basis_funcs - 1
 
 
 class TestCyclicBSplineBasis(BasisFuncsTesting):
@@ -2465,6 +2536,20 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
+
+    def test_identifiability_constraint_setter(self):
+        bas = self.cls(5, mode="conv", window_size=10)
+        bas.identifiability_constraints = True
+        assert bas.identifiability_constraints
+        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+            bas.identifiability_constraints = "True"
+
+    def test_identifiability_constraint_apply(self):
+        bas = self.cls(5)
+        bas.identifiability_constraints = True
+        X = bas(np.linspace(0, 1, 20))
+        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+        assert X.shape[1] == bas.n_basis_funcs - 1
 
 
 class CombinedBasis(BasisFuncsTesting):

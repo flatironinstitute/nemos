@@ -230,6 +230,7 @@ class Basis(abc.ABC):
         self._window_size = window_size
         self._mode = mode
         self._kernel = None
+        self._ident_constraints = False
 
     @property
     def mode(self):
@@ -238,6 +239,55 @@ class Basis(abc.ABC):
     @property
     def window_size(self):
         return self._window_size
+
+    @property
+    def identifiability_constraints(self):
+        return self._ident_constraints
+
+    @identifiability_constraints.setter
+    def identifiability_constraints(self, value: bool):
+        if not isinstance(value, bool):
+            raise TypeError(
+                f"`identifiability_constraints` must be a boolean. {type(value)} provided instead!"
+            )
+        self._ident_constraints = value
+
+    @staticmethod
+    def _apply_identifiability_constraints(X: NDArray):
+        """Apply identifiability constraints to a design matrix `X`.
+
+         Removes columns from `X` until `[1, X]` is full rank to ensure the uniqueness
+         of the GLM (Generalized Linear Model) maximum-likelihood solution. This is particularly
+         crucial for models using bases like BSplines and CyclicBspline, which, due to their
+         construction, sum to 1 and can cause rank deficiency when combined with an intercept.
+
+         For GLMs, this rank deficiency means that different sets of coefficients might yield
+         identical predicted rates and log-likelihood, complicating parameter learning, especially
+         in the absence of regularization.
+
+        Parameters
+        ----------
+        X:
+            The design matrix before applying the identifiability constraints.
+
+        Returns
+        -------
+        :
+            The adjusted design matrix with redundant columns dropped and columns mean-centered.
+        """
+
+        def add_constant(x):
+            return np.hstack((np.ones((x.shape[0], 1)), x))
+
+        rank = np.linalg.matrix_rank(add_constant(X))
+        # mean center
+        X -= np.nanmean(X, axis=0)
+        while rank < X.shape[1] + 1:
+            # drop a column
+            X = X[:, :-1]
+            # recompute rank
+            rank = np.linalg.matrix_rank(add_constant(X))
+        return X
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -685,12 +735,15 @@ class AdditiveBasis(Basis):
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
         """
-        return np.hstack(
+        X = np.hstack(
             (
                 self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -811,13 +864,16 @@ class MultiplicativeBasis(Basis):
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
-        return np.asarray(
+        X = np.asarray(
             row_wise_kron(
                 self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -1018,13 +1074,16 @@ class MSplineBasis(SplineBasis):
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
         )
 
-        return np.stack(
+        X = np.stack(
             [
                 mspline(sample_pts, self.order, i, knot_locs)
                 for i in range(self.n_basis_funcs)
             ],
             axis=1,
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
@@ -1134,7 +1193,8 @@ class BSplineBasis(SplineBasis):
         basis_eval = bspline(
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
-
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1244,7 +1304,8 @@ class CyclicBSplineBasis(SplineBasis):
             )
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1375,7 +1436,8 @@ class RaisedCosineBasisLinear(Basis):
             )
             + 1
         )
-
+        if self.identifiability_constraints:
+            basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
 
     def _compute_peaks(self) -> NDArray:
@@ -1686,9 +1748,12 @@ class OrthExponentialBasis(Basis):
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
-        return scipy.linalg.orth(
+        basis_funcs = scipy.linalg.orth(
             np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
         )
+        if self.identifiability_constraints:
+            basis_funcs = self._apply_identifiability_constraints(basis_funcs)
+        return basis_funcs
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
