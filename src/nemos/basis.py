@@ -246,6 +246,10 @@ class Basis(abc.ABC):
 
     @identifiability_constraints.setter
     def identifiability_constraints(self, value: bool):
+        if not isinstance(value, bool):
+            raise TypeError(
+                f"`identifiability_constraints` must be a boolean. {type(value)} provided instead!"
+            )
         self._ident_constraints = value
 
     @staticmethod
@@ -271,19 +275,19 @@ class Basis(abc.ABC):
         :
             The adjusted design matrix with redundant columns dropped and columns mean-centered.
         """
+
         def add_constant(x):
             return np.hstack((np.ones((x.shape[0], 1)), x))
 
         rank = np.linalg.matrix_rank(add_constant(X))
         # mean center
-        X -= np.nanmean(X)
+        X -= np.nanmean(X, axis=0)
         while rank < X.shape[1] + 1:
             # drop a column
             X = X[:, :-1]
             # recompute rank
             rank = np.linalg.matrix_rank(add_constant(X))
         return X
-
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -740,7 +744,6 @@ class AdditiveBasis(Basis):
         if self.identifiability_constraints:
             X = self._apply_identifiability_constraints(X)
         return X
-
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:

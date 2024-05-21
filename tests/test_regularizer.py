@@ -1,5 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -7,7 +8,6 @@ import numpy as np
 import pytest
 import statsmodels.api as sm
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
-from typing import NamedTuple
 
 import nemos as nmo
 
