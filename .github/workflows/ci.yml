@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
@@ -39,7 +39,7 @@ jobs:
         run: tox -e py
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4.0.1
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
