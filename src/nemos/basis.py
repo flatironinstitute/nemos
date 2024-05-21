@@ -249,19 +249,38 @@ class Basis(abc.ABC):
         self._ident_constraints = value
 
     @staticmethod
-    def _apply_identifiability_constraints(X):
-        """Apply identifiability constraint.
+    def _apply_identifiability_constraints(X: NDArray):
+        """Apply identifiability constraints to a design matrix `X`.
 
-        This function removes a column of X until [1, X] is full rank.
-        This constraint guarantees the uniqueness of the unconstrained
-        GLM solution.
+         Removes columns from `X` until `[1, X]` is full rank to ensure the uniqueness
+         of the GLM (Generalized Linear Model) maximum-likelihood solution. This is particularly
+         crucial for models using bases like BSplines and CyclicBspline, which, due to their
+         construction, sum to 1 and can cause rank deficiency when combined with an intercept.
+
+         For GLMs, this rank deficiency means that different sets of coefficients might yield
+         identical predicted rates and log-likelihood, complicating parameter learning, especially
+         in the absence of regularization.
+
+        Parameters
+        ----------
+        X:
+            The design matrix before applying the identifiability constraints.
+
+        Returns
+        -------
+        :
+            The adjusted design matrix with redundant columns dropped and columns mean-centered.
         """
         def add_constant(x):
             return np.hstack((np.ones((x.shape[0], 1)), x))
 
         rank = np.linalg.matrix_rank(add_constant(X))
+        # mean center
+        X -= np.nanmean(X)
         while rank < X.shape[1] + 1:
-            X = X[:, :-1] - np.nanmean(X[:, :-1], axis=0)
+            # drop a column
+            X = X[:, :-1]
+            # recompute rank
             rank = np.linalg.matrix_rank(add_constant(X))
         return X
 
