@@ -24,7 +24,7 @@ from examples_utils import data, plotting
 import nemos as nmo
 
 # %%
-# configure plots and jax
+# configure plots
 plt.style.use("examples_utils/nemos.mplstyle")
 
 
@@ -132,7 +132,8 @@ print(selected_neurons)
 
 # %%
 # We need to bring the head-direction of the animal to the same size as the transients matrix.
-# We can use the function `bin_average` of pynapple. Notice how we pass the parameter `ep` that is the `time_support` of the transients.
+# We can use the function `bin_average` of pynapple. Notice how we pass the parameter `ep`
+# that is the `time_support` of the transients.
 
 head_direction = data['ry'].bin_average(0.1, ep)
 
@@ -174,6 +175,10 @@ Ytest = Y.restrict(test_ep)
 
 model.fit(Xtrain, Ytrain[:, neu])
 
+
+# %%
+# ## Model comparison
+
 # %%
 # We can compare this to scikit-learn [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 
@@ -181,9 +186,7 @@ mdl = LinearRegression()
 valid = ~jnp.isnan(Xtrain.d.sum(axis=1)) # Scikit learn does not like nans.
 mdl.fit(Xtrain[valid], Ytrain[valid, neu])
 
-# %%
-# Model comparison
-#
+
 # We now have 2 models we can compare. Let's predict the activity of the neuron during the test epoch.
 
 yp = model.predict(Xtest)
@@ -196,7 +199,7 @@ ylreg = nap.Tsd(t=yp.t, d=ylreg, time_support = yp.time_support)
 
 
 # %%
-# Let's plot the predicted activity for the first 60 seconds of data
+# Let's plot the predicted activity for the first 60 seconds of data.
 
 # mkdocs_gallery_thumbnail_number = 3
 
