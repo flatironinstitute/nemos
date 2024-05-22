@@ -2,6 +2,8 @@
 #
 """# Fit V1 cell
 
+The data were collected by Sonica Saraf from the Movshon lab.
+
 !!! warning
     To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
 
@@ -20,8 +22,6 @@ plt.style.use("examples_utils/nemos.mplstyle")
 # %%
 # ## Data Streaming
 #
-# Here we load the data from OSF. This data comes from Sonica Saraf, in Tony
-# Movshon's lab.
 
 path = data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
                                          '../data')
