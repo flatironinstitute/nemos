@@ -189,4 +189,4 @@ Now we can print the best coefficient.
 {'regularizer__regularizer_strength': 0.001}
 ```
 
-Enjoy modeling with NeMoS`!
+Enjoy modeling with NeMoS!
