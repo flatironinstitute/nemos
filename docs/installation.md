@@ -41,7 +41,7 @@
 After creating you virtual environment, follow one of the following sections below, depending on whether you need GPU support or not:
 ### CPU Installation
 
-To install `nemos` on a system without a GPU, run this command from within your activated environment, 
+To install NeMoS on a system without a GPU, run this command from within your activated environment, 
 
 **For macOS/Linux users:**
  ```bash
@@ -70,11 +70,11 @@ For systems equipped with a GPU, you need to specifically install the GPU-enable
 
     If your GPU is listed among the devices, the installation was successful.
 
-3. **Install `nemos`:** After successfully installing and configuring `jax` for GPU support, install `nemos` using the same command as in the [CPU installation](#cpu-installation).
+3. **Install NeMoS`:** After successfully installing and configuring `jax` for GPU support, install NeMoS using the same command as in the [CPU installation](#cpu-installation).
 
 ### Installation For Developers
 
-Developers should clone the repository and install `nemos` in editable mode, including developer dependencies. Follow these steps:
+Developers should clone the repository and install NeMoS in editable mode, including developer dependencies. Follow these steps:
 
 1. **Clone the repo:** From your environment, execute the following commands to clone the repository and navigate to its directory:
     ```bash
