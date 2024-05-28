@@ -1,4 +1,4 @@
-# <img src="docs/assets/NeMoS_Logo_CMYK_Full.svg" width="100%">
+# <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="85%"> </div>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
 ![Python version](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-blue.svg)
