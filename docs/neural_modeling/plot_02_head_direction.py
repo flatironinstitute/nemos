@@ -8,8 +8,8 @@
 
 ## Learning objectives
 
-- Learn how to add history-related predictors to nemos GLM
-- Learn about nemos `Basis` objects
+- Learn how to add history-related predictors to NeMoS GLM
+- Learn about NeMoS `Basis` objects
 - Learn how to use `Basis` objects with convolution
 
 """
@@ -99,7 +99,7 @@ ax[1].set_xlabel("Angle (rad)")
 plt.tight_layout()
 
 # %%
-# Before using Nemos, let's explore the data at the population level.
+# Before using NeMoS, let's explore the data at the population level.
 #
 # Let's plot the preferred heading
 #
@@ -138,8 +138,8 @@ count = nap.TsdFrame(
 )
 
 # %%
-# ## Nemos {.strip-code}
-# It's time to use nemos. Our goal is to estimate the pairwise interaction between neurons.
+# ## NeMoS {.strip-code}
+# It's time to use NeMoS. Our goal is to estimate the pairwise interaction between neurons.
 # This can be quantified with a GLM if we use the recent population spike history to predict the current time step.
 # ### Self-Connected Single Neuron
 # To simplify our life, let's see first how we can model spike history effects in a single neuron.

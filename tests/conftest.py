@@ -6,7 +6,7 @@ of the modules of the `nemos` library.
 
 Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
-    and loading predefined parameters for testing various functionalities of the `nemos` library.
+    and loading predefined parameters for testing various functionalities of the NeMoS library.
 """
 
 import jax

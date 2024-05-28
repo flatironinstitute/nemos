@@ -81,8 +81,8 @@ for i in range(len(spikes)):
 plt.tight_layout()
 
 # %%
-# ## Nemos
-# It's time to use nemos.
+# ## NeMoS
+# It's time to use NeMoS.
 # Let's try to predict the spikes as a function of position and see if we can generate better tuning curves
 # First we start by binning the spike trains in 10 ms bins.
 
