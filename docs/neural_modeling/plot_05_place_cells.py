@@ -215,7 +215,7 @@ plt.title("Neuron {}".format(neuron))
 plt.tight_layout()
 
 # %%
-# This neurons show a strong modulation of firing rate as a function of speed but we can also notice that the animal, on average, accelerates when travering the field. Is the speed tuning we observe a true modulation or spurious correlation caused by traversing the place field at different speed and for different theta phase? We can use `nemos` to model the activity and give the position, the phase and the speed as input variable.
+# This neurons show a strong modulation of firing rate as a function of speed but we can also notice that the animal, on average, accelerates when travering the field. Is the speed tuning we observe a true modulation or spurious correlation caused by traversing the place field at different speed and for different theta phase? We can use NeMoS to model the activity and give the position, the phase and the speed as input variable.
 #
 # We will use speed, phase and position to model the activity of the neuron.
 # All the feature have already been brought to the same dimension thanks to `pynapple`.
@@ -243,12 +243,12 @@ phase_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
 speed_basis = nmo.basis.MSplineBasis(n_basis_funcs=15)
 
 # %%
-# In addition, we will consider position and phase to be a joint variable. In `nemos`, we can combine basis by multiplying them and adding them. In this case the final basis object for our model can be made in one line :
+# In addition, we will consider position and phase to be a joint variable. In NeMoS, we can combine basis by multiplying them and adding them. In this case the final basis object for our model can be made in one line :
 
 basis = position_basis * phase_basis + speed_basis
 
 # %%
-# The object basis only tell us how each basis covers the feature space. For each timestep, we need to _evaluate_ what are the features value. For that we can call `nemos` basis:
+# The object basis only tell us how each basis covers the feature space. For each timestep, we need to _evaluate_ what are the features value. For that we can call NeMoS basis:
 
 X = basis(position, theta, speed)
 
@@ -262,7 +262,7 @@ print(X)
 # %%
 # ## Model learning
 #
-# We can now use the Poisson GLM from nemos to learn the model.
+# We can now use the Poisson GLM from NeMoS to learn the model.
 
 glm = nmo.glm.GLM(
     regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12))
@@ -273,7 +273,7 @@ glm.fit(X, count)
 # %%
 # ## Prediction
 #
-# Let's check first if our model can accurately predict the different tuning curves we displayed above. We can use the `predict` function of nemos and then compute new tuning curves
+# Let's check first if our model can accurately predict the different tuning curves we displayed above. We can use the `predict` function of NeMoS and then compute new tuning curves
 
 predicted_rate = glm.predict(X) / bin_size
 

@@ -1,4 +1,4 @@
-# nemos 
+# NeMoS 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
 ![Python version](https://img.shields.io/badge/python-3.10-blue.svg)
@@ -10,10 +10,10 @@
 
 
 
-`nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
+NeMoS (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
-The core of `nemos` includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
+The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
 focusing on the Generalized Linear Model (GLM). 
 
 We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
@@ -26,7 +26,7 @@ from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
 ## Overview
 
-At his core, `nemos` consists of two primary modules: the `basis` and the `glm` module.
+At his core, NeMoS consists of two primary modules: the `basis` and the `glm` module.
 
 The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature 
 constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented 
@@ -51,7 +51,7 @@ evaluating the model performance, and explore its behavior on new input.
 
 ## Examples
 
-Here's a brief demonstration of how the `basis` and `glm` modules work together within nemos.
+Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
 ### Poisson GLM for features analysis
 
@@ -100,7 +100,7 @@ ll = glm.score(X, y)
 <img src="assets/glm_population_scheme.svg" width="84%">
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in `nemos` you can fit jointly the whole population with the [`PopulationGLM`](generated/api_guide/plot_04_population_glm) object.
+The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](generated/api_guide/plot_04_population_glm) object.
 
 #### Feature Representation
 
@@ -148,7 +148,7 @@ Run the following `pip` command in your virtual environment.
  python -m pip install nemos
  ```
 
-For more details, including specifics for GPU users and developers, refer to `nemos` [docs](https://nemos.readthedocs.io/en/latest/installation/).
+For more details, including specifics for GPU users and developers, refer to NeMoS [docs](https://nemos.readthedocs.io/en/latest/installation/).
 
 
 ## Disclaimer
@@ -164,7 +164,7 @@ We communicate via several channels on Github:
 - To report a bug, open an
   [issue](https://github.com/flatironinstitute/nemos/issues).
 - To ask usage questions, discuss broad issues, or show off what you’ve made
-  with nemos, go to
+  with NeMoS, go to
   [Discussions](https://github.com/flatironinstitute/nemos/discussions).
 - To send suggestions for extensions or enhancements, please post in the
   [ideas](https://github.com/flatironinstitute/nemos/discussions/categories/ideas)

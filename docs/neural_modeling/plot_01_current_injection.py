@@ -36,13 +36,13 @@ First, let us see how to load in the data and reproduce the above figure, which
 we'll do using [pynapple](https://pynapple-org.github.io/pynapple/), which
 we'll use throughout this workshop, as it simplifies handling this type of
 data. After we've explored the data some, we'll introduce the Generalized
-Linear Model and how to fit it with nemos.
+Linear Model and how to fit it with NeMoS.
 
 ## Learning objectives {.keep-text}
 
 - Learn how to explore spiking data and do basic analyses using pynapple
-- Learn how to structure data for nemos
-- Learn how to fit a basic Generalized Linear Model using nemos
+- Learn how to structure data for NeMoS
+- Learn how to fit a basic Generalized Linear Model using NeMoS
 - Learn how to retrieve the parameters and predictions from a fit GLM for
   intrepetation.
 
@@ -365,7 +365,7 @@ plotting.tuning_curve_plot(tuning_curve)
 # current remains on.
 
 # %%
-# ## Nemos {.strip-code}
+# ## NeMoS {.strip-code}
 #
 # ### Preparing data
 #
@@ -373,7 +373,7 @@ plotting.tuning_curve_plot(tuning_curve)
 # Before we construct it, however, we need to get the data into the right
 # format.
 #
-# Nemos requires that the predictors and spike counts it operates on have the
+# NeMoS requires that the predictors and spike counts it operates on have the
 # following properties:
 #
 # - predictors and spike counts must have the same number of time points.
@@ -393,7 +393,7 @@ plotting.tuning_curve_plot(tuning_curve)
 #
 #     [jax](https://github.com/google/jax) is a Google-supported python library
 #     for automatic differentiation. It has all sorts of neat features, but the
-#     most relevant of which for nemos is its GPU-compatibility and
+#     most relevant of which for NeMoS is its GPU-compatibility and
 #     just-in-time compilation (both of which make code faster with little
 #     overhead!), as well as the collection of optimizers present in
 #     [jaxopt](https://jaxopt.github.io/stable/).
@@ -429,7 +429,7 @@ print(f"count sampling rate: {count.rate/1000:.02f} KHz")
 # add two dimensions for axis 1.
 predictor = np.expand_dims(binned_current, 1)
 
-# check that the dimensionality matches nemos expectation
+# check that the dimensionality matches NeMoS expectation
 print(f"predictor shape: {predictor.shape}")
 print(f"count shape: {count.shape}")
 
@@ -441,7 +441,7 @@ print(f"count shape: {count.shape}")
 #     neuron -- do you add an extra dimension? or concatenate neurons along one
 #     of the existing dimensions?
 #
-#     In nemos, we always fit Generalized Linear Models to a single neuron at a
+#     In NeMoS, we always fit Generalized Linear Models to a single neuron at a
 #     time. We'll discuss this more in the [following
 #     tutorial](../02_head_direction/), but briefly: you get the same answer
 #     whether you fit the neurons separately or simultaneously, and fitting
@@ -450,7 +450,7 @@ print(f"count shape: {count.shape}")
 # !!! info
 #
 #     In this example, we're being very explicit about this conversion to
-#     jax.numpy arrays. However, in general, nemos is able to properly convert
+#     jax.numpy arrays. However, in general, NeMoS is able to properly convert
 #     from pynapple objects to jax.numpy arrays without any additional steps
 #     (it can similarly convert from numpy arrays to jax.numpy arrays). Thus,
 #     in later background we will omit this step.
@@ -671,7 +671,7 @@ print(f"log-likelihood: {log_likelihood}")
 #
 # !!! info
 #
-#     Under the hood, nemos is minimizing the negative log-likelihood, as is
+#     Under the hood, NeMoS is minimizing the negative log-likelihood, as is
 #     typical in many optimization contexts. `score` returns the real
 #     log-likelihood, however, and thus higher is better.
 #
