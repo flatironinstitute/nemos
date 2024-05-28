@@ -1,1 +1,0 @@
-"""Model design made easy."""
