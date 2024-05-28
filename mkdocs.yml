@@ -3,6 +3,8 @@ repo_url: https://github.com/flatironinstitute/nemos
 
 theme:
   name: 'material'                         # The theme name, using the 'material' theme
+  favicon: assets/NeMoS_Icon_CMYK_Full.svg
+  logo: assets/NeMoS_Icon_CMYK_White.svg
   palette:
     primary: 'light blue'                   # The primary color palette for the theme
     features:
