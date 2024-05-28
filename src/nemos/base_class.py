@@ -18,7 +18,7 @@ DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
 
 class Base:
-    """Base class for nemos estimators.
+    """Base class for NeMoS estimators.
 
     A base class for estimators with utilities for getting and setting parameters,
     and for interacting with specific devices like CPU, GPU, and TPU.
