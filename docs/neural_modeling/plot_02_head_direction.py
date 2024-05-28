@@ -341,7 +341,7 @@ plotting.plot_basis()
 #     analytical step. We will eventually provide guidance on this choice, but
 #     for now we'll give you a decent choice.
 #
-# nemos includes `Basis` objects to handle the construction and use of these
+# NeMoS includes `Basis` objects to handle the construction and use of these
 # basis functions.
 #
 # When we instantiate this object, the only arguments we need to specify is the
@@ -397,7 +397,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 #
 # Let's see our basis in action. We can "compress" spike history feature by convolving the basis
 # with the counts (without creating the large spike history feature matrix).
-# This can be performed in nemos by calling the "compute_features" method of basis.
+# This can be performed in NeMoS by calling the "compute_features" method of basis.
 
 
 # equivalent to
