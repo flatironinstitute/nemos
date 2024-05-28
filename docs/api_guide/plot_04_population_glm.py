@@ -1,8 +1,8 @@
 """
 # Population GLM
 
-Fitting the activity of a neural population with `nemos` can be much more efficient than fitting each individual
-neuron in a loop. The reason for this is that `nemos` leverages the powerful GPU-vectorization implemented by `JAX`.
+Fitting the activity of a neural population with NeMoS can be much more efficient than fitting each individual
+neuron in a loop. The reason for this is that NeMoS leverages the powerful GPU-vectorization implemented by `JAX`.
 
 
 !!! note
@@ -12,7 +12,7 @@ neuron in a loop. The reason for this is that `nemos` leverages the powerful GPU
 
 ## Fitting a Population GLM
 
-`nemos` has a dedicated `nemos.GLM.PopulationGLM` class for fitting jointly a neural population. The API
+NeMoS has a dedicated `nemos.GLM.PopulationGLM` class for fitting jointly a neural population. The API
  is very similar to that the regular `nemos.glm.GLM`, but with a few differences:
 
  1. The `y` input to the methods `fit` and `score` must be a two-dimensional array of shape `(n_samples, n_neurons)`.

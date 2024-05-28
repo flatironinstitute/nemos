@@ -2,7 +2,7 @@
 
 r"""# Generalized Linear Models: An Introduction
 
-Before we dive into using nemos, you might wonder: why model at all? Why not
+Before we dive into using NeMoS, you might wonder: why model at all? Why not
  just make a bunch of tuning curves and submit to *Science*? Modeling is
  helpful because:
 
@@ -136,7 +136,7 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 # %%
 # !!! info
 #
-#     In nemos, the non-linearity is kept fixed. We default to the exponential,
+#     In NeMoS, the non-linearity is kept fixed. We default to the exponential,
 #     but a small number of other choices, such as soft-plus, are allowed. The
 #     allowed choices guarantee both the non-negativity constraint described
 #     above, as well as convexity, i.e. a single optimal solution. In
@@ -184,7 +184,7 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 #
 # !!! info
 #
-#     In nemos, the log-likelihood can be computed directly by calling the
+#     In NeMoS, the log-likelihood can be computed directly by calling the
 #     `score` method, passing the predictors and the counts. The method first
 #     computes the rate $\lambda(t)$ using (2) and then the likelihood using
 #     (4). This method is used under the hood during optimization.

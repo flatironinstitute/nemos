@@ -17,7 +17,6 @@ class FeaturePytree(UserDict):
     only have a depth of 1, and we allow joint slicing.
 
     This is intended to be used with jax.tree_util.tree_map and similar functionality.
-
     """
 
     def __init__(self, **kwargs):

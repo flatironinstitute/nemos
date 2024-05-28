@@ -8,8 +8,8 @@
 
 ## Learning objectives
 
-- Learn how to add history-related predictors to nemos GLM
-- Learn about nemos `Basis` objects
+- Learn how to add history-related predictors to NeMoS GLM
+- Learn about NeMoS `Basis` objects
 - Learn how to use `Basis` objects with convolution
 
 """
@@ -99,7 +99,7 @@ ax[1].set_xlabel("Angle (rad)")
 plt.tight_layout()
 
 # %%
-# Before using Nemos, let's explore the data at the population level.
+# Before using NeMoS, let's explore the data at the population level.
 #
 # Let's plot the preferred heading
 #
@@ -138,8 +138,8 @@ count = nap.TsdFrame(
 )
 
 # %%
-# ## Nemos {.strip-code}
-# It's time to use nemos. Our goal is to estimate the pairwise interaction between neurons.
+# ## NeMoS {.strip-code}
+# It's time to use NeMoS. Our goal is to estimate the pairwise interaction between neurons.
 # This can be quantified with a GLM if we use the recent population spike history to predict the current time step.
 # ### Self-Connected Single Neuron
 # To simplify our life, let's see first how we can model spike history effects in a single neuron.
@@ -341,7 +341,7 @@ plotting.plot_basis()
 #     analytical step. We will eventually provide guidance on this choice, but
 #     for now we'll give you a decent choice.
 #
-# nemos includes `Basis` objects to handle the construction and use of these
+# NeMoS includes `Basis` objects to handle the construction and use of these
 # basis functions.
 #
 # When we instantiate this object, the only arguments we need to specify is the
@@ -397,7 +397,7 @@ plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 #
 # Let's see our basis in action. We can "compress" spike history feature by convolving the basis
 # with the counts (without creating the large spike history feature matrix).
-# This can be performed in nemos by calling the "compute_features" method of basis.
+# This can be performed in NeMoS by calling the "compute_features" method of basis.
 
 
 # equivalent to
