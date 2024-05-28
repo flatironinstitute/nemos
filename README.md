@@ -9,7 +9,7 @@
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
 
-`nemos` (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
+NeMoS (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
 
 The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
