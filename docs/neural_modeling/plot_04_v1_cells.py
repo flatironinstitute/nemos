@@ -175,10 +175,10 @@ ax.plot(filtered_stimulus)
 #
 # This, then, is the spatial component of our input, as described above.
 #
-# ## Preparing data for nemos
+# ## Preparing data for NeMoS
 #
 # We'll now use the GLM to fit the temporal component. To do that, let's get
-# this and our spike counts into the proper format for nemos:
+# this and our spike counts into the proper format for NeMoS:
 
 # grab spikes from when we were showing our stimulus, and bin at 1 msec
 # resolution

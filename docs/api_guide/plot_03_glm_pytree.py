@@ -23,7 +23,7 @@ np.random.seed(111)
 # %%
 # ## FeaturePytrees
 #
-# A FeaturePytree is a custom nemos object used to represent design matrices,
+# A FeaturePytree is a custom NeMoS object used to represent design matrices,
 # GLM coefficients, and other similar variables. It is a simple
 # [pytree](https://jax.readthedocs.io/en/latest/pytrees.html), a dictionary
 # with strings as keys and arrays as values. These arrays must all have the
