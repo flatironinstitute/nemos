@@ -99,7 +99,7 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 <class 'pynapple.core.time_series.Tsd'>
 ```
 
-Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
+Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and NeMoS.
 
 !!! note
     You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
@@ -153,7 +153,7 @@ plt.show()
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 
-`nemos` takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
+NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
 compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
@@ -189,4 +189,4 @@ Now we can print the best coefficient.
 {'regularizer__regularizer_strength': 0.001}
 ```
 
-Enjoy modeling with `nemos`!
+Enjoy modeling with NeMoS!
