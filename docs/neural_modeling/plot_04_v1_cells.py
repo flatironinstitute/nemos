@@ -315,4 +315,5 @@ for i in range(lags):
     axs2[i].imshow(rf_coupled[i], vmin=mn2, vmax=mx2, cmap="Greys")
     axs2[i].set_xticks([])
     axs2[i].set_yticks([])
-plt.tight_layout()
+fig1.tight_layout()
+fig2.tight_layout()
