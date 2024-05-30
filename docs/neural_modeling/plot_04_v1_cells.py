@@ -102,7 +102,7 @@ spikes = units[units.rate >= 5.0]
 # V1). Pynapple makes this easy:
 
 
-sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
+sta = nap.compute_event_trigger_average(spikes[[20, 34]], stimulus, binsize=0.025,
                                         windowsize=(-0.15, 0.0))
 # %%
 #
@@ -121,7 +121,7 @@ sta[1, 0]
 
 fig, axes = plt.subplots(1, len(sta), figsize=(3*len(sta),3))
 for i, t in enumerate(sta.t):
-    axes[i].imshow(sta[i,0], vmin=np.min(sta), vmax=np.max(sta),
+    axes[i].imshow(sta[i, 1], vmin=np.min(sta), vmax=np.max(sta),
                    cmap='Greys_r')
     axes[i].set_title(str(t)+" s")
 
@@ -203,8 +203,8 @@ prediction_window = 0.13  # duration of the window in sec
 # number of past frames used for predicting the current firing rate
 lags = int(np.ceil(prediction_window / bin_size))
 
-# the duration of the data chunk that we will use at ech iteration
-batch_size = 30  # seconds
+# the duration of the data chunk that we will use at each iteration
+batch_size = 10  # seconds
 
 
 # define a function that returns the chunk of data from "time" to "time + batch_size"
@@ -239,14 +239,14 @@ def batcher(time: float):
 
 # instantiate two models: one that will estimate the functional connectivity and one that will not.
 model_coupled = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Ridge(
+    regularizer=nmo.regularizer.Lasso(
         regularizer_strength=0.01,
         solver_kwargs={"stepsize": 0.001, "acceleration": False}
     )
 )
 
 model_uncoupled = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Ridge(
+    regularizer=nmo.regularizer.Lasso(
         regularizer_strength=0.01,
         solver_kwargs={"stepsize": 0.001, "acceleration": False}
     )
@@ -293,7 +293,7 @@ for k in range(500):
 coeff_coupled = model_coupled.coef_[n_coupling_coef:]
 coeff_uncoupled = model_uncoupled.coef_
 
-# weight the basis nby the coefficients to get the estimated receptive fields.
+# weight the basis by the coefficients to get the estimated receptive fields.
 rf_coupled = np.einsum("lk,ijk->lij", coeff_coupled.reshape(lags, -1), basis_eval)
 rf_uncoupled = np.einsum("lk,ijk->lij", coeff_uncoupled.reshape(lags, -1), basis_eval)
 
@@ -301,8 +301,8 @@ rf_uncoupled = np.einsum("lk,ijk->lij", coeff_uncoupled.reshape(lags, -1), basis
 mn1, mx1 = rf_uncoupled.min(), rf_uncoupled.max()
 mn2, mx2 = rf_coupled.min(), rf_coupled.max()
 
-fig1, axs1 = plt.subplots(1, lags, figsize=(10, 3.5))
-fig2, axs2 = plt.subplots(1, lags, figsize=(10, 3.5))
+fig1, axs1 = plt.subplots(1, lags, figsize=(10, 1.5))
+fig2, axs2 = plt.subplots(1, lags, figsize=(10, 1.5))
 fig1.suptitle("uncoupled model RF")
 fig2.suptitle("coupled model RF")
 for i in range(lags):
