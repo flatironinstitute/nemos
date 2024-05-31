@@ -116,6 +116,14 @@ for i in range(n_step):
 
 # %%
 #
+# !!! Warning "Input validation"
+# 	  The `update` method does not perform input validation each time it is called.
+#     This design choice speeds up computation by avoiding repetitive checks. However,
+#     it requires that all inputs to the `update` method strictly conform to the expected
+#     dimensionality and structure as established during the initialization of the solver.
+#     Failure to comply with these expectations will likely result in runtime errors or
+#     incorrect computations.
+#
 # First let's plot the log-likelihood to see if the model is converging.
 
 plt.figure()
