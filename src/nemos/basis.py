@@ -86,6 +86,16 @@ class TransformerBasis(Base):
     """
 
     def __init__(self, basis: Basis):
+        self.basis = basis
+
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis: Basis):
+        if not isinstance(basis, Basis):
+            raise TypeError(f"`basis` must be of type `nmo.basis.Basis`. Type {type(basis)} provided instead!")
         self._basis = basis
 
     @staticmethod
