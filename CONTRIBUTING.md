@@ -1,6 +1,6 @@
 # Contributing
 
-The `nemos` package is designed to provide a robust set of statistical analysis tools for neuroscience research. While the repository is managed by a core team of data scientists at the Center for Computational Neuroscience of the Flatiron Institute, we warmly welcome contributions from external collaborators.
+The NeMoS package is designed to provide a robust set of statistical analysis tools for neuroscience research. While the repository is managed by a core team of data scientists at the Center for Computational Neuroscience of the Flatiron Institute, we warmly welcome contributions from external collaborators.
 
 ## General Guidelines
 

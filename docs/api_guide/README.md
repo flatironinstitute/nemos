@@ -1,3 +1,3 @@
 # API guide
 
-Familiarize with `nemos` modules and learn how to take advantage of the `pynapple` and `scikit-learn` compatibility.
+Familiarize with NeMoS modules and learn how to take advantage of the `pynapple` and `scikit-learn` compatibility.

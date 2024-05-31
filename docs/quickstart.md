@@ -1,6 +1,6 @@
 
-This tutorial will introduce the main `nemos` functionalities. This is intended for users that are 
-already familiar with the GLM framework but want to learn how to interact with the `nemos` API. 
+This tutorial will introduce the main NeMoS functionalities. This is intended for users that are 
+already familiar with the GLM framework but want to learn how to interact with the NeMoS API. 
 If you have used [scikit-learn](https://scikit-learn.org/stable/) before, we are compatible with the [estimator API](https://scikit-learn.org/stable/modules/generated/sklearn.base.BaseEstimator.html), so the quickstart should look 
 familiar.
 
@@ -8,14 +8,14 @@ In the following sessions, you will learn:
 
 1. [How to define and fit a GLM model.](#basic-model-fitting)
 2. [What are the GLM input arguments.](#model-arguments)
-3. [How to use `nemos` with `pynapple` for pre-processing.](#pre-processing-with-pynapple)
-4. [How to use `nemos` with `scikit-learn` for pipelines and cross-validation.](#compatibility-with-scikit-learn)
+3. [How to use NeMoS with `pynapple` for pre-processing.](#pre-processing-with-pynapple)
+4. [How to use NeMoS with `scikit-learn` for pipelines and cross-validation.](#compatibility-with-scikit-learn)
 
 Each of these sections can be run independently of the others.
 
 ### Basic Model Fitting
 
-Defining and fitting a `nemos` GLM model is straightforward:
+Defining and fitting a NeMoS GLM model is straightforward:
 
 ```python
 import nemos as nmo
@@ -80,7 +80,7 @@ as restricting your time series to specific epochs (sleep/wake, context A vs. co
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy data pre-processing.
 
-In `nemos`, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
+In NeMoS`, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
 also be a `pynapple` time series.
 
 A canonical example of this behavior is the `predict` method of `GLM`.
@@ -99,7 +99,7 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 <class 'pynapple.core.time_series.Tsd'>
 ```
 
-Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and `nemos`.
+Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and NeMoS.
 
 !!! note
     You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
@@ -153,7 +153,7 @@ plt.show()
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 
-`nemos` takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
+NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
 compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
@@ -189,4 +189,4 @@ Now we can print the best coefficient.
 {'regularizer__regularizer_strength': 0.001}
 ```
 
-Enjoy modeling with `nemos`!
+Enjoy modeling with NeMoS!
