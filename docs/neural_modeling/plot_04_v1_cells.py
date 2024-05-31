@@ -2,10 +2,12 @@
 #
 """# Fit V1 cell
 
-The data were collected by Sonica Saraf from the Movshon lab.
+The data presented in this notebook was collected by Sonica Saraf from the Movshon lab.
+
+The notebook focuses on fitting a V1 cell model.
 
 !!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
+    To execute this notebook locally, ensure you download the necessary [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) into the same directory as this notebook.
 
 """
 import jax
@@ -20,13 +22,13 @@ import jax.numpy as jnp
 # suppress jax to numpy conversion warning in pynapple
 nap.nap_config.suppress_conversion_warnings = True
 
-# configure plots some
+# plot style configuration
 plt.style.use("examples_utils/nemos.mplstyle")
 
 # %%
 # ## Data Streaming
-#
 
+# Downloading data from a remote server and storing it locally for analysis.
 path = data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
                                          '../data')
 
@@ -136,7 +138,7 @@ for i, t in enumerate(sta.t):
 #
 # ## Firing rate model
 # What we want is to model the log-firing rate as a linear combination of the past
-# stimuli $\bm{x}\_t$ over a fixed window, here $x\_t$ is an array representing the
+# stimuli $\bm{x}\_t$ over a fixed window, here $\bm{x}\_t$ is an array representing the
 # flattened image of shape `(nm, )`, where n and m are the pixel of the x and y axes
 # of the noise stimuli.
 # Mathematically, this can be expressed as,
@@ -237,6 +239,7 @@ def batcher(time: float):
 # %%
 # We are now ready to run learn the model parameters.
 
+
 # instantiate two models: one that will estimate the functional connectivity and one that will not.
 model_coupled = nmo.glm.GLM(
     regularizer=nmo.regularizer.Lasso(
@@ -317,3 +320,10 @@ for i in range(lags):
     axs2[i].set_yticks([])
 fig1.tight_layout()
 fig2.tight_layout()
+
+# %%
+# Using this batched approach allows for the estimation of a neuron's receptive field with high temporal resolution,
+# even with long recordings and high-dimensional stimuli such as images. Additionally, if the stimulus data is stored
+# in large HDF5 or Zarr files, you can leverage pynapple's "lazy-loading" capabilities (details available
+# [here](https://pynapple-org.github.io/pynapple/generated/api_guide/tutorial_pynapple_nwb/)),
+# to directly read each data chunk from the disk.
