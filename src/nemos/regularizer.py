@@ -23,9 +23,7 @@ from .pytrees import FeaturePytree
 
 SolverRun = Callable[
     [
-        Tuple[
-            jnp.ndarray, jnp.ndarray
-        ],  # Model parameters (for now tuple, eventually pytree)
+        Any,  # parameters, could be any pytree
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
@@ -34,9 +32,7 @@ SolverRun = Callable[
 
 SolverInit = Callable[
     [
-        Tuple[
-            jnp.ndarray, jnp.ndarray
-        ],  # Model parameters (for now tuple, eventually pytree)
+        Any,  # parameters, could be any pytree
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
     ],  # Output (neural activity)
@@ -45,9 +41,7 @@ SolverInit = Callable[
 
 SolverUpdate = Callable[
     [
-        Tuple[
-            jnp.ndarray, jnp.ndarray
-        ],  # Model parameters (for now tuple, eventually pytree)
+        Any,  # parameters, could be any pytree
         NamedTuple,
         jnp.ndarray,  # Predictors (i.e. model design for GLM)
         jnp.ndarray,
@@ -57,9 +51,7 @@ SolverUpdate = Callable[
 
 ProximalOperator = Callable[
     [
-        Tuple[
-            jnp.ndarray, jnp.ndarray
-        ],  # Model parameters (for now tuple, eventually pytree)
+        Any,  # parameters, could be any pytree
         float,  # Regularizer strength (for now float, eventually pytree)
         float,
     ],  # Step-size for optimization (must be a float)
