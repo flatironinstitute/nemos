@@ -13,6 +13,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
 
+from .base_class import Base
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
@@ -69,7 +70,7 @@ def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
     return sample_pts
 
 
-class TransformerBasis:
+class TransformerBasis(Base):
     """Basis as `scikit-learn` transformers.
 
     This class abstracts the underlying basis function details, offering methods
