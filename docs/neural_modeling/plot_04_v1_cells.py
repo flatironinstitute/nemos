@@ -146,7 +146,7 @@ for i, t in enumerate(sta.t):
 # \log \mu\_t = \sum \beta\_{i} \bm{x}\_{t-i}
 # $$
 # Where beta is a vector of coefficients, also of shape `(nm, )`. This is quite a lot of coefficients.
-# For example, if you want to use a window of 130ms at 130 ms resolution on a 51x51 image,
+# For example, if you want to use a window of 130ms at 10 ms resolution on a 51x51 image,
 # you'll end up with 51^2 x 13 = 33813 coefficients.
 # We can use a basis set to reduce the dimensionality: first we create a bank of basis with 51x51 of
 # elements 15 elements, reducing the problem to 15^2 x 13 = 2925 parameters.
