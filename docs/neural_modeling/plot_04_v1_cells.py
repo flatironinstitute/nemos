@@ -2,10 +2,12 @@
 #
 """# Fit V1 cell
 
-The data were collected by Sonica Saraf from the Movshon lab.
+The data presented in this notebook was collected by Sonica Saraf from the Movshon lab.
+
+The notebook focuses on fitting a V1 cell model.
 
 !!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
+    To execute this notebook locally, ensure you download the necessary [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) into the same directory as this notebook.
 
 """
 

@@ -70,7 +70,7 @@ For systems equipped with a GPU, you need to specifically install the GPU-enable
 
     If your GPU is listed among the devices, the installation was successful.
 
-3. **Install NeMoS`:** After successfully installing and configuring `jax` for GPU support, install NeMoS using the same command as in the [CPU installation](#cpu-installation).
+3. **Install NeMoS:** After successfully installing and configuring `jax` for GPU support, install NeMoS using the same command as in the [CPU installation](#cpu-installation).
 
 ### Installation For Developers
 

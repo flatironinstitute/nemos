@@ -164,7 +164,7 @@ fs = CachingFileSystem(
 file = h5py.File(fs.open(s3_url, "rb"))
 io = NWBHDF5IO(file=file, load_namespaces=True)
 
-nwb = nap.NWBFile(io.read())
+nwb = nap.NWBFile(io.read(), lazy_loading=False)
 
 print(nwb)
 
@@ -314,7 +314,6 @@ plt.imshow(pos_tuning)
 #
 # We could do all this with matrices as well, but we have to pay attention to
 # indices in a way that is annoying:
-from nemos.type_casting import support_pynapple
 
 X_mat = nmo.utils.pynapple_concatenate_jax([X['head_direction'], X['spatial_position']], -1)
 

@@ -365,7 +365,7 @@ plotting.tuning_curve_plot(tuning_curve)
 # current remains on.
 
 # %%
-# ## Nemos {.strip-code}
+# ## NeMoS {.strip-code}
 #
 # ### Preparing data
 #
@@ -373,7 +373,7 @@ plotting.tuning_curve_plot(tuning_curve)
 # Before we construct it, however, we need to get the data into the right
 # format.
 #
-# Nemos requires that the predictors and spike counts it operates on have the
+# NeMoS requires that the predictors and spike counts it operates on have the
 # following properties:
 #
 # - predictors and spike counts must have the same number of time points.
