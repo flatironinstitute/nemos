@@ -3917,14 +3917,15 @@ def test_sklearn_transformer_cv(poissonGLM_model_instantiation):
 def test_sklearn_transformer_cv_population(poisson_population_GLM_model):
     """Test pipelines in cross-validation."""
     bas = basis.BSplineBasis(3, order=1)
-    X, y, model, _, _ = poisson_population_GLM_model
-    bas = basis.TransformerBasis(bas)
+    _, y, model, _, _ = poisson_population_GLM_model
+    bas = basis.TransformerBasis(bas ** y.shape[1])
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
     grid = dict(
-        eval__basis=[basis.MSplineBasis(3), basis.RaisedCosineBasisLinear(4, mode="conv", window_size=10)]
+        eval__basis=[basis.MSplineBasis(3) ** y.shape[1],
+                     basis.RaisedCosineBasisLinear(4, mode="conv", window_size=10) ** y.shape[1]]
     )
     cv = GridSearchCV(pipe, param_grid=grid)
-    cv.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+    cv.fit(y, y)
 
 
 @pytest.mark.parametrize(
