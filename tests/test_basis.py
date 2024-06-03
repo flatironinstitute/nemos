@@ -7,12 +7,12 @@ import numpy as np
 import pynapple as nap
 import pytest
 import sklearn.pipeline as pipeline
-import statsmodels.api as sm
 import utils_testing
 
 import nemos.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
+from sklearn.model_selection import GridSearchCV
 
 # automatic define user accessible basis and check the methods
 
@@ -3899,6 +3899,32 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
     pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+
+
+def test_sklearn_transformer_cv(poissonGLM_model_instantiation):
+    """Test pipelines in cross-validation."""
+    bas = basis.BSplineBasis(3, order=1)
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.TransformerBasis(bas)
+    pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
+    grid = dict(
+        eval__basis=[basis.MSplineBasis(3), basis.RaisedCosineBasisLinear(4, mode="conv", window_size=10)]
+    )
+    cv = GridSearchCV(pipe, param_grid=grid)
+    cv.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+
+
+def test_sklearn_transformer_cv_population(poisson_population_GLM_model):
+    """Test pipelines in cross-validation."""
+    bas = basis.BSplineBasis(3, order=1)
+    X, y, model, _, _ = poisson_population_GLM_model
+    bas = basis.TransformerBasis(bas)
+    pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
+    grid = dict(
+        eval__basis=[basis.MSplineBasis(3), basis.RaisedCosineBasisLinear(4, mode="conv", window_size=10)]
+    )
+    cv = GridSearchCV(pipe, param_grid=grid)
+    cv.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
 
 
 @pytest.mark.parametrize(

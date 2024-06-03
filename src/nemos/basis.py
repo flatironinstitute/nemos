@@ -90,10 +90,12 @@ class TransformerBasis(Base):
 
     @property
     def basis(self):
+        """Return the original Basis object."""
         return self._basis
 
     @basis.setter
     def basis(self, basis: Basis):
+        """Check type and set basis."""
         if not isinstance(basis, Basis):
             raise TypeError(f"`basis` must be of type `nmo.basis.Basis`. Type {type(basis)} provided instead!")
         self._basis = basis
