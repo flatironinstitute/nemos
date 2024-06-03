@@ -97,7 +97,9 @@ class TransformerBasis(Base):
     def basis(self, basis: Basis):
         """Check type and set basis."""
         if not isinstance(basis, Basis):
-            raise TypeError(f"`basis` must be of type `nmo.basis.Basis`. Type {type(basis)} provided instead!")
+            raise TypeError(
+                f"`basis` must be of type `nmo.basis.Basis`. Type {type(basis)} provided instead!"
+            )
         self._basis = basis
 
     @staticmethod

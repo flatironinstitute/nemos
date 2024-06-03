@@ -8,11 +8,11 @@ import pynapple as nap
 import pytest
 import sklearn.pipeline as pipeline
 import utils_testing
+from sklearn.model_selection import GridSearchCV
 
 import nemos.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
-from sklearn.model_selection import GridSearchCV
 
 # automatic define user accessible basis and check the methods
 
