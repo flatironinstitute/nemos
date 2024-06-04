@@ -33,9 +33,9 @@ of this notebook, we'll use only the input current and the recorded spikes
 displayed in the first and third rows.
 
 First, let us see how to load in the data and reproduce the above figure, which
-we'll do using [pynapple](https://pynapple-org.github.io/pynapple/), which
-we'll use throughout this workshop, as it simplifies handling this type of
-data. After we've explored the data some, we'll introduce the Generalized
+we'll do using [Pynapple](https://pynapple-org.github.io/pynapple/). We will rely on 
+pynapple throughout this notebook, as it simplifies handling this type of
+data (we will explain the essentials of pynapple as they are used). After we've explored the data some, we'll introduce the Generalized
 Linear Model and how to fit it with NeMoS.
 
 ## Learning objectives {.keep-text}
@@ -104,8 +104,8 @@ print(data)
 
 # %%
 #
-# The dataset contains several different pynapple objects, which we discussed
-# earlier today. Let's see how these relate to the data we visualized above:
+# The dataset contains several different pynapple objects, which we will explore soon. 
+# Let's see how these relate to the data we visualized above:
 #
 # ![Annotated view of the data we will analyze.](../../assets/allen_data_annotated.gif)
 # <!-- this gif created with the following imagemagick command: convert -layers OptimizePlus -delay 100 allen_data_annotated-units.svg allen_data_annotated-epochs.svg allen_data_annotated-stimulus.svg allen_data_annotated-response.svg -loop 0 allen_data_annotated.gif -->
@@ -284,10 +284,11 @@ count
 # Now, let's convert the binned spikes into the firing rate, by smoothing them
 # with a gaussian kernel. Pynapple again provides a convenience function for
 # this:
-
+#
 # the inputs to this function are the standard deviation of the gaussian and
 # the full width of the window, given in bins. So std=50 corresponds to a
 # standard deviation of .05 seconds, total size of the filter, 0.05 sec *20 = 1 sec.
+
 firing_rate = count.smooth(std=0.05, size_factor=20)
 # convert from spikes per bin to spikes per second (Hz)
 firing_rate = firing_rate / bin_size
@@ -302,12 +303,9 @@ print(type(firing_rate))
 # %%
 #
 # Now that we've done all this preparation, let's make a plot to more easily
-# visualize the data.
+# visualize the data. We're hiding the details of the plotting function for the purposes of this
+# tutorial, but you can find it in [the source code](https://github.com/flatironinstitute/nemos/blob/development/docs/neural_modeling/examples_utils/plotting.py) if you are interested.
 
-# we're hiding the details of the plotting function for the purposes of this
-# tutorial, but you can find it in the associated github repo if you're
-# interested:
-# https://github.com/flatironinstitute/nemos-workshop-feb-2024/blob/binder/src/workshop_utils/plotting.py
 plotting.current_injection_plot(current, spikes, firing_rate)
 
 # %%
@@ -423,7 +421,7 @@ print(f"count sampling rate: {count.rate/1000:.02f} KHz")
 #
 # Because we only have a single predictor feature, we'll use
 # [`np.expand_dims`](https://numpy.org/doc/stable/reference/generated/numpy.expand_dims.html)
-# to handle .
+# to ensure it is a 2d array.
 
 
 # add two dimensions for axis 1.
@@ -443,7 +441,7 @@ print(f"count shape: {count.shape}")
 #
 #     In NeMoS, we always fit Generalized Linear Models to a single neuron at a
 #     time. We'll discuss this more in the [following
-#     tutorial](../02_head_direction/), but briefly: you get the same answer
+#     tutorial](../plot_02_head_direction/), but briefly: you get the same answer
 #     whether you fit the neurons separately or simultaneously, and fitting
 #     them separately can make your life easier.
 #
@@ -488,10 +486,10 @@ print(f"count shape: {count.shape}")
 #     different results.)
 #
 # - Observation model: this object links the firing rate and the observed
-#   spikes, describing the distribution of neural activity (and thus changing
-#   the log-likelihood). For now, the only possible observation model is the
-#   Poisson, though this may change in future releases. They can be found
-#   within `nemos.observation_models`.
+#   data (in this case spikes), describing the distribution of neural activity (and thus changing
+#   the log-likelihood). For spiking data, we use the Poisson observation model, but
+#   we discuss other options for continuous data 
+#   in [the calcium imaging analysis demo](../plot_06_calcium_imaging/).
 #
 # For this example, we'll use an un-regularized LBFGS solver. We'll discuss
 # regularization in a later tutorial.
@@ -505,10 +503,8 @@ print(f"count shape: {count.shape}")
 #     often less sensitive to step-size. Try other solvers to see how they
 #     behave!
 #
-# <div class="notes">
-#   - GLM objects need regularizers and observation models
-# </div>
 
+# Initialize the model w/regularizer and solver
 model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
 
 # %%
@@ -545,10 +541,6 @@ print(f"intercept_ shape: {model.intercept_.shape}")
 # the smoothed spike train. By calling `predict()` we can get the model's
 # predicted firing rate for this data. Note that this is just the output of the
 # model's linear-nonlinear step, as described earlier!
-#
-# <div class="notes">
-#   - generate and examine model predictions.
-# </div>
 
 # mkdocs_gallery_thumbnail_number = 4
 
@@ -592,10 +584,6 @@ plotting.current_injection_plot(current, spikes, firing_rate,
 #
 # To get a better sense, let's look at the mean firing rate over the whole
 # period:
-#
-# <div class="notes">
-#   - what do we see?
-# </div>
 
 # compare observed mean firing rate with the model predicted one
 print(f"Observed mean firing rate: {np.mean(count) / bin_size} Hz")
@@ -610,10 +598,6 @@ print(f"Predicted mean firing rate: {np.mean(predicted_fr)} Hz")
 # We can see this more directly by computing the tuning curve for our predicted
 # firing rate and comparing that against our smoothed spike train from the
 # beginning of this notebook. Pynapple can help us again with this:
-#
-# <div class="notes">
-#   - examine tuning curve -- what do we see?
-# </div>
 
 tuning_curve_model = nap.compute_1d_tuning_curves_continuous(predicted_fr[:, np.newaxis], current, 15)
 fig = plotting.tuning_curve_plot(tuning_curve)
@@ -638,10 +622,6 @@ fig.axes[0].legend()
 # model, but the firing rate is just the output of *LN*, its first two steps.
 # The firing rate is just the mean of a Poisson process, so we can pass it to
 # `jax.random.poisson`:
-#
-# <div class="notes">
-#   - Finally, let's look at spiking and scoring/metrics
-# </div>
 
 spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 
