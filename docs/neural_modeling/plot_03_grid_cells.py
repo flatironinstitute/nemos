@@ -32,7 +32,7 @@ io = data.download_dandi_data(
 #
 # Let's load the dataset and see what's inside
 
-dataset = nap.NWBFile(io.read(), lazy_loading=False)
+dataset = nap.NWBFile(io.read())
 
 print(dataset)
 

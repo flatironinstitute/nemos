@@ -164,7 +164,7 @@ fs = CachingFileSystem(
 file = h5py.File(fs.open(s3_url, "rb"))
 io = NWBHDF5IO(file=file, load_namespaces=True)
 
-nwb = nap.NWBFile(io.read(), lazy_loading=False)
+nwb = nap.NWBFile(io.read())
 
 print(nwb)
 
