@@ -250,9 +250,7 @@ ax.set_xlabel("Time (s)")
 # plotted together. 
 #
 # One common way to visualize a rough estimate of firing rate is to smooth
-# the spikes by convolving them with a Gaussian filter. See section 1.2 of [*Theoretical
-#  Neuroscience*](https://boulderschool.yale.edu/sites/default/files/files/DayanAbbott.pdf)
-#  by Dayan and Abbott for a more thorough description.
+# the spikes by convolving them with a Gaussian filter.
 #
 # !!! info
 #
@@ -276,7 +274,8 @@ ax.set_xlabel("Time (s)")
 
 # bin size in seconds
 bin_size = 0.001
-count = spikes[0].count(bin_size) # Taking neuron 0 from the TsGroup
+# Get spikes for neuron 0
+count = spikes[0].count(bin_size)
 count
 
 # %%
@@ -303,8 +302,14 @@ print(type(firing_rate))
 # %%
 #
 # Now that we've done all this preparation, let's make a plot to more easily
-# visualize the data. We're hiding the details of the plotting function for the purposes of this
-# tutorial, but you can find it in [the source code](https://github.com/flatironinstitute/nemos/blob/development/docs/neural_modeling/examples_utils/plotting.py) if you are interested.
+# visualize the data.
+#
+# !!! note
+#
+#     We're hiding the details of the plotting function for the purposes of this
+#     tutorial, but you can find it in [the source
+#     code](https://github.com/flatironinstitute/nemos/blob/development/docs/neural_modeling/examples_utils/plotting.py)
+#     if you are interested.
 
 plotting.current_injection_plot(current, spikes, firing_rate)
 
@@ -423,8 +428,6 @@ print(f"count sampling rate: {count.rate/1000:.02f} KHz")
 # [`np.expand_dims`](https://numpy.org/doc/stable/reference/generated/numpy.expand_dims.html)
 # to ensure it is a 2d array.
 
-
-# add two dimensions for axis 1.
 predictor = np.expand_dims(binned_current, 1)
 
 # check that the dimensionality matches NeMoS expectation
@@ -444,14 +447,6 @@ print(f"count shape: {count.shape}")
 #     tutorial](../plot_02_head_direction/), but briefly: you get the same answer
 #     whether you fit the neurons separately or simultaneously, and fitting
 #     them separately can make your life easier.
-#
-# !!! info
-#
-#     In this example, we're being very explicit about this conversion to
-#     jax.numpy arrays. However, in general, NeMoS is able to properly convert
-#     from pynapple objects to jax.numpy arrays without any additional steps
-#     (it can similarly convert from numpy arrays to jax.numpy arrays). Thus,
-#     in later background we will omit this step.
 #
 # ### Fitting the model
 #
@@ -549,8 +544,7 @@ predicted_fr = model.predict(predictor)
 predicted_fr = predicted_fr / bin_size
 
 
-# and let's smooth the firing rate the same way that we smoothed the smoothed
-# spike train
+# and let's smooth the firing rate the same way that we smoothed the firing rate
 smooth_predicted_fr = predicted_fr.smooth(0.05, size_factor=20)
 
 # and plot!
@@ -565,20 +559,20 @@ plotting.current_injection_plot(current, spikes, firing_rate,
 # What do we see above? Note that the y-axes in the final row are different for
 # each subplot!
 #
-# - Predicted firing rate increases as injected current goes up -- Success!
+# - Predicted firing rate increases as injected current goes up &mdash; Success! :tada:
 #
 # - The amplitude of the predicted firing rate only matches the observed
 #   amplitude in the third interval: it's too high in the first and too low in
-#   the second -- Failure!
+#   the second &mdash; Failure! :x:
 #
 # - Our predicted firing rate has the periodicity we see in the smoothed spike
-#   train -- Success!
+#   train &mdash; Success! :tada:
 #
 # - The predicted firing rate does not decay as the input remains on: the
-#   amplitudes are identical for each of the bumps within a given interval --
-#   Failure!
+#   amplitudes are identical for each of the bumps within a given interval &mdash;
+#   Failure! :x:
 #
-# The failure described in the second point may seem particularly confusing --
+# The failure described in the second point may seem particularly confusing &mdash;
 # approximate amplitude feels like it should be very easy to capture, so what's
 # going on?
 #
@@ -618,7 +612,7 @@ fig.axes[0].legend()
 # ### Finishing up
 #
 # There are a handful of other operations you might like to do with the GLM.
-# First, you might be wondering how to simulate spikes -- the GLM is a LNP
+# First, you might be wondering how to simulate spikes &mdash; the GLM is a LNP
 # model, but the firing rate is just the output of *LN*, its first two steps.
 # The firing rate is just the mean of a Poisson process, so we can pass it to
 # `jax.random.poisson`:
