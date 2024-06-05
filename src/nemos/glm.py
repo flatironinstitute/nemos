@@ -409,7 +409,7 @@ class GLM(BaseRegressor):
         y: ArrayLike,
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "pseudo-r2-McFadden",
+        ] = "log-likelihood",
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
