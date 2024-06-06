@@ -579,9 +579,10 @@ class GLM(BaseRegressor):
                 axis=0, keepdims=False
             )
 
+
         # scipy root finding, much more stable than gradient descent
         func_root = root(func, y.mean(axis=0, keepdims=False), method="hybr")
-        if not func_root.success:
+        if not jnp.allclose(func_root.fun, 0, atol=10**-4):
             raise ValueError(
                 "Could not set the initial intercept as the inverse of the firing rate for "
                 "the provided link function. "
