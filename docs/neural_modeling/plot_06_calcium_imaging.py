@@ -136,8 +136,9 @@ basis = heading_basis + coupling_basis
 # %%
 # ## Gamma GLM
 #
-# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use the built-in Gamma distribution provided with `nemos`. For the linking function, instead of the default exponential function, we will use a soft-plus non linearity.
-
+# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from `nemos` with a soft-plus non linearity.
+!!! note "Non-linearity"
+    Different option are possible. With a soft-plus we are assuming an "additive" effect the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 
 model = nmo.glm.GLM(
     regularizer=nmo.regularizer.Ridge(solver_name="LBFGS", 
