@@ -1624,7 +1624,10 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         'conv' for convolutional operation.
     width :
         Width of the raised cosine.
-    time_scaling:???????
+    time_scaling :
+        Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
+        larger values resulting in more stretching. As this approaches 0, the
+        transformation becomes linear.
     enforce_decay_to_zero:
         If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
