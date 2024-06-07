@@ -579,7 +579,6 @@ class GLM(BaseRegressor):
                 axis=0, keepdims=False
             )
 
-
         # scipy root finding, much more stable than gradient descent
         func_root = root(func, y.mean(axis=0, keepdims=False), method="hybr")
         if not jnp.allclose(func_root.fun, 0, atol=10**-4):
