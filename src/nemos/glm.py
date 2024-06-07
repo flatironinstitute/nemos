@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike
+from scipy.optimize import root
 
 from . import observation_models as obs
 from . import regularizer as reg
@@ -408,7 +409,7 @@ class GLM(BaseRegressor):
         y: ArrayLike,
         score_type: Literal[
             "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "pseudo-r2-McFadden",
+        ] = "log-likelihood",
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
@@ -574,18 +575,19 @@ class GLM(BaseRegressor):
 
         # find numerically zeros of the link
         def func(x):
-            return jnp.sum(
-                jnp.power(
-                    self.observation_model.inverse_link_function(x)
-                    - y.mean(axis=0, keepdims=False),
-                    2,
-                )
+            return self.observation_model.inverse_link_function(x) - y.mean(
+                axis=0, keepdims=False
             )
 
-        initial_intercept, _ = jaxopt.GradientDescent(func).run(
-            y.mean(axis=0, keepdims=False)
-        )
-        initial_intercept = jnp.atleast_1d(initial_intercept)
+        # scipy root finding, much more stable than gradient descent
+        func_root = root(func, y.mean(axis=0, keepdims=False), method="hybr")
+        if not jnp.allclose(func_root.fun, 0, atol=10**-4):
+            raise ValueError(
+                "Could not set the initial intercept as the inverse of the firing rate for "
+                "the provided link function. "
+                "Please, provide initial parameters instead!"
+            )
+        initial_intercept = jnp.atleast_1d(func_root.x)
 
         # Initialize parameters
         init_params = (
@@ -666,7 +668,8 @@ class GLM(BaseRegressor):
         ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
-                " Try tuning optimization hyperparameters, specifically try decreasing the learning rate."
+                " Try tuning optimization hyperparameters, specifically try decreasing the `stepsize` "
+                "and/or setting `acceleration=False`."
             )
 
         self._set_coef_and_intercept(params)

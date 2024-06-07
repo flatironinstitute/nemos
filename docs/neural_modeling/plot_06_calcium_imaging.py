@@ -18,8 +18,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pynapple as nap
-from sklearn.linear_model import LinearRegression
 from examples_utils import data, plotting
+from sklearn.linear_model import LinearRegression
 
 import nemos as nmo
 
