@@ -630,7 +630,7 @@ spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 # including spike history is often helpful, it can sometimes make simulations unstable:
 # if your GLM includes auto-regressive inputs (e.g., neurons are
 # connected to themselves or each other), simulations can sometimes can behave 
-# poorly because of runaway excitation [^1].
+# poorly because of runaway excitation [^1][^2].
 #
 # Finally, you may want a number with which to evaluate your model's
 # performance. As discussed earlier, the model optimizes log-likelihood to find
