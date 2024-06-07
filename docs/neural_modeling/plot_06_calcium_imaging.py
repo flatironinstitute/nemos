@@ -240,7 +240,8 @@ plt.show()
 
 # %%
 # While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data. 
-#
+#  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[^1] for an example of simulating activity with a GLM.
+# [^1]: Peyrache, A., Schieferstein, N. & Buzsáki, G. Transformation of the head-direction signal into a spatial code. Nat Commun 8, 1752 (2017). https://doi.org/10.1038/s41467-017-01908-3
 # Another way to compare models is to compute tuning curves. Here we use the function `compute_1d_tuning_curves_continuous` from pynapple.
 
 real_tcurves = nap.compute_1d_tuning_curves_continuous(transients, data['ry'], 120, ep=test_ep)
