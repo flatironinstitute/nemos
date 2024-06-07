@@ -1790,7 +1790,7 @@ class OrthExponentialBasis(Basis):
         **kwargs,
     ):
         super().__init__(
-            n_basis_funcs=n_basis_funcs,
+            n_basis_funcs,
             *args,
             mode=mode,
             window_size=window_size,
