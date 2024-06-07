@@ -137,8 +137,8 @@ basis = heading_basis + coupling_basis
 # ## Gamma GLM
 #
 # Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from `nemos` with a soft-plus non linearity.
-!!! note "Non-linearity"
-    Different option are possible. With a soft-plus we are assuming an "additive" effect the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
+# !!! note "Non-linearity"
+#     Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 
 model = nmo.glm.GLM(
     regularizer=nmo.regularizer.Ridge(solver_name="LBFGS", 
@@ -151,7 +151,7 @@ model = nmo.glm.GLM(
 # %%
 # We select one neuron to fit later, so remove it from the list of predictors
 
-neu = 12
+neu = 4
 selected_neurons = jnp.hstack(
     (jnp.arange(0, neu), jnp.arange(neu+1, Y.shape[1]))
 )
@@ -233,7 +233,6 @@ ylreg = nap.Tsd(t=yp.t, d=ylreg, time_support = yp.time_support)
 # mkdocs_gallery_thumbnail_number = 3
 
 ep_to_plot = nap.IntervalSet(test_ep.start+20, test_ep.start+80)
-#ep_to_plot = nap.IntervalSet(test_ep.start+100, test_ep.start+300)
 
 plt.figure()
 plt.plot(Ytest[:,neu].restrict(ep_to_plot), "r", label="true", linewidth=2)
@@ -267,3 +266,5 @@ plt.ylabel("Fluorescence")
 plt.xlabel("Head-direction (rad)")
 plt.show()
 
+#%%
+# Using GLMs for fitting calcium imaging data is still in early stages, and hasn't been through the levels of review and validation that they have for fitting spike data. Users should consider this a relatively unexplored territory, and we hope that we hope that Nemos will help researchers explore this new space of models.
