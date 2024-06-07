@@ -637,7 +637,8 @@ spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
 #
-# [^1]: Hocker, David, and Memming Park. "Multistep inference for generalized linear 
+# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
+# [^2]: Hocker, David, and Memming Park. "Multistep inference for generalized linear 
 # spiking models curbs runaway excitation." International IEEE/EMBS Conference on Neural Engineering,
 # May 2017.
 
