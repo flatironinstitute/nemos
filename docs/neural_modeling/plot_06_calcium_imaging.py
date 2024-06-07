@@ -62,14 +62,14 @@ print(ep)
 
 
 # %%
-# There are a few different ways we can explore the data. First, let's examine the raw calcium traces for neurons 4 and 35.
+# There are a few different ways we can explore the data. First, let's inspect the raw calcium traces for neurons 4 and 35 for the first 250 seconds of the experiment.
 
 fig, ax = plt.subplots(1, 2, figsize=(12, 4))
-ax[0].plot(transients[5500:8000, 4])
+ax[0].plot(transients[:, 4].get(0,250))
 ax[0].set_ylabel("Firing rate (Hz)")
 ax[0].set_title("Trace 4")
 ax[0].set_xlabel("Time(s)")
-ax[1].plot(transients[5500:8000, 35])
+ax[1].plot(transients[:, 35].get(0,250))
 ax[1].set_title("Trace 35")
 ax[1].set_xlabel("Time(s)")
 plt.tight_layout()
