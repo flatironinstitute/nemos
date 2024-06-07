@@ -624,15 +624,24 @@ spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 # %%
 #
 # Note that this is not actually that informative and, in general, it is
-# recommended that you focus on firing rates when interpreting your model. In
-# particular, if your GLM includes auto-regressive inputs (e.g., neurons are
-# connected to themselves or each other), simulate can behave poorly [^1].
+# recommended that you focus on firing rates when interpreting your model. 
 #
-# Secondly, you may want a number with which to evaluate your model's
+# Also, while 
+# including spike history is often helpful, it can sometimes make simulations unstable:
+# if your GLM includes auto-regressive inputs (e.g., neurons are
+# connected to themselves or each other), simulations can sometimes can behave 
+# poorly because of runaway excitation [^1].
+#
+# Finally, you may want a number with which to evaluate your model's
 # performance. As discussed earlier, the model optimizes log-likelihood to find
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
-# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
+#
+# [^1]: Hocker, David, and Memming Park. "Multistep inference for generalized linear 
+# spiking models curbs runaway excitation." International IEEE/EMBS Conference on Neural Engineering,
+# May 2017.
+
+
 
 log_likelihood = model.score(predictor, count, score_type="log-likelihood")
 print(f"log-likelihood: {log_likelihood}")
