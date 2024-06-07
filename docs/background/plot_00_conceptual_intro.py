@@ -70,7 +70,7 @@ Let's step through each of those in turn.
 
 Our input feature(s) are first passed through a linear transformation, which
 rescales and shifts the input: $\bm{WX}+\bm{c}$. In the one-dimensional case, as
-in this examine, this is equivalent to scaling it by a constant and adding an
+in this example, this is equivalent to scaling it by a constant and adding an
 intercept.
 
 !!! note
@@ -88,10 +88,10 @@ This means that, in the 1d case, we have two knobs to transform the input: we
 can make it bigger or smaller, or we can shift it up or down. That is, we
 compute:
 
-$$L(x(t)) = w \cdot x(t) + c \tag{1}$$
+$$L(x(t)) = w x(t) + c \tag{1}$$
 
 for some value of $w$ and $c$. Let's visualize some possible transformations
-that our model can make:
+that our model can make with three cartoon neurons:
 
 """
 
@@ -106,9 +106,13 @@ from background_utils import plotting
 plt.style.use("../neural_modeling/examples_utils/nemos.mplstyle")
 
 # %%
-# to make this plot work well, keep this to three values
+# to simplify things, we will look at three simple LNP neuron models as 
+# described above, working through each step of the transform. First, we will
+# plot the linear transformation of the input x:
+
 weights = np.asarray([.5, 4, -4])
 intercepts = np.asarray([.5, -3, -2])
+
 # make a step function with some noise riding on top
 input_feature = np.zeros(100)
 input_feature[50:] = 1
@@ -126,9 +130,10 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts)
 # rate of the neuron, so that's how we should think about the intercept.
 #
 # However, if this is meant to be the firing rate, there's something odd ---
-# the output of the linear transformation can be negative, but firing rates
+# the output of the linear transformation is often negative, but firing rates
 # have to be non-negative! That's what the nonlinearity handles: making sure our
-# firing rate is always positive:
+# firing rate is always positive. We can visualize this second stage of the LNP model
+# by adding the `plot_nonlinear` keyword to our `lnp_schematic()` plotting function:
 
 fig = plotting.lnp_schematic(input_feature, weights, intercepts,
                              plot_nonlinear=True)
@@ -144,12 +149,13 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 #     is not guaranteed in general.
 #
 # Specifically, our firing rate is:
-# $$ \lambda (t) = \exp (L(x(t)) = \exp (w \cdot x(t) + c) \tag{2}$$
+# $$ \lambda (t) = \exp (L(x(t)) = \exp (w x(t) + c) \tag{2}$$
 #
 # We can see that the output of the nonlinear transformation is always
 # positive, though note that the y-values have changed drastically.
 #
-# Now we're ready to see what these spikes look like!
+# Now we're ready to look at the third step of the LNP model, and see what 
+# the generated spikes spikes look like!
 
 # mkdocs_gallery_thumbnail_number = 3
 fig = plotting.lnp_schematic(input_feature, weights, intercepts,
@@ -159,13 +165,13 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 #
 # Remember, spiking is a stochastic process. That means that a given firing
 # rate can give rise to a variety of different spike trains; the plot above
-# shows three. Each spike train is a sample from a Poisson process with the
-# mean equal to the firing rate, i.e., output of the linear-nonlinear parts of
-# the model.
+# shows three possibilities for each neuron. Each spike train is a sample from 
+# a Poisson process with the mean equal to the firing rate, i.e., output of 
+# the linear-nonlinear parts of the model.
 #
 # Given that this is a stochastic process that could produce an infinite number
 # of possible spike trains, how do we compare our model against the single
-# observed spike train we have? We use the log-likelihood. This quantifies how
+# observed spike train we have? We use the _log-likelihood_. This quantifies how
 # likely it is to observe the given spike train for the computed firing rate:
 # if $y(t)$ is the spike counts and $\lambda(t)$ the firing rate, the equation
 # for the log-likelihood is
@@ -188,3 +194,9 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 #     `score` method, passing the predictors and the counts. The method first
 #     computes the rate $\lambda(t)$ using (2) and then the likelihood using
 #     (4). This method is used under the hood during optimization.
+
+# %%
+### More general GLMs
+# So far, we have focused on the relatively simple LNP model of spike generation, which is a special case of a GLM. The LNP model has some known shortcomings[^1]. For instance, LNP ignores things like refactory periods and other history-dependent features of spiking in a neuron. As we will show in other demos, such _spike history filters_ can be built into GLMs to give more accurate results. We will also show how, if you have recordings from a large _population_ of neurons simultaneously, you can build connections between the neurons into the GLM in the form of _coupling filters_. This can help answer the degree to which activity is driven primarily by the input X, or by network influences in the population.
+#
+# [^1]: Pillow, JW, Shlens, J, Paninski, L, Sher, A,  Litke, AM, Chichilnisky, EJ, Simoncelli, EP (2008),  "Spatio-temporal correlations and visual signalling in a complete neuronal population." Nature 454: 995-9.
