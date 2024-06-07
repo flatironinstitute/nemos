@@ -114,7 +114,7 @@ plt.legend()
 plt.show()
 
 # %%
-# The downsampling did not destroy the fast transient dynamics, so seems fine to use. We can now move on to using nemos to fit a model.
+# The downsampling did not destroy the fast transient dynamics, so seems fine to use. We can now move on to using NeMoS to fit a model.
 
 # %%
 # ## Basis instantiation
@@ -136,7 +136,7 @@ basis = heading_basis + coupling_basis
 # %%
 # ## Gamma GLM
 #
-# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from `nemos` with a soft-plus non linearity.
+# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from NeMoS with a soft-plus non linearity.
 # !!! note "Non-linearity"
 #     Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 
@@ -267,4 +267,8 @@ plt.xlabel("Head-direction (rad)")
 plt.show()
 
 #%%
-# Using GLMs for fitting calcium imaging data is still in early stages, and hasn't been through the levels of review and validation that they have for fitting spike data. Users should consider this a relatively unexplored territory, and we hope that we hope that Nemos will help researchers explore this new space of models.
+# !!! note "Gamma-GLM for Calcium Imaging Analysis"
+#     Using Gamma-GLMs for fitting calcium imaging data is still in early stages, and hasn't been through
+#     the levels of review and validation that they have for fitting spike data. Users should consider
+#     this a relatively unexplored territory, and we hope that we hope that NeMoS will help researchers
+#     explore this new space of models.
