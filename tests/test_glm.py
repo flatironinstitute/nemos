@@ -1530,8 +1530,8 @@ class TestPopulationGLM:
     @pytest.mark.parametrize(
         "X, y",
         [
-            (jnp.zeros((2, 4)), jnp.zeros((2, 2))),
-            (jnp.zeros((2, 4)), jnp.zeros((2, 3))),
+            (jnp.zeros((2, 4)), jnp.ones((2, 2))),
+            (jnp.zeros((2, 4)), jnp.ones((2, 3))),
         ],
     )
     def test_parameter_initialization(self, X, y, poisson_population_GLM_model):
