@@ -228,9 +228,13 @@ class Basis(abc.ABC):
                 )
         else:
             if args:
-                raise ValueError(f"args should only be set when mode=='conv', but '{mode}' provided instead!")
+                raise ValueError(
+                    f"args should only be set when mode=='conv', but '{mode}' provided instead!"
+                )
             if kwargs:
-                raise ValueError(f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!")
+                raise ValueError(
+                    f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
+                )
 
         self._window_size = window_size
         self._mode = mode
@@ -935,10 +939,18 @@ class SplineBasis(Basis, abc.ABC):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 2, window_size: Optional[int] = None, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 2,
+        window_size: Optional[int] = None,
+        **kwargs,
     ) -> None:
         self.order = order
-        super().__init__(n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs
+        )
         self._n_input_dimensionality = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
@@ -1066,9 +1078,22 @@ class MSplineBasis(SplineBasis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 2, window_size: Optional[int] = None, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 2,
+        window_size: Optional[int] = None,
+        **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, *args, mode=mode, order=order, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            order=order,
+            window_size=window_size,
+            **kwargs,
+        )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -1194,9 +1219,22 @@ class BSplineBasis(SplineBasis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 4, window_size: Optional[int] = None, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 4,
+        window_size: Optional[int] = None,
+        **kwargs,
     ):
-        super().__init__(n_basis_funcs, *args, mode=mode, order=order, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            order=order,
+            window_size=window_size,
+            **kwargs,
+        )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -1292,9 +1330,22 @@ class CyclicBSplineBasis(SplineBasis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 4, window_size: Optional[int] = None, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 4,
+        window_size: Optional[int] = None,
+        **kwargs,
     ):
-        super().__init__(n_basis_funcs, *args, mode=mode, order=order, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            order=order,
+            window_size=window_size,
+            **kwargs,
+        )
         if self.order < 2:
             raise ValueError(
                 f"Order >= 2 required for cyclic B-spline, "
@@ -1414,9 +1465,17 @@ class RaisedCosineBasisLinear(Basis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", width: float = 2.0, window_size: Optional[int] = None, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        width: float = 2.0,
+        window_size: Optional[int] = None,
+        **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs
+        )
         self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
@@ -1595,7 +1654,14 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         window_size: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, *args, mode=mode, width=width, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            width=width,
+            window_size=window_size,
+            **kwargs,
+        )
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self._time_scaling = 50.0
@@ -1720,7 +1786,13 @@ class OrthExponentialBasis(Basis):
         window_size: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__(n_basis_funcs=n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs=n_basis_funcs,
+            *args,
+            mode=mode,
+            window_size=window_size,
+            **kwargs,
+        )
         self._decay_rates = np.asarray(decay_rates)
         if self._decay_rates.shape[0] != n_basis_funcs:
             raise ValueError(
