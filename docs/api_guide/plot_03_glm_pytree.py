@@ -209,7 +209,7 @@ axes[-1,-1].remove()
 unit_no = 7
 spikes = nwb['units'][unit_no]
 
-basis = nmo.basis.CyclicBSplineBasis(10, 5)
+basis = nmo.basis.CyclicBSplineBasis(10, order=5)
 x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
 plt.plot(x, basis(x))
