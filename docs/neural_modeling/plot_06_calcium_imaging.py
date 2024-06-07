@@ -4,7 +4,7 @@ Fit Calcium Imaging
 ============
 
 
-For the example dataset, we will be working with a recording of a freely-moving mouse imaged with a Miniscope (1-photon imaging using the genetically encoded calcium indicator GCaMP6f). The area recorded for this experiment is the postsubiculum - a region that is known to contain head-direction cells, or cells that fire when the animal's head is pointing in a specific direction.
+For the example dataset, we will be working with a recording of a freely-moving mouse imaged with a Miniscope (1-photon imaging at 30Hz using the genetically encoded calcium indicator GCaMP6f). The area recorded for this experiment is the postsubiculum - a region that is known to contain head-direction cells, or cells that fire when the animal's head is pointing in a specific direction.
 
 The data were collected by Sofia Skromne Carrasco from the Peyrache Lab.
 
@@ -119,8 +119,9 @@ plt.show()
 # %%
 # ## Basis instantiation
 # 
-# We can define a cyclic-BSpline for capturing the encoding of the heading angle, and a
-# log-spaced raised cosine basis for the coupling filters. We can combine the two basis.
+# We can define a cyclic-BSpline for capturing the encoding of the heading angle, and a log-spaced raised cosine basis for the coupling filters between neurons. Note that we are not including a self-coupling (spike history) filter, because in practice we have found it results in overfitting.
+#
+# We can combine the two bases.
 
 heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
 coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
@@ -135,18 +136,21 @@ basis = heading_basis + coupling_basis
 # %%
 # ## Gamma GLM
 #
-# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from `nemos` with a soft-plus non linearity.
+# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observability model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson is no longer appropriate. We cannot use a Gaussian because the calcium traces are non-negative. To satisfy these constraints, we will use the built-in Gamma distribution provided with `nemos`. For the linking function, instead of the default exponential function, we will use a soft-plus non linearity.
 
 
 model = nmo.glm.GLM(
-    regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS", solver_kwargs=dict(tol=10**-13)),
+    regularizer=nmo.regularizer.Ridge(solver_name="LBFGS", 
+                                      regularizer_strength=0.02, 
+                                      solver_kwargs=dict(tol=10**-13)),
     observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jax.nn.softplus)
 )
+
 
 # %%
 # We select one neuron to fit later, so remove it from the list of predictors
 
-neu = 4
+neu = 12
 selected_neurons = jnp.hstack(
     (jnp.arange(0, neu), jnp.arange(neu+1, Y.shape[1]))
 )
@@ -228,6 +232,7 @@ ylreg = nap.Tsd(t=yp.t, d=ylreg, time_support = yp.time_support)
 # mkdocs_gallery_thumbnail_number = 3
 
 ep_to_plot = nap.IntervalSet(test_ep.start+20, test_ep.start+80)
+#ep_to_plot = nap.IntervalSet(test_ep.start+100, test_ep.start+300)
 
 plt.figure()
 plt.plot(Ytest[:,neu].restrict(ep_to_plot), "r", label="true", linewidth=2)
@@ -242,6 +247,7 @@ plt.show()
 # While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data. 
 #  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[^1] for an example of simulating activity with a GLM.
 # [^1]: Peyrache, A., Schieferstein, N. & Buzsáki, G. Transformation of the head-direction signal into a spatial code. Nat Commun 8, 1752 (2017). https://doi.org/10.1038/s41467-017-01908-3
+#
 # Another way to compare models is to compute tuning curves. Here we use the function `compute_1d_tuning_curves_continuous` from pynapple.
 
 real_tcurves = nap.compute_1d_tuning_curves_continuous(transients, data['ry'], 120, ep=test_ep)
