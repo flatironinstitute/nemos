@@ -33,9 +33,11 @@ of this notebook, we'll use only the input current and the recorded spikes
 displayed in the first and third rows.
 
 First, let us see how to load in the data and reproduce the above figure, which
-we'll do using [Pynapple](https://pynapple-org.github.io/pynapple/). We will rely on 
+we'll do using the [Pynapple package](https://pynapple-org.github.io/pynapple/). We will rely on 
 pynapple throughout this notebook, as it simplifies handling this type of
-data (we will explain the essentials of pynapple as they are used). After we've explored the data some, we'll introduce the Generalized
+data (we will explain the essentials of pynapple as they are used, but see the 
+[Pynapple docs](https://pynapple-org.github.io/pynapple/)
+if you are interested in learning more). After we've explored the data some, we'll introduce the Generalized
 Linear Model and how to fit it with NeMoS.
 
 ## Learning objectives {.keep-text}
@@ -104,8 +106,9 @@ print(data)
 
 # %%
 #
-# The dataset contains several different pynapple objects, which we will explore soon. 
-# Let's see how these relate to the data we visualized above:
+# The dataset contains several different pynapple objects, which we will 
+# explore throughout this demo. The following illustrates how these fields relate to the data 
+# we visualized above:
 #
 # ![Annotated view of the data we will analyze.](../../assets/allen_data_annotated.gif)
 # <!-- this gif created with the following imagemagick command: convert -layers OptimizePlus -delay 100 allen_data_annotated-units.svg allen_data_annotated-epochs.svg allen_data_annotated-stimulus.svg allen_data_annotated-response.svg -loop 0 allen_data_annotated.gif -->
@@ -284,11 +287,10 @@ count
 # Now, let's convert the binned spikes into the firing rate, by smoothing them
 # with a gaussian kernel. Pynapple again provides a convenience function for
 # this:
-#
-# the inputs to this function are the standard deviation of the gaussian and
-# the full width of the window, given in bins. So std=50 corresponds to a
-# standard deviation of .05 seconds, total size of the filter, 0.05 sec *20 = 1 sec.
 
+# the inputs to this function are the standard deviation of the gaussian in seconds and
+# the full width of the window, in standard deviations. So std=.05 and size_factor=20 
+# gives a total filter size of 0.05 sec * 20 = 1 sec.
 firing_rate = count.smooth(std=0.05, size_factor=20)
 # convert from spikes per bin to spikes per second (Hz)
 firing_rate = firing_rate / bin_size
