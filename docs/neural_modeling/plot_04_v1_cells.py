@@ -2,7 +2,7 @@
 #
 """# Fit V1 cell
 
-The data presented in this notebook was collected by Sonica Saraf from the Movshon lab.
+The data presented in this notebook was collected by [Sonica Saraf](https://www.cns.nyu.edu/~saraf/) from the [Movshon lab](https://www.cns.nyu.edu/labs/movshonlab/) at NYU.
 
 The notebook focuses on fitting a V1 cell model.
 
