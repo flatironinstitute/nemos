@@ -4,7 +4,7 @@ Fit Calcium Imaging
 ============
 
 
-For the example dataset, we will be working with a recording of a freely-moving mouse imaged with a Miniscope (1-photon imaging). The area recorded for this experiment is the postsubiculum - a region that is known to contain head-direction cells, or cells that fire when the animal's head is pointing in a specific direction.
+For the example dataset, we will be working with a recording of a freely-moving mouse imaged with a Miniscope (1-photon imaging at 30Hz using the genetically encoded calcium indicator GCaMP6f). The area recorded for this experiment is the postsubiculum - a region that is known to contain head-direction cells, or cells that fire when the animal's head is pointing in a specific direction.
 
 The data were collected by Sofia Skromne Carrasco from the Peyrache Lab.
 
@@ -47,7 +47,7 @@ data = nap.load_file(path)
 print(data)
 
 # %%
-# Let's save the RoiResponseSeries as a variable called 'transients' and print it.
+# In the NWB file, the calcium traces are saved the RoiResponseSeries field. Let's save them in a variable called 'transients' and print it.
 
 transients = data['RoiResponseSeries']
 print(transients)
@@ -55,29 +55,52 @@ print(transients)
 # %%
 # `transients` is a `TsdFrame`. Each column contains the activity of one neuron.
 # 
-# The mouse was recorded for 20 minutes as we can see from the `time_support` property of the `transients` object.
+# The mouse was recorded for a 20 minute recording epoch as we can see from the `time_support` property of the `transients` object.
 
 ep = transients.time_support
 print(ep)
 
+
 # %%
-# We can compute the tuning curves and plot them by calling the function `compute_1d_tuning_curves_continuous`.
+# There are a few different ways we can explore the data. First, let's inspect the raw calcium traces for neurons 4 and 35 for the first 250 seconds of the experiment.
+
+fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+ax[0].plot(transients[:, 4].get(0,250))
+ax[0].set_ylabel("Firing rate (Hz)")
+ax[0].set_title("Trace 4")
+ax[0].set_xlabel("Time(s)")
+ax[1].plot(transients[:, 35].get(0,250))
+ax[1].set_title("Trace 35")
+ax[1].set_xlabel("Time(s)")
+plt.tight_layout()
+
+# %%
+# You can see that the calcium signals are both nonnegative, and noisy. One (neuron 4) has much higher SNR than the other. We cannot typically resolve individual action potentials, but instead see slow calcium fluctuations that result from an unknown underlying electrical signal (estimating the spikes from calcium traces is known as _deconvolution_ and is beyond the scope of this demo). 
+
+# %%
+# We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function `compute_1d_tuning_curves_continuous`.
 # Here `data['ry']` is a `Tsd` that contains the angular head-direction of the animal between 0 and 2$\pi$.
 
 tcurves = nap.compute_1d_tuning_curves_continuous(transients, data['ry'], 120)
 
 
-# %%
-# The function returns a pandas DataFrame. Let's plot the tuning curve of neuron 4.
-
-plt.figure()
-plt.plot(tcurves[4])
-plt.xlabel("Angle")
-plt.ylabel("Fluorescence")
-plt.show()
 
 # %%
-# As a first processing step, let's bin the transients to a 100ms resolution.
+# The function returns a pandas DataFrame. Let's plot the tuning curves for neurons 4 and 35.
+
+fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+ax[0].plot(tcurves.iloc[:, 4])
+ax[0].set_xlabel("Angle (rad)")
+ax[0].set_ylabel("Firing rate (Hz)")
+ax[0].set_title("Trace 4")
+ax[1].plot(tcurves.iloc[:, 35])
+ax[1].set_xlabel("Angle (rad)")
+ax[1].set_title("Trace 35")
+plt.tight_layout()
+
+# %%
+# As a first processing step, let's bin the calcium traces to a 100ms resolution.
+
 Y = transients.bin_average(0.1, ep)
 
 # %% 
@@ -91,38 +114,43 @@ plt.legend()
 plt.show()
 
 # %%
-# The downsampling did not destroy the transient dynamic. We can now move on to using nemos to fit a model.
+# The downsampling did not destroy the fast transient dynamics, so seems fine to use. We can now move on to using NeMoS to fit a model.
 
 # %%
 # ## Basis instantiation
 # 
-# We can define a cyclic-BSpline for capturing the encoding of the heading angle, and a
-# log-spaced raised cosine basis for the coupling filters. We can combine the two basis.
+# We can define a cyclic-BSpline for capturing the encoding of the heading angle, and a log-spaced raised cosine basis for the coupling filters between neurons. Note that we are not including a self-coupling (spike history) filter, because in practice we have found it results in overfitting.
+#
+# We can combine the two bases.
 
 heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
 coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
 
 # %%
-# We need to make sure the design matrix will be full-rank by applying identifiability constraints
-# to the Cyclic Bspline
-heading_basis.identifiability_constraints = True
+# We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an `AdditiveBasis` object).
 
-# Here we combine the basis. The returned object is an `AdditiveBasis` object.
+heading_basis.identifiability_constraints = True
 basis = heading_basis + coupling_basis
+
 
 # %%
 # ## Gamma GLM
 #
-# Since the transients are non-negative, we will use a Gamma distribution from `nemos` with a soft-plus non linearity.
-#
+# Until now, we have been modeling spike trains, and have used a Poisson distribution for the observation model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson assumption is no longer appropriate. A Gaussian model is also not ideal since the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from NeMoS with a soft-plus non linearity.
+# !!! note "Non-linearity"
+#     Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 
 model = nmo.glm.GLM(
-    regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS", solver_kwargs=dict(tol=10**-13)),
+    regularizer=nmo.regularizer.Ridge(solver_name="LBFGS", 
+                                      regularizer_strength=0.02, 
+                                      solver_kwargs=dict(tol=10**-13)),
     observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jax.nn.softplus)
 )
 
+
 # %%
-# We select a neuron to fit and remove it from the list of predictors
+# We select one neuron to fit later, so remove it from the list of predictors
+
 neu = 4
 selected_neurons = jnp.hstack(
     (jnp.arange(0, neu), jnp.arange(neu+1, Y.shape[1]))
@@ -171,7 +199,7 @@ Ytest = Y.restrict(test_ep)
 # %%
 # ## Model fitting
 # 
-# It's time to fit the model
+# It's time to fit the model on the data from the neuron we left out.
 
 model.fit(Xtrain, Ytrain[:, neu])
 
@@ -187,6 +215,7 @@ valid = ~jnp.isnan(Xtrain.d.sum(axis=1)) # Scikit learn does not like nans.
 mdl.fit(Xtrain[valid], Ytrain[valid, neu])
 
 
+# %% 
 # We now have 2 models we can compare. Let's predict the activity of the neuron during the test epoch.
 
 yp = model.predict(Xtest)
@@ -215,6 +244,10 @@ plt.ylabel("Fluorescence")
 plt.show()
 
 # %%
+# While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data. 
+#  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[^1] for an example of simulating activity with a GLM.
+# [^1]: Peyrache, A., Schieferstein, N. & Buzsáki, G. Transformation of the head-direction signal into a spatial code. Nat Commun 8, 1752 (2017). https://doi.org/10.1038/s41467-017-01908-3
+#
 # Another way to compare models is to compute tuning curves. Here we use the function `compute_1d_tuning_curves_continuous` from pynapple.
 
 real_tcurves = nap.compute_1d_tuning_curves_continuous(transients, data['ry'], 120, ep=test_ep)
@@ -233,6 +266,9 @@ plt.ylabel("Fluorescence")
 plt.xlabel("Head-direction (rad)")
 plt.show()
 
-
-
-
+#%%
+# !!! note "Gamma-GLM for Calcium Imaging Analysis"
+#     Using Gamma-GLMs for fitting calcium imaging data is still in early stages, and hasn't been through
+#     the levels of review and validation that they have for fitting spike data. Users should consider
+#     this a relatively unexplored territory, and we hope that we hope that NeMoS will help researchers
+#     explore this new space of models.
