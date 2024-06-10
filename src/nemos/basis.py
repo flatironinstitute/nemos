@@ -239,7 +239,7 @@ class Basis(abc.ABC):
         self._window_size = window_size
         self._mode = mode
         self._kernel = None
-        self._ident_constraints = False
+        self._identifiability_constraints = False
 
     @property
     def mode(self):
@@ -251,7 +251,7 @@ class Basis(abc.ABC):
 
     @property
     def identifiability_constraints(self):
-        return self._ident_constraints
+        return self._identifiability_constraints
 
     @identifiability_constraints.setter
     def identifiability_constraints(self, value: bool):
@@ -259,7 +259,7 @@ class Basis(abc.ABC):
             raise TypeError(
                 f"`identifiability_constraints` must be a boolean. {type(value)} provided instead!"
             )
-        self._ident_constraints = value
+        self._identifiability_constraints = value
 
     @staticmethod
     def _apply_identifiability_constraints(X: NDArray):
