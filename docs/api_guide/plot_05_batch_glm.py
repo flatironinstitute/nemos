@@ -5,8 +5,6 @@ Here we demonstrate how to setup and run a stochastic gradient descent in `nemos
 by batching and using the `update` method of the model class.
 
 """
-# %%
-# ## Import
 
 import pynapple as nap
 import nemos as nmo
