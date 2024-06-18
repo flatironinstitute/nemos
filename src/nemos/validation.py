@@ -1,6 +1,5 @@
 """Collection of methods utilities."""
 
-import warnings
 from typing import Any, Optional, Union
 
 import jax
@@ -9,33 +8,6 @@ from numpy.typing import DTypeLike, NDArray
 
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
-
-
-def warn_invalid_entry(*pytree: Any):
-    """
-    Warns if any entry in the provided pytrees contains NaN or Infinite (Inf) values.
-
-    Parameters
-    ----------
-    *pytree :
-        Variable number of pytrees to check for invalid entries. A pytree is a nested structure of lists, tuples,
-        dictionaries, or other containers, with leaves that are arrays.
-
-    """
-    any_infs = pytree_map_and_reduce(
-        jnp.any, any, jax.tree_util.tree_map(jnp.isinf, pytree)
-    )
-    any_nans = pytree_map_and_reduce(
-        jnp.any, any, jax.tree_util.tree_map(jnp.isnan, pytree)
-    )
-    if any_infs and any_nans:
-        warnings.warn(
-            message="The provided trees contain Infs and Nans!", category=UserWarning
-        )
-    elif any_infs:
-        warnings.warn(message="The provided trees contain Infs!", category=UserWarning)
-    elif any_nans:
-        warnings.warn(message="The provided trees contain Nans!", category=UserWarning)
 
 
 def error_invalid_entry(*pytree: Any):

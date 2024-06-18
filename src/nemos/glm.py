@@ -760,9 +760,6 @@ class GLM(BaseRegressor):
         # validate input and params consistency
         self._check_input_and_params_consistency(params, X=feedforward_input)
 
-        # warn if nans in the input
-        validation.warn_invalid_entry(feedforward_input)
-
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(

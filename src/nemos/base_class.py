@@ -294,9 +294,6 @@ class BaseRegressor(Base, abc.ABC):
         # validate input and params consistency
         init_params = self._check_params(init_params)
 
-        # validate input
-        validation.warn_invalid_entry(X, y)
-
         # validate input and params consistency
         self._check_input_and_params_consistency(init_params, X=X, y=y)
 
