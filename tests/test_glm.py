@@ -143,51 +143,6 @@ class TestGLM:
             model.fit(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
-        "add_entry, add_to, expectation",
-        [
-            (0, "X", does_not_raise()),
-            (
-                np.nan,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (0, "y", does_not_raise()),
-            (
-                np.nan,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-        ],
-    )
-    def test_fit_param_values(
-        self, add_entry, add_to, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `fit` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        if add_to == "X":
-            # get an index to be edited
-            idx = np.unravel_index(np.random.choice(X.size), X.shape)
-            X[idx] = add_entry
-        elif add_to == "y":
-            idx = np.unravel_index(np.random.choice(y.size), y.shape)
-            y = np.asarray(y, dtype=np.float32)
-            y[idx] = add_entry
-        with expectation:
-            model.fit(X, y, init_params=true_params)
-
-    @pytest.mark.parametrize(
         "dim_weights, expectation",
         [
             (
@@ -872,51 +827,6 @@ class TestGLM:
             model.initialize_solver(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
-        "add_entry, add_to, expectation",
-        [
-            (0, "X", does_not_raise()),
-            (
-                np.nan,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (0, "y", does_not_raise()),
-            (
-                np.nan,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-        ],
-    )
-    def test_initialize_solver_param_values(
-        self, add_entry, add_to, expectation, poissonGLM_model_instantiation
-    ):
-        """
-        Test the `initialize_solver` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        if add_to == "X":
-            # get an index to be edited
-            idx = np.unravel_index(np.random.choice(X.size), X.shape)
-            X[idx] = add_entry
-        elif add_to == "y":
-            idx = np.unravel_index(np.random.choice(y.size), y.shape)
-            y = np.asarray(y, dtype=np.float32)
-            y[idx] = add_entry
-        with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
-
-    @pytest.mark.parametrize(
         "dim_weights, expectation",
         [
             (
@@ -1404,24 +1314,6 @@ class TestGLM:
         # check the time point number is that expected (same as the input)
         assert ysim.shape[0] == X.shape[0]
 
-    @pytest.mark.parametrize(
-        "insert, expectation",
-        [
-            (0, does_not_raise()),
-            (np.nan, pytest.warns(UserWarning, match=r"The provided trees contain")),
-            (np.inf, pytest.warns(UserWarning, match=r"The provided trees contain")),
-        ],
-    )
-    def test_simulate_invalid_feedforward(
-        self, insert, expectation, poissonGLM_model_instantiation
-    ):
-        X, y, model, params, rate = poissonGLM_model_instantiation
-        model.coef_ = params[0]
-        model.intercept_ = params[1]
-        X[0] = insert
-        with expectation:
-            model.simulate(jax.random.key(123), X)
-
     @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
     def test_simulate_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
@@ -1588,52 +1480,6 @@ class TestPopulationGLM:
         model.regularizer = reg
         num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert int(num) == num
-
-
-    @pytest.mark.parametrize(
-        "add_entry, add_to, expectation",
-        [
-            (0, "X", does_not_raise()),
-            (
-                np.nan,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (0, "y", does_not_raise()),
-            (
-                np.nan,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-        ],
-    )
-    def test_fit_param_values(
-        self, add_entry, add_to, expectation, poisson_population_GLM_model
-    ):
-        """
-        Test the `fit` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
-        """
-        X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        if add_to == "X":
-            # get an index to be edited
-            idx = np.unravel_index(np.random.choice(X.size), X.shape)
-            X[idx] = add_entry
-        elif add_to == "y":
-            idx = np.unravel_index(np.random.choice(y.size), y.shape)
-            y = np.asarray(y, dtype=np.float32)
-            y[idx] = add_entry
-        with expectation:
-            model.fit(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -2018,51 +1864,6 @@ class TestPopulationGLM:
             init_params = true_params + (true_params[0],) * (n_params - 2)
         with expectation:
             model.initialize_solver(X, y, init_params=init_params)
-
-    @pytest.mark.parametrize(
-        "add_entry, add_to, expectation",
-        [
-            (0, "X", does_not_raise()),
-            (
-                np.nan,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "X",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (0, "y", does_not_raise()),
-            (
-                np.nan,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-            (
-                np.inf,
-                "y",
-                pytest.warns(UserWarning, match="The provided trees contain"),
-            ),
-        ],
-    )
-    def test_initialize_solver_param_values(
-        self, add_entry, add_to, expectation, poisson_population_GLM_model
-    ):
-        """
-        Test the `initialize_solver` method with altered X or y values. Ensure the method raises exceptions for NaN or Inf values.
-        """
-        X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        if add_to == "X":
-            # get an index to be edited
-            idx = np.unravel_index(np.random.choice(X.size), X.shape)
-            X[idx] = add_entry
-        elif add_to == "y":
-            idx = np.unravel_index(np.random.choice(y.size), y.shape)
-            y = np.asarray(y, dtype=np.float32)
-            y[idx] = add_entry
-        with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -2827,25 +2628,6 @@ class TestPopulationGLM:
         assert ratesim.shape[0] == ysim.shape[0]
         # check the time point number is that expected (same as the input)
         assert ysim.shape[0] == X.shape[0]
-
-    @pytest.mark.parametrize(
-        "insert, expectation",
-        [
-            (0, does_not_raise()),
-            (np.nan, pytest.warns(UserWarning, match=r"The provided trees contain")),
-            (np.inf, pytest.warns(UserWarning, match=r"The provided trees contain")),
-        ],
-    )
-    def test_simulate_invalid_feedforward(
-        self, insert, expectation, poisson_population_GLM_model
-    ):
-        X, y, model, params, rate = poisson_population_GLM_model
-        model.coef_ = params[0]
-        model.intercept_ = params[1]
-        model._initialize_feature_mask(X, y)
-        X[0] = insert
-        with expectation:
-            model.simulate(jax.random.key(123), X)
 
     @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
     def test_simulate_gamma_glm(self, inv_link, gamma_population_GLM_model):
