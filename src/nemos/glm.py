@@ -1,5 +1,6 @@
 """GLM core module."""
 
+from functools import wraps
 from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
@@ -22,6 +23,7 @@ ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 def cast_to_jax(func):
     """Cast argument to jax."""
 
+    @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             args, kwargs = jax.tree_util.tree_map(
