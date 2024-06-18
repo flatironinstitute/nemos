@@ -1,6 +1,6 @@
 """Bases classes."""
 
-# required to get ArrayLike to render correctly, unnecessary as of python 3.10
+# required to get ArrayLike to render correctly
 from __future__ import annotations
 
 import abc

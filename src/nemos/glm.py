@@ -1,4 +1,6 @@
 """GLM core module."""
+# required to get ArrayLike to render correctly
+from __future__ import annotations
 
 from functools import wraps
 from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
