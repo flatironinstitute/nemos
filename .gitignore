@@ -133,9 +133,6 @@ dmypy.json
 .idea/
 
 
-# IntelliJ's project specific settings 
-.idea/
-
 .DS_Store
 
 # mkdocs generated folder

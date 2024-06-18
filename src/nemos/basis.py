@@ -1,6 +1,6 @@
 """Bases classes."""
 
-# required to get ArrayLike to render correctly, unnecessary as of python 3.10
+# required to get ArrayLike to render correctly
 from __future__ import annotations
 
 import abc
@@ -226,10 +226,20 @@ class Basis(abc.ABC):
                 raise ValueError(
                     f"`window_size` must be a positive integer. {window_size} provided instead!"
                 )
+        else:
+            if args:
+                raise ValueError(
+                    f"args should only be set when mode=='conv', but '{mode}' provided instead!"
+                )
+            if kwargs:
+                raise ValueError(
+                    f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
+                )
 
         self._window_size = window_size
         self._mode = mode
         self._kernel = None
+        self._identifiability_constraints = False
 
     @property
     def mode(self):
@@ -238,6 +248,55 @@ class Basis(abc.ABC):
     @property
     def window_size(self):
         return self._window_size
+
+    @property
+    def identifiability_constraints(self):
+        return self._identifiability_constraints
+
+    @identifiability_constraints.setter
+    def identifiability_constraints(self, value: bool):
+        if not isinstance(value, bool):
+            raise TypeError(
+                f"`identifiability_constraints` must be a boolean. {type(value)} provided instead!"
+            )
+        self._identifiability_constraints = value
+
+    @staticmethod
+    def _apply_identifiability_constraints(X: NDArray):
+        """Apply identifiability constraints to a design matrix `X`.
+
+         Removes columns from `X` until `[1, X]` is full rank to ensure the uniqueness
+         of the GLM (Generalized Linear Model) maximum-likelihood solution. This is particularly
+         crucial for models using bases like BSplines and CyclicBspline, which, due to their
+         construction, sum to 1 and can cause rank deficiency when combined with an intercept.
+
+         For GLMs, this rank deficiency means that different sets of coefficients might yield
+         identical predicted rates and log-likelihood, complicating parameter learning, especially
+         in the absence of regularization.
+
+        Parameters
+        ----------
+        X:
+            The design matrix before applying the identifiability constraints.
+
+        Returns
+        -------
+        :
+            The adjusted design matrix with redundant columns dropped and columns mean-centered.
+        """
+
+        def add_constant(x):
+            return np.hstack((np.ones((x.shape[0], 1)), x))
+
+        rank = np.linalg.matrix_rank(add_constant(X))
+        # mean center
+        X -= np.nanmean(X, axis=0)
+        while rank < X.shape[1] + 1:
+            # drop a column
+            X = X[:, :-1]
+            # recompute rank
+            rank = np.linalg.matrix_rank(add_constant(X))
+        return X
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -653,9 +712,9 @@ class AdditiveBasis(Basis):
 
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis, *args, **kwargs) -> None:
+    def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs, *args, mode="eval", **kwargs)
+        super().__init__(self.n_basis_funcs, mode="eval")
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
@@ -685,12 +744,15 @@ class AdditiveBasis(Basis):
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
         """
-        return np.hstack(
+        X = np.hstack(
             (
                 self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -761,9 +823,9 @@ class MultiplicativeBasis(Basis):
 
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis, *args, **kwargs) -> None:
+    def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs, *args, mode="eval", **kwargs)
+        super().__init__(self.n_basis_funcs, mode="eval")
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
@@ -811,13 +873,16 @@ class MultiplicativeBasis(Basis):
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
         """
-        return np.asarray(
+        X = np.asarray(
             row_wise_kron(
                 self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
                 self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -852,8 +917,19 @@ class SplineBasis(Basis, abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
     order : optional
         Spline order.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     Attributes
     ----------
@@ -863,10 +939,18 @@ class SplineBasis(Basis, abc.ABC):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 2,
+        window_size: Optional[int] = None,
+        **kwargs,
     ) -> None:
         self.order = order
-        super().__init__(n_basis_funcs, *args, mode=mode, **kwargs)
+        super().__init__(
+            n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs
+        )
         self._n_input_dimensionality = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
@@ -961,10 +1045,21 @@ class MSplineBasis(SplineBasis):
     n_basis_funcs :
         The number of basis functions to generate. More basis functions allow for
         more flexible data modeling but can lead to overfitting.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
     order :
         The order of the splines used in basis functions. Must be between [1,
         n_basis_funcs]. Default is 2. Higher order splines have more continuous
         derivatives at each interior knot, resulting in smoother basis functions.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     Examples
     --------
@@ -983,9 +1078,22 @@ class MSplineBasis(SplineBasis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 2, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 2,
+        window_size: Optional[int] = None,
+        **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            order=order,
+            window_size=window_size,
+            **kwargs,
+        )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -1018,13 +1126,16 @@ class MSplineBasis(SplineBasis):
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
         )
 
-        return np.stack(
+        X = np.stack(
             [
                 mspline(sample_pts, self.order, i, knot_locs)
                 for i in range(self.n_basis_funcs)
             ],
             axis=1,
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
@@ -1078,10 +1189,21 @@ class BSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
     order :
         Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     Attributes
     ----------
@@ -1097,9 +1219,22 @@ class BSplineBasis(SplineBasis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 4,
+        window_size: Optional[int] = None,
+        **kwargs,
     ):
-        super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            order=order,
+            window_size=window_size,
+            **kwargs,
+        )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -1134,7 +1269,8 @@ class BSplineBasis(SplineBasis):
         basis_eval = bspline(
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
-
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1169,10 +1305,21 @@ class CyclicBSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
     order :
         Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     Attributes
     ----------
@@ -1183,9 +1330,22 @@ class CyclicBSplineBasis(SplineBasis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", order: int = 4, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        order: int = 4,
+        window_size: Optional[int] = None,
+        **kwargs,
     ):
-        super().__init__(n_basis_funcs, *args, mode=mode, order=order, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            order=order,
+            window_size=window_size,
+            **kwargs,
+        )
         if self.order < 2:
             raise ValueError(
                 f"Order >= 2 required for cyclic B-spline, "
@@ -1244,7 +1404,8 @@ class CyclicBSplineBasis(SplineBasis):
             )
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1281,8 +1442,19 @@ class RaisedCosineBasisLinear(Basis):
     ----------
     n_basis_funcs :
         The number of basis functions.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
     width :
         Width of the raised cosine. By default, it's set to 2.0.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     References
     ----------
@@ -1293,9 +1465,17 @@ class RaisedCosineBasisLinear(Basis):
     """
 
     def __init__(
-        self, n_basis_funcs: int, *args, mode="eval", width: float = 2.0, **kwargs
+        self,
+        n_basis_funcs: int,
+        *args,
+        mode="eval",
+        width: float = 2.0,
+        window_size: Optional[int] = None,
+        **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, *args, mode=mode, **kwargs)
+        super().__init__(
+            n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs
+        )
         self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
@@ -1375,7 +1555,8 @@ class RaisedCosineBasisLinear(Basis):
             )
             + 1
         )
-
+        if self.identifiability_constraints:
+            basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
 
     def _compute_peaks(self) -> NDArray:
@@ -1435,12 +1616,27 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ----------
     n_basis_funcs :
         The number of basis functions.
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
     width :
-        Width of the raised cosine. By default, it's set to 2.0.
+        Width of the raised cosine.
+    time_scaling :
+        Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
+        larger values resulting in more stretching. As this approaches 0, the
+        transformation becomes linear.
     enforce_decay_to_zero:
         If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
 
     References
     ----------
@@ -1458,9 +1654,17 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         width: float = 2.0,
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
+        window_size: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, *args, mode=mode, width=width, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            width=width,
+            window_size=window_size,
+            **kwargs,
+        )
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self._time_scaling = 50.0
@@ -1563,6 +1767,17 @@ class OrthExponentialBasis(Basis):
             Number of basis functions.
     decay_rates :
             Decay rates of the exponentials, shape (n_basis_funcs,).
+    *args:
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    mode :
+        The mode of operation. 'eval' for evaluation at sample points,
+        'conv' for convolutional operation.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    **kwargs:
+        Only used in "conv" mode. Additional keyword arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
     """
 
     def __init__(
@@ -1571,9 +1786,16 @@ class OrthExponentialBasis(Basis):
         decay_rates: NDArray[np.floating],
         *args,
         mode="eval",
+        window_size: Optional[int] = None,
         **kwargs,
     ):
-        super().__init__(n_basis_funcs=n_basis_funcs, *args, mode=mode, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            window_size=window_size,
+            **kwargs,
+        )
         self._decay_rates = np.asarray(decay_rates)
         if self._decay_rates.shape[0] != n_basis_funcs:
             raise ValueError(
@@ -1686,9 +1908,12 @@ class OrthExponentialBasis(Basis):
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
-        return scipy.linalg.orth(
+        basis_funcs = scipy.linalg.orth(
             np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
         )
+        if self.identifiability_constraints:
+            basis_funcs = self._apply_identifiability_constraints(basis_funcs)
+        return basis_funcs
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

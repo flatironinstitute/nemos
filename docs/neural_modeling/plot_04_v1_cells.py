@@ -2,8 +2,12 @@
 #
 """# Fit V1 cell
 
+The data presented in this notebook was collected by [Sonica Saraf](https://www.cns.nyu.edu/~saraf/) from the [Movshon lab](https://www.cns.nyu.edu/labs/movshonlab/) at NYU.
+
+The notebook focuses on fitting a V1 cell model.
+
 !!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
+    To execute this notebook locally, ensure you download the necessary [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) into the same directory as this notebook.
 
 """
 
@@ -20,8 +24,6 @@ plt.style.use("examples_utils/nemos.mplstyle")
 # %%
 # ## Data Streaming
 #
-# Here we load the data from OSF. This data comes from Sonica Saraf, in Tony
-# Movshon's lab.
 
 path = data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
                                          '../data')

@@ -1,13 +1,17 @@
 """Abstract class for estimators."""
 
+# required to get ArrayLike to render correctly
+from __future__ import annotations
+
 import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Any, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from jaxopt import OptStep
 from numpy.typing import ArrayLike, NDArray
 
 from . import validation
@@ -295,3 +299,28 @@ class BaseRegressor(Base, abc.ABC):
 
         # validate input and params consistency
         self._check_input_and_params_consistency(init_params, X=X, y=y)
+
+    @abc.abstractmethod
+    def update(
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
+    ) -> OptStep:
+        """Run a single update step of the jaxopt solver."""
+        pass
+
+    @abc.abstractmethod
+    def initialize_solver(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        params: Optional = None,
+        **kwargs,
+    ) -> Tuple[Any, NamedTuple]:
+        """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
+        pass

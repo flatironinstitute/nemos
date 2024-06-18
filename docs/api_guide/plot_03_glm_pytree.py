@@ -209,7 +209,7 @@ axes[-1,-1].remove()
 unit_no = 7
 spikes = nwb['units'][unit_no]
 
-basis = nmo.basis.CyclicBSplineBasis(10, 5)
+basis = nmo.basis.CyclicBSplineBasis(10, order=5)
 x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
 plt.plot(x, basis(x))
@@ -314,7 +314,6 @@ plt.imshow(pos_tuning)
 #
 # We could do all this with matrices as well, but we have to pay attention to
 # indices in a way that is annoying:
-from nemos.type_casting import support_pynapple
 
 X_mat = nmo.utils.pynapple_concatenate_jax([X['head_direction'], X['spatial_position']], -1)
 

@@ -22,12 +22,12 @@ classifiers = [
 
 # Define dependencies for the project
 dependencies = [
-    "jax>=0.4",                     # Numerical computing library
+    "jax>=0.4.28",                     # Numerical computing library
     "jaxopt>=0.6",                  # Optimization library built on JAX
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple>=0.6.5"
+    "pynapple>=0.6.6"
 ]
 
 

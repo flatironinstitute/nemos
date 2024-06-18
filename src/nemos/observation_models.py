@@ -476,7 +476,7 @@ class PoissonObservations(Observations):
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
         predicted_rate = jnp.clip(
-            predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
         x = y * jnp.log(predicted_rate)
         # see above for derivation of this.
@@ -686,7 +686,7 @@ class GammaObservations(Observations):
 
         """
         predicted_rate = jnp.clip(
-            predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
         x = jnp.power(-predicted_rate, -1)
         # see above for derivation of this.
@@ -798,7 +798,7 @@ class GammaObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
         """
         y_mu = jnp.clip(
-            neural_activity / predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+            neural_activity / predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
         resid_dev = 2 * (
             -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
@@ -839,7 +839,7 @@ class GammaObservations(Observations):
             scale for each neuron.
         """
         predicted_rate = jnp.clip(
-            predicted_rate, a_min=jnp.finfo(predicted_rate.dtype).eps
+            predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
         )
         resid = jnp.power(y - predicted_rate, 2)
         return (
