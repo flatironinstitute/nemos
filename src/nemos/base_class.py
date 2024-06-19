@@ -30,11 +30,6 @@ class Base:
     - Getting and setting parameters using introspection.
     - Sending arrays to target devices (CPU, GPU, TPU).
 
-    Parameters
-    ----------
-    **kwargs : dict
-        Arbitrary keyword arguments.
-
     Notes
     -----
     The class provides helper methods mimicking scikit-learn's get_params and set_params.

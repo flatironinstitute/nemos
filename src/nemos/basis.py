@@ -117,9 +117,9 @@ class TransformerBasis:
         Parameters
         ----------
         X :
-           The data to fit the basis functions to, shape (num_samples, num_input).
+            The data to fit the basis functions to, shape (num_samples, num_input).
         y : ignored
-           Not used, present for API consistency by convention.
+            Not used, present for API consistency by convention.
 
         Returns
         -------
