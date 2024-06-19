@@ -100,7 +100,7 @@ ll = glm.score(X, y)
 <img src="assets/glm_population_scheme.svg" width="84%">
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](generated/api_guide/plot_04_population_glm) object.
+The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](generated/api_guide/plot_04_population_glm.md) object.
 
 #### Feature Representation
 
@@ -128,8 +128,8 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, spike_counts)
 ```
 
-For a deeper dive, see our [Quickstart](quickstart)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
-model](reference/nemos/observation_models) and a [regularizer](reference/nemos/regularizer).
+For a deeper dive, see our [Quickstart](quickstart.md)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
+model](reference/nemos/observation_models.md) and a [regularizer](reference/nemos/regularizer.md).
 
 !!! note "Multi-epoch convolution"
     If your data is formatted as a `pynapple` time-series, the convolution performed by the basis objects will be 
