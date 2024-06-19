@@ -172,8 +172,8 @@ We communicate via several channels on Github:
   section of discussions first. We’ll discuss it there and, if we decide to
   pursue it, open an issue to track progress.
 - To contribute to the project, see the [contributing
-  guide](docs/CONTRIBUTING.md).
+  guide](CONTRIBUTING.md).
 
 In all cases, we request that you respect our [code of
-conduct](docs/CODE_OF_CONDUCT.md).
+conduct](CODE_OF_CONDUCT.md).
 
