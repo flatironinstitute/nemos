@@ -55,8 +55,8 @@ During initialization, the `GLM` class accepts the following optional input argu
 1. `model.observation_model`: The statistical model for the observed variable. The available option so far are `nemos.observation_models.PoissonObservation` and  `nemos.observation_models.GammaObservations`, which are the most common choices for modeling spike counts and calcium imaging traces respectively.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`.
 
-For more information on how to change default arguments, see the API guide for [`observation_models`](../reference/nemos/observation_models/) and
-[`regularizer`](../reference/nemos/regularizer/).
+For more information on how to change default arguments, see the API guide for [`observation_models`](reference/nemos/observation_models.md) and
+[`regularizer`](reference/nemos/regularizer.md).
 
 ```python
 import nemos as nmo
