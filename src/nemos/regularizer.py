@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
-from . import tree_utils, utils
+from . import solvers, tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
 from .pytrees import FeaturePytree
@@ -158,7 +158,9 @@ class Regularizer(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
+        solver_module = solvers if "SVRG" in solver_name else jaxopt
+        solver_args = inspect.getfullargspec(getattr(solver_module, solver_name)).args
+
         undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
         if undefined_kwargs:
             raise NameError(
@@ -231,7 +233,9 @@ class Regularizer(Base, abc.ABC):
             solver_kwargs.update(prox=prox)
         else:
             solver_kwargs = self.solver_kwargs
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_kwargs)
+
+        solver_module = solvers if "SVRG" in self.solver_name else jaxopt
+        solver = getattr(solver_module, self.solver_name)(fun=loss, **solver_kwargs)
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -277,6 +281,7 @@ class UnRegularized(Regularizer):
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
+        "SVRG",
     )
 
     def __init__(
@@ -306,6 +311,7 @@ class Ridge(Regularizer):
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
+        "SVRG",
     )
 
     def __init__(
@@ -401,7 +407,7 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
         A list of solver names that are allowed to be used with this regularizer.
     """
 
-    _allowed_solvers = ("ProximalGradient",)
+    _allowed_solvers = ("ProximalGradient", "ProxSVRG")
 
     def __init__(
         self,
