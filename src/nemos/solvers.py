@@ -1,11 +1,12 @@
-from typing import NamedTuple, Optional
+from typing import Callable, NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
+from jax._src.typing import ArrayLike
 from jaxopt import OptStep
 from jaxopt._src import loop
-from jaxopt._src.tree_util import (
+from jaxopt.tree_util import (
     tree_add,
     tree_add_scalar_mul,
     tree_l2_norm,
@@ -14,22 +15,26 @@ from jaxopt._src.tree_util import (
     tree_zeros_like,
 )
 
+# copying jax.random's annotation
+KeyArrayLike = ArrayLike
+
 
 class SVRGState(NamedTuple):
     epoch_num: int
-    key: jax.Array
+    key: KeyArrayLike
     error: float
 
 
 class SVRG:
     def __init__(
         self,
-        fun,
-        maxiter: int = 100,
-        key=None,
+        fun: Callable,
+        maxiter: int = 1000,
+        key: Optional[KeyArrayLike] = None,
         m: Optional[int] = None,
         lr: float = 1e-3,
         tol: float = 1e-5,
+        batch_size: int = 1,
     ):
         self.fun = fun
         self.maxiter = maxiter
@@ -38,6 +43,7 @@ class SVRG:
         self.lr = lr
         self.tol = tol
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
+        self.batch_size = batch_size
 
     def init_state(self, init_params, *args, **kwargs):
         state = SVRGState(
@@ -57,7 +63,7 @@ class SVRG:
         def inner_loop_body(_, carry):
             xk, key = carry
             key, subkey = random.split(key)
-            i = random.randint(subkey, (), 0, N)
+            i = random.randint(subkey, (self.batch_size,), 0, N)
 
             dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
             dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
@@ -113,15 +119,16 @@ class SVRG:
 class ProxSVRG(SVRG):
     def __init__(
         self,
-        fun,
-        prox,
-        maxiter: int = 100,
-        key=None,
+        fun: Callable,
+        prox: Callable,
+        maxiter: int = 1000,
+        key: Optional[KeyArrayLike] = None,
         m: Optional[int] = None,
         lr: float = 1e-3,
         tol: float = 1e-5,
+        batch_size: int = 1,
     ):
-        super().__init__(fun, maxiter, key, m, lr, tol)
+        super().__init__(fun, maxiter, key, m, lr, tol, batch_size)
         self.proximal_operator = prox
 
     def update(self, xs, state, *args, **kwargs):
@@ -137,7 +144,7 @@ class ProxSVRG(SVRG):
         def inner_loop_body(_, carry):
             xk, x_sum, key = carry
             key, subkey = random.split(key)
-            i = random.randint(subkey, (), 0, N)
+            i = random.randint(subkey, (self.batch_size,), 0, N)
 
             dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
             dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
