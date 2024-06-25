@@ -11,6 +11,7 @@ from jaxopt._src.tree_util import (
     tree_l2_norm,
     tree_scalar_mul,
     tree_sub,
+    tree_zeros_like,
 )
 
 
@@ -57,12 +58,16 @@ class SVRG:
             xk, key = carry
             key, subkey = random.split(key)
             i = random.randint(subkey, (), 0, N)
+
             dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
             dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
+
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
+
             xk = tree_add_scalar_mul(xk, -self.lr, gk)
+
             return (xk, key)
 
         xk, key = lax.fori_loop(
@@ -133,23 +138,26 @@ class ProxSVRG(SVRG):
             xk, x_sum, key = carry
             key, subkey = random.split(key)
             i = random.randint(subkey, (), 0, N)
+
             dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
             dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
+
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
+
             xk = tree_add_scalar_mul(xk, -self.lr, gk)
             xk = self.proximal_operator(xk, self.lr * prox_lambda)
-            x_sum = tree_add(x_sum, xk)
-            return (xk, x_sum, key)
 
-        x_sum_init = jax.tree_util.tree_map(jnp.zeros_like, xs)
+            x_sum = tree_add(x_sum, xk)
+
+            return (xk, x_sum, key)
 
         _, x_sum, key = lax.fori_loop(
             0,
             m,
             inner_loop_body,
-            (xs, x_sum_init, state.key),
+            (xs, tree_zeros_like(xs), state.key),
         )
 
         xs_prev = xs
