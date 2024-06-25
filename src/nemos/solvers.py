@@ -1,4 +1,3 @@
-from functools import partial
 from typing import NamedTuple, Optional
 
 import jax
@@ -33,7 +32,6 @@ class SVRG:
         self.tol = tol
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
 
-    @partial(jit, static_argnums=(0,))
     def init_state(self, init_params, *args, **kwargs):
         state = SVRGState(
             epoch_num=1,
@@ -42,7 +40,6 @@ class SVRG:
         )
         return state
 
-    @partial(jit, static_argnums=(0,))
     def update(self, xs, state, *args, **kwargs):
         X, y = args
         m = self.m if self.m is not None else X.shape[0]
@@ -72,7 +69,6 @@ class SVRG:
         )
         return OptStep(params=xk, state=next_state)
 
-    @partial(jit, static_argnums=(0,))
     def run(self, init_params, *args, **kwargs):
         def body_fun(carry):
             xs, state = carry
@@ -93,7 +89,6 @@ class SVRG:
         return OptStep(params=final_xs, state=final_state)
 
     @staticmethod
-    @jit
     def _error(diff_x, stepsize):
         diff_norm = tree_l2_norm(diff_x)
         return diff_norm / stepsize
@@ -113,7 +108,6 @@ class ProxSVRG(SVRG):
         super().__init__(fun, maxiter, key, m, lr, tol)
         self.proximal_operator = prox
 
-    @partial(jit, static_argnums=(0,))
     def update(self, xs, state, *args, **kwargs):
         """
         Performs the inner loop of Prox-SVRG
