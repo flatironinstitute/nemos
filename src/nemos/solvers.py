@@ -32,7 +32,7 @@ class SVRG:
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
         m: Optional[int] = None,
-        lr: float = 1e-3,
+        stepsize: float = 1e-3,
         tol: float = 1e-5,
         batch_size: int = 1,
     ):
@@ -40,7 +40,7 @@ class SVRG:
         self.maxiter = maxiter
         self.key = key
         self.m = m  # number of iterations in the inner loop
-        self.lr = lr
+        self.stepsize = stepsize
         self.tol = tol
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
         self.batch_size = batch_size
@@ -58,6 +58,8 @@ class SVRG:
         m = self.m if self.m is not None else X.shape[0]
         N = X.shape[0]
 
+        # TODO if X is prohibitively large, do this in batches and average over them
+        # but then should the whole matrix even be passed here, or should the batching be done somewhere else?
         df_xs = self.loss_gradient(xs, X, y)[0]
 
         def inner_loop_body(_, carry):
@@ -72,7 +74,7 @@ class SVRG:
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
 
-            xk = tree_add_scalar_mul(xk, -self.lr, gk)
+            xk = tree_add_scalar_mul(xk, -self.stepsize, gk)
 
             return (xk, key)
 
@@ -83,7 +85,7 @@ class SVRG:
             (xs, state.key),
         )
 
-        error = self._error(tree_sub(xk, xs), self.lr)
+        error = self._error(tree_sub(xk, xs), self.stepsize)
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
             key=key,
@@ -106,7 +108,7 @@ class SVRG:
             body_fun=body_fun,
             init_val=OptStep(params=init_params, state=init_state),
             maxiter=self.maxiter,
-            jit=jit,
+            jit=True,
         )
         return OptStep(params=final_xs, state=final_state)
 
@@ -114,6 +116,7 @@ class SVRG:
     def _error(diff_x, stepsize):
         diff_norm = tree_l2_norm(diff_x)
         return diff_norm / stepsize
+        # return diff_norm
 
 
 class ProxSVRG(SVRG):
@@ -124,11 +127,11 @@ class ProxSVRG(SVRG):
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
         m: Optional[int] = None,
-        lr: float = 1e-3,
+        stepsize: float = 1e-3,
         tol: float = 1e-5,
         batch_size: int = 1,
     ):
-        super().__init__(fun, maxiter, key, m, lr, tol, batch_size)
+        super().__init__(fun, maxiter, key, m, stepsize, tol, batch_size)
         self.proximal_operator = prox
 
     def update(self, xs, state, *args, **kwargs):
@@ -153,8 +156,8 @@ class ProxSVRG(SVRG):
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
 
-            xk = tree_add_scalar_mul(xk, -self.lr, gk)
-            xk = self.proximal_operator(xk, self.lr * prox_lambda)
+            xk = tree_add_scalar_mul(xk, -self.stepsize, gk)
+            xk = self.proximal_operator(xk, self.stepsize * prox_lambda)
 
             x_sum = tree_add(x_sum, xk)
 
@@ -169,7 +172,7 @@ class ProxSVRG(SVRG):
 
         xs_prev = xs
         xs = tree_scalar_mul(1 / m, x_sum)
-        error = self._error(tree_sub(xs, xs_prev), self.lr)
+        error = self._error(tree_sub(xs, xs_prev), self.stepsize)
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
             key=key,
