@@ -98,7 +98,7 @@ class ProxSVRG(SVRG):
     def __init__(
         self,
         fun,
-        prox=None,
+        prox,
         maxiter: int = 100,
         key=None,
         m: Optional[int] = None,
