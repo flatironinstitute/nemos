@@ -1,16 +1,17 @@
-import warnings
+from functools import partial
 from typing import NamedTuple, Optional
 
 import jax
 import jax.numpy as jnp
-from jax import grad, jit, random
+from jax import grad, jit, lax, random
 from jaxopt import OptStep
+from jaxopt._src import loop
 from jaxopt._src.tree_util import tree_l2_norm, tree_sub
 
 
 class SVRGState(NamedTuple):
     epoch_num: int
-    key: jax._src.prng.PRNGKeyArray
+    key: jax.Array
     error: float
 
 
@@ -30,89 +31,72 @@ class SVRG:
         self.m = m  # number of iterations in the inner loop
         self.lr = lr
         self.tol = tol
-
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
 
-        # self.loss_history = []
-
+    @partial(jit, static_argnums=(0,))
     def init_state(self, init_params, *args, **kwargs):
         state = SVRGState(
-            # params=init_params,
             epoch_num=1,
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
         )
         return state
 
+    @partial(jit, static_argnums=(0,))
     def update(self, xs, state, *args, **kwargs):
-        """
-        Performs the inner loop of SVRG
-        """
-        key = state.key
-
         X, y = args
         m = self.m if self.m is not None else X.shape[0]
         N = X.shape[0]
 
-        # compute full gradient
         df_xs = self.loss_gradient(xs, X, y)[0]
 
-        xk = xs
-        for _ in range(m):
-            # sample datapoint index
+        def inner_loop_body(carry, _):
+            xk, key = carry
             key, subkey = random.split(key)
-            i = random.randint(subkey, (), 0, N).item()
-
-            # compute stochastic gradients
+            i = random.randint(subkey, (), 0, N)
             dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
             dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
-
-            # Compute variance-reduced gradient
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
-
-            # Update xk
             xk = jax.tree_util.tree_map(lambda xk, gk: xk - self.lr * gk, xk, gk)
+            return (xk, key), None
 
-        # difference to the previous outer loop's end
+        (xk, key), _ = lax.scan(inner_loop_body, (xs, state.key), None, length=m)
+
         error = self._error(tree_sub(xk, xs), self.lr)
-        # update the outer loop's variable
-        # could be done in the return, but this is more explicit
-        xs = xk
-
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
             key=key,
             error=error,
         )
+        return OptStep(params=xk, state=next_state)
 
-        return OptStep(params=xs, state=next_state)
-
+    @partial(jit, static_argnums=(0,))
     def run(self, init_params, *args, **kwargs):
-        state = self.init_state(init_params)
-        xs = init_params
+        def body_fun(carry):
+            xs, state = carry
+            return self.update(xs, state, *args, **kwargs)
 
-        for s in range(self.maxiter):
-            # self.loss_history.append(self.fun(xs, *args, **kwargs).item())
-            xs, state = self.update(xs, state, *args)
+        def cond_fun(carry):
+            _, state = carry
+            return (state.epoch_num <= self.maxiter) & (state.error >= self.tol)
 
-            if state.error < self.tol:
-                break
+        init_state = self.init_state(init_params)
+        final_xs, final_state = loop.while_loop(
+            cond_fun=cond_fun,
+            body_fun=body_fun,
+            init_val=OptStep(params=init_params, state=init_state),
+            maxiter=self.maxiter,
+            jit=jit,
+        )
+        return OptStep(params=final_xs, state=final_state)
 
-        return OptStep(params=xs, state=state)
-
-    def _error(self, diff_x, stepsize):
+    @staticmethod
+    @jit
+    def _error(diff_x, stepsize):
         diff_norm = tree_l2_norm(diff_x)
         return diff_norm / stepsize
-
-    def _body_fun(self, inputs):
-        (params, state), (args, kwargs) = inputs
-        return self.update(params, state, *args, **kwargs), (args, kwargs)
-
-    def _cond_fun(self, inputs):
-        _, state = inputs[0]
-        return state.error > self.tol
 
 
 class ProxSVRG(SVRG):
@@ -127,63 +111,51 @@ class ProxSVRG(SVRG):
         tol: float = 1e-5,
     ):
         super().__init__(fun, maxiter, key, m, lr, tol)
-
         self.proximal_operator = prox
 
-        # self.loss_history = []
-
+    @partial(jit, static_argnums=(0,))
     def update(self, xs, state, *args, **kwargs):
         """
         Performs the inner loop of Prox-SVRG
         """
-        key = state.key
-
         prox_lambda, X, y = args
-
         m = self.m if self.m is not None else X.shape[0]
         N = X.shape[0]
 
-        # compute full gradient
         df_xs = self.loss_gradient(xs, X, y)[0]
 
-        xk = xs
-        x_sum = jax.tree_util.tree_map(jnp.zeros_like, xs)
-
-        for _ in range(m):
-            # sample datapoint index
+        def inner_loop_body(carry, _):
+            xk, x_sum, key = carry
             key, subkey = random.split(key)
-            i = random.randint(subkey, (), 0, N).item()
-
-            # compute stochastic gradients
+            i = random.randint(subkey, (), 0, N)
             dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
             dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
-
-            # Compute variance-reduced gradient
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
-
             xk = jax.tree_util.tree_map(
                 lambda xk, gk: xk - self.lr * gk,
                 xk,
                 gk,
             )
             xk = self.proximal_operator(xk, self.lr * prox_lambda)
-
-            # Accumulate xk for averaging
             x_sum = jax.tree_util.tree_map(lambda sum, x: sum + x, x_sum, xk)
+            return (xk, x_sum, key), None
 
-        # difference to the previous outer loop's end
+        x_sum_init = jax.tree_util.tree_map(jnp.zeros_like, xs)
+        (_, x_sum, key), _ = lax.scan(
+            inner_loop_body,
+            (xs, x_sum_init, state.key),
+            None,
+            length=m,
+        )
+
         xs_prev = xs
-        # Update xs as the average of inner loop iterations
         xs = jax.tree_util.tree_map(lambda sum: sum / m, x_sum)
-        # compute the difference
         error = self._error(tree_sub(xs, xs_prev), self.lr)
-
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
             key=key,
             error=error,
         )
-
         return OptStep(params=xs, state=next_state)
