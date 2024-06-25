@@ -5,7 +5,13 @@ import jax.numpy as jnp
 from jax import grad, jit, lax, random
 from jaxopt import OptStep
 from jaxopt._src import loop
-from jaxopt._src.tree_util import tree_l2_norm, tree_sub
+from jaxopt._src.tree_util import (
+    tree_add,
+    tree_add_scalar_mul,
+    tree_l2_norm,
+    tree_scalar_mul,
+    tree_sub,
+)
 
 
 class SVRGState(NamedTuple):
@@ -47,7 +53,7 @@ class SVRG:
 
         df_xs = self.loss_gradient(xs, X, y)[0]
 
-        def inner_loop_body(carry, _):
+        def inner_loop_body(_, carry):
             xk, key = carry
             key, subkey = random.split(key)
             i = random.randint(subkey, (), 0, N)
@@ -56,10 +62,15 @@ class SVRG:
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
-            xk = jax.tree_util.tree_map(lambda xk, gk: xk - self.lr * gk, xk, gk)
-            return (xk, key), None
+            xk = tree_add_scalar_mul(xk, -self.lr, gk)
+            return (xk, key)
 
-        (xk, key), _ = lax.scan(inner_loop_body, (xs, state.key), None, length=m)
+        xk, key = lax.fori_loop(
+            0,
+            m,
+            inner_loop_body,
+            (xs, state.key),
+        )
 
         error = self._error(tree_sub(xk, xs), self.lr)
         next_state = SVRGState(
@@ -118,7 +129,7 @@ class ProxSVRG(SVRG):
 
         df_xs = self.loss_gradient(xs, X, y)[0]
 
-        def inner_loop_body(carry, _):
+        def inner_loop_body(_, carry):
             xk, x_sum, key = carry
             key, subkey = random.split(key)
             i = random.randint(subkey, (), 0, N)
@@ -127,25 +138,22 @@ class ProxSVRG(SVRG):
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
-            xk = jax.tree_util.tree_map(
-                lambda xk, gk: xk - self.lr * gk,
-                xk,
-                gk,
-            )
+            xk = tree_add_scalar_mul(xk, -self.lr, gk)
             xk = self.proximal_operator(xk, self.lr * prox_lambda)
-            x_sum = jax.tree_util.tree_map(lambda sum, x: sum + x, x_sum, xk)
-            return (xk, x_sum, key), None
+            x_sum = tree_add(x_sum, xk)
+            return (xk, x_sum, key)
 
         x_sum_init = jax.tree_util.tree_map(jnp.zeros_like, xs)
-        (_, x_sum, key), _ = lax.scan(
+
+        _, x_sum, key = lax.fori_loop(
+            0,
+            m,
             inner_loop_body,
             (xs, x_sum_init, state.key),
-            None,
-            length=m,
         )
 
         xs_prev = xs
-        xs = jax.tree_util.tree_map(lambda sum: sum / m, x_sum)
+        xs = tree_scalar_mul(1 / m, x_sum)
         error = self._error(tree_sub(xs, xs_prev), self.lr)
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
