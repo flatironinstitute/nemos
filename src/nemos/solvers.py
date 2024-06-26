@@ -23,6 +23,7 @@ class SVRGState(NamedTuple):
     epoch_num: int
     key: KeyArrayLike
     error: float
+    stepsize: float
 
 
 class SVRG:
@@ -50,13 +51,17 @@ class SVRG:
             epoch_num=1,
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
+            stepsize=self.stepsize,
         )
         return state
 
     def update(self, xs, state, *args, **kwargs):
         X, y = args
-        m = self.m if self.m is not None else X.shape[0]
         N = X.shape[0]
+        if self.m is not None:
+            m = self.m
+        else:
+            m = (N + self.batch_size - 1) // self.batch_size
 
         # TODO if X is prohibitively large, do this in batches and average over them
         # but then should the whole matrix even be passed here, or should the batching be done somewhere else?
@@ -64,6 +69,7 @@ class SVRG:
 
         def inner_loop_body(_, carry):
             xk, key = carry
+
             key, subkey = random.split(key)
             i = random.randint(subkey, (self.batch_size,), 0, N)
 
@@ -74,7 +80,7 @@ class SVRG:
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
 
-            xk = tree_add_scalar_mul(xk, -self.stepsize, gk)
+            xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
 
             return (xk, key)
 
@@ -82,24 +88,29 @@ class SVRG:
             0,
             m,
             inner_loop_body,
-            (xs, state.key),
+            (
+                xs,
+                # conversion needed for compatibility with glm.update
+                state.key.astype(jnp.uint32),
+            ),
         )
 
-        error = self._error(tree_sub(xk, xs), self.stepsize)
+        error = self._error(xk, xs, state.stepsize)
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
             key=key,
             error=error,
+            stepsize=state.stepsize,
         )
         return OptStep(params=xk, state=next_state)
 
     def run(self, init_params, *args, **kwargs):
-        def body_fun(carry):
-            xs, state = carry
+        def body_fun(step):
+            xs, state = step
             return self.update(xs, state, *args, **kwargs)
 
-        def cond_fun(carry):
-            _, state = carry
+        def cond_fun(step):
+            _, state = step
             return (state.epoch_num <= self.maxiter) & (state.error >= self.tol)
 
         init_state = self.init_state(init_params)
@@ -112,11 +123,14 @@ class SVRG:
         )
         return OptStep(params=final_xs, state=final_state)
 
+    # @staticmethod
+    # def _error(x, x_prev, stepsize):
+    #    diff_norm = tree_l2_norm(tree_sub(x, x_prev))
+    #    return diff_norm / stepsize
+
     @staticmethod
-    def _error(diff_x, stepsize):
-        diff_norm = tree_l2_norm(diff_x)
-        return diff_norm / stepsize
-        # return diff_norm
+    def _error(x, x_prev, stepsize):
+        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
 
 
 class ProxSVRG(SVRG):
@@ -139,8 +153,11 @@ class ProxSVRG(SVRG):
         Performs the inner loop of Prox-SVRG
         """
         prox_lambda, X, y = args
-        m = self.m if self.m is not None else X.shape[0]
         N = X.shape[0]
+        if self.m is not None:
+            m = self.m
+        else:
+            m = (N + self.batch_size - 1) // self.batch_size
 
         df_xs = self.loss_gradient(xs, X, y)[0]
 
@@ -156,8 +173,8 @@ class ProxSVRG(SVRG):
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
             )
 
-            xk = tree_add_scalar_mul(xk, -self.stepsize, gk)
-            xk = self.proximal_operator(xk, self.stepsize * prox_lambda)
+            xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
+            xk = self.proximal_operator(xk, state.stepsize * prox_lambda)
 
             x_sum = tree_add(x_sum, xk)
 
@@ -167,15 +184,21 @@ class ProxSVRG(SVRG):
             0,
             m,
             inner_loop_body,
-            (xs, tree_zeros_like(xs), state.key),
+            (
+                xs,
+                tree_zeros_like(xs),
+                # conversion needed for compatibility with glm.update
+                state.key.astype(jnp.uint32),
+            ),
         )
 
         xs_prev = xs
         xs = tree_scalar_mul(1 / m, x_sum)
-        error = self._error(tree_sub(xs, xs_prev), self.stepsize)
+        error = self._error(xs, xs_prev, state.stepsize)
         next_state = SVRGState(
             epoch_num=state.epoch_num + 1,
             key=key,
             error=error,
+            stepsize=state.stepsize,
         )
         return OptStep(params=xs, state=next_state)
