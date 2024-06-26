@@ -24,6 +24,9 @@ class SVRGState(NamedTuple):
     key: KeyArrayLike
     error: float
     stepsize: float
+    N: Optional[int] = None
+    xs: Optional[tuple] = None
+    df_xs: Optional[tuple] = None
 
 
 class SVRG:
@@ -32,7 +35,7 @@ class SVRG:
         fun: Callable,
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
-        m: Optional[int] = None,
+        # N: Optional[int] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-5,
         batch_size: int = 1,
@@ -40,35 +43,41 @@ class SVRG:
         self.fun = fun
         self.maxiter = maxiter
         self.key = key
-        self.m = m  # number of iterations in the inner loop
+        # self.N = N  # number of overall data points
         self.stepsize = stepsize
         self.tol = tol
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
         self.batch_size = batch_size
 
     def init_state(self, init_params, *args, **kwargs):
+        N = args[0].shape[0] if len(args) > 0 else None
+
         state = SVRGState(
             epoch_num=1,
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
             stepsize=self.stepsize,
+            N=N,
         )
         return state
 
-    def update(self, xs, state, *args, **kwargs):
+    def get_m(self, N: int):
+        """
+        Number of iterations needed to cover N data points with samples of self.batch_size
+        """
+        return (N + self.batch_size - 1) // self.batch_size
+
+    def _sgd_update(self, xs, state, *args, **kwargs):
         X, y = args
-        N = X.shape[0]
-        if self.m is not None:
-            m = self.m
-        else:
-            m = (N + self.batch_size - 1) // self.batch_size
+        N = X.shape[0] if state.N is None else state.N
+        m = self.get_m(N)
 
         # TODO if X is prohibitively large, do this in batches and average over them
         # but then should the whole matrix even be passed here, or should the batching be done somewhere else?
         df_xs = self.loss_gradient(xs, X, y)[0]
 
         def inner_loop_body(_, carry):
-            xk, key = carry
+            xk, key, X, y = carry
 
             key, subkey = random.split(key)
             i = random.randint(subkey, (self.batch_size,), 0, N)
@@ -82,9 +91,9 @@ class SVRG:
 
             xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
 
-            return (xk, key)
+            return (xk, key, X, y)
 
-        xk, key = lax.fori_loop(
+        xk, key, _, _ = lax.fori_loop(
             0,
             m,
             inner_loop_body,
@@ -92,6 +101,8 @@ class SVRG:
                 xs,
                 # conversion needed for compatibility with glm.update
                 state.key.astype(jnp.uint32),
+                X,
+                y,
             ),
         )
 
@@ -104,10 +115,46 @@ class SVRG:
         )
         return OptStep(params=xk, state=next_state)
 
+    # @partial(jit, static_argnums=(0,))
+    # def update(self, xk, state, *args, **kwargs):
+    #    # batch data
+    #    x, y = args
+
+    #    if state.xs is None:
+    #        state = SVRGState(
+    #            stepsize=state.stepsize,
+    #            epoch_num=state.epoch_num,
+    #            key=state.key,
+    #            error=state.error,
+    #            xs=xk,
+    #            df_xs=self.loss_gradient(xk, x, y)[0],
+    #        )
+
+    #    xs, df_xs = state.xs, state.df_xs
+
+    #    dfik_xk = self.loss_gradient(xk, x, y)[0]
+    #    dfik_xs = self.loss_gradient(xs, x, y)[0]
+    #    gk = jax.tree_util.tree_map(lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs)
+    #    xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
+
+    #    next_state = SVRGState(
+    #        stepsize=state.stepsize,
+    #        epoch_num=state.epoch_num + 1,
+    #        key=state.key,
+    #        error=state.error,
+    #        xs=state.xs,
+    #        df_xs=state.df_xs,
+    #    )
+
+    #    return OptStep(params=xk, state=next_state)
+
+    def update(self, xk, state, *args, **kwargs):
+        return self._sgd_update(xk, state, *args, **kwargs)
+
     def run(self, init_params, *args, **kwargs):
         def body_fun(step):
             xs, state = step
-            return self.update(xs, state, *args, **kwargs)
+            return self._sgd_update(xs, state, *args, **kwargs)
 
         def cond_fun(step):
             _, state = step
@@ -140,29 +187,37 @@ class ProxSVRG(SVRG):
         prox: Callable,
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
-        m: Optional[int] = None,
+        # N: Optional[int] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-5,
         batch_size: int = 1,
     ):
-        super().__init__(fun, maxiter, key, m, stepsize, tol, batch_size)
+        super().__init__(
+            fun,
+            maxiter,
+            key,
+            # N,
+            stepsize,
+            tol,
+            batch_size,
+        )
         self.proximal_operator = prox
 
-    def update(self, xs, state, *args, **kwargs):
+    # def update(self, xk, state, *args, **kwargs):
+    #    raise NotImplementedError
+
+    def _sgd_update(self, xs, state, *args, **kwargs):
         """
         Performs the inner loop of Prox-SVRG
         """
         prox_lambda, X, y = args
-        N = X.shape[0]
-        if self.m is not None:
-            m = self.m
-        else:
-            m = (N + self.batch_size - 1) // self.batch_size
+        N = X.shape[0] if state.N is None else state.N
+        m = self.get_m(N)
 
         df_xs = self.loss_gradient(xs, X, y)[0]
 
         def inner_loop_body(_, carry):
-            xk, x_sum, key = carry
+            xk, x_sum, key, X, y = carry
             key, subkey = random.split(key)
             i = random.randint(subkey, (self.batch_size,), 0, N)
 
@@ -178,9 +233,9 @@ class ProxSVRG(SVRG):
 
             x_sum = tree_add(x_sum, xk)
 
-            return (xk, x_sum, key)
+            return (xk, x_sum, key, X, y)
 
-        _, x_sum, key = lax.fori_loop(
+        _, x_sum, key, _, _ = lax.fori_loop(
             0,
             m,
             inner_loop_body,
@@ -189,6 +244,8 @@ class ProxSVRG(SVRG):
                 tree_zeros_like(xs),
                 # conversion needed for compatibility with glm.update
                 state.key.astype(jnp.uint32),
+                X,
+                y,
             ),
         )
 
