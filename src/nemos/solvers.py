@@ -51,7 +51,17 @@ class SVRG:
         self.batch_size = batch_size
 
     def init_state(self, init_params, *args, **kwargs):
-        N = args[0].shape[0] if len(args) > 0 else None
+        if len(args) > 0:
+            X, y = args
+            assert isinstance(X, ArrayLike)
+            assert isinstance(y, ArrayLike)
+            assert X.shape[0] == y.shape[1]
+
+            N = X.shape[0]
+            df_xs = self.loss_gradient(init_params, X, y)
+        else:
+            N = None
+            df_xs = None
 
         state = SVRGState(
             iter_num=1,
@@ -59,6 +69,8 @@ class SVRG:
             error=jnp.inf,
             stepsize=self.stepsize,
             N=N,
+            xs=init_params,
+            df_xs=df_xs,
         )
         return state
 
@@ -122,9 +134,9 @@ class SVRG:
         x, y = args
 
         # if the state hasn't been initialized with the full gradient,
-        # the best we can do is initialize xs with the gradient of the current mini-batch
+        # the best we can do is initialize df_xs with the gradient of the current mini-batch
         # not the full gradient, but less noisy than any xk
-        if state.xs is None:
+        if state.xs is None or state.df_xs is None:
             state = SVRGState(
                 stepsize=state.stepsize,
                 iter_num=state.iter_num,
@@ -150,6 +162,8 @@ class SVRG:
         xk = lax.fori_loop(0, x.shape[0], loop_body, xk)
 
         # xs is updated outside for this implementation
+        # because we only want to update it after a whole sweep
+        # through the data, not after every mini-batch
         next_state = SVRGState(
             stepsize=state.stepsize,
             iter_num=state.iter_num + 1,
@@ -173,7 +187,8 @@ class SVRG:
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
 
-        init_state = self.init_state(init_params)
+        init_state = self.init_state(init_params, *args)
+
         final_xs, final_state = loop.while_loop(
             cond_fun=cond_fun,
             body_fun=body_fun,
