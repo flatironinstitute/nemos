@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Callable, NamedTuple, Optional
 
 import jax
@@ -115,41 +116,53 @@ class SVRG:
         )
         return OptStep(params=xk, state=next_state)
 
-    # @partial(jit, static_argnums=(0,))
-    # def update(self, xk, state, *args, **kwargs):
-    #    # batch data
-    #    x, y = args
-
-    #    if state.xs is None:
-    #        state = SVRGState(
-    #            stepsize=state.stepsize,
-    #            epoch_num=state.epoch_num,
-    #            key=state.key,
-    #            error=state.error,
-    #            xs=xk,
-    #            df_xs=self.loss_gradient(xk, x, y)[0],
-    #        )
-
-    #    xs, df_xs = state.xs, state.df_xs
-
-    #    dfik_xk = self.loss_gradient(xk, x, y)[0]
-    #    dfik_xs = self.loss_gradient(xs, x, y)[0]
-    #    gk = jax.tree_util.tree_map(lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs)
-    #    xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
-
-    #    next_state = SVRGState(
-    #        stepsize=state.stepsize,
-    #        epoch_num=state.epoch_num + 1,
-    #        key=state.key,
-    #        error=state.error,
-    #        xs=state.xs,
-    #        df_xs=state.df_xs,
-    #    )
-
-    #    return OptStep(params=xk, state=next_state)
-
+    @partial(jit, static_argnums=(0,))
     def update(self, xk, state, *args, **kwargs):
-        return self._sgd_update(xk, state, *args, **kwargs)
+        # batch data
+        x, y = args
+
+        # if the state hasn't been initialized with the full gradient,
+        # the best we can do is initialize xs with the gradient of the current mini-batch
+        # not the full gradient, but less noisy than any xk
+        if state.xs is None:
+            state = SVRGState(
+                stepsize=state.stepsize,
+                epoch_num=state.epoch_num,
+                key=state.key,
+                error=state.error,
+                xs=xk,
+                df_xs=self.loss_gradient(xk, x, y)[0],
+            )
+
+        xs, df_xs = state.xs, state.df_xs
+
+        # don't carry x and y, they should be cached on the first call
+        def loop_body(i, xk):
+            # no random sampling, just iterate through the data points
+            dfik_xk = self.loss_gradient(xk, x[i], y[i])[0]
+            dfik_xs = self.loss_gradient(xs, x[i], y[i])[0]
+            gk = jax.tree_util.tree_map(
+                lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
+            )
+            xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
+            return xk
+
+        xk = lax.fori_loop(0, x.shape[0], loop_body, xk)
+
+        # xs is updated outside for this implementation
+        next_state = SVRGState(
+            stepsize=state.stepsize,
+            epoch_num=state.epoch_num + 1,
+            key=state.key,
+            error=state.error,
+            xs=state.xs,
+            df_xs=state.df_xs,
+        )
+
+        return OptStep(params=xk, state=next_state)
+
+    # def update(self, xk, state, *args, **kwargs):
+    #    return self._sgd_update(xk, state, *args, **kwargs)
 
     def run(self, init_params, *args, **kwargs):
         def body_fun(step):
@@ -203,8 +216,8 @@ class ProxSVRG(SVRG):
         )
         self.proximal_operator = prox
 
-    # def update(self, xk, state, *args, **kwargs):
-    #    raise NotImplementedError
+    def update(self, xk, state, *args, **kwargs):
+        raise NotImplementedError
 
     def _sgd_update(self, xs, state, *args, **kwargs):
         """
