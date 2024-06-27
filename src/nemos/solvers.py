@@ -80,7 +80,7 @@ class ProxSVRG:
         return super().init_state(init_params, X, y, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(self, xk, state, *args, **kwargs):
+    def update(self, xs, state, *args, **kwargs):
         """
         Performs the inner loop of Prox-SVRG
         """
@@ -92,11 +92,16 @@ class ProxSVRG:
         # not the full gradient, but less noisy than any xk
         # if state.xs is None or state.df_xs is None:
         #    state = state._replace(
-        #        xs=xk,
-        #        df_xs=self.loss_gradient(xk, X, y)[0],
+        #        xs=xs,
+        #        df_xs=self.loss_gradient(xs, X, y)[0],
         #    )
 
-        xs, df_xs = state.xs, state.df_xs
+        df_xs = state.df_xs
+        # assert jax.tree_util.tree_map(
+        #    lambda params_a, params_b: jnp.all(jnp.isclose(params_a, params_b)),
+        #    xs,
+        #    state.xs,
+        # )
 
         def inner_loop_body(i, carry):
             xk, x_sum, key = carry
