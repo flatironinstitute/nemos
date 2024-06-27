@@ -247,10 +247,8 @@ class Regularizer(Base, abc.ABC):
                 params, state, *args, *run_args, **kwargs, **run_kwargs
             )
 
-        def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
-            return solver.init_state(
-                params, state, *args, *run_args, **kwargs, **run_kwargs
-            )
+        def solver_init_state(params, *run_args, **run_kwargs) -> NamedTuple:
+            return solver.init_state(params, *args, *run_args, **kwargs, **run_kwargs)
 
         return solver_init_state, solver_update, solver_run
 
