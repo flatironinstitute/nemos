@@ -237,6 +237,9 @@ class Regularizer(Base, abc.ABC):
         solver_module = solvers if "SVRG" in self.solver_name else jaxopt
         solver = getattr(solver_module, self.solver_name)(fun=loss, **solver_kwargs)
 
+        self._solver = solver
+        # self._penalized_loss = loss
+
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
         ) -> jaxopt.OptStep:
