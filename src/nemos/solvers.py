@@ -21,7 +21,7 @@ KeyArrayLike = ArrayLike
 
 
 class SVRGState(NamedTuple):
-    epoch_num: int
+    iter_num: int
     key: KeyArrayLike
     error: float
     stepsize: float
@@ -54,7 +54,7 @@ class SVRG:
         N = args[0].shape[0] if len(args) > 0 else None
 
         state = SVRGState(
-            epoch_num=1,
+            iter_num=1,
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
             stepsize=self.stepsize,
@@ -109,7 +109,7 @@ class SVRG:
 
         error = self._error(xk, xs, state.stepsize)
         next_state = SVRGState(
-            epoch_num=state.epoch_num + 1,
+            iter_num=state.iter_num + 1,
             key=key,
             error=error,
             stepsize=state.stepsize,
@@ -127,7 +127,7 @@ class SVRG:
         if state.xs is None:
             state = SVRGState(
                 stepsize=state.stepsize,
-                epoch_num=state.epoch_num,
+                iter_num=state.iter_num,
                 key=state.key,
                 error=state.error,
                 xs=xk,
@@ -152,7 +152,7 @@ class SVRG:
         # xs is updated outside for this implementation
         next_state = SVRGState(
             stepsize=state.stepsize,
-            epoch_num=state.epoch_num + 1,
+            iter_num=state.iter_num + 1,
             key=state.key,
             error=state.error,
             xs=state.xs,
@@ -171,7 +171,7 @@ class SVRG:
 
         def cond_fun(step):
             _, state = step
-            return (state.epoch_num <= self.maxiter) & (state.error >= self.tol)
+            return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
 
         init_state = self.init_state(init_params)
         final_xs, final_state = loop.while_loop(
@@ -266,7 +266,7 @@ class ProxSVRG(SVRG):
         xs = tree_scalar_mul(1 / m, x_sum)
         error = self._error(xs, xs_prev, state.stepsize)
         next_state = SVRGState(
-            epoch_num=state.epoch_num + 1,
+            iter_num=state.iter_num + 1,
             key=key,
             error=error,
             stepsize=state.stepsize,
