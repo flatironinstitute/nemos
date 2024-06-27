@@ -76,8 +76,6 @@ class ProxSVRG:
             df_xs=df_xs,
         )
         return state
-        prox_lambda, X, y = args
-        return super().init_state(init_params, X, y, **kwargs)
 
     @partial(jit, static_argnums=(0,))
     def update(self, xs, state, *args, **kwargs):
