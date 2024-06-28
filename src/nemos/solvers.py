@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable, NamedTuple, Optional
+from typing import Callable, NamedTuple, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -7,6 +7,7 @@ from jax import grad, jit, lax, random
 from jax._src.typing import ArrayLike
 from jaxopt import OptStep
 from jaxopt._src import loop
+from jaxopt._src.proximal_gradient import fista_line_search
 from jaxopt.prox import prox_none
 from jaxopt.tree_util import (
     tree_add,
@@ -20,13 +21,17 @@ from jaxopt.tree_util import (
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
 
+# copying from .glm to avoid circular import
+# TODO might want to move these into a .typing module?
+ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
+
 
 class SVRGState(NamedTuple):
     iter_num: int
     key: KeyArrayLike
     error: float
     stepsize: float
-    N: Optional[int] = None
+    # N: Optional[int] = None
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
 
@@ -53,17 +58,15 @@ class ProxSVRG:
         self.proximal_operator = prox
 
     def init_state(self, init_params, *args, **kwargs):
-        if len(args) < 2:
-            N = None
-            df_xs = None
-        else:
+        df_xs = None
+        if kwargs.get("init_full_gradient", False):
             prox_lambda, X, y = args
 
             assert isinstance(X, ArrayLike)
             assert isinstance(y, ArrayLike)
             assert X.shape[0] == y.shape[0]
 
-            N = X.shape[0]
+            # N = X.shape[0]
             df_xs = self.loss_gradient(init_params, X, y)[0]
 
         state = SVRGState(
@@ -71,30 +74,45 @@ class ProxSVRG:
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
             stepsize=self.stepsize,
-            N=N,
+            # N=N,
             xs=init_params,
             df_xs=df_xs,
         )
         return state
 
     @partial(jit, static_argnums=(0,))
-    def update(self, xs, state, *args, **kwargs):
+    def update(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
         """
         Performs the inner loop of Prox-SVRG
+
+        Parameters
+        ----------
+        x0 : ModelParams
+            Parameters at the end of the previous update, used as the starting point for the current update.
+            When updating on the whole data, `update` is called from within `run` which is used by `GLM.fit`, then this is the last anchor point.
+            When updating on a mini-batch, `update` is called by `GLM.update`, then this has to be the parameters after updating on the last mini-batch, and.
+        state : SVRGState
+            Optimizer state at the end of the previous update.
+            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
+        *args
+            Assumed to be of length 3 and is packed out as:
+                prox_lambda, X, y = args
+            where prox_lambda is the strength of the regularization (which can be None), and X and y are the data.
+
+        Returns
+        -------
+        OptStep
+            xs : ModelParams
+                Average of the parameters over the last inner loop.
+            next_state : SVRGState
+                Updated state.
         """
         prox_lambda, X, y = args
         m = X.shape[0]  # number of iterations
+        N = X.shape[0]  # number of data points
 
-        # if the state hasn't been initialized with the full gradient,
-        # the best we can do is initialize df_xs with the gradient of the current mini-batch
-        # not the full gradient, but less noisy than any xk
-        # if state.xs is None or state.df_xs is None:
-        #    state = state._replace(
-        #        xs=xs,
-        #        df_xs=self.loss_gradient(xs, X, y)[0],
-        #    )
+        xs, df_xs = state.xs, state.df_xs
 
-        df_xs = state.df_xs
         # assert jax.tree_util.tree_map(
         #    lambda params_a, params_b: jnp.all(jnp.isclose(params_a, params_b)),
         #    xs,
@@ -103,11 +121,12 @@ class ProxSVRG:
 
         def inner_loop_body(i, carry):
             xk, x_sum, key = carry
-            # key, subkey = random.split(key)
-            # i = random.randint(subkey, (), 0, N)
+            key, subkey = random.split(key)
+            ind = random.randint(subkey, (), 0, N)
+            # ind = i
 
-            dfik_xk = self.loss_gradient(xk, X[i, :], y[i])[0]
-            dfik_xs = self.loss_gradient(xs, X[i, :], y[i])[0]
+            dfik_xk = self.loss_gradient(xk, X[ind, :], y[ind])[0]
+            dfik_xs = self.loss_gradient(xs, X[ind, :], y[ind])[0]
 
             gk = jax.tree_util.tree_map(
                 lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
@@ -121,29 +140,42 @@ class ProxSVRG:
 
             return (xk, x_sum, key)
 
-        _, x_sum, key = lax.fori_loop(
+        xk, x_sum, key = lax.fori_loop(
             0,
             m,
             inner_loop_body,
             (
-                xs,
+                x0,
                 tree_zeros_like(xs),
                 # conversion needed for compatibility with glm.update
                 state.key.astype(jnp.uint32),
             ),
         )
 
-        # final value is not xk at the last iteration
-        # but an average over the xk values through the loop
-        xs = tree_scalar_mul(1 / m, x_sum)
+        # final value is either xk at the last iteration
+        # or an average over the xk values through the loop
+        x_av = tree_scalar_mul(1 / m, x_sum)
+        xs = xk
+
         next_state = state._replace(
             iter_num=state.iter_num + 1,
+            key=key,
         )
         return OptStep(params=xs, state=next_state)
 
     @partial(jit, static_argnums=(0,))
-    def run(self, init_params, *args, **kwargs):
+    def run(self, init_params: ModelParams, *args, **kwargs):
         prox_lambda, X, y = args
+
+        init_state = self.init_state(
+            init_params,
+            prox_lambda,
+            X,
+            y,
+            init_full_gradient=True,
+        )
+        assert init_state.xs is not None
+        assert init_state.df_xs is not None
 
         # this method assumes that args hold the full data
         def body_fun(step):
@@ -166,8 +198,6 @@ class ProxSVRG:
         def cond_fun(step):
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
-
-        init_state = self.init_state(init_params, prox_lambda, X, y)
 
         final_xs, final_state = loop.while_loop(
             cond_fun=cond_fun,
@@ -208,19 +238,19 @@ class SVRG(ProxSVRG):
             tol,
         )
 
-    def init_state(self, init_params, *args, **kwargs):
+    def init_state(self, init_params: ModelParams, *args, **kwargs):
         # substitute None for prox_lambda
         if len(args) == 2:
             args = (None, *args)
         return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(self, xk, state, *args, **kwargs):
+    def update(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
         if len(args) == 2:
             args = (None, *args)
-        return super().update(xk, state, *args, **kwargs)
+        return super().update(x0, state, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def run(self, init_params, *args, **kwargs):
+    def run(self, init_params: ModelParams, *args, **kwargs):
         args = (None, *args)
         return super().run(init_params, *args, **kwargs)
