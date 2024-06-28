@@ -164,10 +164,6 @@ class ProxSVRG:
             x_av=tree_scalar_mul(1 / m, x_sum),
         )
 
-        state = state._replace(
-            loss_log=state.loss_log.at[state.iter_num].set(self.fun(state.x_av, X, y))
-        )
-
         # returning the average might help stabilize things and allow for a larger step size
         # return OptStep(params=xk, state=state)
         return OptStep(params=state.x_av, state=state)
@@ -185,6 +181,11 @@ class ProxSVRG:
         )
         assert init_state.xs is not None
         assert init_state.df_xs is not None
+
+        # evaluate the loss for the initial parameters, aka iter_num=0
+        init_state = init_state._replace(
+            loss_log=init_state.loss_log.at[0].set(self.fun(init_params, X, y)),
+        )
 
         # this method assumes that args hold the full data
         def body_fun(step):
@@ -205,6 +206,7 @@ class ProxSVRG:
             state = state._replace(
                 xs=xs,
                 error=self._error(xs, xs_prev, state.stepsize),
+                loss_log=state.loss_log.at[state.iter_num].set(self.fun(xs, X, y)),
             )
 
             return OptStep(params=xs, state=state)
