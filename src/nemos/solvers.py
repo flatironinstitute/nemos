@@ -32,6 +32,7 @@ class SVRGState(NamedTuple):
     error: float
     stepsize: float
     # N: Optional[int] = None
+    loss_log: ArrayLike
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
     x_av: Optional[tuple] = None
@@ -71,11 +72,12 @@ class ProxSVRG:
             df_xs = self.loss_gradient(init_params, X, y)[0]
 
         state = SVRGState(
-            iter_num=1,
+            iter_num=0,
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
             stepsize=self.stepsize,
             # N=N,
+            loss_log=jnp.empty((self.maxiter,)),
             xs=init_params,
             df_xs=df_xs,
             x_av=init_params,
@@ -106,7 +108,7 @@ class ProxSVRG:
         OptStep
             xs : ModelParams
                 Average of the parameters over the last inner loop.
-            next_state : SVRGState
+            state : SVRGState
                 Updated state.
         """
         prox_lambda, X, y = args
@@ -156,15 +158,19 @@ class ProxSVRG:
 
         # update the state
         # storing the average over the inner loop to potentially use it in the run loop
-        next_state = state._replace(
+        state = state._replace(
             iter_num=state.iter_num + 1,
             key=key,
             x_av=tree_scalar_mul(1 / m, x_sum),
         )
 
+        state = state._replace(
+            loss_log=state.loss_log.at[state.iter_num].set(self.fun(state.x_av, X, y))
+        )
+
         # returning the average might help stabilize things and allow for a larger step size
-        # return OptStep(params=xk, state=next_state)
-        return OptStep(params=next_state.x_av, state=next_state)
+        # return OptStep(params=xk, state=state)
+        return OptStep(params=state.x_av, state=state)
 
     @partial(jit, static_argnums=(0,))
     def run(self, init_params: ModelParams, *args, **kwargs):
