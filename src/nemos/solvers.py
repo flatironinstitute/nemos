@@ -34,6 +34,7 @@ class SVRGState(NamedTuple):
     # N: Optional[int] = None
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
+    x_av: Optional[tuple] = None
 
 
 class ProxSVRG:
@@ -77,6 +78,7 @@ class ProxSVRG:
             # N=N,
             xs=init_params,
             df_xs=df_xs,
+            x_av=init_params,
         )
         return state
 
@@ -152,16 +154,17 @@ class ProxSVRG:
             ),
         )
 
-        # final value is either xk at the last iteration
-        # or an average over the xk values through the loop
-        x_av = tree_scalar_mul(1 / m, x_sum)
-        xs = xk
-
+        # update the state
+        # storing the average over the inner loop to potentially use it in the run loop
         next_state = state._replace(
             iter_num=state.iter_num + 1,
             key=key,
+            x_av=tree_scalar_mul(1 / m, x_sum),
         )
-        return OptStep(params=xs, state=next_state)
+
+        # returning the average might help stabilize things and allow for a larger step size
+        # return OptStep(params=xk, state=next_state)
+        return OptStep(params=next_state.x_av, state=next_state)
 
     @partial(jit, static_argnums=(0,))
     def run(self, init_params: ModelParams, *args, **kwargs):
@@ -180,13 +183,18 @@ class ProxSVRG:
         # this method assumes that args hold the full data
         def body_fun(step):
             xs_prev, state = step
+
             # evaluate and store the full gradient with the params from the last inner loop
             state = state._replace(
                 df_xs=self.loss_gradient(xs_prev, X, y)[0],
             )
 
-            # update xs with the final xk after running through the whole data
-            xs, state = self.update(xs_prev, state, prox_lambda, X, y, **kwargs)
+            # run an update over the whole data
+            xk, state = self.update(xs_prev, state, prox_lambda, X, y, **kwargs)
+
+            # update xs with the final xk or an average over the inner loop's iterations
+            # xs = xk
+            xs = state.x_av
 
             state = state._replace(
                 xs=xs,
