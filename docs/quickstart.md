@@ -80,7 +80,7 @@ as restricting your time series to specific epochs (sleep/wake, context A vs. co
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy data pre-processing.
 
-In NeMoS`, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
+In NeMoS, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
 also be a `pynapple` time series.
 
 A canonical example of this behavior is the `predict` method of `GLM`.
