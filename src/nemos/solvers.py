@@ -85,7 +85,45 @@ class ProxSVRG:
         return state
 
     @partial(jit, static_argnums=(0,))
+    def _xk_update(self, xk, xs, df_xs, stepsize, prox_lambda, x, y):
+        dfik_xk = self.loss_gradient(xk, x, y)[0]
+        dfik_xs = self.loss_gradient(xs, x, y)[0]
+
+        gk = jax.tree_util.tree_map(lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs)
+
+        next_xk = tree_add_scalar_mul(xk, -stepsize, gk)
+
+        # next_xk = self.proximal_operator(next_xk, state.stepsize * prox_lambda)
+        next_xk = self.proximal_operator(next_xk, prox_lambda, scaling=stepsize)
+
+        return next_xk
+
+    @partial(jit, static_argnums=(0,))
     def update(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
+        # return self._update_per_point(x0, state, *args, **kwargs)
+        return self._update_per_batch(x0, state, *args, **kwargs)
+
+    @partial(jit, static_argnums=(0,))
+    def _update_per_batch(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
+        # NOTE this doesn't update state.x_av, that has to be done outside
+
+        prox_lambda, X, y = args
+        xs, df_xs = state.xs, state.df_xs
+
+        xk = self._xk_update(x0, xs, df_xs, state.stepsize, prox_lambda, X, y)
+
+        # update the state
+        # storing the average over the inner loop to potentially use it in the run loop
+        state = state._replace(
+            iter_num=state.iter_num + 1,
+        )
+
+        # returning the average might help stabilize things and allow for a larger step size
+        # return OptStep(params=xk, state=state)
+        return OptStep(params=xk, state=state)
+
+    @partial(jit, static_argnums=(0,))
+    def _update_per_point(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
         """
         Performs the inner loop of Prox-SVRG
 
@@ -129,16 +167,9 @@ class ProxSVRG:
             ind = random.randint(subkey, (), 0, N)
             # ind = i
 
-            dfik_xk = self.loss_gradient(xk, X[ind, :], y[ind])[0]
-            dfik_xs = self.loss_gradient(xs, X[ind, :], y[ind])[0]
-
-            gk = jax.tree_util.tree_map(
-                lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs
+            xk = self._xk_update(
+                xk, xs, df_xs, state.stepsize, prox_lambda, X[ind, :], y[ind]
             )
-
-            xk = tree_add_scalar_mul(xk, -state.stepsize, gk)
-            # xk = self.proximal_operator(xk, state.stepsize * prox_lambda)
-            xk = self.proximal_operator(xk, prox_lambda, scaling=state.stepsize)
 
             x_sum = tree_add(x_sum, xk)
 
@@ -197,7 +228,9 @@ class ProxSVRG:
             )
 
             # run an update over the whole data
-            xk, state = self.update(xs_prev, state, prox_lambda, X, y, **kwargs)
+            xk, state = self._update_per_point(
+                xs_prev, state, prox_lambda, X, y, **kwargs
+            )
 
             # update xs with the final xk or an average over the inner loop's iterations
             # xs = xk
