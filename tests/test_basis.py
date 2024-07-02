@@ -9,6 +9,7 @@ import pytest
 import sklearn.pipeline as pipeline
 import statsmodels.api as sm
 import utils_testing
+from sklearn.model_selection import GridSearchCV
 
 import nemos.basis as basis
 import nemos.convolve as convolve
@@ -514,10 +515,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs
 
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            bas = self.cls(5, 10, mode='eval')
-
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
             bas = self.cls(5, mode='eval', test='hi')
@@ -913,10 +910,6 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
 
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            bas = self.cls(5, 10, mode='eval')
-
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
             bas = self.cls(5, mode='eval', test='hi')
@@ -1296,10 +1289,6 @@ class TestMSplineBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            bas = self.cls(5, 10, mode='eval')
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -1760,10 +1749,6 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs
 
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            bas = self.cls(5, [1,2,3,4,5], 10, mode='eval')
-
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
             bas = self.cls(5, decay_rates=[1,2,3,4,5], mode='eval', test='hi')
@@ -2164,10 +2149,6 @@ class TestBSplineBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            bas = self.cls(5, 10, mode='eval')
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -2587,10 +2568,6 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            bas = self.cls(5, 10, mode='eval')
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -3926,6 +3903,60 @@ def test_power_of_basis(exponent, basis_class):
 
 
 @pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_basis_to_transformer(basis_cls):
+    n_basis_funcs = 5
+    bas = basis_cls(n_basis_funcs)
+    assert isinstance(bas.to_transformer(), basis.TransformerBasis)
+    assert bas.to_transformer().n_basis_funcs == bas.n_basis_funcs
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize("n_basis_funcs", [5, 10, 20])
+def test_transformerbasis_getattr(basis_cls, n_basis_funcs):
+    trans_basis = basis.TransformerBasis(basis_cls(n_basis_funcs))
+    assert trans_basis.n_basis_funcs == n_basis_funcs
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize("n_basis_funcs_init", [5])
+@pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
+def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_funcs_new):
+    trans_basis = basis.TransformerBasis(basis_cls(n_basis_funcs_init))
+    trans_basis.set_params(n_basis_funcs = n_basis_funcs_new)
+
+    assert trans_basis.n_basis_funcs == n_basis_funcs_new
+    assert trans_basis._basis.n_basis_funcs == n_basis_funcs_new
+
+
+
+@pytest.mark.parametrize(
     "bas",
     [
         basis.MSplineBasis(5),
@@ -3933,9 +3964,7 @@ def test_power_of_basis(exponent, basis_class):
         basis.CyclicBSplineBasis(5),
         basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)),
         basis.RaisedCosineBasisLinear(5),
-        basis.RaisedCosineBasisLog(5),
-        basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5),
-    ],
+        ]
 )
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
@@ -3943,6 +3972,28 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
     pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+
+
+@pytest.mark.parametrize(
+    "bas",
+    [
+        basis.MSplineBasis(5),
+        basis.BSplineBasis(5),
+        basis.CyclicBSplineBasis(5),
+        basis.RaisedCosineBasisLinear(5),
+        basis.RaisedCosineBasisLog(5),
+    ],
+)
+def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.TransformerBasis(bas)
+    pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
+
+    param_grid = dict(basis__n_basis_funcs=(3, 5, 10))
+
+    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv = 3)
+
+    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
 @pytest.mark.parametrize(

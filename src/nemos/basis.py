@@ -12,7 +12,9 @@ import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
+from sklearn.base import clone as sk_clone
 
+from .base_class import Base
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
@@ -172,8 +174,37 @@ class TransformerBasis:
         """
         return self._basis.compute_features(*self._unpack_inputs(X))
 
+    def __getattr__(self, attr: str):
+        """
+        Enable easy access to attributes of the underlying Basis object.
 
-class Basis(abc.ABC):
+        Example
+        -------
+        from nemos import basis
+
+        bas = basis.RaisedCosineBasisLinear(5)
+        trans_bas = basis.TransformerBasis(bas)
+        print(bas.n_basis_funcs)
+        print(trans_bas.n_basis_funcs)
+        """
+        return getattr(self._basis, attr)
+
+    def __sklearn_clone__(self) -> TransformerBasis:
+        """
+        By default scikit-learn calls copy.deepcopy on the estimator object.
+        Cloning the underlying Basis avoids infinite recursive calls to getattr.
+        """
+        return TransformerBasis(sk_clone(self._basis))
+
+    def set_params(self, **parameters) -> TransformerBasis:
+        """
+        Set the parameters of the underlying Basis.
+        """
+        self._basis = self._basis.set_params(**parameters)
+        return self
+
+
+class Basis(Base, abc.ABC):
     """
     Abstract base class for defining basis functions for feature transformation.
 
@@ -190,9 +221,6 @@ class Basis(abc.ABC):
         'conv' for convolutional operation.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     **kwargs:
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -202,7 +230,6 @@ class Basis(abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
         **kwargs,
@@ -210,7 +237,6 @@ class Basis(abc.ABC):
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._check_n_basis_min()
-        self._conv_args = args
         self._conv_kwargs = kwargs
         # check mode
         if mode not in ["conv", "eval"]:
@@ -227,10 +253,6 @@ class Basis(abc.ABC):
                     f"`window_size` must be a positive integer. {window_size} provided instead!"
                 )
         else:
-            if args:
-                raise ValueError(
-                    f"args should only be set when mode=='conv', but '{mode}' provided instead!"
-                )
             if kwargs:
                 raise ValueError(
                     f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
@@ -347,7 +369,7 @@ class Basis(abc.ABC):
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
-                self._kernel, *xi, *self._conv_args, **self._conv_kwargs
+                self._kernel, *xi, **self._conv_kwargs
             )
             # move the time axis to the first dimension
             new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
@@ -692,6 +714,12 @@ class Basis(abc.ABC):
             result = result * self
         return result
 
+    def to_transformer(self) -> TransformerBasis:
+        """
+        Turn the Basis into a TransformerBasis for use with scikit-learn.
+        """
+        return TransformerBasis(self)
+
 
 class AdditiveBasis(Basis):
     """
@@ -917,9 +945,6 @@ class SplineBasis(Basis, abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -941,16 +966,13 @@ class SplineBasis(Basis, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.order = order
-        super().__init__(
-            n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs
-        )
+        super().__init__(n_basis_funcs, mode=mode, window_size=window_size, **kwargs)
         self._n_input_dimensionality = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
@@ -1045,9 +1067,6 @@ class MSplineBasis(SplineBasis):
     n_basis_funcs :
         The number of basis functions to generate. More basis functions allow for
         more flexible data modeling but can lead to overfitting.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1080,7 +1099,6 @@ class MSplineBasis(SplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
@@ -1088,7 +1106,6 @@ class MSplineBasis(SplineBasis):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             order=order,
             window_size=window_size,
@@ -1189,9 +1206,6 @@ class BSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1221,7 +1235,6 @@ class BSplineBasis(SplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
@@ -1229,7 +1242,6 @@ class BSplineBasis(SplineBasis):
     ):
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             order=order,
             window_size=window_size,
@@ -1305,9 +1317,6 @@ class CyclicBSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1332,7 +1341,6 @@ class CyclicBSplineBasis(SplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
@@ -1340,7 +1348,6 @@ class CyclicBSplineBasis(SplineBasis):
     ):
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             order=order,
             window_size=window_size,
@@ -1442,9 +1449,6 @@ class RaisedCosineBasisLinear(Basis):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1467,23 +1471,24 @@ class RaisedCosineBasisLinear(Basis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         width: float = 2.0,
         window_size: Optional[int] = None,
         **kwargs,
     ) -> None:
-        super().__init__(
-            n_basis_funcs, *args, mode=mode, window_size=window_size, **kwargs
-        )
+        super().__init__(n_basis_funcs, mode=mode, window_size=window_size, **kwargs)
         self._n_input_dimensionality = 1
-        self._check_width(width)
-        self._width = width
+        self.width = width
 
     @property
     def width(self):
         """Return width of the raised cosine."""
         return self._width
+
+    @width.setter
+    def width(self, width: float):
+        self._check_width(width)
+        self._width = width
 
     @staticmethod
     def _check_width(width: float) -> None:
@@ -1616,9 +1621,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1649,7 +1651,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         width: float = 2.0,
         time_scaling: float = None,
@@ -1659,7 +1660,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             width=width,
             window_size=window_size,
@@ -1767,9 +1767,6 @@ class OrthExponentialBasis(Basis):
             Number of basis functions.
     decay_rates :
             Decay rates of the exponentials, shape (n_basis_funcs,).
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1784,14 +1781,12 @@ class OrthExponentialBasis(Basis):
         self,
         n_basis_funcs: int,
         decay_rates: NDArray[np.floating],
-        *args,
         mode="eval",
         window_size: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             window_size=window_size,
             **kwargs,
