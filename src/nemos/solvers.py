@@ -48,6 +48,7 @@ class ProxSVRG:
         # N: Optional[int] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-5,
+        batch_size: Optional[int] = None,
     ):
         self.fun = fun
         self.maxiter = maxiter
@@ -56,6 +57,8 @@ class ProxSVRG:
         self.stepsize = stepsize
         self.tol = tol
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
+
+        self.batch_size = batch_size
 
         self.proximal_operator = prox
 
@@ -119,7 +122,6 @@ class ProxSVRG:
         )
 
         # returning the average might help stabilize things and allow for a larger step size
-        # return OptStep(params=xk, state=state)
         return OptStep(params=xk, state=state)
 
     @partial(jit, static_argnums=(0,))
@@ -196,8 +198,13 @@ class ProxSVRG:
         )
 
         # returning the average might help stabilize things and allow for a larger step size
-        # return OptStep(params=xk, state=state)
-        return OptStep(params=state.x_av, state=state)
+        return OptStep(params=xk, state=state)
+        # return OptStep(params=state.x_av, state=state)
+
+    @property
+    def _update_used_in_run(self):
+        # return self._update_per_point
+        return self._update_per_random_batch
 
     @partial(jit, static_argnums=(0,))
     def run(self, init_params: ModelParams, *args, **kwargs):
@@ -228,13 +235,13 @@ class ProxSVRG:
             )
 
             # run an update over the whole data
-            xk, state = self._update_per_point(
+            xk, state = self._update_used_in_run(
                 xs_prev, state, prox_lambda, X, y, **kwargs
             )
 
             # update xs with the final xk or an average over the inner loop's iterations
-            # xs = xk
-            xs = state.x_av
+            xs = xk
+            # xs = state.x_av
 
             state = state._replace(
                 xs=xs,
@@ -257,6 +264,54 @@ class ProxSVRG:
         )
         return OptStep(params=final_xs, state=final_state)
 
+    @partial(jit, static_argnums=(0,))
+    def _update_per_random_batch(
+        self, x0: ModelParams, state: SVRGState, *args, **kwargs
+    ):
+        prox_lambda, X, y = args
+
+        N, d = X.shape[0]  # number of data points x number of dimensions
+        m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
+
+        xs, df_xs = state.xs, state.df_xs
+
+        def inner_loop_body(i, carry):
+            xk, x_sum, key = carry
+            key, subkey = random.split(key)
+            ind = random.randint(subkey, (self.batch_size,), 0, N)
+
+            xk = self._xk_update(
+                xk, xs, df_xs, state.stepsize, prox_lambda, X[ind, :], y[ind]
+            )
+
+            x_sum = tree_add(x_sum, xk)
+
+            return (xk, x_sum, key)
+
+        xk, x_sum, key = lax.fori_loop(
+            0,
+            m,
+            inner_loop_body,
+            (
+                x0,
+                tree_zeros_like(xs),
+                # conversion needed for compatibility with glm.update
+                state.key.astype(jnp.uint32),
+            ),
+        )
+
+        # update the state
+        # storing the average over the inner loop to potentially use it in the run loop
+        state = state._replace(
+            iter_num=state.iter_num + 1,
+            key=key,
+            x_av=tree_scalar_mul(1 / m, x_sum),
+        )
+
+        # returning the average might help stabilize things and allow for a larger step size
+        return OptStep(params=xk, state=state)
+        # return OptStep(params=state.x_av, state=state)
+
     # @staticmethod
     # def _error(x, x_prev, stepsize):
     #    diff_norm = tree_l2_norm(tree_sub(x, x_prev))
@@ -276,6 +331,7 @@ class SVRG(ProxSVRG):
         # N: Optional[int] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-5,
+        batch_size: Optional[int] = None,
     ):
         super().__init__(
             fun,
@@ -285,6 +341,7 @@ class SVRG(ProxSVRG):
             # N,
             stepsize,
             tol,
+            batch_size,
         )
 
     def init_state(self, init_params: ModelParams, *args, **kwargs):
