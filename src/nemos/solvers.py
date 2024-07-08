@@ -62,6 +62,11 @@ class ProxSVRG:
 
         self.proximal_operator = prox
 
+        if batch_size is None:
+            self._update_used_in_run = self._update_per_point
+        else:
+            self._update_used_in_run = self._update_per_random_batch
+
     def init_state(self, init_params, *args, **kwargs):
         df_xs = None
         if kwargs.get("init_full_gradient", False):
@@ -201,11 +206,6 @@ class ProxSVRG:
         return OptStep(params=xk, state=state)
         # return OptStep(params=state.x_av, state=state)
 
-    @property
-    def _update_used_in_run(self):
-        # return self._update_per_point
-        return self._update_per_random_batch
-
     @partial(jit, static_argnums=(0,))
     def run(self, init_params: ModelParams, *args, **kwargs):
         prox_lambda, X, y = args
@@ -268,9 +268,10 @@ class ProxSVRG:
     def _update_per_random_batch(
         self, x0: ModelParams, state: SVRGState, *args, **kwargs
     ):
+        # same as _update_per_point just with a random batch sampled instead of a single point
         prox_lambda, X, y = args
 
-        N, d = X.shape[0]  # number of data points x number of dimensions
+        N, d = X.shape  # number of data points x number of dimensions
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
 
         xs, df_xs = state.xs, state.df_xs
