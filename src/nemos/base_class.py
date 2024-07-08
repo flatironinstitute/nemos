@@ -16,8 +16,16 @@ from numpy.typing import ArrayLike, NDArray
 
 from . import validation
 from .pytrees import FeaturePytree
+from .regularizer import Regularizer, UnRegularized, Ridge, GroupLasso, Lasso
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
+
+REGULARIZERS = {
+    "unregularized": UnRegularized,
+    "ridge": Ridge,
+    "lasso": Lasso,
+    "group_lasso": GroupLasso,
+}
 
 
 class Base:
@@ -105,9 +113,9 @@ class Base:
             # but only if the user did not explicitly set a value for
             # "base_estimator".
             if (
-                key == "base_estimator"
-                and valid_params[key] == "deprecated"
-                and self.__module__.startswith("sklearn.")
+                    key == "base_estimator"
+                    and valid_params[key] == "deprecated"
+                    and self.__module__.startswith("sklearn.")
             ):
                 warnings.warn(
                     (
@@ -178,7 +186,53 @@ class BaseRegressor(Base, abc.ABC):
 
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`GLMRecurrent`](../glm/#nemos.glm.GLMRecurrent): A recurrent GLM implementation.
+
+    Attributes
+    ----------
+    regularizer :
+        Optional string or Regularizer class that defines the regularizer for the regression model
+    solver :
+        Optional string that defines the optimizer/solver for the regression model
+
+    NOTE: Please see the table below for details on regularizer/optimizer pairings:
+    # TODO: insert nice table that shows the available optimizers for each regularizer
     """
+
+    def __init__(
+            self,
+            regularizer: str | Regularizer = "unregularized",
+            solver: str = None
+    ):
+        # parse the regularizer and solver options
+        self._parse_regularizer_optimizer_params(self, regularizer=regularizer, solver=solver)
+
+    @staticmethod
+    def _parse_regularizer_optimizer_params(self, regularizer: str | Regularizer, solver: str):
+        """Parse the regularizer and solver parameters."""
+        # check if solver is in the regularizers allowed solvers
+        if not isinstance(regularizer, str):
+            # check if solver is in allowed solvers list
+            if solver not in regularizer._allowed_solvers:
+                raise ValueError(f"The solver: {solver} is not a valid solver type for the regularizer: "
+                                 f"{regularizer.__class__.__name__}. Please use one of {regularizer._allowed_solvers}.")
+            # store regularizer
+            self._regularizer = regularizer
+            # store solver
+            self.solver = solver
+        else:
+            # check if regularizer str passed is even valid
+            if regularizer not in REGULARIZERS.keys():
+                raise KeyError(f"The regularizer: {regularizer} is not a valid regularizer type."
+                               f" Please use one of {REGULARIZERS.keys()}.")
+            # check if solver is valid
+            if solver not in REGULARIZERS[regularizer]._allowed_solvers:
+                raise ValueError(f"The solver: {solver} is not a valid solver type for the regularizer: "
+                                 f"{REGULARIZERS[regularizer].__class__.__name__}. Please use one of "
+                                 f"{REGULARIZERS[regularizer]._allowed_solvers}.")
+            # store solver
+            self.solver = solver
+            # instantiate regularizer and store
+            self._regularizer = REGULARIZERS[regularizer]()
 
     @abc.abstractmethod
     def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
@@ -192,20 +246,20 @@ class BaseRegressor(Base, abc.ABC):
 
     @abc.abstractmethod
     def score(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: Union[NDArray, jnp.ndarray],
-        # may include score_type or other additional model dependent kwargs
-        **kwargs,
+            self,
+            X: DESIGN_INPUT_TYPE,
+            y: Union[NDArray, jnp.ndarray],
+            # may include score_type or other additional model dependent kwargs
+            **kwargs,
     ) -> jnp.ndarray:
         """Score the predicted firing rates (based on fit) to the target neural activity."""
         pass
 
     @abc.abstractmethod
     def simulate(
-        self,
-        random_key: jax.Array,
-        feed_forward_input: DESIGN_INPUT_TYPE,
+            self,
+            random_key: jax.Array,
+            feed_forward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
@@ -213,8 +267,8 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_params(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-        data_type: Optional[jnp.dtype] = None,
+            params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+            data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -229,8 +283,8 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_input_dimensionality(
-        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
+            X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+            y: Optional[jnp.ndarray] = None,
     ):
         pass
 
@@ -247,9 +301,9 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_input_and_params_consistency(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
-        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
+            params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
+            X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+            y: Optional[jnp.ndarray] = None,
     ):
         """Validate the number of features in model parameters and input arguments.
 
@@ -264,7 +318,7 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_input_n_timepoints(
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
+            X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
     ):
         if y.shape[0] != X.shape[0]:
             raise ValueError(
@@ -274,10 +328,10 @@ class BaseRegressor(Base, abc.ABC):
             )
 
     def _validate(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
-        y: Union[NDArray, jnp.ndarray],
-        init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            self,
+            X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
+            y: Union[NDArray, jnp.ndarray],
+            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
     ):
         # check input dimensionality
         self._check_input_dimensionality(X, y)
@@ -294,25 +348,25 @@ class BaseRegressor(Base, abc.ABC):
 
     @abc.abstractmethod
     def update(
-        self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        **kwargs,
+            self,
+            params: Tuple[jnp.ndarray, jnp.ndarray],
+            opt_state: NamedTuple,
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+            *args,
+            **kwargs,
     ) -> OptStep:
         """Run a single update step of the jaxopt solver."""
         pass
 
     @abc.abstractmethod
     def initialize_solver(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        params: Optional = None,
-        **kwargs,
+            self,
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+            *args,
+            params: Optional = None,
+            **kwargs,
     ) -> Tuple[Any, NamedTuple]:
         """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
         pass

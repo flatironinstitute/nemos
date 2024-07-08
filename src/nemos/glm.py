@@ -85,11 +85,14 @@ class GLM(BaseRegressor):
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
         regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
+        solver: str = None
     ):
-        super().__init__()
+        super().__init__(
+            regularizer=regularizer,
+            solver=solver
+        )
 
         self.observation_model = observation_model
-        self.regularizer = regularizer
 
         # initialize to None fit output
         self.intercept_ = None
