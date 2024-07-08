@@ -523,10 +523,34 @@ class GroupLasso(ProxGradientRegularizer):
     Attributes
     ----------
     mask : Union[jnp.ndarray, NDArray]
-        A 2d mask array indicating groups of features for regularization.
+        A 2d mask array indicating groups of features for regularization, shape (num_groups, num_features).
         Each row represents a group of features.
         Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
         to the group, and a value of 0 indicates it doesn't.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.regularizer import GroupLasso  # Assuming the module is named group_lasso
+    >>> from nemos.glm import GLM
+
+    >>> # simulate some counts
+    >>> num_samples, num_features, num_groups = 1000, 5, 3
+    >>> X = np.random.normal(size=(num_samples, num_features)) # design matrix
+    >>> w = [0, 0.5, 1, 0, -0.5] # define some weights
+    >>> y = np.random.poisson(np.exp(X.dot(w))) # observed counts
+
+    >>> # Define a mask for 3 groups and 5 features
+    >>> mask = np.zeros((num_groups, num_features))
+    >>> mask[0] = [1, 0, 0, 1, 0]  # # Group 0 includes features 0 and 3
+    >>> mask[1] = [0, 1, 0, 0, 0]  # # Group 1 includes features 1
+    >>> mask[2] = [0, 0, 1, 0, 1]  # # Group 2 includes features 2 and 4
+
+    >>> # Create the GroupLasso regularizer instance
+    >>> group_lasso = GroupLasso(solver_name='ProximalGradient', regularizer_strength=0.1, mask=mask)
+    >>> # fit a group-lasso glm
+    >>> model = GLM(regularizer=group_lasso).fit(X, y)
+    >>> print(f"coeff: {model.coef_}")
     """
 
     def __init__(

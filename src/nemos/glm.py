@@ -561,8 +561,8 @@ class GLM(BaseRegressor):
             (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
 
-        Example
-        -------
+        Examples
+        --------
         >>> import nemos as nmo
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
@@ -868,8 +868,8 @@ class GLM(BaseRegressor):
             - If `params` are not array-like when provided.
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
-        Example
-        -------
+        Examples
+        --------
         >>> X, y = load_data()  # Hypothetical function to load data
         >>> params, opt_state = model.initialize_solver(X, y)
         >>> # Now ready to run optimization or update steps
@@ -951,8 +951,8 @@ class GLM(BaseRegressor):
             indicating an invalid update step, typically due to numerical instabilities
             or inappropriate solver configurations.
 
-        Example
-        -------
+        Examples
+        --------
         >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state
