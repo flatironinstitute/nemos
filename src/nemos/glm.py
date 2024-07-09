@@ -569,8 +569,8 @@ class GLM(BaseRegressor):
             (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
 
-        Example
-        -------
+        Examples
+        --------
         >>> import nemos as nmo
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
@@ -876,8 +876,8 @@ class GLM(BaseRegressor):
             - If `params` are not array-like when provided.
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
-        Example
-        -------
+        Examples
+        --------
         >>> X, y = load_data()  # Hypothetical function to load data
         >>> params, opt_state = model.initialize_solver(X, y)
         >>> # Now ready to run optimization or update steps
@@ -959,8 +959,8 @@ class GLM(BaseRegressor):
             indicating an invalid update step, typically due to numerical instabilities
             or inappropriate solver configurations.
 
-        Example
-        -------
+        Examples
+        --------
         >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state
@@ -1013,7 +1013,8 @@ class PopulationGLM(GLM):
         and related parameters.
         Default is UnRegularized regression with gradient descent.
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s.
+        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
+        `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1031,6 +1032,49 @@ class PopulationGLM(GLM):
     TypeError
         - If provided `regularizer` or `observation_model` are not valid.
         - If provided `feature_mask` is not an array-like of dimension two.
+
+    Examples
+    --------
+    >>> # Example with an array mask
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> from nemos.glm import PopulationGLM
+    >>> # Define predictors (X), weights, and neural activity (y)
+    >>> num_samples, num_features, num_neurons = 100, 3, 2
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+    >>> # Define a feature mask, shape (num_features, num_neurons)
+    >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+    >>> print("Feature mask:")
+    >>> print(feature_mask)
+    >>> # Create and fit the model
+    >>> model = PopulationGLM(feature_mask=feature_mask)
+    >>> model.fit(X, y)
+    >>> # Check the fitted coefficients and intercepts
+    >>> print("Model coefficients:")
+    >>> print(model.coef_)
+
+    >>> # Example with a FeaturePytree mask
+    >>> from nemos.pytrees import FeaturePytree
+    >>> # Define two features
+    >>> feature_1 = np.random.normal(size=(num_samples, 2))
+    >>> feature_2 = np.random.normal(size=(num_samples, 1))
+    >>> # Define the FeaturePytree predictor, and weights
+    >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
+    >>> weights = dict(feature_1=jnp.array([[0., 0.5], [0., -0.5]]), feature_2=jnp.array([[1., 0.]]))
+    >>> # Compute the firing rate and counts
+    >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
+    >>> y = np.random.poisson(rate)
+    >>> # Define a feature mask with arrays of shape (num_neurons, )
+    >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> print("Feature mask:")
+    >>> print(feature_mask)
+    >>> # Fit a PopulationGLM
+    >>> model = PopulationGLM(feature_mask=feature_mask)
+    >>> model.fit(X, y)
+    >>> print("Model coefficients:")
+    >>> print(model.coef_)
     """
 
     def __init__(
