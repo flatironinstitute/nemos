@@ -1048,7 +1048,6 @@ class PopulationGLM(GLM):
 
     >>> # Example with a FeaturePytree mask
     >>> from nemos.pytrees import FeaturePytree
-    >>> from nemos.tree_utils import pytree_map_and_reduce
     >>> # Define two features
     >>> feature_1 = np.random.normal(size=(num_samples, 2))
     >>> feature_2 = np.random.normal(size=(num_samples, 1))
@@ -1061,8 +1060,11 @@ class PopulationGLM(GLM):
     >>> # define a feature mask such that
     >>> # feature_1 is a predictor for the 2nd neuron and feature_2 for the 1st
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> print("Feature mask:")
+    >>> print(feature_mask)
     >>> model = PopulationGLM(feature_mask=feature_mask)
     >>> model.fit(X, y)
+    >>> print("Model coefficients:")
     >>> print(model.coef_)
     """
 
