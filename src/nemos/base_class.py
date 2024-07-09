@@ -251,6 +251,40 @@ class BaseRegressor(Base, abc.ABC):
         self.solver_kwargs = solver_kwargs
 
     @property
+    def regularizer(self) -> Union[None, Regularizer]:
+        """Getter for the regularizer attribute."""
+        return self._regularizer
+
+    @regularizer.setter
+    def regularizer(self, regularizer: str | Regularizer):
+        """Setter for the regularizer attribute."""
+        # check if current solver and regularizer match is possible
+        # instantiate solver if necessary
+        self._parse_regularizer_optimizer_params(regularizer=regularizer, solver_name=self.solver_name)
+
+        # test solver instantiation on the GLM loss
+        try:
+            self.instantiate_solver(
+                self.regularizer.penalized_loss(loss=self._predict_and_compute_loss),
+                self.regularizer.regularizer_strength,
+                prox=self.regularizer._get_proximal_operator(),
+            )
+        except Exception:
+            raise TypeError(
+                "The provided `solver` cannot be instantiated on "
+                "the GLM log-likelihood."
+            )
+
+    @property
+    def solver_name(self) -> str:
+        return self._solver_name
+
+    @solver_name.setter
+    def solver_name(self, solver_name: str):
+        # check if solver/regularizer pairing valid
+        self._parse_regularizer_optimizer_params(regularizer=self.regularizer, solver_name=solver_name)
+
+    @property
     def solver_kwargs(self):
         return self._solver_kwargs
 

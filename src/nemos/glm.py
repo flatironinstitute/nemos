@@ -97,40 +97,6 @@ class GLM(BaseRegressor):
         self._solver_run = None
 
     @property
-    def regularizer(self) -> Union[None, reg.Regularizer]:
-        """Getter for the regularizer attribute."""
-        return self._regularizer
-
-    @regularizer.setter
-    def regularizer(self, regularizer: str | reg.Regularizer):
-        """Setter for the regularizer attribute."""
-        # check if current solver and regularizer match is possible
-        # instantiate solver if necessary
-        super()._parse_regularizer_optimizer_params(regularizer=regularizer, solver_name=self.solver_name)
-
-        # test solver instantiation on the GLM loss
-        try:
-            super().instantiate_solver(
-                self.regularizer.penalized_loss(loss=self._predict_and_compute_loss),
-                self.regularizer.regularizer_strength,
-                prox=self.regularizer._get_proximal_operator(),
-            )
-        except Exception:
-            raise TypeError(
-                "The provided `solver` cannot be instantiated on "
-                "the GLM log-likelihood."
-            )
-
-    @property
-    def solver_name(self) -> str:
-        return self._solver_name
-
-    @solver_name.setter
-    def solver_name(self, solver: str):
-        # check if solver/regularizer pairing valid
-        self._parse_regularizer_optimizer_params(regularizer=self.regularizer, solver_name=solver)
-
-    @property
     def observation_model(self) -> Union[None, obs.Observations]:
         """Getter for the observation_model attribute."""
         return self._observation_model
