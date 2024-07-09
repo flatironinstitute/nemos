@@ -244,7 +244,12 @@ class BaseRegressor(Base, abc.ABC):
             solver_name: str = None,
             solver_kwargs: Optional[dict] = None
     ):
-        self._parse_regularizer_optimizer_params(regularizer=regularizer, solver_name=solver_name)
+        self.regularizer = regularizer
+
+        if solver_name is None:
+            self.solver_name = self.regularizer.default_solver
+        else:
+            self.solver_name = solver_name
 
         if solver_kwargs is None:
             solver_kwargs = dict()
@@ -258,22 +263,11 @@ class BaseRegressor(Base, abc.ABC):
     @regularizer.setter
     def regularizer(self, regularizer: str | Regularizer):
         """Setter for the regularizer attribute."""
-        # check if current solver and regularizer match is possible
-        # instantiate solver if necessary
-        self._parse_regularizer_optimizer_params(regularizer=regularizer, solver_name=self.solver_name)
-
-        # test solver instantiation on the GLM loss
-        try:
-            self.instantiate_solver(
-                self.regularizer.penalized_loss(loss=self._predict_and_compute_loss),
-                self.regularizer.regularizer_strength,
-                prox=self.regularizer._get_proximal_operator(),
-            )
-        except Exception:
-            raise TypeError(
-                "The provided `solver` cannot be instantiated on "
-                "the GLM log-likelihood."
-            )
+        # instantiate regularizer
+        if isinstance(regularizer, str):
+            self._regularizer = create_regularizer(name=regularizer)
+        else:
+            self._regularizer = regularizer
 
     @property
     def solver_name(self) -> str:
@@ -281,8 +275,12 @@ class BaseRegressor(Base, abc.ABC):
 
     @solver_name.setter
     def solver_name(self, solver_name: str):
-        # check if solver/regularizer pairing valid
-        self._parse_regularizer_optimizer_params(regularizer=self.regularizer, solver_name=solver_name)
+        # check if solver str passed is valid for regularizer
+        if solver_name not in self._regularizer.allowed_solvers:
+            raise ValueError(f"The solver: {solver_name} is not allowed for "
+                             f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                             f"{self._regularizer.allowed_solvers}.")
+        self._solver_name = solver_name
 
     @property
     def solver_kwargs(self):
@@ -316,25 +314,6 @@ class BaseRegressor(Base, abc.ABC):
             raise NameError(
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
             )
-
-    def _parse_regularizer_optimizer_params(self, regularizer: str | Regularizer, solver_name: str):
-        """Parse the regularizer and solver parameters."""
-        # check if solver is in the regularizers allowed solvers
-        if isinstance(regularizer, str):
-            self._regularizer = create_regularizer(name=regularizer)
-        else:
-            self._regularizer = regularizer
-
-        # if no solver passed, use default for given regularizer
-        if solver_name is None:
-            solver_name = self._regularizer.default_solver
-        # check if solver str passed is valid for regularizer
-        if solver_name not in self._regularizer.allowed_solvers:
-            raise ValueError(f"The solver: {solver_name} is not allowed for "
-                             f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
-                             f"{self._regularizer.allowed_solvers}.")
-        # store solver
-        self._solver_name = solver_name
 
     def instantiate_solver(
         self,
@@ -382,6 +361,12 @@ class BaseRegressor(Base, abc.ABC):
         """
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
+        
+        # final check that solver is valid for chosen regularizer
+        if self.solver_name not in self.regularizer.allowed_solvers:
+            raise ValueError(f"The solver: {self.solver_name} is not allowed for "
+                             f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                             f"{self._regularizer.allowed_solvers}.")
 
         # get the solver with given arguments.
         # The "fun" argument is not always the first one, but it is always KEYWORD
