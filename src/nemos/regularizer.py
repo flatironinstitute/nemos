@@ -542,9 +542,9 @@ class GroupLasso(ProxGradientRegularizer):
 
     >>> # Define a mask for 3 groups and 5 features
     >>> mask = np.zeros((num_groups, num_features))
-    >>> mask[0] = [1, 0, 0, 1, 0]  # # Group 0 includes features 0 and 3
-    >>> mask[1] = [0, 1, 0, 0, 0]  # # Group 1 includes features 1
-    >>> mask[2] = [0, 0, 1, 0, 1]  # # Group 2 includes features 2 and 4
+    >>> mask[0] = [1, 0, 0, 1, 0]  # Group 0 includes features 0 and 3
+    >>> mask[1] = [0, 1, 0, 0, 0]  # Group 1 includes features 1
+    >>> mask[2] = [0, 0, 1, 0, 1]  # Group 2 includes features 2 and 4
 
     >>> # Create the GroupLasso regularizer instance
     >>> group_lasso = GroupLasso(solver_name='ProximalGradient', regularizer_strength=0.1, mask=mask)
