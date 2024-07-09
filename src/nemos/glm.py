@@ -1005,7 +1005,8 @@ class PopulationGLM(GLM):
         and related parameters.
         Default is UnRegularized regression with gradient descent.
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s.
+        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
+        `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1057,11 +1058,11 @@ class PopulationGLM(GLM):
     >>> # Compute the firing rate and counts
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
-    >>> # define a feature mask such that
-    >>> # feature_1 is a predictor for the 2nd neuron and feature_2 for the 1st
+    >>> # Define a feature mask with arrays of shape (num_neurons, )
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
     >>> print("Feature mask:")
     >>> print(feature_mask)
+    >>> # Fit a PopulationGLM
     >>> model = PopulationGLM(feature_mask=feature_mask)
     >>> model.fit(X, y)
     >>> print("Model coefficients:")
