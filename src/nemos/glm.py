@@ -1023,6 +1023,31 @@ class PopulationGLM(GLM):
     TypeError
         - If provided `regularizer` or `observation_model` are not valid.
         - If provided `feature_mask` is not an array-like of dimension two.
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> from nemos.glm import PopulationGLM
+
+    >>> # Define predictors (X), weights, and neural activity (y)
+    >>> num_samples, num_features, num_neurons = 100, 3, 2
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+
+    >>> # Define a feature mask, shape (num_features, num_neurons)
+    >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+    >>> print("Feature mask:")
+    >>> print(feature_mask)
+
+    >>> # Create and fit the model
+    >>> model = PopulationGLM(feature_mask=feature_mask)
+    >>> model.fit(X, y)
+
+    >>> # Check the fitted coefficients and intercepts
+    >>> print("Model coefficients:")
+    >>> print(model.coef_)
     """
 
     def __init__(
