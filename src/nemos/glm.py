@@ -56,10 +56,6 @@ class GLM(BaseRegressor):
     observation_model :
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
-    regularizer :
-        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
-        and related parameters.
-        Default is UnRegularized regression with gradient descent.
 
     Attributes
     ----------
@@ -75,6 +71,7 @@ class GLM(BaseRegressor):
         $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
         of the mean $\mu$ fully specifies the distribution of the activity $y$.
 
+
     Raises
     ------
     TypeError
@@ -84,13 +81,9 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
-        solver: str = None
+        **kwargs
     ):
-        super().__init__(
-            regularizer=regularizer,
-            solver=solver
-        )
+        super().__init__(**kwargs)
 
         self.observation_model = observation_model
 
@@ -109,8 +102,11 @@ class GLM(BaseRegressor):
         return self._regularizer
 
     @regularizer.setter
-    def regularizer(self, regularizer: reg.Regularizer):
+    def regularizer(self, regularizer: str | reg.Regularizer):
         """Setter for the regularizer attribute."""
+        # TODO: allow passing str here and then check solver match
+        super()._parse_regularizer_optimizer_params(regularizer=regularizer, solver=self.solver)
+
         if not hasattr(regularizer, "instantiate_solver"):
             raise AttributeError(
                 "The provided `solver` doesn't implement the `instantiate_solver` method."
@@ -123,7 +119,15 @@ class GLM(BaseRegressor):
                 "The provided `solver` cannot be instantiated on "
                 "the GLM log-likelihood."
             )
-        self._regularizer = regularizer
+
+    @property
+    def solver(self) -> str:
+        return self._solver
+
+    @solver.setter
+    def solver(self, solver: str):
+        # check if solver/regularizer pairing valid
+        self._parse_regularizer_optimizer_params(regularizer=self.regularizer, solver=solver)
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:

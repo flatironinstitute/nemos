@@ -85,6 +85,7 @@ class Regularizer(Base, abc.ABC):
     """
 
     _allowed_solvers: Tuple[str] = tuple()
+    _default_solver: str = None
 
     def __init__(
         self,
@@ -101,6 +102,10 @@ class Regularizer(Base, abc.ABC):
     @property
     def allowed_solvers(self):
         return self._allowed_solvers
+
+    @property
+    def default_solver(self):
+        return self._default_solver
 
     @property
     def solver_name(self):
@@ -279,6 +284,8 @@ class UnRegularized(Regularizer):
         "LBFGSB",
     )
 
+    _default_solver = "GradientDescent"
+
     def __init__(
         self, solver_name: str = "GradientDescent", solver_kwargs: Optional[dict] = None
     ):
@@ -307,6 +314,8 @@ class Ridge(Regularizer):
         "ScipyBoundedMinimize",
         "LBFGSB",
     )
+
+    _default_solver = "GradientDescent"
 
     def __init__(
         self,
@@ -402,6 +411,8 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
     """
 
     _allowed_solvers = ("ProximalGradient",)
+
+    _default_solver = "ProximalGradient"
 
     def __init__(
         self,

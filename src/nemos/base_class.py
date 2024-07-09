@@ -7,7 +7,7 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Any, NamedTuple, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -16,16 +16,12 @@ from numpy.typing import ArrayLike, NDArray
 
 from . import validation
 from .pytrees import FeaturePytree
-from .regularizer import Regularizer, UnRegularized, Ridge, GroupLasso, Lasso
+from ._regularizer_builder import create_regularizer
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
-REGULARIZERS = {
-    "unregularized": UnRegularized,
-    "ridge": Ridge,
-    "lasso": Lasso,
-    "group_lasso": GroupLasso,
-}
+if TYPE_CHECKING:
+    from regularizer import Regularizer
 
 
 class Base:
@@ -180,22 +176,26 @@ class BaseRegressor(Base, abc.ABC):
     scoring the model, simulating responses, and preprocessing data. Concrete classes
     are expected to provide specific implementations of the abstract methods defined here.
 
+    Parameters
+    ----------
+    regularizer :
+        Regularization to use for model optimization. Defines the regularization scheme
+        and related parameters.
+        Default is UnRegularized regression.
+    solver :
+        Solver to use for model optimization. Defines the optimization scheme and related parameters.
+        The solver must be an appropriate match for the chosen regularizer. Please see table below for
+        regularizer/optimizer pairings.
+        Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+
+    # TODO: insert nice table that shows the available optimizers for each regularizer
+
     See Also
     --------
     Concrete models:
 
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
     - [`GLMRecurrent`](../glm/#nemos.glm.GLMRecurrent): A recurrent GLM implementation.
-
-    Attributes
-    ----------
-    regularizer :
-        Optional string or Regularizer class that defines the regularizer for the regression model
-    solver :
-        Optional string that defines the optimizer/solver for the regression model
-
-    NOTE: Please see the table below for details on regularizer/optimizer pairings:
-    # TODO: insert nice table that shows the available optimizers for each regularizer
     """
 
     def __init__(
@@ -203,36 +203,7 @@ class BaseRegressor(Base, abc.ABC):
             regularizer: str | Regularizer = "unregularized",
             solver: str = None
     ):
-        # parse the regularizer and solver options
-        self._parse_regularizer_optimizer_params(self, regularizer=regularizer, solver=solver)
-
-    @staticmethod
-    def _parse_regularizer_optimizer_params(self, regularizer: str | Regularizer, solver: str):
-        """Parse the regularizer and solver parameters."""
-        # check if solver is in the regularizers allowed solvers
-        if not isinstance(regularizer, str):
-            # check if solver is in allowed solvers list
-            if solver not in regularizer._allowed_solvers:
-                raise ValueError(f"The solver: {solver} is not a valid solver type for the regularizer: "
-                                 f"{regularizer.__class__.__name__}. Please use one of {regularizer._allowed_solvers}.")
-            # store regularizer
-            self._regularizer = regularizer
-            # store solver
-            self.solver = solver
-        else:
-            # check if regularizer str passed is even valid
-            if regularizer not in REGULARIZERS.keys():
-                raise KeyError(f"The regularizer: {regularizer} is not a valid regularizer type."
-                               f" Please use one of {REGULARIZERS.keys()}.")
-            # check if solver is valid
-            if solver not in REGULARIZERS[regularizer]._allowed_solvers:
-                raise ValueError(f"The solver: {solver} is not a valid solver type for the regularizer: "
-                                 f"{REGULARIZERS[regularizer].__class__.__name__}. Please use one of "
-                                 f"{REGULARIZERS[regularizer]._allowed_solvers}.")
-            # store solver
-            self.solver = solver
-            # instantiate regularizer and store
-            self._regularizer = REGULARIZERS[regularizer]()
+        self._parse_regularizer_optimizer_params(regularizer=regularizer, solver=solver)
 
     @abc.abstractmethod
     def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
@@ -263,6 +234,37 @@ class BaseRegressor(Base, abc.ABC):
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
+
+    def _parse_regularizer_optimizer_params(self, regularizer: str | Regularizer, solver: str):
+        """Parse the regularizer and solver parameters."""
+        # check if solver is in the regularizers allowed solvers
+        if not isinstance(regularizer, str):
+            # if no solver passed, use default for given regularizer
+            if solver is None:
+                self._solver = regularizer.default_solver
+            # check if solver is in allowed solvers list
+            if solver not in regularizer.allowed_solvers:
+                raise ValueError(f"The solver: {solver} is not allowed for "
+                                 f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                                 f"{self._regularizer.allowed_solvers}.")
+            # store regularizer
+            self._regularizer = regularizer
+            # store solver
+            self._solver = solver
+        else:
+            # try to instantiate solver
+            self._regularizer = create_regularizer(name=regularizer)
+
+            # if no solver passed, use default for given regularizer
+            if solver is None:
+                solver = self._regularizer.default_solver
+            # check if solver str passed is valid for regularizer
+            if solver not in self._regularizer.allowed_solvers:
+                raise ValueError(f"The solver: {solver} is not allowed for "
+                                 f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                                 f"{self._regularizer.allowed_solvers}.")
+            # store solver
+            self._solver = solver
 
     @staticmethod
     @abc.abstractmethod
