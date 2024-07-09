@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -19,6 +19,9 @@ from .base_class import DESIGN_INPUT_TYPE, BaseRegressor, SolverRun, SolverUpdat
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import jnp_asarray_if, support_pynapple
+
+if TYPE_CHECKING:
+    from regularizer import Regularizer
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -81,9 +84,11 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        **kwargs
+        regularizer: str | Regularizer = "unregularized",
+        solver_name: str = None,
+        solver_kwargs: dict = None,
     ):
-        super().__init__(**kwargs)
+        super().__init__(regularizer=regularizer, solver_name=solver_name, solver_kwargs=solver_kwargs)
 
         self.observation_model = observation_model
 

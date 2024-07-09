@@ -361,7 +361,7 @@ class BaseRegressor(Base, abc.ABC):
         """
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
-        
+
         # final check that solver is valid for chosen regularizer
         if self.solver_name not in self.regularizer.allowed_solvers:
             raise ValueError(f"The solver: {self.solver_name} is not allowed for "
