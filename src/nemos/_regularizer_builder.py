@@ -27,9 +27,9 @@ def create_regularizer(name: str):
         case "lasso":
             from .regularizer import Lasso
             return Lasso()
-        # case "group_lasso":
-        #     from regularizer import GroupLasso
-        #     return GroupLasso()
+        case "group_lasso":
+            from regularizer import GroupLasso
+            return GroupLasso()
 
     raise ValueError(f"Unknown regularizer: {name}. Regularizer must be one of {AVAILABLE_REGULARIZERS}")
 

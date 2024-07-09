@@ -15,7 +15,7 @@ from scipy.optimize import root
 from . import observation_models as obs
 from . import regularizer as reg
 from . import tree_utils, validation
-from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
+from .base_class import DESIGN_INPUT_TYPE, BaseRegressor, SolverRun, SolverUpdate, SolverInit
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import jnp_asarray_if, support_pynapple
@@ -104,16 +104,17 @@ class GLM(BaseRegressor):
     @regularizer.setter
     def regularizer(self, regularizer: str | reg.Regularizer):
         """Setter for the regularizer attribute."""
-        # TODO: allow passing str here and then check solver match
-        super()._parse_regularizer_optimizer_params(regularizer=regularizer, solver=self.solver)
+        # check if current solver and regularizer match is possible
+        # instantiate solver if necessary
+        super()._parse_regularizer_optimizer_params(regularizer=regularizer, solver_name=self.solver_name)
 
-        if not hasattr(regularizer, "instantiate_solver"):
-            raise AttributeError(
-                "The provided `solver` doesn't implement the `instantiate_solver` method."
-            )
         # test solver instantiation on the GLM loss
         try:
-            regularizer.instantiate_solver(self._predict_and_compute_loss)
+            super().instantiate_solver(
+                self.regularizer.penalized_loss(loss=self._predict_and_compute_loss),
+                self.regularizer.regularizer_strength,
+                prox=self.regularizer._get_proximal_operator(),
+            )
         except Exception:
             raise TypeError(
                 "The provided `solver` cannot be instantiated on "
@@ -121,13 +122,13 @@ class GLM(BaseRegressor):
             )
 
     @property
-    def solver(self) -> str:
-        return self._solver
+    def solver_name(self) -> str:
+        return self._solver_name
 
-    @solver.setter
-    def solver(self, solver: str):
+    @solver_name.setter
+    def solver_name(self, solver: str):
         # check if solver/regularizer pairing valid
-        self._parse_regularizer_optimizer_params(regularizer=self.regularizer, solver=solver)
+        self._parse_regularizer_optimizer_params(regularizer=self.regularizer, solver_name=solver)
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -142,7 +143,7 @@ class GLM(BaseRegressor):
         self._observation_model = observation
 
     @property
-    def solver_init_state(self) -> Union[None, reg.SolverInit]:
+    def solver_init_state(self) -> Union[None, SolverInit]:
         """
         Provides the initialization function for the solver's state.
 
@@ -159,7 +160,7 @@ class GLM(BaseRegressor):
         return self._solver_init_state
 
     @property
-    def solver_update(self) -> Union[None, reg.SolverUpdate]:
+    def solver_update(self) -> Union[None, SolverUpdate]:
         """
         Provides the function for updating the solver's state during the optimization process.
 
@@ -177,7 +178,7 @@ class GLM(BaseRegressor):
         return self._solver_update
 
     @property
-    def solver_run(self) -> Union[None, reg.SolverRun]:
+    def solver_run(self) -> Union[None, SolverRun]:
         """
         Provides the function to execute the solver's optimization process.
 
@@ -894,7 +895,7 @@ class GLM(BaseRegressor):
         self._validate(X, y, init_params)
 
         self._solver_init_state, self._solver_update, self._solver_run = (
-            self.regularizer.instantiate_solver(self._predict_and_compute_loss)
+            super().instantiate_solver(self._predict_and_compute_loss)
         )
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -1035,10 +1036,10 @@ class PopulationGLM(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
         feature_mask: Optional[jnp.ndarray] = None,
+        **kwargs
     ):
-        super().__init__(observation_model=observation_model, regularizer=regularizer)
+        super().__init__(observation_model=observation_model, **kwargs)
         self.feature_mask = feature_mask
 
     @property

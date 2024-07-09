@@ -7,14 +7,14 @@ import abc
 import inspect
 import warnings
 from collections import defaultdict
-from typing import Any, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Any, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING, Callable
 
 import jax
 import jax.numpy as jnp
-from jaxopt import OptStep
+import jaxopt
 from numpy.typing import ArrayLike, NDArray
 
-from . import validation
+from . import validation, utils
 from .pytrees import FeaturePytree
 from ._regularizer_builder import create_regularizer
 
@@ -22,6 +22,34 @@ DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
 
 if TYPE_CHECKING:
     from regularizer import Regularizer
+
+SolverRun = Callable[
+    [
+        Any,  # parameters, could be any pytree
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    jaxopt.OptStep,
+]
+
+SolverInit = Callable[
+    [
+        Any,  # parameters, could be any pytree
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    NamedTuple,
+]
+
+SolverUpdate = Callable[
+    [
+        Any,  # parameters, could be any pytree
+        NamedTuple,
+        jnp.ndarray,  # Predictors (i.e. model design for GLM)
+        jnp.ndarray,
+    ],  # Output (neural activity)
+    jaxopt.OptStep,
+]
 
 
 class Base:
@@ -182,13 +210,25 @@ class BaseRegressor(Base, abc.ABC):
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
         Default is UnRegularized regression.
-    solver :
+    solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
-        The solver must be an appropriate match for the chosen regularizer. Please see table below for
-        regularizer/optimizer pairings.
+        The solver must be an appropriate match for the chosen regularizer.
         Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+        Please see table below forregularizer/optimizer pairings.
 
-    # TODO: insert nice table that shows the available optimizers for each regularizer
+    +---------------+------------------+-------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    +===============+==================+=============================================================+
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, ScipyMinimize, NonlinearCG,   |
+    |               |                  | ScipyBoundedMinimize, LBFGSB                                |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, ScipyMinimize, NonlinearCG,   |
+    |               |                  | ScipyBoundedMinimize, LBFGSB                                |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
 
     See Also
     --------
@@ -201,9 +241,155 @@ class BaseRegressor(Base, abc.ABC):
     def __init__(
             self,
             regularizer: str | Regularizer = "unregularized",
-            solver: str = None
+            solver_name: str = None,
+            solver_kwargs: Optional[dict] = None
     ):
-        self._parse_regularizer_optimizer_params(regularizer=regularizer, solver=solver)
+        self._parse_regularizer_optimizer_params(regularizer=regularizer, solver_name=solver_name)
+
+        if solver_kwargs is None:
+            solver_kwargs = dict()
+        self.solver_kwargs = solver_kwargs
+
+    @property
+    def solver_kwargs(self):
+        return self._solver_kwargs
+
+    @solver_kwargs.setter
+    def solver_kwargs(self, solver_kwargs: dict):
+        self._check_solver_kwargs(self.solver_name, solver_kwargs)
+        self._solver_kwargs = solver_kwargs
+
+    @staticmethod
+    def _check_solver_kwargs(solver_name, solver_kwargs):
+        """
+        Check if provided solver keyword arguments are valid.
+
+        Parameters
+        ----------
+        solver_name :
+            Name of the solver.
+        solver_kwargs :
+            Additional keyword arguments for the solver.
+
+        Raises
+        ------
+        NameError
+            If any of the solver keyword arguments are not valid.
+        """
+        solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
+        undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
+        if undefined_kwargs:
+            raise NameError(
+                f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
+            )
+
+    def _parse_regularizer_optimizer_params(self, regularizer: str | Regularizer, solver_name: str):
+        """Parse the regularizer and solver parameters."""
+        # check if solver is in the regularizers allowed solvers
+        if isinstance(regularizer, str):
+            self._regularizer = create_regularizer(name=regularizer)
+        else:
+            self._regularizer = regularizer
+
+        # if no solver passed, use default for given regularizer
+        if solver_name is None:
+            solver_name = self._regularizer.default_solver
+        # check if solver str passed is valid for regularizer
+        if solver_name not in self._regularizer.allowed_solvers:
+            raise ValueError(f"The solver: {solver_name} is not allowed for "
+                             f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                             f"{self._regularizer.allowed_solvers}.")
+        # store solver
+        self._solver_name = solver_name
+
+    def instantiate_solver(
+        self,
+        loss: Callable,
+        *args: Any,
+        prox: Optional[Callable] = None,
+        **kwargs: Any
+    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
+        """
+        Instantiate the solver with the provided loss function.
+
+        Instantiate the solver with the provided loss function, and return callable functions
+        that initialize the solver state, update the model parameters, and run the optimization.
+
+        This method creates a solver instance from jaxopt library, tailored to the specific loss
+        function and regularization approach defined by the Regularizer instance. It also handles
+        the proximal operator if required for the optimization method. The returned functions are
+         directly usable in optimization loops, simplifying the syntax by pre-setting
+        common arguments like regularization strength and other hyperparameters.
+
+        Parameters
+        ----------
+        loss :
+            The loss function to be optimized.
+
+        *args:
+            Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
+            strength for proximal gradient methods.
+
+        prox:
+            Optional, the proximal projection operator.
+
+        *kwargs:
+            Keyword arguments for the jaxopt `solver.run` method.
+
+        Returns
+        -------
+        :
+            A tuple containing three callable functions:
+            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
+            - solver_update: Function to perform a single update step in the optimization process,
+            returning new parameters and state.
+            - solver_run: Function to execute the optimization process, applying multiple updates until a
+            stopping criterion is met.
+        """
+        # check that the loss is Callable
+        utils.assert_is_callable(loss, "loss")
+
+        # get the solver with given arguments.
+        # The "fun" argument is not always the first one, but it is always KEYWORD
+        # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
+        # The proximal gradient is added to the kwargs if passed. This avoids issues with over-writing
+        # the proximal operator.
+        if "prox" in self.solver_kwargs:
+            if prox is None:
+                raise ValueError(
+                    f"Regularizer of type {self.__class__.__name__} "
+                    f"does not require a proximal operator!"
+                )
+            else:
+                warnings.warn(
+                    "Overwritten the user-defined proximal operator! "
+                    "There is only one valid proximal operator for each regularizer type.",
+                    UserWarning,
+                )
+        # update the kwargs if prox is passed
+        if prox is not None:
+            solver_kwargs = self.solver_kwargs.copy()
+            solver_kwargs.update(prox=prox)
+        else:
+            solver_kwargs = self.solver_kwargs
+        solver = getattr(jaxopt, self._solver_name)(fun=loss, **solver_kwargs)
+
+        def solver_run(
+            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
+        ) -> jaxopt.OptStep:
+            return solver.run(init_params, *args, *run_args, **kwargs)
+
+        def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
+            return solver.update(
+                params, state, *args, *run_args, **kwargs, **run_kwargs
+            )
+
+        def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
+            return solver.init_state(
+                params, state, *args, *run_args, **kwargs, **run_kwargs
+            )
+
+        return solver_init_state, solver_update, solver_run
 
     @abc.abstractmethod
     def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
@@ -234,37 +420,6 @@ class BaseRegressor(Base, abc.ABC):
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
-
-    def _parse_regularizer_optimizer_params(self, regularizer: str | Regularizer, solver: str):
-        """Parse the regularizer and solver parameters."""
-        # check if solver is in the regularizers allowed solvers
-        if not isinstance(regularizer, str):
-            # if no solver passed, use default for given regularizer
-            if solver is None:
-                self._solver = regularizer.default_solver
-            # check if solver is in allowed solvers list
-            if solver not in regularizer.allowed_solvers:
-                raise ValueError(f"The solver: {solver} is not allowed for "
-                                 f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
-                                 f"{self._regularizer.allowed_solvers}.")
-            # store regularizer
-            self._regularizer = regularizer
-            # store solver
-            self._solver = solver
-        else:
-            # try to instantiate solver
-            self._regularizer = create_regularizer(name=regularizer)
-
-            # if no solver passed, use default for given regularizer
-            if solver is None:
-                solver = self._regularizer.default_solver
-            # check if solver str passed is valid for regularizer
-            if solver not in self._regularizer.allowed_solvers:
-                raise ValueError(f"The solver: {solver} is not allowed for "
-                                 f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
-                                 f"{self._regularizer.allowed_solvers}.")
-            # store solver
-            self._solver = solver
 
     @staticmethod
     @abc.abstractmethod
@@ -357,7 +512,7 @@ class BaseRegressor(Base, abc.ABC):
             y: jnp.ndarray,
             *args,
             **kwargs,
-    ) -> OptStep:
+    ) -> jaxopt.OptStep:
         """Run a single update step of the jaxopt solver."""
         pass
 

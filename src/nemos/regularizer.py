@@ -21,34 +21,6 @@ from .base_class import DESIGN_INPUT_TYPE, Base
 from .proximal_operator import prox_group_lasso
 from .pytrees import FeaturePytree
 
-SolverRun = Callable[
-    [
-        Any,  # parameters, could be any pytree
-        jnp.ndarray,  # Predictors (i.e. model design for GLM)
-        jnp.ndarray,
-    ],  # Output (neural activity)
-    jaxopt.OptStep,
-]
-
-SolverInit = Callable[
-    [
-        Any,  # parameters, could be any pytree
-        jnp.ndarray,  # Predictors (i.e. model design for GLM)
-        jnp.ndarray,
-    ],  # Output (neural activity)
-    NamedTuple,
-]
-
-SolverUpdate = Callable[
-    [
-        Any,  # parameters, could be any pytree
-        NamedTuple,
-        jnp.ndarray,  # Predictors (i.e. model design for GLM)
-        jnp.ndarray,
-    ],  # Output (neural activity)
-    jaxopt.OptStep,
-]
-
 ProximalOperator = Callable[
     [
         Any,  # parameters, could be any pytree
@@ -57,7 +29,6 @@ ProximalOperator = Callable[
     ],  # Step-size for optimization (must be a float)
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
-
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
@@ -74,30 +45,30 @@ class Regularizer(Base, abc.ABC):
     enabling users to easily switch between different regularizers, ensuring compatibility
     with various loss functions and optimization algorithms.
 
+    Parameters
+    ----------
+    regularization_strength
+        Float representing the strength of the regularization being applied.
+        Default 1.0.
+
     Attributes
     ----------
     allowed_solvers :
         Tuple of solver names that are allowed for use with this regularizer.
-    solver_name :
-        Name of the solver being used.
-    solver_kwargs :
-        Additional keyword arguments to be passed to the solver during instantiation.
+    default_solver :
+        String of the default solver name allowed for use with this regularizer.
     """
 
     _allowed_solvers: Tuple[str] = tuple()
     _default_solver: str = None
 
     def __init__(
-        self,
-        solver_name: str,
-        solver_kwargs: Optional[dict] = None,
-        **kwargs,
+            self,
+            regularization_strength: float = 1.0,
+            **kwargs,
     ):
         super().__init__(**kwargs)
-        self.solver_name = solver_name
-        if solver_kwargs is None:
-            solver_kwargs = dict()
-        self.solver_kwargs = solver_kwargs
+        self.regularization_strength = regularization_strength
 
     @property
     def allowed_solvers(self):
@@ -107,153 +78,37 @@ class Regularizer(Base, abc.ABC):
     def default_solver(self):
         return self._default_solver
 
-    @property
-    def solver_name(self):
-        return self._solver_name
-
-    @solver_name.setter
-    def solver_name(self, solver_name: str):
-        self._check_solver(solver_name)
-        self._solver_name = solver_name
-
-    @property
-    def solver_kwargs(self):
-        return self._solver_kwargs
-
-    @solver_kwargs.setter
-    def solver_kwargs(self, solver_kwargs: dict):
-        self._check_solver_kwargs(self.solver_name, solver_kwargs)
-        self._solver_kwargs = solver_kwargs
-
-    def _check_solver(self, solver_name: str):
+    @abc.abstractmethod
+    def penalized_loss(self, loss: Callable) -> Callable:
         """
-        Ensure the provided solver name is allowed.
-
-        Parameters
-        ----------
-        solver_name :
-            Name of the solver to be checked.
-
-        Raises
-        ------
-        ValueError
-            If the provided solver name is not in the list of allowed optimizers.
-        """
-        if solver_name not in self.allowed_solvers:
-            raise ValueError(
-                f"Solver `{solver_name}` not allowed for "
-                f"{self.__class__} regularization. "
-                f"Allowed solvers are {self.allowed_solvers}."
-            )
-
-    @staticmethod
-    def _check_solver_kwargs(solver_name, solver_kwargs):
-        """
-        Check if provided solver keyword arguments are valid.
-
-        Parameters
-        ----------
-        solver_name :
-            Name of the solver.
-        solver_kwargs :
-            Additional keyword arguments for the solver.
-
-        Raises
-        ------
-        NameError
-            If any of the solver keyword arguments are not valid.
-        """
-        solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
-        undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
-        if undefined_kwargs:
-            raise NameError(
-                f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
-            )
-
-    def instantiate_solver(
-        self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
-        """
-        Instantiate the solver with the provided loss function.
-
-        Instantiate the solver with the provided loss function, and return callable functions
-        that initialize the solver state, update the model parameters, and run the optimization.
-
-        This method creates a solver instance from jaxopt library, tailored to the specific loss
-        function and regularization approach defined by the Regularizer instance. It also handles
-        the proximal operator if required for the optimization method. The returned functions are
-         directly usable in optimization loops, simplifying the syntax by pre-setting
-        common arguments like regularization strength and other hyperparameters.
+        Abstract method to penalize loss functions.
 
         Parameters
         ----------
         loss :
-            The loss function to be optimized.
-
-        *args:
-            Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
-            strength for proximal gradient methods.
-
-        prox:
-            Optional, the proximal projection operator.
-
-        *kwargs:
-            Keyword arguments for the jaxopt `solver.run` method.
+            Callable loss function.
 
         Returns
         -------
         :
-            A tuple containing three callable functions:
-            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
-            - solver_update: Function to perform a single update step in the optimization process,
-            returning new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until a
-            stopping criterion is met.
+            A modified version of the loss function including any relevant penalization based on the regularizer
+            type.
         """
-        # check that the loss is Callable
-        utils.assert_is_callable(loss, "loss")
+        pass
 
-        # get the solver with given arguments.
-        # The "fun" argument is not always the first one, but it is always KEYWORD
-        # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
-        # The proximal gradient is added to the kwargs if passed. This avoids issues with over-writing
-        # the proximal operator.
-        if "prox" in self.solver_kwargs:
-            if prox is None:
-                raise ValueError(
-                    f"Regularizer of type {self.__class__.__name__} "
-                    f"does not require a proximal operator!"
-                )
-            else:
-                warnings.warn(
-                    "Overwritten the user-defined proximal operator! "
-                    "There is only one valid proximal operator for each regularizer type.",
-                    UserWarning,
-                )
-        # update the kwargs if prox is passed
-        if prox is not None:
-            solver_kwargs = self.solver_kwargs.copy()
-            solver_kwargs.update(prox=prox)
-        else:
-            solver_kwargs = self.solver_kwargs
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_kwargs)
+    @abc.abstractmethod
+    def _get_proximal_operator(
+            self,
+    ) -> ProximalOperator:
+        """
+        Abstract method to retrieve the proximal operator for this solver.
 
-        def solver_run(
-            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
-        ) -> jaxopt.OptStep:
-            return solver.run(init_params, *args, *run_args, **kwargs)
-
-        def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
-            return solver.update(
-                params, state, *args, *run_args, **kwargs, **run_kwargs
-            )
-
-        def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
-            return solver.init_state(
-                params, state, *args, *run_args, **kwargs, **run_kwargs
-            )
-
-        return solver_init_state, solver_update, solver_run
+        Returns
+        -------
+        :
+            The proximal operator, which typically applies a form of regularization.
+        """
+        pass
 
 
 class UnRegularized(Regularizer):
@@ -268,6 +123,8 @@ class UnRegularized(Regularizer):
     ----------
     allowed_solvers : list of str
         List of solver names that are allowed for this regularizer class.
+    default_solver :
+        Default solver for this regularizer is GradientDescent.
 
     See Also
     --------
@@ -287,9 +144,21 @@ class UnRegularized(Regularizer):
     _default_solver = "GradientDescent"
 
     def __init__(
-        self, solver_name: str = "GradientDescent", solver_kwargs: Optional[dict] = None
+            self,
+            **kwargs
     ):
-        super().__init__(solver_name, solver_kwargs=solver_kwargs)
+        super().__init__(**kwargs)
+
+    def penalized_loss(self, loss: Callable):
+        """Unregularized method does not add any penalty."""
+        return loss
+
+    def _get_proximal_operator(self,) -> ProximalOperator:
+        def prox_op(params, scaling=1.0):
+            Ws, bs = params
+            return jaxopt.prox.prox_none(Ws, scaling=scaling), bs
+
+        return prox_op
 
 
 class Ridge(Regularizer):
@@ -299,10 +168,18 @@ class Ridge(Regularizer):
     This class uses `jaxopt` optimizers to perform Ridge regularization. It extends
     the base Solver class, with the added feature of Ridge penalization.
 
+    Parameters
+    ----------
+    regularizer_strength :
+        Indicates the strength of the penalization being applied.
+        Float with default value of 1.0.
+
     Attributes
     ----------
     allowed_solvers : List[..., str]
         A list of solver names that are allowed to be used with this regularizer.
+    default_solver :
+        Default solver for this regularizer is GradientDescent.
     """
 
     _allowed_solvers = (
@@ -318,16 +195,13 @@ class Ridge(Regularizer):
     _default_solver = "GradientDescent"
 
     def __init__(
-        self,
-        solver_name: str = "GradientDescent",
-        solver_kwargs: Optional[dict] = None,
-        regularizer_strength: float = 1.0,
+            self,
+            **kwargs
     ):
-        super().__init__(solver_name, solver_kwargs=solver_kwargs)
-        self.regularizer_strength = regularizer_strength
+        super().__init__(**kwargs)
 
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+            self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -345,10 +219,10 @@ class Ridge(Regularizer):
 
         def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
             return (
-                0.5
-                * self.regularizer_strength
-                * jnp.sum(jnp.power(coeff, 2))
-                / intercept.shape[0]
+                    0.5
+                    * self.regularizer_strength
+                    * jnp.sum(jnp.power(coeff, 2))
+                    / intercept.shape[0]
             )
 
         # tree map the computation and sum over leaves
@@ -356,45 +230,29 @@ class Ridge(Regularizer):
             lambda x: l2_penalty(x, params[1]), sum, params[0]
         )
 
-    def instantiate_solver(
-        self, loss: Callable, *args: Any, **kwargs: Any
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
-        """
-        Instantiate the solver with the provided loss function.
+    def penalized_loss(self, loss: Callable) -> Callable:
 
-        Instantiate the solver with the provided loss function and return callable functions
-        that initialize the solver state, update the model parameters, and run the optimization.
-
-        This method creates a solver instance from jaxopt library, tailored to the specific loss
-        function and regularization approach defined by the Regularizer instance. It also handles
-        the proximal operator if required for the optimization method. The returned functions are
-         directly usable in optimization loops, simplifying the syntax by pre-setting
-        common arguments like regularization strength and other hyperparameters.
-
-        Parameters
-        ----------
-        loss :
-            The original loss function to be optimized.
-
-        Returns
-        -------
-        :
-            A tuple containing three callable functions:
-            - solver_init_state: Function to initialize the solver's state, necessary before starting
-            the optimization.
-            - solver_update: Function to perform a single update step in the optimization process, returning
-            new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until a
-            stopping criterion is met.
-        """
-        # this check has be performed here because the penalized loss will
-        # always be a callable independently of which loss is passed!
-        utils.assert_is_callable(loss, "loss")
-
-        def penalized_loss(params, X, y):
+        def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
-        return super().instantiate_solver(penalized_loss, *args, **kwargs)
+        return _penalized_loss
+
+    def _get_proximal_operator(
+            self,
+    ) -> ProximalOperator:
+        def prox_op(params, l2reg, scaling=1.0):
+            Ws, bs = params
+            l2reg /= bs.shape[0]
+            # if Ws is a pytree, l2reg needs to be a pytree with the same
+            # structure
+            if isinstance(Ws, (dict, FeaturePytree)):
+                struct = jax.tree_util.tree_structure(Ws)
+                l1reg = jax.tree_util.tree_unflatten(
+                    struct, [l2reg] * struct.num_leaves
+                )
+            return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
+
+        return prox_op
 
 
 class ProxGradientRegularizer(Regularizer, abc.ABC):
@@ -404,10 +262,18 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
     This class utilizes the `jaxopt` library's Proximal Gradient optimizer. It extends
     the base Solver class, with the added functionality of a proximal operator.
 
+    Parameters
+    ----------
+    regularizer_strength :
+        Indicates the strength of the penalization being applied.
+        Float with default value of 1.0.
+
     Attributes
     ----------
-    allowed_solvers : List[...,str]
+    allowed_solvers : List[..., str]
         A list of solver names that are allowed to be used with this regularizer.
+    default_solver :
+        Default solver for this regularizer is ProximalGradient.
     """
 
     _allowed_solvers = ("ProximalGradient",)
@@ -415,88 +281,31 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
     _default_solver = "ProximalGradient"
 
     def __init__(
-        self,
-        solver_name: str,
-        solver_kwargs: Optional[dict] = None,
-        regularizer_strength: float = 1.0,
-        **kwargs,
-    ):
-        super().__init__(solver_name, solver_kwargs=solver_kwargs)
-        self.regularizer_strength = regularizer_strength
-
-    @abc.abstractmethod
-    def _get_proximal_operator(
-        self,
-    ) -> ProximalOperator:
-        """
-        Abstract method to retrieve the proximal operator for this solver.
-
-        Returns
-        -------
-        :
-            The proximal operator, which typically applies a form of regularization.
-        """
-        pass
-
-    def instantiate_solver(
-        self, loss: Callable, *args: Any, **kwargs: Any
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
-        """
-        Instantiate the solver with the provided loss function.
-
-        Instantiate the solver with the provided loss function and return callable functions
-        that initialize the solver state, update the model parameters, and run the optimization.
-
-        This method creates a solver instance from jaxopt library, tailored to the specific loss
-        function and regularization approach defined by the Regularizer instance. It also handles
-        the proximal operator if required for the optimization method. The returned functions are
-         directly usable in optimization loops, simplifying the syntax by pre-setting
-        common arguments like regularization strength and other hyperparameters.
-
-        Parameters
-        ----------
-        loss :
-            The original loss function to be optimized.
-
-        Returns
-        -------
-        :
-            A tuple containing three callable functions:
-            - solver_init_state: Function to initialize the solver's state, necessary before starting
-            the optimization.
-            - solver_update: Function to perform a single update step in the optimization process,
-            returning new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until
-            a stopping criterion is met.
-        """
-        return super().instantiate_solver(
-            loss,
-            self.regularizer_strength,
-            *args,
-            prox=self._get_proximal_operator(),
+            self,
             **kwargs,
-        )
+    ):
+        super().__init__(**kwargs)
+
+    def penalized_loss(self, loss: Callable) -> Callable:
+        return loss
 
 
 class Lasso(ProxGradientRegularizer):
     """
-     Optimization solver using the Lasso (L1 regularization) method with Proximal Gradient.
+    Optimization solver using the Lasso (L1 regularization) method with Proximal Gradient.
 
     This class is a specialized version of the ProxGradientSolver with the proximal operator
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
     def __init__(
-        self,
-        solver_name: str = "ProximalGradient",
-        solver_kwargs: Optional[dict] = None,
-        regularizer_strength: float = 1.0,
+            self,
+            **kwargs
     ):
-        super().__init__(solver_name, solver_kwargs=solver_kwargs)
-        self.regularizer_strength = regularizer_strength
+        super().__init__(**kwargs)
 
     def _get_proximal_operator(
-        self,
+            self,
     ) -> ProximalOperator:
         """
         Retrieve the proximal operator for Lasso regularization (L1 penalty).
@@ -541,18 +350,15 @@ class GroupLasso(ProxGradientRegularizer):
     """
 
     def __init__(
-        self,
-        solver_name: str,
-        mask: Union[NDArray, jnp.ndarray],
-        solver_kwargs: Optional[dict] = None,
-        regularizer_strength: float = 1.0,
+            self,
+            mask: Union[NDArray, jnp.ndarray] = None,
+            **kwargs
     ):
-        super().__init__(
-            solver_name,
-            solver_kwargs=solver_kwargs,
-        )
-        self.regularizer_strength = regularizer_strength
-        self.mask = jnp.asarray(mask)
+        super().__init__(**kwargs)
+
+        if mask is not None:
+            self.mask = jnp.asarray(mask)
+        # TODO: need to add if mask is None, to basically just use Lasso (single group)
 
     @property
     def mask(self):
@@ -609,7 +415,7 @@ class GroupLasso(ProxGradientRegularizer):
             )
 
     def _get_proximal_operator(
-        self,
+            self,
     ) -> ProximalOperator:
         """
         Retrieve the proximal operator for Group Lasso regularization.
