@@ -1026,27 +1026,43 @@ class PopulationGLM(GLM):
 
     Examples
     --------
+    >>> # Example with an array mask
     >>> import jax.numpy as jnp
     >>> import numpy as np
     >>> from nemos.glm import PopulationGLM
-
     >>> # Define predictors (X), weights, and neural activity (y)
     >>> num_samples, num_features, num_neurons = 100, 3, 2
     >>> X = np.random.normal(size=(num_samples, num_features))
     >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
-
     >>> # Define a feature mask, shape (num_features, num_neurons)
     >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
     >>> print("Feature mask:")
     >>> print(feature_mask)
-
     >>> # Create and fit the model
     >>> model = PopulationGLM(feature_mask=feature_mask)
     >>> model.fit(X, y)
-
     >>> # Check the fitted coefficients and intercepts
     >>> print("Model coefficients:")
+    >>> print(model.coef_)
+
+    >>> # Example with a FeaturePytree mask
+    >>> from nemos.pytrees import FeaturePytree
+    >>> from nemos.tree_utils import pytree_map_and_reduce
+    >>> # Define two features
+    >>> feature_1 = np.random.normal(size=(num_samples, 2))
+    >>> feature_2 = np.random.normal(size=(num_samples, 1))
+    >>> # Define the FeaturePytree predictor, and weights
+    >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
+    >>> weights = dict(feature_1=jnp.array([[0., 0.5], [0., -0.5]]), feature_2=jnp.array([[1., 0.]]))
+    >>> # Compute the firing rate and counts
+    >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
+    >>> y = np.random.poisson(rate)
+    >>> # define a feature mask such that
+    >>> # feature_1 is a predictor for the 2nd neuron and feature_2 for the 1st
+    >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> model = PopulationGLM(feature_mask=feature_mask)
+    >>> model.fit(X, y)
     >>> print(model.coef_)
     """
 
