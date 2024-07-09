@@ -58,13 +58,19 @@ def check_one_dimensional(func: Callable) -> Callable:
     return wrapper
 
 
-def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
+def min_max_rescale_samples(sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None) -> NDArray:
     """Rescale samples to [0,1]."""
+    sample_pts = sample_pts.astype(float)
+    if vmin and vmax and vmax <= vmin:
+        raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
     if np.any(sample_pts < 0) or np.any(sample_pts > 1):
-        sample_pts -= np.min(sample_pts)
-        sample_pts /= np.max(sample_pts)
+        vmin = np.min(sample_pts) if vmin is None else vmin
+        vmax = np.max(sample_pts) if vmax is None else vmax
+        sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
+        sample_pts -= vmin
+        sample_pts /= (vmax - vmin)
         warnings.warn(
-            "Rescaling sample points for RaisedCosine basis to [0,1]!", UserWarning
+            "Rescaling sample points to [0,1]!", UserWarning
         )
     return sample_pts
 
