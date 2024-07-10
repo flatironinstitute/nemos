@@ -78,7 +78,6 @@ class Regularizer(Base, abc.ABC):
     def default_solver(self):
         return self._default_solver
 
-    @abc.abstractmethod
     def penalized_loss(self, loss: Callable) -> Callable:
         """
         Abstract method to penalize loss functions.
@@ -96,7 +95,6 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
-    @abc.abstractmethod
     def _get_proximal_operator(
             self,
     ) -> ProximalOperator:
@@ -152,14 +150,6 @@ class UnRegularized(Regularizer):
     def penalized_loss(self, loss: Callable):
         """Unregularized method does not add any penalty."""
         return loss
-
-    def _get_proximal_operator(self,) -> ProximalOperator:
-        """Proximal operator for unregularized would return the identity."""
-        def prox_op(params, scaling=1.0):
-            Ws, bs = params
-            return jaxopt.prox.prox_none(Ws, scaling=scaling), bs
-
-        return prox_op
 
 
 class Ridge(Regularizer):
@@ -232,28 +222,10 @@ class Ridge(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable) -> Callable:
-
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
         return _penalized_loss
-
-    def _get_proximal_operator(
-            self,
-    ) -> ProximalOperator:
-        def prox_op(params, l2reg, scaling=1.0):
-            Ws, bs = params
-            l2reg /= bs.shape[0]
-            # if Ws is a pytree, l2reg needs to be a pytree with the same
-            # structure
-            if isinstance(Ws, (dict, FeaturePytree)):
-                struct = jax.tree_util.tree_structure(Ws)
-                l1reg = jax.tree_util.tree_unflatten(
-                    struct, [l2reg] * struct.num_leaves
-                )
-            return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
-
-        return prox_op
 
 
 class ProxGradientRegularizer(Regularizer, abc.ABC):
@@ -368,7 +340,7 @@ class GroupLasso(ProxGradientRegularizer):
     >>> mask[2] = [0, 0, 1, 0, 1]  # Group 2 includes features 2 and 4
 
     >>> # Create the GroupLasso regularizer instance
-    >>> group_lasso = GroupLasso(solver_name='ProximalGradient', regularizer_strength=0.1, mask=mask)
+    >>> group_lasso = GroupLasso(regularizer_strength=0.1, mask=mask)
     >>> # fit a group-lasso glm
     >>> model = GLM(regularizer=group_lasso).fit(X, y)
     >>> print(f"coeff: {model.coef_}")
@@ -383,7 +355,9 @@ class GroupLasso(ProxGradientRegularizer):
 
         if mask is not None:
             self.mask = jnp.asarray(mask)
-        # TODO: need to add if mask is None, to basically just use Lasso (single group)
+        else:
+            # default mask if None is a singular group
+            self.mask = jnp.asarray([[1.0]])
 
     @property
     def mask(self):

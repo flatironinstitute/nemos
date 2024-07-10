@@ -865,9 +865,18 @@ class GLM(BaseRegressor):
         # validate input
         self._validate(X, y, init_params)
 
-        self._solver_init_state, self._solver_update, self._solver_run = (
-            super().instantiate_solver(self._predict_and_compute_loss)
-        )
+        if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
+            self._solver_init_state, self._solver_update, self._solver_run = (
+                super().instantiate_solver(self._predict_and_compute_loss,
+                                           self.regularizer.regularizer_strength,
+                                           prox=self.regularizer._get_proximal_operator(),
+                                    )
+                    )
+        else:
+            self._solver_init_state, self._solver_update, self._solver_run = (
+                super().instantiate_solver(self._predict_and_compute_loss)
+            )
+
         if isinstance(X, FeaturePytree):
             data = X.data
         else:

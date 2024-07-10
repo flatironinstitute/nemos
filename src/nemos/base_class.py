@@ -376,7 +376,7 @@ class BaseRegressor(Base, abc.ABC):
         if "prox" in self.solver_kwargs:
             if prox is None:
                 raise ValueError(
-                    f"Regularizer of type {self.__class__.__name__} "
+                    f"Regularizer of type {self.regularizer.__class__.__name__} "
                     f"does not require a proximal operator!"
                 )
             else:
