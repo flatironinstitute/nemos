@@ -47,7 +47,7 @@ class Regularizer(Base, abc.ABC):
 
     Parameters
     ----------
-    regularization_strength
+    regularizer_strength
         Float representing the strength of the regularization being applied.
         Default 1.0.
 
@@ -64,11 +64,11 @@ class Regularizer(Base, abc.ABC):
 
     def __init__(
             self,
-            regularization_strength: float = 1.0,
+            regularizer_strength: float = 1.0,
             **kwargs,
     ):
         super().__init__(**kwargs)
-        self.regularization_strength = regularization_strength
+        self.regularizer_strength = regularizer_strength
 
     @property
     def allowed_solvers(self):
@@ -145,15 +145,16 @@ class UnRegularized(Regularizer):
 
     def __init__(
             self,
-            **kwargs
+            regularizer_strength: float = 1.0
     ):
-        super().__init__(**kwargs)
+        super().__init__(regularizer_strength=regularizer_strength)
 
     def penalized_loss(self, loss: Callable):
         """Unregularized method does not add any penalty."""
         return loss
 
     def _get_proximal_operator(self,) -> ProximalOperator:
+        """Proximal operator for unregularized would return the identity."""
         def prox_op(params, scaling=1.0):
             Ws, bs = params
             return jaxopt.prox.prox_none(Ws, scaling=scaling), bs
@@ -196,9 +197,9 @@ class Ridge(Regularizer):
 
     def __init__(
             self,
-            **kwargs
+            regularizer_strength: float = 1.0
     ):
-        super().__init__(**kwargs)
+        super().__init__(regularizer_strength=regularizer_strength)
 
     def _penalization(
             self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
@@ -282,9 +283,9 @@ class ProxGradientRegularizer(Regularizer, abc.ABC):
 
     def __init__(
             self,
-            **kwargs,
+            regularizer_strength: float = 1.0
     ):
-        super().__init__(**kwargs)
+        super().__init__(regularizer_strength=regularizer_strength)
 
     def penalized_loss(self, loss: Callable) -> Callable:
         return loss
@@ -300,9 +301,9 @@ class Lasso(ProxGradientRegularizer):
 
     def __init__(
             self,
-            **kwargs
+            regularizer_strength: float = 1.0
     ):
-        super().__init__(**kwargs)
+        super().__init__(regularizer_strength=regularizer_strength)
 
     def _get_proximal_operator(
             self,
@@ -376,9 +377,9 @@ class GroupLasso(ProxGradientRegularizer):
     def __init__(
             self,
             mask: Union[NDArray, jnp.ndarray] = None,
-            **kwargs
+            regularizer_strength: float = 1.0
     ):
-        super().__init__(**kwargs)
+        super().__init__(regularizer_strength=regularizer_strength)
 
         if mask is not None:
             self.mask = jnp.asarray(mask)
