@@ -64,11 +64,12 @@ class Regularizer(Base, abc.ABC):
 
     def __init__(
             self,
-            regularizer_strength: float = 1.0,
             **kwargs,
     ):
         super().__init__(**kwargs)
-        self.regularizer_strength = regularizer_strength
+
+        # default regularizer strength
+        self.regularizer_strength = 1.0
 
     @property
     def allowed_solvers(self):
@@ -77,6 +78,14 @@ class Regularizer(Base, abc.ABC):
     @property
     def default_solver(self):
         return self._default_solver
+
+    @property
+    def regularizer_strength(self) -> float:
+        return self._regularizer_strength
+
+    @regularizer_strength.setter
+    def regularizer_strength(self, strength: float):
+        self._regularizer_strength = strength
 
     def penalized_loss(self, loss: Callable) -> Callable:
         """
@@ -95,7 +104,7 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
-    def _get_proximal_operator(
+    def get_proximal_operator(
             self,
     ) -> ProximalOperator:
         """
@@ -137,19 +146,28 @@ class UnRegularized(Regularizer):
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
+        "ProximalGradient"
     )
 
     _default_solver = "GradientDescent"
 
     def __init__(
             self,
-            regularizer_strength: float = 1.0
     ):
-        super().__init__(regularizer_strength=regularizer_strength)
+        super().__init__()
 
     def penalized_loss(self, loss: Callable):
         """Unregularized method does not add any penalty."""
         return loss
+
+    def get_proximal_operator(self, ) -> ProximalOperator:
+        """Unregularized method has no proximal operator."""
+
+        def prox_op(params, hyperparams, scaling=1.0):
+            Ws, bs = params
+            return jaxopt.prox.prox_none(Ws, hyperparams, scaling=scaling), bs
+
+        return prox_op
 
 
 class Ridge(Regularizer):
@@ -181,15 +199,17 @@ class Ridge(Regularizer):
         "NonlinearCG",
         "ScipyBoundedMinimize",
         "LBFGSB",
+        "ProximalGradient"
     )
 
     _default_solver = "GradientDescent"
 
     def __init__(
             self,
-            regularizer_strength: float = 1.0
+            regularizer_strength: float = 1.0,
     ):
-        super().__init__(regularizer_strength=regularizer_strength)
+        super().__init__()
+        self.regularizer_strength = regularizer_strength
 
     def _penalization(
             self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
@@ -227,43 +247,25 @@ class Ridge(Regularizer):
 
         return _penalized_loss
 
-
-class ProxGradientRegularizer(Regularizer, abc.ABC):
-    """
-    Abstract class for ptimization solvers using the Proximal Gradient method.
-
-    This class utilizes the `jaxopt` library's Proximal Gradient optimizer. It extends
-    the base Solver class, with the added functionality of a proximal operator.
-
-    Parameters
-    ----------
-    regularizer_strength :
-        Indicates the strength of the penalization being applied.
-        Float with default value of 1.0.
-
-    Attributes
-    ----------
-    allowed_solvers : List[..., str]
-        A list of solver names that are allowed to be used with this regularizer.
-    default_solver :
-        Default solver for this regularizer is ProximalGradient.
-    """
-
-    _allowed_solvers = ("ProximalGradient",)
-
-    _default_solver = "ProximalGradient"
-
-    def __init__(
+    def get_proximal_operator(
             self,
-            regularizer_strength: float = 1.0
-    ):
-        super().__init__(regularizer_strength=regularizer_strength)
+    ) -> ProximalOperator:
+        def prox_op(params, l2reg, scaling=1.0):
+            Ws, bs = params
+            l2reg /= bs.shape[0]
+            # if Ws is a pytree, l2reg needs to be a pytree with the same
+            # structure
+            if isinstance(Ws, (dict, FeaturePytree)):
+                struct = jax.tree_util.tree_structure(Ws)
+                l2reg = jax.tree_util.tree_unflatten(
+                    struct, [l2reg] * struct.num_leaves
+                )
+            return jaxopt.prox.prox_lasso(Ws, l2reg, scaling=scaling), bs
 
-    def penalized_loss(self, loss: Callable) -> Callable:
-        return loss
+        return prox_op
 
 
-class Lasso(ProxGradientRegularizer):
+class Lasso(Regularizer):
     """
     Optimization solver using the Lasso (L1 regularization) method with Proximal Gradient.
 
@@ -271,13 +273,18 @@ class Lasso(ProxGradientRegularizer):
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
+    _allowed_solvers = ("ProximalGradient,")
+
+    _default_solver = "ProximalGradient"
+
     def __init__(
             self,
-            regularizer_strength: float = 1.0
+            regularizer_strength: float = 1.0,
     ):
-        super().__init__(regularizer_strength=regularizer_strength)
+        super().__init__()
+        self.regularizer_strength = regularizer_strength
 
-    def _get_proximal_operator(
+    def get_proximal_operator(
             self,
     ) -> ProximalOperator:
         """
@@ -304,8 +311,11 @@ class Lasso(ProxGradientRegularizer):
 
         return prox_op
 
+    def penalized_loss(self, loss: Callable) -> Callable:
+        return loss
 
-class GroupLasso(ProxGradientRegularizer):
+
+class GroupLasso(Regularizer):
     """
     Optimization solver using the Group Lasso regularization method with Proximal Gradient.
 
@@ -346,12 +356,17 @@ class GroupLasso(ProxGradientRegularizer):
     >>> print(f"coeff: {model.coef_}")
     """
 
+    _allowed_solvers = ("ProximalGradient,")
+
+    _default_solver = "ProximalGradient"
+
     def __init__(
             self,
             mask: Union[NDArray, jnp.ndarray] = None,
-            regularizer_strength: float = 1.0
+            regularizer_strength: float = 1.0,
     ):
-        super().__init__(regularizer_strength=regularizer_strength)
+        super().__init__()
+        self.regularizer_strength = regularizer_strength
 
         if mask is not None:
             self.mask = jnp.asarray(mask)
@@ -413,7 +428,10 @@ class GroupLasso(ProxGradientRegularizer):
                 f"Data type {mask.dtype} provided instead!"
             )
 
-    def _get_proximal_operator(
+    def penalized_loss(self, loss: Callable) -> Callable:
+        return loss
+
+    def get_proximal_operator(
             self,
     ) -> ProximalOperator:
         """

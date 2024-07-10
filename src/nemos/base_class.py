@@ -242,7 +242,7 @@ class BaseRegressor(Base, abc.ABC):
             self,
             regularizer: str | Regularizer = "unregularized",
             solver_name: str = None,
-            solver_kwargs: Optional[dict] = None
+            solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = regularizer
 
@@ -391,6 +391,9 @@ class BaseRegressor(Base, abc.ABC):
             solver_kwargs.update(prox=prox)
         else:
             solver_kwargs = self.solver_kwargs
+
+        # get regularizer kwargs
+        # check if they are valid
         solver = getattr(jaxopt, self._solver_name)(fun=loss, **solver_kwargs)
 
         def solver_run(

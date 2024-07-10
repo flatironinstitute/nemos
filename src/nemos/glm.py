@@ -82,11 +82,11 @@ class GLM(BaseRegressor):
     """
 
     def __init__(
-        self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: str | Regularizer = "unregularized",
-        solver_name: str = None,
-        solver_kwargs: dict = None,
+            self,
+            observation_model: obs.Observations = obs.PoissonObservations(),
+            regularizer: str | Regularizer = "unregularized",
+            solver_name: str = None,
+            solver_kwargs: dict = None,
     ):
         super().__init__(regularizer=regularizer, solver_name=solver_name, solver_kwargs=solver_kwargs)
 
@@ -167,8 +167,8 @@ class GLM(BaseRegressor):
 
     @staticmethod
     def _check_params(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-        data_type: Optional[jnp.dtype] = None,
+            params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+            data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -192,14 +192,14 @@ class GLM(BaseRegressor):
             params[0],
             expected_dim=1,
             err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_features, ).",
+                        "with array leafs of shape (n_features, ).",
         )
         # check the dimensionality of intercept
         validation.check_tree_leaves_dimensionality(
             params[1],
             expected_dim=1,
             err_message="params[1] must be of shape (1,) but "
-            f"params[1] has {params[1].ndim} dimensions!",
+                        f"params[1] has {params[1].ndim} dimensions!",
         )
         if params[1].shape[0] != 1:
             raise ValueError(
@@ -209,7 +209,7 @@ class GLM(BaseRegressor):
 
     @staticmethod
     def _check_input_dimensionality(
-        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
+            X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
     ):
         if y is not None:
             validation.check_tree_leaves_dimensionality(
@@ -223,14 +223,14 @@ class GLM(BaseRegressor):
                 X,
                 expected_dim=2,
                 err_message="X must be two-dimensional, with shape "
-                "(n_timebins, n_features) or pytree of the same shape.",
+                            "(n_timebins, n_features) or pytree of the same shape.",
             )
 
     @staticmethod
     def _check_input_and_params_consistency(
-        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
-        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
+            params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+            X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+            y: Optional[jnp.ndarray] = None,
     ):
         """Validate the number of features and structure in model parameters and input arguments.
 
@@ -253,7 +253,7 @@ class GLM(BaseRegressor):
                 data,
                 params[0],
                 err_message=f"X and params[0] must be the same type, but X is "
-                f"{type(X)} and params[0] is {type(params[0])}",
+                            f"{type(X)} and params[0] is {type(params[0])}",
             )
             # check the consistency of the feature axis
             validation.check_tree_axis_consistency(
@@ -262,8 +262,8 @@ class GLM(BaseRegressor):
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
-                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+                            f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
+                            f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
     def _check_is_fit(self):
@@ -274,7 +274,7 @@ class GLM(BaseRegressor):
             )
 
     def _predict(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
+            self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
@@ -358,10 +358,10 @@ class GLM(BaseRegressor):
         return self._predict(params, data)
 
     def _predict_and_compute_loss(
-        self,
-        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+            self,
+            params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
@@ -388,13 +388,13 @@ class GLM(BaseRegressor):
         return self._observation_model._negative_log_likelihood(predicted_rate, y)
 
     def score(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        score_type: Literal[
-            "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
-        ] = "log-likelihood",
-        aggregate_sample_scores: Callable = jnp.mean,
+            self,
+            X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+            y: ArrayLike,
+            score_type: Literal[
+                "log-likelihood", "pseudo-r2-McFadden", "pseudo-r2-Cohen"
+            ] = "log-likelihood",
+            aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
@@ -512,7 +512,7 @@ class GLM(BaseRegressor):
         return score
 
     def _initialize_parameters(
-        self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
+            self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray
     ) -> Tuple[Union[dict, jnp.ndarray], jnp.ndarray]:
         """Initialize the parameters based on the structure and dimensions X and y.
 
@@ -565,7 +565,7 @@ class GLM(BaseRegressor):
 
         # scipy root finding, much more stable than gradient descent
         func_root = root(func, y.mean(axis=0, keepdims=False), method="hybr")
-        if not jnp.allclose(func_root.fun, 0, atol=10**-4):
+        if not jnp.allclose(func_root.fun, 0, atol=10 ** -4):
             raise ValueError(
                 "Could not set the initial intercept as the inverse of the firing rate for "
                 "the provided link function. "
@@ -591,10 +591,10 @@ class GLM(BaseRegressor):
 
     @cast_to_jax
     def fit(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
+            self,
+            X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+            y: ArrayLike,
+            init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
     ):
         """Fit GLM to neural activity.
 
@@ -648,7 +648,7 @@ class GLM(BaseRegressor):
         params, state = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
-            lambda x: jnp.any(jnp.isnan(x)), any, params
+                lambda x: jnp.any(jnp.isnan(x)), any, params
         ):
             raise ValueError(
                 "Solver returned at least one NaN parameter, so solution is invalid!"
@@ -689,9 +689,9 @@ class GLM(BaseRegressor):
         self.intercept_: jnp.ndarray = params[1]
 
     def simulate(
-        self,
-        random_key: jax.Array,
-        feedforward_input: DESIGN_INPUT_TYPE,
+            self,
+            random_key: jax.Array,
+            feedforward_input: DESIGN_INPUT_TYPE,
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
@@ -748,7 +748,7 @@ class GLM(BaseRegressor):
         )
 
     def estimate_resid_degrees_of_freedom(
-        self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
+            self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
     ):
         """
         Estimate the degrees of freedom of the residuals.
@@ -799,12 +799,12 @@ class GLM(BaseRegressor):
 
     @cast_to_jax
     def initialize_solver(
-        self,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        init_params: Optional[ModelParams] = None,
-        **kwargs,
+            self,
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+            *args,
+            init_params: Optional[ModelParams] = None,
+            **kwargs,
     ) -> Tuple[ModelParams, NamedTuple]:
         """
         Initialize the solver's state and optionally sets initial model parameters for the optimization process.
@@ -865,13 +865,15 @@ class GLM(BaseRegressor):
         # validate input
         self._validate(X, y, init_params)
 
-        if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
+        # if using ProximalGradient, pass prox op
+        if self.solver_name == "ProximalGradient":
             self._solver_init_state, self._solver_update, self._solver_run = (
                 super().instantiate_solver(self._predict_and_compute_loss,
                                            self.regularizer.regularizer_strength,
-                                           prox=self.regularizer._get_proximal_operator(),
-                                    )
-                    )
+                                           prox=self.regularizer.get_proximal_operator(),
+                                           )
+            )
+
         else:
             self._solver_init_state, self._solver_update, self._solver_run = (
                 super().instantiate_solver(self._predict_and_compute_loss)
@@ -886,14 +888,14 @@ class GLM(BaseRegressor):
 
     @cast_to_jax
     def update(
-        self,
-        params: Tuple[jnp.ndarray, jnp.ndarray],
-        opt_state: NamedTuple,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
-        *args,
-        n_samples: Optional[int] = None,
-        **kwargs,
+            self,
+            params: Tuple[jnp.ndarray, jnp.ndarray],
+            opt_state: NamedTuple,
+            X: DESIGN_INPUT_TYPE,
+            y: jnp.ndarray,
+            *args,
+            n_samples: Optional[int] = None,
+            **kwargs,
     ) -> jaxopt.OptStep:
         """
         Update the model parameters and solver state.
@@ -1058,10 +1060,10 @@ class PopulationGLM(GLM):
     """
 
     def __init__(
-        self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
-        feature_mask: Optional[jnp.ndarray] = None,
-        **kwargs
+            self,
+            observation_model: obs.Observations = obs.PoissonObservations(),
+            feature_mask: Optional[jnp.ndarray] = None,
+            **kwargs
     ):
         super().__init__(observation_model=observation_model, **kwargs)
         self.feature_mask = feature_mask
@@ -1082,7 +1084,7 @@ class PopulationGLM(GLM):
 
         # check if the mask is of 0s and 1s
         if tree_utils.pytree_map_and_reduce(
-            lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
+                lambda x: jnp.any(jnp.logical_and(x != 0, x != 1)), any, feature_mask
         ):
             raise ValueError("'feature_mask' must contain only 0s and 1s!")
 
@@ -1112,7 +1114,7 @@ class PopulationGLM(GLM):
 
     @staticmethod
     def _check_input_dimensionality(
-        X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
+            X: Union[FeaturePytree, jnp.ndarray] = None, y: jnp.ndarray = None
     ):
         if y is not None:
             validation.check_tree_leaves_dimensionality(
@@ -1126,13 +1128,13 @@ class PopulationGLM(GLM):
                 X,
                 expected_dim=2,
                 err_message="X must be two-dimensional, with shape "
-                "(n_timebins, n_features) or pytree of the same shape.",
+                            "(n_timebins, n_features) or pytree of the same shape.",
             )
 
     @staticmethod
     def _check_params(
-        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-        data_type: Optional[jnp.dtype] = None,
+            params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+            data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -1156,17 +1158,17 @@ class PopulationGLM(GLM):
             params[0],
             expected_dim=2,
             err_message="params[0] must be an array or nemos.pytree.FeaturePytree "
-            "with array leafs of shape (n_features, n_neurons).",
+                        "with array leafs of shape (n_features, n_neurons).",
         )
         # check the dimensionality of intercept
         validation.check_tree_leaves_dimensionality(
             params[1],
             expected_dim=1,
             err_message="params[1] must be of shape (n_neurons,) but "
-            f"params[1] has {params[1].ndim} dimensions!",
+                        f"params[1] has {params[1].ndim} dimensions!",
         )
         if tree_utils.pytree_map_and_reduce(
-            lambda x: x.shape[1] != params[1].shape[0], all, params[0]
+                lambda x: x.shape[1] != params[1].shape[0], all, params[0]
         ):
             raise ValueError(
                 "Inconsistent number of neurons. "
@@ -1176,10 +1178,10 @@ class PopulationGLM(GLM):
         return params
 
     def _check_input_and_params_consistency(
-        self,
-        params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
-        X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
-        y: Optional[jnp.ndarray] = None,
+            self,
+            params: Tuple[Union[FeaturePytree, jnp.ndarray], jnp.ndarray],
+            X: Optional[Union[FeaturePytree, jnp.ndarray]] = None,
+            y: Optional[jnp.ndarray] = None,
     ):
         """Validate the number of features and structure in model parameters and input arguments.
 
@@ -1205,7 +1207,7 @@ class PopulationGLM(GLM):
                 data,
                 params[0],
                 err_message=f"X and params[0] must be the same type, but X is "
-                f"{type(X)} and params[0] is {type(params[0])}",
+                            f"{type(X)} and params[0] is {type(params[0])}",
             )
             # check the consistency of the feature axis
             validation.check_tree_axis_consistency(
@@ -1214,8 +1216,8 @@ class PopulationGLM(GLM):
                 axis_1=0,
                 axis_2=1,
                 err_message="Inconsistent number of features. "
-                f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
-                f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
+                            f"spike basis coefficients has {jax.tree_util.tree_map(lambda p: p.shape[0], params[0])} features, "
+                            f"X has {jax.tree_util.tree_map(lambda x: x.shape[1], X)} features instead!",
             )
 
         if y is not None:
@@ -1224,8 +1226,8 @@ class PopulationGLM(GLM):
                 y,
                 axis=1,
                 err_message="Inconsistent number of neurons. "
-                f"spike basis coefficients assumes {jax.tree_util.tree_map(lambda p: p.shape[1], params[0])} neurons, "
-                f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
+                            f"spike basis coefficients assumes {jax.tree_util.tree_map(lambda p: p.shape[1], params[0])} neurons, "
+                            f"y has {jax.tree_util.tree_map(lambda x: x.shape[1], y)} neurons instead!",
             )
         self._check_mask(X, y, params)
 
@@ -1244,8 +1246,8 @@ class PopulationGLM(GLM):
                 data,
                 self.feature_mask,
                 err_message=f"feature_mask and X must have the same structure, but feature_mask has structure  "
-                f"{jax.tree_util.tree_structure(X)}, params[0] is of "
-                f"{jax.tree_util.tree_structure(self.feature_mask)} structure instead!",
+                            f"{jax.tree_util.tree_structure(X)}, params[0] is of "
+                            f"{jax.tree_util.tree_structure(self.feature_mask)} structure instead!",
             )
 
         if isinstance(params[0], dict):
@@ -1259,8 +1261,8 @@ class PopulationGLM(GLM):
                 axis_1=0,
                 axis_2=0,
                 err_message="Inconsistent number of features. "
-                f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[0], self.feature_mask)} neurons, "
-                f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
+                            f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[0], self.feature_mask)} neurons, "
+                            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
             )
         # check the consistency of the feature axis
         validation.check_tree_axis_consistency(
@@ -1269,16 +1271,16 @@ class PopulationGLM(GLM):
             axis_1=neural_axis,
             axis_2=1,
             err_message="Inconsistent number of neurons. "
-            f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
-            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
+                        f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
+                        f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
         )
 
     @cast_to_jax
     def fit(
-        self,
-        X: Union[DESIGN_INPUT_TYPE, ArrayLike],
-        y: ArrayLike,
-        init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
+            self,
+            X: Union[DESIGN_INPUT_TYPE, ArrayLike],
+            y: ArrayLike,
+            init_params: Optional[Tuple[Union[dict, ArrayLike], ArrayLike]] = None,
     ):
         """Fit GLM to the activity of a population of neurons.
 
@@ -1343,7 +1345,7 @@ class PopulationGLM(GLM):
                 self._feature_mask = jnp.ones((X.shape[1], y.shape[1]))
 
     def _predict(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
+            self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], X: jnp.ndarray
     ) -> jnp.ndarray:
         """
         Predicts firing rates based on given parameters and design matrix.
