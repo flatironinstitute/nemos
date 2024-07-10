@@ -62,7 +62,7 @@ class ProxSVRG:
 
         self.proximal_operator = prox
 
-        if batch_size is None:
+        if (batch_size is None) or (batch_size == 1):
             self._update_used_in_run = self._update_per_point
         else:
             self._update_used_in_run = self._update_per_random_batch
@@ -168,11 +168,16 @@ class ProxSVRG:
         #    state.xs,
         # )
 
+        # key, subkey = random.split(state.key)
+        # ind_per_iteration = random.randint(subkey, (m,), 0, N)
+        # state = state._replace(key=key)
+
         def inner_loop_body(i, carry):
             xk, x_sum, key = carry
             key, subkey = random.split(key)
             ind = random.randint(subkey, (), 0, N)
             # ind = i
+            # ind = ind_per_iteration[i]
 
             xk = self._xk_update(
                 xk, xs, df_xs, state.stepsize, prox_lambda, X[ind, :], y[ind]
