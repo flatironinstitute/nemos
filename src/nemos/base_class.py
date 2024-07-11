@@ -384,11 +384,7 @@ class BaseRegressor(Base, abc.ABC):
         if self.solver_name == "ProximalGradient":
             self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
             # add self.regularizer_strength to args
-            # need to half the regularizer strength in order to conform to sklearn standards
-            # of multiplying penalization by 0.5
-            args += (0.5 * self.regularizer.regularizer_strength,)
-            # set tolerance for solver
-            self.solver_kwargs.update(tol=10**-12)
+            args += (self.regularizer.regularizer_strength,)
 
         # instantiate the solver
         solver = getattr(jaxopt, self._solver_name)(fun=loss, **self.solver_kwargs)
