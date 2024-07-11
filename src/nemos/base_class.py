@@ -223,10 +223,10 @@ class BaseRegressor(Base, abc.ABC):
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
     | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, ScipyMinimize, NonlinearCG,   |
-    |               |                  | ScipyBoundedMinimize, LBFGSB                                |
+    |               |                  | ScipyBoundedMinimize, LBFGSB, ProximalGradient              |
     +---------------+------------------+-------------------------------------------------------------+
     | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, ScipyMinimize, NonlinearCG,   |
-    |               |                  | ScipyBoundedMinimize, LBFGSB                                |
+    |               |                  | ScipyBoundedMinimize, LBFGSB, ProximalGradient              |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
@@ -327,7 +327,7 @@ class BaseRegressor(Base, abc.ABC):
             )
 
     def instantiate_solver(
-        self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
+        self, *args, **kwargs
     ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
         Instantiate the solver with the provided loss function.
@@ -366,6 +366,9 @@ class BaseRegressor(Base, abc.ABC):
             - solver_run: Function to execute the optimization process, applying multiple updates until a
             stopping criterion is met.
         """
+        # use penalized loss based on regularizer
+        loss = self.regularizer.penalized_loss(self._predict_and_compute_loss)
+
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
 
@@ -377,32 +380,14 @@ class BaseRegressor(Base, abc.ABC):
                 f"{self._regularizer.allowed_solvers}."
             )
 
-        # get the solver with given arguments.
-        # The "fun" argument is not always the first one, but it is always KEYWORD
-        # see jaxopt.EqualityConstrainedQP for example. The most general way is to pass it as keyword.
-        # The proximal gradient is added to the kwargs if passed. This avoids issues with over-writing
-        # the proximal operator.
-        if "prox" in self.solver_kwargs:
-            if prox is None:
-                raise ValueError(
-                    f"Regularizer of type {self.regularizer.__class__.__name__} "
-                    f"does not require a proximal operator!"
-                )
-            else:
-                warnings.warn(
-                    "Overwritten the user-defined proximal operator! "
-                    "There is only one valid proximal operator for each regularizer type.",
-                    UserWarning,
-                )
-        # update the kwargs if prox is passed
-        if prox is not None:
-            solver_kwargs = self.solver_kwargs.copy()
-            solver_kwargs.update(prox=prox)
-        else:
-            solver_kwargs = self.solver_kwargs
+        # if using proximal gradient add to solver kwargs
+        if self.solver_name == "ProximalGradient":
+            self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
+            # add self.regularizer_strength to args
+            args += (self.regularizer.regularizer_strength,)
 
         # instantiate the solver
-        solver = getattr(jaxopt, self._solver_name)(fun=loss, **solver_kwargs)
+        solver = getattr(jaxopt, self._solver_name)(fun=loss, **self.solver_kwargs)
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -513,6 +498,11 @@ class BaseRegressor(Base, abc.ABC):
                 f"X has {X.shape[0]} time-points, "
                 f"y has {y.shape[0]} instead!"
             )
+
+    @abc.abstractmethod
+    def _predict_and_compute_loss(self, params, X, y):
+        """The loss function for a given model to be optimized over."""
+        pass
 
     def _validate(
         self,

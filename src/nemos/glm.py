@@ -52,8 +52,7 @@ def cast_to_jax(func):
 
 
 class GLM(BaseRegressor):
-    """
-    Generalized Linear Model (GLM) for neural activity data.
+    r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
@@ -901,22 +900,11 @@ class GLM(BaseRegressor):
         # validate input
         self._validate(X, y, init_params)
 
-        # if using ProximalGradient, pass prox op and regularizer strength
-        if self.solver_name == "ProximalGradient":
-            (
-                self._solver_init_state,
-                self._solver_update,
-                self._solver_run,
-            ) = super().instantiate_solver(
-                self._predict_and_compute_loss,
-                self.regularizer.regularizer_strength,
-                prox=self.regularizer.get_proximal_operator(),
-            )
-
-        else:
-            self._solver_init_state, self._solver_update, self._solver_run = (
-                super().instantiate_solver(self._predict_and_compute_loss)
-            )
+        (
+            self._solver_init_state,
+            self._solver_update,
+            self._solver_run,
+        ) = super().instantiate_solver(*args, **kwargs)
 
         if isinstance(X, FeaturePytree):
             data = X.data

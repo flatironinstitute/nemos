@@ -261,7 +261,7 @@ class Ridge(Regularizer):
                 l2reg = jax.tree_util.tree_unflatten(
                     struct, [l2reg] * struct.num_leaves
                 )
-            return jaxopt.prox.prox_lasso(Ws, l2reg, scaling=scaling), bs
+            return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
 
         return prox_op
 
@@ -312,8 +312,41 @@ class Lasso(Regularizer):
 
         return prox_op
 
+    def _penalization(
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ) -> jnp.ndarray:
+        """
+        Compute the Lasso penalization for given parameters.
+
+        Parameters
+        ----------
+        params :
+            Model parameters for which to compute the penalization.
+
+        Returns
+        -------
+        float
+            The Lasso penalization value.
+        """
+
+        def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
+            return (
+                0.5
+                * self.regularizer_strength
+                * jnp.sum(jnp.abs(coeff))
+                / intercept.shape[0]
+            )
+
+        # tree map the computation and sum over leaves
+        return tree_utils.pytree_map_and_reduce(
+            lambda x: l1_penalty(x, params[1]), sum, params[0]
+        )
+
     def penalized_loss(self, loss: Callable) -> Callable:
-        return loss
+        def _penalized_loss(params, X, y):
+            return loss(params, X, y) + self._penalization(params)
+
+        return _penalized_loss
 
 
 class GroupLasso(Regularizer):
