@@ -137,9 +137,9 @@ class Base:
             # but only if the user did not explicitly set a value for
             # "base_estimator".
             if (
-                    key == "base_estimator"
-                    and valid_params[key] == "deprecated"
-                    and self.__module__.startswith("sklearn.")
+                key == "base_estimator"
+                and valid_params[key] == "deprecated"
+                and self.__module__.startswith("sklearn.")
             ):
                 warnings.warn(
                     (
@@ -214,7 +214,10 @@ class BaseRegressor(Base, abc.ABC):
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
         Default is `None`. If no solver specified, one will be chosen based on the regularizer.
-        Please see table below forregularizer/optimizer pairings.
+        Please see table below for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g. stepsize, acceleration, value_and_grad, etc.
 
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
@@ -230,6 +233,7 @@ class BaseRegressor(Base, abc.ABC):
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
 
+
     See Also
     --------
     Concrete models:
@@ -239,13 +243,14 @@ class BaseRegressor(Base, abc.ABC):
     """
 
     def __init__(
-            self,
-            regularizer: str | Regularizer = "unregularized",
-            solver_name: str = None,
-            solver_kwargs: Optional[dict] = None,
+        self,
+        regularizer: str | Regularizer = "unregularized",
+        solver_name: str = None,
+        solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = regularizer
 
+        # no solver name provided, use default
         if solver_name is None:
             self.solver_name = self.regularizer.default_solver
         else:
@@ -263,7 +268,7 @@ class BaseRegressor(Base, abc.ABC):
     @regularizer.setter
     def regularizer(self, regularizer: str | Regularizer):
         """Setter for the regularizer attribute."""
-        # instantiate regularizer
+        # instantiate regularizer if str
         if isinstance(regularizer, str):
             self._regularizer = create_regularizer(name=regularizer)
         else:
@@ -271,23 +276,29 @@ class BaseRegressor(Base, abc.ABC):
 
     @property
     def solver_name(self) -> str:
+        """Getter for the solver_name attribute."""
         return self._solver_name
 
     @solver_name.setter
     def solver_name(self, solver_name: str):
+        """Setter for the solver_name attribute."""
         # check if solver str passed is valid for regularizer
         if solver_name not in self._regularizer.allowed_solvers:
-            raise ValueError(f"The solver: {solver_name} is not allowed for "
-                             f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
-                             f"{self._regularizer.allowed_solvers}.")
+            raise ValueError(
+                f"The solver: {solver_name} is not allowed for "
+                f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.allowed_solvers}."
+            )
         self._solver_name = solver_name
 
     @property
     def solver_kwargs(self):
+        """Getter for the solver_kwargs attribute."""
         return self._solver_kwargs
 
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
+        """Setter for the solver_kwargs attribute."""
         self._check_solver_kwargs(self.solver_name, solver_kwargs)
         self._solver_kwargs = solver_kwargs
 
@@ -316,11 +327,7 @@ class BaseRegressor(Base, abc.ABC):
             )
 
     def instantiate_solver(
-        self,
-        loss: Callable,
-        *args: Any,
-        prox: Optional[Callable] = None,
-        **kwargs: Any
+        self, loss: Callable, *args: Any, prox: Optional[Callable] = None, **kwargs: Any
     ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
         """
         Instantiate the solver with the provided loss function.
@@ -331,7 +338,7 @@ class BaseRegressor(Base, abc.ABC):
         This method creates a solver instance from jaxopt library, tailored to the specific loss
         function and regularization approach defined by the Regularizer instance. It also handles
         the proximal operator if required for the optimization method. The returned functions are
-         directly usable in optimization loops, simplifying the syntax by pre-setting
+        directly usable in optimization loops, simplifying the syntax by pre-setting
         common arguments like regularization strength and other hyperparameters.
 
         Parameters
@@ -364,9 +371,11 @@ class BaseRegressor(Base, abc.ABC):
 
         # final check that solver is valid for chosen regularizer
         if self.solver_name not in self.regularizer.allowed_solvers:
-            raise ValueError(f"The solver: {self.solver_name} is not allowed for "
-                             f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
-                             f"{self._regularizer.allowed_solvers}.")
+            raise ValueError(
+                f"The solver: {self.solver_name} is not allowed for "
+                f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.allowed_solvers}."
+            )
 
         # get the solver with given arguments.
         # The "fun" argument is not always the first one, but it is always KEYWORD
@@ -392,8 +401,7 @@ class BaseRegressor(Base, abc.ABC):
         else:
             solver_kwargs = self.solver_kwargs
 
-        # get regularizer kwargs
-        # check if they are valid
+        # instantiate the solver
         solver = getattr(jaxopt, self._solver_name)(fun=loss, **solver_kwargs)
 
         def solver_run(
@@ -425,20 +433,20 @@ class BaseRegressor(Base, abc.ABC):
 
     @abc.abstractmethod
     def score(
-            self,
-            X: DESIGN_INPUT_TYPE,
-            y: Union[NDArray, jnp.ndarray],
-            # may include score_type or other additional model dependent kwargs
-            **kwargs,
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: Union[NDArray, jnp.ndarray],
+        # may include score_type or other additional model dependent kwargs
+        **kwargs,
     ) -> jnp.ndarray:
         """Score the predicted firing rates (based on fit) to the target neural activity."""
         pass
 
     @abc.abstractmethod
     def simulate(
-            self,
-            random_key: jax.Array,
-            feed_forward_input: DESIGN_INPUT_TYPE,
+        self,
+        random_key: jax.Array,
+        feed_forward_input: DESIGN_INPUT_TYPE,
     ):
         """Simulate neural activity in response to a feed-forward input and recurrent activity."""
         pass
@@ -446,8 +454,8 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_params(
-            params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
-            data_type: Optional[jnp.dtype] = None,
+        params: Tuple[Union[DESIGN_INPUT_TYPE, ArrayLike], ArrayLike],
+        data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
         Validate the dimensions and consistency of parameters and data.
@@ -462,8 +470,8 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_input_dimensionality(
-            X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-            y: Optional[jnp.ndarray] = None,
+        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+        y: Optional[jnp.ndarray] = None,
     ):
         pass
 
@@ -480,9 +488,9 @@ class BaseRegressor(Base, abc.ABC):
     @staticmethod
     @abc.abstractmethod
     def _check_input_and_params_consistency(
-            params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
-            X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
-            y: Optional[jnp.ndarray] = None,
+        params: Tuple[Union[DESIGN_INPUT_TYPE, jnp.ndarray], jnp.ndarray],
+        X: Optional[Union[DESIGN_INPUT_TYPE, jnp.ndarray]] = None,
+        y: Optional[jnp.ndarray] = None,
     ):
         """Validate the number of features in model parameters and input arguments.
 
@@ -497,7 +505,7 @@ class BaseRegressor(Base, abc.ABC):
 
     @staticmethod
     def _check_input_n_timepoints(
-            X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
+        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray], y: jnp.ndarray
     ):
         if y.shape[0] != X.shape[0]:
             raise ValueError(
@@ -507,10 +515,10 @@ class BaseRegressor(Base, abc.ABC):
             )
 
     def _validate(
-            self,
-            X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
-            y: Union[NDArray, jnp.ndarray],
-            init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
+        self,
+        X: Union[DESIGN_INPUT_TYPE, jnp.ndarray],
+        y: Union[NDArray, jnp.ndarray],
+        init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray],
     ):
         # check input dimensionality
         self._check_input_dimensionality(X, y)
@@ -527,25 +535,25 @@ class BaseRegressor(Base, abc.ABC):
 
     @abc.abstractmethod
     def update(
-            self,
-            params: Tuple[jnp.ndarray, jnp.ndarray],
-            opt_state: NamedTuple,
-            X: DESIGN_INPUT_TYPE,
-            y: jnp.ndarray,
-            *args,
-            **kwargs,
+        self,
+        params: Tuple[jnp.ndarray, jnp.ndarray],
+        opt_state: NamedTuple,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        **kwargs,
     ) -> jaxopt.OptStep:
         """Run a single update step of the jaxopt solver."""
         pass
 
     @abc.abstractmethod
     def initialize_solver(
-            self,
-            X: DESIGN_INPUT_TYPE,
-            y: jnp.ndarray,
-            *args,
-            params: Optional = None,
-            **kwargs,
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        *args,
+        params: Optional = None,
+        **kwargs,
     ) -> Tuple[Any, NamedTuple]:
         """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
         pass

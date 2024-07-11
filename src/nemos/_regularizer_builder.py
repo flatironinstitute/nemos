@@ -1,11 +1,6 @@
 """Utility functions for creating regularizer object."""
 
-AVAILABLE_REGULARIZERS: [
-    "unregularized",
-    "ridge",
-    "lasso",
-    "group_lasso"
-]
+AVAILABLE_REGULARIZERS: ["unregularized", "ridge", "lasso", "group_lasso"]
 
 
 def create_regularizer(name: str):
@@ -20,19 +15,21 @@ def create_regularizer(name: str):
     match name:
         case "unregularized":
             from .regularizer import UnRegularized
+
             return UnRegularized()
         case "ridge":
             from .regularizer import Ridge
+
             return Ridge()
         case "lasso":
             from .regularizer import Lasso
+
             return Lasso()
         case "group_lasso":
             from .regularizer import GroupLasso
+
             return GroupLasso()
 
-    raise ValueError(f"Unknown regularizer: {name}. Regularizer must be one of {AVAILABLE_REGULARIZERS}")
-
-
-
-
+    raise ValueError(
+        f"Unknown regularizer: {name}. Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+    )
