@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Callable, NamedTuple, Optional, Tuple
+from typing import Any, Callable, NamedTuple, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -31,52 +31,88 @@ class SVRGState(NamedTuple):
     key: KeyArrayLike
     error: float
     stepsize: float
-    # N: Optional[int] = None
-    loss_log: ArrayLike
+    loss_log: jnp.ndarray
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
     x_av: Optional[tuple] = None
 
 
 class ProxSVRG:
+    """
+    Prox-SVRG solver
+
+    Borrowing from jaxopt.ProximalGradient, this solver minimizes:
+
+      objective(params, hyperparams_prox, *args, **kwargs) =
+        fun(params, *args, **kwargs) + non_smooth(params, hyperparams_prox)
+
+    Attributes
+    ----------
+    fun: Callable
+        smooth function of the form ``fun(x, *args, **kwargs)``.
+    prox: Callable
+        proximity operator associated with the function ``non_smooth``.
+        It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
+        See ``jaxopt.prox`` for examples.
+    maxiter : int
+        Maximum number of epochs to run the optimization for.
+    key : jax.random.PRNGkey
+        jax PRNGKey to start with. Used for sampling random data points.
+    stepsize : float
+        Constant step size to use.
+    tol: float
+        Tolerance level for the error when comparing parameters
+        at the end of consecutive epochs to check for convergence.
+    batch_size: int
+        Number of data points to sample per inner loop iteration.
+
+    References
+    ----------
+    Prox-SVRG - https://arxiv.org/abs/1403.4699v1
+    SVRG - https://papers.nips.cc/paper_files/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html
+    """
+
     def __init__(
         self,
         fun: Callable,
         prox: Callable,
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
-        # N: Optional[int] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-5,
-        batch_size: Optional[int] = None,
+        batch_size: int = 1,
     ):
         self.fun = fun
         self.maxiter = maxiter
         self.key = key
-        # self.N = N  # number of overall data points
         self.stepsize = stepsize
         self.tol = tol
         self.loss_gradient = jit(grad(self.fun, argnums=(0,)))
-
         self.batch_size = batch_size
-
         self.proximal_operator = prox
 
-        if (batch_size is None) or (batch_size == 1):
-            self._update_used_in_run = self._update_per_point
-        else:
-            self._update_used_in_run = self._update_per_random_batch
+    def init_state(
+        self, init_params: ModelParams, hyperparams_prox: Any, *args, **kwargs
+    ):
+        """
+        Initialize the solver state
 
-    def init_state(self, init_params, *args, **kwargs):
+        Parameters
+        ----------
+        init_params : ModelParams
+            pytree containing the initial parameters.
+            For GLMs it's a tuple of (W, b)
+        hyperparams_prox : float
+            Parameters of the proximal operator, in our case the regularization strength.
+        """
         df_xs = None
         if kwargs.get("init_full_gradient", False):
-            prox_lambda, X, y = args
+            X, y = args
 
             assert isinstance(X, ArrayLike)
             assert isinstance(y, ArrayLike)
             assert X.shape[0] == y.shape[0]
 
-            # N = X.shape[0]
             df_xs = self.loss_gradient(init_params, X, y)[0]
 
         state = SVRGState(
@@ -84,7 +120,6 @@ class ProxSVRG:
             key=self.key if self.key is not None else random.PRNGKey(0),
             error=jnp.inf,
             stepsize=self.stepsize,
-            # N=N,
             loss_log=jnp.empty((self.maxiter,)),
             xs=init_params,
             df_xs=df_xs,
@@ -92,8 +127,56 @@ class ProxSVRG:
         )
         return state
 
+    def _update_loss_log(
+        self,
+        loss_log: jnp.ndarray,
+        i: int,
+        params: ModelParams,
+        X: jnp.ndarray,
+        y: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """
+        Update an entry in the array used for storing the log of the loss throughout the optimization.
+
+        Parameters
+        ----------
+        loss_log : jnp.ndarray
+            1D array storing the loss values.
+        i : int
+            Index at which to update, most likely the current iteration number.
+        params : ModelParams
+            Parameters with which to evaluate the loss.
+        X, y : jnp.ndarray
+            Input and output data.
+
+        Returns
+        -------
+        Updated loss log.
+        """
+        return loss_log.at[i].set(self.fun(params, X, y))
+
     @partial(jit, static_argnums=(0,))
     def _xk_update(self, xk, xs, df_xs, stepsize, prox_lambda, x, y):
+        """
+        Body of the inner loop of Prox-SVRG that takes a step.
+
+        Parameters
+        ----------
+        xk : pytree
+            Current parameters.
+        xs : pytree
+            Anchor point.
+        df_xs : pytree
+            Full gradient at the anchor point.
+        stepsize : float
+            Step size
+        prox_lambda : float or None
+            Regularization strength.
+        x : jnp.ndarray
+            Input data point or mini-batch
+        y : jnp.ndarray
+            Output data point or mini-batch
+        """
         dfik_xk = self.loss_gradient(xk, x, y)[0]
         dfik_xs = self.loss_gradient(xs, x, y)[0]
 
@@ -107,114 +190,87 @@ class ProxSVRG:
         return next_xk
 
     @partial(jit, static_argnums=(0,))
-    def update(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
-        # return self._update_per_point(x0, state, *args, **kwargs)
-        return self._update_per_batch(x0, state, *args, **kwargs)
-
-    @partial(jit, static_argnums=(0,))
-    def _update_per_batch(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
-        # NOTE this doesn't update state.x_av, that has to be done outside
-
-        prox_lambda, X, y = args
-        xs, df_xs = state.xs, state.df_xs
-
-        xk = self._xk_update(x0, xs, df_xs, state.stepsize, prox_lambda, X, y)
-
-        # update the state
-        # storing the average over the inner loop to potentially use it in the run loop
-        state = state._replace(
-            iter_num=state.iter_num + 1,
-        )
-
-        # returning the average might help stabilize things and allow for a larger step size
-        return OptStep(params=xk, state=state)
-
-    @partial(jit, static_argnums=(0,))
-    def _update_per_point(self, x0: ModelParams, state: SVRGState, *args, **kwargs):
+    def update(self, x0: ModelParams, state: SVRGState, *args, **kwargs) -> OptStep:
         """
-        Performs the inner loop of Prox-SVRG
+        Perform a single parameter update on the passed data (no random sampling or loops)
+        and increment `state.iter_num`.
+
+        Please note that this is called by `GLM.update`, but repeated calls to `GLM.update`
+        on mini-batches passed to it will not result in running the full (Prox-)SVRG,
+        and parts of the algorithm will have to be implemented outside.
 
         Parameters
         ----------
         x0 : ModelParams
             Parameters at the end of the previous update, used as the starting point for the current update.
-            When updating on the whole data, `update` is called from within `run` which is used by `GLM.fit`, then this is the last anchor point.
-            When updating on a mini-batch, `update` is called by `GLM.update`, then this has to be the parameters after updating on the last mini-batch, and.
         state : SVRGState
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        *args
-            Assumed to be of length 3 and is packed out as:
-                prox_lambda, X, y = args
-            where prox_lambda is the strength of the regularization (which can be None), and X and y are the data.
 
         Returns
         -------
         OptStep
             xs : ModelParams
-                Average of the parameters over the last inner loop.
+                Parameters after taking one step defined in the inner loop of Prox-SVRG.
             state : SVRGState
                 Updated state.
         """
-        prox_lambda, X, y = args
-        m = X.shape[0]  # number of iterations
-        N = X.shape[0]  # number of data points
-
-        xs, df_xs = state.xs, state.df_xs
-
-        # assert jax.tree_util.tree_map(
-        #    lambda params_a, params_b: jnp.all(jnp.isclose(params_a, params_b)),
-        #    xs,
-        #    state.xs,
-        # )
-
-        # key, subkey = random.split(state.key)
-        # ind_per_iteration = random.randint(subkey, (m,), 0, N)
-        # state = state._replace(key=key)
-
-        def inner_loop_body(i, carry):
-            xk, x_sum, key = carry
-            key, subkey = random.split(key)
-            ind = random.randint(subkey, (), 0, N)
-            # ind = i
-            # ind = ind_per_iteration[i]
-
-            xk = self._xk_update(
-                xk, xs, df_xs, state.stepsize, prox_lambda, X[ind, :], y[ind]
-            )
-
-            x_sum = tree_add(x_sum, xk)
-
-            return (xk, x_sum, key)
-
-        xk, x_sum, key = lax.fori_loop(
-            0,
-            m,
-            inner_loop_body,
-            (
-                x0,
-                tree_zeros_like(xs),
-                # conversion needed for compatibility with glm.update
-                state.key.astype(jnp.uint32),
-            ),
-        )
-
-        # update the state
-        # storing the average over the inner loop to potentially use it in the run loop
-        state = state._replace(
-            iter_num=state.iter_num + 1,
-            key=key,
-            x_av=tree_scalar_mul(1 / m, x_sum),
-        )
-
-        # returning the average might help stabilize things and allow for a larger step size
-        return OptStep(params=xk, state=state)
-        # return OptStep(params=state.x_av, state=state)
+        # return self._update_per_random_samples(x0, state, *args, **kwargs)
+        return self._update_on_batch(x0, state, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def run(self, init_params: ModelParams, *args, **kwargs):
+    def _update_on_batch(
+        self, x0: ModelParams, state: SVRGState, *args, **kwargs
+    ) -> OptStep:
+        """
+        Update parameters given a mini-batch of data and increment iteration/epoch number in state.
+
+        Note that this method doesn't update state.x_av, state.xs, state.df_xs, that has to be done outside.
+        """
+        # NOTE this doesn't update state.x_av, state.xs, state.df_xs, that has to be done outside
+
         prox_lambda, X, y = args
 
+        xk = self._xk_update(
+            x0, state.xs, state.df_xs, state.stepsize, prox_lambda, X, y
+        )
+
+        state = state._replace(
+            iter_num=state.iter_num + 1,
+        )
+
+        return OptStep(params=xk, state=state)
+
+    @partial(jit, static_argnums=(0,))
+    def run(self, init_params: ModelParams, *args, **kwargs) -> OptStep:
+        """
+        Run a whole optimization until convergence or until `maxiter` epochs are reached.
+        Called from `GLM.fit` and assumes that `args` hold the full dataset (and the regularization parameter).
+
+        Parameters
+        ----------
+        init_params : ModelParams
+            Initial parameters to start from.
+        args
+            prox_lambda : float
+                Regularization strength and the full data.
+            X : jnp.ndarray
+                Input data.
+            y : jnp.ndarray
+                Output data.
+
+        Returns
+        -------
+        OptStep
+            final_xs : ModelParams
+                Parameters at the end of the last innner loop.
+                (... or the average of the parameters over the last inner loop)
+            final_state : SVRGState
+                Final optimizer state.
+        """
+        prox_lambda, X, y = args
+
+        # initialize the state, including the full gradient at the initial parameters
         init_state = self.init_state(
             init_params,
             prox_lambda,
@@ -227,7 +283,7 @@ class ProxSVRG:
 
         # evaluate the loss for the initial parameters, aka iter_num=0
         init_state = init_state._replace(
-            loss_log=init_state.loss_log.at[0].set(self.fun(init_params, X, y)),
+            loss_log=self._update_loss_log(init_state.loss_log, 0, init_params, X, y)
         )
 
         # this method assumes that args hold the full data
@@ -240,7 +296,7 @@ class ProxSVRG:
             )
 
             # run an update over the whole data
-            xk, state = self._update_used_in_run(
+            xk, state = self._update_per_random_samples(
                 xs_prev, state, prox_lambda, X, y, **kwargs
             )
 
@@ -251,11 +307,14 @@ class ProxSVRG:
             state = state._replace(
                 xs=xs,
                 error=self._error(xs, xs_prev, state.stepsize),
-                loss_log=state.loss_log.at[state.iter_num].set(self.fun(xs, X, y)),
+                loss_log=self._update_loss_log(
+                    state.loss_log, state.iter_num, xs, X, y
+                ),
             )
 
             return OptStep(params=xs, state=state)
 
+        # at the end of each epoch, check for convergence or reaching the max number of epochs
         def cond_fun(step):
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
@@ -270,26 +329,58 @@ class ProxSVRG:
         return OptStep(params=final_xs, state=final_state)
 
     @partial(jit, static_argnums=(0,))
-    def _update_per_random_batch(
+    def _update_per_random_samples(
         self, x0: ModelParams, state: SVRGState, *args, **kwargs
-    ):
-        # same as _update_per_point just with a random batch sampled instead of a single point
+    ) -> OptStep:
+        """
+        Performs the inner loop of Prox-SVRG sweeping through approximately one full epoch,
+        updating the parameters after sampling a mini-batch on each iteration.
+
+        Parameters
+        ----------
+        x0 : ModelParams
+            Parameters at the end of the previous update, used as the starting point for the current update.
+        state : SVRGState
+            Optimizer state at the end of the previous sweep.
+            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
+        *args
+            Assumed to be of length 3 and is packed out as:
+                prox_lambda, X, y = args
+            where prox_lambda is the strength of the regularization (which can be None), and X and y are the data.
+
+        Returns
+        -------
+        OptStep
+            xs : ModelParams
+                Parameters at the end of the last inner loop.
+                (... or the average of the parameters over the last inner loop)
+            state : SVRGState
+                Updated state.
+        """
         prox_lambda, X, y = args
 
-        N, d = X.shape  # number of data points x number of dimensions
+        N, _ = X.shape  # number of data points x number of dimensions
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
+        # m = N
 
         xs, df_xs = state.xs, state.df_xs
 
-        def inner_loop_body(i, carry):
+        def inner_loop_body(_, carry):
             xk, x_sum, key = carry
+
+            # sample mini-batch or data point
             key, subkey = random.split(key)
             ind = random.randint(subkey, (self.batch_size,), 0, N)
+            # TODO might want to handle self.batch_size == 1 differently
+            # with random.randint(subkey, (), 0, N)
+            # but it's unlikely to give a big speedup
 
+            # perform a single update on the mini-batch or data point
             xk = self._xk_update(
                 xk, xs, df_xs, state.stepsize, prox_lambda, X[ind, :], y[ind]
             )
 
+            # update the sum used for the averaging
             x_sum = tree_add(x_sum, xk)
 
             return (xk, x_sum, key)
@@ -300,9 +391,10 @@ class ProxSVRG:
             inner_loop_body,
             (
                 x0,
-                tree_zeros_like(xs),
-                # conversion needed for compatibility with glm.update
-                state.key.astype(jnp.uint32),
+                tree_zeros_like(xs),  # initialize the sum to zero
+                state.key.astype(
+                    jnp.uint32
+                ),  # conversion needed for compatibility with glm.update
             ),
         )
 
@@ -314,7 +406,8 @@ class ProxSVRG:
             x_av=tree_scalar_mul(1 / m, x_sum),
         )
 
-        # returning the average might help stabilize things and allow for a larger step size
+        # the next anchor point is the parameters at the end of the inner loop
+        # or the average over the inner loop
         return OptStep(params=xk, state=state)
         # return OptStep(params=state.x_av, state=state)
 
@@ -329,22 +422,47 @@ class ProxSVRG:
 
 
 class SVRG(ProxSVRG):
+    """
+    SVRG solver
+
+    Equivalent to ProxSVRG with prox as the identity function and prox_lambda=None.
+
+    Attributes
+    ----------
+    fun: Callable
+        smooth function of the form ``fun(x, *args, **kwargs)``.
+    maxiter : int
+        Maximum number of epochs to run the optimization for.
+    key : jax.random.PRNGkey
+        jax PRNGKey to start with. Used for sampling random data points.
+    stepsize : float
+        Constant step size to use.
+    tol: float
+        Tolerance level for the error when comparing parameters
+        at the end of consecutive epochs to check for convergence.
+    batch_size: int
+        Number of data points to sample per inner loop iteration.
+
+    References
+    ----------
+    Prox-SVRG - https://arxiv.org/abs/1403.4699v1
+    SVRG - https://papers.nips.cc/paper_files/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html
+    """
+
     def __init__(
         self,
         fun: Callable,
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
-        # N: Optional[int] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-5,
-        batch_size: Optional[int] = None,
+        batch_size: int = 1,
     ):
         super().__init__(
             fun,
             prox_none,
             maxiter,
             key,
-            # N,
             stepsize,
             tol,
             batch_size,
