@@ -117,7 +117,7 @@ class ProxSVRG:
 
         state = SVRGState(
             iter_num=0,
-            key=self.key if self.key is not None else random.PRNGKey(0),
+            key=self.key if self.key is not None else random.key(0),
             error=jnp.inf,
             stepsize=self.stepsize,
             loss_log=jnp.empty((self.maxiter,)),
@@ -392,9 +392,7 @@ class ProxSVRG:
             (
                 x0,
                 tree_zeros_like(xs),  # initialize the sum to zero
-                state.key.astype(
-                    jnp.uint32
-                ),  # conversion needed for compatibility with glm.update
+                state.key,
             ),
         )
 
