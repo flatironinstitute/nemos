@@ -904,7 +904,7 @@ class GLM(BaseRegressor):
             self._solver_init_state,
             self._solver_update,
             self._solver_run,
-        ) = super().instantiate_solver(*args, **kwargs)
+        ) = super().instantiate_solver()
 
         if isinstance(X, FeaturePytree):
             data = X.data

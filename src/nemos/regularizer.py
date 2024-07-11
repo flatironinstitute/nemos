@@ -463,6 +463,7 @@ class GroupLasso(Regularizer):
             )
 
     def penalized_loss(self, loss: Callable) -> Callable:
+        # TODO: fix this, I think we should be applying L1 loss same as Lasso
         return loss
 
     def get_proximal_operator(
