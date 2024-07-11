@@ -158,8 +158,11 @@ class Regularizer(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        solver_module = solvers if "SVRG" in solver_name else jaxopt
-        solver_args = inspect.getfullargspec(getattr(solver_module, solver_name)).args
+        try:
+            solver_class = getattr(solvers, solver_name)
+        except AttributeError:
+            solver_class = getattr(jaxopt, solver_name)
+        solver_args = inspect.getfullargspec(solver_class).args
 
         undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
         if undefined_kwargs:
@@ -234,8 +237,11 @@ class Regularizer(Base, abc.ABC):
         else:
             solver_kwargs = self.solver_kwargs
 
-        solver_module = solvers if "SVRG" in self.solver_name else jaxopt
-        solver = getattr(solver_module, self.solver_name)(fun=loss, **solver_kwargs)
+        try:
+            solver_class = getattr(solvers, self.solver_name)
+        except AttributeError:
+            solver_class = getattr(jaxopt, self.solver_name)
+        solver = solver_class(fun=loss, **solver_kwargs)
 
         self._solver = solver
         # self._penalized_loss = loss
