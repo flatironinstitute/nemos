@@ -79,7 +79,7 @@ class ProxSVRG:
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
-        tol: float = 1e-5,
+        tol: float = 1e-3,
         batch_size: int = 1,
     ):
         self.fun = fun
@@ -453,7 +453,7 @@ class SVRG(ProxSVRG):
         maxiter: int = 1000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
-        tol: float = 1e-5,
+        tol: float = 1e-3,
         batch_size: int = 1,
     ):
         super().__init__(
