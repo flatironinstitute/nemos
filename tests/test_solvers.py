@@ -1,7 +1,5 @@
-import pytest
 import numpy as np
 from nemos.solvers import SVRG
-from jaxopt import LBFGS
 import jax
 from nemos.tree_utils import pytree_map_and_reduce
 
