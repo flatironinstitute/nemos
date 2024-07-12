@@ -1,10 +1,14 @@
 """Utilities for manipulating and checking PyTrees."""
 
 from functools import reduce
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union, List, Tuple
+
+from numpy.typing import NDArray
 
 import jax
 import jax.numpy as jnp
+
+IndexType = Union[int, slice, List[int], NDArray, Tuple[Any, ...], Ellipsis, None]
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
@@ -140,3 +144,23 @@ def pytree_map_and_reduce(
     cond_tree = jax.tree_util.tree_map(map_fn, *pytrees, is_leaf=is_leaf)
     # for some reason, tree_reduce doesn't work well with any.
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
+
+
+def tree_slice(data: Any, idx: IndexType):
+    """
+    Apply an indexing operation to each array in a nested structure.
+
+    Parameters
+    ----------
+    data :
+        A nested structure containing arrays (e.g., a dictionary of arrays).
+    idx :
+        The indexing operation to apply. This can be an integer, slice, list of integers,
+        NumPy array (boolean or integer), tuple of indexing operations, ellipsis, or None.
+
+    Returns
+    -------
+    Any
+        A nested structure with the same format as `data`, where each array has been sliced according to `idx`.
+    """
+    return jax.tree_util.tree_map(lambda x: x[idx], data)
