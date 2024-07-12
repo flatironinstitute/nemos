@@ -13,9 +13,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from sklearn.linear_model import Lasso, Ridge
 
 import nemos as nmo
-from sklearn.linear_model import Ridge, Lasso
+
 
 # Sample subclass to test instantiation and methods
 class MockRegressor(nmo.base_regressor.BaseRegressor):
@@ -543,6 +544,7 @@ def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
+
 @pytest.fixture
 def regr_data():
     np.random.seed(123)
@@ -554,6 +556,7 @@ def regr_data():
     y = X.dot(coef) + 0.1 * np.random.normal(size=(n_samples,))
     return X, y, coef
 
+
 @pytest.fixture
 def linear_regression(regr_data):
     X, y, coef = regr_data
@@ -562,12 +565,12 @@ def linear_regression(regr_data):
 
     # set the loss
     def loss(params, X, y):
-        return jnp.power(y - jnp.dot(X, params),2).mean()
+        return jnp.power(y - jnp.dot(X, params), 2).mean()
 
     return X, y, coef, ols, loss
 
 
-@pytest.fixture()
+@pytest.fixture
 def ridge_regression(regr_data):
     X, y, coef = regr_data
 
@@ -578,9 +581,13 @@ def ridge_regression(regr_data):
 
     # set the loss
     def loss(params, XX, yy):
-        return jnp.power(yy - jnp.dot(XX, params),2).sum() + 0.5 * jnp.power(params, 2).sum()
+        return (
+            jnp.power(yy - jnp.dot(XX, params), 2).sum()
+            + 0.5 * jnp.power(params, 2).sum()
+        )
 
     return X, y, coef, ridge, loss
+
 
 @pytest.fixture
 def linear_regression_tree(linear_regression):
@@ -593,7 +600,7 @@ def linear_regression_tree(linear_regression):
 
     def loss_tree(params, XX, yy):
         pred = nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, XX, params)
-        return jnp.power(yy - pred,2).sum()
+        return jnp.power(yy - pred, 2).sum()
 
     return X_tree, y, coef_tree, ols_tree, loss_tree
 
@@ -609,8 +616,12 @@ def ridge_regression_tree(ridge_regression):
 
     def loss_tree(params, XX, yy):
         pred = nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, XX, params)
-        norm = 0.5 * nmo.tree_utils.pytree_map_and_reduce(lambda x: jnp.power(x, 2).sum(), sum, params).sum()
-        return jnp.power(yy - pred,2).sum() + norm
+        norm = (
+            0.5
+            * nmo.tree_utils.pytree_map_and_reduce(
+                lambda x: jnp.power(x, 2).sum(), sum, params
+            ).sum()
+        )
+        return jnp.power(yy - pred, 2).sum() + norm
 
     return X_tree, y, coef_tree, ridge_tree, loss_tree
-
