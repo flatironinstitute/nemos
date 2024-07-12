@@ -543,17 +543,20 @@ def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
 
-
-@pytest.fixture()
-def linear_regression():
+@pytest.fixture
+def regr_data():
     np.random.seed(123)
     # define inputs and coeff
     n_samples, n_features = 50, 3
-    X = np.random.normal(size=(n_samples,n_features))
+    X = np.random.normal(size=(n_samples, n_features))
     coef = np.random.normal(size=(n_features))
     # set y according to lin reg eqn
-    y = X.dot(coef) + 0.1 * np.random.normal(size=(n_samples, ))
+    y = X.dot(coef) + 0.1 * np.random.normal(size=(n_samples,))
+    return X, y, coef
 
+@pytest.fixture
+def linear_regression(regr_data):
+    X, y, coef = regr_data
     # solve least-squares
     ols, _, _, _ = np.linalg.lstsq(X, y, rcond=-1)
 
@@ -565,15 +568,8 @@ def linear_regression():
 
 
 @pytest.fixture()
-def ridge_regression():
-    np.random.seed(123)
-    # define inputs and coeff
-    n_samples, n_features = 50, 3
-    X = np.random.normal(size=(n_samples,n_features))
-    coef = np.random.normal(size=(n_features))
-
-    # set y according to lin reg eqn
-    y = X.dot(coef) + 0.1 * np.random.normal(size=(n_samples, ))
+def ridge_regression(regr_data):
+    X, y, coef = regr_data
 
     # solve least-squares
     yagu = np.hstack((y, np.zeros_like(coef)))
@@ -586,7 +582,7 @@ def ridge_regression():
 
     return X, y, coef, ridge, loss
 
-@pytest.fixture()
+@pytest.fixture
 def linear_regression_tree(linear_regression):
     X, y, coef, ols, loss = linear_regression
     X_tree = dict(input_1=X[..., :2], input_2=X[..., 2:])
