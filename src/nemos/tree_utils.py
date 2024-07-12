@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 import jax
 import jax.numpy as jnp
 
-IndexType = Union[int, slice, List[int], NDArray, Tuple[Any, ...], Ellipsis, None]
+IndexType = Union[int, slice, NDArray, Tuple[Any, ...], Ellipsis, None]
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
