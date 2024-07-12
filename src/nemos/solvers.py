@@ -18,6 +18,7 @@ from jaxopt.tree_util import (
     tree_sub,
     tree_zeros_like,
 )
+from .tree_utils import tree_slice
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
@@ -25,7 +26,6 @@ KeyArrayLike = ArrayLike
 # copying from .glm to avoid circular import
 # TODO might want to move these into a .typing module?
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
-
 
 class SVRGState(NamedTuple):
     iter_num: int
@@ -110,9 +110,9 @@ class ProxSVRG:
         if kwargs.get("init_full_gradient", False):
             X, y = args
 
-            assert isinstance(X, ArrayLike)
-            assert isinstance(y, ArrayLike)
-            assert X.shape[0] == y.shape[0]
+            # assert isinstance(X, ArrayLike)
+            # assert isinstance(y, ArrayLike)
+            #assert X.shape[0] == y.shape[0]
 
             df_xs = self.loss_gradient(init_params, X, y)[0]
 
@@ -360,7 +360,7 @@ class ProxSVRG:
         """
         prox_lambda, X, y = args
 
-        N, _ = X.shape  # number of data points x number of dimensions
+        N = y.shape[0]  # number of data points x number of dimensions
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
         # m = N
 
@@ -378,7 +378,7 @@ class ProxSVRG:
 
             # perform a single update on the mini-batch or data point
             xk = self._xk_update(
-                xk, xs, df_xs, state.stepsize, prox_lambda, X[ind, :], y[ind]
+                xk, xs, df_xs, state.stepsize, prox_lambda, tree_slice(X, ind), y[ind]
             )
 
             # update the sum used for the averaging
