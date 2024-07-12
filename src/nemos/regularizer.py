@@ -141,10 +141,8 @@ class UnRegularized(Regularizer):
         "GradientDescent",
         "BFGS",
         "LBFGS",
-        "ScipyMinimize",
-        "NonlinearCG",
-        "ScipyBoundedMinimize",
         "LBFGSB",
+        "NonlinearCG",
         "ProximalGradient",
     )
 
@@ -196,10 +194,8 @@ class Ridge(Regularizer):
         "GradientDescent",
         "BFGS",
         "LBFGS",
-        "ScipyMinimize",
-        "NonlinearCG",
-        "ScipyBoundedMinimize",
         "LBFGSB",
+        "NonlinearCG",
         "ProximalGradient",
     )
 
@@ -274,7 +270,7 @@ class Lasso(Regularizer):
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
-    _allowed_solvers = "ProximalGradient,"
+    _allowed_solvers = ("ProximalGradient",)
 
     _default_solver = "ProximalGradient"
 
@@ -390,7 +386,7 @@ class GroupLasso(Regularizer):
     >>> print(f"coeff: {model.coef_}")
     """
 
-    _allowed_solvers = "ProximalGradient,"
+    _allowed_solvers = ("ProximalGradient",)
 
     _default_solver = "ProximalGradient"
 
@@ -402,11 +398,7 @@ class GroupLasso(Regularizer):
         super().__init__()
         self.regularizer_strength = regularizer_strength
 
-        if mask is not None:
-            self.mask = jnp.asarray(mask)
-        else:
-            # default mask if None is a singular group
-            self.mask = jnp.asarray([[1.0]])
+        self.mask = mask
 
     @property
     def mask(self):
@@ -414,8 +406,10 @@ class GroupLasso(Regularizer):
         return self._mask
 
     @mask.setter
-    def mask(self, mask: jnp.ndarray):
-        self._check_mask(mask)
+    def mask(self, mask: jnp.ndarray | None):
+        # check mask if passed by user, else will be initialized later
+        if mask is not None:
+            self._check_mask(mask)
         self._mask = mask
 
     @staticmethod
@@ -453,7 +447,7 @@ class GroupLasso(Regularizer):
         if jnp.any(mask.sum(axis=0) > 1):
             raise ValueError(
                 "Incorrect group assignment. Some of the features are assigned "
-                "to more then one group."
+                "to more than one group."
             )
 
         if not jnp.issubdtype(mask.dtype, jnp.floating):
@@ -462,9 +456,33 @@ class GroupLasso(Regularizer):
                 f"Data type {mask.dtype} provided instead!"
             )
 
+    def _penalization(
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+    ) -> jnp.ndarray:
+        """
+        Calculate the penalization.
+        """
+        # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
+        # param is (n_features, n_neurons)
+        param_with_extra_axis = jnp.atleast_2d(params[1].T)
+
+        vec_prod = jax.vmap(
+            lambda x: self.mask * x, in_axes=0, out_axes=2
+        )  # this vectorizes the product over the neurons, and adds the neuron axis as the last axis
+
+        masked_param = vec_prod(
+            param_with_extra_axis
+        )  # this masks the param, (group, feature, neuron)
+
+        penalty = jnp.linalg.norm(masked_param, axis=0).sum()
+
+        return penalty
+
     def penalized_loss(self, loss: Callable) -> Callable:
-        # TODO: fix this, I think we should be applying L1 loss same as Lasso
-        return loss
+        def _penalized_loss(params, X, y):
+            return loss(params, X, y) + self._penalization(params)
+
+        return _penalized_loss
 
     def get_proximal_operator(
         self,

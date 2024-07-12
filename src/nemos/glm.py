@@ -80,11 +80,11 @@ class GLM(BaseRegressor):
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
     +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, ScipyMinimize, NonlinearCG,   |
-    |               |                  | ScipyBoundedMinimize, LBFGSB, ProximalGradient              |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
+    |               |                  | ProximalGradient, LBFGSB                                    |
     +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, ScipyMinimize, NonlinearCG,   |
-    |               |                  | ScipyBoundedMinimize, LBFGSB, ProximalGradient              |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
+    |               |                  | ProximalGradient, LBFGSB                                    |
     +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
@@ -679,6 +679,12 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
+
+        # check if mask has been set is using group lasso
+        # if mask has not been set, use a single group as default
+        if self.regularizer.__class__.__name__ == "GroupLasso":
+            if self.regularizer.mask is None:
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
         params, state = self.solver_run(init_params, data, y)
 
