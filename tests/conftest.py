@@ -602,8 +602,6 @@ def ridge_regression_tree(ridge_regression):
     coef_tree = dict(input_1=coef[:2], input_2=coef[2:])
     ridge_tree = dict(input_1=ridge[:2], input_2=ridge[2:])
 
-    nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, X_tree, coef_tree)
-
     def loss_tree(params, XX, yy):
         pred = nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, XX, params)
         norm = (
