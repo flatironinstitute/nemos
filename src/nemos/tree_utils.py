@@ -155,7 +155,7 @@ def tree_slice(data: Any, idx: IndexType):
     data :
         A nested structure containing arrays (e.g., a dictionary of arrays).
     idx :
-        The indexing operation to apply. This can be an integer, slice, list of integers,
+        The indexing operation to apply. This can be an integer, slice,
         NumPy array (boolean or integer), tuple of indexing operations, ellipsis, or None.
 
     Returns
