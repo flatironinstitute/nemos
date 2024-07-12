@@ -464,7 +464,7 @@ class GroupLasso(Regularizer):
         """
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
-        param_with_extra_axis = jnp.atleast_2d(params[1].T)
+        param_with_extra_axis = jnp.atleast_2d(params[0].T)
 
         vec_prod = jax.vmap(
             lambda x: self.mask * x, in_axes=0, out_axes=2
