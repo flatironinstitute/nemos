@@ -2,6 +2,7 @@ from functools import partial
 from typing import Any, Callable, NamedTuple, Optional, Tuple
 
 import jax
+import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
 from jax._src.typing import ArrayLike
@@ -414,15 +415,16 @@ class ProxSVRG:
     #    diff_norm = tree_l2_norm(tree_sub(x, x_prev))
     #    return diff_norm / stepsize
 
-    # @staticmethod
-    # def _error(x, x_prev, stepsize):
-    #    return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
-
     @staticmethod
     def _error(x, x_prev, stepsize):
-        diff = tree_sub(x, x_prev)
-        flat_weights, _ = jax.flatten_util.ravel_pytree(diff)
-        return jnp.max(jnp.abs(flat_weights))
+        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
+
+    # @staticmethod
+    # def _error(x, x_prev, stepsize):
+    #    # adapted from scikit-learn's SAG solver
+    #    diff = tree_sub(x, x_prev)
+    #    flat_weights, _ = jax.flatten_util.ravel_pytree(diff)
+    #    return jnp.max(jnp.abs(flat_weights))
 
 
 class SVRG(ProxSVRG):
