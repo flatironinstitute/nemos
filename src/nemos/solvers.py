@@ -414,9 +414,15 @@ class ProxSVRG:
     #    diff_norm = tree_l2_norm(tree_sub(x, x_prev))
     #    return diff_norm / stepsize
 
+    # @staticmethod
+    # def _error(x, x_prev, stepsize):
+    #    return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
+
     @staticmethod
     def _error(x, x_prev, stepsize):
-        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
+        diff = tree_sub(x, x_prev)
+        flat_weights, _ = jax.flatten_util.ravel_pytree(diff)
+        return jnp.max(jnp.abs(flat_weights))
 
 
 class SVRG(ProxSVRG):
