@@ -233,7 +233,7 @@ convolved_input = basis.compute_features(filtered_stimulus)
 # Now we're ready to fit the model! Let's do it, same as before:
 
 
-model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
+model = nmo.glm.GLM(solver_name="LBFGS")
 model.fit(convolved_input, counts)
 
 # %%

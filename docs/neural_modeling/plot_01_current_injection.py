@@ -502,7 +502,7 @@ print(f"count shape: {count.shape}")
 #
 
 # Initialize the model w/regularizer and solver
-model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
+model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(), solver_name="LBFGS")
 
 # %%
 #

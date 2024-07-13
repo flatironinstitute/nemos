@@ -285,7 +285,7 @@ X['spatial_position'] = pos_basis(*spatial_pos.values.T)
 # Running the GLM is identical to before, but we can see that our coef_
 # FeaturePytree now has two separate keys, one for each feature type.
 
-model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
+model = nmo.glm.GLM(solver_name="LBFGS")
 model.fit(X, spikes)
 model.coef_
 
