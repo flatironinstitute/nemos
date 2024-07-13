@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -15,16 +15,11 @@ from scipy.optimize import root
 from . import observation_models as obs
 from . import regularizer as reg
 from . import tree_utils, validation
-from .base_class import (
-    DESIGN_INPUT_TYPE,
-    BaseRegressor,
-    SolverRun,
-    SolverUpdate,
-    SolverInit,
-)
+from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .type_casting import jnp_asarray_if, support_pynapple
+from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
 
 if TYPE_CHECKING:
     from regularizer import Regularizer

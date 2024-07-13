@@ -7,7 +7,7 @@ with various optimization methods, and they can be applied depending on the mode
 """
 
 import abc
-from typing import Any, Callable, Tuple, Union
+from typing import Callable, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -15,18 +15,10 @@ import jaxopt
 from numpy.typing import NDArray
 
 from . import tree_utils
-from .base_class import DESIGN_INPUT_TYPE, Base
+from .base_class import Base
 from .proximal_operator import prox_group_lasso
 from .pytrees import FeaturePytree
-
-ProximalOperator = Callable[
-    [
-        Any,  # parameters, could be any pytree
-        float,  # Regularizer strength (for now float, eventually pytree)
-        float,
-    ],  # Step-size for optimization (must be a float)
-    Tuple[jnp.ndarray, jnp.ndarray],
-]
+from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
