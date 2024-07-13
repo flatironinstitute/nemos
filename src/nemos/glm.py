@@ -13,16 +13,13 @@ from numpy.typing import ArrayLike
 from scipy.optimize import root
 
 from . import observation_models as obs
-from . import regularizer as reg
 from . import tree_utils, validation
 from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
+from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
-
-if TYPE_CHECKING:
-    from regularizer import Regularizer
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -677,7 +674,7 @@ class GLM(BaseRegressor):
 
         # check if mask has been set is using group lasso
         # if mask has not been set, use a single group as default
-        if self.regularizer.__class__.__name__ == "GroupLasso":
+        if isinstance(self.regularizer, GroupLasso):
             if self.regularizer.mask is None:
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
@@ -822,10 +819,10 @@ class GLM(BaseRegressor):
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
-        if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
+        if isinstance(self.regularizer, (GroupLasso, Lasso)):
             coef, _ = self._get_coef_and_intercept()
             return n_samples - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
-        elif isinstance(self.regularizer, reg.Ridge):
+        elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
             return n_samples - X.shape[1] - 1
         else:
