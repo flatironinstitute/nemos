@@ -66,8 +66,8 @@ def min_max_rescale_samples(
     if vmin and vmax and vmax <= vmin:
         raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
     if np.any(sample_pts < 0) or np.any(sample_pts > 1):
-        vmin = np.min(sample_pts) if vmin is None else vmin
-        vmax = np.max(sample_pts) if vmax is None else vmax
+        vmin = np.nanmin(sample_pts) if vmin is None else vmin
+        vmax = np.nanmax(sample_pts) if vmax is None else vmax
         sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
         sample_pts -= vmin
         sample_pts /= vmax - vmin
