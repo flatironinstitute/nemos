@@ -477,9 +477,14 @@ class GroupLasso(Regularizer):
             param_with_extra_axis
         )  # this masks the param, (group, feature, neuron)
 
-        penalty = jnp.linalg.norm(masked_param, axis=0).sum()
+        penalty = jnp.linalg.norm(masked_param, axis=1) * jax.numpy.sqrt(
+            self.mask.sum(axis=1)
+        )
 
-        return penalty * self.regularizer_strength
+        # divide regularization strength by number of neurons
+        regularizer_strength = self.regularizer_strength / params[1].shape[0]
+
+        return penalty * regularizer_strength
 
     def penalized_loss(self, loss: Callable) -> Callable:
         """Returns a function for calculating the penalized loss using Group Lasso regularization."""
