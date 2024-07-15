@@ -58,7 +58,9 @@ def check_one_dimensional(func: Callable) -> Callable:
     return wrapper
 
 
-def min_max_rescale_samples(sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None) -> NDArray:
+def min_max_rescale_samples(
+    sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None
+) -> NDArray:
     """Rescale samples to [0,1]."""
     sample_pts = sample_pts.astype(float)
     if vmin and vmax and vmax <= vmin:
@@ -68,10 +70,8 @@ def min_max_rescale_samples(sample_pts: NDArray, vmin: Optional[float] = None, v
         vmax = np.max(sample_pts) if vmax is None else vmax
         sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
         sample_pts -= vmin
-        sample_pts /= (vmax - vmin)
-        warnings.warn(
-            "Rescaling sample points to [0,1]!", UserWarning
-        )
+        sample_pts /= vmax - vmin
+        warnings.warn("Rescaling sample points to [0,1]!", UserWarning)
     return sample_pts
 
 
@@ -1104,7 +1104,12 @@ class MSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> FeatureMatrix:
         """
         Evaluate the M-spline basis functions at given sample points.
 
@@ -1112,7 +1117,14 @@ class MSplineBasis(SplineBasis):
         ----------
         sample_pts :
             An array of sample points where the M-spline basis functions are to be
-            evaluated.
+            evaluated. Sample points are rescaled to [0,1] as follows:
+             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used,
+            respectively. Values outside the [vmin, vmax] range are set to NaN.
+        vmin :
+            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
+        vmax :
+            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
         Returns
         -------
@@ -1127,6 +1139,7 @@ class MSplineBasis(SplineBasis):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
+        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -1245,7 +1258,12 @@ class BSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -1257,7 +1275,15 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         basis_funcs :
-            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs).
+            Sample points are rescaled to [0,1] as follows:
+             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used,
+            respectively. Values outside the [vmin, vmax] range are set to NaN.
+        vmin :
+            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
+        vmax :
+            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
         Raises
         ------
@@ -1269,6 +1295,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
+        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
@@ -1361,14 +1388,26 @@ class CyclicBSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> FeatureMatrix:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
         ----------
         sample_pts :
             The sample points at which the cyclic B-spline is evaluated, shape
-            (n_samples,).
+            (n_samples,).Sample points are rescaled to [0,1] as follows:
+             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used,
+            respectively. Values outside the [vmin, vmax] range are set to NaN.
+        vmin :
+            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
+        vmax :
+            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
         Returns
         -------
@@ -1381,6 +1420,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
+        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -1517,18 +1557,29 @@ class RaisedCosineBasisLinear(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike, rescale_samples=True) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+        rescale_samples=True,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> FeatureMatrix:
         """Generate basis functions with given samples.
 
         Parameters
         ----------
         sample_pts :
             Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
+        rescale_samples :
+            If `True`, the sample points will be rescaled to the interval [0, 1]. If `False`, no rescaling is applied.
+            Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used, respectively.
+            Values outside the [vmin, vmax] range are set to NaN.
+        vmin :
+            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
+        vmax :
+            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
-        Returns
-        -------
-        basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs).
 
         Raises
         ------
@@ -1544,7 +1595,9 @@ class RaisedCosineBasisLinear(Basis):
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
             # additive_basis(*([x] * 2)) would modify both inputs
-            sample_pts = min_max_rescale_samples(np.copy(sample_pts))
+            sample_pts = min_max_rescale_samples(
+                np.copy(sample_pts), vmin=vmin, vmax=vmax
+            )
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
@@ -1690,7 +1743,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
                 f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
             )
 
-    def _transform_samples(self, sample_pts: ArrayLike) -> NDArray:
+    def _transform_samples(
+        self,
+        sample_pts: ArrayLike,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> NDArray:
         """
         Map the sample domain to log-space.
 
@@ -1699,6 +1757,10 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         sample_pts :
             Sample points used for evaluating the splines,
             shape (n_samples, ).
+        vmin :
+            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
+        vmax :
+            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
         Returns
         -------
@@ -1707,7 +1769,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
-        sample_pts = min_max_rescale_samples(np.copy(sample_pts))
+        sample_pts = min_max_rescale_samples(np.copy(sample_pts), vmin=vmin, vmax=vmax)
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -1741,13 +1803,24 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> FeatureMatrix:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
         ----------
         sample_pts :
-            Spacing for basis functions, holding elements on interval [0, 1].
+            Spacing for basis functions. Samples will be rescaled to the interval [0, 1].
+            Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            Values outside the [vmin, vmax] range are set to NaN.
+        vmin :
+            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
+        vmax :
+            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
         Returns
         -------
@@ -1760,7 +1833,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             If the sample provided do not lie in [0,1].
         """
         return super().__call__(
-            self._transform_samples(sample_pts), rescale_samples=False
+            self._transform_samples(sample_pts, vmin=vmin, vmax=vmax),
+            rescale_samples=False,
         )
 
 
