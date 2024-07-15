@@ -1,12 +1,11 @@
 """Utilities for manipulating and checking PyTrees."""
 
 from functools import reduce
-from typing import Any, Callable, Optional, Union, List, Tuple
-
-from numpy.typing import NDArray
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
+from numpy.typing import NDArray
 
 IndexType = Union[int, slice, NDArray, Tuple[Any, ...], Ellipsis, None]
 
