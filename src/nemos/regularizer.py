@@ -146,7 +146,10 @@ class UnRegularized(Regularizer):
         super().__init__()
 
     def penalized_loss(self, loss: Callable):
-        """Unregularized method does not add any penalty."""
+        """
+        Returns the original loss function unpenalized. Unregularized regularization method does not add any
+        penalty.
+        """
         return loss
 
     def get_proximal_operator(
@@ -227,6 +230,7 @@ class Ridge(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable) -> Callable:
+        """Returns the penalized loss function for Ridge regularization."""
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
@@ -235,6 +239,15 @@ class Ridge(Regularizer):
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
+        """
+        Retrieve the proximal operator for Ridge regularization (L2 penalty).
+
+        Returns
+        -------
+        :
+            The proximal operator, applying L2 regularization to the provided parameters. The intercept
+            term is not regularized.
+        """
         def prox_op(params, l2reg, scaling=0.5):
             Ws, bs = params
             l2reg /= bs.shape[0]
@@ -326,6 +339,7 @@ class Lasso(Regularizer):
         )
 
     def penalized_loss(self, loss: Callable) -> Callable:
+        """Returns a function for calculating the penalized loss using Lasso regularization."""
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
@@ -394,6 +408,7 @@ class GroupLasso(Regularizer):
 
     @mask.setter
     def mask(self, mask: jnp.ndarray | None):
+        """Setter for the mask attribute."""
         # check mask if passed by user, else will be initialized later
         if mask is not None:
             self._check_mask(mask)
@@ -463,9 +478,10 @@ class GroupLasso(Regularizer):
 
         penalty = jnp.linalg.norm(masked_param, axis=0).sum()
 
-        return penalty
+        return penalty * self.regularizer_strength
 
     def penalized_loss(self, loss: Callable) -> Callable:
+        """Returns a function for calculating the penalized loss using Group Lasso regularization."""
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
