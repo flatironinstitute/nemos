@@ -231,6 +231,7 @@ class Ridge(Regularizer):
 
     def penalized_loss(self, loss: Callable) -> Callable:
         """Returns the penalized loss function for Ridge regularization."""
+
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
@@ -248,6 +249,7 @@ class Ridge(Regularizer):
             The proximal operator, applying L2 regularization to the provided parameters. The intercept
             term is not regularized.
         """
+
         def prox_op(params, l2reg, scaling=0.5):
             Ws, bs = params
             l2reg /= bs.shape[0]
@@ -271,7 +273,7 @@ class Lasso(Regularizer):
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
-    _allowed_solvers = ("ProximalGradient", )
+    _allowed_solvers = ("ProximalGradient",)
 
     _default_solver = "ProximalGradient"
 
@@ -328,9 +330,7 @@ class Lasso(Regularizer):
 
         def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
             return (
-                self.regularizer_strength
-                * jnp.sum(jnp.abs(coeff))
-                / intercept.shape[0]
+                self.regularizer_strength * jnp.sum(jnp.abs(coeff)) / intercept.shape[0]
             )
 
         # tree map the computation and sum over leaves
@@ -340,6 +340,7 @@ class Lasso(Regularizer):
 
     def penalized_loss(self, loss: Callable) -> Callable:
         """Returns a function for calculating the penalized loss using Lasso regularization."""
+
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
@@ -482,6 +483,7 @@ class GroupLasso(Regularizer):
 
     def penalized_loss(self, loss: Callable) -> Callable:
         """Returns a function for calculating the penalized loss using Group Lasso regularization."""
+
         def _penalized_loss(params, X, y):
             return loss(params, X, y) + self._penalization(params)
 
