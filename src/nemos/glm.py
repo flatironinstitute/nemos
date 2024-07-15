@@ -50,6 +50,14 @@ class GLM(BaseRegressor):
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
+    Below, a table listing the default and available solvers for each regularizer.
+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
     Parameters
     ----------
@@ -68,20 +76,6 @@ class GLM(BaseRegressor):
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
-
-    +---------------+------------------+-------------------------------------------------------------+
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
-    |               |                  | ProximalGradient, LBFGSB                                    |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
-    |               |                  | ProximalGradient, LBFGSB                                    |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
 
     Attributes
     ----------
@@ -102,6 +96,7 @@ class GLM(BaseRegressor):
     ------
     TypeError
         If provided `regularizer` or `observation_model` are not valid.
+
     """
 
     def __init__(
