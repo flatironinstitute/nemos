@@ -154,11 +154,7 @@ class UnRegularized(Regularizer):
     ) -> ProximalOperator:
         """Unregularized method has no proximal operator."""
 
-        def prox_op(params, hyperparams, scaling=0.5):
-            Ws, bs = params
-            return jaxopt.prox.prox_none(Ws, hyperparams, scaling=scaling), bs
-
-        return prox_op
+        return jaxopt.prox.prox_none
 
 
 class Ridge(Regularizer):
@@ -286,7 +282,7 @@ class Lasso(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l1reg, scaling=0.5):
+        def prox_op(params, l1reg, scaling=1.0):
             Ws, bs = params
             l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
@@ -319,8 +315,7 @@ class Lasso(Regularizer):
 
         def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
             return (
-                0.5
-                * self.regularizer_strength
+                self.regularizer_strength
                 * jnp.sum(jnp.abs(coeff))
                 / intercept.shape[0]
             )
@@ -489,7 +484,7 @@ class GroupLasso(Regularizer):
             intercept term is not regularized.
         """
 
-        def prox_op(params, regularizer_strength, scaling=0.5):
+        def prox_op(params, regularizer_strength, scaling=1.0):
             return prox_group_lasso(
                 params, regularizer_strength, mask=self.mask, scaling=scaling
             )

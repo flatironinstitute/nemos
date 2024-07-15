@@ -76,6 +76,7 @@ class GLM(BaseRegressor):
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
+        See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
 
     Attributes
     ----------
@@ -1011,13 +1012,36 @@ class PopulationGLM(GLM):
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
     regularizer :
-        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
-        Default is UnRegularized regression with gradient descent.
+        Default is UnRegularized regression.
+    solver_name :
+        Solver to use for model optimization. Defines the optimization scheme and related parameters.
+        The solver must be an appropriate match for the chosen regularizer.
+        Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+        Please see table below for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g. stepsize, acceleration, value_and_grad, etc.
+        See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
     feature_mask :
         Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
         `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
+
+    +---------------+------------------+-------------------------------------------------------------+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    +===============+==================+=============================================================+
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
+    |               |                  | ProximalGradient, LBFGSB                                    |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
+    |               |                  | ProximalGradient, LBFGSB                                    |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
 
     Attributes
     ----------

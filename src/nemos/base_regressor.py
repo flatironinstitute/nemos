@@ -42,6 +42,7 @@ class BaseRegressor(Base, abc.ABC):
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
+        See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
 
     +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
