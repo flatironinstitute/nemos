@@ -1029,19 +1029,12 @@ class PopulationGLM(GLM):
         `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
-    +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
-    |               |                  | ProximalGradient, LBFGSB                                    |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
-    |               |                  | ProximalGradient, LBFGSB                                    |
-    +---------------+------------------+-------------------------------------------------------------+
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
     | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
 
     Attributes
     ----------

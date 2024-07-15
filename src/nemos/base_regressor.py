@@ -44,19 +44,12 @@ class BaseRegressor(Base, abc.ABC):
         E.g. stepsize, acceleration, value_and_grad, etc.
         See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
 
-    +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
-    +===============+==================+=============================================================+
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
-    |               |                  | ProximalGradient, LBFGSB                                    |
-    +---------------+------------------+-------------------------------------------------------------+
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG,                  |
-    |               |                  | ProximalGradient, LBFGSB                                    |
-    +---------------+------------------+-------------------------------------------------------------+
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
     | Lasso         | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-    +---------------+------------------+-------------------------------------------------------------+
 
 
     See Also

@@ -258,7 +258,7 @@ class Lasso(Regularizer):
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
-    _allowed_solvers = ("ProximalGradient",)
+    _allowed_solvers = ("ProximalGradient", )
 
     _default_solver = "ProximalGradient"
 
