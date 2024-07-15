@@ -18,9 +18,9 @@ from jaxopt.tree_util import (
     tree_sub,
     tree_zeros_like,
 )
-from .tree_utils import tree_slice
 
 from .base_class import DESIGN_INPUT_TYPE
+from .tree_utils import tree_slice
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
@@ -144,7 +144,7 @@ class ProxSVRG:
             key=self.key if self.key is not None else random.key(0),
             error=jnp.inf,
             stepsize=self.stepsize,
-            loss_log=jnp.empty((self.maxiter,)),
+            loss_log=jnp.zeros((self.maxiter,)),
             xs=init_params,
             df_xs=df_xs,
             x_av=init_params,
