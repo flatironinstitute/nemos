@@ -26,7 +26,6 @@ from .base_class import DESIGN_INPUT_TYPE
 KeyArrayLike = ArrayLike
 
 
-
 class SVRGState(NamedTuple):
     iter_num: int
     key: KeyArrayLike
@@ -131,7 +130,6 @@ class ProxSVRG:
 
         if init_full_gradient:
             df_xs = self.loss_gradient(init_params, X, y)
-
 
         state = SVRGState(
             iter_num=0,
