@@ -11,6 +11,7 @@ import sklearn.pipeline as pipeline
 import statsmodels.api as sm
 import utils_testing
 from sklearn.model_selection import GridSearchCV
+from sklearn.base import clone as sk_clone
 
 import nemos.basis as basis
 import nemos.convolve as convolve
@@ -4050,14 +4051,16 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
     orig_bas = basis_cls(10, mode="conv", window_size=5)
     trans_bas = basis.TransformerBasis(orig_bas)
 
-    # kernel should 
+    # kernel should be saved in the object after fit
     trans_bas.fit(np.random.randn(100, 20))
     assert isinstance(trans_bas._kernel, np.ndarray)
 
     # cloning should set _kernel to None
-    trans_bas_clone = trans_bas.__sklearn_clone__()
+    trans_bas_clone = sk_clone(trans_bas)
 
-    assert orig_bas._kernel is None
+    # the original object should still have _kernel
+    assert isinstance(trans_bas._kernel, np.ndarray)
+    # but the clone should not have one
     assert trans_bas_clone._kernel is None
 
 
