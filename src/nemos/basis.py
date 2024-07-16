@@ -13,7 +13,6 @@ import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
-from sklearn.base import clone as sk_clone
 
 from .base_class import Base
 from .convolve import create_convolutional_predictor
@@ -175,7 +174,27 @@ class TransformerBasis:
         """
         return self._basis.compute_features(*self._unpack_inputs(X))
 
-    def __getattr__(self, attr: str):
+    def __getstate__(self):
+        """
+        Explicitly define how to pickle TransformerBasis object.
+
+        See https://docs.python.org/3/library/pickle.html#object.__getstate__
+        and https://docs.python.org/3/library/pickle.html#pickle-state
+        """
+        return {"_basis": self._basis}
+
+    def __setstate__(self, state):
+        """
+        Define how to populate the object's state when unpickling.
+        Not that during unpickling a new object is created without calling __init__.
+        Needed to avoid infinite recursion in __getattr__ when unpickling.
+
+        See https://docs.python.org/3/library/pickle.html#object.__setstate__
+        and https://docs.python.org/3/library/pickle.html#pickle-state
+        """
+        self._basis = state["_basis"]
+
+    def __getattr__(self, name: str):
         """
         Enable easy access to attributes of the underlying Basis object.
 
@@ -188,21 +207,111 @@ class TransformerBasis:
         print(bas.n_basis_funcs)
         print(trans_bas.n_basis_funcs)
         """
-        return getattr(self._basis, attr)
+        return getattr(self._basis, name)
+
+    def __setattr__(self, name: str, value) -> None:
+        """
+        Allow setting _basis or the attributes of _basis with a convenient dot assignment syntax.
+        Setting any other attribute is not allowed.
+
+        Example
+        -------
+        trans_bas = nmo.basis.TransformerBasis(nmo.basis.MSplineBasis(10))
+        # allowed
+        trans_bas._basis = nmo.basis.BSplineBasis(10)
+        # allowed
+        trans_bas.n_basis_funcs = 20
+        # not allowed
+        tran_bas.random_attribute_name = "some value"
+        """
+        # allow self._basis = basis
+        if name == "_basis":
+            super().__setattr__(name, value)
+        # allow changing existing attributes of self._basis
+        elif hasattr(self._basis, name):
+            setattr(self._basis, name, value)
+        # don't allow setting any other attribute
+        else:
+            raise ValueError(
+                "Only setting _basis or existing attributes of _basis is allowed."
+            )
 
     def __sklearn_clone__(self) -> TransformerBasis:
         """
-        By default scikit-learn calls copy.deepcopy on the estimator object.
-        Cloning the underlying Basis avoids infinite recursive calls to getattr.
+        Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
+        By default scikit-learn tries to clone the object by calling __init__ using the output of get_params,
+        which fails in our case.
+
+        For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        return TransformerBasis(sk_clone(self._basis))
+        self._basis._kernel = None
+        return TransformerBasis(copy.deepcopy(self._basis))
 
     def set_params(self, **parameters) -> TransformerBasis:
         """
-        Set the parameters of the underlying Basis.
+        When used with, sklearn.model_selection, either set the _basis attribute directly,
+        or set the parameters of the underlying Basis, but doing both at the same time is not allowed.
+
+        Example
+        -------
+        pipeline = Pipeline(
+            [
+                ("transformerbasis", basis.TransformerBasis(basis.MSplineBasis(10))),
+                ("glm", nmo.glm.GLM()),
+            ]
+        )
+        # setting parameters of _basis is allowed
+        param_grid = dict(
+            transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
+        )
+
+        # setting _basis directly is allowed
+        param_grid = dict(
+            transformerbasis___basis=(
+                nmo.basis.RaisedCosineBasisLinear(10),
+                nmo.basis.RaisedCosineBasisLog(10),
+                nmo.basis.MSplineBasis(10),
+            )
+        )
+
+        # mixing the two doesn't work
+        param_grid = dict(
+            transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
+            transformerbasis___basis=(
+                nmo.basis.RaisedCosineBasisLinear(10),
+                nmo.basis.RaisedCosineBasisLog(10),
+                nmo.basis.MSplineBasis(10),
+            )
+        )
+
+        gridsearch = GridSearchCV(
+            pipeline, param_grid=param_grid, cv=5, scoring=pseudo_r2, n_jobs=4
+        )
+
         """
-        self._basis = self._basis.set_params(**parameters)
+        new_basis = parameters.pop("_basis", None)
+        if new_basis is not None:
+            self._basis = new_basis
+            if len(parameters) > 0:
+                raise ValueError(
+                    "Set either _basis or parameters for _basis, not both."
+                )
+        else:
+            self._basis = self._basis.set_params(**parameters)
+
         return self
+
+    def get_params(self, deep: bool = True) -> dict:
+        """
+        Extend the dict of parameters from the underlying Basis with _basis.
+        """
+        return {"_basis": self._basis, **self._basis.get_params(deep)}
+
+    def __dir__(self) -> list[str]:
+        """
+        Extend the list of properties of methods with the ones from the underlying Basis.
+        """
+        return super().__dir__() + self._basis.__dir__()
 
 
 class Basis(Base, abc.ABC):
