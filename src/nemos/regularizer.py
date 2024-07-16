@@ -416,7 +416,7 @@ class GroupLasso(Regularizer):
         return self._mask
 
     @mask.setter
-    def mask(self, mask: jnp.ndarray | None):
+    def mask(self, mask: Union[jnp.ndarray, None]):
         """Setter for the mask attribute."""
         # check mask if passed by user, else will be initialized later
         if mask is not None:
