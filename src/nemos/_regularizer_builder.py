@@ -22,24 +22,23 @@ def create_regularizer(name: str):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
-    match name:
-        case "unregularized":
-            from .regularizer import UnRegularized
+    if name == "unregularized":
+        from .regularizer import UnRegularized
 
-            return UnRegularized()
-        case "ridge":
-            from .regularizer import Ridge
+        return UnRegularized()
+    elif name == "ridge":
+        from .regularizer import Ridge
 
-            return Ridge()
-        case "lasso":
-            from .regularizer import Lasso
+        return Ridge()
+    elif name == "lasso":
+        from .regularizer import Lasso
 
-            return Lasso()
-        case "group_lasso":
-            from .regularizer import GroupLasso
+        return Lasso()
+    elif name == "group_lasso":
+        from .regularizer import GroupLasso
 
-            return GroupLasso()
-
-    raise ValueError(
-        f"Unknown regularizer: {name}. Regularizer must be one of {AVAILABLE_REGULARIZERS}"
-    )
+        return GroupLasso()
+    else:
+        raise ValueError(
+            f"Unknown regularizer: {name}. Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+        )

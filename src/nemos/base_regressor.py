@@ -207,17 +207,16 @@ class BaseRegressor(Base, abc.ABC):
         utils.assert_is_callable(loss, "loss")
 
         # some parsing to make sure solver gets instantiated properly
-        match self.solver_name:
-            case "ProximalGradient":
-                self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
-                # add self.regularizer_strength to args
-                args += (self.regularizer.regularizer_strength,)
-            case "LBFGSB":
-                if "bounds" not in kwargs.keys():
-                    warnings.warn(
-                        "Bounds must be provided for LBFGSB. Reverting back to LBFGS solver."
-                    )
-                self.solver_name = "LBFGS"
+        if self.solver_name == "ProximalGradient":
+            self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
+            # add self.regularizer_strength to args
+            args += (self.regularizer.regularizer_strength,)
+        if self.solver_name == "LBFGSB":
+            if "bounds" not in kwargs.keys():
+                warnings.warn(
+                    "Bounds must be provided for LBFGSB. Reverting back to LBFGS solver."
+                )
+            self.solver_name = "LBFGS"
 
         # instantiate the solver
         solver = getattr(jaxopt, self._solver_name)(fun=loss, **self.solver_kwargs)
