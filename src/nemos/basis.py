@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import abc
+import copy
 import warnings
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -87,7 +88,7 @@ class TransformerBasis:
     """
 
     def __init__(self, basis: Basis):
-        self._basis = basis
+        self._basis = copy.deepcopy(basis)
 
     @staticmethod
     def _unpack_inputs(X: FeatureMatrix):
