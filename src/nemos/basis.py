@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import abc
-import warnings
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -60,7 +59,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 
 def min_max_rescale_samples(
     sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None
-) -> NDArray:
+) -> Tuple[NDArray, float]:
     """Rescale samples to [0,1]."""
     sample_pts = sample_pts.astype(float)
     if vmin and vmax and vmax <= vmin:
@@ -70,8 +69,11 @@ def min_max_rescale_samples(
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     if vmin != vmax:  # Needed is samples contain a single value.
-        sample_pts /= vmax - vmin
-    return sample_pts
+        scaling = vmax - vmin
+        sample_pts /= scaling
+    else:
+        scaling = 1.0
+    return sample_pts, scaling
 
 
 class TransformerBasis:
@@ -991,7 +993,13 @@ class SplineBasis(Basis, abc.ABC):
     ) -> None:
         self.order = order
         super().__init__(
-            n_basis_funcs, *args, mode=mode, window_size=window_size, vmin=vmin, vmax=vmax, **kwargs
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            window_size=window_size,
+            vmin=vmin,
+            vmax=vmax,
+            **kwargs,
         )
         self._n_input_dimensionality = 1
         if self.order < 1:
@@ -1189,7 +1197,7 @@ class MSplineBasis(SplineBasis):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
-        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
+        sample_pts, scaling = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -1202,6 +1210,8 @@ class MSplineBasis(SplineBasis):
             ],
             axis=1,
         )
+        # re-normalize so that it integrates to 1 over the range.
+        X /= scaling
         if self.identifiability_constraints:
             X = self._apply_identifiability_constraints(X)
         return X
@@ -1359,7 +1369,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
@@ -1498,7 +1508,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
-        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -1608,7 +1618,13 @@ class RaisedCosineBasisLinear(Basis):
         **kwargs,
     ) -> None:
         super().__init__(
-            n_basis_funcs, *args, mode=mode, window_size=window_size, vmin=vmin, vmax=vmax, **kwargs
+            n_basis_funcs,
+            *args,
+            mode=mode,
+            window_size=window_size,
+            vmin=vmin,
+            vmax=vmax,
+            **kwargs,
         )
         self._n_input_dimensionality = 1
         self._check_width(width)
@@ -1661,8 +1677,8 @@ class RaisedCosineBasisLinear(Basis):
         rescale_samples :
             If `True`, the sample points will be rescaled to the interval [0, 1]. If `False`, no rescaling is applied.
             Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used, respectively.
-            Values outside the [vmin, vmax] range are set to NaN.
+            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts`
+            are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
          vmin:
             The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
             This value determines the minimum of the domain of the basis.
@@ -1685,7 +1701,7 @@ class RaisedCosineBasisLinear(Basis):
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
             # additive_basis(*([x] * 2)) would modify both inputs
-            sample_pts = min_max_rescale_samples(
+            sample_pts, _ = min_max_rescale_samples(
                 np.copy(sample_pts), vmin=vmin, vmax=vmax
             )
 
@@ -1871,7 +1887,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
-        sample_pts = min_max_rescale_samples(np.copy(sample_pts), vmin=vmin, vmax=vmax)
+        sample_pts, _ = min_max_rescale_samples(
+            np.copy(sample_pts), vmin=vmin, vmax=vmax
+        )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -2061,7 +2079,12 @@ class OrthExponentialBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: NDArray,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+    ) -> FeatureMatrix:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -2078,16 +2101,23 @@ class OrthExponentialBasis(Basis):
 
         """
         self._check_sample_size(sample_pts)
-        sample_pts = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
-        basis_funcs = np.full(shape=(sample_pts.shape[0], self.n_basis_funcs), fill_value=np.nan)
-        basis_funcs[valid_idx] = scipy.linalg.orth(
-            np.stack([np.exp(-lam * sample_pts[valid_idx]) for lam in self._decay_rates], axis=1)
+        exp_decay_eval = np.stack(
+            [np.exp(-lam * sample_pts[valid_idx]) for lam in self._decay_rates], axis=1
         )
+        # count the linear independent components (could be lower than n_basis_funcs for num precision).
+        n_independent_component = np.linalg.matrix_rank(exp_decay_eval)
+        # initialize output to nan
+        basis_funcs = np.full(
+            shape=(sample_pts.shape[0], n_independent_component), fill_value=np.nan
+        )
+        # orthonormalize on valid points
+        basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
         if self.identifiability_constraints:
             basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs

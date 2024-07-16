@@ -152,22 +152,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         else:
             self.cls(n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size)
 
-    @pytest.mark.parametrize(
-        "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
-    )
-    def test_samples_range_matches_evaluate_requirements(self, sample_range):
-        """
-        Ensures that the evaluate() method correctly handles sample range inputs that are outside of its
-         required bounds (0, 1).
-        """
-        raise_warn = (sample_range[0] < 0) | (sample_range[1] > 1)
-        basis_obj = self.cls(n_basis_funcs=5, mode="eval")
-        if raise_warn:
-            with pytest.warns(UserWarning, match="Rescaling sample points"):
-                basis_obj.compute_features(np.linspace(*sample_range, 100))
-        else:
-            basis_obj.compute_features(np.linspace(*sample_range, 100))
-
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
     def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
@@ -409,7 +393,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "mn, mx, expectation",
         [
             (0, 1, does_not_raise()),
-            (-2, 2, pytest.warns(UserWarning, match="Rescaling sample points")),
+            (-2, 2, does_not_raise()),
         ],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
@@ -1594,13 +1578,13 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
-    @pytest.mark.parametrize("n_basis_funcs", [2, 10, 20])
+    @pytest.mark.parametrize("n_basis_funcs", [2, 10, 12])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 30)])
     def test_sample_size_of_fit_transform_matches_that_of_input(
         self, n_basis_funcs, sample_size, mode, window_size
     ):
         """Tests whether the sample size of the fit_transformed result matches that of the input."""
-        decay_rates = np.arange(1, 1 + n_basis_funcs)
+        decay_rates = np.linspace(0.1, 20, n_basis_funcs)
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs,
             decay_rates=decay_rates,
@@ -1810,10 +1794,11 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         bas = self.cls(
             5, mode=mode, window_size=window_size, decay_rates=np.arange(1, 6)
         )
-        x = np.linspace(0, 1, 10)
-        x[3] = np.nan
-        with pytest.raises(ValueError, match="array must not contain infs or NaNs"):
-            bas(x)
+        x = np.linspace(0, 1, 15)
+        x[13] = np.nan
+        with does_not_raise():
+            out = bas(x)
+            assert np.all(np.isnan(out[13]))
 
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
