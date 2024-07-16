@@ -76,6 +76,12 @@ class Regularizer(Base, abc.ABC):
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: float):
+        try:
+            # force conversion to float to prevent weird GPU issues
+            strength = float(strength)
+        except ValueError:
+            # raise a more detailed ValueError
+            raise ValueError(f"Could not convert the regularizer strength: {strength} to a float.")
         self._regularizer_strength = strength
 
     def penalized_loss(self, loss: Callable) -> Callable:
@@ -464,6 +470,14 @@ class GroupLasso(Regularizer):
     ) -> jnp.ndarray:
         """
         Calculate the penalization.
+
+        Note: the penalty is being calculated according to the following formula:
+
+        $$\\text{loss}(\beta_1,...,\beta_g) + \alpha \cdot \sum _{j=1...,g} \sqrt{\dim(\beta_j)} || \beta_j||_2$$
+
+        where $g$ is the number of groups, $\dim(\cdot)$ is the dimension of the vector,
+        i.e. the number of coefficient in each $\beta_j$, and $||\cdot||_2$ is the euclidean norm.
+
         """
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)

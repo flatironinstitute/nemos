@@ -11,6 +11,16 @@ def create_regularizer(name: str):
     ----------
     name :
         The string name of the regularizer to create. Must be one of: 'unregularized', 'ridge', 'lasso', 'group_lasso'.
+
+    Returns
+    -------
+    :
+        The regularizer instance with default parameters.
+
+    Raises
+    ------
+    ValueError
+        If the `name` provided does not match to any available regularizer.
     """
     match name:
         case "unregularized":
