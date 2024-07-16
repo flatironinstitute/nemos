@@ -1,5 +1,6 @@
 import abc
 import inspect
+import pickle
 from contextlib import nullcontext as does_not_raise
 
 import jax.numpy
@@ -3955,6 +3956,134 @@ def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_func
     assert trans_basis._basis.n_basis_funcs == n_basis_funcs_new
 
 
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_setattr_basis(basis_cls):
+    # setting the _basis attribute should change it
+    trans_bas = basis.TransformerBasis(basis_cls(10))
+    trans_bas._basis = basis_cls(20)
+
+    assert trans_bas.n_basis_funcs == 20
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert isinstance(trans_bas._basis, basis_cls)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_setattr_basis_attribute(basis_cls):
+    # setting an attribute that is an attribute of the underlying _basis
+    # should propagate setting it on _basis itself
+    trans_bas = basis.TransformerBasis(basis_cls(10))
+    trans_bas.n_basis_funcs = 20
+
+    assert trans_bas.n_basis_funcs == 20
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert isinstance(trans_bas._basis, basis_cls)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_copy_basis_on_contsruct(basis_cls):
+    # modifying the transformerbasis's attributes shouldn't
+    # touch the original basis that was used to create it
+    orig_bas = basis_cls(10)
+    trans_bas = basis.TransformerBasis(orig_bas)
+    trans_bas.n_basis_funcs = 20
+
+    assert orig_bas.n_basis_funcs == 10
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert isinstance(trans_bas._basis, basis_cls)
+    
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_setattr_illegal_attribute(basis_cls):
+    # changing an attribute that is not _basis or an attribute of _basis
+    # is not allowed
+    trans_bas = basis.TransformerBasis(basis_cls(10))
+
+    with pytest.raises(ValueError, match="Only setting _basis or existing attributes of _basis is allowed."):
+        trans_bas.random_attr = "random value"
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
+    orig_bas = basis_cls(10, mode="conv", window_size=5)
+    trans_bas = basis.TransformerBasis(orig_bas)
+
+    # kernel should 
+    trans_bas.fit(np.random.randn(100, 20))
+    assert isinstance(trans_bas._kernel, np.ndarray)
+
+    # cloning should set _kernel to None
+    trans_bas_clone = trans_bas.__sklearn_clone__()
+
+    assert orig_bas._kernel is None
+    assert trans_bas_clone._kernel is None
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize("n_basis_funcs", [5])
+def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
+    # the test that tries cross-validation with n_jobs = 2 already should test this
+    trans_bas = basis.TransformerBasis(basis_cls(n_basis_funcs))
+    filepath = tmpdir / "transformerbasis.pickle"
+    with open(filepath, "wb") as f:
+        pickle.dump(trans_bas, f)
+    with open(filepath, "rb") as f:
+        trans_bas2 = pickle.load(f)
+
+    assert isinstance(trans_bas2, basis.TransformerBasis)
+    assert trans_bas2.n_basis_funcs == n_basis_funcs
+
 
 @pytest.mark.parametrize(
     "bas",
@@ -3964,7 +4093,7 @@ def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_func
         basis.CyclicBSplineBasis(5),
         basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)),
         basis.RaisedCosineBasisLinear(5),
-        ]
+    ]
 )
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
@@ -3988,12 +4117,71 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = basis.TransformerBasis(bas)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
-
     param_grid = dict(basis__n_basis_funcs=(3, 5, 10))
-
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv = 3)
-
     gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+
+@pytest.mark.parametrize(
+    "bas",
+    [
+        basis.MSplineBasis(5),
+        basis.BSplineBasis(5),
+        basis.CyclicBSplineBasis(5),
+        basis.RaisedCosineBasisLinear(5),
+        basis.RaisedCosineBasisLog(5),
+    ],
+)
+def test_sklearn_transformer_pipeline_cv_multiprocess(bas, poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.TransformerBasis(bas)
+    pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
+    param_grid = dict(basis__n_basis_funcs=(3, 5, 10))
+    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv = 3, n_jobs=3)
+    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+
+@pytest.mark.parametrize(
+    "bas_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_sklearn_transformer_pipeline_cv_directly_over_basis(bas_cls, poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.TransformerBasis(bas_cls(5))
+    pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
+    param_grid = dict(
+        transformerbasis___basis=(bas_cls(5), bas_cls(10), bas_cls(20))
+    )
+    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv = 3)
+    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+
+@pytest.mark.parametrize(
+    "bas_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_sklearn_transformer_pipeline_cv_illegal_combination(bas_cls, poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.TransformerBasis(bas_cls(5))
+    pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
+    param_grid = dict(
+        transformerbasis___basis=(bas_cls(5), bas_cls(10), bas_cls(20)),
+        transformerbasis__n_basis_funcs=(3, 5, 10),
+    )
+    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv = 3)
+    with pytest.raises(
+        ValueError, match="Set either _basis or parameters for _basis, not both."
+    ):
+        gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
 @pytest.mark.parametrize(
