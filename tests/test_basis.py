@@ -424,12 +424,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -497,7 +497,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -820,12 +820,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -893,7 +893,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -1200,12 +1200,12 @@ class TestMSplineBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -1273,7 +1273,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -1658,12 +1658,12 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         bas._set_kernel(None)
-        assert bas._kernel.shape == (10, 5)
+        assert bas.kernel_.shape == (10, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
@@ -1732,7 +1732,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -2060,12 +2060,12 @@ class TestBSplineBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -2133,7 +2133,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -2479,12 +2479,12 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -2552,7 +2552,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -3202,7 +3202,7 @@ class TestAdditiveBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj._basis2)
             else:
                 has_kern += [
-                    basis_obj._kernel is not None if basis_obj.mode == "conv" else True
+                    basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
                 ]
             return has_kern
 
@@ -3829,7 +3829,7 @@ class TestMultiplicativeBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj._basis2)
             else:
                 has_kern += [
-                    basis_obj._kernel is not None if basis_obj.mode == "conv" else True
+                    basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
                 ]
             return has_kern
 
@@ -4053,15 +4053,15 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
 
     # kernel should be saved in the object after fit
     trans_bas.fit(np.random.randn(100, 20))
-    assert isinstance(trans_bas._kernel, np.ndarray)
+    assert isinstance(trans_bas.kernel_, np.ndarray)
 
-    # cloning should set _kernel to None
+    # cloning should set kernel_ to None
     trans_bas_clone = sk_clone(trans_bas)
 
-    # the original object should still have _kernel
-    assert isinstance(trans_bas._kernel, np.ndarray)
+    # the original object should still have kernel_
+    assert isinstance(trans_bas.kernel_, np.ndarray)
     # but the clone should not have one
-    assert trans_bas_clone._kernel is None
+    assert trans_bas_clone.kernel_ is None
 
 
 @pytest.mark.parametrize(

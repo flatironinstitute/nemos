@@ -30,6 +30,7 @@ __all__ = [
     "OrthExponentialBasis",
     "AdditiveBasis",
     "MultiplicativeBasis",
+    # "TransformerBasis",
 ]
 
 
@@ -245,7 +246,7 @@ class TransformerBasis:
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
         cloned_obj = TransformerBasis(copy.deepcopy(self._basis))
-        cloned_obj._basis._kernel = None
+        cloned_obj._basis.kernel_ = None
         return cloned_obj
 
     def set_params(self, **parameters) -> TransformerBasis:
@@ -371,7 +372,7 @@ class Basis(Base, abc.ABC):
 
         self._window_size = window_size
         self._mode = mode
-        self._kernel = None
+        self.kernel_ = None
         self._identifiability_constraints = False
 
     @property
@@ -468,7 +469,7 @@ class Basis(Base, abc.ABC):
         ValueError:
             If an invalid mode is specified or necessary parameters for the chosen mode are missing.
         """
-        # check if self._kernel is not None for mode="conv"
+        # check if self.kernel_ is not None for mode="conv"
         self._check_has_kernel()
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
@@ -480,7 +481,7 @@ class Basis(Base, abc.ABC):
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
-                self._kernel, *xi, **self._conv_kwargs
+                self.kernel_, *xi, **self._conv_kwargs
             )
             # move the time axis to the first dimension
             new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
@@ -517,7 +518,7 @@ class Basis(Base, abc.ABC):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
-        if self._kernel is None:
+        if self.kernel_ is None:
             self._set_kernel(*xi)
         return self._compute_features(*xi)
 
@@ -553,7 +554,7 @@ class Basis(Base, abc.ABC):
         mode exclusively, this method should simply return `self` without modification.
         """
         if self.mode == "conv":
-            self._kernel = self.__call__(np.linspace(0, 1, self.window_size))
+            self.kernel_ = self.__call__(np.linspace(0, 1, self.window_size))
         return self
 
     @abc.abstractmethod
@@ -641,7 +642,7 @@ class Basis(Base, abc.ABC):
 
     def _check_has_kernel(self) -> None:
         """Check that the kernel is pre-computed."""
-        if self.mode == "conv" and self._kernel is None:
+        if self.mode == "conv" and self.kernel_ is None:
             raise ValueError(
                 "You must call `_set_kernel` before `_compute_features` when mode =`conv`."
             )
