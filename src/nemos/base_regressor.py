@@ -93,8 +93,8 @@ class BaseRegressor(Base, abc.ABC):
             self._regularizer = regularizer
         else:
             raise TypeError(
-                f"The regularizer should be either a string from {AVAILABLE_REGULARIZERS} "
-                f"or an instance of `nemos.regularizer.Regularizer`"
+                f"The regularizer should be either a string from "
+                f"{AVAILABLE_REGULARIZERS} or an instance of `nemos.regularizer.Regularizer`"
             )
 
     @property

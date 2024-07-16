@@ -1099,10 +1099,19 @@ class PopulationGLM(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
+        regularizer: str | Regularizer = "unregularized",
+        solver_name: str = None,
+        solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
         **kwargs,
     ):
-        super().__init__(observation_model=observation_model, **kwargs)
+        super().__init__(
+            observation_model=observation_model,
+            regularizer=regularizer,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+            **kwargs,
+        )
         self.feature_mask = feature_mask
 
     @property

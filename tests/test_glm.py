@@ -46,29 +46,31 @@ class TestGLM:
     # Test model.__init__
     #######################
     @pytest.mark.parametrize(
-        "regularizer, expectation",
+        "regularizer, solver_name, expectation",
         [
-            (nmo.regularizer.Ridge("BFGS"), does_not_raise()),
+            (nmo.regularizer.Ridge(), "BFGS", does_not_raise()),
             (
                 None,
+                None,
                 pytest.raises(
-                    AttributeError, match="The provided `solver` doesn't implement "
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
             (
                 nmo.regularizer.Ridge,
+                None,
                 pytest.raises(
-                    TypeError, match="The provided `solver` cannot be instantiated"
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
         ],
     )
-    def test_solver_type(self, regularizer, expectation, glm_class):
+    def test_solver_type(self, regularizer, solver_name, expectation, glm_class):
         """
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            glm_class(regularizer=regularizer)
+            glm_class(regularizer=regularizer, solver_name=solver_name)
 
     @pytest.mark.parametrize(
         "observation, expectation",
@@ -98,7 +100,11 @@ class TestGLM:
         when the regularizer name is not present in jaxopt.
         """
         with expectation:
-            glm_class(regularizer=ridge_regularizer, observation_model=observation)
+            glm_class(
+                regularizer=ridge_regularizer,
+                solver_name="LBFGS",
+                observation_model=observation,
+            )
 
     @pytest.mark.parametrize(
         "X, y",
@@ -409,9 +415,8 @@ class TestGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
         model.fit(X, y)
 
@@ -1095,9 +1100,8 @@ class TestGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
         model.initialize_solver(X, y)
 
@@ -1345,12 +1349,12 @@ class TestGLM:
 
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     def test_compatibility_with_sklearn_cv_gamma(self, gammaGLM_model_instantiation):
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
 
@@ -1365,17 +1369,17 @@ class TestPopulationGLM:
     @pytest.mark.parametrize(
         "regularizer, expectation",
         [
-            (nmo.regularizer.Ridge("BFGS"), does_not_raise()),
+            (nmo.regularizer.Ridge(), does_not_raise()),
             (
                 None,
                 pytest.raises(
-                    AttributeError, match="The provided `solver` doesn't implement "
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
             (
                 nmo.regularizer.Ridge,
                 pytest.raises(
-                    TypeError, match="The provided `solver` cannot be instantiated"
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
         ],
@@ -1466,13 +1470,11 @@ class TestPopulationGLM:
         [
             nmo.regularizer.UnRegularized(),
             nmo.regularizer.Lasso(),
-            nmo.regularizer.Ridge()
-        ]
+            nmo.regularizer.Ridge(),
+        ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
-    def test_estimate_dof_resid(
-        self, n_samples, reg, poisson_population_GLM_model
-    ):
+    def test_estimate_dof_resid(self, n_samples, reg, poisson_population_GLM_model):
         """
         Test that the dof is an integer.
         """
@@ -1739,9 +1741,8 @@ class TestPopulationGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
         model.fit(X, y)
 
@@ -2125,9 +2126,8 @@ class TestPopulationGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
         model.initialize_solver(X, y)
 
@@ -2661,12 +2661,12 @@ class TestPopulationGLM:
 
     def test_compatibility_with_sklearn_cv(self, poisson_population_GLM_model):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     def test_compatibility_with_sklearn_cv_gamma(self, gamma_population_GLM_model):
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     @pytest.mark.parametrize(
@@ -2801,24 +2801,24 @@ class TestPopulationGLM:
                 getattr(model, attr_name)(X, y)
 
     @pytest.mark.parametrize(
-        "regularizer",
+        "regularizer, solver_name, solver_kwargs",
         [
-            nmo.regularizer.UnRegularized(
-                solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}
+            (
+                nmo.regularizer.UnRegularized(),
+                "LBFGS",
+                {"stepsize": 0.1, "tol": 10**-14},
             ),
-            nmo.regularizer.UnRegularized(
-                solver_name="GradientDescent", solver_kwargs={"tol": 10**-14}
+            (nmo.regularizer.UnRegularized(), "GradientDescent", {"tol": 10**-14}),
+            (
+                nmo.regularizer.Ridge(regularizer_strength=0.001),
+                "LBFGS",
+                {"tol": 10**-14},
             ),
-            nmo.regularizer.Ridge(
-                solver_name="GradientDescent",
-                regularizer_strength=0.001,
-                solver_kwargs={"tol": 10**-14},
-            ),
-            nmo.regularizer.Ridge(
-                solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}
-            ),
-            nmo.regularizer.Lasso(
-                regularizer_strength=0.001, solver_kwargs={"tol": 10**-14}
+            (nmo.regularizer.Ridge(), "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (
+                nmo.regularizer.Lasso(regularizer_strength=0.001),
+                "ProximalGradient",
+                {"tol": 10**-14},
             ),
         ],
     )
@@ -2840,6 +2840,8 @@ class TestPopulationGLM:
     def test_masked_fit_vs_loop(
         self,
         regularizer,
+        solver_name,
+        solver_kwargs,
         mask,
         poisson_population_GLM_model,
         poisson_population_GLM_model_pytree,
@@ -2870,6 +2872,8 @@ class TestPopulationGLM:
         # fit pop glm
         model.feature_mask = mask
         model.regularizer = regularizer
+        model.solver_name = solver_name
+        model.solver_kwargs = solver_kwargs
         model.fit(X, y)
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
@@ -2877,7 +2881,11 @@ class TestPopulationGLM:
         intercept_loop = np.zeros((3,))
         # loop over neuron
         for k in range(y.shape[1]):
-            model_single_neu = nmo.glm.GLM(regularizer=regularizer)
+            model_single_neu = nmo.glm.GLM(
+                regularizer=regularizer,
+                solver_name=solver_name,
+                solver_kwargs=solver_kwargs,
+            )
             if isinstance(mask_bool, dict):
                 X_neu = {}
                 for key, xx in X.items():

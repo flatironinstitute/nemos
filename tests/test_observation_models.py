@@ -153,7 +153,7 @@ class TestPoissonObservations:
         pseudo_r2 = model.observation_model.pseudo_r2(
             y.mean(), y, score_type=score_type
         )
-        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.):
+        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )
@@ -414,9 +414,9 @@ class TestGammaObservations:
 
         rate = model.predict(X)
         ysim, _ = model.simulate(jax.random.PRNGKey(123), X)
-        pseudo_r2 = nmo.observation_models.GammaObservations(inverse_link_function=lambda x: 1/x).pseudo_r2(
-            rate, ysim, score_type=score_type
-        )
+        pseudo_r2 = nmo.observation_models.GammaObservations(
+            inverse_link_function=lambda x: 1 / x
+        ).pseudo_r2(rate, ysim, score_type=score_type)
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
 
@@ -429,7 +429,7 @@ class TestGammaObservations:
         pseudo_r2 = model.observation_model.pseudo_r2(
             y.mean(), y, score_type=score_type
         )
-        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.):
+        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )

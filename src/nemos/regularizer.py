@@ -81,7 +81,9 @@ class Regularizer(Base, abc.ABC):
             strength = float(strength)
         except ValueError:
             # raise a more detailed ValueError
-            raise ValueError(f"Could not convert the regularizer strength: {strength} to a float.")
+            raise ValueError(
+                f"Could not convert the regularizer strength: {strength} to a float."
+            )
         self._regularizer_strength = strength
 
     def penalized_loss(self, loss: Callable) -> Callable:
