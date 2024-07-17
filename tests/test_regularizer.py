@@ -41,6 +41,58 @@ def test_regularizer_builder(reg_str, reg_type):
 
 
 @pytest.mark.parametrize(
+    "regularizer_strength, reg_type",
+    [
+        (0.001, nmo.regularizer.Ridge),
+        (1.0, nmo.regularizer.Ridge),
+        ("bah", nmo.regularizer.Ridge),
+        (0.001, nmo.regularizer.Lasso),
+        (1.0, nmo.regularizer.Lasso),
+        ("bah", nmo.regularizer.Lasso),
+        (0.001, nmo.regularizer.GroupLasso),
+        (1.0, nmo.regularizer.GroupLasso),
+        ("bah", nmo.regularizer.GroupLasso),
+    ],
+)
+def test_regularizer(regularizer_strength, reg_type):
+    if not isinstance(regularizer_strength, float):
+        with pytest.raises(
+            ValueError,
+            match=f"Could not convert the regularizer strength: {regularizer_strength} "
+            f"to a float.",
+        ):
+            reg_type(regularizer_strength=regularizer_strength)
+    else:
+        reg_type(regularizer_strength=regularizer_strength)
+
+
+@pytest.mark.parametrize(
+    "regularizer_strength, regularizer",
+    [
+        (0.001, nmo.regularizer.Ridge()),
+        (1.0, nmo.regularizer.Ridge()),
+        ("bah", nmo.regularizer.Ridge()),
+        (0.001, nmo.regularizer.Lasso()),
+        (1.0, nmo.regularizer.Lasso()),
+        ("bah", nmo.regularizer.Lasso()),
+        (0.001, nmo.regularizer.GroupLasso()),
+        (1.0, nmo.regularizer.GroupLasso()),
+        ("bah", nmo.regularizer.GroupLasso()),
+    ],
+)
+def test_regularizer_setter(regularizer_strength, regularizer):
+    if not isinstance(regularizer_strength, float):
+        with pytest.raises(
+            ValueError,
+            match=f"Could not convert the regularizer strength: {regularizer_strength} "
+            f"to a float.",
+        ):
+            regularizer.regularizer_strength = regularizer_strength
+    else:
+        regularizer.regularizer_strength = regularizer_strength
+
+
+@pytest.mark.parametrize(
     "regularizer",
     [
         nmo.regularizer.UnRegularized(),
