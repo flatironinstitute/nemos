@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional, Tuple
+from typing import Any, Callable, NamedTuple, Optional
 
 import jax
 import jax.flatten_util
@@ -8,7 +8,6 @@ from jax import grad, jit, lax, random
 from jax._src.typing import ArrayLike
 from jaxopt import OptStep
 from jaxopt._src import loop
-from jaxopt._src.proximal_gradient import fista_line_search
 from jaxopt.prox import prox_none
 from jaxopt.tree_util import (
     tree_add,
@@ -548,7 +547,8 @@ class SVRG(ProxSVRG):
             pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
         args:
-            If 2 positional arguments are passed, they are assumed to be X and y, and prox_lambda is substituted with None.
+            If 2 positional arguments are passed, they are assumed to be X and y,
+            and prox_lambda is substituted with None.
 
             (prox_lambda : Optional, float)
                 Regularization strength.
@@ -586,7 +586,8 @@ class SVRG(ProxSVRG):
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         args:
-            If 2 positional arguments are passed, they are assumed to be X and y, and prox_lambda is substituted with None.
+            If 2 positional arguments are passed, they are assumed to be X and y,
+            and prox_lambda is substituted with None.
 
             (prox_lambda : Optional, float)
                 Regularization strength.
@@ -621,7 +622,8 @@ class SVRG(ProxSVRG):
         prox_lambda : float
             Regularization strength.
         args:
-            If 2 positional arguments are passed, they are assumed to be X and y, and prox_lambda is substituted with None.
+            If 2 positional arguments are passed, they are assumed to be X and y,
+            and prox_lambda is substituted with None.
 
             (prox_lambda : Optional, float)
                 Regularization strength.

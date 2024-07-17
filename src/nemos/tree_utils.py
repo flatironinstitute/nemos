@@ -1,7 +1,7 @@
 """Utilities for manipulating and checking PyTrees."""
 
 from functools import reduce
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
