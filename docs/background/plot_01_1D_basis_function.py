@@ -27,12 +27,13 @@ mspline_basis = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
 # %%
 # Evaluating a Basis
 # ------------------------------------
-# The `Basis` object is callable, and can be evaluated as a function. For `SplineBasis`, the domain is defined by
-# the samples that we input to the `__call__` method. This results in an equi-spaced set of knots, which spans
-# the range from the smallest to the largest sample. These knots are then used to construct a uniformly spaced basis.
+# The `Basis` object is callable, and can be evaluated as a function. By default, the support of the basis
+# is defined by the samples that we input to the `__call__` method.  This results in an equi-spaced set of knots,
+# which spans the range from the smallest to the largest sample. These knots are then used to construct a
+# uniformly spaced basis.
 
 # Generate an array of sample points
-samples = np.random.uniform(0, 10, size=1000)
+samples = np.linspace(0, 10,1000)
 
 # Evaluate the basis at the sample points
 eval_basis = mspline_basis(samples)
@@ -40,6 +41,21 @@ eval_basis = mspline_basis(samples)
 # Output information about the evaluated basis
 print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples.")
+
+plt.figure()
+plt.title("MSpline basis")
+plt.plot(eval_basis)
+
+# %%
+# ## Setting the basis support
+# You can specify a range for the support of the basis by setting the `vmin` and `vmax`
+# parameters at initialization. Evaluating the basis at any sample outside the range will result in a NaN.
+
+mspline_basis = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, order=order, vmin=0.2, vmax=0.8)
+
+print(f"Within the domain: {np.round(mspline_basis(0.5), 3)}")
+print(f"Outside the domain: {mspline_basis(0.1)}")
+
 
 # %%
 # ## Basis `mode`

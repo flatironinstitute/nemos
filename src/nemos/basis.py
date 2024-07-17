@@ -369,7 +369,7 @@ class Basis(abc.ABC):
         # check if self._kernel is not None for mode="conv"
         self._check_has_kernel()
         if self.mode == "eval":  # evaluate at the sample
-            return self.__call__(*xi, vmin=self._vmin, vmax=self._vmax)
+            return self.__call__(*xi)
         else:  # convolve, called only at the last layer
             if "axis" not in self._conv_kwargs:
                 axis = 0
@@ -455,7 +455,12 @@ class Basis(abc.ABC):
         return self
 
     @abc.abstractmethod
-    def __call__(self, *xi: ArrayLike, **kwargs) -> FeatureMatrix:
+    def _call(self, *xi: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None, **kwargs):
+        """Evaluate basis on samples."""
+        pass
+
+    @abc.abstractmethod
+    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -470,9 +475,6 @@ class Basis(abc.ABC):
             Variable number of arguments, each representing an array of points at which
             to evaluate the basis functions. The dimensions and requirements of these
             inputs vary depending on the specific basis implementation.
-        **kwargs :
-            Keyword args such as `vmin` and `vmax`, needed for all basis except for
-            AdditiveBasis and MultiplicativeBasis.
 
         Returns
         -------
@@ -595,7 +597,7 @@ class Basis(abc.ABC):
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # evaluates the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self.__call__(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        Y = self._call(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
@@ -759,10 +761,22 @@ class AdditiveBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
+    def _call(self, *xi: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None, **kwargs):
+        """Evaluate basis on samples."""
+        X = np.hstack(
+            (
+                self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2.__call__(*xi[self._basis1._n_input_dimensionality:]),
+            )
+        )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
+
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, *xi: ArrayLike, **kwargs) -> FeatureMatrix:
+    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -778,15 +792,7 @@ class AdditiveBasis(Basis):
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
         """
-        X = np.hstack(
-            (
-                self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
-            )
-        )
-        if self.identifiability_constraints:
-            X = self._apply_identifiability_constraints(X)
-        return X
+        return self._call(*xi, vmin=self.vmin, vmax=self.vmax)
 
     @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -892,7 +898,7 @@ class MultiplicativeBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, *xi: ArrayLike, **kwargs) -> FeatureMatrix:
+    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -1157,46 +1163,8 @@ class MSplineBasis(SplineBasis):
             **kwargs,
         )
 
-    @support_pynapple(conv_type="numpy")
-    @check_transform_input
-    @check_one_dimensional
-    def __call__(
-        self,
-        sample_pts: ArrayLike,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-    ) -> FeatureMatrix:
-        """
-        Evaluate the M-spline basis functions at given sample points.
-
-        Parameters
-        ----------
-        sample_pts :
-            An array of sample points where the M-spline basis functions are to be
-            evaluated. Sample points are rescaled to [0,1] as follows:
-             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided at initialization, the minimum and maximum values of
-            `sample_pts` are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
-        vmin:
-            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
-            This value determines the minimum of the domain of the basis.
-        vmax :
-            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
-            This value determines the maximum of the domain of the basis.
-
-        Returns
-        -------
-        :
-            An array where each column corresponds to one M-spline basis function
-            evaluated at the input sample points. The shape of the array is
-            (len(sample_pts), n_basis_funcs).
-
-        Notes
-        -----
-        The implementation uses a recursive definition of M-splines. Boundary
-        conditions are handled such that the basis functions are positive and
-        integrate to one over the domain defined by the sample points.
-        """
+    def _call(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None):
+        """Evaluate basis over samples."""
         sample_pts, scaling = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         # add knots if not passed
         knot_locs = self._generate_knots(
@@ -1215,6 +1183,37 @@ class MSplineBasis(SplineBasis):
         if self.identifiability_constraints:
             X = self._apply_identifiability_constraints(X)
         return X
+
+    @support_pynapple(conv_type="numpy")
+    @check_transform_input
+    @check_one_dimensional
+    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+        """
+        Evaluate the M-spline basis functions at given sample points.
+
+        Parameters
+        ----------
+        sample_pts :
+            An array of sample points where the M-spline basis functions are to be
+            evaluated. Sample points are rescaled to [0,1] as follows:
+             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            If `vmin` and `vmax` are not provided at initialization, the minimum and maximum values of
+            `sample_pts` are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
+
+        Returns
+        -------
+        :
+            An array where each column corresponds to one M-spline basis function
+            evaluated at the input sample points. The shape of the array is
+            (len(sample_pts), n_basis_funcs).
+
+        Notes
+        -----
+        The implementation uses a recursive definition of M-splines. Boundary
+        conditions are handled such that the basis functions are positive and
+        integrate to one over the domain defined by the sample points.
+        """
+        return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
@@ -1327,14 +1326,25 @@ class BSplineBasis(SplineBasis):
             **kwargs,
         )
 
+    def _call(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None):
+        """Evaluate basis over samples."""
+        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
+        # add knots
+        knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
+
+        basis_eval = bspline(
+            sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
+        )
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
+        return basis_eval
+
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
     def __call__(
         self,
         sample_pts: ArrayLike,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
     ) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
@@ -1369,16 +1379,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
-        # add knots
-        knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
-
-        basis_eval = bspline(
-            sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
-        )
-        if self.identifiability_constraints:
-            basis_eval = self._apply_identifiability_constraints(basis_eval)
-        return basis_eval
+        return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the B-spline basis set on a grid of equi-spaced sample points.
@@ -1471,14 +1472,48 @@ class CyclicBSplineBasis(SplineBasis):
                 f"order {self.order} specified instead!"
             )
 
+    def _call(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None):
+        """Evaluate basis over samples."""
+        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
+        knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
+
+        # for cyclic, do not repeat knots
+        knot_locs = np.unique(knot_locs)
+
+        nk = knot_locs.shape[0]
+
+        # make sure knots are sorted
+        knot_locs.sort()
+
+        # extend knots
+        xc = knot_locs[nk - self.order]
+        knots = np.hstack(
+            (
+                knot_locs[0] - knot_locs[-1] + knot_locs[nk - self.order: nk - 1],
+                knot_locs,
+            )
+        )
+        ind = sample_pts > xc
+
+        basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
+        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
+
+        if np.sum(ind):
+            basis_eval[ind] = basis_eval[ind] + bspline(
+                sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
+            )
+        # restore points
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
+        return basis_eval
+
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
     def __call__(
         self,
         sample_pts: ArrayLike,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
     ) -> FeatureMatrix:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
@@ -1508,39 +1543,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
-        sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
-        knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
-
-        # for cyclic, do not repeat knots
-        knot_locs = np.unique(knot_locs)
-
-        nk = knot_locs.shape[0]
-
-        # make sure knots are sorted
-        knot_locs.sort()
-
-        # extend knots
-        xc = knot_locs[nk - self.order]
-        knots = np.hstack(
-            (
-                knot_locs[0] - knot_locs[-1] + knot_locs[nk - self.order : nk - 1],
-                knot_locs,
-            )
-        )
-        ind = sample_pts > xc
-
-        basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
-        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
-
-        if np.sum(ind):
-            basis_eval[ind] = basis_eval[ind] + bspline(
-                sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
-            )
-        # restore points
-        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-        if self.identifiability_constraints:
-            basis_eval = self._apply_identifiability_constraints(basis_eval)
-        return basis_eval
+        return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the Cyclic B-spline basis set on a grid of equi-spaced sample points.
@@ -1658,41 +1661,8 @@ class RaisedCosineBasisLinear(Basis):
                 f"2*width must be a positive integer, 2*width = {2 * width} instead!"
             )
 
-    @support_pynapple(conv_type="numpy")
-    @check_transform_input
-    @check_one_dimensional
-    def __call__(
-        self,
-        sample_pts: ArrayLike,
-        rescale_samples=True,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-    ) -> FeatureMatrix:
-        """Generate basis functions with given samples.
-
-        Parameters
-        ----------
-        sample_pts :
-            Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
-        rescale_samples :
-            If `True`, the sample points will be rescaled to the interval [0, 1]. If `False`, no rescaling is applied.
-            Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts`
-            are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
-         vmin:
-            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
-            This value determines the minimum of the domain of the basis.
-        vmax :
-            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
-            This value determines the maximum of the domain of the basis.
-
-
-        Raises
-        ------
-        ValueError
-            If the sample provided do not lie in [0,1].
-
-        """
+    def _call(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None, rescale_samples: bool = False):
+        """Evaluate basis over samples."""
         if rescale_samples:
             # note that sample points is converted to NDArray
             # with the decorator.
@@ -1723,6 +1693,34 @@ class RaisedCosineBasisLinear(Basis):
         if self.identifiability_constraints:
             basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
+
+    @support_pynapple(conv_type="numpy")
+    @check_transform_input
+    @check_one_dimensional
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+        rescale_samples=True,
+    ) -> FeatureMatrix:
+        """Generate basis functions with given samples.
+
+        Parameters
+        ----------
+        sample_pts :
+            Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
+        rescale_samples :
+            If `True`, the sample points will be rescaled to the interval [0, 1]. If `False`, no rescaling is applied.
+            Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
+            If `vmin` and `vmax` are not provided at initialization, the minimum and maximum values of `sample_pts`
+            are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
+
+        Raises
+        ------
+        ValueError
+            If the sample provided do not lie in [0,1].
+
+        """
+        return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax, rescale_samples=rescale_samples)
 
     def _compute_peaks(self) -> NDArray:
         """
@@ -1920,14 +1918,21 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             last_peak = 1
         return np.linspace(0, last_peak, self.n_basis_funcs)
 
+    def _call(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None):
+        """Evaluate basis over samples."""
+        return super()._call(
+            self._transform_samples(sample_pts, vmin=vmin, vmax=vmax),
+            vmin=vmin,
+            vmax=vmax,
+            rescale_samples=False,
+        )
+
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
     def __call__(
         self,
         sample_pts: ArrayLike,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
     ) -> FeatureMatrix:
         """Generate log-spaced raised cosine basis with given samples.
 
@@ -1937,12 +1942,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             Spacing for basis functions. Samples will be rescaled to the interval [0, 1].
             Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
             Values outside the [vmin, vmax] range are set to NaN.
-         vmin:
-            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
-            This value determines the minimum of the domain of the basis.
-        vmax :
-            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
-            This value determines the maximum of the domain of the basis.
 
         Returns
         -------
@@ -1954,10 +1953,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super().__call__(
-            self._transform_samples(sample_pts, vmin=vmin, vmax=vmax),
-            rescale_samples=False,
-        )
+        return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax)
 
 
 class OrthExponentialBasis(Basis):
@@ -2076,30 +2072,8 @@ class OrthExponentialBasis(Basis):
                 f"but only {sample_pts[0].size} samples provided!"
             )
 
-    @support_pynapple(conv_type="numpy")
-    @check_transform_input
-    @check_one_dimensional
-    def __call__(
-        self,
-        sample_pts: NDArray,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
-    ) -> FeatureMatrix:
-        """Generate basis functions with given spacing.
-
-        Parameters
-        ----------
-        sample_pts
-            Spacing for basis functions, holding elements on the interval [0,
-            inf), shape (n_samples,).
-
-        Returns
-        -------
-        basis_funcs
-            Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
-
-        """
+    def _call(self, sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None):
+        """Evaluate basis over samples."""
         self._check_sample_size(sample_pts)
         sample_pts, _ = min_max_rescale_samples(sample_pts, vmin=vmin, vmax=vmax)
         valid_idx = ~np.isnan(sample_pts)
@@ -2121,6 +2095,30 @@ class OrthExponentialBasis(Basis):
         if self.identifiability_constraints:
             basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
+
+    @support_pynapple(conv_type="numpy")
+    @check_transform_input
+    @check_one_dimensional
+    def __call__(
+        self,
+        sample_pts: NDArray,
+    ) -> FeatureMatrix:
+        """Generate basis functions with given spacing.
+
+        Parameters
+        ----------
+        sample_pts
+            Spacing for basis functions, holding elements on the interval [0,
+            inf), shape (n_samples,).
+
+        Returns
+        -------
+        basis_funcs
+            Evaluated exponentially decaying basis functions, numerically
+            orthogonalized, shape (n_samples, n_basis_funcs)
+
+        """
+        return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
