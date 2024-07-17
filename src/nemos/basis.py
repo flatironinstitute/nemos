@@ -830,7 +830,7 @@ class Basis(Base, abc.ABC):
         """
         Turn the Basis into a TransformerBasis for use with scikit-learn.
         """
-        return TransformerBasis(self)
+        return TransformerBasis(copy.deepcopy(self))
 
 
 class AdditiveBasis(Basis):
