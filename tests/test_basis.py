@@ -573,20 +573,19 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert np.allclose(out1, out2)
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "vmin, vmax, samples, nan_idx, mn, mx",
         [
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, None, np.arange(5), [4], 0, 1),
+            (None, 3, np.arange(5), [4], 2, 3),
+            (1, None, np.arange(5), [0], 1, 2),
+            (1, 3, np.arange(5), [0, 4], 1, 3)
         ]
     )
-    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx):
+    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
         bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
-        mn = 0 if vmin is None else vmin
-        mx = mn + 1 if vmax is None else vmax
         assert np.allclose(x1, x2 * (mx - mn) + mn)
 
     @pytest.mark.parametrize(
@@ -1054,20 +1053,19 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         assert np.allclose(out1, out2)
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "vmin, vmax, samples, nan_idx, mn, mx",
         [
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, None, np.arange(5), [4], 0, 1),
+            (None, 3, np.arange(5), [4], 2, 3),
+            (1, None, np.arange(5), [0], 1, 2),
+            (1, 3, np.arange(5), [0, 4], 1, 3)
         ]
     )
-    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx):
+    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
         bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
-        mn = 0 if vmin is None else vmin
-        mx = mn + 1 if vmax is None else vmax
         assert np.allclose(x1, x2 * (mx - mn) + mn)
 
     @pytest.mark.parametrize(
@@ -1520,35 +1518,38 @@ class TestMSplineBasis(BasisFuncsTesting):
         assert np.all(~np.isnan(out[valid_idx]))
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "vmin, vmax, samples, nan_idx, scaling",
         [
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, 3, np.arange(5), [4], 1),
+            (1, None, np.arange(5), [0], 1),
+            (1, 3, np.arange(5), [0, 4], 2)
         ]
     )
-    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
+    def test_vmin_vmax_eval_on_grid_scaling_effect_on_eval(self, vmin, vmax, samples, nan_idx, scaling):
+        """Check that the MSpline has the expected scaling property."""
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
         bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
-        assert np.allclose(out1, out2)
+        # multiply by scaling to get the invariance
+        # mspline must integrate to one, if the support
+        # is reduced, the height of the spline increases.
+        assert np.allclose(out1 * scaling, out2)
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "vmin, vmax, samples, nan_idx, mn, mx",
         [
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, None, np.arange(5), [4], 0, 1),
+            (None, 3, np.arange(5), [4], 2, 3),
+            (1, None, np.arange(5), [0], 1, 2),
+            (1, 3, np.arange(5), [0, 4], 1, 3)
         ]
     )
-    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx):
+    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
         bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
-        mn = 0 if vmin is None else vmin
-        mx = mn + 1 if vmax is None else vmax
         assert np.allclose(x1, x2 * (mx - mn) + mn)
 
     @pytest.mark.parametrize(
@@ -2481,20 +2482,19 @@ class TestBSplineBasis(BasisFuncsTesting):
         assert np.allclose(out1, out2)
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "vmin, vmax, samples, nan_idx, mn, mx",
         [
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, None, np.arange(5), [4], 0, 1),
+            (None, 3, np.arange(5), [4], 2, 3),
+            (1, None, np.arange(5), [0], 1, 2),
+            (1, 3, np.arange(5), [0, 4], 1, 3)
         ]
     )
-    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx):
+    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(5, mode="eval", vmin=None, vmax=None)
         bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
-        mn = 0 if vmin is None else vmin
-        mx = mn + 1 if vmax is None else vmax
         assert np.allclose(x1, x2 * (mx - mn) + mn)
 
     @pytest.mark.parametrize(
@@ -3002,20 +3002,19 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         assert np.allclose(out1, out2)
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "vmin, vmax, samples, nan_idx, mn, mx",
         [
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, None, np.arange(5), [4], 0, 1),  # default to 0, 1 by convention of Basis._get_samples
+            (None, 3, np.arange(5), [4], 2, 3),  # mn is mx - 1  by convention of Basis._get_samples
+            (1, None, np.arange(5), [0], 1, 2),  # mx is mn + 1  by convention of Basis._get_samples
+            (1, 3, np.arange(5), [0, 4], 1, 3)
         ]
     )
-    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx):
+    def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(5, mode="eval", vmin=None, vmax=None)
         bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
-        mn = 0 if vmin is None else vmin
-        mx = mn + 1 if vmax is None else vmax
         assert np.allclose(x1, x2 * (mx - mn) + mn)
 
     @pytest.mark.parametrize(
