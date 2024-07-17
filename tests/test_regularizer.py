@@ -10,6 +10,34 @@ import statsmodels.api as sm
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
 
 import nemos as nmo
+from nemos.regularizer import Regularizer
+
+
+@pytest.mark.parametrize(
+    "reg_str, reg_type",
+    [
+        ("unregularized", nmo.regularizer.Regularizer),
+        ("ridge", nmo.regularizer.Ridge),
+        ("lasso", nmo.regularizer.Lasso),
+        ("group_lasso", nmo.regularizer.GroupLasso),
+        ("not_valid", None),
+    ],
+)
+def test_regularizer_builder(reg_str, reg_type):
+    """Test building a regularizer from a string"""
+    raise_exception = reg_str not in nmo._regularizer_builder.AVAILABLE_REGULARIZERS
+    if raise_exception:
+        with pytest.raises(ValueError, match=f"Unknown regularizer: {reg_str}. "):
+            nmo._regularizer_builder.create_regularizer(reg_str)
+    else:
+        # build a regularizer by string
+        regularizer = nmo._regularizer_builder.create_regularizer(reg_str)
+        # assert correct type of regularizer is instantiated
+        assert isinstance(regularizer, reg_type)
+        # create a regularizer of that type
+        regularizer2 = reg_type()
+        # assert that they have the same attributes
+        assert regularizer.__dict__ == regularizer2.__dict__
 
 
 @pytest.mark.parametrize(
