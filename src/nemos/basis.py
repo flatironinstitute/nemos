@@ -30,7 +30,7 @@ __all__ = [
     "OrthExponentialBasis",
     "AdditiveBasis",
     "MultiplicativeBasis",
-    # "TransformerBasis",
+    "TransformerBasis",
 ]
 
 
