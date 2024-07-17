@@ -1480,6 +1480,8 @@ class TestPopulationGLM:
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         model.regularizer = reg
+        model.solver_name = model.regularizer.default_solver
+        model.fit(X, y)
         num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert int(num) == num
 

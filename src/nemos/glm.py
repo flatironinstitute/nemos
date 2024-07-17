@@ -814,6 +814,9 @@ class GLM(BaseRegressor):
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (GroupLasso, Lasso)):
             coef, _ = self._get_coef_and_intercept()
+            if isinstance(coef, dict):
+                resid_dof = jax.tree.map(lambda x: n_samples - jnp.sum(jnp.isclose(x, jnp.zeros_like(x))), coef)
+                return resid_dof
             return n_samples - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
         elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
