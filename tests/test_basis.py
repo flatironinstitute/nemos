@@ -10,8 +10,8 @@ import pytest
 import sklearn.pipeline as pipeline
 import statsmodels.api as sm
 import utils_testing
-from sklearn.model_selection import GridSearchCV
 from sklearn.base import clone as sk_clone
+from sklearn.model_selection import GridSearchCV
 
 import nemos.basis as basis
 import nemos.convolve as convolve
@@ -3919,6 +3919,30 @@ def test_basis_to_transformer(basis_cls):
     bas = basis_cls(n_basis_funcs)
     assert isinstance(bas.to_transformer(), basis.TransformerBasis)
     assert bas.to_transformer().n_basis_funcs == bas.n_basis_funcs
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_basis_to_transformer_makes_a_copy(basis_cls):
+    bas_a = basis_cls(5)
+    trans_bas_a = bas_a.to_transformer()
+
+    # changing an attribute in bas should not change trans_bas
+    bas_a.n_basis_funcs = 10
+    assert trans_bas_a.n_basis_funcs == 5
+
+    # changing an attribute in the transformerbasis should not change the original
+    bas_b = basis_cls(5)
+    trans_bas_b = bas_b.to_transformer()
+    trans_bas_b.n_basis_funcs = 100
+    assert bas_b.n_basis_funcs == 5
 
 
 @pytest.mark.parametrize(
