@@ -1083,21 +1083,11 @@ class SplineBasis(Basis, abc.ABC):
         if is_cyclic:
             num_interior_knots += self.order - 1
 
-        assert 0 <= perc_low <= 1, "Specify `perc_low` as a float between 0 and 1."
-        assert 0 <= perc_high <= 1, "Specify `perc_high` as a float between 0 and 1."
-        assert perc_low < perc_high, "perc_low must be less than perc_high."
-
-        # clip to avoid numerical errors in case of percentile numerical precision close to 0 and 1
-        # Spline basis have support on the semi-open [a, b)  interval, we add a small epsilon
-        # to mx so that the so that basis_element(max(samples)) != 0
-        mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
-        mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100)) + 10**-8
-
         knot_locs = np.concatenate(
             (
-                mn * np.ones(self.order - 1),
-                np.linspace(mn, mx, num_interior_knots + 2),
-                mx * np.ones(self.order - 1),
+                np.zeros(self.order - 1),
+                np.linspace(0, (1 + 10**-8), num_interior_knots + 2),
+                np.full(self.order - 1, 1 + 10**-8),
             )
         )
         return knot_locs
@@ -1379,9 +1369,14 @@ class BSplineBasis(SplineBasis):
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
-        basis_eval = bspline(
-            sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
-        )
+        valid = ~np.isnan(sample_pts)
+        if np.any(valid):
+            basis_eval = bspline(
+                sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
+            )
+        else:
+            basis_eval = np.full((sample_pts.shape[0], self.n_basis_funcs), np.nan)
+
         if self.identifiability_constraints:
             basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
@@ -1545,19 +1540,26 @@ class CyclicBSplineBasis(SplineBasis):
                 knot_locs,
             )
         )
-        ind = sample_pts > xc
 
-        basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
-        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
+        valid = ~np.isnan(sample_pts)
+        if np.any(valid):
+            ind = sample_pts > xc
 
-        if np.sum(ind):
-            basis_eval[ind] = basis_eval[ind] + bspline(
-                sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
-            )
-        # restore points
-        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-        if self.identifiability_constraints:
-            basis_eval = self._apply_identifiability_constraints(basis_eval)
+            basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
+            sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
+
+            if np.sum(ind):
+                basis_eval[ind] = basis_eval[ind] + bspline(
+                    sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
+                )
+            # restore points
+            sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
+            if self.identifiability_constraints:
+                basis_eval = self._apply_identifiability_constraints(basis_eval)
+        else:
+            # deal with the case of no valid samples
+            basis_eval = np.full((sample_pts.shape[0], self.n_basis_funcs), np.nan)
+
         return basis_eval
 
     @support_pynapple(conv_type="numpy")
