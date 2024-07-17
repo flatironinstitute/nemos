@@ -315,6 +315,64 @@ class TransformerBasis:
         """
         return super().__dir__() + self._basis.__dir__()
 
+    def __add__(self, other: TransformerBasis) -> TransformerBasis:
+        """
+        Add two TransformerBasis objects.
+
+        Parameters
+        ----------
+        other
+            The other TransformerBasis object to add.
+
+        Returns
+        -------
+        : TransformerBasis
+            The resulting Basis object.
+        """
+        return TransformerBasis(self._basis + other._basis)
+
+    def __mul__(self, other: TransformerBasis) -> TransformerBasis:
+        """
+        Multiply two TransformerBasis objects.
+
+        Parameters
+        ----------
+        other
+            The other TransformerBasis object to multiply.
+
+        Returns
+        -------
+        :
+            The resulting Basis object.
+        """
+        return TransformerBasis(self._basis * other._basis)
+
+    def __pow__(self, exponent: int) -> TransformerBasis:
+        """Exponentiation of a TransformerBasis object.
+
+        Define the power of a basis by repeatedly applying the method __multiply__.
+        The exponent must be a positive integer.
+
+        Parameters
+        ----------
+        exponent :
+            Positive integer exponent
+
+        Returns
+        -------
+        :
+            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
+
+        Raises
+        ------
+        TypeError
+            If the provided exponent is not an integer.
+        ValueError
+            If the integer is zero or negative.
+        """
+        # errors are handled by Basis.__pow__
+        return TransformerBasis(self._basis**exponent)
+
 
 class Basis(Base, abc.ABC):
     """

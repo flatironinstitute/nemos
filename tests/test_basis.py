@@ -4061,6 +4061,82 @@ def test_transformerbasis_setattr_illegal_attribute(basis_cls):
     with pytest.raises(ValueError, match="Only setting _basis or existing attributes of _basis is allowed."):
         trans_bas.random_attr = "random value"
 
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_addition(basis_cls):
+    n_basis_funcs_a = 5
+    n_basis_funcs_b = n_basis_funcs_a * 2
+    trans_bas_a = basis.TransformerBasis(basis_cls(n_basis_funcs_a))
+    trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
+    trans_bas_sum = trans_bas_a + trans_bas_b
+    assert isinstance(trans_bas_sum, basis.TransformerBasis)
+    assert isinstance(trans_bas_sum._basis, basis.AdditiveBasis)
+    assert trans_bas_sum.n_basis_funcs == trans_bas_a.n_basis_funcs + trans_bas_b.n_basis_funcs
+    assert trans_bas_sum._n_input_dimensionality == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
+    assert trans_bas_sum._basis1.n_basis_funcs == n_basis_funcs_a
+    assert trans_bas_sum._basis2.n_basis_funcs == n_basis_funcs_b
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_multiplication(basis_cls):
+    n_basis_funcs_a = 5
+    n_basis_funcs_b = n_basis_funcs_a * 2
+    trans_bas_a = basis.TransformerBasis(basis_cls(n_basis_funcs_a))
+    trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
+    trans_bas_prod = trans_bas_a * trans_bas_b
+    assert isinstance(trans_bas_prod, basis.TransformerBasis)
+    assert isinstance(trans_bas_prod._basis, basis.MultiplicativeBasis)
+    assert trans_bas_prod.n_basis_funcs == trans_bas_a.n_basis_funcs * trans_bas_b.n_basis_funcs
+    assert trans_bas_prod._n_input_dimensionality == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
+    assert trans_bas_prod._basis1.n_basis_funcs == n_basis_funcs_a
+    assert trans_bas_prod._basis2.n_basis_funcs == n_basis_funcs_b
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize(
+        "exponent, error_type, error_message",
+        [
+            (2, does_not_raise, None),
+            (5, does_not_raise, None),
+            (0.5, TypeError, "Exponent should be an integer"),
+            (-1, ValueError, "Exponent should be a non-negative integer")
+        ]
+)
+def test_transformerbasis_exponentiation(basis_cls, exponent: int, error_type, error_message):
+    trans_bas = basis.TransformerBasis(basis_cls(5))
+
+    if not isinstance(exponent, int):
+        with pytest.raises(error_type, match=error_message):
+            trans_bas_exp = trans_bas ** exponent
+            assert isinstance(trans_bas_exp, basis.TransformerBasis)
+            assert isinstance(trans_bas_exp._basis, basis.MultiplicativeBasis)
+
+
 @pytest.mark.parametrize(
     "basis_cls",
     [
