@@ -809,9 +809,6 @@ class GLM(BaseRegressor):
                     "instead!"
                 )
 
-        if isinstance(self.observation_model, obs.PoissonObservations):
-            return 1.0  # scale is fix, residual not used
-
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
