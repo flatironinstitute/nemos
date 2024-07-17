@@ -40,5 +40,6 @@ def create_regularizer(name: str):
         return GroupLasso()
     else:
         raise ValueError(
-            f"Unknown regularizer: {name}. Regularizer must be one of {AVAILABLE_REGULARIZERS}"
+            f"Unknown regularizer: {name}. "
+            f"Regularizer must be one of {AVAILABLE_REGULARIZERS}"
         )
