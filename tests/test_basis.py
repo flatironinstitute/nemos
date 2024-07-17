@@ -3926,6 +3926,22 @@ def test_transformerbasis_exponentiation(basis_cls, exponent: int, error_type, e
             assert isinstance(trans_bas_exp, basis.TransformerBasis)
             assert isinstance(trans_bas_exp._basis, basis.MultiplicativeBasis)
 
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_dir(basis_cls):
+    trans_bas = basis.TransformerBasis(basis_cls(5))
+    for attr_name in ("fit", "transform", "fit_transform", "n_basis_funcs", "mode", "window_size"):
+        assert attr_name in dir(trans_bas)
+
+
 
 @pytest.mark.parametrize(
     "basis_cls",
