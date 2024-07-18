@@ -261,13 +261,6 @@ class Ridge(Regularizer):
         def prox_op(params, l2reg, scaling=0.5):
             Ws, bs = params
             l2reg /= bs.shape[0]
-            # if Ws is a pytree, l2reg needs to be a pytree with the same
-            # structure
-            if isinstance(Ws, (dict, FeaturePytree)):
-                struct = jax.tree_util.tree_structure(Ws)
-                l2reg = jax.tree_util.tree_unflatten(
-                    struct, [l2reg] * struct.num_leaves
-                )
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
 
         return prox_op
@@ -310,11 +303,7 @@ class Lasso(Regularizer):
             l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
             # structure
-            if isinstance(Ws, (dict, FeaturePytree)):
-                struct = jax.tree_util.tree_structure(Ws)
-                l1reg = jax.tree_util.tree_unflatten(
-                    struct, [l1reg] * struct.num_leaves
-                )
+            l1reg = jax.tree_util.tree_map(lambda x: l1reg * jnp.ones_like(x), Ws)
             return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
 
         return prox_op

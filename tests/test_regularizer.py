@@ -161,7 +161,7 @@ class TestUnRegularized:
         else:
             nmo.utils.assert_is_callable(model._predict_and_compute_loss, "loss")
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
         """Test that the solver runs."""
 
@@ -172,6 +172,18 @@ class TestUnRegularized:
         model.solver_name = solver_name
         runner = model.instantiate_solver()[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient"])
+    def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
+        """Test that the solver runs."""
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+
+        # set regularizer and solver name
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        runner = model.instantiate_solver()[2]
+        runner((jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]), X.data, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -366,7 +378,7 @@ class TestRidge:
         else:
             nmo.utils.assert_is_callable(model._predict_and_compute_loss, "loss")
 
-    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient"])
     def test_run_solver(self, solver_name, poissonGLM_model_instantiation):
         """Test that the solver runs."""
 
@@ -377,6 +389,18 @@ class TestRidge:
         model.solver_name = solver_name
         runner = model.instantiate_solver()[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS", "ProximalGradient"])
+    def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
+        """Test that the solver runs."""
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+
+        # set regularizer and solver name
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        runner = model.instantiate_solver()[2]
+        runner((jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]), X.data, y)
 
     def test_solver_output_match(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
@@ -532,6 +556,18 @@ class TestLasso:
         model.solver_name = "ProximalGradient"
         runner = model.instantiate_solver()[2]
         runner((true_params[0] * 0.0, true_params[1]), X, y)
+
+    @pytest.mark.parametrize("solver_name", ["ProximalGradient"])
+    def test_run_solver_tree(self, solver_name, poissonGLM_model_instantiation_pytree):
+        """Test that the solver runs."""
+
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation_pytree
+
+        # set regularizer and solver name
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        runner = model.instantiate_solver()[2]
+        runner((jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]), X.data, y)
 
     def test_solver_match_statsmodels(self, poissonGLM_model_instantiation):
         """Test that different solvers converge to the same solution."""
