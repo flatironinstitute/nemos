@@ -82,7 +82,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
         Checks that the sample size of the output from the evaluate() method matches the input sample size.
         """
@@ -94,7 +94,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, args, mode, window_size, sample_size
     ):
         """
@@ -114,7 +114,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_funcs, sample_size, mode, window_size
     ):
         """
@@ -154,9 +154,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, window_size):
         """
-        Confirms that the fit_transform() method correctly handles the number of input samples that are provided.
+        Confirms that the compute_features() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, mode=mode, window_size=window_size)
         inputs = [np.linspace(0, 1, 20)] * n_input
@@ -306,7 +306,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_fit_transform(self, n_basis, sample_size):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -623,9 +623,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
@@ -635,30 +635,30 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, args, mode, window_size, sample_size
     ):
         """
-        Verifies that the fit_transform() method returns the expected number of basis functions.
+        Verifies that the compute_features() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(mode=mode, window_size=window_size, **args)
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != args["n_basis_funcs"]:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {args['n_basis_funcs']}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_funcs, sample_size, mode, window_size
     ):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the co ute_features() method matches the input sample size.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size
@@ -666,9 +666,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The second dimension of the output features basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -694,9 +694,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, window_size):
         """
-        Confirms that the fit_transform() method correctly handles the number of input samples that are provided.
+        Confirms that the compute_features() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(n_basis_funcs=5, mode=mode, window_size=window_size)
         inputs = [np.linspace(0, 1, 20)] * n_input
@@ -787,7 +787,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_fit_transform(self, n_basis, sample_size):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -1118,9 +1118,9 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
@@ -1128,11 +1128,11 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_funcs: int, order: int, mode, window_size
     ):
         """
-        Verifies that the fit_transform() method returns the expected number of basis functions.
+        Verifies that the compute_features() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size
@@ -1140,20 +1140,20 @@ class TestMSplineBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [4, 10, 100])
     @pytest.mark.parametrize("order", [1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_funcs, sample_size, order, mode, window_size
     ):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size
@@ -1161,9 +1161,9 @@ class TestMSplineBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -1202,20 +1202,20 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_fit_transform_requirements(
+    def test_samples_range_matches_compute_features_requirements(
         self, sample_range: tuple
     ):
         """
-        Verifies that the fit_transform() method can handle input range.
+        Verifies that the compute_features() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, window_size):
         """
-        Confirms that the fit_transform() method correctly handles the number of input samples that are provided.
+        Confirms that the compute_features() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(
             n_basis_funcs=5, order=3, mode=mode, window_size=window_size
@@ -1287,7 +1287,7 @@ class TestMSplineBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_fit_transform(self, n_basis, sample_size):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -1621,9 +1621,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         "eval_input",
         [0, [0] * 6, (0,) * 6, np.array([0] * 6), jax.numpy.array([0] * 6)],
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         if isinstance(eval_input, int):
@@ -1639,7 +1639,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_funcs, sample_size, mode, window_size
     ):
         """Tests whether the evaluate method returns the expected number of basis functions."""
@@ -1653,19 +1653,19 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The first dimension of the output features basis is {eval_basis.shape[1]}",
             )
         return
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 12])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 30)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_funcs, sample_size, mode, window_size
     ):
-        """Tests whether the sample size of the fit_transformed result matches that of the input."""
+        """Tests whether the sample size of the features result matches that of the input."""
         decay_rates = np.linspace(0.1, 20, n_basis_funcs)
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs,
@@ -1676,9 +1676,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -1711,8 +1711,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
-        """Tests whether the fit_transform method correctly processes the number of required inputs."""
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, window_size):
+        """Tests whether the compute_features method correctly processes the number of required inputs."""
         basis_obj = self.cls(
             n_basis_funcs=5,
             decay_rates=np.arange(1, 6),
@@ -1732,7 +1732,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 2, 3, 4, 5, 6, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
-        """Tests whether the fit_transform_on_grid method correctly outputs the grid mesh size."""
+        """Tests whether the compute_features_on_grid method correctly outputs the grid mesh size."""
         basis_obj = self.cls(n_basis_funcs=5, decay_rates=np.arange(1, 6))
         raise_exception = sample_size < 5
         if raise_exception:
@@ -1820,7 +1820,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_fit_transform(self, n_basis, sample_size):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -2074,9 +2074,9 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
@@ -2084,11 +2084,11 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_funcs: int, order: int, mode, window_size
     ):
         """
-        Verifies that the fit_transform() method returns the expected number of basis functions.
+        Verifies that the compute_features() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size
@@ -2096,9 +2096,9 @@ class TestBSplineBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
         return
 
@@ -2106,11 +2106,11 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [4, 10, 100])
     @pytest.mark.parametrize("order", [1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_funcs, sample_size, order, mode, window_size
     ):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size
@@ -2118,9 +2118,9 @@ class TestBSplineBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -2174,20 +2174,20 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_fit_transform_requirements(
+    def test_samples_range_matches_compute_features_requirements(
         self, sample_range: tuple
     ):
         """
-        Verifies that the fit_transform() method can handle input range.
+        Verifies that the compute_features() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, window_size):
         """
-        Confirms that the fit_transform() method correctly handles the number of input samples that are provided.
+        Confirms that the compute_features() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(
             n_basis_funcs=5, order=3, mode=mode, window_size=window_size
@@ -2206,7 +2206,7 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     def test_evaluate_on_grid_meshgrid_size(self, sample_size):
         """
-        Checks that the fit_transform_on_grid() method returns a grid of the expected size.
+        Checks that the evaluate_on_grid() method returns a grid of the expected size.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         raise_exception = sample_size <= 0
@@ -2263,7 +2263,7 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_fit_transform(self, n_basis, sample_size):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -2591,9 +2591,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
@@ -2601,11 +2601,11 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [8, 10])
     @pytest.mark.parametrize("order", range(2, 6))
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_funcs: int, order: int, mode, window_size
     ):
         """
-        Verifies that the fit_transform() method returns the expected number of basis functions.
+        Verifies that the compute_features() method returns the expected number of basis functions.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size
@@ -2613,9 +2613,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, 100))
         if eval_basis.shape[1] != n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {n_basis_funcs}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The first dimension of the output features is {eval_basis.shape[0]}",
             )
         return
 
@@ -2623,11 +2623,11 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("n_basis_funcs", [8, 10, 100])
     @pytest.mark.parametrize("order", [2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_funcs, sample_size, order, mode, window_size
     ):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = self.cls(
             n_basis_funcs=n_basis_funcs, order=order, mode=mode, window_size=window_size
@@ -2635,9 +2635,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The second dimension of the output features is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
@@ -2709,20 +2709,20 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
-    def test_samples_range_matches_fit_transform_requirements(
+    def test_samples_range_matches_compute_features_requirements(
         self, sample_range: tuple
     ):
         """
-        Verifies that the fit_transform() method can handle input range.
+        Verifies that the compute_features() method can handle input range.
         """
         basis_obj = self.cls(n_basis_funcs=5, order=3)
         basis_obj.compute_features(np.linspace(*sample_range, 100))
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_number_of_required_inputs_fit_transform(self, n_input, mode, window_size):
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, window_size):
         """
-        Confirms that the fit_transform() method correctly handles the number of input samples that are provided.
+        Confirms that the compute_features() method correctly handles the number of input samples that are provided.
         """
         basis_obj = self.cls(
             n_basis_funcs=5, order=3, mode=mode, window_size=window_size
@@ -2798,7 +2798,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_fit_transform(self, n_basis, sample_size):
+    def test_pynapple_support_compute_features(self, n_basis, sample_size):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -3205,9 +3205,9 @@ class TestAdditiveBasis(CombinedBasis):
             [jax.numpy.array([0]), [0]],
         ],
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) + basis.MSplineBasis(5)
         basis_obj.compute_features(*eval_input)
@@ -3224,7 +3224,7 @@ class TestAdditiveBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
     ):
         """
@@ -3245,9 +3245,9 @@ class TestAdditiveBasis(CombinedBasis):
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {n_basis_a + n_basis_b}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
@@ -3262,11 +3262,11 @@ class TestAdditiveBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
     ):
         """
-        Test whether the output sample size from the `AdditiveBasis` fit_transform function matches the input sample size.
+        Test whether the output sample size from the `AdditiveBasis` compute_features function matches the input sample size.
         """
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, mode=mode, window_size=window_size
@@ -3280,9 +3280,9 @@ class TestAdditiveBasis(CombinedBasis):
         )
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features basis."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The second dimension of the output features basis is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize(
@@ -3297,11 +3297,11 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_number_of_required_inputs_fit_transform(
+    def test_number_of_required_inputs_compute_features(
         self, n_input, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
     ):
         """
-        Test whether the number of required inputs for the `fit_transform` function matches
+        Test whether the number of required inputs for the `compute_features` function matches
         the sum of the number of input samples from the two bases.
         """
         basis_a_obj = self.instantiate_basis(
@@ -3420,7 +3420,7 @@ class TestAdditiveBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_pynapple_support_fit_transform(
+    def test_pynapple_support_compute_features(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
     ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
@@ -3432,7 +3432,7 @@ class TestAdditiveBasis(CombinedBasis):
         basis_add = self.instantiate_basis(n_basis_a, basis_a) + self.instantiate_basis(
             n_basis_b, basis_b
         )
-        # fit_transform the basis over pynapple Tsd objects
+        # compute_features the basis over pynapple Tsd objects
         out = basis_add.compute_features(*([inp] * basis_add._n_input_dimensionality))
         # check type
         assert isinstance(out, nap.TsdFrame)
@@ -3808,9 +3808,9 @@ class TestMultiplicativeBasis(CombinedBasis):
             [jax.numpy.array([0]), [0]],
         ],
     )
-    def test_fit_transform_input(self, eval_input):
+    def test_compute_features_input(self, eval_input):
         """
-        Checks that the sample size of the output from the fit_transform() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         basis_obj = basis.MSplineBasis(5) * basis.MSplineBasis(5)
         basis_obj.compute_features(*eval_input)
@@ -3827,7 +3827,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_fit_transform_returns_expected_number_of_basis(
+    def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
     ):
         """
@@ -3848,9 +3848,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the fit_transformed basis."
+                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
                 f"The number of basis is {n_basis_a * n_basis_b}",
-                f"The first dimension of the fit_transformed basis is {eval_basis.shape[1]}",
+                f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
 
     @pytest.mark.parametrize("sample_size", [12, 30, 35])
@@ -3865,11 +3865,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_sample_size_of_fit_transform_matches_that_of_input(
+    def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
     ):
         """
-        Test whether the output sample size from the `MultiplicativeBasis` fit_transform function matches the input sample size.
+        Test whether the output sample size from the `MultiplicativeBasis` compute_features function matches the input sample size.
         """
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, mode=mode, window_size=window_size
@@ -3883,9 +3883,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         if eval_basis.shape[0] != sample_size:
             raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the fit_transformed basis."
+                f"Dimensions do not agree: The window size should match the second dimension of the output features."
                 f"The window size is {sample_size}",
-                f"The second dimension of the fit_transformed basis is {eval_basis.shape[0]}",
+                f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
 
     @pytest.mark.parametrize(
@@ -3900,11 +3900,11 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
-    def test_number_of_required_inputs_fit_transform(
+    def test_number_of_required_inputs_compute_features(
         self, n_input, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
     ):
         """
-        Test whether the number of required inputs for the `fit_transform` function matches
+        Test whether the number of required inputs for the `compute_features` function matches
         the sum of the number of input samples from the two bases.
         """
         basis_a_obj = self.instantiate_basis(
@@ -4021,7 +4021,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_inconsistent_sample_sizes(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size_a, sample_size_b
     ):
-        """Test that the inputs of inconsistent sample sizes result in an exception when fit_transform is called"""
+        """Test that the inputs of inconsistent sample sizes result in an exception when compute_features is called"""
         raise_exception = sample_size_a != sample_size_b
         basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
         basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
@@ -4050,7 +4050,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         "basis_b",
         [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
     )
-    def test_pynapple_support_fit_transform(
+    def test_pynapple_support_compute_features(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
     ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
