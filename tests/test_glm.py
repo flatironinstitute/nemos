@@ -102,6 +102,7 @@ class TestGLM:
         with expectation:
             glm_class(
                 regularizer=ridge_regularizer,
+                regularizer_strength=0.1,
                 solver_name="LBFGS",
                 observation_model=observation,
             )
@@ -2803,22 +2804,30 @@ class TestPopulationGLM:
                 getattr(model, attr_name)(X, y)
 
     @pytest.mark.parametrize(
-        "regularizer, solver_name, solver_kwargs",
+        "regularizer, regularizer_strength, solver_name, solver_kwargs",
         [
             (
                 nmo.regularizer.UnRegularized(),
+                0.001,
                 "LBFGS",
                 {"stepsize": 0.1, "tol": 10**-14},
             ),
-            (nmo.regularizer.UnRegularized(), "GradientDescent", {"tol": 10**-14}),
             (
-                nmo.regularizer.Ridge(regularizer_strength=0.001),
+                nmo.regularizer.UnRegularized(),
+                None,
+                "GradientDescent",
+                {"tol": 10**-14},
+            ),
+            (
+                nmo.regularizer.Ridge(),
+                None,
                 "LBFGS",
                 {"tol": 10**-14},
             ),
-            (nmo.regularizer.Ridge(), "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (nmo.regularizer.Ridge(), None, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
             (
-                nmo.regularizer.Lasso(regularizer_strength=0.001),
+                nmo.regularizer.Lasso(),
+                0.001,
                 "ProximalGradient",
                 {"tol": 10**-14},
             ),
@@ -2842,6 +2851,7 @@ class TestPopulationGLM:
     def test_masked_fit_vs_loop(
         self,
         regularizer,
+        regularizer_strength,
         solver_name,
         solver_kwargs,
         mask,
@@ -2874,6 +2884,7 @@ class TestPopulationGLM:
         # fit pop glm
         model.feature_mask = mask
         model.regularizer = regularizer
+        model.regularizer_strength = regularizer_strength
         model.solver_name = solver_name
         model.solver_kwargs = solver_kwargs
         model.fit(X, y)
@@ -2885,6 +2896,7 @@ class TestPopulationGLM:
         for k in range(y.shape[1]):
             model_single_neu = nmo.glm.GLM(
                 regularizer=regularizer,
+                regularizer_strength=regularizer_strength,
                 solver_name=solver_name,
                 solver_kwargs=solver_kwargs,
             )

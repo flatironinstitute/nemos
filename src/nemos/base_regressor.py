@@ -34,6 +34,9 @@ class BaseRegressor(Base, abc.ABC):
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
         Default is UnRegularized regression.
+    regularizer_strength :
+        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
+        regularization, a warning will be raised and the strength will default to 1.0.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -63,10 +66,12 @@ class BaseRegressor(Base, abc.ABC):
     def __init__(
         self,
         regularizer: Union[str, Regularizer] = "unregularized",
+        regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = regularizer
+        self.regularizer_strength = regularizer_strength
 
         # no solver name provided, use default
         if solver_name is None:
@@ -96,6 +101,25 @@ class BaseRegressor(Base, abc.ABC):
                 f"The regularizer should be either a string from "
                 f"{AVAILABLE_REGULARIZERS} or an instance of `nemos.regularizer.Regularizer`"
             )
+
+    @property
+    def regularizer_strength(self) -> float:
+        return self._regularizer_strength
+
+    @regularizer_strength.setter
+    def regularizer_strength(self, strength: float):
+        if strength is None:
+            self._regularizer_strength = None
+            return
+        try:
+            # force conversion to float to prevent weird GPU issues
+            strength = float(strength)
+        except ValueError:
+            # raise a more detailed ValueError
+            raise ValueError(
+                f"Could not convert the regularizer strength: {strength} to a float."
+            )
+        self._regularizer_strength = strength
 
     @property
     def solver_name(self) -> str:
@@ -197,9 +221,18 @@ class BaseRegressor(Base, abc.ABC):
                 f"{self._regularizer.allowed_solvers}."
             )
 
+        if self.regularizer_strength is None:
+            warnings.warn(
+                "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
+                "the documentation for best practices in setting regularization strength."
+            )
+            self.regularizer_strength = 1.0
+
         # only use penalized loss if not using proximal gradient descent
         if self.solver_name != "ProximalGradient":
-            loss = self.regularizer.penalized_loss(self._predict_and_compute_loss)
+            loss = self.regularizer.penalized_loss(
+                self._predict_and_compute_loss, self.regularizer_strength
+            )
         else:
             loss = self._predict_and_compute_loss
 
@@ -210,7 +243,7 @@ class BaseRegressor(Base, abc.ABC):
         if self.solver_name == "ProximalGradient":
             self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
             # add self.regularizer_strength to args
-            args += (self.regularizer.regularizer_strength,)
+            args += (self.regularizer_strength,)
         if self.solver_name == "LBFGSB":
             if "bounds" not in kwargs.keys():
                 warnings.warn(

@@ -68,6 +68,9 @@ class GLM(BaseRegressor):
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
         Default is UnRegularized regression.
+    regularizer_strength :
+        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
+        regularization, a warning will be raised and the strength will default to 1.0.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -103,12 +106,14 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: str | Regularizer = "unregularized",
+        regularizer: Union[str, Regularizer] = "unregularized",
+        regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
     ):
         super().__init__(
             regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,
         )
@@ -1018,6 +1023,9 @@ class PopulationGLM(GLM):
         Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
         Default is UnRegularized regression.
+    regularizer_strength :
+        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
+        regularization, a warning will be raised and the strength will default to 1.0.
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
@@ -1102,7 +1110,8 @@ class PopulationGLM(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: str | Regularizer = "unregularized",
+        regularizer: Union[str, Regularizer] = "unregularized",
+        regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
@@ -1110,6 +1119,7 @@ class PopulationGLM(GLM):
     ):
         super().__init__(
             observation_model=observation_model,
+            regularizer_strength=regularizer_strength,
             regularizer=regularizer,
             solver_name=solver_name,
             solver_kwargs=solver_kwargs,

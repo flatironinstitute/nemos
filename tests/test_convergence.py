@@ -86,12 +86,12 @@ def test_lasso_convergence():
 
     # instantiate and fit GLM with ProximalGradient
     model_PG = nmo.glm.GLM(regularizer="lasso", solver_name="ProximalGradient")
-    model_PG.regularizer.regularizer_strength = 0.1
+    model_PG.regularizer_strength = 0.1
     model_PG.fit(X, y)
 
     # use the penalized loss function to solve optimization via Nelder-Mead
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG._predict_and_compute_loss
+        model_PG._predict_and_compute_loss, model_PG.regularizer_strength
     )(
         (
             p[1:],
@@ -131,7 +131,7 @@ def test_group_lasso_convergence():
 
     # use the penalized loss function to solve optimization via Nelder-Mead
     penalized_loss = lambda p, x, y: model_PG.regularizer.penalized_loss(
-        model_PG._predict_and_compute_loss
+        model_PG._predict_and_compute_loss, model_PG.regularizer_strength
     )(
         (
             p[1:],

@@ -422,14 +422,12 @@ def poisson_observation_model():
 
 @pytest.fixture
 def ridge_regularizer():
-    return nmo.regularizer.Ridge(regularizer_strength=0.1)
+    return nmo.regularizer.Ridge()
 
 
 @pytest.fixture
 def lasso_regularizer():
-    return nmo.regularizer.Lasso(
-        solver_name="ProximalGradient", regularizer_strength=0.1
-    )
+    return nmo.regularizer.Lasso(solver_name="ProximalGradient")
 
 
 @pytest.fixture
@@ -437,9 +435,7 @@ def group_lasso_2groups_5features_regularizer():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(
-        solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1
-    )
+    return nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask)
 
 
 @pytest.fixture

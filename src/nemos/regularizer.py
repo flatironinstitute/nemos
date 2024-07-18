@@ -35,13 +35,6 @@ class Regularizer(Base, abc.ABC):
     enabling users to easily switch between different regularizers, ensuring compatibility
     with various loss functions and optimization algorithms.
 
-    Parameters
-    ----------
-    regularizer_strength
-        Float representing the strength of the regularization being applied. Only used if the solver method
-        is ProximalGradient.
-        Default 1.0.
-
     Attributes
     ----------
     allowed_solvers :
@@ -59,9 +52,6 @@ class Regularizer(Base, abc.ABC):
     ):
         super().__init__(**kwargs)
 
-        # default regularizer strength
-        self.regularizer_strength = 1.0
-
     @property
     def allowed_solvers(self):
         return self._allowed_solvers
@@ -70,23 +60,7 @@ class Regularizer(Base, abc.ABC):
     def default_solver(self):
         return self._default_solver
 
-    @property
-    def regularizer_strength(self) -> float:
-        return self._regularizer_strength
-
-    @regularizer_strength.setter
-    def regularizer_strength(self, strength: float):
-        try:
-            # force conversion to float to prevent weird GPU issues
-            strength = float(strength)
-        except ValueError:
-            # raise a more detailed ValueError
-            raise ValueError(
-                f"Could not convert the regularizer strength: {strength} to a float."
-            )
-        self._regularizer_strength = strength
-
-    def penalized_loss(self, loss: Callable) -> Callable:
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """
         Abstract method to penalize loss functions.
 
@@ -94,6 +68,8 @@ class Regularizer(Base, abc.ABC):
         ----------
         loss :
             Callable loss function.
+        regularizer_strength :
+            Float the indicates the regularization strength.
 
         Returns
         -------
@@ -153,7 +129,7 @@ class UnRegularized(Regularizer):
     ):
         super().__init__()
 
-    def penalized_loss(self, loss: Callable):
+    def penalized_loss(self, loss: Callable, regularizer_strength: float):
         """
         Returns the original loss function unpenalized. Unregularized regularization method does not add any
         penalty.
@@ -174,12 +150,6 @@ class Ridge(Regularizer):
 
     This class uses `jaxopt` optimizers to perform Ridge regularization. It extends
     the base Solver class, with the added feature of Ridge penalization.
-
-    Parameters
-    ----------
-    regularizer_strength :
-        Indicates the strength of the penalization being applied.
-        Float with default value of 1.0.
 
     Attributes
     ----------
@@ -202,13 +172,11 @@ class Ridge(Regularizer):
 
     def __init__(
         self,
-        regularizer_strength: float = 1.0,
     ):
         super().__init__()
-        self.regularizer_strength = regularizer_strength
 
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -227,7 +195,7 @@ class Ridge(Regularizer):
         def l2_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
             return (
                 0.5
-                * self.regularizer_strength
+                * regularizer_strength
                 * jnp.sum(jnp.power(coeff, 2))
                 / intercept.shape[0]
             )
@@ -237,11 +205,11 @@ class Ridge(Regularizer):
             lambda x: l2_penalty(x, params[1]), sum, params[0]
         )
 
-    def penalized_loss(self, loss: Callable) -> Callable:
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Returns the penalized loss function for Ridge regularization."""
 
         def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params)
+            return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
 
@@ -280,10 +248,8 @@ class Lasso(Regularizer):
 
     def __init__(
         self,
-        regularizer_strength: float = 1.0,
     ):
         super().__init__()
-        self.regularizer_strength = regularizer_strength
 
     def get_proximal_operator(
         self,
@@ -309,7 +275,7 @@ class Lasso(Regularizer):
         return prox_op
 
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
@@ -326,20 +292,18 @@ class Lasso(Regularizer):
         """
 
         def l1_penalty(coeff: jnp.ndarray, intercept: jnp.ndarray) -> jnp.ndarray:
-            return (
-                self.regularizer_strength * jnp.sum(jnp.abs(coeff)) / intercept.shape[0]
-            )
+            return regularizer_strength * jnp.sum(jnp.abs(coeff)) / intercept.shape[0]
 
         # tree map the computation and sum over leaves
         return tree_utils.pytree_map_and_reduce(
             lambda x: l1_penalty(x, params[1]), sum, params[0]
         )
 
-    def penalized_loss(self, loss: Callable) -> Callable:
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Returns a function for calculating the penalized loss using Lasso regularization."""
 
         def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params)
+            return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
 
@@ -392,10 +356,8 @@ class GroupLasso(Regularizer):
     def __init__(
         self,
         mask: Union[NDArray, jnp.ndarray] = None,
-        regularizer_strength: float = 1.0,
     ):
         super().__init__()
-        self.regularizer_strength = regularizer_strength
 
         self.mask = mask
 
@@ -457,7 +419,7 @@ class GroupLasso(Regularizer):
             )
 
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]
+        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
         """
         Calculate the penalization.
@@ -488,15 +450,15 @@ class GroupLasso(Regularizer):
         )
 
         # divide regularization strength by number of neurons
-        regularizer_strength = self.regularizer_strength / params[1].shape[0]
+        regularizer_strength = regularizer_strength / params[1].shape[0]
 
         return penalty * regularizer_strength
 
-    def penalized_loss(self, loss: Callable) -> Callable:
+    def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Returns a function for calculating the penalized loss using Group Lasso regularization."""
 
         def _penalized_loss(params, X, y):
-            return loss(params, X, y) + self._penalization(params)
+            return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
 

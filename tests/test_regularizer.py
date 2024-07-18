@@ -61,9 +61,11 @@ def test_regularizer(regularizer_strength, reg_type):
             match=f"Could not convert the regularizer strength: {regularizer_strength} "
             f"to a float.",
         ):
-            reg_type(regularizer_strength=regularizer_strength)
+            nmo.glm.GLM(
+                regularizer=reg_type(), regularizer_strength=regularizer_strength
+            )
     else:
-        reg_type(regularizer_strength=regularizer_strength)
+        nmo.glm.GLM(regularizer=reg_type(), regularizer_strength=regularizer_strength)
 
 
 @pytest.mark.parametrize(
@@ -87,9 +89,12 @@ def test_regularizer_setter(regularizer_strength, regularizer):
             match=f"Could not convert the regularizer strength: {regularizer_strength} "
             f"to a float.",
         ):
-            regularizer.regularizer_strength = regularizer_strength
+
+            nmo.glm.GLM(
+                regularizer=regularizer, regularizer_strength=regularizer_strength
+            )
     else:
-        regularizer.regularizer_strength = regularizer_strength
+        nmo.glm.GLM(regularizer=regularizer, regularizer_strength=regularizer_strength)
 
 
 @pytest.mark.parametrize(
@@ -517,7 +522,7 @@ class TestRidge:
         model_skl = PoissonRegressor(
             fit_intercept=True,
             tol=10**-12,
-            alpha=model.regularizer.regularizer_strength,
+            alpha=model.regularizer_strength,
         )
         model_skl.fit(X, y)
 
@@ -535,7 +540,7 @@ class TestRidge:
         model.observation_model.inverse_link_function = jnp.exp
         model.regularizer = self.cls()
         model.solver_kwargs = {"tol": 10**-12}
-        model.regularizer.regularizer_strength = 0.1
+        model.regularizer_strength = 0.1
         runner_bfgs = model.instantiate_solver()[2]
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
@@ -543,7 +548,7 @@ class TestRidge:
         model_skl = GammaRegressor(
             fit_intercept=True,
             tol=10**-12,
-            alpha=model.regularizer.regularizer_strength,
+            alpha=model.regularizer_strength,
         )
         model_skl.fit(X, y)
 
@@ -672,7 +677,7 @@ class TestLasso:
         glm_sm = sm.GLM(endog=y, exog=sm.add_constant(X), family=sm.families.Poisson())
 
         # regularize everything except intercept
-        alpha_sm = np.ones(X.shape[1] + 1) * model.regularizer.regularizer_strength
+        alpha_sm = np.ones(X.shape[1] + 1) * model.regularizer_strength
         alpha_sm[0] = 0
 
         # pure lasso = elastic net with L1 weight = 1
@@ -705,8 +710,10 @@ class TestLasso:
         X, _, model, _, _ = poissonGLM_model_instantiation_pytree
         X_array, y, model_array, _, _ = poissonGLM_model_instantiation
 
-        model.regularizer = nmo.regularizer.Lasso(regularizer_strength=reg_str)
-        model_array.regularizer = nmo.regularizer.Lasso(regularizer_strength=reg_str)
+        model.regularizer_strength = reg_str
+        model_array.regularizer_strength = reg_str
+        model.regularizer = nmo.regularizer.Lasso()
+        model_array.regularizer = nmo.regularizer.Lasso()
         model.solver_name = "ProximalGradient"
         model_array.solver_name = "ProximalGradient"
         model.fit(X, y)
