@@ -430,7 +430,7 @@ class PoissonObservations(Observations):
 
     def __init__(self, inverse_link_function=jnp.exp):
         super().__init__(inverse_link_function=inverse_link_function)
-        self.scale = 1.
+        self.scale = 1.0
 
     def _negative_log_likelihood(
         self,
