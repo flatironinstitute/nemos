@@ -10,6 +10,7 @@ from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
+import warnings
 
 
 def test_validate_higher_dimensional_data_X(mock_glm):
@@ -1378,6 +1379,32 @@ class TestGLM:
         model.fit(X, y)
         num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert np.allclose(num, n_samples - dof - 1)
+
+    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    def test_waning_solver_reg_str(self, reg):
+        # check that a warning is triggered
+        # if no param is passed
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+        # check that the warning is not triggered
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+
+        # reset to unregularized
+        model.regularizer = "unregularized"
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    def test_reg_strength_reset(self, reg):
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+        model.regularizer = "unregularized"
+        assert model.regularizer_strength is None
+
+
+
 
 
 
