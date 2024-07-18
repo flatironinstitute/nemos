@@ -17,7 +17,6 @@ from numpy.typing import NDArray
 from . import tree_utils
 from .base_class import Base
 from .proximal_operator import prox_group_lasso
-from .pytrees import FeaturePytree
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
