@@ -131,6 +131,22 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
                 f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
             )
 
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
+
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
     def test_minimum_number_of_basis_required_is_matched(
@@ -671,6 +687,21 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
                 f"The second dimension of the output features basis is {eval_basis.shape[0]}",
             )
 
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
     def test_minimum_number_of_basis_required_is_matched(
@@ -1165,6 +1196,21 @@ class TestMSplineBasis(BasisFuncsTesting):
                 f"The window size is {sample_size}",
                 f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [-1, 0, 1, 2, 3, 4, 5])
@@ -1681,6 +1727,22 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
 
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (np.linspace(-0.5, -0.001, 7), 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(1.5, 2., 7), 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            ([-0.5, -0.1, -0.01, 1.5, 2 , 3], 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax, decay_rates=np.linspace(0.1, 1, 5))
+        with expectation:
+            bas(samples)
+
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 30)])
     def test_minimum_number_of_basis_required_is_matched(
@@ -2122,6 +2184,21 @@ class TestBSplineBasis(BasisFuncsTesting):
                 f"The window size is {sample_size}",
                 f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
@@ -2639,6 +2716,21 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 f"The window size is {sample_size}",
                 f"The second dimension of the output features is {eval_basis.shape[1]}",
             )
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
     @pytest.mark.parametrize("order", [2, 3, 4, 5])
