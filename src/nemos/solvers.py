@@ -216,7 +216,7 @@ class ProxSVRG:
 
         next_xk = tree_add_scalar_mul(xk, -stepsize, gk)
 
-        # next_xk = self.proximal_operator(next_xk, state.stepsize * prox_lambda)
+        # next_xk = self.proximal_operator(next_xk, stepsize * prox_lambda)
         next_xk = self.proximal_operator(next_xk, prox_lambda, scaling=stepsize)
 
         return next_xk
@@ -262,6 +262,11 @@ class ProxSVRG:
                 Updated state.
         """
         # return self._update_per_random_samples(current_params, state, prox_lambda, X, y)
+        if state.df_xs is None:
+            raise ValueError(
+                "Full gradient at the anchor point (state.df_xs) has to be set. "
+                + "Try passing init_full_gradient=True to ProxSVRG.init_state or GLM.initialize_solver."
+            )
         return self._update_on_batch(current_params, state, prox_lambda, X, y)
 
     @partial(jit, static_argnums=(0,))
