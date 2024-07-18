@@ -3,6 +3,8 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+from functools import wraps
+
 import abc
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -15,6 +17,7 @@ from scipy.interpolate import splev
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
+from .validation import check_fraction_valid_samples
 
 FeatureMatrix = Union[NDArray, TsdFrame]
 
@@ -49,6 +52,7 @@ def check_transform_input(func: Callable) -> Callable:
 
 
 def check_one_dimensional(func: Callable) -> Callable:
+    @wraps(func)
     def wrapper(self: Basis, *xi: ArrayLike, **kwargs):
         if any(x.ndim != 1 for x in xi):
             raise ValueError("Input sample must be one dimensional!")
@@ -60,7 +64,28 @@ def check_one_dimensional(func: Callable) -> Callable:
 def min_max_rescale_samples(
     sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None
 ) -> Tuple[NDArray, float]:
-    """Rescale samples to [0,1]."""
+    """Rescale samples to [0,1].
+
+    Parameters
+    ----------
+    sample_pts:
+        The original samples.
+    vmin:
+        Sample value that is mapped to 0. Default is `min(sample_pts)`.
+    vmax:
+        Sample value that is mapped to 1. Default is `max(sample_pts)`.
+
+    Raises
+    ------
+    ValueError
+        If all the samples contain invalid entries (either NaN or Inf).
+        This may happen if `max(sample) < vmin` or `min(sample) > vmax`.
+
+    Warns
+    -----
+    UserWarning
+        If more than 90% of the sample points contain NaNs or Infs.
+    """
     sample_pts = sample_pts.astype(float)
     if vmin and vmax and vmax <= vmin:
         raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
@@ -73,6 +98,13 @@ def min_max_rescale_samples(
         sample_pts /= scaling
     else:
         scaling = 1.0
+
+    check_fraction_valid_samples(
+        sample_pts,
+        err_msg="All the samples lie outside the [vmin, vmax] range.",
+        warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range."
+    )
+
     return sample_pts, scaling
 
 

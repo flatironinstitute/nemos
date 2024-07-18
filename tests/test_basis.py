@@ -845,6 +845,21 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         x = np.linspace(0, 1, 10)
         assert np.all(bas_con(x) == bas_eva(x))
 
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
+
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
     def test_pynapple_support(self, mode, window_size):
         bas = self.cls(5, mode=mode, window_size=window_size)
@@ -1329,6 +1344,21 @@ class TestMSplineBasis(BasisFuncsTesting):
         bas_eva = self.cls(5, mode="eval")
         x = np.linspace(0, 1, 10)
         assert np.all(bas_con(x) == bas_eva(x))
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
     def test_pynapple_support(self, mode, window_size):
@@ -1858,6 +1888,20 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         x = np.linspace(0, 1, 10)
         assert np.all(bas_con(x) == bas_eva(x))
 
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (np.linspace(-1,-0.5, 10), 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, decay_rates=np.linspace(0,1,5), vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
+
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
     def test_pynapple_support(self, mode, window_size):
         bas = self.cls(
@@ -2276,6 +2320,21 @@ class TestBSplineBasis(BasisFuncsTesting):
         bas_eva = self.cls(5, mode="eval")
         x = np.linspace(0, 1, 10)
         assert np.all(bas_con(x) == bas_eva(x))
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
     def test_pynapple_support(self, mode, window_size):
@@ -2796,6 +2855,36 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         bas_eva = self.cls(5, mode="eval")
         x = np.linspace(0, 1, 10)
         assert np.all(bas_con(x) == bas_eva(x))
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
+
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
+            (np.linspace(-1,1,10), 0, 1, does_not_raise()),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+        ]
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
+        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        with expectation:
+            bas(samples)
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
     def test_pynapple_support(self, mode, window_size):
