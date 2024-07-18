@@ -532,8 +532,9 @@ print(f"Convolved count shape: {convolved_count.shape}")
 #
 
 model = nmo.glm.PopulationGLM(
-    regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1),
-    solver_name="LBFGS"
+    regularizer="ridge",
+    solver_name="LBFGS",
+    regularizer_strength=0.1
     ).fit(convolved_count, count)
 
 # %%

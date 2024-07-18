@@ -231,8 +231,7 @@ X = nmo.pytrees.FeaturePytree(head_direction=basis(head_dir))
 # %%
 #
 # Now we'll fit our GLM and then see what our head direction tuning looks like:
-ridge = nmo.regularizer.Ridge(regularizer_strength=0.001)
-model = nmo.glm.GLM(regularizer=ridge)
+model = nmo.glm.GLM(regularizer="ridge", regularizer_strength=0.001)
 model.fit(X, spikes)
 print(model.coef_['head_direction'])
 

@@ -133,7 +133,7 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 # The same exact syntax works for any configuration.
 
 # fit a ridge regression Poisson GLM
-model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1))
+model = nmo.glm.GLM(regularizer="ridge", regularizer_strength=0.1)
 model.fit(X, spikes)
 
 print("Ridge results")
@@ -151,7 +151,7 @@ print("Recovered weights: ", model.coef_)
 #
 # **Ridge**
 
-parameter_grid = {"regularizer__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
+parameter_grid = {"regularizer_strength": np.logspace(-1.5, 1.5, 6)}
 # in practice, you should use more folds than 2, but for the purposes of this
 # demo, 2 is sufficient.
 cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
