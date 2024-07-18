@@ -41,6 +41,58 @@ def test_regularizer_builder(reg_str, reg_type):
 
 
 @pytest.mark.parametrize(
+    "regularizer_strength, reg_type",
+    [
+        (0.001, nmo.regularizer.Ridge),
+        (1.0, nmo.regularizer.Ridge),
+        ("bah", nmo.regularizer.Ridge),
+        (0.001, nmo.regularizer.Lasso),
+        (1.0, nmo.regularizer.Lasso),
+        ("bah", nmo.regularizer.Lasso),
+        (0.001, nmo.regularizer.GroupLasso),
+        (1.0, nmo.regularizer.GroupLasso),
+        ("bah", nmo.regularizer.GroupLasso),
+    ],
+)
+def test_regularizer(regularizer_strength, reg_type):
+    if not isinstance(regularizer_strength, float):
+        with pytest.raises(
+            ValueError,
+            match=f"Could not convert the regularizer strength: {regularizer_strength} "
+            f"to a float.",
+        ):
+            reg_type(regularizer_strength=regularizer_strength)
+    else:
+        reg_type(regularizer_strength=regularizer_strength)
+
+
+@pytest.mark.parametrize(
+    "regularizer_strength, regularizer",
+    [
+        (0.001, nmo.regularizer.Ridge()),
+        (1.0, nmo.regularizer.Ridge()),
+        ("bah", nmo.regularizer.Ridge()),
+        (0.001, nmo.regularizer.Lasso()),
+        (1.0, nmo.regularizer.Lasso()),
+        ("bah", nmo.regularizer.Lasso()),
+        (0.001, nmo.regularizer.GroupLasso()),
+        (1.0, nmo.regularizer.GroupLasso()),
+        ("bah", nmo.regularizer.GroupLasso()),
+    ],
+)
+def test_regularizer_setter(regularizer_strength, regularizer):
+    if not isinstance(regularizer_strength, float):
+        with pytest.raises(
+            ValueError,
+            match=f"Could not convert the regularizer strength: {regularizer_strength} "
+            f"to a float.",
+        ):
+            regularizer.regularizer_strength = regularizer_strength
+    else:
+        regularizer.regularizer_strength = regularizer_strength
+
+
+@pytest.mark.parametrize(
     "regularizer",
     [
         nmo.regularizer.UnRegularized(),
@@ -291,6 +343,23 @@ class TestUnRegularized:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Unregularized GLM estimate does not match statsmodels!")
 
+    @pytest.mark.parametrize(
+        "solver_name",
+        [
+            "GradientDescent",
+            "BFGS",
+            "LBFGS",
+            "LBFGSB",
+            "NonlinearCG",
+            "ProximalGradient",
+        ],
+    )
+    def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        model.fit(X, y)
+
 
 class TestRidge:
     cls = nmo.regularizer.Ridge
@@ -483,6 +552,23 @@ class TestRidge:
         if (not match_weights) or (not match_intercepts):
             raise ValueError("Ridge GLM estimate does not match sklearn!")
 
+    @pytest.mark.parametrize(
+        "solver_name",
+        [
+            "GradientDescent",
+            "BFGS",
+            "LBFGS",
+            "LBFGSB",
+            "NonlinearCG",
+            "ProximalGradient",
+        ],
+    )
+    def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        model.fit(X, y)
+
 
 class TestLasso:
     cls = nmo.regularizer.Lasso
@@ -628,6 +714,18 @@ class TestLasso:
         assert np.allclose(
             np.hstack(jax.tree_util.tree_leaves(model.coef_)), model_array.coef_
         )
+
+    @pytest.mark.parametrize(
+        "solver_name",
+        [
+            "ProximalGradient",
+        ],
+    )
+    def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        model.fit(X, y)
 
 
 class TestGroupLasso:
@@ -1052,3 +1150,15 @@ class TestGroupLasso:
                 regularizer.set_params(mask=mask)
         else:
             regularizer.set_params(mask=mask)
+
+    @pytest.mark.parametrize(
+        "solver_name",
+        [
+            "ProximalGradient",
+        ],
+    )
+    def test_solver_combination(self, solver_name, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = self.cls()
+        model.solver_name = solver_name
+        model.fit(X, y)

@@ -482,8 +482,9 @@ class GroupLasso(Regularizer):
             param_with_extra_axis
         )  # this masks the param, (group, feature, neuron)
 
-        penalty = jnp.linalg.norm(masked_param, axis=1) * jax.numpy.sqrt(
-            self.mask.sum(axis=1)
+        penalty = jax.numpy.sum(
+            jax.numpy.linalg.norm(masked_param, axis=1)
+            * jax.numpy.sqrt(self.mask.sum(axis=1))
         )
 
         # divide regularization strength by number of neurons
