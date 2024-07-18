@@ -2966,3 +2966,27 @@ class TestPopulationGLM:
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
+
+    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    def test_waning_solver_reg_str(self, reg):
+        # check that a warning is triggered
+        # if no param is passed
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+        # check that the warning is not triggered
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+
+        # reset to unregularized
+        model.regularizer = "unregularized"
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    def test_reg_strength_reset(self, reg):
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+        model.regularizer = "unregularized"
+        assert model.regularizer_strength is None
+
