@@ -3,9 +3,8 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
-from functools import wraps
-
 import abc
+from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -102,7 +101,7 @@ def min_max_rescale_samples(
     check_fraction_valid_samples(
         sample_pts,
         err_msg="All the samples lie outside the [vmin, vmax] range.",
-        warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range."
+        warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
     )
 
     return sample_pts, scaling
@@ -1577,7 +1576,9 @@ class CyclicBSplineBasis(SplineBasis):
         if np.any(valid):
             ind = sample_pts > xc
 
-            basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
+            basis_eval = bspline(
+                sample_pts, knots, order=self.order, der=0, outer_ok=True
+            )
             sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
 
             if np.sum(ind):
