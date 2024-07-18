@@ -1197,10 +1197,7 @@ class MSplineBasis(SplineBasis):
         ----------
         sample_pts :
             An array of sample points where the M-spline basis functions are to be
-            evaluated. Sample points are rescaled to [0,1] as follows:
-             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided at initialization, the minimum and maximum values of
-            `sample_pts` are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
+            evaluated.
 
         Returns
         -------
@@ -1215,7 +1212,6 @@ class MSplineBasis(SplineBasis):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
-        """Evaluate basis over samples."""
         sample_pts, scaling = min_max_rescale_samples(
             sample_pts, vmin=self.vmin, vmax=self.vmax
         )
@@ -1351,10 +1347,7 @@ class BSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(
-        self,
-        sample_pts: ArrayLike,
-    ) -> FeatureMatrix:
+    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -1367,10 +1360,6 @@ class BSplineBasis(SplineBasis):
         -------
         basis_funcs :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs).
-            Sample points are rescaled to [0,1] as follows:
-             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used,
-            respectively. Values outside the [vmin, vmax] range are set to NaN.
 
         Raises
         ------
@@ -1504,10 +1493,7 @@ class CyclicBSplineBasis(SplineBasis):
         ----------
         sample_pts :
             The sample points at which the cyclic B-spline is evaluated, shape
-            (n_samples,).Sample points are rescaled to [0,1] as follows:
-             `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided, the minimum and maximum values of `sample_pts` are used,
-            respectively. Values outside the [vmin, vmax] range are set to NaN.
+            (n_samples,).
 
         Returns
         -------
@@ -1947,8 +1933,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ----------
         sample_pts :
             Spacing for basis functions. Samples will be rescaled to the interval [0, 1].
-            Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            Values outside the [vmin, vmax] range are set to NaN.
 
         Returns
         -------
@@ -2127,7 +2111,6 @@ class OrthExponentialBasis(Basis):
         if self.identifiability_constraints:
             basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
-        # return self._call(sample_pts, vmin=self.vmin, vmax=self.vmax)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
