@@ -3,8 +3,9 @@ method with just penalized loss."""
 
 import jax
 import numpy as np
-import nemos as nmo
 from scipy.optimize import minimize
+
+import nemos as nmo
 
 
 def test_unregularized_convergence():

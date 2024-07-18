@@ -1,3 +1,4 @@
+import warnings
 from contextlib import nullcontext as does_not_raise
 from typing import Callable
 
@@ -10,7 +11,6 @@ from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
-import warnings
 
 
 def test_validate_higher_dimensional_data_X(mock_glm):
