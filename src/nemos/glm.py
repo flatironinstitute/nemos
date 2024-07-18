@@ -814,14 +814,13 @@ class GLM(BaseRegressor):
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (GroupLasso, Lasso)):
             coef, _ = self._get_coef_and_intercept()
-            if isinstance(coef, dict):
-                resid_dof = tree_utils.pytree_map_and_reduce(
-                    lambda x: jnp.isclose(x, jnp.zeros_like(x)),
-                    lambda x: sum([jnp.sum(i) for i in x]),
-                    coef,
-                )
-                return n_samples - resid_dof
-            return n_samples - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
+            resid_dof = tree_utils.pytree_map_and_reduce(
+                lambda x: jnp.isclose(x, jnp.zeros_like(x)),
+                lambda x: sum([jnp.sum(i) for i in x]),
+                coef,
+            )
+            return n_samples - resid_dof
+
         elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
             return n_samples - X.shape[1] - 1
