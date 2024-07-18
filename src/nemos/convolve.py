@@ -169,6 +169,7 @@ def _convolve_pad_and_shift(
     predictor :
         Predictor of with same shape and structure as `time_series`
     """
+
     # apply convolution
     def conv(x):
         return _shift_time_axis_and_convolve(x, basis_matrix, axis=axis)
