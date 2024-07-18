@@ -1358,6 +1358,29 @@ class TestGLM:
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
+    @pytest.mark.parametrize(
+        "reg, dof",
+        [
+            (nmo.regularizer.UnRegularized(), np.array([5])),
+            (nmo.regularizer.Lasso(), np.array([3])),  # this lasso fit has only 3 coeff of the first neuron
+            # surviving
+            (nmo.regularizer.Ridge(), np.array([5])),
+        ],
+    )
+    @pytest.mark.parametrize("n_samples", [1, 20])
+    def test_estimate_dof_resid(self, n_samples, dof, reg, poissonGLM_model_instantiation):
+        """
+        Test that the dof is an integer.
+        """
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = reg
+        model.solver_name = model.regularizer.default_solver
+        model.fit(X, y)
+        num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        assert np.allclose(num, n_samples - dof - 1)
+
+
+
 
 class TestPopulationGLM:
     """
@@ -1467,15 +1490,16 @@ class TestPopulationGLM:
             model.fit(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
-        "reg",
+        "reg, dof",
         [
-            nmo.regularizer.UnRegularized(),
-            nmo.regularizer.Lasso(),
-            nmo.regularizer.Ridge(),
+            (nmo.regularizer.UnRegularized(), np.array([5, 5, 5])),
+            (nmo.regularizer.Lasso(), np.array([3, 0, 0])),  # this lasso fit has only 3 coeff of the first neuron
+                                                             # surviving
+            (nmo.regularizer.Ridge(), np.array([5, 5, 5])),
         ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
-    def test_estimate_dof_resid(self, n_samples, reg, poisson_population_GLM_model):
+    def test_estimate_dof_resid(self, n_samples, dof, reg, poisson_population_GLM_model):
         """
         Test that the dof is an integer.
         """
@@ -1484,7 +1508,7 @@ class TestPopulationGLM:
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        assert int(num) == num
+        assert np.allclose(num, n_samples - dof - 1)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",

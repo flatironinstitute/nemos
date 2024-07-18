@@ -430,7 +430,7 @@ class PoissonObservations(Observations):
 
     def __init__(self, inverse_link_function=jnp.exp):
         super().__init__(inverse_link_function=inverse_link_function)
-        self.scale = 1
+        self.scale = 1.
 
     def _negative_log_likelihood(
         self,
@@ -633,7 +633,7 @@ class PoissonObservations(Observations):
         dof_resid :
             The DOF of the residuals.
         """
-        return 1.0
+        return jnp.ones_like(jnp.atleast_1d(y[0]))
 
 
 class GammaObservations(Observations):

@@ -814,25 +814,25 @@ class GLM(BaseRegressor):
                     "instead!"
                 )
 
+        params = self._get_coef_and_intercept()
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
         if isinstance(self.regularizer, (GroupLasso, Lasso)):
-            coef, _ = self._get_coef_and_intercept()
             resid_dof = tree_utils.pytree_map_and_reduce(
-                lambda x: jnp.isclose(x, jnp.zeros_like(x)),
-                lambda x: sum([jnp.sum(i) for i in x]),
-                coef,
+                lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                params[0]
             )
-            return n_samples - resid_dof
+            return n_samples - resid_dof - 1
 
         elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return n_samples - X.shape[1] - 1
+            return (n_samples - X.shape[1] - 1) * jnp.ones_like(params[1])
         else:
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return n_samples - rank - 1
+            return (n_samples - rank - 1) * jnp.ones_like(params[1])
 
     @cast_to_jax
     def initialize_solver(
