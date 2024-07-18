@@ -374,6 +374,17 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         x[3] = np.nan
         assert all(np.isnan(bas(x)[3]))
 
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (np.array(['a', '1', '2', '3', '4', '5']), pytest.raises(TypeError, match="Input samples must")),
+        ])
+    def test_call_input_type(self, samples, expectation):
+        bas = self.cls(5)
+        with expectation:
+            bas(samples)
+
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10)
         bas_eva = self.cls(5, mode="eval")
@@ -869,6 +880,17 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
         assert all(np.isnan(bas(x)[3]))
+
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (np.array(['a', '1', '2', '3', '4', '5']), pytest.raises(TypeError, match="Input samples must")),
+        ])
+    def test_call_input_type(self, samples, expectation):
+        bas = self.cls(5)
+        with expectation:
+            bas(samples)
 
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10)
@@ -1384,6 +1406,17 @@ class TestMSplineBasis(BasisFuncsTesting):
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
         assert all(np.isnan(bas(x)[3]))
+
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (np.array(['a', '1', '2', '3', '4', '5']), pytest.raises(TypeError, match="Input samples must")),
+        ])
+    def test_call_input_type(self, samples, expectation):
+        bas = self.cls(5)
+        with expectation:
+            bas(samples)
 
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10)
@@ -1944,6 +1977,17 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             out = bas(x)
             assert np.all(np.isnan(out[13]))
 
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (np.array(['a', '1', '2', '3', '4', '5']), pytest.raises(TypeError, match="Input samples must")),
+        ])
+    def test_call_input_type(self, samples, expectation):
+        bas = self.cls(5, np.linspace(0.1, 1, 5))
+        with expectation:
+            bas(samples)
+
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         bas_eva = self.cls(5, mode="eval", decay_rates=np.arange(1, 6))
@@ -2391,6 +2435,17 @@ class TestBSplineBasis(BasisFuncsTesting):
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
         assert all(np.isnan(bas(x)[3]))
+
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (np.array(['a', '1', '2', '3', '4', '5']), pytest.raises(TypeError, match="Input samples must")),
+        ])
+    def test_call_input_type(self, samples, expectation):
+        bas = self.cls(5)
+        with expectation:
+            bas(samples)
 
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10)
@@ -2941,6 +2996,17 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
         assert all(np.isnan(bas(x)[3]))
+
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (np.array(['a', '1', '2', '3', '4', '5']), pytest.raises(TypeError, match="Input samples must")),
+        ])
+    def test_call_input_type(self, samples, expectation):
+        bas = self.cls(5)
+        with expectation:
+            bas(samples)
 
     def test_call_equivalent_in_conv(self):
         bas_con = self.cls(5, mode="conv", window_size=10)

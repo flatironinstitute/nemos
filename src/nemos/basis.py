@@ -578,7 +578,7 @@ class Basis(abc.ABC):
             # make sure array is at least 1d (so that we succeed when only
             # passed a scalar)
             xi = tuple(np.atleast_1d(np.asarray(x, dtype=float)) for x in xi)
-        except TypeError:
+        except (TypeError, ValueError):
             raise TypeError("Input samples must be array-like of floats!")
 
         # check for non-empty samples

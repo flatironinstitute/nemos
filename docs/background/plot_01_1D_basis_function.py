@@ -54,8 +54,10 @@ plt.plot(eval_basis)
 
 bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, vmin=0.2, vmax=0.8)
 
-print(f"Within the domain: {np.round(bspline_range(0.5), 3)}")
-print(f"Outside the domain: {bspline_range(0.1)}")
+print("Evaluated basis:")
+# 0.5  is within the support, 0.1 is outside the support
+print(np.round(bspline_range([0.5, 0.1]), 3))
+
 
 # %%
 # Let's compare the default behavior of basis (estimating the range from the samples) with
