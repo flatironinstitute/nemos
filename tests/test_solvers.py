@@ -383,3 +383,116 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
         analytical_params,
         params,
     )
+
+
+# @pytest.mark.parametrize("regr_setup", ["linear_regression", "linear_regression_tree"])
+# @pytest.mark.parametrize("regr_setup", ["linear_regression"])
+# @pytest.mark.parametrize("regr_setup", ["linear_regression_tree"])
+@pytest.mark.parametrize(
+    "regr_setup, to_tuple",
+    # ["poissonGLM_model_instantiation", "poissonGLM_model_instantiation_pytree"],
+    # ["poissonGLM_model_instantiation"],
+    # ["poissonGLM_model_instantiation_pytree"],
+    [
+        ("linear_regression", True),
+        ("linear_regression", True),
+        ("linear_regression_tree", False),
+    ],
+)
+def test_xk_update(request, regr_setup, to_tuple):
+
+    X, y, true_params, ols_coef, loss_arr = request.getfixturevalue(regr_setup)
+
+    # the loss takes an array, but I want to test with tuples as well
+    # so make a new loss function that takes a tuple
+    if to_tuple:
+        true_params = (
+            true_params,
+            np.zeros(X.shape[1]),
+        )
+        loss = lambda params, X, y: loss_arr(params[0], X, y)
+    else:
+        loss = loss_arr
+
+    prox = jaxopt.prox.prox_ridge
+    prox_lambda = 0.1
+    stepsize = 1e-2
+    loss_gradient = jax.jit(jax.grad(loss))
+
+    # set the initial parameters to zero and
+    # set the anchor point to a random value that's not just zeros
+    init_param = jax.tree_util.tree_map(np.zeros_like, true_params)
+    xs = jax.tree_util.tree_map(lambda x: np.random.randn(*x.shape), true_params)
+    df_xs = loss_gradient(xs, X, y)
+
+    # sample a mini-batch
+    key = jax.random.key(0)
+    key, subkey = jax.random.split(key)
+    ind = jax.random.randint(subkey, (32,), 0, y.shape[0])
+    xi, yi = tree_slice(X, ind), tree_slice(y, ind)
+
+    dfik_xk = loss_gradient(init_param, xi, yi)
+    dfik_xs = loss_gradient(xs, xi, yi)
+
+    def _array_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize):
+        gk = dfik_xk - dfik_xs + df_xs
+        next_xk = init_param - stepsize * gk
+        return gk, next_xk
+
+    def _tuple_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize):
+        gk, next_xk = [], []
+        for a, b, c, d in zip(dfik_xk, dfik_xs, df_xs, init_param):
+            gki, next_xki = _array_update(a, b, c, d, stepsize)
+            gk.append(gki)
+            next_xk.append(next_xki)
+
+        return tuple(gk), tuple(next_xk)
+
+    def _dict_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize, update_fun):
+        gk, next_xk = {}, {}
+        for k in dfik_xk.keys():
+            gk_k, next_xk_k = update_fun(
+                dfik_xk[k], dfik_xs[k], df_xs[k], init_param[k], stepsize
+            )
+            gk[k] = gk_k
+            next_xk[k] = next_xk_k
+
+        return gk, next_xk
+
+    if isinstance(true_params, np.ndarray):
+        gk, next_xk = _array_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize)
+    elif isinstance(true_params, tuple):
+        gk, next_xk = _tuple_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize)
+    elif isinstance(X, dict):
+        assert (
+            set(X.keys())
+            == set(dfik_xk.keys())
+            == set(dfik_xs.keys())
+            == set(df_xs.keys())
+        )
+
+        if isinstance(list(dfik_xk.values())[0], tuple):
+            update_fun = _tuple_update
+        else:
+            update_fun = _array_update
+
+        gk, next_xk = _dict_update(
+            dfik_xk, dfik_xs, df_xs, init_param, stepsize, update_fun
+        )
+    else:
+        raise TypeError
+
+    next_xk = prox(next_xk, prox_lambda, scaling=stepsize)
+
+    # TODO do it with SVRG just don't pass prox and use prox_none in the reference
+    solver = ProxSVRG(loss, prox)
+    svrg_next_xk = solver._xk_update(
+        init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
+    )
+
+    assert pytree_map_and_reduce(
+        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+        all,
+        next_xk,
+        svrg_next_xk,
+    )
