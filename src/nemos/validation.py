@@ -280,7 +280,7 @@ def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
 
 def check_fraction_valid_samples(*tree: Any, err_msg: str, warn_msg: str) -> None:
     """
-    Check the fraction of valid entries.
+    Check the fraction of entries that are not infinite or NaN.
 
     Parameters
     ----------
