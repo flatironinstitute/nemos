@@ -29,9 +29,7 @@ bspline = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order)
 # ## Evaluating a Basis
 #
 # The `Basis` object is callable, and can be evaluated as a function. By default, the support of the basis
-# is defined by the samples that we input to the `__call__` method.  This results in an equispaced set of knots,
-# which spans the range from the smallest to the largest sample. These knots are then used to construct a
-# uniformly spaced basis.
+# is defined by the samples that we input to the `__call__` method, and covers from the smallest to the largest value.
 
 # Generate a time series of sample points
 samples = nap.Tsd(t=np.arange(1001), d=np.linspace(0, 1,1001))
@@ -49,10 +47,12 @@ plt.plot(eval_basis)
 
 # %%
 # ## Setting the basis support
-# You can specify a range for the support of the basis by setting the `vmin` and `vmax`
-# parameters at initialization. Evaluating the basis at any sample outside the range will result in a NaN.
+# Sometimes, it is useful to restrict the basis to a fixed range. This can help manage outliers or ensure that
+# your basis covers the same range across multiple experimental sessions.
+# You can specify a range for the support of your basis by setting the `bounds`
+# parameter at initialization. Evaluating the basis at any sample outside the bounds will result in a NaN.
 
-bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=0.2, vmax=0.8)
+bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
 
 print("Evaluated basis:")
 # 0.5  is within the support, 0.1 is outside the support
@@ -68,7 +68,7 @@ plt.suptitle("B-spline basis ")
 axs[0].plot(bspline(samples), color="k")
 axs[0].set_title("default")
 axs[1].plot(bspline_range(samples), color="tomato")
-axs[1].set_title("range=[0.2, 0.8]")
+axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 
 # %%
