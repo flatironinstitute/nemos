@@ -2,11 +2,12 @@ import jax
 import jaxopt
 import numpy as np
 import pytest
+from jaxopt.tree_util import tree_l2_norm, tree_sub
 
 import nemos as nmo
 from nemos.regularizer import GroupLasso, Lasso, Ridge, UnRegularized
 from nemos.solvers import SVRG, ProxSVRG
-from nemos.tree_utils import pytree_map_and_reduce
+from nemos.tree_utils import pytree_map_and_reduce, tree_slice
 
 
 @pytest.mark.parametrize(
@@ -315,3 +316,58 @@ def test_svrg_glm_update_needs_df_xs(
     ):
         params, state = glm.initialize_solver(X, y)
         glm.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    ("regr_setup", "stepsize"),
+    [
+        ("linear_regression", 1e-3),
+        ("ridge_regression", 1e-4),
+        ("linear_regression_tree", 1e-4),
+        ("ridge_regression_tree", 1e-4),
+    ],
+)
+def test_svrg_update_converges(request, regr_setup, stepsize):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, analytical_params, loss = request.getfixturevalue(regr_setup)
+
+    loss_grad = jax.jit(jax.grad(loss))
+
+    N = y.shape[0]
+    batch_size = 1
+    maxiter = 10_000
+    tol = 1e-12
+    key = jax.random.key(0)
+
+    m = int((N + batch_size - 1) // batch_size)
+
+    solver = SVRG(loss, stepsize=stepsize, batch_size=batch_size)
+    params = jax.tree_util.tree_map(np.zeros_like, analytical_params)
+    state = solver.init_state(params, X, y)
+
+    for _ in range(maxiter):
+        state = state._replace(
+            df_xs=loss_grad(params, X, y),
+        )
+
+        prev_params = params
+        for _ in range(m):
+            key, subkey = jax.random.split(key)
+            ind = jax.random.randint(subkey, (batch_size,), 0, N)
+            xi, yi = tree_slice(X, ind), y[ind]
+            params, state = solver.update(params, state, xi, yi)
+
+        state = state._replace(
+            xs=params,
+        )
+
+        _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
+        if _error < tol:
+            break
+
+    assert pytree_map_and_reduce(
+        lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+        all,
+        analytical_params,
+        params,
+    )
