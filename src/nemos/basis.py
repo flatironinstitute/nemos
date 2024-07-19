@@ -92,7 +92,8 @@ def min_max_rescale_samples(
         raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
-    if vmin != vmax:  # Needed is samples contain a single value.
+    # this passes if `samples_pts` contains a single value
+    if vmin != vmax:  
         scaling = vmax - vmin
         sample_pts /= scaling
     else:
