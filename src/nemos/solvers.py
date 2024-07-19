@@ -333,6 +333,9 @@ class ProxSVRG:
         #    loss_log=self._update_loss_log(init_state.loss_log, 0, init_params, X, y)
         # )
 
+        N = y.shape[0]  # number of data points x number of dimensions
+        m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
+
         # this method assumes that args hold the full data
         def body_fun(step):
             xs_prev, state = step
@@ -364,7 +367,7 @@ class ProxSVRG:
         # at the end of each epoch, check for convergence or reaching the max number of epochs
         def cond_fun(step):
             _, state = step
-            return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
+            return (state.iter_num + m <= self.maxiter) & (state.error >= self.tol)
 
         final_xs, final_state = loop.while_loop(
             cond_fun=cond_fun,
@@ -420,7 +423,7 @@ class ProxSVRG:
         xs, df_xs = state.xs, state.df_xs
 
         def inner_loop_body(_, carry):
-            xk, x_sum, key = carry
+            xk, x_sum, key, iter_num = carry
 
             # sample mini-batch or data point
             key, subkey = random.split(key)
@@ -434,9 +437,11 @@ class ProxSVRG:
             # update the sum used for the averaging
             x_sum = tree_add(x_sum, xk)
 
-            return (xk, x_sum, key)
+            iter_num += 1
 
-        xk, x_sum, key = lax.fori_loop(
+            return (xk, x_sum, key, iter_num)
+
+        xk, x_sum, key, iter_num = lax.fori_loop(
             0,
             m,
             inner_loop_body,
@@ -444,13 +449,14 @@ class ProxSVRG:
                 current_params,
                 tree_zeros_like(xs),  # initialize the sum to zero
                 state.key,
+                state.iter_num,
             ),
         )
 
         # update the state
         # storing the average over the inner loop to potentially use it in the run loop
         state = state._replace(
-            iter_num=state.iter_num + 1,
+            iter_num=iter_num,
             key=key,
             x_av=tree_scalar_mul(1 / m, x_sum),
         )
