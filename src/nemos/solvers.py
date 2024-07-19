@@ -327,8 +327,6 @@ class ProxSVRG:
             y,
             init_full_gradient=True,
         )
-        assert init_state.xs is not None
-        assert init_state.df_xs is not None
 
         # evaluate the loss for the initial parameters, aka iter_num=0
         # init_state = init_state._replace(
