@@ -33,7 +33,7 @@ class SVRGState(NamedTuple):
     key: KeyArrayLike
     error: float
     stepsize: float
-    loss_log: jnp.ndarray
+    # loss_log: jnp.ndarray
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
     x_av: Optional[tuple] = None
@@ -86,7 +86,7 @@ class ProxSVRG:
         self,
         fun: Callable,
         prox: Callable,
-        maxiter: int = 1000,
+        maxiter: int = 10_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-3,
@@ -143,7 +143,7 @@ class ProxSVRG:
             key=self.key if self.key is not None else random.key(0),
             error=jnp.inf,
             stepsize=self.stepsize,
-            loss_log=jnp.zeros((self.maxiter,)),
+            # loss_log=jnp.zeros((self.maxiter,)),
             xs=init_params,
             df_xs=df_xs,
             x_av=init_params,
@@ -339,9 +339,9 @@ class ProxSVRG:
         assert init_state.df_xs is not None
 
         # evaluate the loss for the initial parameters, aka iter_num=0
-        init_state = init_state._replace(
-            loss_log=self._update_loss_log(init_state.loss_log, 0, init_params, X, y)
-        )
+        # init_state = init_state._replace(
+        #    loss_log=self._update_loss_log(init_state.loss_log, 0, init_params, X, y)
+        # )
 
         # this method assumes that args hold the full data
         def body_fun(step):
@@ -364,9 +364,9 @@ class ProxSVRG:
             state = state._replace(
                 xs=xs,
                 error=self._error(xs, xs_prev, state.stepsize),
-                loss_log=self._update_loss_log(
-                    state.loss_log, state.iter_num, xs, X, y
-                ),
+                # loss_log=self._update_loss_log(
+                #    state.loss_log, state.iter_num, xs, X, y
+                # ),
             )
 
             return OptStep(params=xs, state=state)
@@ -430,7 +430,7 @@ class ProxSVRG:
         xs, df_xs = state.xs, state.df_xs
 
         def inner_loop_body(_, carry):
-            xk, x_sum, key = carry
+            xk, x_sum, key, iter_num = carry
 
             # sample mini-batch or data point
             key, subkey = random.split(key)
@@ -444,9 +444,11 @@ class ProxSVRG:
             # update the sum used for the averaging
             x_sum = tree_add(x_sum, xk)
 
-            return (xk, x_sum, key)
+            iter_num += 1
 
-        xk, x_sum, key = lax.fori_loop(
+            return (xk, x_sum, key, iter_num)
+
+        xk, x_sum, key, iter_num = lax.fori_loop(
             0,
             m,
             inner_loop_body,
@@ -454,13 +456,14 @@ class ProxSVRG:
                 current_params,
                 tree_zeros_like(xs),  # initialize the sum to zero
                 state.key,
+                state.iter_num,
             ),
         )
 
         # update the state
         # storing the average over the inner loop to potentially use it in the run loop
         state = state._replace(
-            iter_num=state.iter_num + 1,
+            iter_num=iter_num,
             key=key,
             x_av=tree_scalar_mul(1 / m, x_sum),
         )
@@ -526,7 +529,7 @@ class SVRG(ProxSVRG):
     def __init__(
         self,
         fun: Callable,
-        maxiter: int = 1000,
+        maxiter: int = 10_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-3,
