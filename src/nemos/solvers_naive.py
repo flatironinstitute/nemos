@@ -4,7 +4,8 @@ import jax
 import jax.numpy as jnp
 from jax import grad, jit, random
 from jaxopt import OptStep
-from jaxopt._src.tree_util import tree_l2_norm, tree_sub
+
+from .tree_utils import tree_l2_norm, tree_sub
 
 
 class SVRGState(NamedTuple):

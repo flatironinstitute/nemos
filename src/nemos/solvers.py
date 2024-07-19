@@ -9,17 +9,17 @@ from jax._src.typing import ArrayLike
 from jaxopt import OptStep
 from jaxopt._src import loop
 from jaxopt.prox import prox_none
-from jaxopt.tree_util import (
+
+from .base_class import DESIGN_INPUT_TYPE
+from .tree_utils import (
     tree_add,
     tree_add_scalar_mul,
     tree_l2_norm,
     tree_scalar_mul,
+    tree_slice,
     tree_sub,
     tree_zeros_like,
 )
-
-from .base_class import DESIGN_INPUT_TYPE
-from .tree_utils import tree_slice
 
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike

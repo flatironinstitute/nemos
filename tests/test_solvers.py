@@ -2,12 +2,11 @@ import jax
 import jaxopt
 import numpy as np
 import pytest
-from jaxopt.tree_util import tree_l2_norm, tree_sub
 
 import nemos as nmo
 from nemos.regularizer import GroupLasso, Lasso, Ridge, UnRegularized
 from nemos.solvers import SVRG, ProxSVRG
-from nemos.tree_utils import pytree_map_and_reduce, tree_slice
+from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
 @pytest.mark.parametrize(
