@@ -61,7 +61,8 @@ def check_one_dimensional(func: Callable) -> Callable:
 
 
 def min_max_rescale_samples(
-    sample_pts: NDArray, bounds: Optional[Tuple[float, float]] = None,
+    sample_pts: NDArray,
+    bounds: Optional[Tuple[float, float]] = None,
 ) -> Tuple[NDArray, float]:
     """Rescale samples to [0,1].
 
@@ -256,8 +257,10 @@ class Basis(abc.ABC):
         self._conv_kwargs = kwargs
 
         if bounds is not None and len(bounds) != 2:
-            raise ValueError(f"The provided `bounds` must be of length two. Length {len(bounds)} provided instead!")
-        
+            raise ValueError(
+                f"The provided `bounds` must be of length two. Length {len(bounds)} provided instead!"
+            )
+
         # convert to float and store
         self._bounds = bounds if bounds is None else tuple(map(float, bounds))
 
@@ -276,9 +279,7 @@ class Basis(abc.ABC):
                     f"`window_size` must be a positive integer. {window_size} provided instead!"
                 )
             if bounds is not None:
-                raise ValueError(
-                    "`bounds` should only be set when `mode=='eval'`."
-                )
+                raise ValueError("`bounds` should only be set when `mode=='eval'`.")
         else:
             if args:
                 raise ValueError(
@@ -1189,9 +1190,7 @@ class MSplineBasis(SplineBasis):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
-        sample_pts, scaling = min_max_rescale_samples(
-            sample_pts, self.bounds
-        )
+        sample_pts, scaling = min_max_rescale_samples(sample_pts, self.bounds)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -1342,9 +1341,7 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
-        sample_pts, _ = min_max_rescale_samples(
-            sample_pts, self.bounds
-        )
+        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
@@ -1471,9 +1468,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
-        sample_pts, _ = min_max_rescale_samples(
-            sample_pts, self.bounds
-        )
+        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -1598,7 +1593,7 @@ class RaisedCosineBasisLinear(Basis):
         self._check_width(width)
         self._width = width
         # if linear raised cosine are initialized
-        # this flag is always true, the samples 
+        # this flag is always true, the samples
         # must be rescaled to 0 and 1.
         self._rescale_samples = True
 
@@ -1658,9 +1653,7 @@ class RaisedCosineBasisLinear(Basis):
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
             # additive_basis(*([x] * 2)) would modify both inputs
-            sample_pts, _ = min_max_rescale_samples(
-                np.copy(sample_pts), self.bounds
-            )
+            sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), self.bounds)
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
@@ -1793,11 +1786,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             bounds=bounds,
             **kwargs,
         )
-        # overwrite the flag for scaling the samples to [0,1] in the super.__call__(...). 
+        # overwrite the flag for scaling the samples to [0,1] in the super.__call__(...).
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
         self._rescale_samples = False
-        
+
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self._time_scaling = 50.0
@@ -1837,9 +1830,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
-        sample_pts, _ = min_max_rescale_samples(
-            np.copy(sample_pts), self.bounds
-        )
+        sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), self.bounds)
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -2030,9 +2021,7 @@ class OrthExponentialBasis(Basis):
 
         """
         self._check_sample_size(sample_pts)
-        sample_pts, _ = min_max_rescale_samples(
-            sample_pts, self.bounds
-        )
+        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
         valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
