@@ -244,8 +244,43 @@ def test_svrg_glm_update(regularizer_class, solver_class, mask, linear_regressio
     )
 
     params, state = glm.initialize_solver(X, y, init_full_gradient=True)
+    params, state = glm.update(params, state, X, y)
 
-    glm.update(params, state, X, y)
+    assert state.iter_num == 1
+
+
+@pytest.mark.parametrize(
+    "regularizer_class, solver_class, mask",
+    [
+        (Lasso, ProxSVRG, None),
+        # (GroupLasso, ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        (Ridge, SVRG, None),
+        (UnRegularized, SVRG, None),
+    ],
+)
+def test_svrg_glm_fit(regularizer_class, solver_class, mask, linear_regression):
+    X, y, true_coef, _, loss = linear_regression
+    # make y 2D
+    y = np.expand_dims(y, 1)
+
+    # only run for a few iterations
+    maxiter = 3
+    solver_kwargs = {"maxiter": maxiter}
+
+    # only pass mask if it's not None
+    kwargs = {"solver_name": solver_class.__name__}
+    if mask is not None:
+        kwargs["mask"] = mask
+
+    glm = nmo.glm.PopulationGLM(
+        regularizer=regularizer_class(**kwargs, solver_kwargs=solver_kwargs),
+        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+    )
+
+    glm.fit(X, y)
+
+    assert glm.regularizer._solver.maxiter == maxiter
+    assert glm.solver_state.iter_num == maxiter
 
 
 @pytest.mark.parametrize(
