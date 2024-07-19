@@ -142,7 +142,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ]
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -534,51 +534,35 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             bas = self.cls(5, mode='eval', test='hi')
 
     @pytest.mark.parametrize(
-        "vmin, vmax, expectation",
+        "bounds, expectation",
         [
-            (None, None, does_not_raise()),
-            (None, 3, does_not_raise()),
-            (1, None, does_not_raise()),
-            (1, 3, does_not_raise()),
-            ("a", 3, pytest.raises(ValueError, match="could not convert")),
-            (1, "a", pytest.raises(ValueError, match="could not convert")),
-            ("a", "a", pytest.raises(ValueError, match="could not convert"))
+            (None, does_not_raise()),
+            ((None, 3),  pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, None),  pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(ValueError, match="could not convert")),
+            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
+            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
         ]
     )
-    def test_vmin_vmax_init(self, vmin, vmax, expectation):
+    def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
-            bas = self.cls(3, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:bas = self.cls(3, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                assert bas.vmin == vmin
+            bas = self.cls(3, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
 
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
-
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
 
     @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
         [
             (None, None, np.arange(5), []),
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
+            (0, 3, np.arange(5), [4]),
+            (1, 4, np.arange(5), [0]),
             (1, 3, np.arange(5), [0, 4])
         ]
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx):
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bounds = (vmin, vmax) if vmin else None
+        bas = self.cls(3, mode="eval", bounds=bounds)
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
@@ -594,7 +578,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1, out2)
@@ -610,7 +594,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(x1, x2 * (mx - mn) + mn)
@@ -626,7 +610,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_mode_conv(self, vmin, vmax, samples, exception):
         with exception:
-            self.cls(3, mode="conv", window_size=10, vmin=vmin, vmax=vmax)
+            self.cls(3, mode="conv", window_size=10, bounds=(vmin, vmax))
 
 
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
@@ -709,7 +693,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         ]
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -909,7 +893,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -1054,52 +1038,33 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             bas = self.cls(5, mode='eval', test='hi')
 
     @pytest.mark.parametrize(
-        "vmin, vmax, expectation",
+        "bounds, expectation",
         [
-            (None, None, does_not_raise()),
-            (None, 3, does_not_raise()),
-            (1, None, does_not_raise()),
-            (1, 3, does_not_raise()),
-            ("a", 3, pytest.raises(ValueError, match="could not convert")),
-            (1, "a", pytest.raises(ValueError, match="could not convert")),
-            ("a", "a", pytest.raises(ValueError, match="could not convert"))
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(ValueError, match="could not convert")),
+            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
+            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
         ]
     )
-    def test_vmin_vmax_init(self, vmin, vmax, expectation):
+    def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
-            bas = self.cls(3, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                bas = self.cls(3, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
-
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
+            bas = self.cls(3, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "bounds, samples, nan_idx",
         [
-            (None, None, np.arange(5), []),
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, np.arange(5), []),
+            ((0, 3), np.arange(5), [4]),
+            ((1, 6), np.arange(5), [0]),
+            ((1, 3), np.arange(5), [0, 4])
         ]
     )
-    def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx):
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+    def test_vmin_vmax_range(self, bounds, samples, nan_idx):
+        bas = self.cls(3, mode="eval", bounds=bounds)
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
@@ -1115,7 +1080,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1, out2)
@@ -1131,7 +1096,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(x1, x2 * (mx - mn) + mn)
@@ -1147,7 +1112,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_mode_conv(self, vmin, vmax, samples, exception):
         with exception:
-            self.cls(3, mode="conv", window_size=10, vmin=vmin, vmax=vmax)
+            self.cls(3, mode="conv", window_size=10, bounds=(vmin, vmax))
 
 
 class TestMSplineBasis(BasisFuncsTesting):
@@ -1230,7 +1195,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -1435,7 +1400,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -1575,52 +1540,33 @@ class TestMSplineBasis(BasisFuncsTesting):
             bas = self.cls(5, mode='eval', test='hi')
 
     @pytest.mark.parametrize(
-        "vmin, vmax, expectation",
+        "bounds, expectation",
         [
-            (None, None, does_not_raise()),
-            (None, 3, does_not_raise()),
-            (1, None, does_not_raise()),
-            (1, 3, does_not_raise()),
-            ("a", 3, pytest.raises(ValueError, match="could not convert")),
-            (1, "a", pytest.raises(ValueError, match="could not convert")),
-            ("a", "a", pytest.raises(ValueError, match="could not convert"))
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(ValueError, match="could not convert")),
+            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
+            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
         ]
     )
-    def test_vmin_vmax_init(self, vmin, vmax, expectation):
+    def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
-            bas = self.cls(3, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                bas = self.cls(3, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
-
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
+            bas = self.cls(3, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
+        "bounds, samples, nan_idx",
         [
-            (None, None, np.arange(5), []),
-            (None, 3, np.arange(5), [4]),
-            (1, None, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4])
+            (None, np.arange(5), []),
+            ((0, 3), np.arange(5), [4]),
+            ((1, 6), np.arange(5), [0]),
+            ((1, 3), np.arange(5), [0, 4])
         ]
     )
-    def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx):
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+    def test_vmin_vmax_range(self, bounds, samples, nan_idx):
+        bas = self.cls(3, mode="eval", bounds=bounds)
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
@@ -1637,7 +1583,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     def test_vmin_vmax_eval_on_grid_scaling_effect_on_eval(self, vmin, vmax, samples, nan_idx, scaling):
         """Check that the MSpline has the expected scaling property."""
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         # multiply by scaling to get the invariance
@@ -1656,7 +1602,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(3, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(3, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(x1, x2 * (mx - mn) + mn)
@@ -1672,7 +1618,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_mode_conv(self, vmin, vmax, samples, exception):
         with exception:
-            self.cls(3, mode="conv", window_size=10, vmin=vmin, vmax=vmax)
+            self.cls(3, mode="conv", window_size=10, bounds=(vmin, vmax))
 
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
@@ -1772,7 +1718,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         ]
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax, decay_rates=np.linspace(0.1, 1, 5))
+        bas = self.cls(5, bounds=(vmin, vmax), decay_rates=np.linspace(0.1, 1, 5))
         with expectation:
             bas(samples)
 
@@ -2004,7 +1950,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, decay_rates=np.linspace(0,1,5), vmin=vmin, vmax=vmax)
+        bas = self.cls(5, decay_rates=np.linspace(0,1,5), bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -2240,7 +2186,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -2464,7 +2410,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -2606,40 +2552,21 @@ class TestBSplineBasis(BasisFuncsTesting):
             bas = self.cls(5, mode='eval', test='hi')
 
     @pytest.mark.parametrize(
-        "vmin, vmax, expectation",
+        "bounds, expectation",
         [
-            (None, None, does_not_raise()),
-            (None, 3, does_not_raise()),
-            (1, None, does_not_raise()),
-            (1, 3, does_not_raise()),
-            ("a", 3, pytest.raises(ValueError, match="could not convert")),
-            (1, "a", pytest.raises(ValueError, match="could not convert")),
-            ("a", "a", pytest.raises(ValueError, match="could not convert"))
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(ValueError, match="could not convert")),
+            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
+            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
         ]
     )
-    def test_vmin_vmax_init(self, vmin, vmax, expectation):
+    def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
-            bas = self.cls(5, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                bas = self.cls(5, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
-
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
+            bas = self.cls(5, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
@@ -2651,7 +2578,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx):
-        bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(5, mode="eval", bounds=(vmin, vmax))
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
@@ -2667,7 +2594,7 @@ class TestBSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
         bas_no_range = self.cls(5, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(5, mode="eval", bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1, out2)
@@ -2683,7 +2610,7 @@ class TestBSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(5, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(5, mode="eval", bounds=(vmin, vmax))
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(x1, x2 * (mx - mn) + mn)
@@ -2699,7 +2626,7 @@ class TestBSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_mode_conv(self, vmin, vmax, samples, exception):
         with exception:
-            self.cls(5, mode="conv", window_size=10, vmin=vmin, vmax=vmax)
+            self.cls(5, mode="conv", window_size=10, bounds=(vmin, vmax))
 
 
 class TestCyclicBSplineBasis(BasisFuncsTesting):
@@ -2783,7 +2710,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -3025,7 +2952,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -3040,7 +2967,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, vmin=vmin, vmax=vmax)
+        bas = self.cls(5, bounds=(vmin, vmax))
         with expectation:
             bas(samples)
 
@@ -3182,40 +3109,21 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             bas = self.cls(5, mode='eval', test='hi')
 
     @pytest.mark.parametrize(
-        "vmin, vmax, expectation",
+        "bounds, expectation",
         [
-            (None, None, does_not_raise()),
-            (None, 3, does_not_raise()),
-            (1, None, does_not_raise()),
-            (1, 3, does_not_raise()),
-            ("a", 3, pytest.raises(ValueError, match="could not convert")),
-            (1, "a", pytest.raises(ValueError, match="could not convert")),
-            ("a", "a", pytest.raises(ValueError, match="could not convert"))
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(ValueError, match="could not convert")),
+            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
+            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
         ]
     )
-    def test_vmin_vmax_init(self, vmin, vmax, expectation):
+    def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
-            bas = self.cls(5, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                bas = self.cls(5, vmin=vmin, vmax=vmax)
-            if vmin is None:
-                assert bas.vmin is vmin
-            else:
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
-
-                assert bas.vmin == vmin
-
-            if vmax is None:
-                assert bas.vmax is vmax
-            else:
-                assert bas.vmax == vmax
+            bas = self.cls(5, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
@@ -3227,7 +3135,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         ]
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx):
-        bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(5, mode="eval", bounds=(vmin, vmax))
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
@@ -3243,7 +3151,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
         bas_no_range = self.cls(5, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(5, mode="eval", bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1, out2)
@@ -3259,7 +3167,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_eval_on_grid_affects_x(self, vmin, vmax, samples, nan_idx, mn, mx):
         bas_no_range = self.cls(5, mode="eval", vmin=None, vmax=None)
-        bas = self.cls(5, mode="eval", vmin=vmin, vmax=vmax)
+        bas = self.cls(5, mode="eval", bounds=(vmin, vmax))
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(x1, x2 * (mx - mn) + mn)
@@ -3275,7 +3183,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_mode_conv(self, vmin, vmax, samples, exception):
         with exception:
-            self.cls(5, mode="conv", window_size=10, vmin=vmin, vmax=vmax)
+            self.cls(5, mode="conv", window_size=10, bounds=(vmin, vmax))
 
 class CombinedBasis(BasisFuncsTesting):
     """

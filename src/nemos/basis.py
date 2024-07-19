@@ -61,7 +61,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 
 
 def min_max_rescale_samples(
-    sample_pts: NDArray, vmin: Optional[float] = None, vmax: Optional[float] = None
+    sample_pts: NDArray, bounds: Optional[Tuple[float, float]] = None,
 ) -> Tuple[NDArray, float]:
     """Rescale samples to [0,1].
 
@@ -69,16 +69,15 @@ def min_max_rescale_samples(
     ----------
     sample_pts:
         The original samples.
-    vmin:
-        Sample value that is mapped to 0. Default is `min(sample_pts)`.
-    vmax:
-        Sample value that is mapped to 1. Default is `max(sample_pts)`.
+    bounds:
+        Sample bounds. `bounds[0]` abd `bounds[1]` are mapped to 0/1 respectively.
+        Default are `min(sample_pts), max(sample_pts)`.
 
     Raises
     ------
     ValueError
         If all the samples contain invalid entries (either NaN or Inf).
-        This may happen if `max(sample) < vmin` or `min(sample) > vmax`.
+        This may happen if `max(sample) < bounds[0]` or `min(sample) >  bounds[1]`.
 
     Warns
     -----
@@ -86,10 +85,10 @@ def min_max_rescale_samples(
         If more than 90% of the sample points contain NaNs or Infs.
     """
     sample_pts = sample_pts.astype(float)
+    vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
+    vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
     if vmin and vmax and vmax <= vmin:
         raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
-    vmin = np.nanmin(sample_pts) if vmin is None else vmin
-    vmax = np.nanmax(sample_pts) if vmax is None else vmax
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     if vmin != vmax:  # Needed is samples contain a single value.
@@ -228,14 +227,10 @@ class Basis(abc.ABC):
         'conv' for convolutional operation.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     *args :
         Only used in "conv" mode. Additional positional arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -251,8 +246,7 @@ class Basis(abc.ABC):
         *args,
         mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
@@ -260,8 +254,13 @@ class Basis(abc.ABC):
         self._check_n_basis_min()
         self._conv_args = args
         self._conv_kwargs = kwargs
-        self._vmin = vmin if vmin is None else float(vmin)
-        self._vmax = vmax if vmax is None else float(vmax)
+
+        if bounds is not None and len(bounds) != 2:
+            raise ValueError(f"The provided `bounds` must be of length two. Length {len(bounds)} provided instead!")
+        
+        # convert to float and store
+        self._bounds = bounds if bounds is None else tuple(map(float, bounds))
+
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(
@@ -276,9 +275,9 @@ class Basis(abc.ABC):
                 raise ValueError(
                     f"`window_size` must be a positive integer. {window_size} provided instead!"
                 )
-            if vmin is not None or vmax is not None:
+            if bounds is not None:
                 raise ValueError(
-                    "`vmin` and `vmax` should only be set when `mode=='conv'`."
+                    "`bounds` should only be set when `mode=='eval'`."
                 )
         else:
             if args:
@@ -296,12 +295,8 @@ class Basis(abc.ABC):
         self._identifiability_constraints = False
 
     @property
-    def vmin(self):
-        return self._vmin
-
-    @property
-    def vmax(self):
-        return self._vmax
+    def bounds(self):
+        return self._bounds
 
     @property
     def mode(self):
@@ -529,16 +524,10 @@ class Basis(abc.ABC):
         """
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
-        if self.vmin is None and self.vmax is None:
+        if self.bounds is None:
             mn, mx = 0, 1
-        elif self.vmin is None:
-            mn = self.vmax - 1  # min has to be lower than the provided max
-            mx = self.vmax
-        elif self.vmax is None:
-            mn = self.vmin
-            mx = mn + 1  # max has to be greater than the provided min
         else:
-            mn, mx = self.vmin, self.vmax
+            mn, mx = self.bounds
         return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
 
     @support_pynapple(conv_type="numpy")
@@ -1000,14 +989,10 @@ class SplineBasis(Basis, abc.ABC):
         Spline order.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1026,8 +1011,7 @@ class SplineBasis(Basis, abc.ABC):
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         self.order = order
@@ -1036,8 +1020,7 @@ class SplineBasis(Basis, abc.ABC):
             *args,
             mode=mode,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
         self._n_input_dimensionality = 1
@@ -1136,14 +1119,10 @@ class MSplineBasis(SplineBasis):
         derivatives at each interior knot, resulting in smoother basis functions.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs:
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1171,8 +1150,7 @@ class MSplineBasis(SplineBasis):
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1181,8 +1159,7 @@ class MSplineBasis(SplineBasis):
             mode=mode,
             order=order,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
 
@@ -1213,7 +1190,7 @@ class MSplineBasis(SplineBasis):
         integrate to one over the domain defined by the sample points.
         """
         sample_pts, scaling = min_max_rescale_samples(
-            sample_pts, vmin=self.vmin, vmax=self.vmax
+            sample_pts, self.bounds
         )
         # add knots if not passed
         knot_locs = self._generate_knots(
@@ -1297,14 +1274,10 @@ class BSplineBasis(SplineBasis):
         The higher this number, the smoother the basis representation will be.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1329,8 +1302,7 @@ class BSplineBasis(SplineBasis):
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1339,8 +1311,7 @@ class BSplineBasis(SplineBasis):
             mode=mode,
             order=order,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
 
@@ -1372,7 +1343,7 @@ class BSplineBasis(SplineBasis):
         from SciPy to compute the basis values.
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, vmin=self.vmin, vmax=self.vmax
+            sample_pts, self.bounds
         )
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
@@ -1433,14 +1404,10 @@ class CyclicBSplineBasis(SplineBasis):
         The higher this number, the smoother the basis representation will be.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1460,8 +1427,7 @@ class CyclicBSplineBasis(SplineBasis):
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1470,8 +1436,7 @@ class CyclicBSplineBasis(SplineBasis):
             mode=mode,
             order=order,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
         if self.order < 2:
@@ -1507,7 +1472,7 @@ class CyclicBSplineBasis(SplineBasis):
 
         """
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, vmin=self.vmin, vmax=self.vmax
+            sample_pts, self.bounds
         )
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
@@ -1595,14 +1560,10 @@ class RaisedCosineBasisLinear(Basis):
         Width of the raised cosine. By default, it's set to 2.0.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1622,8 +1583,7 @@ class RaisedCosineBasisLinear(Basis):
         mode="eval",
         width: float = 2.0,
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1631,13 +1591,16 @@ class RaisedCosineBasisLinear(Basis):
             *args,
             mode=mode,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
         self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
+        # if linear raised cosine are initialized
+        # this flag is always true, the samples 
+        # must be rescaled to 0 and 1.
+        self._rescale_samples = True
 
     @property
     def width(self):
@@ -1673,7 +1636,6 @@ class RaisedCosineBasisLinear(Basis):
     def __call__(
         self,
         sample_pts: ArrayLike,
-        rescale_samples=True,
     ) -> FeatureMatrix:
         """Generate basis functions with given samples.
 
@@ -1681,11 +1643,6 @@ class RaisedCosineBasisLinear(Basis):
         ----------
         sample_pts :
             Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
-        rescale_samples :
-            If `True`, the sample points will be rescaled to the interval [0, 1]. If `False`, no rescaling is applied.
-            Rescaling is performed as follows: `sample_pts = (sample_pts - vmin) / (vmax - vmin)`.
-            If `vmin` and `vmax` are not provided at initialization, the minimum and maximum values of `sample_pts`
-            are used, respectively. Values outside the [vmin, vmax] range are set to NaN.
 
         Raises
         ------
@@ -1693,7 +1650,7 @@ class RaisedCosineBasisLinear(Basis):
             If the sample provided do not lie in [0,1].
 
         """
-        if rescale_samples:
+        if self._rescale_samples:
             # note that sample points is converted to NDArray
             # with the decorator.
             # copy is necessary otherwise:
@@ -1702,7 +1659,7 @@ class RaisedCosineBasisLinear(Basis):
             # additive_basis = basis1 + basis2
             # additive_basis(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
-                np.copy(sample_pts), vmin=self.vmin, vmax=self.vmax
+                np.copy(sample_pts), self.bounds
             )
 
         peaks = self._compute_peaks()
@@ -1799,14 +1756,10 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         decays to 0.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1828,8 +1781,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1838,10 +1790,14 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             mode=mode,
             width=width,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
+        # overwrite the flag for scaling the samples to [0,1] in the super.__call__(...). 
+        # The samples are scaled appropriately in the self._transform_samples which scales
+        # and applies the log-stretch, no additional transform is needed.
+        self._rescale_samples = False
+        
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self._time_scaling = 50.0
@@ -1864,8 +1820,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def _transform_samples(
         self,
         sample_pts: ArrayLike,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
     ) -> NDArray:
         """
         Map the sample domain to log-space.
@@ -1875,10 +1829,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         sample_pts :
             Sample points used for evaluating the splines,
             shape (n_samples, ).
-        vmin :
-            The minimum value for rescaling. If not provided, the default is the minimum value of `sample_pts`.
-        vmax :
-            The maximum value for rescaling. If not provided, the default is the maximum value of `sample_pts`.
 
         Returns
         -------
@@ -1888,7 +1838,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
         sample_pts, _ = min_max_rescale_samples(
-            np.copy(sample_pts), vmin=vmin, vmax=vmax
+            np.copy(sample_pts), self.bounds
         )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
@@ -1944,10 +1894,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super().__call__(
-            self._transform_samples(sample_pts, vmin=self.vmin, vmax=self.vmax),
-            rescale_samples=False,
-        )
+        return super().__call__(self._transform_samples(sample_pts))
 
 
 class OrthExponentialBasis(Basis):
@@ -1967,14 +1914,10 @@ class OrthExponentialBasis(Basis):
         'conv' for convolutional operation.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    vmin :
-        The minimum value for the basis domain in `mode="eval"`. The default `vmin` is the minimum of
-        the samples provided when evaluating the basis.
-        If a sample is lower than `vmin`, the basis will return NaN.
-    vmax :
-        The maximum value for the samples in `mode="eval"`. The default `vmax` is the maximum of
-        the samples provided when evaluating the basis.
-        If a sample is larger than `vmax`, the basis will return NaN.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1987,8 +1930,7 @@ class OrthExponentialBasis(Basis):
         *args,
         mode="eval",
         window_size: Optional[int] = None,
-        vmin: Optional[float] = None,
-        vmax: Optional[float] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1996,8 +1938,7 @@ class OrthExponentialBasis(Basis):
             *args,
             mode=mode,
             window_size=window_size,
-            vmin=vmin,
-            vmax=vmax,
+            bounds=bounds,
             **kwargs,
         )
         self._decay_rates = np.asarray(decay_rates)
@@ -2090,7 +2031,7 @@ class OrthExponentialBasis(Basis):
         """
         self._check_sample_size(sample_pts)
         sample_pts, _ = min_max_rescale_samples(
-            sample_pts, vmin=self.vmin, vmax=self.vmax
+            sample_pts, self.bounds
         )
         valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of

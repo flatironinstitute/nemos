@@ -52,7 +52,7 @@ plt.plot(eval_basis)
 # You can specify a range for the support of the basis by setting the `vmin` and `vmax`
 # parameters at initialization. Evaluating the basis at any sample outside the range will result in a NaN.
 
-bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, vmin=0.2, vmax=0.8)
+bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=0.2, vmax=0.8)
 
 print("Evaluated basis:")
 # 0.5  is within the support, 0.1 is outside the support
