@@ -1091,7 +1091,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """
+    r"""
     M-spline[$^1$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
@@ -1143,6 +1143,11 @@ class MSplineBasis(SplineBasis):
     ----------
     [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
+
+    Notes
+    -----
+    MSplines must integrate to 1 over their domain. Therefore, if the domain (x-axis) of an MSpline
+    basis is dilated by a factor of $\alpha$, the co-domain (y-axis) values will shrink by a factor of $1/\alpha$.
     """
 
     def __init__(
@@ -1346,13 +1351,10 @@ class BSplineBasis(SplineBasis):
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
-        valid = ~np.isnan(sample_pts)
-        if np.any(valid):
-            basis_eval = bspline(
-                sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
-            )
-        else:
-            basis_eval = np.full((sample_pts.shape[0], self.n_basis_funcs), np.nan)
+        basis_eval = bspline(
+            sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
+        )
+
 
         if self.identifiability_constraints:
             basis_eval = self._apply_identifiability_constraints(basis_eval)
@@ -1489,26 +1491,21 @@ class CyclicBSplineBasis(SplineBasis):
             )
         )
 
-        valid = ~np.isnan(sample_pts)
-        if np.any(valid):
-            ind = sample_pts > xc
+        ind = sample_pts > xc
 
-            basis_eval = bspline(
-                sample_pts, knots, order=self.order, der=0, outer_ok=True
+        basis_eval = bspline(
+            sample_pts, knots, order=self.order, der=0, outer_ok=True
+        )
+        sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
+
+        if np.sum(ind):
+            basis_eval[ind] = basis_eval[ind] + bspline(
+                sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
             )
-            sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
-
-            if np.sum(ind):
-                basis_eval[ind] = basis_eval[ind] + bspline(
-                    sample_pts[ind], knots, order=self.order, outer_ok=True, der=0
-                )
-            # restore points
-            sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-            if self.identifiability_constraints:
-                basis_eval = self._apply_identifiability_constraints(basis_eval)
-        else:
-            # deal with the case of no valid samples
-            basis_eval = np.full((sample_pts.shape[0], self.n_basis_funcs), np.nan)
+        # restore points
+        sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
+        if self.identifiability_constraints:
+            basis_eval = self._apply_identifiability_constraints(basis_eval)
 
         return basis_eval
 
