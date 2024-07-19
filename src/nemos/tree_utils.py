@@ -1,6 +1,7 @@
 """Utilities for manipulating and checking PyTrees."""
 
-from functools import reduce
+import operator
+from functools import partial, reduce
 from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
@@ -163,3 +164,45 @@ def tree_slice(data: Any, idx: IndexType):
         A nested structure with the same format as `data`, where each array has been sliced according to `idx`.
     """
     return jax.tree_util.tree_map(lambda x: x[idx], data)
+
+
+# The following functions are adapted from jaxopt.tree_utils
+
+tree_add = partial(jax.tree_util.tree_map, operator.add)
+tree_add.__doc__ = "Tree addition."
+
+tree_sub = partial(jax.tree_util.tree_map, operator.sub)
+tree_sub.__doc__ = "Tree subtraction."
+
+
+def tree_scalar_mul(scalar, tree_x):
+    """Compute scalar * tree_x."""
+    return jax.tree_util.tree_map(lambda x: scalar * x, tree_x)
+
+
+def tree_add_scalar_mul(tree_x, scalar, tree_y):
+    """Compute tree_x + scalar * tree_y."""
+    return jax.tree_util.tree_map(lambda x, y: x + scalar * y, tree_x, tree_y)
+
+
+def tree_sum(tree_x):
+    """Compute sum(tree_x)."""
+    sums = jax.tree_util.tree_map(jnp.sum, tree_x)
+    return jax.tree_util.tree_reduce(operator.add, sums)
+
+
+def tree_l2_norm(tree_x, squared=False):
+    """Compute the l2 norm ||tree_x||."""
+    squared_tree = jax.tree_util.tree_map(
+        lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), tree_x
+    )
+    sqnorm = tree_sum(squared_tree)
+    if squared:
+        return sqnorm
+    else:
+        return jnp.sqrt(sqnorm)
+
+
+def tree_zeros_like(tree_x):
+    """Creates an all-zero tree with the same structure as tree_x."""
+    return jax.tree_util.tree_map(jnp.zeros_like, tree_x)
