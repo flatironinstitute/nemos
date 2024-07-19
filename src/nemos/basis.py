@@ -93,7 +93,7 @@ def min_max_rescale_samples(
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     # this passes if `samples_pts` contains a single value
-    if vmin != vmax:  
+    if vmin != vmax:
         scaling = vmax - vmin
         sample_pts /= scaling
     else:
@@ -1355,7 +1355,6 @@ class BSplineBasis(SplineBasis):
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
 
-
         if self.identifiability_constraints:
             basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
@@ -1493,9 +1492,7 @@ class CyclicBSplineBasis(SplineBasis):
 
         ind = sample_pts > xc
 
-        basis_eval = bspline(
-            sample_pts, knots, order=self.order, der=0, outer_ok=True
-        )
+        basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
         sample_pts[ind] = sample_pts[ind] - knots.max() + knot_locs[0]
 
         if np.sum(ind):
