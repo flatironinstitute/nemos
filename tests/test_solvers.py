@@ -1,8 +1,11 @@
 import jax
+import jaxopt
 import numpy as np
 import pytest
 
-from nemos.solvers import SVRG
+import nemos as nmo
+from nemos.regularizer import GroupLasso, Lasso, Ridge, UnRegularized
+from nemos.solvers import SVRG, ProxSVRG
 from nemos.tree_utils import pytree_map_and_reduce
 
 
@@ -91,3 +94,189 @@ def test_svrg_init_state_init_full_gradient(request, regr_setup):
     state = svrg.init_state(param_init, X, y, init_full_gradient=True)
 
     assert state.df_xs is not None
+
+
+@pytest.mark.parametrize(
+    "regr_setup",
+    [
+        "linear_regression",
+        "linear_regression_tree",
+    ],
+)
+@pytest.mark.parametrize(
+    "solver_class, prox, prox_lambda",
+    [(SVRG, None, None), (ProxSVRG, jaxopt.prox.prox_ridge, 0.1)],
+)
+def test_svrg_update_needs_df_xs(request, regr_setup, solver_class, prox, prox_lambda):
+    jax.config.update("jax_enable_x64", True)
+    X, y, _, params, loss = request.getfixturevalue(regr_setup)
+
+    param_init = jax.tree_util.tree_map(np.zeros_like, params)
+    if prox_lambda is not None:
+        args = (prox_lambda, X, y)
+        constr_args = (loss, prox)
+    else:
+        args = (X, y)
+        constr_args = (loss,)
+
+    solver_class = solver_class(*constr_args)
+    state = solver_class.init_state(param_init, *args)
+
+    with pytest.raises(
+        ValueError,
+        match=r"Full gradient at the anchor point \(state\.df_xs\) has to be set",
+    ):
+        _, _ = solver_class.update(param_init, state, *args)
+
+
+@pytest.mark.parametrize(
+    "regularizer_class, solver_class, mask",
+    [
+        (Lasso, ProxSVRG, None),
+        (GroupLasso, ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
+        (Ridge, SVRG, None),
+        (UnRegularized, SVRG, None),
+    ],
+)
+def test_svrg_regularizer_constr(
+    regularizer_class, solver_class, mask, linear_regression
+):
+    _, _, _, _, loss = linear_regression
+
+    # only pass mask if it's not None
+    kwargs = {"solver_name": solver_class.__name__}
+    if mask is not None:
+        kwargs["mask"] = mask
+
+    reg = regularizer_class(**kwargs)
+    reg.instantiate_solver(loss)
+
+    assert isinstance(reg._solver, solver_class)
+
+
+@pytest.mark.parametrize(
+    "regularizer_class, solver_class, mask",
+    [
+        (Lasso, ProxSVRG, None),
+        (GroupLasso, ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
+        (Ridge, SVRG, None),
+        (UnRegularized, SVRG, None),
+    ],
+)
+def test_svrg_regularizer_passes_solver_kwargs(
+    regularizer_class, solver_class, mask, linear_regression
+):
+    _, _, _, _, loss = linear_regression
+
+    solver_kwargs = {
+        "stepsize": np.abs(np.random.randn()),
+        "maxiter": np.random.randint(1, 100),
+    }
+
+    # only pass mask if it's not None
+    kwargs = {
+        "solver_name": solver_class.__name__,
+        "solver_kwargs": solver_kwargs,
+    }
+    if mask is not None:
+        kwargs["mask"] = mask
+
+    reg = regularizer_class(**kwargs)
+    reg.instantiate_solver(loss)
+
+    assert reg._solver.stepsize == solver_kwargs["stepsize"]
+    assert reg._solver.maxiter == solver_kwargs["maxiter"]
+
+
+@pytest.mark.parametrize(
+    "regularizer_class, solver_class, mask",
+    [
+        (Lasso, ProxSVRG, None),
+        (GroupLasso, ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
+        (Ridge, SVRG, None),
+        (UnRegularized, SVRG, None),
+    ],
+)
+def test_svrg_glm_initialize_solver(
+    regularizer_class, solver_class, mask, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    # make y 2D
+    y = np.expand_dims(y, 1)
+
+    # only pass mask if it's not None
+    kwargs = {"solver_name": solver_class.__name__}
+    if mask is not None:
+        kwargs["mask"] = mask
+
+    glm = nmo.glm.PopulationGLM(
+        regularizer=regularizer_class(**kwargs),
+        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+    )
+
+    params, state = glm.initialize_solver(X, y)
+
+    assert isinstance(glm.regularizer._solver, solver_class)
+
+
+@pytest.mark.parametrize(
+    "regularizer_class, solver_class, mask",
+    [
+        (Lasso, ProxSVRG, None),
+        (GroupLasso, ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        (Ridge, SVRG, None),
+        (UnRegularized, SVRG, None),
+    ],
+)
+def test_svrg_glm_update(regularizer_class, solver_class, mask, linear_regression):
+    X, y, _, _, loss = linear_regression
+    # make y 2D
+    y = np.expand_dims(y, 1)
+
+    # only pass mask if it's not None
+    kwargs = {"solver_name": solver_class.__name__}
+    if mask is not None:
+        kwargs["mask"] = mask
+
+    glm = nmo.glm.PopulationGLM(
+        regularizer=regularizer_class(**kwargs),
+        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+    )
+
+    params, state = glm.initialize_solver(X, y, init_full_gradient=True)
+
+    glm.update(params, state, X, y)
+
+
+@pytest.mark.parametrize(
+    "regularizer_class, solver_class, mask",
+    [
+        (Lasso, ProxSVRG, None),
+        (GroupLasso, ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        (Ridge, SVRG, None),
+        (UnRegularized, SVRG, None),
+    ],
+)
+def test_svrg_glm_update_needs_df_xs(
+    regularizer_class, solver_class, mask, linear_regression
+):
+    X, y, _, _, loss = linear_regression
+    # make y 2D
+    y = np.expand_dims(y, 1)
+
+    # only pass mask if it's not None
+    kwargs = {"solver_name": solver_class.__name__}
+    if mask is not None:
+        kwargs["mask"] = mask
+
+    glm = nmo.glm.PopulationGLM(
+        regularizer=regularizer_class(**kwargs),
+        observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Full gradient at the anchor point \(state\.df_xs\) has to be set",
+    ):
+        params, state = glm.initialize_solver(X, y)
+        glm.update(params, state, X, y)
