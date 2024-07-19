@@ -263,14 +263,22 @@ def test_svrg_glm_update(regularizer_class, solver_class, mask, linear_regressio
         (UnRegularized, SVRG, None),
     ],
 )
-def test_svrg_glm_fit(regularizer_class, solver_class, mask, linear_regression):
+@pytest.mark.parametrize(
+    "maxiter",
+    [3, 50, 100, 110],
+)
+def test_svrg_glm_fit(
+    regularizer_class, solver_class, mask, linear_regression, maxiter
+):
     X, y, true_coef, _, loss = linear_regression
     # make y 2D
     y = np.expand_dims(y, 1)
 
-    # only run for a few iterations
-    maxiter = 3
-    solver_kwargs = {"maxiter": maxiter}
+    # set tolerance to -1 so that doesn't stop the iteration
+    solver_kwargs = {
+        "maxiter": maxiter,
+        "tol": -1.0,
+    }
 
     # only pass mask if it's not None
     kwargs = {"solver_name": solver_class.__name__}
@@ -285,8 +293,15 @@ def test_svrg_glm_fit(regularizer_class, solver_class, mask, linear_regression):
 
     glm.fit(X, y)
 
+    # calculate how many iterations we expect
+    # the current rule is to stop if we would exceed maxiter
+    # during the next full batch
+    N = y.shape[0]
+    n_full_epochs = maxiter // N
+    expected_iters = int(N * n_full_epochs)
+
     assert glm.regularizer._solver.maxiter == maxiter
-    assert glm.solver_state.iter_num == maxiter
+    assert glm.solver_state.iter_num == expected_iters
 
 
 @pytest.mark.parametrize(
