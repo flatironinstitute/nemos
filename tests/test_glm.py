@@ -1363,13 +1363,18 @@ class TestGLM:
         "reg, dof",
         [
             (nmo.regularizer.UnRegularized(), np.array([5])),
-            (nmo.regularizer.Lasso(), np.array([3])),  # this lasso fit has only 3 coeff of the first neuron
+            (
+                nmo.regularizer.Lasso(),
+                np.array([3]),
+            ),  # this lasso fit has only 3 coeff of the first neuron
             # surviving
             (nmo.regularizer.Ridge(), np.array([5])),
         ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
-    def test_estimate_dof_resid(self, n_samples, dof, reg, poissonGLM_model_instantiation):
+    def test_estimate_dof_resid(
+        self, n_samples, dof, reg, poissonGLM_model_instantiation
+    ):
         """
         Test that the dof is an integer.
         """
@@ -1381,16 +1386,16 @@ class TestGLM:
         assert np.allclose(num, n_samples - dof - 1)
 
     @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
-    def test_waning_solver_reg_str(self, reg):
+    def test_warning_solver_reg_str(self, reg):
         # check that a warning is triggered
         # if no param is passed
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
-        # check that the warning is not triggered
+        # # check that the warning is not triggered
         with warnings.catch_warnings():
             warnings.simplefilter("error")
-            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
         model.regularizer = "unregularized"
@@ -1399,14 +1404,9 @@ class TestGLM:
 
     @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
     def test_reg_strength_reset(self, reg):
-        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
         model.regularizer = "unregularized"
         assert model.regularizer_strength is None
-
-
-
-
-
 
 
 class TestPopulationGLM:
@@ -1520,13 +1520,18 @@ class TestPopulationGLM:
         "reg, dof",
         [
             (nmo.regularizer.UnRegularized(), np.array([5, 5, 5])),
-            (nmo.regularizer.Lasso(), np.array([3, 0, 0])),  # this lasso fit has only 3 coeff of the first neuron
-                                                             # surviving
+            (
+                nmo.regularizer.Lasso(),
+                np.array([3, 0, 0]),
+            ),  # this lasso fit has only 3 coeff of the first neuron
+            # surviving
             (nmo.regularizer.Ridge(), np.array([5, 5, 5])),
         ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
-    def test_estimate_dof_resid(self, n_samples, dof, reg, poisson_population_GLM_model):
+    def test_estimate_dof_resid(
+        self, n_samples, dof, reg, poisson_population_GLM_model
+    ):
         """
         Test that the dof is an integer.
         """
@@ -2865,17 +2870,17 @@ class TestPopulationGLM:
             ),
             (
                 nmo.regularizer.UnRegularized(),
-                None,
+                1.0,
                 "GradientDescent",
                 {"tol": 10**-14},
             ),
             (
                 nmo.regularizer.Ridge(),
-                None,
+                1.0,
                 "LBFGS",
                 {"tol": 10**-14},
             ),
-            (nmo.regularizer.Ridge(), None, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (nmo.regularizer.Ridge(), 1.0, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
             (
                 nmo.regularizer.Lasso(),
                 0.001,
@@ -2977,7 +2982,7 @@ class TestPopulationGLM:
         # check that the warning is not triggered
         with warnings.catch_warnings():
             warnings.simplefilter("error")
-            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
         model.regularizer = "unregularized"
@@ -2986,7 +2991,6 @@ class TestPopulationGLM:
 
     @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
     def test_reg_strength_reset(self, reg):
-        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.)
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
         model.regularizer = "unregularized"
         assert model.regularizer_strength is None
-

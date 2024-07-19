@@ -16,7 +16,7 @@ from numpy.typing import ArrayLike, NDArray
 from . import utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
-from .regularizer import Regularizer
+from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
 
 
@@ -71,7 +71,18 @@ class BaseRegressor(Base, abc.ABC):
         solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = regularizer
-        self.regularizer_strength = regularizer_strength
+
+        # check regularizer strength
+        if regularizer_strength is None:
+            warnings.warn(
+                UserWarning(
+                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
+                    "the documentation for best practices in setting regularization strength."
+                )
+            )
+            self._regularizer_strength = 1.0
+        else:
+            self.regularizer_strength = regularizer_strength
 
         # no solver name provided, use default
         if solver_name is None:
@@ -102,15 +113,15 @@ class BaseRegressor(Base, abc.ABC):
                 f"{AVAILABLE_REGULARIZERS} or an instance of `nemos.regularizer.Regularizer`"
             )
 
+        if isinstance(self._regularizer, UnRegularized):
+            self._regularizer_strength = None
+
     @property
     def regularizer_strength(self) -> float:
         return self._regularizer_strength
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: float):
-        if strength is None:
-            self._regularizer_strength = None
-            return
         try:
             # force conversion to float to prevent weird GPU issues
             strength = float(strength)
@@ -220,13 +231,6 @@ class BaseRegressor(Base, abc.ABC):
                 f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
-
-        if self.regularizer_strength is None:
-            warnings.warn(
-                "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
-                "the documentation for best practices in setting regularization strength."
-            )
-            self.regularizer_strength = 1.0
 
         # only use penalized loss if not using proximal gradient descent
         if self.solver_name != "ProximalGradient":
