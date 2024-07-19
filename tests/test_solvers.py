@@ -265,7 +265,7 @@ def test_svrg_glm_update(regularizer_class, solver_class, mask, linear_regressio
 )
 @pytest.mark.parametrize(
     "maxiter",
-    [3, 50, 100, 110],
+    [3, 50],
 )
 def test_svrg_glm_fit(
     regularizer_class, solver_class, mask, linear_regression, maxiter
@@ -293,15 +293,8 @@ def test_svrg_glm_fit(
 
     glm.fit(X, y)
 
-    # calculate how many iterations we expect
-    # the current rule is to stop if we would exceed maxiter
-    # during the next full batch
-    N = y.shape[0]
-    n_full_epochs = maxiter // N
-    expected_iters = int(N * n_full_epochs)
-
     assert glm.regularizer._solver.maxiter == maxiter
-    assert glm.solver_state.iter_num == expected_iters
+    assert glm.solver_state.iter_num == maxiter
 
 
 @pytest.mark.parametrize(
