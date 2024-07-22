@@ -505,6 +505,7 @@ class TestGammaObservations:
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
+        jax.config.update("jax_enable_x64", True)
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
 
         # statsmodels mcfadden
