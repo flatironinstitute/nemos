@@ -160,7 +160,7 @@ plt.tight_layout()
 # Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 
 model = nmo.glm.GLM(
-    regularizer="ridge",
+    regularizer="Ridge",
     solver_name="LBFGS",
     regularizer_strength=0.001
 )
