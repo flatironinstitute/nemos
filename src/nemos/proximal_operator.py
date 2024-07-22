@@ -132,6 +132,7 @@ def prox_group_lasso(
 
     """
     weights, intercepts = params
+    shape = weights.shape
     # divide the reg strength by the number of neurons
     regularizer_strength /= intercepts.shape[0]
     # add an extra dim if not 2D, do nothing otherwise.
@@ -143,4 +144,4 @@ def prox_group_lasso(
     # Avoid shrinkage of features that do not belong to any group
     # by setting the shrinkage factor to 1.
     not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
-    return jnp.squeeze(weights * (factor @ mask + not_regularized)).T, intercepts
+    return (weights * (factor @ mask + not_regularized)).T.reshape(shape), intercepts

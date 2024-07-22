@@ -263,11 +263,11 @@ def test_svrg_glm_update(
     "regularizer_class, solver_class, mask",
     [
         (Lasso, ProxSVRG, None),
-        # (
-        #    GroupLasso,
-        #    ProxSVRG,
-        #    np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
-        # ),
+        (
+           GroupLasso,
+           ProxSVRG,
+           np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
+        ),
         (Ridge, SVRG, None),
         (UnRegularized, SVRG, None),
     ],
@@ -284,7 +284,7 @@ def test_svrg_glm_fit(
     glm_class, regularizer_class, solver_class, mask, linear_regression, maxiter
 ):
     X, y, true_coef, _, loss = linear_regression
-    y = np.expand_dims(y, 1)
+
 
     # set tolerance to -1 so that doesn't stop the iteration
     solver_kwargs = {
@@ -297,11 +297,14 @@ def test_svrg_glm_fit(
     if mask is not None:
         kwargs["mask"] = mask
 
-    # with jax.disable_jit():
-    glm = nmo.glm.PopulationGLM(
+        # with jax.disable_jit():
+    glm = glm_class(
         regularizer=regularizer_class(**kwargs, solver_kwargs=solver_kwargs),
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
     )
+
+    if isinstance(glm, nmo.glm.PopulationGLM):
+        y = np.expand_dims(y, 1)
 
     glm.fit(X, y)
 
