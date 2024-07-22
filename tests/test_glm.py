@@ -1382,7 +1382,7 @@ class TestGLM:
         model.regularizer = reg
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
-        num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert np.allclose(num, n_samples - dof - 1)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
@@ -1539,7 +1539,7 @@ class TestPopulationGLM:
         model.regularizer = reg
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
-        num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert np.allclose(num, n_samples - dof - 1)
 
     @pytest.mark.parametrize(
