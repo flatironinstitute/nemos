@@ -197,19 +197,23 @@ def test_svrg_regularizer_passes_solver_kwargs(
         (UnRegularized, SVRG, None),
     ],
 )
+@pytest.mark.parametrize(
+    "glm_class",
+    [nmo.glm.GLM, nmo.glm.PopulationGLM],
+)
 def test_svrg_glm_initialize_solver(
-    regularizer_class, solver_class, mask, linear_regression
+    glm_class, regularizer_class, solver_class, mask, linear_regression
 ):
     X, y, _, _, loss = linear_regression
-    # make y 2D
-    y = np.expand_dims(y, 1)
+    if glm_class.__name__ == "PopulationGLM":
+        y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
     kwargs = {"solver_name": solver_class.__name__}
     if mask is not None:
         kwargs["mask"] = mask
 
-    glm = nmo.glm.PopulationGLM(
+    glm = glm_class(
         regularizer=regularizer_class(**kwargs),
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
     )
@@ -228,17 +232,23 @@ def test_svrg_glm_initialize_solver(
         (UnRegularized, SVRG, None),
     ],
 )
-def test_svrg_glm_update(regularizer_class, solver_class, mask, linear_regression):
+@pytest.mark.parametrize(
+    "glm_class",
+    [nmo.glm.GLM, nmo.glm.PopulationGLM],
+)
+def test_svrg_glm_update(
+    glm_class, regularizer_class, solver_class, mask, linear_regression
+):
     X, y, _, _, loss = linear_regression
-    # make y 2D
-    y = np.expand_dims(y, 1)
+    if glm_class.__name__ == "PopulationGLM":
+        y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
     kwargs = {"solver_name": solver_class.__name__}
     if mask is not None:
         kwargs["mask"] = mask
 
-    glm = nmo.glm.PopulationGLM(
+    glm = glm_class(
         regularizer=regularizer_class(**kwargs),
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
     )
@@ -266,11 +276,14 @@ def test_svrg_glm_update(regularizer_class, solver_class, mask, linear_regressio
     "maxiter",
     [3, 50],
 )
+@pytest.mark.parametrize(
+    "glm_class",
+    [nmo.glm.GLM, nmo.glm.PopulationGLM],
+)
 def test_svrg_glm_fit(
-    regularizer_class, solver_class, mask, linear_regression, maxiter
+    glm_class, regularizer_class, solver_class, mask, linear_regression, maxiter
 ):
     X, y, true_coef, _, loss = linear_regression
-    # make y 2D
     y = np.expand_dims(y, 1)
 
     # set tolerance to -1 so that doesn't stop the iteration
@@ -305,19 +318,23 @@ def test_svrg_glm_fit(
         (UnRegularized, SVRG, None),
     ],
 )
+@pytest.mark.parametrize(
+    "glm_class",
+    [nmo.glm.GLM, nmo.glm.PopulationGLM],
+)
 def test_svrg_glm_update_needs_df_xs(
-    regularizer_class, solver_class, mask, linear_regression
+    glm_class, regularizer_class, solver_class, mask, linear_regression
 ):
     X, y, _, _, loss = linear_regression
-    # make y 2D
-    y = np.expand_dims(y, 1)
+    if glm_class.__name__ == "PopulationGLM":
+        y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
     kwargs = {"solver_name": solver_class.__name__}
     if mask is not None:
         kwargs["mask"] = mask
 
-    glm = nmo.glm.PopulationGLM(
+    glm = glm_class(
         regularizer=regularizer_class(**kwargs),
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
     )
@@ -385,21 +402,24 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     )
 
 
-# @pytest.mark.parametrize("regr_setup", ["linear_regression", "linear_regression_tree"])
-# @pytest.mark.parametrize("regr_setup", ["linear_regression"])
-# @pytest.mark.parametrize("regr_setup", ["linear_regression_tree"])
 @pytest.mark.parametrize(
     "regr_setup, to_tuple",
-    # ["poissonGLM_model_instantiation", "poissonGLM_model_instantiation_pytree"],
-    # ["poissonGLM_model_instantiation"],
-    # ["poissonGLM_model_instantiation_pytree"],
     [
         ("linear_regression", True),
-        ("linear_regression", True),
+        ("linear_regression", False),
         ("linear_regression_tree", False),
     ],
 )
-def test_xk_update(request, regr_setup, to_tuple):
+@pytest.mark.parametrize(
+    "prox, prox_lambda",
+    [
+        (jaxopt.prox.prox_none, None),
+        (jaxopt.prox.prox_ridge, 0.1),
+        (jaxopt.prox.prox_none, 0.1),
+        # (jaxopt.prox.prox_lasso, 0.1),
+    ],
+)
+def test_svrg_xk_update(request, regr_setup, to_tuple, prox, prox_lambda):
 
     X, y, true_params, ols_coef, loss_arr = request.getfixturevalue(regr_setup)
 
@@ -414,8 +434,6 @@ def test_xk_update(request, regr_setup, to_tuple):
     else:
         loss = loss_arr
 
-    prox = jaxopt.prox.prox_ridge
-    prox_lambda = 0.1
     stepsize = 1e-2
     loss_gradient = jax.jit(jax.grad(loss))
 
@@ -434,35 +452,31 @@ def test_xk_update(request, regr_setup, to_tuple):
     dfik_xk = loss_gradient(init_param, xi, yi)
     dfik_xs = loss_gradient(xs, xi, yi)
 
+    # update if inputs are arrays
     def _array_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize):
         gk = dfik_xk - dfik_xs + df_xs
         next_xk = init_param - stepsize * gk
-        return gk, next_xk
+        return next_xk
 
+    # update if inputs are a tuple of arrays
     def _tuple_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize):
-        gk, next_xk = [], []
-        for a, b, c, d in zip(dfik_xk, dfik_xs, df_xs, init_param):
-            gki, next_xki = _array_update(a, b, c, d, stepsize)
-            gk.append(gki)
-            next_xk.append(next_xki)
+        return tuple(
+            _array_update(a, b, c, d, stepsize)
+            for a, b, c, d in zip(dfik_xk, dfik_xs, df_xs, init_param)
+        )
 
-        return tuple(gk), tuple(next_xk)
-
+    # update if inputs are dicts with either arrays or tuple of arrays as inputs
+    # behavior is determined by update_fun
     def _dict_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize, update_fun):
-        gk, next_xk = {}, {}
-        for k in dfik_xk.keys():
-            gk_k, next_xk_k = update_fun(
-                dfik_xk[k], dfik_xs[k], df_xs[k], init_param[k], stepsize
-            )
-            gk[k] = gk_k
-            next_xk[k] = next_xk_k
-
-        return gk, next_xk
+        return {
+            k: update_fun(dfik_xk[k], dfik_xs[k], df_xs[k], init_param[k], stepsize)
+            for k in dfik_xk.keys()
+        }
 
     if isinstance(true_params, np.ndarray):
-        gk, next_xk = _array_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize)
+        next_xk = _array_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize)
     elif isinstance(true_params, tuple):
-        gk, next_xk = _tuple_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize)
+        next_xk = _tuple_update(dfik_xk, dfik_xs, df_xs, init_param, stepsize)
     elif isinstance(X, dict):
         assert (
             set(X.keys())
@@ -476,7 +490,7 @@ def test_xk_update(request, regr_setup, to_tuple):
         else:
             update_fun = _array_update
 
-        gk, next_xk = _dict_update(
+        next_xk = _dict_update(
             dfik_xk, dfik_xs, df_xs, init_param, stepsize, update_fun
         )
     else:
@@ -484,8 +498,11 @@ def test_xk_update(request, regr_setup, to_tuple):
 
     next_xk = prox(next_xk, prox_lambda, scaling=stepsize)
 
-    # TODO do it with SVRG just don't pass prox and use prox_none in the reference
-    solver = ProxSVRG(loss, prox)
+    if prox_lambda is None:
+        assert prox == jaxopt.prox.prox_none
+        solver = SVRG(loss)
+    else:
+        solver = ProxSVRG(loss, prox)
     svrg_next_xk = solver._xk_update(
         init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
     )
