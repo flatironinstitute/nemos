@@ -428,7 +428,13 @@ class ProxSVRG:
 
             # perform a single update on the mini-batch or data point
             xk = self._xk_update(
-                xk, xs, df_xs, state.stepsize, prox_lambda, tree_slice(X, ind), y[ind]
+                xk,
+                xs,
+                df_xs,
+                state.stepsize,
+                prox_lambda,
+                tree_slice(X, ind),
+                tree_slice(y, ind),
             )
 
             # update the sum used for the averaging
