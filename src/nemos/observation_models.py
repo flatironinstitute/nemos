@@ -798,7 +798,7 @@ class GammaObservations(Observations):
         log-likelihood. Lower values of deviance indicate a better fit.
         """
         y_mu = jnp.clip(
-            neural_activity / predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
+            neural_activity / predicted_rate, min=jnp.finfo(float).eps
         )
         resid_dev = 2 * (
             -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
