@@ -248,12 +248,6 @@ class BaseRegressor(Base, abc.ABC):
             self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
             # add self.regularizer_strength to args
             args += (self.regularizer_strength,)
-        if self.solver_name == "LBFGSB":
-            if "bounds" not in kwargs.keys():
-                warnings.warn(
-                    "Bounds must be provided for LBFGSB. Reverting back to LBFGS solver."
-                )
-            self.solver_name = "LBFGS"
 
         # instantiate the solver
         solver = getattr(jaxopt, self._solver_name)(fun=loss, **self.solver_kwargs)
@@ -406,13 +400,21 @@ class BaseRegressor(Base, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def initialize_solver(
+    def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        *args,
         params: Optional = None,
-        **kwargs,
-    ) -> Tuple[Any, NamedTuple]:
+    ) -> Union[Any, NamedTuple]:
         """Initialize the solver's state and optionally sets initial model parameters for the optimization."""
+        pass
+
+    @abc.abstractmethod
+    def initialize_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params,
+    ) -> Union[Any, NamedTuple]:
+        """Initialize the state of the solver for running fit and update."""
         pass

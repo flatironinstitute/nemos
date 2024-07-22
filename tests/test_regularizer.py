@@ -1184,6 +1184,14 @@ class TestGroupLasso:
         else:
             regularizer.set_params(mask=mask)
 
+    def test_mask_none(self, poissonGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+
+        with pytest.warns(UserWarning):
+            model.regularizer = self.cls()
+            model.solver_name = "ProximalGradient"
+            model.fit(X, y)
+
     @pytest.mark.parametrize(
         "solver_name",
         [

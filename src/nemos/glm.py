@@ -3,8 +3,9 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+import warnings
 from functools import wraps
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union, Any
 
 import jax
 import jax.numpy as jnp
@@ -661,7 +662,7 @@ class GLM(BaseRegressor):
 
         """
         # validate the inputs & initialize solver
-        init_params, _ = self.initialize_solver(X, y, init_params=init_params)
+        init_params = self.initialize_params(X, y, init_params=init_params)
 
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -680,7 +681,28 @@ class GLM(BaseRegressor):
         # if mask has not been set, use a single group as default
         if isinstance(self.regularizer, GroupLasso):
             if self.regularizer.mask is None:
+                warnings.warn(
+                    UserWarning(
+                        "Mask has not been set. Defaulting to a single group for all parameters. "
+                        "Please see the documentation on GroupLasso regularization for defining a "
+                        "mask."
+                    )
+                )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
+        if self.solver_name == "LBFGSB":
+            if "bounds" not in self.solver_kwargs.keys():
+                warnings.warn(
+                    UserWarning(
+                        "No bounds provided. Defaulting to unlimited bounds: (-jnp.inf, jnp.inf). "
+                        "Please see the documentation on how to set box constraints."
+                    )
+                )
+            # bounds = (jax.tree_map(lambda x: -jnp.inf * jnp.ones_like(x), init_params),
+            #           jax.tree_map(lambda x: jnp.inf * jnp.ones_like(x), init_params))
+            # self.solver_kwargs.update(bounds=bounds)
+            self.solver_name = "LBFGS"
+
+        self.initialize_state(data, y, init_params)
 
         params, state = self.solver_run(init_params, data, y)
 
@@ -838,19 +860,16 @@ class GLM(BaseRegressor):
             return (n_samples - rank - 1) * jnp.ones_like(params[1])
 
     @cast_to_jax
-    def initialize_solver(
+    def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        *args,
         init_params: Optional[ModelParams] = None,
-        **kwargs,
     ) -> Tuple[ModelParams, NamedTuple]:
         """
-        Initialize the solver's state and optionally sets initial model parameters for the optimization process.
+        Initialize the model parameters for the optimization process.
 
-        This method prepares the solver by instantiating its components (initial state, update function,
-        and run function) and initializes model parameters if they are not provided. It is typically called
+        This method prepares the initializes model parameters if they are not provided. It is typically called
         before starting the optimization process to ensure that all necessary
         components and states are correctly configured.
 
@@ -864,16 +883,11 @@ class GLM(BaseRegressor):
             they are not provided.
         init_params :
             Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
-        *args
-            Additional positional arguments to be passed to the solver's init_state method.
-        **kwargs
-            Additional keyword arguments to be passed to the solver's init_state method.
 
         Returns
         -------
-        Tuple[ModelParams, NamedTuple]
-            A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
-            to be used for running the solver's optimization routines.
+        ModelParams
+            The initialized model parameters
 
         Raises
         ------
@@ -890,7 +904,8 @@ class GLM(BaseRegressor):
         Examples
         --------
         >>> X, y = load_data()  # Hypothetical function to load data
-        >>> params, opt_state = model.initialize_solver(X, y)
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_state(X, y)
         >>> # Now ready to run optimization or update steps
         """
         if init_params is None:
@@ -905,6 +920,37 @@ class GLM(BaseRegressor):
         # validate input
         self._validate(X, y, init_params)
 
+        return init_params
+
+    def initialize_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params,
+    ) -> Union[Any, NamedTuple]:
+        """
+        Initialize the solver by instantiating its components (initial state, update function,
+        and run function).
+
+        This method also prepares the solver's state by using the initialized model parameters and data.
+        This setup is ready to be used for running the solver's optimization routines.
+
+        Parameters
+        ----------
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+        init_params :
+            Initial parameters for the model.
+
+        Returns
+        -------
+        NamedTuple
+            The initialized solver state
+        """
         (
             self._solver_init_state,
             self._solver_update,
@@ -915,8 +961,8 @@ class GLM(BaseRegressor):
             data = X.data
         else:
             data = X
-        opt_state = self.solver_init_state(init_params, data, y, *args, **kwargs)
-        return init_params, opt_state
+        opt_state = self.solver_init_state(init_params, data, y)
+        return opt_state
 
     @cast_to_jax
     def update(

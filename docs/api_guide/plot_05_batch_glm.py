@@ -88,7 +88,8 @@ def batcher():
 # 
 # First we need to initialize the gradient descent solver within the `PopulationGLM`.
 # This gets you the initial parameters and the first state of the solver.
-params, state = glm.initialize_solver(*batcher())
+params = glm.initialize_params(*batcher())
+state = glm.initialize_state(*batcher, params)
 
 # %%
 # ## Batch learning

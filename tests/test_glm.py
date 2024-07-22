@@ -831,7 +831,8 @@ class TestGLM:
         else:
             init_params = true_params + (true_params[0],) * (n_params - 2)
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -882,7 +883,7 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, true_params[1]))
+            model.initialize_params(X, y, init_params=(init_w, true_params[1]))
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -904,7 +905,8 @@ class TestGLM:
         init_b = jnp.zeros((1,) * dim_intercepts)
         init_w = jnp.zeros((n_features,))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "init_params, expectation",
@@ -954,7 +956,8 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -976,7 +979,8 @@ class TestGLM:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -998,7 +1002,8 @@ class TestGLM:
         elif delta_dim == 1:
             y = np.zeros((y.shape[0], 1))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1021,7 +1026,8 @@ class TestGLM:
             1,
         )
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1044,7 +1050,8 @@ class TestGLM:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1069,7 +1076,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1094,7 +1102,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            model.initialize_params(X, y, init_params=true_params)
 
     def test_initialize_solver_mask_grouplasso(
         self, group_sparse_poisson_glm_model_instantiation
@@ -1105,7 +1113,8 @@ class TestGLM:
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
-        model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1131,7 +1140,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X.fill(fill_val)
         with expectation:
-            model.initialize_solver(X, y)
+            params = model.initialize_params(X, y)
+            model.initialize_state(X, y, params)
 
     def test_initializer_solver_set_solver_callable(
         self, poissonGLM_model_instantiation
@@ -1140,7 +1150,8 @@ class TestGLM:
         assert model.solver_init_state is None
         assert model.solver_update is None
         assert model.solver_run is None
-        model.initialize_solver(X, y)
+        init_params = model.initialize_params(X, y)
+        model.initialize_state(X, y, init_params)
         assert isinstance(model.solver_init_state, Callable)
         assert isinstance(model.solver_update, Callable)
         assert isinstance(model.solver_run, Callable)
@@ -1165,7 +1176,8 @@ class TestGLM:
         self, n_samples, expectation, batch_size, poissonGLM_model_instantiation
     ):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         with expectation:
             model.update(
                 params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
@@ -1174,7 +1186,8 @@ class TestGLM:
     @pytest.mark.parametrize("batch_size", [1, 10])
     def test_update_params_stored(self, batch_size, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         assert model.scale is None
@@ -1189,7 +1202,8 @@ class TestGLM:
     ):
         """Test that jit compilation does not affect the update in the presence of nans."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
 
         # extract batch and add nans
         Xnan = X[:batch_size]
@@ -1923,7 +1937,8 @@ class TestPopulationGLM:
         else:
             init_params = true_params + (true_params[0],) * (n_params - 2)
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -1974,7 +1989,8 @@ class TestPopulationGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, true_params[1]))
+            params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -1996,7 +2012,8 @@ class TestPopulationGLM:
         init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
         init_w = jnp.zeros((n_features, y.shape[1]))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "init_params, expectation",
@@ -2037,7 +2054,8 @@ class TestPopulationGLM:
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -2059,7 +2077,8 @@ class TestPopulationGLM:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -2081,7 +2100,8 @@ class TestPopulationGLM:
         elif delta_dim == 1:
             y = np.zeros((*y.shape, 1))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -2104,7 +2124,8 @@ class TestPopulationGLM:
             y.shape[1],
         )
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -2127,7 +2148,8 @@ class TestPopulationGLM:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -2152,7 +2174,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -2177,7 +2200,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     def test_initialize_solver_mask_grouplasso(
         self, group_sparse_poisson_glm_model_instantiation
@@ -2188,7 +2212,8 @@ class TestPopulationGLM:
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
-        model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -2214,7 +2239,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         X.fill(fill_val)
         with expectation:
-            model.initialize_solver(X, y)
+            params = model.initialize_params(X, y)
+            model.initialize_state(X, y, params)
 
     #######################
     # Test model.update
@@ -2236,7 +2262,8 @@ class TestPopulationGLM:
         self, n_samples, expectation, batch_size, poisson_population_GLM_model
     ):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         with expectation:
             model.update(
                 params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
@@ -2245,7 +2272,8 @@ class TestPopulationGLM:
     @pytest.mark.parametrize("batch_size", [1, 10])
     def test_update_params_stored(self, batch_size, poisson_population_GLM_model):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
         assert model.scale is None
