@@ -469,7 +469,7 @@ class TestGLM:
         assert np.allclose(model.intercept_, model_tree.intercept_)
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
-        assert np.allclose(model.scale, model_tree.scale)
+        assert np.allclose(model.scale_, model_tree.scale_)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -508,7 +508,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
-        assert model.scale != 1
+        assert model.scale_ != 1
 
     #######################
     # Test model.score
@@ -727,7 +727,7 @@ class TestGLM:
         model.observation_model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = 1.0
+        model.scale_ = 1.0
         model.score(X, y)
 
     #######################
@@ -1190,11 +1190,11 @@ class TestGLM:
         state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
-        assert model.scale is None
+        assert model.scale_ is None
         _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
         assert model.coef_ is not None
         assert model.intercept_ is not None
-        assert model.scale is not None
+        assert model.scale_ is not None
 
     @pytest.mark.parametrize("batch_size", [2, 10])
     def test_update_nan_drop_at_jit_comp(
@@ -1340,7 +1340,7 @@ class TestGLM:
         model.observation_model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = 1.0
+        model.scale_ = 1.0
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
@@ -1864,7 +1864,7 @@ class TestPopulationGLM:
         assert np.allclose(model.intercept_, model_tree.intercept_)
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
-        assert np.allclose(model.scale, model_tree.scale)
+        assert np.allclose(model.scale_, model_tree.scale_)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1903,12 +1903,12 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
-        assert np.all(model.scale != 1)
+        assert np.all(model.scale_ != 1)
 
     def test_fit_scale_array(self, gamma_population_GLM_model):
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
         model.fit(X, y)
-        assert model.scale.size == y.shape[1]
+        assert model.scale_.size == y.shape[1]
 
     #######################
     # Test model.initialize_solver
@@ -2276,11 +2276,11 @@ class TestPopulationGLM:
         state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
-        assert model.scale is None
+        assert model.scale_ is None
         _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
         assert model.coef_ is not None
         assert model.intercept_ is not None
-        assert model.scale is not None
+        assert model.scale_ is not None
 
     #######################
     # Test model.score
@@ -2498,7 +2498,7 @@ class TestPopulationGLM:
         model.observation_model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = np.ones((y.shape[1]))
+        model.scale_ = np.ones((y.shape[1]))
         model.score(X, y)
 
     @pytest.mark.parametrize(
@@ -2723,7 +2723,7 @@ class TestPopulationGLM:
         model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = jnp.ones((y.shape[1]))
+        model.scale_ = jnp.ones((y.shape[1]))
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape

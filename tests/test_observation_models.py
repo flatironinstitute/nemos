@@ -410,7 +410,7 @@ class TestGammaObservations:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = 0.5
+        model.scale_ = 0.5
 
         rate = model.predict(X)
         ysim, _ = model.simulate(jax.random.PRNGKey(123), X)

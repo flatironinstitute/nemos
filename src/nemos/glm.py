@@ -91,7 +91,7 @@ class GLM(BaseRegressor):
         Basis coefficients for the model.
     solver_state :
         State of the solver after fitting. May include details like optimization error.
-    scale:
+    scale_:
         Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
         $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
         of the mean $\mu$ fully specifies the distribution of the activity $y$.
@@ -127,7 +127,7 @@ class GLM(BaseRegressor):
         self.intercept_ = None
         self.coef_ = None
         self.solver_state = None
-        self.scale = None
+        self.scale_ = None
         self._solver_init_state = None
         self._solver_update = None
         self._solver_run = None
@@ -524,7 +524,7 @@ class GLM(BaseRegressor):
             score = self._observation_model.log_likelihood(
                 self._predict(params, data),
                 y,
-                self.scale,
+                self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
@@ -532,7 +532,7 @@ class GLM(BaseRegressor):
                 self._predict(params, data),
                 y,
                 score_type=score_type,
-                scale=self.scale,
+                scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         else:
@@ -718,7 +718,7 @@ class GLM(BaseRegressor):
         self._set_coef_and_intercept(params)
 
         self.dof = self._estimate_resid_degrees_of_freedom(X)
-        self.scale = self.observation_model.estimate_scale(
+        self.scale_ = self.observation_model.estimate_scale(
             self._predict(params, data), y, dof_resid=self.dof
         )
 
@@ -801,7 +801,7 @@ class GLM(BaseRegressor):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, scale=self.scale
+                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
             ),
             predicted_rate,
         )
@@ -1045,7 +1045,7 @@ class GLM(BaseRegressor):
 
         # estimate the scale
         self.dof = self._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        self.scale = self.observation_model.estimate_scale(
+        self.scale_ = self.observation_model.estimate_scale(
             self._predict(params, data), y, dof_resid=self.dof
         )
 
