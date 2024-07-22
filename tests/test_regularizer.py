@@ -16,10 +16,10 @@ from nemos.regularizer import Regularizer
 @pytest.mark.parametrize(
     "reg_str, reg_type",
     [
-        ("unregularized", nmo.regularizer.Regularizer),
-        ("ridge", nmo.regularizer.Ridge),
-        ("lasso", nmo.regularizer.Lasso),
-        ("group_lasso", nmo.regularizer.GroupLasso),
+        ("UnRegularized", nmo.regularizer.Regularizer),
+        ("Ridge", nmo.regularizer.Ridge),
+        ("Lasso", nmo.regularizer.Lasso),
+        ("GroupLasso", nmo.regularizer.GroupLasso),
         ("not_valid", None),
     ],
 )
@@ -38,6 +38,12 @@ def test_regularizer_builder(reg_str, reg_type):
         regularizer2 = reg_type()
         # assert that they have the same attributes
         assert regularizer.__dict__ == regularizer2.__dict__
+
+
+def test_regularizer_available():
+    for regularizer in nmo._regularizer_builder.AVAILABLE_REGULARIZERS:
+        reg = nmo._regularizer_builder.create_regularizer(regularizer)
+        assert reg.__class__.__name__ == regularizer
 
 
 @pytest.mark.parametrize(

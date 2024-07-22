@@ -1385,7 +1385,7 @@ class TestGLM:
         num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert np.allclose(num, n_samples - dof - 1)
 
-    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_warning_solver_reg_str(self, reg):
         # check that a warning is triggered
         # if no param is passed
@@ -1398,14 +1398,14 @@ class TestGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "unregularized"
+        model.regularizer = "UnRegularized"
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
-    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "unregularized"
+        model.regularizer = "UnRegularized"
         assert model.regularizer_strength is None
 
 
@@ -2972,7 +2972,7 @@ class TestPopulationGLM:
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
 
-    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_waning_solver_reg_str(self, reg):
         # check that a warning is triggered
         # if no param is passed
@@ -2985,12 +2985,12 @@ class TestPopulationGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "unregularized"
+        model.regularizer = "UnRegularized"
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
-    @pytest.mark.parametrize("reg", ["ridge", "lasso", "group_lasso"])
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "unregularized"
+        model.regularizer = "UnRegularized"
         assert model.regularizer_strength is None

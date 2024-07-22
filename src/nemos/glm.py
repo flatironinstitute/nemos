@@ -50,7 +50,7 @@ class GLM(BaseRegressor):
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
-    Below, a table listing the default and available solvers for each regularizer.
+    Below is a table listing the default and available solvers for each regularizer.
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
@@ -75,11 +75,11 @@ class GLM(BaseRegressor):
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
         Default is `None`. If no solver specified, one will be chosen based on the regularizer.
-        Please see table below for regularizer/optimizer pairings.
+        Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
-        See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
+         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
 
     Attributes
     ----------
@@ -106,7 +106,7 @@ class GLM(BaseRegressor):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: Union[str, Regularizer] = "unregularized",
+        regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,
@@ -1013,6 +1013,14 @@ class PopulationGLM(GLM):
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
     stored in tabular format, shape (n_timebins, num_features) or as [FeaturePytree](../pytrees).
+    Below is a table listing the default and available solvers for each regularizer.
+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
     Parameters
     ----------
@@ -1030,22 +1038,15 @@ class PopulationGLM(GLM):
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
         Default is `None`. If no solver specified, one will be chosen based on the regularizer.
-        Please see table below for regularizer/optimizer pairings.
+        Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
-        See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
+         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
     feature_mask :
         Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
         `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
-
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
     Attributes
     ----------
@@ -1110,7 +1111,7 @@ class PopulationGLM(GLM):
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: Union[str, Regularizer] = "unregularized",
+        regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: dict = None,

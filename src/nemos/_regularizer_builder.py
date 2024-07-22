@@ -1,6 +1,6 @@
 """Utility functions for creating regularizer object."""
 
-AVAILABLE_REGULARIZERS = ["unregularized", "ridge", "lasso", "group_lasso"]
+AVAILABLE_REGULARIZERS = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
 
 def create_regularizer(name: str):
@@ -22,19 +22,19 @@ def create_regularizer(name: str):
     ValueError
         If the `name` provided does not match to any available regularizer.
     """
-    if name == "unregularized":
+    if name == "UnRegularized":
         from .regularizer import UnRegularized
 
         return UnRegularized()
-    elif name == "ridge":
+    elif name == "Ridge":
         from .regularizer import Ridge
 
         return Ridge()
-    elif name == "lasso":
+    elif name == "Lasso":
         from .regularizer import Lasso
 
         return Lasso()
-    elif name == "group_lasso":
+    elif name == "GroupLasso":
         from .regularizer import GroupLasso
 
         return GroupLasso()

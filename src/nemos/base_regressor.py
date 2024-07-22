@@ -27,6 +27,14 @@ class BaseRegressor(Base, abc.ABC):
     regression models. It provides an abstraction for fitting the model, making predictions,
     scoring the model, simulating responses, and preprocessing data. Concrete classes
     are expected to provide specific implementations of the abstract methods defined here.
+    Below is a table listing the default and available solvers for each regularizer.
+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
     Parameters
     ----------
@@ -41,19 +49,11 @@ class BaseRegressor(Base, abc.ABC):
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
         Default is `None`. If no solver specified, one will be chosen based on the regularizer.
-        Please see table below for regularizer/optimizer pairings.
+        Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
-        See the jaxopt documentation for more details: https://jaxopt.github.io/stable/
-
-    | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
-
+         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
 
     See Also
     --------
@@ -65,7 +65,7 @@ class BaseRegressor(Base, abc.ABC):
 
     def __init__(
         self,
-        regularizer: Union[str, Regularizer] = "unregularized",
+        regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
         solver_kwargs: Optional[dict] = None,
@@ -144,7 +144,7 @@ class BaseRegressor(Base, abc.ABC):
         if solver_name not in self._regularizer.allowed_solvers:
             raise ValueError(
                 f"The solver: {solver_name} is not allowed for "
-                f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.__class__.__name__} regularizaration. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
         self._solver_name = solver_name
@@ -228,7 +228,7 @@ class BaseRegressor(Base, abc.ABC):
         if self.solver_name not in self.regularizer.allowed_solvers:
             raise ValueError(
                 f"The solver: {self.solver_name} is not allowed for "
-                f"{self._regularizer.__class__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.__class__.__name__} regularizaration. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
 

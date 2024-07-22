@@ -63,11 +63,11 @@ def test_ridge_convergence():
     y = np.random.poisson(rate)
 
     # instantiate and fit ridge GLM with GradientDescent
-    model_GD = nmo.glm.GLM(regularizer="ridge")
+    model_GD = nmo.glm.GLM(regularizer="Ridge")
     model_GD.fit(X, y)
 
     # instantiate and fit ridge GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(regularizer="ridge", solver_name="ProximalGradient")
+    model_PG = nmo.glm.GLM(regularizer="Ridge", solver_name="ProximalGradient")
     model_PG.fit(X, y)
 
     # assert weights are the same
@@ -86,7 +86,7 @@ def test_lasso_convergence():
     y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
 
     # instantiate and fit GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(regularizer="lasso", solver_name="ProximalGradient")
+    model_PG = nmo.glm.GLM(regularizer="Lasso", solver_name="ProximalGradient")
     model_PG.regularizer_strength = 0.1
     model_PG.fit(X, y)
 
