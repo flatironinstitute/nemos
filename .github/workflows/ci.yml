@@ -50,7 +50,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   check:
-    if: always()
+    if: ${{ !github.event.pull_request.draft }}
     needs: tox
     runs-on: ubuntu-latest
     steps:
