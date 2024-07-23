@@ -1371,8 +1371,8 @@ class TestGLM:
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
-        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol = 0.)
-        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol = 0.)
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
 
         if (not match_weights) or (not match_intercepts):
             raise ValueError("GLM.fit estimate does not match sklearn!")
@@ -1394,14 +1394,10 @@ class TestGLM:
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
-        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol = 0.)
-        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol = 0.)
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
 
         if (not match_weights) or (not match_intercepts):
-            print()
-            print(solver_name)
-            print(jnp.max(jnp.abs(model_skl.coef_ - model.coef_)))
-            print(jnp.max(jnp.abs(model_skl.intercept_ - model.intercept_)))
             raise ValueError("GLM.fit estimate does not match sklearn!")
 
 
