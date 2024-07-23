@@ -106,7 +106,7 @@ class ProxSVRG:
         hyperparams_prox: Any,
         *args,
         init_full_gradient: bool = False,
-    ):
+    ) -> SVRGState:
         """
         Initialize the solver state
 
@@ -127,7 +127,12 @@ class ProxSVRG:
                     Output data.
         init_full_gradient : bool, default False
             Whether to calculate the full gradient at the initial parameters,
-            assuming that X, y are the full data set, and store this gradient in the initial state.
+            assuming that args hold the full data set, and store this gradient in the initial state.
+
+        Returns
+        -------
+        state : SVRGState
+            Initialized optimizer state
         """
         df_xs = None
         if kwargs.get("init_full_gradient", False):
@@ -369,6 +374,46 @@ class ProxSVRG:
             init_full_gradient=True,
         )
 
+        return self._run(init_params, init_state, prox_lambda, *args)
+
+    @partial(jit, static_argnums=(0,))
+    def _run(
+        self,
+        init_params: Any,
+        init_state: SVRGState,
+        prox_lambda: float,
+        *args,
+    ) -> OptStep:
+        """
+        Run a whole optimization until convergence or until `maxiter` epochs are reached.
+        Called from `GLM.fit` and assumes that X and y are the full data set.
+        Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
+
+        Parameters
+        ----------
+        init_params : Any
+            Initial parameters to start from.
+        init_state : SVRGState
+            Initialized optimizer state returned by `ProxSVRG.init_state`
+        prox_lambda : float
+            Regularization strength.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
+
+        Returns
+        -------
+        OptStep
+            final_xs : Any
+                Parameters at the end of the last innner loop.
+                (... or the average of the parameters over the last inner loop)
+            final_state : SVRGState
+                Final optimizer state.
+        """
         # evaluate the loss for the initial parameters, aka iter_num=0
         # init_state = init_state._replace(
         #    loss_log=self._update_loss_log(init_state.loss_log, 0, init_params, X, y)
@@ -580,7 +625,7 @@ class SVRG(ProxSVRG):
             batch_size,
         )
 
-    def init_state(self, init_params: Any, *args, **kwargs):
+    def init_state(self, init_params: Any, *args, **kwargs) -> SVRGState:
         """
         Initialize the solver state
 
@@ -599,13 +644,15 @@ class SVRG(ProxSVRG):
 
         init_full_gradient : bool, default False
             Whether to calculate the full gradient at the initial parameters,
-            assuming that X, y are the full data set, and store this gradient in the initial state.
+            assuming that args hold the full data set, and store this gradient in the initial state.
+
+        Returns
+        -------
+        state : SVRGState
+            Initialized optimizer state
         """
         # substitute None for prox_lambda
-        # but only if not called from within run which already did the substitution
-        if args[0] is not None:
-            args = (None, *args)
-        return super().init_state(init_params, *args, **kwargs)
+        return super().init_state(init_params, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
     def update(self, current_params: Any, state: SVRGState, *args, **kwargs):
@@ -644,7 +691,11 @@ class SVRG(ProxSVRG):
         return super().update(current_params, state, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def run(self, init_params: Any, *args, **kwargs):
+    def run(
+        self,
+        init_params: Any,
+        *args,
+    ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
         Called from `GLM.fit` and assumes that X and y are the full data set.
@@ -670,5 +721,13 @@ class SVRG(ProxSVRG):
             final_state : SVRGState
                 Final optimizer state.
         """
+        # initialize the state, including the full gradient at the initial parameters
+        # don't have to pass prox_lambda here
+        init_state = self.init_state(
+            init_params,
+            *args,
+            init_full_gradient=True,
+        )
+
         # substitute None for prox_lambda
-        return super().run(init_params, None, *args, **kwargs)
+        return self._run(init_params, init_state, None, *args)
