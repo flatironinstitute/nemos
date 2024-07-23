@@ -417,11 +417,10 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
 @pytest.mark.parametrize(
     "prox, prox_lambda",
     [
-        # (jaxopt.prox.prox_none, None),
-        # (jaxopt.prox.prox_ridge, 0.1),
-        # (jaxopt.prox.prox_none, 0.1),
-        (jaxopt.prox.prox_lasso, 0.1),
-        #(nmo.proximal_operator.prox_lasso, 0.1),
+        (jaxopt.prox.prox_none, None),
+        (jaxopt.prox.prox_ridge, 0.1),
+        (jaxopt.prox.prox_none, 0.1),
+        (nmo.proximal_operator.prox_lasso, 0.1),
     ],
 )
 def test_svrg_xk_update(request, regr_setup, to_tuple, prox, prox_lambda):
