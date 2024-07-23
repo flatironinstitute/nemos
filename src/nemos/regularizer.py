@@ -174,8 +174,9 @@ class Ridge(Regularizer):
     ):
         super().__init__()
 
+    @staticmethod
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
         """
         Compute the Ridge penalization for given parameters.
@@ -273,8 +274,9 @@ class Lasso(Regularizer):
 
         return prox_op
 
+    @staticmethod
     def _penalization(
-        self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
+        params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
         """
         Compute the Lasso penalization for given parameters.
