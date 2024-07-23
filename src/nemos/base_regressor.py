@@ -60,7 +60,7 @@ class BaseRegressor(Base, abc.ABC):
     Concrete models:
 
     - [`GLM`](../glm/#nemos.glm.GLM): A feed-forward GLM implementation.
-    - [`GLMRecurrent`](../glm/#nemos.glm.GLMRecurrent): A recurrent GLM implementation.
+    - [`PopulationGLM`](../glm/#nemos.glm.PopulationGLM): A population GLM implementation.
     """
 
     def __init__(
@@ -290,12 +290,9 @@ class BaseRegressor(Base, abc.ABC):
         solver_update_kwargs = dict()
         solver_init_kwargs = dict()
 
-        def dummy_loss():
-            pass
-
         if self.solver_kwargs:
             # instantiate a solver to then inspect the params of its various functions
-            solver = getattr(jaxopt, self.solver_name)(fun=dummy_loss)
+            solver = getattr(jaxopt, self.solver_name)
 
             for key, value in self.solver_kwargs.items():
                 if key in inspect.getfullargspec(solver.run).args:

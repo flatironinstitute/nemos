@@ -95,7 +95,7 @@ class GLM(BaseRegressor):
         Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
         $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
         of the mean $\mu$ fully specifies the distribution of the activity $y$.
-    dof:
+    dof_resid_:
         Degrees of freedom for the residuals.
 
 
@@ -131,7 +131,7 @@ class GLM(BaseRegressor):
         self._solver_init_state = None
         self._solver_update = None
         self._solver_run = None
-        self.dof = None
+        self.dof_resid_ = None
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -705,7 +705,7 @@ class GLM(BaseRegressor):
 
         self._set_coef_and_intercept(params)
 
-        self.dof = self._estimate_resid_degrees_of_freedom(X)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         self.scale_ = self.observation_model.estimate_scale(
             self._predict(params, data), y, dof_resid=self.dof
         )
@@ -1032,9 +1032,9 @@ class GLM(BaseRegressor):
         self.solver_state = opt_step[1]
 
         # estimate the scale
-        self.dof = self._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof
+            self._predict(params, data), y, dof_resid=self.dof_resid_
         )
 
         return opt_step
