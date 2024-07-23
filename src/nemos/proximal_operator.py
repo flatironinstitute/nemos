@@ -147,9 +147,7 @@ def prox_group_lasso(
     return (weights * (factor @ mask + not_regularized)).T.reshape(shape), intercepts
 
 
-def prox_lasso(x: Any,
-               l1reg: Optional[Any] = None,
-               scaling: float = 1.0) -> Any:
+def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any:
     r"""Proximal operator for the l1 norm, i.e., soft-thresholding operator.
 
     Minimizes the following function:
@@ -179,8 +177,9 @@ def prox_lasso(x: Any,
         l1reg = 1.0
 
     if jnp.isscalar(l1reg):
-        l1reg = jax.tree_util.tree_map(lambda y: l1reg*jnp.ones_like(y), x)
+        l1reg = jax.tree_util.tree_map(lambda y: l1reg * jnp.ones_like(y), x)
 
-    def fun(u, v): return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
+    def fun(u, v):
+        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
+
     return jax.tree_util.tree_map(fun, x, l1reg)
-
