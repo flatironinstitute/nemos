@@ -689,18 +689,6 @@ class GLM(BaseRegressor):
                     )
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
-        if self.solver_name == "LBFGSB":
-            if "bounds" not in self.solver_kwargs.keys():
-                warnings.warn(
-                    UserWarning(
-                        "No bounds provided. Defaulting to unlimited bounds: (-jnp.inf, jnp.inf). "
-                        "Please see the documentation on how to set box constraints."
-                    )
-                )
-            # bounds = (jax.tree_map(lambda x: -jnp.inf * jnp.ones_like(x), init_params),
-            #           jax.tree_map(lambda x: jnp.inf * jnp.ones_like(x), init_params))
-            # self.solver_kwargs.update(bounds=bounds)
-            self.solver_name = "LBFGS"
 
         self.initialize_state(data, y, init_params)
 

@@ -116,7 +116,6 @@ class UnRegularized(Regularizer):
         "GradientDescent",
         "BFGS",
         "LBFGS",
-        "LBFGSB",
         "NonlinearCG",
         "ProximalGradient",
     )
@@ -162,7 +161,6 @@ class Ridge(Regularizer):
         "GradientDescent",
         "BFGS",
         "LBFGS",
-        "LBFGSB",
         "NonlinearCG",
         "ProximalGradient",
     )

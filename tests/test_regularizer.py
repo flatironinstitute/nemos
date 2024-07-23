@@ -10,7 +10,6 @@ import statsmodels.api as sm
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
 
 import nemos as nmo
-from nemos.regularizer import Regularizer
 
 
 @pytest.mark.parametrize(
@@ -149,7 +148,6 @@ class TestUnRegularized:
         acceptable_solvers = [
             "GradientDescent",
             "BFGS",
-            "LBFGS",
             "LBFGSB",
             "NonlinearCG",
             "ProximalGradient",
@@ -174,7 +172,6 @@ class TestUnRegularized:
             "GradientDescent",
             "BFGS",
             "LBFGS",
-            "LBFGSB",
             "NonlinearCG",
             "ProximalGradient",
         ]
@@ -368,7 +365,6 @@ class TestUnRegularized:
             "GradientDescent",
             "BFGS",
             "LBFGS",
-            "LBFGSB",
             "NonlinearCG",
             "ProximalGradient",
         ],
@@ -393,7 +389,6 @@ class TestRidge:
             "GradientDescent",
             "BFGS",
             "LBFGS",
-            "LBFGSB",
             "NonlinearCG",
             "ProximalGradient",
         ]
@@ -585,7 +580,6 @@ class TestRidge:
             "GradientDescent",
             "BFGS",
             "LBFGS",
-            "LBFGSB",
             "NonlinearCG",
             "ProximalGradient",
         ],

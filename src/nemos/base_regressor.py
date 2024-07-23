@@ -6,7 +6,7 @@ from __future__ import annotations
 import abc
 import inspect
 import warnings
-from typing import Any, NamedTuple, Optional, Tuple, Union
+from typing import Any, NamedTuple, Optional, Tuple, Union, Dict
 
 import jax
 import jax.numpy as jnp
@@ -249,25 +249,70 @@ class BaseRegressor(Base, abc.ABC):
             # add self.regularizer_strength to args
             args += (self.regularizer_strength,)
 
+        (
+            solver_run_kwargs,
+            solver_init_state_kwargs,
+            solver_update_kwargs,
+            solver_init_kwargs,
+        ) = self._inspect_solver_kwargs()
+
         # instantiate the solver
-        solver = getattr(jaxopt, self._solver_name)(fun=loss, **self.solver_kwargs)
+        solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_init_kwargs)
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
         ) -> jaxopt.OptStep:
-            return solver.run(init_params, *args, *run_args, **kwargs)
+            return solver.run(init_params, *args, *run_args, **solver_run_kwargs)
 
         def solver_update(params, state, *run_args, **run_kwargs) -> jaxopt.OptStep:
             return solver.update(
-                params, state, *args, *run_args, **kwargs, **run_kwargs
+                params, state, *args, *run_args, **solver_update_kwargs, **run_kwargs
             )
 
         def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
+            print(solver_init_state_kwargs)
             return solver.init_state(
-                params, state, *args, *run_args, **kwargs, **run_kwargs
+                params,
+                state,
+                *run_args,
+                **run_kwargs,
+                **solver_init_state_kwargs,
             )
 
         return solver_init_state, solver_update, solver_run
+
+    def _inspect_solver_kwargs(
+        self,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+
+        solver_run_kwargs = dict()
+        solver_init_state_kwargs = dict()
+        solver_update_kwargs = dict()
+        solver_init_kwargs = dict()
+
+        def dummy_loss():
+            pass
+
+        if self.solver_kwargs:
+            # instantiate a solver to then inspect the params of its various functions
+            solver = getattr(jaxopt, self.solver_name)(fun=dummy_loss)
+
+            for key, value in self.solver_kwargs.items():
+                if key in inspect.getfullargspec(solver.run).args:
+                    solver_run_kwargs[key] = value
+                if key in inspect.getfullargspec(solver.init_state).args:
+                    solver_init_state_kwargs[key] = value
+                if key in inspect.getfullargspec(solver.update).args:
+                    solver_update_kwargs[key] = value
+                if key in inspect.getfullargspec(solver.__init__).args:
+                    solver_init_kwargs[key] = value
+
+        return (
+            solver_run_kwargs,
+            solver_init_state_kwargs,
+            solver_update_kwargs,
+            solver_init_kwargs,
+        )
 
     @abc.abstractmethod
     def fit(self, X: DESIGN_INPUT_TYPE, y: Union[NDArray, jnp.ndarray]):
