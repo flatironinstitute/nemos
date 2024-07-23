@@ -55,8 +55,8 @@ class GLM(BaseRegressor):
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
@@ -707,7 +707,7 @@ class GLM(BaseRegressor):
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof
+            self._predict(params, data), y, dof_resid=self.dof_resid_
         )
 
         # note that this will include an error value, which is not the same as
@@ -1032,7 +1032,9 @@ class GLM(BaseRegressor):
         self.solver_state = opt_step[1]
 
         # estimate the scale
-        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
+            X, n_samples=n_samples
+        )
         self.scale_ = self.observation_model.estimate_scale(
             self._predict(params, data), y, dof_resid=self.dof_resid_
         )
@@ -1054,8 +1056,8 @@ class PopulationGLM(GLM):
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 

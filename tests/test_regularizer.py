@@ -186,6 +186,24 @@ class TestUnRegularized:
         else:
             model.set_params(solver_name=solver_name)
 
+    def test_regularizer_strength_none(self):
+        """Add test to assert that regularizer strength of UnRegularized model should be `None`"""
+        # unregularized should be None
+        regularizer = self.cls()
+        model = nmo.glm.GLM(regularizer=regularizer)
+
+        assert model.regularizer_strength is None
+
+        # changing to ridge, lasso, or grouplasso should raise UserWarning and set to 1.0
+        with pytest.warns(UserWarning):
+            model.regularizer = "Lasso"
+
+        assert model.regularizer_strength == 1.0
+
+        # assert change back to unregularized is none
+        model.regularizer = regularizer
+        assert model.regularizer_strength is None
+
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_name, solver_kwargs):
@@ -448,6 +466,25 @@ class TestRidge:
                 solver_kwargs=solver_kwargs,
             )
 
+    def test_regularizer_strength_none(self):
+        """Assert regularizer strength handled appropriately."""
+        # if no strength given, should warn and set to 1.0
+        with pytest.warns(UserWarning):
+            regularizer = self.cls()
+            model = nmo.glm.GLM(regularizer=regularizer)
+
+        assert model.regularizer_strength == 1.0
+
+        # if changed to regularized, should go to None
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
+
+        # if changed back, should warn and set to 1.0
+        with pytest.warns(UserWarning):
+            model.regularizer = "Ridge"
+
+        assert model.regularizer_strength == 1.0
+
     @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_is_callable(self, loss):
         """Test Ridge callable loss."""
@@ -641,6 +678,25 @@ class TestLasso:
         else:
             nmo.glm.GLM(regularizer=regularizer, solver_kwargs=solver_kwargs)
 
+    def test_regularizer_strength_none(self):
+        """Assert regularizer strength handled appropriately."""
+        # if no strength given, should warn and set to 1.0
+        with pytest.warns(UserWarning):
+            regularizer = self.cls()
+            model = nmo.glm.GLM(regularizer=regularizer)
+
+        assert model.regularizer_strength == 1.0
+
+        # if changed to regularized, should go to None
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
+
+        # if changed back, should warn and set to 1.0
+        with pytest.warns(UserWarning):
+            model.regularizer = regularizer
+
+        assert model.regularizer_strength == 1.0
+
     @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_callable(self, loss):
         """Test that the loss function is a callable"""
@@ -824,6 +880,25 @@ class TestGroupLasso:
                 nmo.glm.GLM(regularizer=regularizer, solver_kwargs=solver_kwargs)
         else:
             nmo.glm.GLM(regularizer=regularizer, solver_kwargs=solver_kwargs)
+
+    def test_regularizer_strength_none(self):
+        """Assert regularizer strength handled appropriately."""
+        # if no strength given, should warn and set to 1.0
+        with pytest.warns(UserWarning):
+            regularizer = self.cls()
+            model = nmo.glm.GLM(regularizer=regularizer)
+
+        assert model.regularizer_strength == 1.0
+
+        # if changed to regularized, should go to None
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
+
+        # if changed back, should warn and set to 1.0
+        with pytest.warns(UserWarning):
+            model.regularizer = regularizer
+
+        assert model.regularizer_strength == 1.0
 
     @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_callable(self, loss):

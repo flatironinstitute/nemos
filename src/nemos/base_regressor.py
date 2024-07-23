@@ -31,8 +31,8 @@ class BaseRegressor(Base, abc.ABC):
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient, LBFGSB |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
     | Lasso         | ProximalGradient | ProximalGradient                                            |
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
@@ -71,18 +71,7 @@ class BaseRegressor(Base, abc.ABC):
         solver_kwargs: Optional[dict] = None,
     ):
         self.regularizer = regularizer
-
-        # check regularizer strength
-        if regularizer_strength is None:
-            warnings.warn(
-                UserWarning(
-                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
-                    "the documentation for best practices in setting regularization strength."
-                )
-            )
-            self._regularizer_strength = 1.0
-        else:
-            self.regularizer_strength = regularizer_strength
+        self.regularizer_strength = regularizer_strength
 
         # no solver name provided, use default
         if solver_name is None:
@@ -113,24 +102,39 @@ class BaseRegressor(Base, abc.ABC):
                 f"{AVAILABLE_REGULARIZERS} or an instance of `nemos.regularizer.Regularizer`"
             )
 
-        if isinstance(self._regularizer, UnRegularized):
-            self._regularizer_strength = None
+        # force check of regularizer_strength
+        # need to use hasattr to avoid class instantiation issues
+        if hasattr(self, "_regularizer_strength"):
+            self.regularizer_strength = self._regularizer_strength
 
     @property
     def regularizer_strength(self) -> float:
         return self._regularizer_strength
 
     @regularizer_strength.setter
-    def regularizer_strength(self, strength: float):
-        try:
-            # force conversion to float to prevent weird GPU issues
-            strength = float(strength)
-        except ValueError:
-            # raise a more detailed ValueError
-            raise ValueError(
-                f"Could not convert the regularizer strength: {strength} to a float."
+    def regularizer_strength(self, strength: Union[float, None]):
+        # if using unregularized, strength will be None no matter what
+        if isinstance(self._regularizer, UnRegularized):
+            self._regularizer_strength = None
+        # check regularizer strength
+        elif strength is None:
+            warnings.warn(
+                UserWarning(
+                    "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
+                    "the documentation for best practices in setting regularization strength."
+                )
             )
-        self._regularizer_strength = strength
+            self._regularizer_strength = 1.0
+        else:
+            try:
+                # force conversion to float to prevent weird GPU issues
+                strength = float(strength)
+            except ValueError:
+                # raise a more detailed ValueError
+                raise ValueError(
+                    f"Could not convert the regularizer strength: {strength} to a float."
+                )
+            self._regularizer_strength = strength
 
     @property
     def solver_name(self) -> str:
