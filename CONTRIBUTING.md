@@ -16,12 +16,12 @@ Feel free to work on any section of code that you believe you can improve. More 
 In order to contribute, you will need to do the following:
 
 1) Create your own branch
-2) Make sure that tests pass
+2) Make sure that tests pass and code coverage is maintained
 3) Open a Pull Request
 
 The NeMoS package follows the [GitHub Flow](https://www.gitkraken.com/learn/git/best-practices/git-branch-strategy#github-flow-branch-strategy) workflow. In essence, this means no one is allowed to
 push to the `main` branch and all development happens in separate feature branches that are then merged into `main` once we have determined they are ready. When enough changes have accumulated, we 
-put out a new release, adding a new tag which increments the version number, and uploading the new release to PyPI. 
+put out a new release, adding a new tag which increments the version number, and upload the new release to PyPI. 
 
 
 #### Creating a development environment
@@ -72,7 +72,7 @@ git push origin my_feature_branch
 #### Contributing your change back to NeMoS
 
 You can make any number of changes on your branch. Once you are happy with your changes, add tests to check that they run correctly and add documentation to properly note your changes. 
-See below for details on how to [add tests]() and [add documentation]().
+See below for details on how to [add tests](#adding-tests) and properly [document](#adding-documentation) your code.
 
 Lastly, you should make sure that the existing tests all run successfully and that the codebase is formatted properly:
 
@@ -108,9 +108,23 @@ The next section will talk about the style of your code and specific requirement
 
 #### Adding a regularization method
 
+All regularization method can be found in `/src/nemos/regularizer.py`. If you would like to add a new regularizer class to the `nemos` 
+library, it will need to do the following:
+
+1) Inherit from the base `Regularizer` base class
+2) Have an `_allowed_solvers` attribute of type `List[str]` that gives the `string` names of compatible `jaxopt` solvers
+3) Have two methods implemented
+   - `get_proximal_operator()` that returns the proximal operator for the regularization method when using projected gradient descent
+   - `penalized_loss()` that wraps a given model's loss function and returns the augmented loss based on the regularization being applied
+
 #### Adding a new model
 
+A new model should be put into its own `.py` file. If you would like to add a new model to the `nemos` library, it will need to inherit from the 
+`BaseRegressor` class and implement all of its abstract methods. 
+
 #### Adding a new optimization method
+
+#### Adding a new basis 
 
 ### Testing 
 
@@ -130,13 +144,47 @@ If you're adding a substantial bunch of tests that are separate from the existin
 it must have an `.py` extension, and it must be contained within the `tests` directory. Assuming you do that, our github actions will automatically find it and 
 add it to the tests-to-run.
 
-> **_NOTE:_** If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official `pytest`
+> **_NOTE:_** If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official
 > documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html).
 
-> **_NOTE_** If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use fixtures to avoid having to 
-> load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official `pytest` documentation 
-> [here](https://docs.pytest.org/en/stable/how-to/fixtures.html)
+> **_NOTE_** If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to 
+> load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation 
+> [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
 
 ### Documentation 
+
+Documentation is a crucial part of open-source software and greatly influences the ability to use a codebase. As such, it is imperative that any new changes are
+properly documented as outlined below. 
+
+#### Adding documentation
+
+1) **Docstrings**
+
+All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, 
+a medium-length description of the function / class and what it does, and a complete description of all arguments and return values. 
+Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature 
+should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary 
+for a user to use the code.
+
+Private functions and classes should have sufficient explanation that other developers know what the function / class does and how to use it, 
+but do not need to be as extensive.
+
+We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
+
+2) **Examples/Tutorials**
+
+If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or 
+a new example may need to be added.
+
+All examples live within the `docs/` subfolder of `nemos`. 
+
+To see if changes you have made break the current documentation, you can build the documentation locally. 
+
+```bash
+# build the docs within the nemos repo
+mkdocs build
+```
+
+If the build fails, you will see line-specific errors that prompted the failure.
 
 
