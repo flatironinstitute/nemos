@@ -7,11 +7,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import statsmodels.api as sm
+from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
-from sklearn.linear_model import PoissonRegressor, GammaRegressor
+from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
 def test_validate_higher_dimensional_data_X(mock_glm):
@@ -1494,6 +1495,126 @@ class TestGLM:
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
         model.regularizer = "UnRegularized"
         assert model.regularizer_strength is None
+
+    @pytest.mark.parametrize(
+        "regr_setup, glm_class",
+        [
+            ("poissonGLM_model_instantiation", nmo.glm.GLM),
+            ("poissonGLM_model_instantiation_pytree", nmo.glm.GLM),
+            ("poisson_population_GLM_model", nmo.glm.PopulationGLM),
+            ("poisson_population_GLM_model_pytree", nmo.glm.PopulationGLM),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "key", [jax.random.key(0), jax.random.key(19)]
+    )
+    @pytest.mark.parametrize(
+        "regularizer_class, solver_name",
+        [
+            (nmo.regularizer.UnRegularized, "SVRG"),
+            (nmo.regularizer.Ridge, "SVRG"),
+            (nmo.regularizer.Lasso, "ProxSVRG"),
+            #(nmo.regularizer.GroupLasso, "ProxSVRG"),
+        ]
+    )
+    def test_glm_update_consistent_with_fit_with_svrg(self, request, regr_setup, glm_class, key, regularizer_class, solver_name):
+        """
+        Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
+        is consistent with running the compiled GLM.fit on the same data with the same parameters
+        """
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, rate = request.getfixturevalue(regr_setup)
+
+        N = y.shape[0]
+        batch_size = 1
+        maxiter = 3 # number of epochs
+        tol = 1e-12
+        stepsize = 1e-3
+
+        # has to match how the number of iterations is calculated in SVRG
+        m = int((N + batch_size - 1) // batch_size)
+
+        regularizer_kwargs = {}
+        if regularizer_class.__name__ == "GroupLasso":
+            #regularizer_kwargs["mask"] = jax.tree_util.tree_map(
+            #    lambda x: (np.random.randn(x.shape[1]) > 0).reshape(1, -1).astype(float), X
+            #)
+            #n_features = pytree_map_and_reduce(lambda x: x.shape[1], sum, X)
+            n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
+            regularizer_kwargs["mask"] = (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
+
+        glm = glm_class(
+            regularizer=regularizer_class(
+                solver_name = solver_name,
+                solver_kwargs = {
+                    "batch_size" : batch_size,
+                    "stepsize" : stepsize,
+                    "tol" : tol,
+                    "maxiter" : maxiter,
+                    "key" : key,
+                },
+                **regularizer_kwargs,
+            )
+        )
+        glm2 = glm_class(
+            regularizer=regularizer_class(
+                solver_name = solver_name,
+                solver_kwargs = {
+                    "batch_size" : batch_size,
+                    "stepsize" : stepsize,
+                    "tol" : tol,
+                    "maxiter" : maxiter,
+                    "key" : key,
+                },
+                **regularizer_kwargs,
+            )
+        )
+        glm2.fit(X, y)
+
+        # NOTE these two are not the same because for example Ridge augments the loss
+        #loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
+        loss_grad = jax.jit(glm.regularizer._solver.loss_gradient)
+
+        params, state = glm.initialize_solver(X, y)
+
+        # copied from GLM.fit
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            X = X.data
+
+        iter_num = 0
+        while iter_num < maxiter:
+            state = state._replace(
+                df_xs=loss_grad(params, X, y),
+            )
+
+            prev_params = params
+            for _ in range(m):
+                key, subkey = jax.random.split(key)
+                ind = jax.random.randint(subkey, (batch_size,), 0, N)
+                xi, yi = tree_slice(X, ind), tree_slice(y, ind)
+                params, state = glm.update(params, state, xi, yi)
+
+            state = state._replace(
+                xs=params,
+            )
+
+            iter_num += 1
+
+            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
+            if _error < tol:
+                break
+
+
+        assert iter_num == glm2.solver_state.iter_num
+
+        assert pytree_map_and_reduce(
+            lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+            all,
+            (glm.coef_, glm.intercept_),
+            (glm2.coef_, glm2.intercept_),
+        )
+
 
 
 class TestPopulationGLM:
