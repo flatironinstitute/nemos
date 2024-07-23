@@ -18,7 +18,7 @@ from numpy.typing import NDArray
 
 from . import solvers, tree_utils, utils
 from .base_class import DESIGN_INPUT_TYPE, Base
-from .proximal_operator import prox_group_lasso
+from .proximal_operator import prox_group_lasso, prox_lasso
 from .pytrees import FeaturePytree
 
 SolverRun = Callable[
@@ -520,7 +520,7 @@ class Lasso(ProxGradientRegularizer):
                 l1reg = jax.tree_util.tree_unflatten(
                     struct, [l1reg] * struct.num_leaves
                 )
-            return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
+            return prox_lasso(Ws, l1reg, scaling=scaling), bs
 
         return prox_op
 
