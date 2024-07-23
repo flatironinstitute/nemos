@@ -10,6 +10,7 @@ from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
+from sklearn.linear_model import PoissonRegressor, GammaRegressor
 
 
 def test_validate_higher_dimensional_data_X(mock_glm):
@@ -1352,6 +1353,56 @@ class TestGLM:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    def test_glm_fit_matches_sklearn_poisson(self, solver_name, poissonGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, _, true_params, firing_rate = poissonGLM_model_instantiation
+
+        model = nmo.glm.GLM(
+            regularizer=nmo.regularizer.UnRegularized(solver_name, solver_kwargs = {"tol": 10**-12}),
+            observation_model=nmo.observation_models.PoissonObservations()
+        )
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.fit(X, y)
+
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol = 0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol = 0.)
+
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("GLM.fit estimate does not match sklearn!")
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    def test_glm_fit_matches_sklearn_gamma(self, solver_name, gammaGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, _, true_params, firing_rate = gammaGLM_model_instantiation
+
+        model = nmo.glm.GLM(
+            regularizer=nmo.regularizer.UnRegularized(solver_name, solver_kwargs = {"tol": 10**-12}),
+            observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jnp.exp)
+        )
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.fit(X, y)
+
+        model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol = 0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol = 0.)
+
+        if (not match_weights) or (not match_intercepts):
+            print()
+            print(solver_name)
+            print(jnp.max(jnp.abs(model_skl.coef_ - model.coef_)))
+            print(jnp.max(jnp.abs(model_skl.intercept_ - model.intercept_)))
+            raise ValueError("GLM.fit estimate does not match sklearn!")
 
 
 class TestPopulationGLM:
