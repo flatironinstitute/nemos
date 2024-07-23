@@ -1,3 +1,5 @@
+from contextlib import nullcontext as does_not_raise
+
 import jax
 import jaxopt
 import numpy as np
@@ -264,9 +266,9 @@ def test_svrg_glm_update(
     [
         (Lasso, ProxSVRG, None),
         (
-           GroupLasso,
-           ProxSVRG,
-           np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
+            GroupLasso,
+            ProxSVRG,
+            np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
         ),
         (Ridge, SVRG, None),
         (UnRegularized, SVRG, None),
@@ -284,7 +286,6 @@ def test_svrg_glm_fit(
     glm_class, regularizer_class, solver_class, mask, linear_regression, maxiter
 ):
     X, y, true_coef, _, loss = linear_regression
-
 
     # set tolerance to -1 so that doesn't stop the iteration
     solver_kwargs = {
@@ -516,3 +517,33 @@ def test_svrg_xk_update(request, regr_setup, to_tuple, prox, prox_lambda):
         next_xk,
         svrg_next_xk,
     )
+
+
+@pytest.mark.parametrize(
+    "shapes, expected_context",
+    [
+        [
+            (10, 10),
+            does_not_raise(),
+        ],
+        [
+            (10, 8),
+            pytest.raises(
+                ValueError,
+                match="All arguments must have the same sized first dimension.",
+            ),
+        ],
+    ],
+)
+def test_svrg_wrong_shapes(shapes, expected_context):
+    X = np.random.randn(shapes[0], 3)
+    y = np.random.randn(shapes[1], 1)
+
+    init_params = np.random.randn(3, 1)
+
+    def loss_fn(params, X, y):
+        return 1.0
+
+    with expected_context:
+        svrg = SVRG(loss_fn)
+        svrg.run(init_params, X, y)

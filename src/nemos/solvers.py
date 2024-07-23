@@ -10,7 +10,6 @@ from jaxopt import OptStep
 from jaxopt._src import loop
 from jaxopt.prox import prox_none
 
-from .base_class import DESIGN_INPUT_TYPE
 from .tree_utils import (
     tree_add,
     tree_add_scalar_mul,
@@ -102,8 +101,7 @@ class ProxSVRG:
         self,
         init_params: Any,
         hyperparams_prox: Any,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
         init_full_gradient: bool = False,
     ):
         """
@@ -117,10 +115,13 @@ class ProxSVRG:
         hyperparams_prox : float
             Parameters of the proximal operator, in our case the regularization strength.
             Not used here, but required to be consistent with the jaxopt API.
-        X :
-            Input data.
-        y :
-            Output data.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
         init_full_gradient : bool, default False
             Whether to calculate the full gradient at the initial parameters,
             assuming that X, y are the full data set, and store this gradient in the initial state.
@@ -128,7 +129,7 @@ class ProxSVRG:
         df_xs = None
 
         if init_full_gradient:
-            df_xs = self.loss_gradient(init_params, X, y)
+            df_xs = self.loss_gradient(init_params, *args)
 
         state = SVRGState(
             iter_num=0,
@@ -147,8 +148,7 @@ class ProxSVRG:
         loss_log: jnp.ndarray,
         i: int,
         params: Any,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
     ) -> jnp.ndarray:
         """
         Update an entry in the array used for storing the log of the loss throughout the optimization.
@@ -161,14 +161,19 @@ class ProxSVRG:
             Index at which to update, most likely the current iteration number.
         params : Any
             Parameters with which to evaluate the loss.
-        X, y : jnp.ndarray
-            Input and output data.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
         Returns
         -------
         Updated loss log.
         """
-        return loss_log.at[i].set(self.fun(params, X, y))
+        return loss_log.at[i].set(self.fun(params, *args))
 
     @partial(jit, static_argnums=(0,))
     def _xk_update(
@@ -178,8 +183,7 @@ class ProxSVRG:
         df_xs: Any,
         stepsize: float,
         prox_lambda: float,
-        x: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
     ) -> Any:
         """
         Body of the inner loop of Prox-SVRG that takes a step.
@@ -195,20 +199,22 @@ class ProxSVRG:
         stepsize : float
             Step size.
         prox_lambda : float or None
-            Regularization strength.
-        x : jnp.ndarray
-            Input data point or mini-batch.
-        y : jnp.ndarray
-            Output data point or mini-batch.
+            Hyperparameters to `prox`, most commonly regularization strength.
+        args:
+            Hyperparameters passed to `prox` and positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input datapoint or mini-batch.
+                y :
+                    Output datapoint or mini-batch.
         """
-        dfik_xk = self.loss_gradient(xk, x, y)
-        dfik_xs = self.loss_gradient(xs, x, y)
+        dfik_xk = self.loss_gradient(xk, *args)
+        dfik_xs = self.loss_gradient(xs, *args)
 
         gk = jax.tree_util.tree_map(lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs)
 
         next_xk = tree_add_scalar_mul(xk, -stepsize, gk)
 
-        # next_xk = self.proximal_operator(next_xk, stepsize * prox_lambda)
         next_xk = self.proximal_operator(next_xk, prox_lambda, scaling=stepsize)
 
         return next_xk
@@ -219,8 +225,7 @@ class ProxSVRG:
         current_params: Any,
         state: SVRGState,
         prox_lambda: float,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
     ) -> OptStep:
         """
         Perform a single parameter update on the passed data (no random sampling or loops)
@@ -239,10 +244,13 @@ class ProxSVRG:
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         prox_lambda : float
             Regularization strength.
-        X :
-            Input data.
-        y : jnp.ndarray
-            Output data.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
 
         Returns
@@ -259,7 +267,7 @@ class ProxSVRG:
                 "Full gradient at the anchor point (state.df_xs) has to be set. "
                 + "Try passing init_full_gradient=True to ProxSVRG.init_state or GLM.initialize_solver."
             )
-        return self._update_on_batch(current_params, state, prox_lambda, X, y)
+        return self._update_on_batch(current_params, state, prox_lambda, *args)
 
     @partial(jit, static_argnums=(0,))
     def _update_on_batch(
@@ -267,18 +275,42 @@ class ProxSVRG:
         current_params: Any,
         state: SVRGState,
         prox_lambda: float,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
     ) -> OptStep:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
 
         Note that this method doesn't update state.x_av, state.xs, state.df_xs, that has to be done outside.
+
+        Parameters
+        ----------
+        current_params : Any
+            Parameters at the end of the previous update, used as the starting point for the current update.
+        state : SVRGState
+            Optimizer state at the end of the previous update.
+            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
+        prox_lambda : float
+            Regularization strength.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
+
+        Returns
+        -------
+        OptStep
+            xs : Any
+                Parameters after taking one step defined in the inner loop of Prox-SVRG.
+            state : SVRGState
+                Updated state.
         """
         # NOTE this doesn't update state.x_av, state.xs, state.df_xs, that has to be done outside
 
         next_params = self._xk_update(
-            current_params, state.xs, state.df_xs, state.stepsize, prox_lambda, X, y
+            current_params, state.xs, state.df_xs, state.stepsize, prox_lambda, *args
         )
 
         state = state._replace(
@@ -292,8 +324,7 @@ class ProxSVRG:
         self,
         init_params: Any,
         prox_lambda: float,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
@@ -305,10 +336,13 @@ class ProxSVRG:
             Initial parameters to start from.
         prox_lambda : float
             Regularization strength.
-        X :
-            Input data.
-        y : jnp.ndarray
-            Output data.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
         Returns
         -------
@@ -323,8 +357,7 @@ class ProxSVRG:
         init_state = self.init_state(
             init_params,
             prox_lambda,
-            X,
-            y,
+            *args,
             init_full_gradient=True,
         )
 
@@ -339,12 +372,12 @@ class ProxSVRG:
 
             # evaluate and store the full gradient with the params from the last inner loop
             state = state._replace(
-                df_xs=self.loss_gradient(xs_prev, X, y),
+                df_xs=self.loss_gradient(xs_prev, *args),
             )
 
             # run an update over the whole data
             xk, state = self._update_per_random_samples(
-                xs_prev, state, prox_lambda, X, y
+                xs_prev, state, prox_lambda, *args
             )
 
             # update xs with the final xk or an average over the inner loop's iterations
@@ -381,8 +414,7 @@ class ProxSVRG:
         current_params: Any,
         state: SVRGState,
         prox_lambda: float,
-        X: DESIGN_INPUT_TYPE,
-        y: jnp.ndarray,
+        *args,
     ) -> OptStep:
         """
         Performs the inner loop of Prox-SVRG sweeping through approximately one full epoch,
@@ -397,10 +429,13 @@ class ProxSVRG:
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         prox_lambda : float
             Regularization strength. Can be None.
-        X :
-            Input data
-        y :
-            Output data.
+        args:
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
         Returns
         -------
@@ -411,8 +446,10 @@ class ProxSVRG:
             state : SVRGState
                 Updated state.
         """
-
-        N = y.shape[0]  # number of data points x number of dimensions
+        n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
+        if not len(n_points_per_arg) == 1:
+            raise ValueError("All arguments must have the same sized first dimension.")
+        N = n_points_per_arg.pop()
 
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
         # m = N
@@ -433,8 +470,7 @@ class ProxSVRG:
                 df_xs,
                 state.stepsize,
                 prox_lambda,
-                tree_slice(X, ind),
-                tree_slice(y, ind),
+                *(tree_slice(arg, ind) for arg in args),
             )
 
             # update the sum used for the averaging
@@ -548,24 +584,20 @@ class SVRG(ProxSVRG):
             pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
         args:
-            If 2 positional arguments are passed, they are assumed to be X and y,
-            and prox_lambda is substituted with None.
-
-            (prox_lambda : Optional, float)
-                Regularization strength.
-                When calling `SVRG.init_state` by hand, this doesn't need to be passed,
-                but within `SVRG.run` None is passed.
-            X :
-                Input data.
-            y :
-                Output data.
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
         init_full_gradient : bool, default False
             Whether to calculate the full gradient at the initial parameters,
             assuming that X, y are the full data set, and store this gradient in the initial state.
         """
         # substitute None for prox_lambda
-        if len(args) == 2:
+        # but only if not called from within run which already did the substitution
+        if args[0] is not None:
             args = (None, *args)
         return super().init_state(init_params, *args, **kwargs)
 
@@ -587,16 +619,12 @@ class SVRG(ProxSVRG):
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         args:
-            If 2 positional arguments are passed, they are assumed to be X and y,
-            and prox_lambda is substituted with None.
-
-            (prox_lambda : Optional, float)
-                Regularization strength.
-                When calling `SVRG.update` or `GLM.update` by hand, this doesn't need to be passed.
-            X :
-                Input data.
-            y : jnp.ndarray
-                Output data.
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
         Returns
         -------
@@ -606,9 +634,8 @@ class SVRG(ProxSVRG):
             state : SVRGState
                 Updated state.
         """
-        if len(args) == 2:
-            args = (None, *args)
-        return super().update(current_params, state, *args, **kwargs)
+        # substitute None for prox_lambda
+        return super().update(current_params, state, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
     def run(self, init_params: Any, *args, **kwargs):
@@ -620,18 +647,13 @@ class SVRG(ProxSVRG):
         ----------
         init_params : Any
             Initial parameters to start from.
-        prox_lambda : float
-            Regularization strength.
         args:
-            If 2 positional arguments are passed, they are assumed to be X and y,
-            and prox_lambda is substituted with None.
-
-            (prox_lambda : Optional, float)
-                Regularization strength.
-            X :
-                Input data.
-            y : jnp.ndarray
-                Output data.
+            Positional arguments passed to loss function `fun` and its gradient.
+            For GLMs it is:
+                X :
+                    Input data.
+                y :
+                    Output data.
 
         Returns
         -------
@@ -642,6 +664,5 @@ class SVRG(ProxSVRG):
             final_state : SVRGState
                 Final optimizer state.
         """
-        if len(args) == 2:
-            args = (None, *args)
-        return super().run(init_params, *args, **kwargs)
+        # substitute None for prox_lambda
+        return super().run(init_params, None, *args, **kwargs)
