@@ -143,7 +143,7 @@ basis = heading_basis + coupling_basis
 model = nmo.glm.GLM(
     solver_name="LBFGS",
     solver_kwargs=dict(tol=10**-13),
-    regularizer="ridge",
+    regularizer="Ridge",
     regularizer_strength=0.02,
     observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jax.nn.softplus)
 )
