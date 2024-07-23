@@ -11,6 +11,7 @@ from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
+from sklearn.linear_model import PoissonRegressor, GammaRegressor
 
 
 def test_validate_higher_dimensional_data_X(mock_glm):
