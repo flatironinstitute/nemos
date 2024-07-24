@@ -181,14 +181,14 @@ class TestGLM:
         # changing solver
         model.solver_name = "ProximalGradient"
 
-        expected_values = [
+        expected_values = {
             model.observation_model.inverse_link_function,
             model.observation_model,
             model.regularizer,
             model.regularizer_strength,
             model.solver_kwargs,
             model.solver_name,
-        ]
+        }
 
         assert list(model.get_params().keys()) == expected_keys
         assert list(model.get_params().values()) == expected_values
