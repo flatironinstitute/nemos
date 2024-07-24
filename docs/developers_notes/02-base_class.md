@@ -40,10 +40,6 @@ Abstract Class Base
 ...
 ```
 
-!!! Example
-    The current package version includes a concrete class named `nemos.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the " GLM regression" category. 
-    As any `BaseRegressor`, it **must** implement the `fit`, `score`, `predict`, and `simulate` methods.
-
 
 ## The Class `model_base.Base`
 
