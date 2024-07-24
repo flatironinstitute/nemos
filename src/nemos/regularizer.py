@@ -317,11 +317,12 @@ class GroupLasso(Regularizer):
 
     Attributes
     ----------
-    mask : Union[jnp.ndarray, NDArray]
+    mask :
         A 2d mask array indicating groups of features for regularization, shape (num_groups, num_features).
         Each row represents a group of features.
         Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
         to the group, and a value of 0 indicates it doesn't.
+        Default is `mask = np.ones((1, num_features))`, grouping all features in a single group.
 
     Examples
     --------

@@ -1277,3 +1277,9 @@ class TestGroupLasso:
         model.regularizer = self.cls()
         model.solver_name = solver_name
         model.fit(X, y)
+
+
+def test_available_regularizer_match():
+    """Test matching of the two regularizer lists."""
+    assert set(nmo._regularizer_builder.AVAILABLE_REGULARIZERS) == set(nmo.regularizer.__dir__())
+
