@@ -1,3 +1,4 @@
+import copy
 import warnings
 from contextlib import nullcontext as does_not_raise
 from typing import NamedTuple
@@ -250,8 +251,8 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.regularizer = self.cls()
         model.solver_name = solver_name
-        runner = model.instantiate_solver()[2]
-        runner((true_params[0] * 0.0, true_params[1]), X, y)
+        model.instantiate_solver()
+        model.solver_run((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize(
         "solver_name", ["GradientDescent", "BFGS", "ProximalGradient"]
@@ -264,8 +265,8 @@ class TestUnRegularized:
         # set regularizer and solver name
         model.regularizer = self.cls()
         model.solver_name = solver_name
-        runner = model.instantiate_solver()[2]
-        runner(
+        model.instantiate_solver()
+        model.solver_run(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
             y,
@@ -281,15 +282,16 @@ class TestUnRegularized:
         model.regularizer = self.cls()
         model.solver_name = "GradientDescent"
         model.solver_kwargs = {"tol": 10**-12}
-        runner_gd = model.instantiate_solver()[2]
+        model.instantiate_solver()
 
         # update solver name
-        model.solver_name = "BFGS"
-        runner_bfgs = model.instantiate_solver()[2]
-        weights_gd, intercepts_gd = runner_gd(
+        model_bfgs = copy.deepcopy(model)
+        model_bfgs.solver_name = "BFGS"
+        model_bfgs.instantiate_solver()
+        weights_gd, intercepts_gd = model.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
+        weights_bfgs, intercepts_bfgs = model_bfgs.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
 
@@ -309,8 +311,8 @@ class TestUnRegularized:
         model.data_type = jnp.float64
         model.regularizer = self.cls()
         model.solver_kwargs = {"tol": 10**-12}
-        runner_bfgs = model.instantiate_solver()[2]
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
+        model.instantiate_solver()
+        weights_bfgs, intercepts_bfgs = model.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
@@ -330,8 +332,8 @@ class TestUnRegularized:
         model.observation_model.inverse_link_function = jnp.exp
         model.regularizer = self.cls()
         model.solver_kwargs = {"tol": 10**-12}
-        runner_bfgs = model.instantiate_solver()[2]
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
+        model.instantiate_solver()
+        weights_bfgs, intercepts_bfgs = model.solver_run(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
@@ -361,8 +363,8 @@ class TestUnRegularized:
         model.regularizer = self.cls()
         model.solver_name = "LBFGS"
         model.solver_kwargs = {"tol": 10**-13}
-        runner_bfgs = model.instantiate_solver()[2]
-        weights_bfgs, intercepts_bfgs = runner_bfgs(
+        model.instantiate_solver()
+        weights_bfgs, intercepts_bfgs = model.solver_run(
             model._initialize_parameters(X, y), X, y
         )[0]
 
