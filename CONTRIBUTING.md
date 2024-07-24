@@ -26,16 +26,19 @@ put out a new release, adding a new tag which increments the version number, and
 
 #### Creating a development environment
 
-You will need a local installation of `nemos` which keeps up-to-date with any changes you make. To do so, you will need to clone `nemos` and checkout a new branch:
+You will need a local installation of `nemos` which keeps up-to-date with any changes you make. To do so, you will need to fork and clone `nemos` before checking out
+a new branch:
 
-1) Clone the `nemos` repo to your local machine
+1) Go to the [nemos repo](https://github.com/flatironinstitute/nemos) and click on the `Fork` button at the top right of the page. This will create a copy
+of `nemos` in your GitHub account. You should then clone *your fork* to your local machine.
 
 ```bash
-git clone https://github.com/flatironinstitute/nemos.git
+git clone https://github.com/<YourUserName>/nemos.git
 cd nemos
 ```
 
 2) Install `nemos` in editable mode with developer dependencies  
+
 ```bash
 pip install -e .[dev]
 ```
@@ -43,17 +46,32 @@ pip install -e .[dev]
 > **_NOTE:_**  In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that 
 > provides guidance on how to create and activate a virtual environment.
 
+3) Add the upstream branch:
+
+```bash
+git remote add upstream https://github.com/flatironinstitute/nemos
+```
+
+At this point you have two remotes: `origin` (your fork) and `upstream` (the canonical version). You won't have permission to push to upstream (only `origin`), but 
+this make it easy to keep your `nemos` up-to-date with the canonical version by pulling from upstream: `git pull upstream`.
 
 #### Creating a new branch
 
 As mentioned previously, each feature in `nemos` is worked on in a separate branch. This allows multiple people developing multiple features simultaneously, without interfering with each other's work. To create
 your own branch, run the following from within your `nemos` directory:
 
+> **_NOTE:_** Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of
+> changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release) :D
+
 ```bash
-# switch to the main branch
-git checkout main
-# update your main branch
-git pull origin main
+# switch to the development branch
+git checkout development
+# update your development branch
+git pull origin development
+# sync with upstream development
+git pull upstream development
+# update your fork's development branch with any changs from upstream
+git push origin development
 # create and switch to a new branch
 git checkout -b my_feature_branch
 ```
@@ -81,8 +99,14 @@ Lastly, you should make sure that the existing tests all run successfully and th
 pytest tests/
 # format the code base
 black src/
-black tests/
+isort src
+flake8 --config=tox.ini src
 ```
+
+> **_INFO:_** [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
+> reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your 
+> code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
+
 > **_NOTE:_** If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
 
 Now you are ready to make a Pull Request. You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo 
@@ -112,8 +136,10 @@ All regularization method can be found in `/src/nemos/regularizer.py`. If you wo
 library, it will need to do the following:
 
 1) Inherit from the base `Regularizer` base class
-2) Have an `_allowed_solvers` attribute of type `List[str]` that gives the `string` names of compatible `jaxopt` solvers
-3) Have two methods implemented
+2) Have an `_allowed_solvers` attribute of type `List[str]` that gives the string names of compatible `jaxopt` solvers
+3) Have a `_default_solver` attribute of type `str` that gives a string name of a default solver to be used when instantiating a model
+with this type of regularizer if a user does not provide one
+4) Have two methods implemented
    - `get_proximal_operator()` that returns the proximal operator for the regularization method when using projected gradient descent
    - `penalized_loss()` that wraps a given model's loss function and returns the augmented loss based on the regularization being applied
 
@@ -133,7 +159,7 @@ All basis are in the `/src/nemos/basis.py` class. If you would like to add a new
 
 ### Testing 
 
-To run all tests, run `pytest tests/` from within the main `nemos` repository. This may take a while as there are many tests, broken into several categories. 
+To run all tests, run `pytest` from within the main `nemos` repository. This may take a while as there are many tests, broken into several categories. 
 There are several options for how to run a subset of tests:
 - Run tests from one file: `pytest tests/test_glm.py`
 - Run a specific test within a specific module: `pytests tests/test_glm.py::test_func`
@@ -186,6 +212,9 @@ All examples live within the `docs/` subfolder of `nemos`.
 To see if changes you have made break the current documentation, you can build the documentation locally. 
 
 ```bash
+# Clear the cached documentation pages
+# This step is only necessary if your changes affected the src/ directory
+rm -r docs/generated
 # build the docs within the nemos repo
 mkdocs build
 ```
