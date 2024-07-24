@@ -15,11 +15,9 @@ Abstract Class Regularizer
 |
 ├─ Concrete Class Ridge
 |
-└─ Abstract Class ProximalGradientRegularizer
-    |
-    ├─ Concrete Class Lasso
-    |
-    └─ Concrete Class GroupLasso
+├─ Concrete Class Lasso
+|
+└─ Concrete Class GroupLasso
 ```
 
 !!! note

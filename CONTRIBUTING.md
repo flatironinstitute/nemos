@@ -9,6 +9,8 @@ Developers are encouraged to contribute to various areas of development. This co
 
 Feel free to work on any section of code that you believe you can improve. More importantly, remember to thoroughly test all your classes and functions, and to provide clear, detailed comments within your code. This not only aids others in using the library, but also facilitates future maintenance and further development.
 
+For more detailed information about NeMoS modules, including design choices and implementation details, visit the [`For Developers`](https://nemos.readthedocs.io/en/latest/developers_notes/) section of the package documentation.
+
 ## Contributing to the code
 
 ### Contribution workflow cycle
@@ -130,33 +132,6 @@ The next section will talk about the style of your code and specific requirement
 - Longer, descriptive names are preferred (e.g., x is not an appropriate name for a variable), especially for anything user-facing, such as methods, attributes, or arguments.
 - Any public method or function must have a complete type-annotated docstring (see below for details). Hidden ones do not need to have complete docstrings, but they probably should.
 
-#### Adding a regularization method
-
-All regularization method can be found in `/src/nemos/regularizer.py`. If you would like to add a new regularizer class to the `nemos` 
-library, it will need to do the following:
-
-1) Inherit from the base `Regularizer` base class
-2) Have an `_allowed_solvers` attribute of type `List[str]` that gives the string names of compatible `jaxopt` solvers
-3) Have a `_default_solver` attribute of type `str` that gives a string name of a default solver to be used when instantiating a model
-with this type of regularizer if a user does not provide one
-4) Have two methods implemented
-   - `get_proximal_operator()` that returns the proximal operator for the regularization method when using projected gradient descent
-   - `penalized_loss()` that wraps a given model's loss function and returns the augmented loss based on the regularization being applied
-
-#### Adding a new model
-
-A new model should be put into its own `.py` file. If you would like to add a new model to the `nemos` library, it will need to inherit from the 
-`BaseRegressor` class and implement all of its abstract methods.
-
-#### Adding a new basis 
-
-All basis are in the `/src/nemos/basis.py` class. If you would like to add a new basis class, you:
-
-- **Must** inherit the abstract superclass `Basis`
-- **Must** define the `__call__` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/nemos/basis/) for the specifics.
-- **Should not** overwrite the `compute_features` and `evaluate_on_grid` methods inherited from `Basis`.
-- **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
-
 ### Testing 
 
 To run all tests, run `pytest` from within the main `nemos` repository. This may take a while as there are many tests, broken into several categories. 
@@ -220,7 +195,3 @@ mkdocs build
 ```
 
 If the build fails, you will see line-specific errors that prompted the failure.
-
-### More On NeMoS Modules
-
-For more detailed information about NeMoS modules, including design choices and implementation details, visit the [`For Developers`](https://nemos.readthedocs.io/en/latest/developers_notes/) section of the package documentation.
