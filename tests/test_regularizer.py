@@ -511,7 +511,7 @@ class TestRidge:
         # set regularizer and solver name
         model.regularizer = self.cls()
         model.solver_name = solver_name
-        runner = model.instantiate_solver()[2]
+        runner = model.instantiate_solver().solver_run
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize(
@@ -525,7 +525,7 @@ class TestRidge:
         # set regularizer and solver name
         model.regularizer = self.cls()
         model.solver_name = solver_name
-        runner = model.instantiate_solver()[2]
+        runner = model.instantiate_solver().solver_run
         runner(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
@@ -544,8 +544,11 @@ class TestRidge:
         model.solver_name = "GradientDescent"
         model.solver_kwargs = {"tol": 10**-12}
 
-        runner_gd = model.instantiate_solver()[2]
-        runner_bfgs = model.instantiate_solver()[2]
+        model_bfgs = copy.deepcopy(model)
+        model_bfgs.solver_name = "BFGS"
+
+        runner_gd = model.instantiate_solver().solver_run
+        runner_bfgs = model_bfgs.instantiate_solver().solver_run
 
         weights_gd, intercepts_gd = runner_gd(
             (true_params[0] * 0.0, true_params[1]), X, y
@@ -571,7 +574,7 @@ class TestRidge:
         model.regularizer = self.cls()
         model.solver_kwargs = {"tol": 10**-12}
 
-        runner_bfgs = model.instantiate_solver()[2]
+        runner_bfgs = model.instantiate_solver().solver_run
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -597,7 +600,7 @@ class TestRidge:
         model.regularizer = self.cls()
         model.solver_kwargs = {"tol": 10**-12}
         model.regularizer_strength = 0.1
-        runner_bfgs = model.instantiate_solver()[2]
+        runner_bfgs = model.instantiate_solver().solver_run
         weights_bfgs, intercepts_bfgs = runner_bfgs(
             (true_params[0] * 0.0, true_params[1]), X, y
         )[0]
@@ -719,7 +722,7 @@ class TestLasso:
 
         model.regularizer = self.cls()
         model.solver_name = "ProximalGradient"
-        runner = model.instantiate_solver()[2]
+        runner = model.instantiate_solver().solver_run
         runner((true_params[0] * 0.0, true_params[1]), X, y)
 
     @pytest.mark.parametrize("solver_name", ["ProximalGradient"])
@@ -731,7 +734,7 @@ class TestLasso:
         # set regularizer and solver name
         model.regularizer = self.cls()
         model.solver_name = solver_name
-        runner = model.instantiate_solver()[2]
+        runner = model.instantiate_solver().solver_run
         runner(
             (jax.tree_util.tree_map(jnp.zeros_like, true_params[0]), true_params[1]),
             X.data,
@@ -748,7 +751,7 @@ class TestLasso:
         model.solver_name = "ProximalGradient"
         model.solver_kwargs = {"tol": 10**-12}
 
-        runner = model.instantiate_solver()[2]
+        runner = model.instantiate_solver().solver_run
         weights, intercepts = runner((true_params[0] * 0.0, true_params[1]), X, y)[0]
 
         # instantiate the glm with statsmodels

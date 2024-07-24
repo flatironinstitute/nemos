@@ -312,7 +312,6 @@ class BaseRegressor(Base, abc.ABC):
             solver_init_kwargs,
         ) = self._inspect_solver_kwargs(solver_kwargs)
 
-
         # instantiate the solver
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_init_kwargs)
 
