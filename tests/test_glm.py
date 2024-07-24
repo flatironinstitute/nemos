@@ -125,14 +125,14 @@ class TestGLM:
         """
         Test that get_params() contains expected values.
         """
-        expected_keys = [
+        expected_keys = {
             "observation_model__inverse_link_function",
             "observation_model",
             "regularizer",
             "regularizer_strength",
             "solver_kwargs",
             "solver_name",
-        ]
+        }
 
         model = nmo.glm.GLM()
 
