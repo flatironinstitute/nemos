@@ -1,4 +1,4 @@
-# The Abstract Class `base_regressor.BaseRegressor`
+# The Abstract Class `BaseRegressor`
 
 `BaseRegressor` is an abstract class that inherits from `Base`, stipulating the implementation of number of abstract methods such as `fit`, `predict`, `score`. This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
 
