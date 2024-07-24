@@ -4,7 +4,8 @@ import jax.numpy as jnp
 import pytest
 from numpy.typing import NDArray
 
-from nemos.base_class import Base, BaseRegressor
+from nemos.base_class import Base
+from nemos.base_regressor import BaseRegressor
 
 
 class MockBaseRegressorInvalid(BaseRegressor):
