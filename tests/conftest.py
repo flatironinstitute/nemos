@@ -18,7 +18,7 @@ import nemos as nmo
 
 
 # Sample subclass to test instantiation and methods
-class MockRegressor(nmo.base_class.BaseRegressor):
+class MockRegressor(nmo.base_regressor.BaseRegressor):
     """
     Mock implementation of the BaseRegressor abstract class for testing purposes.
     Implements all required abstract methods as empty methods.
@@ -69,8 +69,15 @@ class MockRegressor(nmo.base_class.BaseRegressor):
     def update(self, *args, **kwargs):
         pass
 
-    def initialize_solver(self, *args, **kwargs):
+    def initialize_state(self, *args, **kwargs):
         pass
+
+    def initialize_params(self, *args, **kwargs):
+        pass
+
+    def _predict_and_compute_loss(self, params, X, y):
+        pass
+
 
 class MockRegressorNested(MockRegressor):
     def __init__(self, other_param: int, std_param: int = 0):
@@ -154,7 +161,7 @@ def poissonGLM_model_instantiation():
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
@@ -181,8 +188,10 @@ def poisson_population_GLM_model():
     b_true = -2 * np.ones((3,))
     w_true = np.random.normal(size=(5, 3))
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
-    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.PopulationGLM(
+        observation_model=observation_model, regularizer=regularizer
+    )
     rate = jnp.exp(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate
 
@@ -209,7 +218,9 @@ def poisson_population_GLM_model_pytree(poisson_population_GLM_model):
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.PopulationGLM(model.observation_model, model.regularizer)
+    model_tree = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model, regularizer=model.regularizer
+    )
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
 
 
@@ -335,7 +346,7 @@ def group_sparse_poisson_glm_model_instantiation():
     mask[0, 1:4] = 1
     mask[1, [0, 4]] = 1
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
@@ -414,14 +425,12 @@ def poisson_observation_model():
 
 @pytest.fixture
 def ridge_regularizer():
-    return nmo.regularizer.Ridge(solver_name="LBFGS", regularizer_strength=0.1)
+    return nmo.regularizer.Ridge()
 
 
 @pytest.fixture
 def lasso_regularizer():
-    return nmo.regularizer.Lasso(
-        solver_name="ProximalGradient", regularizer_strength=0.1
-    )
+    return nmo.regularizer.Lasso(solver_name="ProximalGradient")
 
 
 @pytest.fixture
@@ -429,9 +438,7 @@ def group_lasso_2groups_5features_regularizer():
     mask = np.zeros((2, 5))
     mask[0, :2] = 1
     mask[1, 2:] = 1
-    return nmo.regularizer.GroupLasso(
-        solver_name="ProximalGradient", mask=mask, regularizer_strength=0.1
-    )
+    return nmo.regularizer.GroupLasso(solver_name="ProximalGradient", mask=mask)
 
 
 @pytest.fixture
@@ -470,13 +477,14 @@ def gammaGLM_model_instantiation():
     b_true = np.zeros((1,))
     w_true = np.random.uniform(size=(5,))
     observation_model = nmo.observation_models.GammaObservations()
-    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = (jax.numpy.einsum("k,tk->t", w_true, X) + b_true) ** -1
     theta = 3
     k = rate / theta
-    model.scale = theta
+    model.scale_ = theta
     return X, np.random.gamma(k, scale=theta), model, (w_true, b_true), rate
+
 
 @pytest.fixture
 def gammaGLM_model_instantiation_pytree(gammaGLM_model_instantiation):
@@ -511,13 +519,16 @@ def gamma_population_GLM_model():
     b_true = 0.5 * np.ones((3,))
     w_true = np.random.uniform(size=(5, 3))
     observation_model = nmo.observation_models.GammaObservations()
-    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
-    model = nmo.glm.PopulationGLM(observation_model, regularizer)
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.PopulationGLM(
+        observation_model=observation_model, regularizer=regularizer
+    )
     rate = 1 / (jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     theta = 3
-    model.scale = theta
+    model.scale_ = theta
     y = jax.random.gamma(jax.random.PRNGKey(123), rate / theta) * theta
     return X, y, model, (w_true, b_true), rate
+
 
 @pytest.fixture()
 def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
@@ -527,5 +538,7 @@ def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
         true_params[1],
     )
-    model_tree = nmo.glm.PopulationGLM(model.observation_model, model.regularizer)
+    model_tree = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model, regularizer=model.regularizer
+    )
     return X_tree, spikes, model_tree, true_params_tree, rate

@@ -231,8 +231,7 @@ X = nmo.pytrees.FeaturePytree(head_direction=basis(head_dir))
 # %%
 #
 # Now we'll fit our GLM and then see what our head direction tuning looks like:
-ridge = nmo.regularizer.Ridge(regularizer_strength=0.001)
-model = nmo.glm.GLM(regularizer=ridge)
+model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)
 model.fit(X, spikes)
 print(model.coef_['head_direction'])
 
@@ -285,7 +284,7 @@ X['spatial_position'] = pos_basis(*spatial_pos.values.T)
 # Running the GLM is identical to before, but we can see that our coef_
 # FeaturePytree now has two separate keys, one for each feature type.
 
-model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized(solver_name="LBFGS"))
+model = nmo.glm.GLM(solver_name="LBFGS")
 model.fit(X, spikes)
 model.coef_
 
