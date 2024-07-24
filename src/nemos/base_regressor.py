@@ -279,6 +279,8 @@ class BaseRegressor(Base, abc.ABC):
             )
 
         # only use penalized loss if not using proximal gradient descent
+        # In proximal method you must use the unpenalized loss independently
+        # of what regularizer you are using.
         if self.solver_name != "ProximalGradient":
             loss = self.regularizer.penalized_loss(
                 self._predict_and_compute_loss, self.regularizer_strength
