@@ -6,7 +6,7 @@ The `regularizer` module introduces an archetype class `Regularizer` which provi
 
 Objects of type `Regularizer` provide methods to define a regularized optimization objective. These objects serve as attribute of the [`nemos.glm.GLM`](../05-glm/#the-concrete-class-glm), equipping the glm with an appropriate regularization scheme.
 
-Each `Regularizer` object defines a default solver, set of allowed solvers, which depends on the loss function characteristics (smooth vs non-smooth).
+Each `Regularizer` object defines a default solver, and a set of allowed solvers, which depends on the loss function characteristics (smooth vs non-smooth).
 
 ```
 Abstract Class Regularizer
@@ -31,7 +31,7 @@ The abstract class `Regularizer` enforces the implementation of the `penalized_l
 
 ### Attributes
 
-The attributes of `Regularizer` consist of the `default_solver` and `allowed_solvers`, which are stored as read-only properties as a string and tuple of strings respectively.
+The attributes of `Regularizer` consist of the `default_solver` and `allowed_solvers`, which are stored as read-only properties of type string and tuple of strings respectively.
 
 ### Abstract Methods
 
@@ -43,8 +43,8 @@ The attributes of `Regularizer` consist of the `default_solver` and `allowed_sol
 The `UnRegularized` class extends the base `Regularizer` class and is designed specifically for optimizing unregularized models. This means that the solver instantiated by this class does not add any regularization penalty to the loss function during the optimization process.
 
 
-### Concrete methods specifics
-- **`penalized_loss`**: Returns the original loss without any changes
+### Concrete Methods Specifics
+- **`penalized_loss`**: Returns the original loss without any changes.
 - **`get_proximal_operator`**: Returns the identity operator.
 
 
@@ -52,10 +52,9 @@ The `UnRegularized` class extends the base `Regularizer` class and is designed s
 
 The `Ridge` class extends the `Regularizer` class to handle optimization problems with Ridge regularization. Ridge regularization adds a penalty to the loss function, proportional to the sum of squares of the model parameters, to prevent overfitting and stabilize the optimization.
 
-### Concrete methods specifics
+### Concrete Methods Specifics
 - **`penalized_loss`**: Returns the original loss penalized by a term proportional to the sum of squares of the coefficients (excluding the intercept).
-- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
-  +\text{l2reg} \cdot ||y||_2^2$, where "l2reg" is the regularizer strength.
+- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $$\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2  +\text{l2reg} \cdot ||y||_2^2,$$ where "l2reg" is the regularizer strength.
 
 ### Example Usage
 
@@ -70,10 +69,9 @@ model = nmo.glm.GLM(regularizer=ridge)
 
 The `Lasso` class enables optimization using the Lasso (L1 regularization) method with Proximal Gradient.
 
-### Concrete methods specifics
+### Concrete Methods Specifics
 - **`penalized_loss`**: Returns the original loss penalized by a term proportional to the sum of the absolute values of the coefficients (excluding the intercept).
-- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
-  + \text{l1reg} \cdot ||y||_1$, where "l1reg" is the regularizer strength.
+- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $$\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2 + \text{l1reg} \cdot ||y||_1,$$ where "l1reg" is the regularizer strength.
 
 ## `GroupLasso` Class
 
@@ -82,10 +80,11 @@ The `GroupLasso` class enables optimization using the Group Lasso regularization
 ### Attributes:
 - **`mask`**: A mask array indicating groups of features for regularization.
 
-### Concrete methods specifics
+### Concrete Methods Specifics
 - **`penalized_loss`**: Returns the original loss penalized by a term proportional to the sum of the L2 norms of the coefficient vectors for each group defined by the `mask`.
-- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
-  + \text{lgreg} \cdot \sum_j ||y^{(j)}||_2$, where "lgreg" is the regularizer strength, and $j$ runs over the coefficient groups.
+- **`get_proximal_operator`**: Returns the ridge proximal operator, solving 
+$$\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2 + \text{lgreg} \cdot \sum_j ||y^{(j)}||_2,$$ where "lgreg" is the regularizer strength, and $j$ runs over the coefficient groups.
+
 
 ### Example Usage
 ```python
@@ -110,5 +109,4 @@ When developing a functional (i.e., concrete) `Regularizer` class:
 - **Must** inherit from `Regularizer` or one of its derivatives.
 - **Must** implement the `penalized_loss` and `proximal_operator` methods.
 - **Must** define a default solver and a tuple of allowed solvers.
-- 
 
