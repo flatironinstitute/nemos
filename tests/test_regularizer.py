@@ -16,7 +16,7 @@ import nemos as nmo
 @pytest.mark.parametrize(
     "reg_str, reg_type",
     [
-        ("UnRegularized", nmo.regularizer.Regularizer),
+        ("UnRegularized", nmo.regularizer.UnRegularized),
         ("Ridge", nmo.regularizer.Ridge),
         ("Lasso", nmo.regularizer.Lasso),
         ("GroupLasso", nmo.regularizer.GroupLasso),
@@ -1281,5 +1281,6 @@ class TestGroupLasso:
 
 def test_available_regularizer_match():
     """Test matching of the two regularizer lists."""
-    assert set(nmo._regularizer_builder.AVAILABLE_REGULARIZERS) == set(nmo.regularizer.__dir__())
-
+    assert set(nmo._regularizer_builder.AVAILABLE_REGULARIZERS) == set(
+        nmo.regularizer.__dir__()
+    )
