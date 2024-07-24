@@ -33,6 +33,10 @@ Public attributes are stored as properties:
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
 - `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees for a consistent API for all solver.
 
+!!! note "Sovlers"
+    Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and `update` method with the appropriate input/output types).
+    We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we will provide a number of custom solvers optimized for convex stochastic optimization.
+
 ## Contributor Guidelines
 
 ### Implementing Model Subclasses
@@ -43,3 +47,13 @@ When devising a new model subclass based on the `BaseRegressor` abstract class, 
 - **Must** realize the abstract methods, see above.
 - **Should not** overwrite the `get_params` and `set_params` methods, inherited from `Base`.
 - **May** introduce auxiliary methods for added utility.
+
+
+## Glossary
+
+|  Term   | Description |
+|--------------------| ----------- |
+| **Regularization** | Regularization is a technique used to prevent overfitting by adding a penalty to the loss function, which discourages complex models. Common regularization techniques include L1 (Lasso) and L2 (Ridge) regularization. |
+| **Optimization**   | Optimization refers to the process of minimizing (or maximizing) a function by systematically choosing the values of the variables within an allowable set. In machine learning, optimization aims to minimize the loss function to train models. |
+| **Solver**         | A solver is an algorithm or a set of algorithms used for solving optimization problems. In the given module, solvers are used to find the parameters that minimize the loss function, potentially subject to some constraints. |
+| **Runner**         | A runner in this context refers to a callable function configured to execute the solver with the specified parameters and data. It acts as an interface to the solver, simplifying the process of running optimization tasks. |
