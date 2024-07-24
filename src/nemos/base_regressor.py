@@ -245,7 +245,7 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
             )
 
-    def instantiate_solver(self, *args, **kwargs) -> None:
+    def instantiate_solver(self, *args) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -265,18 +265,10 @@ class BaseRegressor(Base, abc.ABC):
             Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
             strength for proximal gradient methods.
 
-        *kwargs:
-            Keyword arguments for the jaxopt `solver.run` method.
-
         Returns
         -------
         :
-            A tuple containing three callable functions:
-            - solver_init_state: Function to initialize the solver's state, necessary before starting the optimization.
-            - solver_update: Function to perform a single update step in the optimization process,
-            returning new parameters and state.
-            - solver_run: Function to execute the optimization process, applying multiple updates until a
-            stopping criterion is met.
+            The instance itself for method chaining.
         """
         # final check that solver is valid for chosen regularizer
         if self.solver_name not in self.regularizer.allowed_solvers:
@@ -320,6 +312,7 @@ class BaseRegressor(Base, abc.ABC):
             solver_init_kwargs,
         ) = self._inspect_solver_kwargs(solver_kwargs)
 
+
         # instantiate the solver
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_init_kwargs)
 
@@ -345,6 +338,7 @@ class BaseRegressor(Base, abc.ABC):
         self._solver_init_state = solver_init_state
         self._solver_update = solver_update
         self._solver_run = solver_run
+        return self
 
     def _inspect_solver_kwargs(
         self, solver_kwargs: dict
