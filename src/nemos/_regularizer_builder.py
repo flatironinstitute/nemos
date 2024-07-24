@@ -10,7 +10,7 @@ def create_regularizer(name: str):
     Parameters
     ----------
     name :
-        The string name of the regularizer to create. Must be one of: 'unregularized', 'ridge', 'lasso', 'group_lasso'.
+        The string name of the regularizer to create. Must be one of: 'UnRegularized', 'Ridge', 'Lasso', 'GroupLasso'.
 
     Returns
     -------
