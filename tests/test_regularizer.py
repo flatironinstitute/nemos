@@ -937,8 +937,8 @@ class TestGroupLasso:
         model.regularizer = self.cls(mask=mask)
         model.solver_name = "ProximalGradient"
 
-        runner = model.instantiate_solver()[2]
-        runner((true_params[0] * 0.0, true_params[1]), X, y)
+        model.instantiate_solver()
+        model.solver_run((true_params[0] * 0.0, true_params[1]), X, y)
 
     def test_init_solver(self, poissonGLM_model_instantiation):
         """Test that the solver initialization returns a state."""
@@ -954,8 +954,8 @@ class TestGroupLasso:
         model.regularizer = self.cls(mask=mask)
         model.solver_name = "ProximalGradient"
 
-        init, _, _ = model.instantiate_solver()
-        state = init(true_params, X, y)
+        model.instantiate_solver()
+        state = model.solver_init_state(true_params, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple)
@@ -979,10 +979,10 @@ class TestGroupLasso:
         model.regularizer = self.cls(mask=mask)
         model.solver_name = "ProximalGradient"
 
-        init, update, _ = model.instantiate_solver()
+        model.instantiate_solver()
 
-        state = init((true_params[0] * 0.0, true_params[1]), X, y)
-        params, state = update(true_params, state, X, y)
+        state = model.solver_init_state((true_params[0] * 0.0, true_params[1]), X, y)
+        params, state = model.solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
         # specific namespace attributes
         assert isinstance(state, tuple)
@@ -1125,7 +1125,7 @@ class TestGroupLasso:
         model.regularizer = self.cls(mask=mask)
         model.solver_name = "ProximalGradient"
 
-        runner = model.instantiate_solver()[2]
+        runner = model.instantiate_solver().solver_run
         params, _ = runner((true_params[0] * 0.0, true_params[1]), X, y)
 
         zeros_est = params[0] == 0
