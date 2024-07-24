@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from functools import wraps
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union, Any
+from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -20,7 +20,7 @@ from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .type_casting import jnp_asarray_if, support_pynapple
-from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
+from .typing import DESIGN_INPUT_TYPE
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -861,9 +861,7 @@ class GLM(BaseRegressor):
         y: jnp.ndarray,
         init_params,
     ) -> Union[Any, NamedTuple]:
-        """
-        Initialize the solver by instantiating its components (initial state, update function,
-        and run function).
+        """Initialize the solver by instantiating its init_state, update and, run methods.
 
         This method also prepares the solver's state by using the initialized model parameters and data.
         This setup is ready to be used for running the solver's optimization routines.

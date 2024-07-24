@@ -6,7 +6,8 @@ from __future__ import annotations
 import abc
 import inspect
 import warnings
-from typing import Any, NamedTuple, Optional, Tuple, Union, Dict
+from copy import deepcopy
+from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -164,6 +165,7 @@ class BaseRegressor(Base, abc.ABC):
 
     @property
     def regularizer_strength(self) -> float:
+        """Regularizer strength getter."""
         return self._regularizer_strength
 
     @regularizer_strength.setter
@@ -243,14 +245,13 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
             )
 
-    def instantiate_solver(
-        self, *args, **kwargs
-    ) -> Tuple[SolverInit, SolverUpdate, SolverRun]:
+    def instantiate_solver(self, *args, **kwargs) -> None:
         """
         Instantiate the solver with the provided loss function.
 
-        Instantiate the solver with the provided loss function, and return callable functions
-        that initialize the solver state, update the model parameters, and run the optimization.
+        Instantiate the solver with the provided loss function, and store callable functions
+        that initialize the solver state, update the model parameters, and run the optimization
+        as attributes.
 
         This method creates a solver instance from jaxopt library, tailored to the specific loss
         function and regularization approach defined by the Regularizer instance. It also handles
@@ -260,15 +261,9 @@ class BaseRegressor(Base, abc.ABC):
 
         Parameters
         ----------
-        loss :
-            The loss function to be optimized.
-
         *args:
             Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
             strength for proximal gradient methods.
-
-        prox:
-            Optional, the proximal projection operator.
 
         *kwargs:
             Keyword arguments for the jaxopt `solver.run` method.
@@ -299,12 +294,22 @@ class BaseRegressor(Base, abc.ABC):
         else:
             loss = self._predict_and_compute_loss
 
+        # copy dictionary of kwargs to avoid modifying user settings
+        solver_kwargs = deepcopy(self.solver_kwargs)
+
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
 
         # some parsing to make sure solver gets instantiated properly
         if self.solver_name == "ProximalGradient":
-            self.solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
+            if "prox" in self.solver_kwargs:
+                raise ValueError(
+                    "Proximal operator specification is not permitted. "
+                    "The proximal operator is automatically determined based on the selected regularizer. "
+                    "Please remove the 'prox' argument from the `solver_kwargs` "
+                )
+
+            solver_kwargs.update(prox=self.regularizer.get_proximal_operator())
             # add self.regularizer_strength to args
             args += (self.regularizer_strength,)
 
@@ -313,7 +318,7 @@ class BaseRegressor(Base, abc.ABC):
             solver_init_state_kwargs,
             solver_update_kwargs,
             solver_init_kwargs,
-        ) = self._inspect_solver_kwargs()
+        ) = self._inspect_solver_kwargs(solver_kwargs)
 
         # instantiate the solver
         solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_init_kwargs)
@@ -329,7 +334,6 @@ class BaseRegressor(Base, abc.ABC):
             )
 
         def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
-            print(solver_init_state_kwargs)
             return solver.init_state(
                 params,
                 state,
@@ -343,19 +347,39 @@ class BaseRegressor(Base, abc.ABC):
         self._solver_run = solver_run
 
     def _inspect_solver_kwargs(
-        self,
+        self, solver_kwargs: dict
     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        """Inspect and categorize the solver keyword arguments.
 
+        This method inspects the provided `solver_kwargs` dictionary and categorizes
+        the keyword arguments based on which solver functions they apply to:
+        `run`, `init_state`, `update`, and `__init__`. This ensures that the
+        appropriate arguments are passed to each function when the solver is used.
+
+        Parameters
+        ----------
+        solver_kwargs :
+            Dictionary containing keyword arguments for the solver.
+
+        Returns
+        -------
+        :
+            A tuple containing four dictionaries:
+            - solver_run_kwargs: Arguments for the solver's `run` method.
+            - solver_init_state_kwargs: Arguments for the solver's `init_state` method.
+            - solver_update_kwargs: Arguments for the solver's `update` method.
+            - solver_init_kwargs: Arguments for the solver's `__init__` constructor.
+        """
         solver_run_kwargs = dict()
         solver_init_state_kwargs = dict()
         solver_update_kwargs = dict()
         solver_init_kwargs = dict()
 
-        if self.solver_kwargs:
+        if solver_kwargs:
             # instantiate a solver to then inspect the params of its various functions
             solver = getattr(jaxopt, self.solver_name)
 
-            for key, value in self.solver_kwargs.items():
+            for key, value in solver_kwargs.items():
                 if key in inspect.getfullargspec(solver.run).args:
                     solver_run_kwargs[key] = value
                 if key in inspect.getfullargspec(solver.init_state).args:
@@ -467,7 +491,7 @@ class BaseRegressor(Base, abc.ABC):
 
     @abc.abstractmethod
     def _predict_and_compute_loss(self, params, X, y):
-        """The loss function for a given model to be optimized over."""
+        """Loss function for a given model to be optimized over."""
         pass
 
     def _validate(
