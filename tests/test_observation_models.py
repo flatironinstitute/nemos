@@ -110,6 +110,14 @@ class TestPoissonObservations:
         else:
             observation_model.set_params(inverse_link_function=link_function)
 
+    def test_get_params(self, poisson_observations):
+        """Test get_params() returns expected values."""
+        observation_model = poisson_observations()
+
+        assert observation_model.get_params() == {
+            "inverse_link_function": observation_model.inverse_link_function
+        }
+
     def test_deviance_against_statsmodels(self, poissonGLM_model_instantiation):
         """
         Compare fitted parameters to statsmodels.
@@ -379,6 +387,14 @@ class TestGammaObservations:
                 observation_model.set_params(inverse_link_function=link_function)
         else:
             observation_model.set_params(inverse_link_function=link_function)
+
+    def test_get_params(self, gamma_observations):
+        """Test get_params() returns expected values."""
+        observation_model = gamma_observations()
+
+        assert observation_model.get_params() == {
+            "inverse_link_function": observation_model.inverse_link_function
+        }
 
     def test_deviance_against_statsmodels(self, gammaGLM_model_instantiation):
         """
