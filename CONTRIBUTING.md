@@ -120,11 +120,16 @@ library, it will need to do the following:
 #### Adding a new model
 
 A new model should be put into its own `.py` file. If you would like to add a new model to the `nemos` library, it will need to inherit from the 
-`BaseRegressor` class and implement all of its abstract methods. 
-
-#### Adding a new optimization method
+`BaseRegressor` class and implement all of its abstract methods.
 
 #### Adding a new basis 
+
+All basis are in the `/src/nemos/basis.py` class. If you would like to add a new basis class, you:
+
+- **Must** inherit the abstract superclass `Basis`
+- **Must** define the `__call__` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/nemos/basis/) for the specifics.
+- **Should not** overwrite the `compute_features` and `evaluate_on_grid` methods inherited from `Basis`.
+- **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 
 ### Testing 
 
