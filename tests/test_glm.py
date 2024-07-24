@@ -190,8 +190,8 @@ class TestGLM:
             model.solver_name,
         }
 
-        assert list(model.get_params().keys()) == expected_keys
-        assert list(model.get_params().values()) == expected_values
+        assert set(model.get_params().keys()) == expected_keys
+        assert set(model.get_params().values()) == expected_values
 
     #######################
     # Test model.fit
