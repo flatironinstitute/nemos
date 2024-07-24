@@ -121,6 +121,78 @@ class TestGLM:
         assert coef.shape == (X.shape[1],)
         assert inter.shape == (1,)
 
+    def test_get_params(self):
+        """
+        Test that get_params() contains expected values.
+        """
+        expected_keys = [
+            "observation_model__inverse_link_function",
+            "observation_model",
+            "regularizer",
+            "regularizer_strength",
+            "solver_kwargs",
+            "solver_name",
+        ]
+
+        model = nmo.glm.GLM()
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # passing params
+        model = nmo.glm.GLM(solver_name="LBFGS", regularizer="UnRegularized")
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing regularizer
+        model.regularizer = "Ridge"
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing solver
+        model.solver_name = "ProximalGradient"
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
     #######################
     # Test model.fit
     #######################
@@ -1455,6 +1527,83 @@ class TestPopulationGLM:
         """
         with expectation:
             population_glm_class(regularizer=regularizer)
+
+    def test_get_params(self):
+        """
+        Test that get_params() contains expected values.
+        """
+        expected_keys = [
+            "feature_mask",
+            "observation_model__inverse_link_function",
+            "observation_model",
+            "regularizer",
+            "regularizer_strength",
+            "solver_kwargs",
+            "solver_name",
+        ]
+
+        model = nmo.glm.PopulationGLM()
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # passing params
+        model = nmo.glm.PopulationGLM(solver_name="LBFGS", regularizer="UnRegularized")
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing regularizer
+        model.regularizer = "Ridge"
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing solver
+        model.solver_name = "ProximalGradient"
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert list(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
 
     @pytest.mark.parametrize(
         "observation, expectation",
