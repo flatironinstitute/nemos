@@ -107,6 +107,6 @@ model = nmo.glm.GLM(regularizer=group_lasso)
 When developing a functional (i.e., concrete) `Regularizer` class:
 
 - **Must** inherit from `Regularizer` or one of its derivatives.
-- **Must** implement the `penalized_loss` and `proximal_operator` methods.
+- **Must** implement the `penalized_loss` and `get_proximal_operator` methods.
 - **Must** define a default solver and a tuple of allowed solvers.
 
