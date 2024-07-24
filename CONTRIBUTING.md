@@ -221,4 +221,6 @@ mkdocs build
 
 If the build fails, you will see line-specific errors that prompted the failure.
 
+### More On NeMoS Modules
 
+For more detailed information about NeMoS modules, including design choices and implementation details, visit the [`For Developers`](https://nemos.readthedocs.io/en/latest/developers_notes/) section of the package documentation.
