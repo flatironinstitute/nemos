@@ -47,10 +47,8 @@ units = nap.Tsd(spike_t/T, spike_id).to_tsgroup()
 #     In jaxopt, this can be done by setting the parameters `acceleration` to False and setting the `stepsize`.
 #
 glm = nmo.glm.PopulationGLM(
-	regularizer=nmo.regularizer.UnRegularized(
-		solver_name="GradientDescent",
-		solver_kwargs={"stepsize": 0.1, "acceleration": False}
-		)
+	solver_name="GradientDescent",
+	solver_kwargs={"stepsize": 0.1, "acceleration": False}
 	)
 
 # %%
@@ -90,7 +88,8 @@ def batcher():
 # 
 # First we need to initialize the gradient descent solver within the `PopulationGLM`.
 # This gets you the initial parameters and the first state of the solver.
-params, state = glm.initialize_solver(*batcher())
+params = glm.initialize_params(*batcher())
+state = glm.initialize_state(*batcher(), params)
 
 # %%
 # ## Batch learning
@@ -163,8 +162,12 @@ full_model = nmo.glm.PopulationGLM().fit(X, Y)
 # %%
 # Now that the full model is fitted, we are scoring the full model and the batch model against the full datasets to compare the scores.
 # The score is pseudo-R2
-full_scores = full_model.score(X, Y, aggregate_sample_scores=lambda x:np.mean(x, axis=0))
-batch_scores = glm.score(X, Y, aggregate_sample_scores=lambda x:np.mean(x, axis=0))
+full_scores = full_model.score(
+	X, Y, aggregate_sample_scores=lambda x:np.mean(x, axis=0), score_type="pseudo-r2-McFadden"
+)
+batch_scores = glm.score(
+	X, Y, aggregate_sample_scores=lambda x:np.mean(x, axis=0), score_type="pseudo-r2-McFadden"
+)
 
 # %%
 # Let's compare scores for each neurons as well as the coefficients.
