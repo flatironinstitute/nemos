@@ -89,7 +89,7 @@ class GLM(BaseRegressor):
         firing rate will be `jnp.exp(model.intercept_)`.
     coef_ :
         Basis coefficients for the model.
-    solver_state :
+    solver_state_ :
         State of the solver after fitting. May include details like optimization error.
     scale_:
         Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
@@ -126,11 +126,8 @@ class GLM(BaseRegressor):
         # initialize to None fit output
         self.intercept_ = None
         self.coef_ = None
-        self.solver_state = None
+        self.solver_state_ = None
         self.scale_ = None
-        self._solver_init_state = None
-        self._solver_update = None
-        self._solver_run = None
         self.dof_resid_ = None
 
     @property
@@ -144,58 +141,6 @@ class GLM(BaseRegressor):
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
-
-    @property
-    def solver_init_state(self) -> Union[None, SolverInit]:
-        """
-        Provides the initialization function for the solver's state.
-
-        This function is responsible for initializing the solver's state, necessary for the start
-        of the optimization process. It sets up initial values for parameters like gradients and step
-        sizes based on the model configuration and input data.
-
-        Returns
-        -------
-        :
-            The function to initialize the state of the solver, if available; otherwise, None if
-            the solver has not yet been instantiated.
-        """
-        return self._solver_init_state
-
-    @property
-    def solver_update(self) -> Union[None, SolverUpdate]:
-        """
-        Provides the function for updating the solver's state during the optimization process.
-
-        This function is used to perform a single update step in the optimization process. It updates
-        the model's parameters based on the current state, data, and gradients. It is typically used
-        in scenarios where fine-grained control over each optimization step is necessary, such as in
-        online learning or complex optimization scenarios.
-
-        Returns
-        -------
-        :
-            The function to update the solver's state, if available; otherwise, None if the solver
-            has not yet been instantiated.
-        """
-        return self._solver_update
-
-    @property
-    def solver_run(self) -> Union[None, SolverRun]:
-        """
-        Provides the function to execute the solver's optimization process.
-
-        This function runs the solver using the initialized parameters and state, performing the
-        optimization to fit the model to the data. It iteratively updates the model parameters until
-        a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
-
-        Returns
-        -------
-        :
-            The function to run the solver's optimization process, if available; otherwise, None if
-            the solver has not yet been instantiated.
-        """
-        return self._solver_run
 
     @staticmethod
     def _check_params(
@@ -713,7 +658,7 @@ class GLM(BaseRegressor):
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
-        self.solver_state = state
+        self.solver_state_ = state
         return self
 
     def _get_coef_and_intercept(self):
@@ -939,11 +884,8 @@ class GLM(BaseRegressor):
         NamedTuple
             The initialized solver state
         """
-        (
-            self._solver_init_state,
-            self._solver_update,
-            self._solver_run,
-        ) = super().instantiate_solver()
+        #  set up the solver init/run/update attrs
+        self.instantiate_solver()
 
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -1011,7 +953,7 @@ class GLM(BaseRegressor):
         --------
         >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
         >>> params = glm_instance.coef_, glm_instance.intercept_
-        >>> opt_state = glm_instance.solver_state
+        >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
         """
         # find non-nans
@@ -1029,7 +971,7 @@ class GLM(BaseRegressor):
 
         # store params and state
         self._set_coef_and_intercept(opt_step[0])
-        self.solver_state = opt_step[1]
+        self.solver_state_ = opt_step[1]
 
         # estimate the scale
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
@@ -1094,7 +1036,7 @@ class PopulationGLM(GLM):
         firing rate will be `jnp.exp(model.intercept_)`.
     coef_ :
         Basis coefficients for the model.
-    solver_state :
+    solver_state_ :
         State of the solver after fitting. May include details like optimization error.
 
     Raises

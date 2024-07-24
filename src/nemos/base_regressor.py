@@ -82,6 +82,61 @@ class BaseRegressor(Base, abc.ABC):
         if solver_kwargs is None:
             solver_kwargs = dict()
         self.solver_kwargs = solver_kwargs
+        self._solver_init_state = None
+        self._solver_update = None
+        self._solver_run = None
+
+    @property
+    def solver_init_state(self) -> Union[None, SolverInit]:
+        """
+        Provides the initialization function for the solver's state.
+
+        This function is responsible for initializing the solver's state, necessary for the start
+        of the optimization process. It sets up initial values for parameters like gradients and step
+        sizes based on the model configuration and input data.
+
+        Returns
+        -------
+        :
+            The function to initialize the state of the solver, if available; otherwise, None if
+            the solver has not yet been instantiated.
+        """
+        return self._solver_init_state
+
+    @property
+    def solver_update(self) -> Union[None, SolverUpdate]:
+        """
+        Provides the function for updating the solver's state during the optimization process.
+
+        This function is used to perform a single update step in the optimization process. It updates
+        the model's parameters based on the current state, data, and gradients. It is typically used
+        in scenarios where fine-grained control over each optimization step is necessary, such as in
+        online learning or complex optimization scenarios.
+
+        Returns
+        -------
+        :
+            The function to update the solver's state, if available; otherwise, None if the solver
+            has not yet been instantiated.
+        """
+        return self._solver_update
+
+    @property
+    def solver_run(self) -> Union[None, SolverRun]:
+        """
+        Provides the function to execute the solver's optimization process.
+
+        This function runs the solver using the initialized parameters and state, performing the
+        optimization to fit the model to the data. It iteratively updates the model parameters until
+        a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
+
+        Returns
+        -------
+        :
+            The function to run the solver's optimization process, if available; otherwise, None if
+            the solver has not yet been instantiated.
+        """
+        return self._solver_run
 
     @property
     def regularizer(self) -> Union[None, Regularizer]:
@@ -283,7 +338,9 @@ class BaseRegressor(Base, abc.ABC):
                 **solver_init_state_kwargs,
             )
 
-        return solver_init_state, solver_update, solver_run
+        self._solver_init_state = solver_init_state
+        self._solver_update = solver_update
+        self._solver_run = solver_run
 
     def _inspect_solver_kwargs(
         self,
