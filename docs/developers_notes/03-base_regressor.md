@@ -35,6 +35,9 @@ Public attributes are stored as properties:
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
 - `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees for a consistent API for all solver.
 
+When implementing a `BaseRegressor`, the only attributes you must interact directly with are the operates the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
+Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in `fit`, and `self.solver_update` in `update`. 
+
 !!! note "Solvers"
     Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and `update` method with the appropriate input/output types).
     We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we will provide a number of custom solvers optimized for convex stochastic optimization.
