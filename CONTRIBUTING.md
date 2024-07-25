@@ -183,8 +183,10 @@ If your changes are significant (add a new functionality or drastically change t
 a new example may need to be added.
 
 All examples live within the `docs/` subfolder of `nemos`.  These are written as `.py` files but are converted to 
-notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, see this [example 
+notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example 
 gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
+
+We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control. 
 
 To see if changes you have made break the current documentation, you can build the documentation locally. 
 
