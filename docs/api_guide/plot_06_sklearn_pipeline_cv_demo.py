@@ -79,7 +79,7 @@ pipeline = Pipeline(
         ),
         (
             "glm",
-            nmo.glm.GLM(regularizer=nmo.regularizer.Ridge(regularizer_strength=0.5)),
+            nmo.glm.GLM(regularizer_strength=0.5, regularizer="Ridge"),
         ),
     ]
 )
@@ -129,7 +129,7 @@ sns.despine(ax=ax)
 
 # %%
 param_grid = dict(
-    glm__regularizer__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+    glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
 )
 
@@ -188,7 +188,7 @@ cvdf = pd.DataFrame(gridsearch.cv_results_)
 
 cvdf_wide = cvdf.pivot(
     index="param_transformerbasis__n_basis_funcs",
-    columns="param_glm__regularizer__regularizer_strength",
+    columns="param_glm__regularizer_strength",
     values="mean_test_score",
 )
 
@@ -237,7 +237,7 @@ sns.despine(ax=ax)
 
 # %%
 param_grid = dict(
-    glm__regularizer__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+    glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis___basis=(
         nmo.basis.RaisedCosineBasisLinear(5),
         nmo.basis.RaisedCosineBasisLinear(10),
@@ -276,7 +276,7 @@ cvdf["transformerbasis_config"] = [
 
 cvdf_wide = cvdf.pivot(
     index="transformerbasis_config",
-    columns="param_glm__regularizer__regularizer_strength",
+    columns="param_glm__regularizer_strength",
     values="mean_test_score",
 )
 
@@ -320,7 +320,7 @@ sns.despine(ax=ax)
 #
 #     ```python
 #     param_grid = dict(
-#         glm__regularizer__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+#         glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
 #         transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
 #         transformerbasis___basis=(
 #             nmo.basis.RaisedCosineBasisLinear(5),
