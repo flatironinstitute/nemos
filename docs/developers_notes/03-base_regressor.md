@@ -40,7 +40,7 @@ Typically, in `YourRegressor` you will call `self.solver_init_state` at the para
 
 !!! note "Solvers"
     Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and `update` method with the appropriate input/output types).
-    We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we will provide a number of custom solvers optimized for convex stochastic optimization.
+    We rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we may provide a number of custom solvers optimized for convex stochastic optimization.
 
 ## Contributor Guidelines
 
