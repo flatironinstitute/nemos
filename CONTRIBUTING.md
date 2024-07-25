@@ -150,10 +150,10 @@ If you're adding a substantial bunch of tests that are separate from the existin
 it must have an `.py` extension, and it must be contained within the `tests` directory. Assuming you do that, our github actions will automatically find it and 
 add it to the tests-to-run.
 
-> **_NOTE:_** If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official
+> [!NOTE] If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official
 > documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html).
 
-> **_NOTE_** If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to 
+> [!NOTE] If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to 
 > load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation 
 > [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
 
