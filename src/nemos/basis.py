@@ -119,11 +119,43 @@ class TransformerBasis:
     transformations. It supports fitting to data (calculating any necessary parameters
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
+    This could be extremely useful in combination with scikit-learn pipelining and
+    cross-validation, enabling the cross-validation of the basis type and parameters,
+     for example `n_basis_funcs`. See the example section below.
 
     Parameters
     ----------
     basis :
         A concrete subclass of `Basis`.
+
+    Examples
+    --------
+    >>> from nemos.basis import BSplineBasis, TransformerBasis
+    >>> from nemos.glm import GLM
+    >>> from sklearn.pipeline import Pipeline
+    >>> from sklearn.model_selection import GridSearchCV
+    >>> import numpy as np
+    >>> np.random.seed(123)
+
+    >>> # Generate data
+    >>> num_samples, num_features = 10000, 1
+    >>> x = np.random.normal(size=(num_samples, ))  # raw time series
+    >>> basis = BSplineBasis(10)
+    >>> features = basis.compute_features(x)  # basis transformed time series
+    >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
+    >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
+
+    >>> # transformer can be used in pipelines
+    >>> transformer = TransformerBasis(basis)
+    >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
+    >>> pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
+    >>> print(pipeline.predict(np.random.normal(size=(10, 1))))  # predict rate from new data
+
+    >>> # 5-fold cross-validate the number of basis
+    >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])
+    >>> grid_cv = GridSearchCV(pipeline, param_grid, cv=5)
+    >>> grid_cv.fit(x[:, None], y)
+    >>> print("Cross-validated number of basis:", grid_cv.best_params_)
     """
 
     def __init__(self, basis: Basis):
@@ -279,7 +311,7 @@ class TransformerBasis:
     def __sklearn_clone__(self) -> TransformerBasis:
         """
         Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
-        By default scikit-learn tries to clone the object by calling __init__ using the output of get_params,
+        By default, scikit-learn tries to clone the object by calling __init__ using the output of get_params,
         which fails in our case.
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
@@ -295,39 +327,18 @@ class TransformerBasis:
 
         Example
         -------
-        pipeline = Pipeline(
-            [
-                ("transformerbasis", basis.TransformerBasis(basis.MSplineBasis(10))),
-                ("glm", nmo.glm.GLM()),
-            ]
-        )
-        # setting parameters of _basis is allowed
-        param_grid = dict(
-            transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
-        )
+        >>> from nemos.basis import BSplineBasis, MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer_basis = TransformerBasis(basis=basis)
 
-        # setting _basis directly is allowed
-        param_grid = dict(
-            transformerbasis___basis=(
-                nmo.basis.RaisedCosineBasisLinear(10),
-                nmo.basis.RaisedCosineBasisLog(10),
-                nmo.basis.MSplineBasis(10),
-            )
-        )
+        >>> # setting parameters of _basis is allowed
+        >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
 
-        # mixing the two doesn't work
-        param_grid = dict(
-            transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
-            transformerbasis___basis=(
-                nmo.basis.RaisedCosineBasisLinear(10),
-                nmo.basis.RaisedCosineBasisLog(10),
-                nmo.basis.MSplineBasis(10),
-            )
-        )
+        >>> # setting _basis directly is allowed
+        >>> print(transformer_basis.set_params(_basis=BSplineBasis(10))._basis)
 
-        gridsearch = GridSearchCV(
-            pipeline, param_grid=param_grid, cv=5, scoring=pseudo_r2, n_jobs=4
-        )
+        >>> # mixing is not allowed, this will raise an exception
+        >>> transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
 
         """
         new_basis = parameters.pop("_basis", None)
