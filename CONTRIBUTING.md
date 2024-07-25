@@ -66,15 +66,15 @@ your own branch, run the following from within your `nemos` directory:
 > changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release) :D
 
 ```bash
-# switch to the development branch
+# switch to the development branch on your local copy
 git checkout development
-# update your development branch
+# update your local copy from your fork
 git pull origin development
-# sync with upstream development
+# sync your local copy with upstream development
 git pull upstream development
 # update your fork's development branch with any changs from upstream
 git push origin development
-# create and switch to a new branch
+# create and switch to a new branch, where you'll work on your new feature
 git checkout -b my_feature_branch
 ```
 
