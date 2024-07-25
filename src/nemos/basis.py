@@ -1767,7 +1767,6 @@ class RaisedCosineBasisLinear(Basis):
         # must be rescaled to 0 and 1.
         self._rescale_samples = True
 
-
     @property
     def width(self):
         """Return width of the raised cosine."""
