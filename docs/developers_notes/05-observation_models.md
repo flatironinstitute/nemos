@@ -29,18 +29,6 @@ For subclasses derived from `Observations` to function correctly, they must impl
 - **pseudo_r2**: Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Cohen at al. 2003[^2]. 
 - **check_inverse_link_function**: Check that the link function is a auto-differentiable, vectorized function form $\mathbb{R} \longrightarrow \mathbb{R}$.
 
-
-## Concrete classes
-
-### `PoissonObservations`
-
-The `PoissonObservations` is designed for modeling observed spike counts based on a Poisson distribution with a given rate.
-
-### `GammaObservations`
-
-The `GammaObservations`  is designed for modeling continuous calcium/voltage traces based on a Gamma distribution with a given rate.
-
-
 ## Contributor Guidelines 
 
 To implement an observation model class you
