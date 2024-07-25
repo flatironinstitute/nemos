@@ -1,8 +1,5 @@
 """Utility functions for data pre-processing."""
 
-# required to get ArrayLike to render correctly, unnecessary as of python 3.10
-from __future__ import annotations
-
 import warnings
 from typing import Any, Callable, List, Literal, Union
 

@@ -53,17 +53,17 @@ Model intercept: [-0.0010547]
 During initialization, the `GLM` class accepts the following optional input arguments,
 
 1. `model.observation_model`: The statistical model for the observed variable. The available option so far are `nemos.observation_models.PoissonObservation` and  `nemos.observation_models.GammaObservations`, which are the most common choices for modeling spike counts and calcium imaging traces respectively.
-2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`.
+2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`. This parameter can be provided either as a string ("unregularized", "ridge", "lasso", or "group_lasso") or as an instance of `nemos.regularizer.Regularizer`.
 
-For more information on how to change default arguments, see the API guide for [`observation_models`](../reference/nemos/observation_models/) and
-[`regularizer`](../reference/nemos/regularizer/).
+For more information on how to change default arguments, see the API guide for [`observation_models`](reference/nemos/observation_models.md) and
+[`regularizer`](reference/nemos/regularizer.md).
 
 ```python
 import nemos as nmo
 
 # initialize a Gamma GLM with Ridge regularization
 model = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Ridge(), 
+    regularizer="ridge", 
     observation_model=nmo.observation_models.GammaObservations()
 )
 ```
@@ -80,7 +80,7 @@ as restricting your time series to specific epochs (sleep/wake, context A vs. co
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
 others. All these operations can be easily concatenated for a quick and easy data pre-processing.
 
-In NeMoS`, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
+In NeMoS, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
 also be a `pynapple` time series.
 
 A canonical example of this behavior is the `predict` method of `GLM`.
@@ -166,7 +166,7 @@ from sklearn.model_selection import GridSearchCV
 # ...Assume X and counts are available or generated as shown above
 
 # model definition
-model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge())
+model = nmo.glm.GLM(regularizer="ridge")
 
 # fit a 5-fold cross-validation scheme for comparing two different
 # regularizer strengths:

@@ -11,33 +11,6 @@ from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce
 
 
-def warn_invalid_entry(*pytree: Any):
-    """
-    Warns if any entry in the provided pytrees contains NaN or Infinite (Inf) values.
-
-    Parameters
-    ----------
-    *pytree :
-        Variable number of pytrees to check for invalid entries. A pytree is a nested structure of lists, tuples,
-        dictionaries, or other containers, with leaves that are arrays.
-
-    """
-    any_infs = pytree_map_and_reduce(
-        jnp.any, any, jax.tree_util.tree_map(jnp.isinf, pytree)
-    )
-    any_nans = pytree_map_and_reduce(
-        jnp.any, any, jax.tree_util.tree_map(jnp.isnan, pytree)
-    )
-    if any_infs and any_nans:
-        warnings.warn(
-            message="The provided trees contain Infs and Nans!", category=UserWarning
-        )
-    elif any_infs:
-        warnings.warn(message="The provided trees contain Infs!", category=UserWarning)
-    elif any_nans:
-        warnings.warn(message="The provided trees contain Nans!", category=UserWarning)
-
-
 def error_invalid_entry(*pytree: Any):
     """
     Raise an error if any entry in the provided pytrees contains NaN or Infinite (Inf) values.
@@ -303,3 +276,33 @@ def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
     """
     if jax.tree_util.tree_structure(tree_1) != jax.tree_util.tree_structure(tree_2):
         raise TypeError(err_message)
+
+
+def check_fraction_valid_samples(*tree: Any, err_msg: str, warn_msg: str) -> None:
+    """
+    Check the fraction of entries that are not infinite or NaN.
+
+    Parameters
+    ----------
+    *tree :
+        Trees containing arrays with the same sample axis.
+    err_msg :
+        The exception message.
+    warn_msg :
+        The warning message.
+
+    Raises
+    ------
+    ValueError
+        If all the samples contain invalid entries (either NaN or Inf).
+
+    Warns
+    -----
+    UserWarning
+        If more than 90% of the sample points contain NaNs or Infs.
+    """
+    valid = get_valid_multitree(tree)
+    if all(~valid):
+        raise ValueError(err_msg)
+    elif valid.mean() <= 0.1:
+        warnings.warn(warn_msg, UserWarning)

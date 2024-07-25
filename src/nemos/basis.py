@@ -1,11 +1,11 @@
 """Bases classes."""
 
-# required to get ArrayLike to render correctly, unnecessary as of python 3.10
+# required to get ArrayLike to render correctly
 from __future__ import annotations
 
 import abc
 import copy
-import warnings
+from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -18,6 +18,7 @@ from .base_class import Base
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
+from .validation import check_fraction_valid_samples
 
 FeatureMatrix = Union[NDArray, TsdFrame]
 
@@ -53,6 +54,7 @@ def check_transform_input(func: Callable) -> Callable:
 
 
 def check_one_dimensional(func: Callable) -> Callable:
+    @wraps(func)
     def wrapper(self: Basis, *xi: ArrayLike, **kwargs):
         if any(x.ndim != 1 for x in xi):
             raise ValueError("Input sample must be one dimensional!")
@@ -61,15 +63,52 @@ def check_one_dimensional(func: Callable) -> Callable:
     return wrapper
 
 
-def min_max_rescale_samples(sample_pts: NDArray) -> NDArray:
-    """Rescale samples to [0,1]."""
-    if np.any(sample_pts < 0) or np.any(sample_pts > 1):
-        sample_pts -= np.min(sample_pts)
-        sample_pts /= np.max(sample_pts)
-        warnings.warn(
-            "Rescaling sample points for RaisedCosine basis to [0,1]!", UserWarning
-        )
-    return sample_pts
+def min_max_rescale_samples(
+    sample_pts: NDArray,
+    bounds: Optional[Tuple[float, float]] = None,
+) -> Tuple[NDArray, float]:
+    """Rescale samples to [0,1].
+
+    Parameters
+    ----------
+    sample_pts:
+        The original samples.
+    bounds:
+        Sample bounds. `bounds[0]` abd `bounds[1]` are mapped to 0/1 respectively.
+        Default are `min(sample_pts), max(sample_pts)`.
+
+    Raises
+    ------
+    ValueError
+        If all the samples contain invalid entries (either NaN or Inf).
+        This may happen if `max(sample) < bounds[0]` or `min(sample) >  bounds[1]`.
+
+    Warns
+    -----
+    UserWarning
+        If more than 90% of the sample points contain NaNs or Infs.
+    """
+    sample_pts = sample_pts.astype(float)
+    vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
+    vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
+    if vmin and vmax and vmax <= vmin:
+        raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
+    sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
+    sample_pts -= vmin
+    # this passes if `samples_pts` contains a single value
+    if vmin != vmax:
+        scaling = vmax - vmin
+        sample_pts /= scaling
+    else:
+        scaling = 1.0
+
+    check_fraction_valid_samples(
+        sample_pts,
+        err_msg="All the samples lie outside the [vmin, vmax] range.",
+        warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
+    )
+
+    return sample_pts, scaling
 
 
 class TransformerBasis:
@@ -120,9 +159,9 @@ class TransformerBasis:
         Parameters
         ----------
         X :
-           The data to fit the basis functions to, shape (num_samples, num_input).
+            The data to fit the basis functions to, shape (num_samples, num_input).
         y : ignored
-           Not used, present for API consistency by convention.
+            Not used, present for API consistency by convention.
 
         Returns
         -------
@@ -391,7 +430,14 @@ class Basis(Base, abc.ABC):
         'conv' for convolutional operation.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    *args :
+        Only used in "conv" mode. Additional positional arguments that are passed to
+        `nemos.convolve.create_convolutional_predictor`
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
@@ -402,12 +448,22 @@ class Basis(Base, abc.ABC):
         n_basis_funcs: int,
         mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._check_n_basis_min()
         self._conv_kwargs = kwargs
+
+        if bounds is not None and len(bounds) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. Length {len(bounds)} provided instead!"
+            )
+
+        # convert to float and store
+        self._bounds = bounds if bounds is None else tuple(map(float, bounds))
+
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(
@@ -422,6 +478,8 @@ class Basis(Base, abc.ABC):
                 raise ValueError(
                     f"`window_size` must be a positive integer. {window_size} provided instead!"
                 )
+            if bounds is not None:
+                raise ValueError("`bounds` should only be set when `mode=='eval'`.")
         else:
             if kwargs:
                 raise ValueError(
@@ -432,6 +490,10 @@ class Basis(Base, abc.ABC):
         self._mode = mode
         self.kernel_ = None
         self._identifiability_constraints = False
+
+    @property
+    def bounds(self):
+        return self._bounds
 
     @property
     def mode(self):
@@ -641,8 +703,7 @@ class Basis(Base, abc.ABC):
         """
         pass
 
-    @staticmethod
-    def _get_samples(*n_samples: int) -> Generator[NDArray]:
+    def _get_samples(self, *n_samples: int) -> Generator[NDArray]:
         """Get equi-spaced samples for all the input dimensions.
 
         This will be used to evaluate the basis on a grid of
@@ -658,7 +719,13 @@ class Basis(Base, abc.ABC):
         :
             A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by `n_samples`.
         """
-        return (np.linspace(0, 1, n_samples[k]) for k in range(len(n_samples)))
+        # handling of defaults when evaluating on a grid
+        # (i.e. when we cannot use max and min of samples)
+        if self.bounds is None:
+            mn, mx = 0, 1
+        else:
+            mn, mx = self.bounds
+        return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
 
     @support_pynapple(conv_type="numpy")
     def _check_transform_input(
@@ -685,7 +752,7 @@ class Basis(Base, abc.ABC):
             # make sure array is at least 1d (so that we succeed when only
             # passed a scalar)
             xi = tuple(np.atleast_1d(np.asarray(x, dtype=float)) for x in xi)
-        except TypeError:
+        except (TypeError, ValueError):
             raise TypeError("Input samples must be array-like of floats!")
 
         # check for non-empty samples
@@ -1122,7 +1189,11 @@ class SplineBasis(Basis, abc.ABC):
         Spline order.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
@@ -1139,10 +1210,17 @@ class SplineBasis(Basis, abc.ABC):
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         self.order = order
-        super().__init__(n_basis_funcs, mode=mode, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            mode=mode,
+            window_size=window_size,
+            bounds=bounds,
+            **kwargs,
+        )
         self._n_input_dimensionality = 1
         if self.order < 1:
             raise ValueError("Spline order must be positive!")
@@ -1182,21 +1260,11 @@ class SplineBasis(Basis, abc.ABC):
         if is_cyclic:
             num_interior_knots += self.order - 1
 
-        assert 0 <= perc_low <= 1, "Specify `perc_low` as a float between 0 and 1."
-        assert 0 <= perc_high <= 1, "Specify `perc_high` as a float between 0 and 1."
-        assert perc_low < perc_high, "perc_low must be less than perc_high."
-
-        # clip to avoid numerical errors in case of percentile numerical precision close to 0 and 1
-        # Spline basis have support on the semi-open [a, b)  interval, we add a small epsilon
-        # to mx so that the so that basis_element(max(samples)) != 0
-        mn = np.nanpercentile(sample_pts, np.clip(perc_low * 100, 0, 100))
-        mx = np.nanpercentile(sample_pts, np.clip(perc_high * 100, 0, 100)) + 10**-8
-
         knot_locs = np.concatenate(
             (
-                mn * np.ones(self.order - 1),
-                np.linspace(mn, mx, num_interior_knots + 2),
-                mx * np.ones(self.order - 1),
+                np.zeros(self.order - 1),
+                np.linspace(0, (1 + 10**-8), num_interior_knots + 2),
+                np.full(self.order - 1, 1 + 10**-8),
             )
         )
         return knot_locs
@@ -1219,7 +1287,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """
+    r"""
     M-spline[$^1$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
@@ -1246,6 +1314,10 @@ class MSplineBasis(SplineBasis):
         derivatives at each interior knot, resulting in smoother basis functions.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
     **kwargs:
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1264,6 +1336,11 @@ class MSplineBasis(SplineBasis):
     ----------
     [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
+
+    Notes
+    -----
+    MSplines must integrate to 1 over their domain. Therefore, if the domain (x-axis) of an MSpline
+    basis is dilated by a factor of $\alpha$, the co-domain (y-axis) values will shrink by a factor of $1/\alpha$.
     """
 
     def __init__(
@@ -1272,6 +1349,7 @@ class MSplineBasis(SplineBasis):
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1279,6 +1357,7 @@ class MSplineBasis(SplineBasis):
             mode=mode,
             order=order,
             window_size=window_size,
+            bounds=bounds,
             **kwargs,
         )
 
@@ -1308,6 +1387,7 @@ class MSplineBasis(SplineBasis):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
+        sample_pts, scaling = min_max_rescale_samples(sample_pts, self.bounds)
         # add knots if not passed
         knot_locs = self._generate_knots(
             sample_pts, perc_low=0.0, perc_high=1.0, is_cyclic=False
@@ -1320,6 +1400,8 @@ class MSplineBasis(SplineBasis):
             ],
             axis=1,
         )
+        # re-normalize so that it integrates to 1 over the range.
+        X /= scaling
         if self.identifiability_constraints:
             X = self._apply_identifiability_constraints(X)
         return X
@@ -1385,7 +1467,11 @@ class BSplineBasis(SplineBasis):
         The higher this number, the smoother the basis representation will be.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
@@ -1408,6 +1494,7 @@ class BSplineBasis(SplineBasis):
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1415,6 +1502,7 @@ class BSplineBasis(SplineBasis):
             mode=mode,
             order=order,
             window_size=window_size,
+            bounds=bounds,
             **kwargs,
         )
 
@@ -1433,7 +1521,7 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         basis_funcs :
-            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
+            The basis function evaluated at the samples, shape (n_samples, n_basis_funcs).
 
         Raises
         ------
@@ -1445,12 +1533,14 @@ class BSplineBasis(SplineBasis):
         The evaluation is performed by looping over each element and using `splev`
         from SciPy to compute the basis values.
         """
+        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
         # add knots
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0)
 
         basis_eval = bspline(
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
+
         if self.identifiability_constraints:
             basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
@@ -1496,7 +1586,11 @@ class CyclicBSplineBasis(SplineBasis):
         The higher this number, the smoother the basis representation will be.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
@@ -1514,6 +1608,7 @@ class CyclicBSplineBasis(SplineBasis):
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1521,6 +1616,7 @@ class CyclicBSplineBasis(SplineBasis):
             mode=mode,
             order=order,
             window_size=window_size,
+            bounds=bounds,
             **kwargs,
         )
         if self.order < 2:
@@ -1532,7 +1628,10 @@ class CyclicBSplineBasis(SplineBasis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+    ) -> FeatureMatrix:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
         Parameters
@@ -1552,6 +1651,7 @@ class CyclicBSplineBasis(SplineBasis):
         SciPy to compute the basis values.
 
         """
+        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
         knot_locs = self._generate_knots(sample_pts, 0.0, 1.0, is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -1570,6 +1670,7 @@ class CyclicBSplineBasis(SplineBasis):
                 knot_locs,
             )
         )
+
         ind = sample_pts > xc
 
         basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
@@ -1583,6 +1684,7 @@ class CyclicBSplineBasis(SplineBasis):
         sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
         if self.identifiability_constraints:
             basis_eval = self._apply_identifiability_constraints(basis_eval)
+
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1626,7 +1728,11 @@ class RaisedCosineBasisLinear(Basis):
         Width of the raised cosine. By default, it's set to 2.0.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
@@ -1644,11 +1750,23 @@ class RaisedCosineBasisLinear(Basis):
         mode="eval",
         width: float = 2.0,
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(n_basis_funcs, mode=mode, window_size=window_size, **kwargs)
+        super().__init__(
+            n_basis_funcs,
+            mode=mode,
+            window_size=window_size,
+            bounds=bounds,
+            **kwargs,
+        )
         self._n_input_dimensionality = 1
         self.width = width
+        # if linear raised cosine are initialized
+        # this flag is always true, the samples
+        # must be rescaled to 0 and 1.
+        self._rescale_samples = True
+
 
     @property
     def width(self):
@@ -1686,7 +1804,10 @@ class RaisedCosineBasisLinear(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike, rescale_samples=True) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+    ) -> FeatureMatrix:
         """Generate basis functions with given samples.
 
         Parameters
@@ -1694,18 +1815,13 @@ class RaisedCosineBasisLinear(Basis):
         sample_pts :
             Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
 
-        Returns
-        -------
-        basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs).
-
         Raises
         ------
         ValueError
             If the sample provided do not lie in [0,1].
 
         """
-        if rescale_samples:
+        if self._rescale_samples:
             # note that sample points is converted to NDArray
             # with the decorator.
             # copy is necessary otherwise:
@@ -1713,7 +1829,7 @@ class RaisedCosineBasisLinear(Basis):
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
             # additive_basis(*([x] * 2)) would modify both inputs
-            sample_pts = min_max_rescale_samples(np.copy(sample_pts))
+            sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), self.bounds)
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
@@ -1806,7 +1922,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         decays to 0.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
@@ -1826,6 +1946,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1833,8 +1954,14 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             mode=mode,
             width=width,
             window_size=window_size,
+            bounds=bounds,
             **kwargs,
         )
+        # overwrite the flag for scaling the samples to [0,1] in the super.__call__(...).
+        # The samples are scaled appropriately in the self._transform_samples which scales
+        # and applies the log-stretch, no additional transform is needed.
+        self._rescale_samples = False
+
         self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
             self._time_scaling = 50.0
@@ -1854,7 +1981,10 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
                 f"Only strictly positive time_scaling are allowed, {time_scaling} provided instead."
             )
 
-    def _transform_samples(self, sample_pts: ArrayLike) -> NDArray:
+    def _transform_samples(
+        self,
+        sample_pts: ArrayLike,
+    ) -> NDArray:
         """
         Map the sample domain to log-space.
 
@@ -1871,7 +2001,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
-        sample_pts = min_max_rescale_samples(np.copy(sample_pts))
+        sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), self.bounds)
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -1905,13 +2035,16 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: ArrayLike,
+    ) -> FeatureMatrix:
         """Generate log-spaced raised cosine basis with given samples.
 
         Parameters
         ----------
         sample_pts :
-            Spacing for basis functions, holding elements on interval [0, 1].
+            Spacing for basis functions. Samples will be rescaled to the interval [0, 1].
 
         Returns
         -------
@@ -1923,9 +2056,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super().__call__(
-            self._transform_samples(sample_pts), rescale_samples=False
-        )
+        return super().__call__(self._transform_samples(sample_pts))
 
 
 class OrthExponentialBasis(Basis):
@@ -1942,7 +2073,11 @@ class OrthExponentialBasis(Basis):
         'conv' for convolutional operation.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    **kwargs:
+    bounds :
+        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bonuds, the basis will return NaN.
+    **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
     """
@@ -1953,12 +2088,14 @@ class OrthExponentialBasis(Basis):
         decay_rates: NDArray[np.floating],
         mode="eval",
         window_size: Optional[int] = None,
+        bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ):
         super().__init__(
             n_basis_funcs,
             mode=mode,
             window_size=window_size,
+            bounds=bounds,
             **kwargs,
         )
         self._decay_rates = np.asarray(decay_rates)
@@ -2004,27 +2141,6 @@ class OrthExponentialBasis(Basis):
                 "linearly dependent set of function for the basis."
             )
 
-    @staticmethod
-    def _check_sample_range(sample_pts: NDArray) -> None:
-        """
-        Check if the sample points are all positive.
-
-        Parameters
-        ----------
-        sample_pts
-            Sample points to check.
-
-        Raises
-        ------
-        ValueError
-            If any of the sample points are negative, as OrthExponentialBasis requires
-            positive samples.
-        """
-        if any(sample_pts < 0):
-            raise ValueError(
-                "OrthExponentialBasis requires positive samples. Negative values provided instead!"
-            )
-
     def _check_sample_size(self, *sample_pts: NDArray) -> None:
         """Check that the sample size is greater than the number of basis.
 
@@ -2051,7 +2167,10 @@ class OrthExponentialBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: NDArray) -> FeatureMatrix:
+    def __call__(
+        self,
+        sample_pts: NDArray,
+    ) -> FeatureMatrix:
         """Generate basis functions with given spacing.
 
         Parameters
@@ -2067,15 +2186,24 @@ class OrthExponentialBasis(Basis):
             orthogonalized, shape (n_samples, n_basis_funcs)
 
         """
-        self._check_sample_range(sample_pts)
         self._check_sample_size(sample_pts)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
+        valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
         # directly computing orth on the matrix of shape (n_basis_funcs,
         # n_pts)
-        basis_funcs = scipy.linalg.orth(
-            np.stack([np.exp(-lam * sample_pts) for lam in self._decay_rates], axis=1)
+        exp_decay_eval = np.stack(
+            [np.exp(-lam * sample_pts[valid_idx]) for lam in self._decay_rates], axis=1
         )
+        # count the linear independent components (could be lower than n_basis_funcs for num precision).
+        n_independent_component = np.linalg.matrix_rank(exp_decay_eval)
+        # initialize output to nan
+        basis_funcs = np.full(
+            shape=(sample_pts.shape[0], n_independent_component), fill_value=np.nan
+        )
+        # orthonormalize on valid points
+        basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
         if self.identifiability_constraints:
             basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs

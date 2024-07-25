@@ -1,5 +1,8 @@
 """Convolution utilities."""
 
+# required to get ArrayLike to render correctly
+from __future__ import annotations
+
 import re
 import warnings
 from functools import partial

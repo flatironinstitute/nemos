@@ -430,7 +430,7 @@ class PoissonObservations(Observations):
 
     def __init__(self, inverse_link_function=jnp.exp):
         super().__init__(inverse_link_function=inverse_link_function)
-        self.scale = 1
+        self.scale = 1.0
 
     def _negative_log_likelihood(
         self,
@@ -633,7 +633,7 @@ class PoissonObservations(Observations):
         dof_resid :
             The DOF of the residuals.
         """
-        return 1.0
+        return jnp.ones_like(jnp.atleast_1d(y[0]))
 
 
 class GammaObservations(Observations):
@@ -788,18 +788,16 @@ class GammaObservations(Observations):
 
         $$
         \begin{aligned}
-            D(y\_{tn}, \hat{y}\_{tn}) &=  2 \left[ -\log \frac{y\_{tn}}{\hat{y}\_{tn}} + \frac{y\_{tn} -
-            \hat{y}\_{tn}} \right]\\\
-            &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right)\right)
+            D(y\_{tn}, \hat{y}\_{tn}) &=  2 \left[ -\log \frac{ y\_{tn}}{\hat{y}\_{tn}} +  \frac{y\_{tn} -
+            \hat{y}\_{tn}}{\hat{y}\_{tn}}\right]\\\
+            &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right) \right)
         \end{aligned}
         $$
 
         where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
         log-likelihood. Lower values of deviance indicate a better fit.
         """
-        y_mu = jnp.clip(
-            neural_activity / predicted_rate, min=jnp.finfo(predicted_rate.dtype).eps
-        )
+        y_mu = jnp.clip(neural_activity / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (
             -jnp.log(y_mu) + (neural_activity - predicted_rate) / predicted_rate
         )
@@ -816,7 +814,7 @@ class GammaObservations(Observations):
 
         For $y \sim \Gamma$ the scale is equal to,
         $$
-        \Phi = frac{\text{Var(y)}}{V(\mu)}
+        \Phi = \frac{\text{Var(y)}}{V(\mu)}
         $$
         with $V(\mu) = \mu^2$.
 

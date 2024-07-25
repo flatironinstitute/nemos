@@ -16,30 +16,60 @@ import matplotlib.pylab as plt
 import numpy as np
 
 import nemos as nmo
+import pynapple as nap
 
 # Initialize hyperparameters
 order = 4
 n_basis = 10
 
 # Define the 1D basis function object
-mspline_basis = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, order=order)
+bspline = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order)
 
 # %%
-# Evaluating a Basis
-# ------------------------------------
-# The `Basis` object is callable, and can be evaluated as a function. For `SplineBasis`, the domain is defined by
-# the samples that we input to the `__call__` method. This results in an equi-spaced set of knots, which spans
-# the range from the smallest to the largest sample. These knots are then used to construct a uniformly spaced basis.
+# ## Evaluating a Basis
+#
+# The `Basis` object is callable, and can be evaluated as a function. By default, the support of the basis
+# is defined by the samples that we input to the `__call__` method, and covers from the smallest to the largest value.
 
-# Generate an array of sample points
-samples = np.random.uniform(0, 10, size=1000)
+# Generate a time series of sample points
+samples = nap.Tsd(t=np.arange(1001), d=np.linspace(0, 1,1001))
 
 # Evaluate the basis at the sample points
-eval_basis = mspline_basis(samples)
+eval_basis = bspline(samples)
 
 # Output information about the evaluated basis
-print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "
+print(f"Evaluated B-spline of order {order} with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples.")
+
+plt.figure()
+plt.title("B-spline basis")
+plt.plot(eval_basis)
+
+# %%
+# ## Setting the basis support
+# Sometimes, it is useful to restrict the basis to a fixed range. This can help manage outliers or ensure that
+# your basis covers the same range across multiple experimental sessions.
+# You can specify a range for the support of your basis by setting the `bounds`
+# parameter at initialization. Evaluating the basis at any sample outside the bounds will result in a NaN.
+
+bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
+
+print("Evaluated basis:")
+# 0.5  is within the support, 0.1 is outside the support
+print(np.round(bspline_range([0.5, 0.1]), 3))
+
+
+# %%
+# Let's compare the default behavior of basis (estimating the range from the samples) with
+# the fixed range basis.
+
+fig, axs = plt.subplots(2,1, sharex=True)
+plt.suptitle("B-spline basis ")
+axs[0].plot(bspline(samples), color="k")
+axs[0].set_title("default")
+axs[1].plot(bspline_range(samples), color="tomato")
+axs[1].set_title("bounds=[0.2, 0.8]")
+plt.tight_layout()
 
 # %%
 # ## Basis `mode`
@@ -52,8 +82,8 @@ print(f"Evaluated M-spline of order {order} with {eval_basis.shape[1]} "
 #
 # Let's see how this two modalities operate.
 
-eval_mode = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, mode="eval")
-conv_mode = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, mode="conv", window_size=100)
+eval_mode = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, mode="eval")
+conv_mode = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, mode="conv", window_size=100)
 
 # define an input
 angles = np.linspace(0, np.pi*4, 201)
@@ -106,11 +136,11 @@ plt.tight_layout()
 
 # Call evaluate on grid on 100 sample points to generate samples and evaluate the basis at those samples
 n_samples = 100
-equispaced_samples, eval_basis = mspline_basis.evaluate_on_grid(n_samples)
+equispaced_samples, eval_basis = bspline.evaluate_on_grid(n_samples)
 
 # Plot each basis element
 plt.figure()
-plt.title(f"M-spline basis with {eval_basis.shape[1]} elements\nevaluated at {eval_basis.shape[0]} sample points")
+plt.title(f"B-spline basis with {eval_basis.shape[1]} elements\nevaluated at {eval_basis.shape[0]} sample points")
 plt.plot(equispaced_samples, eval_basis)
 plt.show()
 
