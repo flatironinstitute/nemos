@@ -4,8 +4,8 @@
 
 
 !!! Example
-    The current package version includes a concrete class named `nemos.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the " GLM regression" category. 
-    As any `BaseRegressor`, it **must** implement the `fit`, `score`, `predict` methods.
+    The current package version includes a concrete class named `nemos.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the "GLM regression" category. 
+    As a `BaseRegressor`, it **must** implement the `fit`, `score`, `predict` and the other abstract methods of this class, see below.
 
 ### Abstract Methods
 
@@ -16,12 +16,14 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 3. `score`: Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. `simulate`: Simulate data based on the trained regression model.
 5. `update`: Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
-6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`.
+6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which prepares the solver.
 7. `_check_params`: Check the parameter structure.
 8. `_check_input_dimensionality`: Check the input dimensionality matches model expectation.
 9. `_check_input_and_params_consistency`: Checks that the input and the parameters are consistent.
 10. `_get_coef_and_intercept` and `_set_coef_and_intercept`: set and get model coefficient and intercept term.
 
+All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided 
+input and parameters conform with the model requirements.
 
 ### Attributes
 
