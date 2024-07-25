@@ -35,11 +35,10 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 ### Attributes
 
-- **`regularizer`**: Refers to the optimization regularizer - an object of the [`nemos.regularizer.regularizer`](../04-regularizer/#the-abstract-class-regularizer) type. This is used to add a penalization to the GLM negative log-likelihood loss or to define a proximal operator for the `ProximalGradient` solver.
 - **`observation_model`**: Property that represents the GLM observation model, which is an object of the [`nemos.observation_models.Observations`](../03-observation_models/#the-abstract-class-observations) type. This model determines the log-likelihood and the emission probability mechanism for the `GLM`.
 - **`coef_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
-- *`dof_resid_`*: The degrees of freedom of the model's residual. this quantity is used to estimate the scale parameter, see below, and compute frequentist confidence intervals.
+- **`dof_resid_`**: The degrees of freedom of the model's residual. this quantity is used to estimate the scale parameter, see below, and compute frequentist confidence intervals.
 - **`scale_`**: The scale parameter of the observation distribution, which togheter with the rate, uniquely specifies a disribution of the exponential family. Example: a 1D Gaussian is specified by the mean which is the rate, and the standard deviation, which is the scale.
 - **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
 
