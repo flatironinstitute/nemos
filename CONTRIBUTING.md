@@ -21,9 +21,9 @@ In order to contribute, you will need to do the following:
 2) Make sure that tests pass and code coverage is maintained
 3) Open a Pull Request
 
-The NeMoS package follows the [GitHub Flow](https://www.gitkraken.com/learn/git/best-practices/git-branch-strategy#github-flow-branch-strategy) workflow. In essence, this means no one is allowed to
-push to the `main` branch and all development happens in separate feature branches that are then merged into `main` once we have determined they are ready. When enough changes have accumulated, we 
-put out a new release, adding a new tag which increments the version number, and upload the new release to PyPI. 
+The NeMoS package follows the [GitHub Flow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) workflow. In essence, there are two primary branches, `main` and `development`, to which no one is allowed to
+push directly. All development happens in separate feature branches that are then merged into `development` once we have determined they are ready. When enough changes have accumulated, `developemnt` is merged into `main`, and a new release is 
+generated. This process includes adding a new tag to increment the version number and uploading the new release to PyPI. 
 
 
 #### Creating a development environment
