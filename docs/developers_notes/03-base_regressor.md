@@ -16,7 +16,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 3. `score`: Score the accuracy of model predictions using input data `X` against the actual observations `y`.
 4. `simulate`: Simulate data based on the trained regression model.
 5. `update`: Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
-6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which prepares the solver.
+6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
 7. `_check_params`: Check the parameter structure.
 8. `_check_input_dimensionality`: Check the input dimensionality matches model expectation.
 9. `_check_input_and_params_consistency`: Checks that the input and the parameters are consistent.
@@ -35,7 +35,7 @@ Public attributes are stored as properties:
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
 - `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees for a consistent API for all solver.
 
-!!! note "Sovlers"
+!!! note "Solvers"
     Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and `update` method with the appropriate input/output types).
     We choose to rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we will provide a number of custom solvers optimized for convex stochastic optimization.
 
