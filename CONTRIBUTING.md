@@ -182,7 +182,9 @@ We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions
 If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or 
 a new example may need to be added.
 
-All examples live within the `docs/` subfolder of `nemos`. 
+All examples live within the `docs/` subfolder of `nemos`.  These are written as `.py` files but are converted to 
+notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, see this [example 
+gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
 
 To see if changes you have made break the current documentation, you can build the documentation locally. 
 
