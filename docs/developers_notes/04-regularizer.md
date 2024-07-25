@@ -46,58 +46,6 @@ The `UnRegularized` class extends the base `Regularizer` class and is designed s
 - **`get_proximal_operator`**: Returns the identity operator.
 
 
-## The `Ridge` Class
-
-The `Ridge` class extends the `Regularizer` class to handle optimization problems with Ridge regularization. Ridge regularization adds a penalty to the loss function, proportional to the sum of squares of the model parameters, to prevent overfitting and stabilize the optimization.
-
-### Concrete Methods Specifics
-- **`penalized_loss`**: Returns the original loss penalized by a term proportional to the sum of squares of the coefficients (excluding the intercept).
-- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $$\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2  +\text{l2reg} \cdot ||y||_2^2,$$ where "l2reg" is the regularizer strength.
-
-### Example Usage
-
-```python
-import nemos as nmo
-
-ridge = nmo.regularizer.Ridge()
-model = nmo.glm.GLM(regularizer=ridge)
-```
-
-## `Lasso` Class
-
-The `Lasso` class enables optimization using the Lasso (L1 regularization) method with Proximal Gradient.
-
-### Concrete Methods Specifics
-- **`penalized_loss`**: Returns the original loss penalized by a term proportional to the sum of the absolute values of the coefficients (excluding the intercept).
-- **`get_proximal_operator`**: Returns the ridge proximal operator, solving $$\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2 + \text{l1reg} \cdot ||y||_1,$$ where "l1reg" is the regularizer strength.
-
-## `GroupLasso` Class
-
-The `GroupLasso` class enables optimization using the Group Lasso regularization method with Proximal Gradient. It induces sparsity on groups of features rather than individual features.
-
-### Attributes:
-- **`mask`**: A mask array indicating groups of features for regularization.
-
-### Concrete Methods Specifics
-- **`penalized_loss`**: Returns the original loss penalized by a term proportional to the sum of the L2 norms of the coefficient vectors for each group defined by the `mask`.
-- **`get_proximal_operator`**: Returns the ridge proximal operator, solving 
-$$\underset{y \ge 0}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2 + \text{lgreg} \cdot \sum_j ||y^{(j)}||_2,$$ where "lgreg" is the regularizer strength, and $j$ runs over the coefficient groups.
-
-
-### Example Usage
-```python
-import nemos as nmo
-import numpy as np
-
-group_mask = np.zeros((2, 10))  # assume 2 groups and 10 features
-group_mask[0, :4] = 1  # assume the first group consist of the first 4 coefficients
-group_mask[1, 4:] = 1  # assume the second group consist of the last 6 coefficients
-group_lasso = nmo.regularizer.GroupLasso(mask=group_mask)
-model = nmo.glm.GLM(regularizer=group_lasso)
-```
-
-
-
 ## Contributor Guidelines
 
 ### Implementing `Regularizer` Subclasses
@@ -107,4 +55,5 @@ When developing a functional (i.e., concrete) `Regularizer` class:
 - **Must** inherit from `Regularizer` or one of its derivatives.
 - **Must** implement the `penalized_loss` and `get_proximal_operator` methods.
 - **Must** define a default solver and a tuple of allowed solvers.
+- **May** require extra initialization parameters, like the `mask` argument of `GroupLasso`.
 
