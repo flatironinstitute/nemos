@@ -105,7 +105,7 @@ isort src
 flake8 --config=tox.ini src
 ```
 
-> [!INFO] [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
+> [!IMPORTANT] [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
 > reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your 
 > code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
 
