@@ -62,7 +62,7 @@ this make it easy to keep your `nemos` up-to-date with the canonical version by 
 As mentioned previously, each feature in `nemos` is worked on in a separate branch. This allows multiple people developing multiple features simultaneously, without interfering with each other's work. To create
 your own branch, run the following from within your `nemos` directory:
 
-> **_NOTE:_** Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of
+> [!NOTE]  Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of
 > changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release) :D
 
 ```bash
@@ -105,11 +105,11 @@ isort src
 flake8 --config=tox.ini src
 ```
 
-> **_INFO:_** [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
+> [!INFO] [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
 > reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your 
 > code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
 
-> **_NOTE:_** If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
+> [!NOTE] If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
 
 Now you are ready to make a Pull Request. You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo 
 after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/03-pr/index.html) for a tutorial).
