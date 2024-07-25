@@ -39,7 +39,7 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 - **`coef_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`dof_resid_`**: The degrees of freedom of the model's residual. this quantity is used to estimate the scale parameter, see below, and compute frequentist confidence intervals.
-- **`scale_`**: The scale parameter of the observation distribution, which togheter with the rate, uniquely specifies a disribution of the exponential family. Example: a 1D Gaussian is specified by the mean which is the rate, and the standard deviation, which is the scale.
+- **`scale_`**: The scale parameter of the observation distribution, which together with the rate, uniquely specifies a distribution of the exponential family. Example: a 1D Gaussian is specified by the mean which is the rate, and the standard deviation, which is the scale.
 - **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
 
 Additionally, the `GLM` class inherits the attributes of `BaseRegressor`, see the [relative note](03-base_regressor.md) for more information.
@@ -56,7 +56,7 @@ Additionally, the `GLM` class inherits the attributes of `BaseRegressor`, see th
 
 ### Private Methods
 
-Here we list the private method related to the model compuations:
+Here we list the private method related to the model computations:
 
 - **`_predict`**: Forecasts rates based on current model parameters and the inverse-link function of the `observation_models`.
 - **`_predict_and_compute_loss`**: Predicts the rate and calculates the mean Poisson negative log-likelihood, excluding normalization constants.
@@ -81,11 +81,13 @@ The `PopulationGLM` class is an extension of the `GLM`, designed to fit multiple
 
 ## Contributor Guidelines
 
-### Implementing GLM Subclasses
+### Implementing a `BaseRegressor` Subclasses
 
 When crafting a functional (i.e., concrete) GLM class:
 
-- **Must** inherit from `BaseRegressor` or one of its derivatives.
-- **Must** realize all abstract methods.
-- **May** embed additional parameter and input checks if required by the specific GLM subclass.
-- **May** override some of the computations if needed by the model specifications.
+- You **must** inherit from or one of its derivatives.
+- If you inherit directly from  `BaseRegressor`, you **must** implement all the abstract methods, see the [`BaseRegressor` page](03-base_regressor.md)  for more details.
+- If you inherit `GLM` or any of the other concrete classes directly, there won't be any abstract methods. 
+- You **may** embed additional parameter and input checks if required by the specific GLM subclass.
+- You **may** override some of the computations if needed by the model specifications.
+
