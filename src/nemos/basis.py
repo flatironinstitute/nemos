@@ -258,6 +258,7 @@ class TransformerBasis:
     def __setstate__(self, state):
         """
         Define how to populate the object's state when unpickling.
+
         Not that during unpickling a new object is created without calling __init__.
         Needed to avoid infinite recursion in __getattr__ when unpickling.
 
@@ -284,6 +285,7 @@ class TransformerBasis:
     def __setattr__(self, name: str, value) -> None:
         """
         Allow setting _basis or the attributes of _basis with a convenient dot assignment syntax.
+
         Setting any other attribute is not allowed.
 
         Example
@@ -311,6 +313,7 @@ class TransformerBasis:
     def __sklearn_clone__(self) -> TransformerBasis:
         """
         Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
+
         By default, scikit-learn tries to clone the object by calling __init__ using the output of get_params,
         which fails in our case.
 
@@ -322,6 +325,8 @@ class TransformerBasis:
 
     def set_params(self, **parameters) -> TransformerBasis:
         """
+        Set TransformerBasis parameters.
+
         When used with, sklearn.model_selection, either set the _basis attribute directly,
         or set the parameters of the underlying Basis, but doing both at the same time is not allowed.
 
@@ -354,15 +359,11 @@ class TransformerBasis:
         return self
 
     def get_params(self, deep: bool = True) -> dict:
-        """
-        Extend the dict of parameters from the underlying Basis with _basis.
-        """
+        """Extend the dict of parameters from the underlying Basis with _basis."""
         return {"_basis": self._basis, **self._basis.get_params(deep)}
 
     def __dir__(self) -> list[str]:
-        """
-        Extend the list of properties of methods with the ones from the underlying Basis.
-        """
+        """Extend the list of properties of methods with the ones from the underlying Basis."""
         return super().__dir__() + self._basis.__dir__()
 
     def __add__(self, other: TransformerBasis) -> TransformerBasis:
@@ -400,7 +401,7 @@ class TransformerBasis:
     def __pow__(self, exponent: int) -> TransformerBasis:
         """Exponentiation of a TransformerBasis object.
 
-        Define the power of a basis by repeatedly applying the method __multiply__.
+        Define the power of a basis by repeatedly applying the method __mul__.
         The exponent must be a positive integer.
 
         Parameters
@@ -963,9 +964,7 @@ class Basis(Base, abc.ABC):
         return result
 
     def to_transformer(self) -> TransformerBasis:
-        """
-        Turn the Basis into a TransformerBasis for use with scikit-learn.
-        """
+        """Turn the Basis into a TransformerBasis for use with scikit-learn."""
         return TransformerBasis(copy.deepcopy(self))
 
 
