@@ -119,9 +119,10 @@ class TransformerBasis:
     transformations. It supports fitting to data (calculating any necessary parameters
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
+
     This could be extremely useful in combination with scikit-learn pipelining and
     cross-validation, enabling the cross-validation of the basis type and parameters,
-     for example `n_basis_funcs`. See the example section below.
+    for example `n_basis_funcs`. See the example section below.
 
     Parameters
     ----------
@@ -151,6 +152,7 @@ class TransformerBasis:
     >>> pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
     >>> print(pipeline.predict(np.random.normal(size=(10, 1))))  # predict rate from new data
 
+    >>> # TransformerBasis parameter can be cross-validated.
     >>> # 5-fold cross-validate the number of basis
     >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])
     >>> grid_cv = GridSearchCV(pipeline, param_grid, cv=5)
