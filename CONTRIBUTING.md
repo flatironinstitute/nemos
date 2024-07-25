@@ -45,7 +45,7 @@ cd nemos
 pip install -e .[dev]
 ```
 
-> **_NOTE:_**  In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that 
+> [!NOTE]  In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that 
 > provides guidance on how to create and activate a virtual environment.
 
 3) Add the upstream branch:
