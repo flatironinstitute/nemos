@@ -14,7 +14,7 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike, NDArray
 
-from . import utils, validation
+from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
@@ -218,18 +218,20 @@ class BaseRegressor(Base, abc.ABC):
     @solver_kwargs.setter
     def solver_kwargs(self, solver_kwargs: dict):
         """Setter for the solver_kwargs attribute."""
-        self._check_solver_kwargs(self.solver_name, solver_kwargs)
+        self._check_solver_kwargs(
+            self._get_solver_class(self.solver_name), solver_kwargs
+        )
         self._solver_kwargs = solver_kwargs
 
     @staticmethod
-    def _check_solver_kwargs(solver_name, solver_kwargs):
+    def _check_solver_kwargs(solver_class, solver_kwargs):
         """
         Check if provided solver keyword arguments are valid.
 
         Parameters
         ----------
-        solver_name :
-            Name of the solver.
+        solver_class :
+            Class of the solver.
         solver_kwargs :
             Additional keyword arguments for the solver.
 
@@ -238,11 +240,11 @@ class BaseRegressor(Base, abc.ABC):
         NameError
             If any of the solver keyword arguments are not valid.
         """
-        solver_args = inspect.getfullargspec(getattr(jaxopt, solver_name)).args
+        solver_args = inspect.getfullargspec(solver_class).args
         undefined_kwargs = set(solver_kwargs.keys()).difference(solver_args)
         if undefined_kwargs:
             raise NameError(
-                f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for jaxopt.{solver_name}!"
+                f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
     def instantiate_solver(self, *args) -> BaseRegressor:
@@ -253,10 +255,10 @@ class BaseRegressor(Base, abc.ABC):
         that initialize the solver state, update the model parameters, and run the optimization
         as attributes.
 
-        This method creates a solver instance from jaxopt library, tailored to the specific loss
-        function and regularization approach defined by the Regularizer instance. It also handles
-        the proximal operator if required for the optimization method. The returned functions are
-        directly usable in optimization loops, simplifying the syntax by pre-setting
+        This method creates a solver instance from nemos.solvers or the jaxopt library, tailored to
+        the specific loss function and regularization approach defined by the Regularizer instance.
+        It also handles the proximal operator if required for the optimization method. The returned
+        functions are directly usable in optimization loops, simplifying the syntax by pre-setting
         common arguments like regularization strength and other hyperparameters.
 
         Parameters
@@ -281,7 +283,7 @@ class BaseRegressor(Base, abc.ABC):
         # only use penalized loss if not using proximal gradient descent
         # In proximal method you must use the unpenalized loss independently
         # of what regularizer you are using.
-        if self.solver_name != "ProximalGradient":
+        if self.solver_name not in ("ProximalGradient", "ProxSVRG"):
             loss = self.regularizer.penalized_loss(
                 self._predict_and_compute_loss, self.regularizer_strength
             )
@@ -295,7 +297,7 @@ class BaseRegressor(Base, abc.ABC):
         utils.assert_is_callable(loss, "loss")
 
         # some parsing to make sure solver gets instantiated properly
-        if self.solver_name == "ProximalGradient":
+        if self.solver_name in ("ProximalGradient", "ProxSVRG"):
             if "prox" in self.solver_kwargs:
                 raise ValueError(
                     "Proximal operator specification is not permitted. "
@@ -315,7 +317,12 @@ class BaseRegressor(Base, abc.ABC):
         ) = self._inspect_solver_kwargs(solver_kwargs)
 
         # instantiate the solver
-        solver = getattr(jaxopt, self.solver_name)(fun=loss, **solver_init_kwargs)
+        solver = self._get_solver_class(self.solver_name)(
+            fun=loss, **solver_init_kwargs
+        )
+
+        self._loss_fn = loss
+        self._solver = solver
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
@@ -327,10 +334,9 @@ class BaseRegressor(Base, abc.ABC):
                 params, state, *args, *run_args, **solver_update_kwargs, **run_kwargs
             )
 
-        def solver_init_state(params, state, *run_args, **run_kwargs) -> NamedTuple:
+        def solver_init_state(params, *run_args, **run_kwargs) -> NamedTuple:
             return solver.init_state(
                 params,
-                state,
                 *run_args,
                 **run_kwargs,
                 **solver_init_state_kwargs,
@@ -372,7 +378,7 @@ class BaseRegressor(Base, abc.ABC):
 
         if solver_kwargs:
             # instantiate a solver to then inspect the params of its various functions
-            solver = getattr(jaxopt, self.solver_name)
+            solver = self._get_solver_class(self.solver_name)
 
             for key, value in solver_kwargs.items():
                 if key in inspect.getfullargspec(solver.run).args:
@@ -540,3 +546,35 @@ class BaseRegressor(Base, abc.ABC):
     ) -> Union[Any, NamedTuple]:
         """Initialize the state of the solver for running fit and update."""
         pass
+
+    @staticmethod
+    def _get_solver_class(solver_name: str):
+        """
+        Find a solver class first looking in nemos.solvers, then in jaxopt.
+
+        Parameters
+        ----------
+        solver_name : str
+            Name of the solver class to load.
+
+        Returns
+        -------
+        solver_class :
+            Solver class ready to be instantiated.
+
+        Raises
+        ------
+        AttributeError
+            If a solver class with that name is not found.
+        """
+        try:
+            solver_class = getattr(solvers, solver_name)
+        except AttributeError:
+            try:
+                solver_class = getattr(jaxopt, solver_name)
+            except AttributeError:
+                raise AttributeError(
+                    f"Could not find {solver_name} in nemos.solvers or jaxopt"
+                )
+
+        return solver_class
