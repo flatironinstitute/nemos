@@ -35,7 +35,7 @@ Public attributes are stored as properties:
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
 - `solver_init_state`, `solver_update`, `solver_run`: Read-only property with a partially evaluated `solver.init_state`, `solver.update` and, `solver.run` methods. The partial evaluation guarantees a consistent API for all solvers.
 
-When implementing a `BaseRegressor`, the only attributes you must interact directly with are the operates the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
+When implementing a BaseRegressor, the only attributes you must interact directly with are those that operate on the solver, i.e., `solver_init_state`, `solver_update`, and `solver_run`.
 Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in `fit`, and `self.solver_update` in `update`. 
 
 !!! note "Solvers"
