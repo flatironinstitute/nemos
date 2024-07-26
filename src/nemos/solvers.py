@@ -23,9 +23,6 @@ from .tree_utils import (
 # copying jax.random's annotation
 KeyArrayLike = ArrayLike
 
-# copying from .glm to avoid circular import
-# TODO might want to move these into a .typing module?
-ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
 class SVRGState(NamedTuple):
     iter_num: int
@@ -135,14 +132,8 @@ class ProxSVRG:
             Initialized optimizer state
         """
         df_xs = None
-        if kwargs.get("init_full_gradient", False):
-            X, y = args
-
-            # assert isinstance(X, ArrayLike)
-            # assert isinstance(y, ArrayLike)
-            #assert X.shape[0] == y.shape[0]
-
-            df_xs = self.loss_gradient(init_params, X, y)[0]
+        if init_full_gradient:
+            df_xs = self.loss_gradient(init_params, *args)
 
         state = SVRGState(
             iter_num=0,
@@ -499,9 +490,11 @@ class ProxSVRG:
             state : SVRGState
                 Updated state.
         """
-        prox_lambda, X, y = args
+        n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
+        if not len(n_points_per_arg) == 1:
+            raise ValueError("All arguments must have the same sized first dimension.")
+        N = n_points_per_arg.pop()
 
-        N = y.shape[0]  # number of data points x number of dimensions
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
         # m = N
 
