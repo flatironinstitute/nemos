@@ -3,6 +3,7 @@ import pytest
 
 from nemos.proximal_operator import _vmap_norm2_masked_2, prox_group_lasso, prox_lasso
 
+
 @pytest.mark.parametrize("prox_operator", [prox_group_lasso, prox_lasso])
 def test_prox_operator_returns_tuple(prox_operator, example_data_prox_operator):
     """Test whether the proximal operator returns a tuple."""

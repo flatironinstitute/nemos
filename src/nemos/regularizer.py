@@ -14,12 +14,9 @@ import jax.numpy as jnp
 import jaxopt
 from numpy.typing import NDArray
 
-
-from . import solvers, tree_utils, utils
+from . import tree_utils
 from .base_class import Base
-
-from .proximal_operator import prox_group_lasso, prox_lasso
-from .pytrees import FeaturePytree
+from .proximal_operator import prox_group_lasso
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
@@ -123,7 +120,6 @@ class UnRegularized(Regularizer):
         "ProximalGradient",
         "SVRG",
         "ProxSVRG",
-
     )
 
     _default_solver = "GradientDescent"
@@ -218,7 +214,6 @@ class Ridge(Regularizer):
             return loss(params, X, y) + self._penalization(params, regularizer_strength)
 
         return _penalized_loss
-
 
     def get_proximal_operator(
         self,

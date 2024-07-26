@@ -13,7 +13,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from sklearn.linear_model import Lasso, Ridge
 
 import nemos as nmo
 

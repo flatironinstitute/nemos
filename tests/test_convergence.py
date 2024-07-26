@@ -88,7 +88,7 @@ def test_lasso_convergence(solver_name):
     lasso GLM is the same.
     """
     # generate toy data
-    num_samples, num_features, num_groups = 1000, 5, 3
+    num_samples, num_features = 1000, 5
     X = np.random.normal(size=(num_samples, num_features))  # design matrix
     w = [0, 0.5, 1, 0, -0.5]  # define some weights
     y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
