@@ -194,7 +194,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]),
+            np.array([[0], [0], [1]]),
         ),
         ("GroupLasso", ProxSVRG, None),
         ("Ridge", SVRG, None),

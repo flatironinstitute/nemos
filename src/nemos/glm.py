@@ -1311,7 +1311,7 @@ class PopulationGLM(GLM):
             axis_2=1,
             err_message="Inconsistent number of neurons. "
             f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
-            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
+            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
         )
 
     @cast_to_jax
