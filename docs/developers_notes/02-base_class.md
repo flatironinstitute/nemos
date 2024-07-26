@@ -34,7 +34,7 @@ Abstract Class Base
 │   │
 │   ├─ Concrete Subclass PoissonObservations
 │   │
-│   ├─ Concrete Subclass GammaObservations *(not implemented yet)
+│   ├─ Concrete Subclass GammaObservations
 │   ... 
 │
 ...
