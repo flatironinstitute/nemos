@@ -279,12 +279,8 @@ class Lasso(Regularizer):
             l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
             # structure
-            if isinstance(Ws, (dict, FeaturePytree)):
-                struct = jax.tree_util.tree_structure(Ws)
-                l1reg = jax.tree_util.tree_unflatten(
-                    struct, [l1reg] * struct.num_leaves
-                )
-            return prox_lasso(Ws, l1reg, scaling=scaling), bs
+            l1reg = jax.tree_util.tree_map(lambda x: l1reg * jnp.ones_like(x), Ws)
+            return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
 
         return prox_op
 
