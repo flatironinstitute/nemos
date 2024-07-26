@@ -2,13 +2,10 @@
 
 import operator
 from functools import partial, reduce
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
-
-IndexType = Union[int, slice, NDArray, Tuple, Ellipsis, None]
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
@@ -146,7 +143,7 @@ def pytree_map_and_reduce(
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
 
 
-def tree_slice(data: Any, idx: IndexType):
+def tree_slice(data: Any, idx):
     """
     Apply an indexing operation to each array in a nested structure.
 
