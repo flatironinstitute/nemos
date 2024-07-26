@@ -2,13 +2,13 @@
 
 import operator
 from functools import partial, reduce
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-IndexType = Union[int, slice, NDArray, tuple[Any, ...], Ellipsis, None]
+IndexType = Union[int, slice, NDArray, Tuple, Ellipsis, None]
 
 
 def _get_not_inf(array: jnp.ndarray) -> jnp.ndarray:
