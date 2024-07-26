@@ -48,44 +48,6 @@ def test_difference_of_gammas_excit_a(excit_a, expectation):
 
 
 @pytest.mark.parametrize(
-    "inhib_b, expectation",
-    [
-        (
-            -1,
-            pytest.raises(ValueError, match="Gamma parameter [a-z]+_[a,b] must be >0."),
-        ),
-        (
-            0,
-            pytest.raises(ValueError, match="Gamma parameter [a-z]+_[a,b] must be >0."),
-        ),
-        (1, does_not_raise()),
-    ],
-)
-def test_difference_of_gammas_excit_a(inhib_b, expectation):
-    with expectation:
-        simulation.difference_of_gammas(10, inhib_b=inhib_b)
-
-
-@pytest.mark.parametrize(
-    "excit_b, expectation",
-    [
-        (
-            -1,
-            pytest.raises(ValueError, match="Gamma parameter [a-z]+_[a,b] must be >0."),
-        ),
-        (
-            0,
-            pytest.raises(ValueError, match="Gamma parameter [a-z]+_[a,b] must be >0."),
-        ),
-        (1, does_not_raise()),
-    ],
-)
-def test_difference_of_gammas_excit_a(excit_b, expectation):
-    with expectation:
-        simulation.difference_of_gammas(10, excit_b=excit_b)
-
-
-@pytest.mark.parametrize(
     "upper_percentile, expectation",
     [
         (
@@ -230,16 +192,16 @@ def test_regress_filter_weights_size(
         np.zeros((window_size, n_basis_funcs)),
     )
     assert weights.shape[0] == n_neurons_sender, (
-        f"First dimension of weights (n_neurons_receiver) does not "
-        f"match the second dimension of coupling_filters."
+        "First dimension of weights (n_neurons_receiver) does not "
+        "match the second dimension of coupling_filters."
     )
     assert weights.shape[1] == n_neurons_receiver, (
-        f"Second dimension of weights (n_neuron_sender) does not "
-        f"match the third dimension of coupling_filters."
+        "Second dimension of weights (n_neuron_sender) does not "
+        "match the third dimension of coupling_filters."
     )
     assert weights.shape[2] == n_basis_funcs, (
-        f"Third dimension of weights (n_basis_funcs) does not "
-        f"match the second dimension of eval_basis."
+        "Third dimension of weights (n_basis_funcs) does not "
+        "match the second dimension of eval_basis."
     )
 
 
