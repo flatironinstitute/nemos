@@ -3,12 +3,16 @@ method with just penalized loss."""
 
 import jax
 import numpy as np
+import pytest
 from scipy.optimize import minimize
 
 import nemos as nmo
 
 
-def test_unregularized_convergence():
+@pytest.mark.parametrize(
+    "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
+)
+def test_unregularized_convergence(solver_names):
     """
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     unregularized GLM is the same.
@@ -30,18 +34,21 @@ def test_unregularized_convergence():
     y = np.random.poisson(rate)
 
     # instantiate and fit unregularized GLM with GradientDescent
-    model_GD = nmo.glm.GLM()
+    model_GD = nmo.glm.GLM(solver_name=solver_names[0])
     model_GD.fit(X, y)
 
     # instantiate and fit unregularized GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(solver_name="ProximalGradient")
+    model_PG = nmo.glm.GLM(solver_name=solver_names[1])
     model_PG.fit(X, y)
 
     # assert weights are the same
     assert np.allclose(np.round(model_GD.coef_, 2), np.round(model_PG.coef_, 2))
 
 
-def test_ridge_convergence():
+@pytest.mark.parametrize(
+    "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
+)
+def test_ridge_convergence(solver_names):
     """
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     ridge GLM is the same.
@@ -63,18 +70,19 @@ def test_ridge_convergence():
     y = np.random.poisson(rate)
 
     # instantiate and fit ridge GLM with GradientDescent
-    model_GD = nmo.glm.GLM(regularizer="Ridge")
+    model_GD = nmo.glm.GLM(regularizer="Ridge", solver_name=solver_names[0])
     model_GD.fit(X, y)
 
     # instantiate and fit ridge GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(regularizer="Ridge", solver_name="ProximalGradient")
+    model_PG = nmo.glm.GLM(regularizer="Ridge", solver_name=solver_names[1])
     model_PG.fit(X, y)
 
     # assert weights are the same
     assert np.allclose(np.round(model_GD.coef_, 2), np.round(model_PG.coef_, 2))
 
 
-def test_lasso_convergence():
+@pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+def test_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
     lasso GLM is the same.
@@ -86,7 +94,7 @@ def test_lasso_convergence():
     y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
 
     # instantiate and fit GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(regularizer="Lasso", solver_name="ProximalGradient")
+    model_PG = nmo.glm.GLM(regularizer="Lasso", solver_name=solver_name)
     model_PG.regularizer_strength = 0.1
     model_PG.fit(X, y)
 
@@ -110,7 +118,8 @@ def test_lasso_convergence():
     assert a.all()
 
 
-def test_group_lasso_convergence():
+@pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+def test_group_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
     group lasso GLM is the same.
@@ -127,7 +136,9 @@ def test_group_lasso_convergence():
     mask[2] = [0, 0, 1, 0, 1]  # Group 2 includes features 2 and 4
 
     # instantiate and fit GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(regularizer=nmo.regularizer.GroupLasso(mask=mask))
+    model_PG = nmo.glm.GLM(
+        regularizer=nmo.regularizer.GroupLasso(mask=mask), solver_name=solver_name
+    )
     model_PG.fit(X, y)
 
     # use the penalized loss function to solve optimization via Nelder-Mead

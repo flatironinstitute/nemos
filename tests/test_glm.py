@@ -1447,6 +1447,56 @@ class TestGLM:
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    def test_glm_fit_matches_sklearn_poisson(self, solver_name, poissonGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, _, true_params, firing_rate = poissonGLM_model_instantiation
+
+        model = nmo.glm.GLM(
+            regularizer=nmo.regularizer.UnRegularized(),
+            observation_model=nmo.observation_models.PoissonObservations(),
+            solver_name = solver_name,
+            solver_kwargs = {"tol": 10**-12}
+        )
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.fit(X, y)
+
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("GLM.fit estimate does not match sklearn!")
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    def test_glm_fit_matches_sklearn_gamma(self, solver_name, gammaGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, _, true_params, firing_rate = gammaGLM_model_instantiation
+
+        model = nmo.glm.GLM(
+            regularizer=nmo.regularizer.UnRegularized(),
+            observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jnp.exp),
+            solver_name=solver_name,
+            solver_kwargs = {"tol": 10**-12},
+        )
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.fit(X, y)
+
+        model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
+
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("GLM.fit estimate does not match sklearn!")
+
     @pytest.mark.parametrize(
         "reg, dof",
         [
@@ -1545,37 +1595,39 @@ class TestGLM:
 
         glm = glm_class(
             regularizer=regularizer_class(
-                solver_name = solver_name,
-                solver_kwargs = {
-                    "batch_size" : batch_size,
-                    "stepsize" : stepsize,
-                    "tol" : tol,
-                    "maxiter" : maxiter,
-                    "key" : key,
-                },
                 **regularizer_kwargs,
-            )
+            ),
+            solver_name = solver_name,
+            solver_kwargs = {
+                "batch_size" : batch_size,
+                "stepsize" : stepsize,
+                "tol" : tol,
+                "maxiter" : maxiter,
+                "key" : key,
+            },
         )
         glm2 = glm_class(
             regularizer=regularizer_class(
-                solver_name = solver_name,
-                solver_kwargs = {
-                    "batch_size" : batch_size,
-                    "stepsize" : stepsize,
-                    "tol" : tol,
-                    "maxiter" : maxiter,
-                    "key" : key,
-                },
                 **regularizer_kwargs,
-            )
+            ),
+            solver_name = solver_name,
+            solver_kwargs = {
+                "batch_size" : batch_size,
+                "stepsize" : stepsize,
+                "tol" : tol,
+                "maxiter" : maxiter,
+                "key" : key,
+            },
         )
         glm2.fit(X, y)
 
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_state(X, y, params)
+        glm.instantiate_solver()
+
         # NOTE these two are not the same because for example Ridge augments the loss
         #loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
-        loss_grad = jax.jit(glm.regularizer._solver.loss_gradient)
-
-        params, state = glm.initialize_solver(X, y)
+        loss_grad = jax.jit(glm._solver.loss_gradient)
 
         # copied from GLM.fit
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
@@ -1606,7 +1658,7 @@ class TestGLM:
                 break
 
 
-        assert iter_num == glm2.solver_state.iter_num
+        assert iter_num == glm2.solver_state_.iter_num
 
         assert pytree_map_and_reduce(
             lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
