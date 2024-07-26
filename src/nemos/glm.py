@@ -622,19 +622,6 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        # check if mask has been set is using group lasso
-        # if mask has not been set, use a single group as default
-        if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
-                warnings.warn(
-                    UserWarning(
-                        "Mask has not been set. Defaulting to a single group for all parameters. "
-                        "Please see the documentation on GroupLasso regularization for defining a "
-                        "mask."
-                    )
-                )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
-
         self.initialize_state(data, y, init_params)
 
         params, state = self.solver_run(init_params, data, y)
@@ -882,13 +869,27 @@ class GLM(BaseRegressor):
         NamedTuple
             The initialized solver state
         """
-        #  set up the solver init/run/update attrs
-        self.instantiate_solver()
-
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
+
+        # check if mask has been set is using group lasso
+        # if mask has not been set, use a single group as default
+        if isinstance(self.regularizer, GroupLasso):
+            if self.regularizer.mask is None:
+                warnings.warn(
+                    UserWarning(
+                        "Mask has not been set. Defaulting to a single group for all parameters. "
+                        "Please see the documentation on GroupLasso regularization for defining a "
+                        "mask."
+                    )
+                )
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        #  set up the solver init/run/update attrs
+        self.instantiate_solver()
+
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
 

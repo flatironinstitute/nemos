@@ -240,7 +240,7 @@ def test_svrg_glm_initialize_state(
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]),
+            np.array([[0], [0], [1]]),
         ),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),

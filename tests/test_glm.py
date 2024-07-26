@@ -1483,37 +1483,39 @@ class TestGLM:
 
         glm = glm_class(
             regularizer=regularizer_class(
-                solver_name=solver_name,
-                solver_kwargs={
-                    "batch_size" : batch_size,
-                    "stepsize" : stepsize,
-                    "tol" : tol,
-                    "maxiter" : maxiter,
-                    "key" : key,
-                },
                 **regularizer_kwargs,
-            )
+            ),
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
         )
         glm2 = glm_class(
             regularizer=regularizer_class(
-                solver_name=solver_name,
-                solver_kwargs={
-                    "batch_size" : batch_size,
-                    "stepsize" : stepsize,
-                    "tol" : tol,
-                    "maxiter" : maxiter,
-                    "key" : key,
-                },
                 **regularizer_kwargs,
-            )
+            ),
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
         )
         glm2.fit(X, y)
 
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_state(X, y, params)
+        glm.instantiate_solver()
+
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
-        loss_grad = jax.jit(glm.regularizer._solver.loss_gradient)
-
-        params, state = glm.initialize_solver(X, y)
+        loss_grad = jax.jit(glm._solver.loss_gradient)
 
         # copied from GLM.fit
         # grab data if needed (tree map won't function because param is never a FeaturePytree).
@@ -1543,7 +1545,7 @@ class TestGLM:
             if _error < tol:
                 break
 
-        assert iter_num == glm2.solver_state.iter_num
+        assert iter_num == glm2.solver_state_.iter_num
 
         assert pytree_map_and_reduce(
             lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
