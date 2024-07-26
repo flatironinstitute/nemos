@@ -16,7 +16,8 @@ from numpy.typing import NDArray
 
 from . import tree_utils
 from .base_class import Base
-from .proximal_operator import prox_group_lasso
+from .proximal_operator import prox_group_lasso, prox_lasso
+from .pytrees import FeaturePytree
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
@@ -118,6 +119,8 @@ class UnRegularized(Regularizer):
         "LBFGS",
         "NonlinearCG",
         "ProximalGradient",
+        "SVRG",
+        "ProxSVRG",
     )
 
     _default_solver = "GradientDescent"
@@ -163,6 +166,8 @@ class Ridge(Regularizer):
         "LBFGS",
         "NonlinearCG",
         "ProximalGradient",
+        "SVRG",
+        "ProxSVRG",
     )
 
     _default_solver = "GradientDescent"
@@ -240,7 +245,10 @@ class Lasso(Regularizer):
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
-    _allowed_solvers = ("ProximalGradient",)
+    _allowed_solvers = (
+        "ProximalGradient",
+        "ProxSVRG",
+    )
 
     _default_solver = "ProximalGradient"
 
@@ -267,8 +275,12 @@ class Lasso(Regularizer):
             l1reg /= bs.shape[0]
             # if Ws is a pytree, l1reg needs to be a pytree with the same
             # structure
-            l1reg = jax.tree_util.tree_map(lambda x: l1reg * jnp.ones_like(x), Ws)
-            return jaxopt.prox.prox_lasso(Ws, l1reg, scaling=scaling), bs
+            if isinstance(Ws, (dict, FeaturePytree)):
+                struct = jax.tree_util.tree_structure(Ws)
+                l1reg = jax.tree_util.tree_unflatten(
+                    struct, [l1reg] * struct.num_leaves
+                )
+            return prox_lasso(Ws, l1reg, scaling=scaling), bs
 
         return prox_op
 
@@ -349,7 +361,10 @@ class GroupLasso(Regularizer):
     >>> print(f"coeff: {model.coef_}")
     """
 
-    _allowed_solvers = ("ProximalGradient",)
+    _allowed_solvers = (
+        "ProximalGradient",
+        "ProxSVRG",
+    )
 
     _default_solver = "ProximalGradient"
 
