@@ -1,3 +1,4 @@
+import inspect
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -150,8 +151,9 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
     glm = nmo.glm.GLM(regularizer=regularizer_name, solver_name=solver_name)
     glm.instantiate_solver()
 
+    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
     assert glm.solver_name == solver_name
-    assert isinstance(glm._solver, solver_class)
+    assert isinstance(solver, solver_class)
 
 
 @pytest.mark.parametrize(
@@ -183,8 +185,9 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
     )
     glm.instantiate_solver()
 
-    assert glm._solver.stepsize == solver_kwargs["stepsize"]
-    assert glm._solver.maxiter == solver_kwargs["maxiter"]
+    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    assert solver.stepsize == solver_kwargs["stepsize"]
+    assert solver.maxiter == solver_kwargs["maxiter"]
 
 
 @pytest.mark.parametrize(
@@ -229,7 +232,9 @@ def test_svrg_glm_initialize_state(
     state = glm.initialize_state(X, y, init_params)
 
     assert state.xs == init_params
-    assert isinstance(glm._solver, solver_class)
+
+    for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
+        assert isinstance(inspect.getclosurevars(f).nonlocals["solver"], solver_class)
     assert isinstance(state, SVRGState)
 
 
@@ -273,9 +278,11 @@ def test_svrg_glm_update(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_state(X, y, init_params)  # , init_full_gradient=True)
 
+    loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun_))
+
     # initialize full gradient at the anchor point
     state = state._replace(
-        df_xs=glm._solver.loss_gradient(init_params, X, y),
+        df_xs=loss_gradient(init_params, X, y),
     )
 
     params, state = glm.update(init_params, state, X, y)
@@ -283,7 +290,6 @@ def test_svrg_glm_update(
     assert state.iter_num == 1
 
 
-# TODO fix GroupLasso
 @pytest.mark.parametrize(
     "regularizer_name, solver_name, mask",
     [
@@ -345,7 +351,8 @@ def test_svrg_glm_fit(
 
     glm.fit(X, y)
 
-    assert glm._solver.maxiter == maxiter
+    solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
+    assert solver.maxiter == maxiter
     assert glm.solver_state_.iter_num == maxiter
 
 

@@ -1515,7 +1515,7 @@ class TestGLM:
 
         # NOTE these two are not the same because for example Ridge augments the loss
         # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
-        loss_grad = jax.jit(glm._solver.loss_gradient)
+        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun_))
 
         # copied from GLM.fit
         # grab data if needed (tree map won't function because param is never a FeaturePytree).

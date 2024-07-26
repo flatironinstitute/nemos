@@ -321,8 +321,7 @@ class BaseRegressor(Base, abc.ABC):
             fun=loss, **solver_init_kwargs
         )
 
-        self._loss_fn = loss
-        self._solver = solver
+        self._solver_loss_fun_ = loss
 
         def solver_run(
             init_params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], *run_args: jnp.ndarray
