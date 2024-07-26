@@ -265,7 +265,8 @@ print(X)
 # We can now use the Poisson GLM from NeMoS to learn the model.
 
 glm = nmo.glm.GLM(
-    regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs=dict(tol=10**-12))
+    solver_kwargs=dict(tol=10**-12),
+    solver_name="LBFGS"
 )
 
 glm.fit(X, count)
@@ -333,7 +334,6 @@ for m in models:
     X = models[m](*features[m])
 
     print("2. Fitting model : ", m)
-    # glm = nmo.glm.GLM()
     glm.fit(
         X.restrict(train_iset),
         count.restrict(train_iset),

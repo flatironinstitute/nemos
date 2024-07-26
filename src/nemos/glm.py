@@ -3,8 +3,9 @@
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+import warnings
 from functools import wraps
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Union
+from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -13,12 +14,13 @@ from numpy.typing import ArrayLike
 from scipy.optimize import root
 
 from . import observation_models as obs
-from . import regularizer as reg
 from . import tree_utils, validation
-from .base_class import DESIGN_INPUT_TYPE, BaseRegressor
+from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
+from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .type_casting import jnp_asarray_if, support_pynapple
+from .typing import DESIGN_INPUT_TYPE
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -43,13 +45,20 @@ def cast_to_jax(func):
 
 
 class GLM(BaseRegressor):
-    r"""
-    Generalized Linear Model (GLM) for neural activity data.
+    r"""Generalized Linear Model (GLM) for neural activity data.
 
     This GLM implementation allows users to model neural activity based on a combination of exogenous inputs
     (like convolved currents or light intensities) and a choice of observation model. It is suitable for scenarios where
     the relationship between predictors and the response variable might be non-linear, and the residuals
     don't follow a normal distribution.
+    Below is a table listing the default and available solvers for each regularizer.
+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
     Parameters
     ----------
@@ -57,9 +66,21 @@ class GLM(BaseRegressor):
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
     regularizer :
-        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
-        Default is UnRegularized regression with gradient descent.
+        Default is UnRegularized regression.
+    regularizer_strength :
+        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
+        regularization, a warning will be raised and the strength will default to 1.0.
+    solver_name :
+        Solver to use for model optimization. Defines the optimization scheme and related parameters.
+        The solver must be an appropriate match for the chosen regularizer.
+        Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+        Please see table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g. stepsize, acceleration, value_and_grad, etc.
+         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
 
     Attributes
     ----------
@@ -68,59 +89,46 @@ class GLM(BaseRegressor):
         firing rate will be `jnp.exp(model.intercept_)`.
     coef_ :
         Basis coefficients for the model.
-    solver_state :
+    solver_state_ :
         State of the solver after fitting. May include details like optimization error.
-    scale:
+    scale_:
         Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
         $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
         of the mean $\mu$ fully specifies the distribution of the activity $y$.
+    dof_resid_:
+        Degrees of freedom for the residuals.
+
 
     Raises
     ------
     TypeError
         If provided `regularizer` or `observation_model` are not valid.
+
     """
 
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
+        regularizer: Union[str, Regularizer] = "UnRegularized",
+        regularizer_strength: Optional[float] = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
     ):
-        super().__init__()
+        super().__init__(
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
 
         self.observation_model = observation_model
-        self.regularizer = regularizer
 
         # initialize to None fit output
         self.intercept_ = None
         self.coef_ = None
-        self.solver_state = None
-        self.scale = None
-        self._solver_init_state = None
-        self._solver_update = None
-        self._solver_run = None
-
-    @property
-    def regularizer(self) -> Union[None, reg.Regularizer]:
-        """Getter for the regularizer attribute."""
-        return self._regularizer
-
-    @regularizer.setter
-    def regularizer(self, regularizer: reg.Regularizer):
-        """Setter for the regularizer attribute."""
-        if not hasattr(regularizer, "instantiate_solver"):
-            raise AttributeError(
-                "The provided `solver` doesn't implement the `instantiate_solver` method."
-            )
-        # test solver instantiation on the GLM loss
-        try:
-            regularizer.instantiate_solver(self._predict_and_compute_loss)
-        except Exception:
-            raise TypeError(
-                "The provided `solver` cannot be instantiated on "
-                "the GLM log-likelihood."
-            )
-        self._regularizer = regularizer
+        self.solver_state_ = None
+        self.scale_ = None
+        self.dof_resid_ = None
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
@@ -133,58 +141,6 @@ class GLM(BaseRegressor):
         # and that the attribute can be called
         obs.check_observation_model(observation)
         self._observation_model = observation
-
-    @property
-    def solver_init_state(self) -> Union[None, reg.SolverInit]:
-        """
-        Provides the initialization function for the solver's state.
-
-        This function is responsible for initializing the solver's state, necessary for the start
-        of the optimization process. It sets up initial values for parameters like gradients and step
-        sizes based on the model configuration and input data.
-
-        Returns
-        -------
-        :
-            The function to initialize the state of the solver, if available; otherwise, None if
-            the solver has not yet been instantiated.
-        """
-        return self._solver_init_state
-
-    @property
-    def solver_update(self) -> Union[None, reg.SolverUpdate]:
-        """
-        Provides the function for updating the solver's state during the optimization process.
-
-        This function is used to perform a single update step in the optimization process. It updates
-        the model's parameters based on the current state, data, and gradients. It is typically used
-        in scenarios where fine-grained control over each optimization step is necessary, such as in
-        online learning or complex optimization scenarios.
-
-        Returns
-        -------
-        :
-            The function to update the solver's state, if available; otherwise, None if the solver
-            has not yet been instantiated.
-        """
-        return self._solver_update
-
-    @property
-    def solver_run(self) -> Union[None, reg.SolverRun]:
-        """
-        Provides the function to execute the solver's optimization process.
-
-        This function runs the solver using the initialized parameters and state, performing the
-        optimization to fit the model to the data. It iteratively updates the model parameters until
-        a stopping criterion is met, such as convergence or exceeding a maximum number of iterations.
-
-        Returns
-        -------
-        :
-            The function to run the solver's optimization process, if available; otherwise, None if
-            the solver has not yet been instantiated.
-        """
-        return self._solver_run
 
     @staticmethod
     def _check_params(
@@ -513,7 +469,7 @@ class GLM(BaseRegressor):
             score = self._observation_model.log_likelihood(
                 self._predict(params, data),
                 y,
-                self.scale,
+                self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
@@ -521,7 +477,7 @@ class GLM(BaseRegressor):
                 self._predict(params, data),
                 y,
                 score_type=score_type,
-                scale=self.scale,
+                scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         else:
@@ -561,8 +517,8 @@ class GLM(BaseRegressor):
             (either as a FeaturePytree or ndarray, matching the structure of X) with shapes (n_features,).
             - The second element is the initialized intercept (bias terms) as an ndarray of shape (1,).
 
-        Example
-        -------
+        Examples
+        --------
         >>> import nemos as nmo
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
@@ -651,7 +607,7 @@ class GLM(BaseRegressor):
 
         """
         # validate the inputs & initialize solver
-        init_params, _ = self.initialize_solver(X, y, init_params=init_params)
+        init_params = self.initialize_params(X, y, init_params=init_params)
 
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -666,6 +622,21 @@ class GLM(BaseRegressor):
         else:
             data = X
 
+        # check if mask has been set is using group lasso
+        # if mask has not been set, use a single group as default
+        if isinstance(self.regularizer, GroupLasso):
+            if self.regularizer.mask is None:
+                warnings.warn(
+                    UserWarning(
+                        "Mask has not been set. Defaulting to a single group for all parameters. "
+                        "Please see the documentation on GroupLasso regularization for defining a "
+                        "mask."
+                    )
+                )
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        self.initialize_state(data, y, init_params)
+
         params, state = self.solver_run(init_params, data, y)
 
         if tree_utils.pytree_map_and_reduce(
@@ -679,15 +650,15 @@ class GLM(BaseRegressor):
 
         self._set_coef_and_intercept(params)
 
-        dof_resid = self.estimate_resid_degrees_of_freedom(X)
-        self.scale = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=dof_resid
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
+        self.scale_ = self.observation_model.estimate_scale(
+            self._predict(params, data), y, dof_resid=self.dof_resid_
         )
 
         # note that this will include an error value, which is not the same as
         # the output of loss. I believe it's the output of
         # solver.l2_optimality_error
-        self.solver_state = state
+        self.solver_state_ = state
         return self
 
     def _get_coef_and_intercept(self):
@@ -763,12 +734,12 @@ class GLM(BaseRegressor):
         predicted_rate = self._predict(params, feedforward_input)
         return (
             self._observation_model.sample_generator(
-                key=random_key, predicted_rate=predicted_rate, scale=self.scale
+                key=random_key, predicted_rate=predicted_rate, scale=self.scale_
             ),
             predicted_rate,
         )
 
-    def estimate_resid_degrees_of_freedom(
+    def _estimate_resid_degrees_of_freedom(
         self, X: DESIGN_INPUT_TYPE, n_samples: Optional[int] = None
     ):
         """
@@ -801,37 +772,37 @@ class GLM(BaseRegressor):
                     "instead!"
                 )
 
-        if isinstance(self.observation_model, obs.PoissonObservations):
-            return 1.0  # scale is fix, residual not used
-
+        params = self._get_coef_and_intercept()
         # if the regularizer is lasso use the non-zero
         # coeff as an estimate of the dof
         # see https://arxiv.org/abs/0712.0881
-        if isinstance(self.regularizer, (reg.GroupLasso, reg.Lasso)):
-            coef, _ = self._get_coef_and_intercept()
-            return n_samples - jnp.sum(jnp.isclose(coef, jnp.zeros_like(coef)))
-        elif isinstance(self.regularizer, reg.Ridge):
+        if isinstance(self.regularizer, (GroupLasso, Lasso)):
+            resid_dof = tree_utils.pytree_map_and_reduce(
+                lambda x: ~jnp.isclose(x, jnp.zeros_like(x)),
+                lambda x: sum([jnp.sum(i, axis=0) for i in x]),
+                params[0],
+            )
+            return n_samples - resid_dof - 1
+
+        elif isinstance(self.regularizer, Ridge):
             # for Ridge, use the tot parameters (X.shape[1] + intercept)
-            return n_samples - X.shape[1] - 1
+            return (n_samples - X.shape[1] - 1) * jnp.ones_like(params[1])
         else:
             # for UnRegularized, use the rank
             rank = jnp.linalg.matrix_rank(X)
-            return n_samples - rank - 1
+            return (n_samples - rank - 1) * jnp.ones_like(params[1])
 
     @cast_to_jax
-    def initialize_solver(
+    def initialize_params(
         self,
         X: DESIGN_INPUT_TYPE,
         y: jnp.ndarray,
-        *args,
         init_params: Optional[ModelParams] = None,
-        **kwargs,
     ) -> Tuple[ModelParams, NamedTuple]:
         """
-        Initialize the solver's state and optionally sets initial model parameters for the optimization process.
+        Initialize the model parameters for the optimization process.
 
-        This method prepares the solver by instantiating its components (initial state, update function,
-        and run function) and initializes model parameters if they are not provided. It is typically called
+        This method prepares the initializes model parameters if they are not provided. It is typically called
         before starting the optimization process to ensure that all necessary
         components and states are correctly configured.
 
@@ -845,16 +816,11 @@ class GLM(BaseRegressor):
             they are not provided.
         init_params :
             Initial parameters for the model. If not provided, they will be initialized based on the input data X and y.
-        *args
-            Additional positional arguments to be passed to the solver's init_state method.
-        **kwargs
-            Additional keyword arguments to be passed to the solver's init_state method.
 
         Returns
         -------
-        Tuple[ModelParams, NamedTuple]
-            A tuple containing the initialized model parameters and the solver's initial state. This setup is ready
-            to be used for running the solver's optimization routines.
+        ModelParams
+            The initialized model parameters
 
         Raises
         ------
@@ -868,10 +834,11 @@ class GLM(BaseRegressor):
             - If `params` are not array-like when provided.
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
-        Example
-        -------
+        Examples
+        --------
         >>> X, y = load_data()  # Hypothetical function to load data
-        >>> params, opt_state = model.initialize_solver(X, y)
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_state(X, y)
         >>> # Now ready to run optimization or update steps
         """
         if init_params is None:
@@ -886,15 +853,44 @@ class GLM(BaseRegressor):
         # validate input
         self._validate(X, y, init_params)
 
-        self._solver_init_state, self._solver_update, self._solver_run = (
-            self.regularizer.instantiate_solver(self._predict_and_compute_loss)
-        )
+        return init_params
+
+    def initialize_state(
+        self,
+        X: DESIGN_INPUT_TYPE,
+        y: jnp.ndarray,
+        init_params,
+    ) -> Union[Any, NamedTuple]:
+        """Initialize the solver by instantiating its init_state, update and, run methods.
+
+        This method also prepares the solver's state by using the initialized model parameters and data.
+        This setup is ready to be used for running the solver's optimization routines.
+
+        Parameters
+        ----------
+        X :
+            The predictors used in the model fitting process. This can include feature matrices or other structures
+            compatible with the model's design.
+        y :
+            The response variables or outputs corresponding to the predictors. Used to initialize parameters when
+            they are not provided.
+        init_params :
+            Initial parameters for the model.
+
+        Returns
+        -------
+        NamedTuple
+            The initialized solver state
+        """
+        #  set up the solver init/run/update attrs
+        self.instantiate_solver()
+
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
-        opt_state = self.solver_init_state(init_params, data, y, *args, **kwargs)
-        return init_params, opt_state
+        opt_state = self.solver_init_state(init_params, data, y)
+        return opt_state
 
     @cast_to_jax
     def update(
@@ -951,11 +947,11 @@ class GLM(BaseRegressor):
             indicating an invalid update step, typically due to numerical instabilities
             or inappropriate solver configurations.
 
-        Example
-        -------
+        Examples
+        --------
         >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
         >>> params = glm_instance.coef_, glm_instance.intercept_
-        >>> opt_state = glm_instance.solver_state
+        >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
         """
         # find non-nans
@@ -973,12 +969,14 @@ class GLM(BaseRegressor):
 
         # store params and state
         self._set_coef_and_intercept(opt_step[0])
-        self.solver_state = opt_step[1]
+        self.solver_state_ = opt_step[1]
 
         # estimate the scale
-        dof_resid = self.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        self.scale = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=dof_resid
+        self.dof_resid_ = self._estimate_resid_degrees_of_freedom(
+            X, n_samples=n_samples
+        )
+        self.scale_ = self.observation_model.estimate_scale(
+            self._predict(params, data), y, dof_resid=self.dof_resid_
         )
 
         return opt_step
@@ -994,6 +992,14 @@ class PopulationGLM(GLM):
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
     stored in tabular format, shape (n_timebins, num_features) or as [FeaturePytree](../pytrees).
+    Below is a table listing the default and available solvers for each regularizer.
+
+    | Regularizer   | Default Solver   | Available Solvers                                           |
+    | ------------- | ---------------- | ----------------------------------------------------------- |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
 
     Parameters
     ----------
@@ -1001,11 +1007,24 @@ class PopulationGLM(GLM):
         Observation model to use. The model describes the distribution of the neural activity.
         Default is the Poisson model.
     regularizer :
-        Regularization to use for model optimization. Defines the regularization scheme, the optimization algorithm,
+        Regularization to use for model optimization. Defines the regularization scheme
         and related parameters.
-        Default is UnRegularized regression with gradient descent.
+        Default is UnRegularized regression.
+    regularizer_strength :
+        Float that is default None. Sets the regularizer strength. If a user does not pass a value, and it is needed for
+        regularization, a warning will be raised and the strength will default to 1.0.
+    solver_name :
+        Solver to use for model optimization. Defines the optimization scheme and related parameters.
+        The solver must be an appropriate match for the chosen regularizer.
+        Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+        Please see table above for regularizer/optimizer pairings.
+    solver_kwargs :
+        Optional dictionary for keyword arguments that are passed to the solver when instantiated.
+        E.g. stepsize, acceleration, value_and_grad, etc.
+         See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s.
+        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
+        `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
@@ -1015,7 +1034,7 @@ class PopulationGLM(GLM):
         firing rate will be `jnp.exp(model.intercept_)`.
     coef_ :
         Basis coefficients for the model.
-    solver_state :
+    solver_state_ :
         State of the solver after fitting. May include details like optimization error.
 
     Raises
@@ -1023,15 +1042,69 @@ class PopulationGLM(GLM):
     TypeError
         - If provided `regularizer` or `observation_model` are not valid.
         - If provided `feature_mask` is not an array-like of dimension two.
+
+    Examples
+    --------
+    >>> # Example with an array mask
+    >>> import jax.numpy as jnp
+    >>> import numpy as np
+    >>> from nemos.glm import PopulationGLM
+    >>> # Define predictors (X), weights, and neural activity (y)
+    >>> num_samples, num_features, num_neurons = 100, 3, 2
+    >>> X = np.random.normal(size=(num_samples, num_features))
+    >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+    >>> y = np.random.poisson(np.exp(X.dot(weights)))
+    >>> # Define a feature mask, shape (num_features, num_neurons)
+    >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+    >>> print("Feature mask:")
+    >>> print(feature_mask)
+    >>> # Create and fit the model
+    >>> model = PopulationGLM(feature_mask=feature_mask)
+    >>> model.fit(X, y)
+    >>> # Check the fitted coefficients and intercepts
+    >>> print("Model coefficients:")
+    >>> print(model.coef_)
+
+    >>> # Example with a FeaturePytree mask
+    >>> from nemos.pytrees import FeaturePytree
+    >>> # Define two features
+    >>> feature_1 = np.random.normal(size=(num_samples, 2))
+    >>> feature_2 = np.random.normal(size=(num_samples, 1))
+    >>> # Define the FeaturePytree predictor, and weights
+    >>> X = FeaturePytree(feature_1=feature_1, feature_2=feature_2)
+    >>> weights = dict(feature_1=jnp.array([[0., 0.5], [0., -0.5]]), feature_2=jnp.array([[1., 0.]]))
+    >>> # Compute the firing rate and counts
+    >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
+    >>> y = np.random.poisson(rate)
+    >>> # Define a feature mask with arrays of shape (num_neurons, )
+    >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
+    >>> print("Feature mask:")
+    >>> print(feature_mask)
+    >>> # Fit a PopulationGLM
+    >>> model = PopulationGLM(feature_mask=feature_mask)
+    >>> model.fit(X, y)
+    >>> print("Model coefficients:")
+    >>> print(model.coef_)
     """
 
     def __init__(
         self,
         observation_model: obs.Observations = obs.PoissonObservations(),
-        regularizer: reg.Regularizer = reg.UnRegularized("GradientDescent"),
+        regularizer: Union[str, Regularizer] = "UnRegularized",
+        regularizer_strength: Optional[float] = None,
+        solver_name: str = None,
+        solver_kwargs: dict = None,
         feature_mask: Optional[jnp.ndarray] = None,
+        **kwargs,
     ):
-        super().__init__(observation_model=observation_model, regularizer=regularizer)
+        super().__init__(
+            observation_model=observation_model,
+            regularizer_strength=regularizer_strength,
+            regularizer=regularizer,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+            **kwargs,
+        )
         self.feature_mask = feature_mask
 
     @property

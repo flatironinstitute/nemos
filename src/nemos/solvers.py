@@ -132,7 +132,6 @@ class ProxSVRG:
             Initialized optimizer state
         """
         df_xs = None
-
         if init_full_gradient:
             df_xs = self.loss_gradient(init_params, *args)
 

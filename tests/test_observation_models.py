@@ -110,6 +110,14 @@ class TestPoissonObservations:
         else:
             observation_model.set_params(inverse_link_function=link_function)
 
+    def test_get_params(self, poisson_observations):
+        """Test get_params() returns expected values."""
+        observation_model = poisson_observations()
+
+        assert observation_model.get_params() == {
+            "inverse_link_function": observation_model.inverse_link_function
+        }
+
     def test_deviance_against_statsmodels(self, poissonGLM_model_instantiation):
         """
         Compare fitted parameters to statsmodels.
@@ -153,7 +161,7 @@ class TestPoissonObservations:
         pseudo_r2 = model.observation_model.pseudo_r2(
             y.mean(), y, score_type=score_type
         )
-        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.):
+        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )
@@ -380,6 +388,14 @@ class TestGammaObservations:
         else:
             observation_model.set_params(inverse_link_function=link_function)
 
+    def test_get_params(self, gamma_observations):
+        """Test get_params() returns expected values."""
+        observation_model = gamma_observations()
+
+        assert observation_model.get_params() == {
+            "inverse_link_function": observation_model.inverse_link_function
+        }
+
     def test_deviance_against_statsmodels(self, gammaGLM_model_instantiation):
         """
         Compare fitted parameters to statsmodels.
@@ -410,13 +426,13 @@ class TestGammaObservations:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = 0.5
+        model.scale_ = 0.5
 
         rate = model.predict(X)
         ysim, _ = model.simulate(jax.random.PRNGKey(123), X)
-        pseudo_r2 = nmo.observation_models.GammaObservations(inverse_link_function=lambda x: 1/x).pseudo_r2(
-            rate, ysim, score_type=score_type
-        )
+        pseudo_r2 = nmo.observation_models.GammaObservations(
+            inverse_link_function=lambda x: 1 / x
+        ).pseudo_r2(rate, ysim, score_type=score_type)
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
 
@@ -429,7 +445,7 @@ class TestGammaObservations:
         pseudo_r2 = model.observation_model.pseudo_r2(
             y.mean(), y, score_type=score_type
         )
-        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.):
+        if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
             )
@@ -505,6 +521,7 @@ class TestGammaObservations:
         Compare log-likelihood to scipy.
         Assesses if the model estimates are close to statsmodels' results.
         """
+        jax.config.update("jax_enable_x64", True)
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
 
         # statsmodels mcfadden

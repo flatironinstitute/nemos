@@ -6,8 +6,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
-from nemos.regularizer import GroupLasso, Lasso, Ridge, UnRegularized
-from nemos.solvers import SVRG, ProxSVRG
+from nemos.solvers import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
@@ -132,106 +131,119 @@ def test_svrg_update_needs_df_xs(request, regr_setup, solver_class, prox, prox_l
 
 
 @pytest.mark.parametrize(
-    "regularizer_class, solver_class, mask",
+    "regularizer_name, solver_class, mask",
     [
-        (Lasso, ProxSVRG, None),
-        (GroupLasso, ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
-        (Ridge, SVRG, None),
-        (UnRegularized, SVRG, None),
+        ("Lasso", ProxSVRG, None),
+        ("GroupLasso", ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
+        ("Ridge", SVRG, None),
+        ("UnRegularized", SVRG, None),
     ],
 )
-def test_svrg_regularizer_constr(
-    regularizer_class, solver_class, mask, linear_regression
-):
-    _, _, _, _, loss = linear_regression
+def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
+    solver_name = solver_class.__name__
 
     # only pass mask if it's not None
-    kwargs = {"solver_name": solver_class.__name__}
+    kwargs = {"solver_name": solver_name}
     if mask is not None:
         kwargs["mask"] = mask
 
-    reg = regularizer_class(**kwargs)
-    reg.instantiate_solver(loss)
+    glm = nmo.glm.GLM(regularizer=regularizer_name, solver_name=solver_name)
+    glm.instantiate_solver()
 
-    assert isinstance(reg._solver, solver_class)
+    assert glm.solver_name == solver_name
+    assert isinstance(glm._solver, solver_class)
 
 
 @pytest.mark.parametrize(
-    "regularizer_class, solver_class, mask",
+    "regularizer_name, solver_name, mask",
     [
-        (Lasso, ProxSVRG, None),
-        (GroupLasso, ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
-        (Ridge, SVRG, None),
-        (UnRegularized, SVRG, None),
+        ("Lasso", "ProxSVRG", None),
+        ("GroupLasso", "ProxSVRG", np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
+        ("Ridge", "SVRG", None),
+        ("UnRegularized", "SVRG", None),
     ],
 )
-def test_svrg_regularizer_passes_solver_kwargs(
-    regularizer_class, solver_class, mask, linear_regression
-):
-    _, _, _, _, loss = linear_regression
-
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_class):
     solver_kwargs = {
         "stepsize": np.abs(np.random.randn()),
         "maxiter": np.random.randint(1, 100),
     }
 
     # only pass mask if it's not None
-    kwargs = {
-        "solver_name": solver_class.__name__,
-        "solver_kwargs": solver_kwargs,
-    }
-    if mask is not None:
-        kwargs["mask"] = mask
+    kwargs = {}
+    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = mask
 
-    reg = regularizer_class(**kwargs)
-    reg.instantiate_solver(loss)
+    glm = glm_class(
+        regularizer=regularizer_name,
+        solver_name=solver_name,
+        solver_kwargs=solver_kwargs,
+        **kwargs,
+    )
+    glm.instantiate_solver()
 
-    assert reg._solver.stepsize == solver_kwargs["stepsize"]
-    assert reg._solver.maxiter == solver_kwargs["maxiter"]
+    assert glm._solver.stepsize == solver_kwargs["stepsize"]
+    assert glm._solver.maxiter == solver_kwargs["maxiter"]
 
 
 @pytest.mark.parametrize(
-    "regularizer_class, solver_class, mask",
+    "regularizer_name, solver_class, mask",
     [
-        (Lasso, ProxSVRG, None),
-        (GroupLasso, ProxSVRG, np.array([0, 1, 0, 1]).reshape(1, -1).astype(float)),
-        (Ridge, SVRG, None),
-        (UnRegularized, SVRG, None),
+        ("Lasso", ProxSVRG, None),
+        (
+            "GroupLasso",
+            ProxSVRG,
+            np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]),
+        ),
+        ("GroupLasso", ProxSVRG, None),
+        ("Ridge", SVRG, None),
+        ("UnRegularized", SVRG, None),
     ],
 )
 @pytest.mark.parametrize(
     "glm_class",
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
-def test_svrg_glm_initialize_solver(
-    glm_class, regularizer_class, solver_class, mask, linear_regression
+def test_svrg_glm_initialize_state(
+    glm_class, regularizer_name, solver_class, mask, linear_regression
 ):
-    X, y, _, _, loss = linear_regression
-    if glm_class.__name__ == "PopulationGLM":
+    X, y, _, _, _ = linear_regression
+
+    if glm_class == nmo.glm.PopulationGLM:
         y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
-    kwargs = {"solver_name": solver_class.__name__}
-    if mask is not None:
-        kwargs["mask"] = mask
+    kwargs = {}
+    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = mask
 
     glm = glm_class(
-        regularizer=regularizer_class(**kwargs),
+        regularizer=regularizer_name,
+        solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        **kwargs,
     )
 
-    params, state = glm.initialize_solver(X, y)
+    init_params = glm.initialize_params(X, y)
+    state = glm.initialize_state(X, y, init_params)
 
-    assert isinstance(glm.regularizer._solver, solver_class)
+    assert state.xs == init_params
+    assert isinstance(glm._solver, solver_class)
+    assert isinstance(state, SVRGState)
 
 
 @pytest.mark.parametrize(
-    "regularizer_class, solver_class, mask",
+    "regularizer_name, solver_class, mask",
     [
-        (Lasso, ProxSVRG, None),
-        (GroupLasso, ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
-        (Ridge, SVRG, None),
-        (UnRegularized, SVRG, None),
+        ("Lasso", ProxSVRG, None),
+        (
+            "GroupLasso",
+            ProxSVRG,
+            np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]]),
+        ),
+        ("Ridge", SVRG, None),
+        ("UnRegularized", SVRG, None),
     ],
 )
 @pytest.mark.parametrize(
@@ -239,39 +251,57 @@ def test_svrg_glm_initialize_solver(
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
 def test_svrg_glm_update(
-    glm_class, regularizer_class, solver_class, mask, linear_regression
+    glm_class, regularizer_name, solver_class, mask, linear_regression
 ):
     X, y, _, _, loss = linear_regression
-    if glm_class.__name__ == "PopulationGLM":
+    if glm_class == nmo.glm.PopulationGLM:
         y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
-    kwargs = {"solver_name": solver_class.__name__}
-    if mask is not None:
-        kwargs["mask"] = mask
+    kwargs = {}
+    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = mask
 
     glm = glm_class(
-        regularizer=regularizer_class(**kwargs),
+        regularizer=regularizer_name,
+        solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        **kwargs,
     )
 
-    params, state = glm.initialize_solver(X, y, init_full_gradient=True)
-    params, state = glm.update(params, state, X, y)
+    # TODO init_full_gradient is not passed to initialize_state
+    init_params = glm.initialize_params(X, y)
+    state = glm.initialize_state(X, y, init_params)  # , init_full_gradient=True)
+
+    # initialize full gradient at the anchor point
+    state = state._replace(
+        df_xs=glm._solver.loss_gradient(init_params, X, y),
+    )
+
+    params, state = glm.update(init_params, state, X, y)
 
     assert state.iter_num == 1
 
 
+# TODO fix GroupLasso
 @pytest.mark.parametrize(
-    "regularizer_class, solver_class, mask",
+    "regularizer_name, solver_name, mask",
     [
-        (Lasso, ProxSVRG, None),
+        ("Lasso", "ProxSVRG", None),
         (
-            GroupLasso,
-            ProxSVRG,
+            "GroupLasso",
+            "ProxSVRG",
             np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
         ),
-        (Ridge, SVRG, None),
-        (UnRegularized, SVRG, None),
+        ("GroupLasso", "ProxSVRG", None),
+        (
+            "GroupLasso",
+            "ProximalGradient",
+            np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
+        ),
+        ("GroupLasso", "ProximalGradient", None),
+        ("Ridge", "SVRG", None),
+        ("UnRegularized", "SVRG", None),
     ],
 )
 @pytest.mark.parametrize(
@@ -283,9 +313,14 @@ def test_svrg_glm_update(
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
 def test_svrg_glm_fit(
-    glm_class, regularizer_class, solver_class, mask, linear_regression, maxiter
+    glm_class,
+    regularizer_name,
+    solver_name,
+    mask,
+    poissonGLM_model_instantiation,
+    maxiter,
 ):
-    X, y, true_coef, _, loss = linear_regression
+    X, y, model, (w_true, b_true), rate = poissonGLM_model_instantiation
 
     # set tolerance to -1 so that doesn't stop the iteration
     solver_kwargs = {
@@ -294,14 +329,15 @@ def test_svrg_glm_fit(
     }
 
     # only pass mask if it's not None
-    kwargs = {"solver_name": solver_class.__name__}
+    kwargs = {}
     if mask is not None:
-        kwargs["mask"] = mask
+        kwargs["feature_mask"] = mask
 
-        # with jax.disable_jit():
     glm = glm_class(
-        regularizer=regularizer_class(**kwargs, solver_kwargs=solver_kwargs),
+        regularizer=regularizer_name,
+        solver_name=solver_name,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        solver_kwargs=solver_kwargs,
     )
 
     if isinstance(glm, nmo.glm.PopulationGLM):
@@ -309,17 +345,17 @@ def test_svrg_glm_fit(
 
     glm.fit(X, y)
 
-    assert glm.regularizer._solver.maxiter == maxiter
-    assert glm.solver_state.iter_num == maxiter
+    assert glm._solver.maxiter == maxiter
+    assert glm.solver_state_.iter_num == maxiter
 
 
 @pytest.mark.parametrize(
-    "regularizer_class, solver_class, mask",
+    "regularizer_name, solver_class, mask",
     [
-        (Lasso, ProxSVRG, None),
-        (GroupLasso, ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
-        (Ridge, SVRG, None),
-        (UnRegularized, SVRG, None),
+        ("Lasso", ProxSVRG, None),
+        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        ("Ridge", SVRG, None),
+        ("UnRegularized", SVRG, None),
     ],
 )
 @pytest.mark.parametrize(
@@ -327,19 +363,20 @@ def test_svrg_glm_fit(
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
 def test_svrg_glm_update_needs_df_xs(
-    glm_class, regularizer_class, solver_class, mask, linear_regression
+    glm_class, regularizer_name, solver_class, mask, linear_regression
 ):
     X, y, _, _, loss = linear_regression
     if glm_class.__name__ == "PopulationGLM":
         y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
-    kwargs = {"solver_name": solver_class.__name__}
-    if mask is not None:
-        kwargs["mask"] = mask
+    kwargs = {}
+    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = mask
 
     glm = glm_class(
-        regularizer=regularizer_class(**kwargs),
+        regularizer=regularizer_name,
+        solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
     )
 
@@ -347,7 +384,8 @@ def test_svrg_glm_update_needs_df_xs(
         ValueError,
         match=r"Full gradient at the anchor point \(state\.df_xs\) has to be set",
     ):
-        params, state = glm.initialize_solver(X, y)
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_state(X, y, params)
         glm.update(params, state, X, y)
 
 
