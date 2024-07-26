@@ -2,7 +2,7 @@
 
 import operator
 from functools import partial, reduce
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import jax
 import jax.numpy as jnp
