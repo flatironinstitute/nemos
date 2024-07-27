@@ -239,7 +239,6 @@ class Basis(abc.ABC):
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
-
     """
 
     def __init__(
@@ -256,14 +255,7 @@ class Basis(abc.ABC):
         self._check_n_basis_min()
         self._conv_args = args
         self._conv_kwargs = kwargs
-
-        if bounds is not None and len(bounds) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(bounds)} provided instead!"
-            )
-
-        # convert to float and store
-        self._bounds = bounds if bounds is None else tuple(map(float, bounds))
+        self.bounds = bounds
 
         # check mode
         if mode not in ["conv", "eval"]:
@@ -299,6 +291,19 @@ class Basis(abc.ABC):
     @property
     def bounds(self):
         return self._bounds
+
+    @bounds.setter
+    def bounds(self, values: Union[None, Tuple[float, float]]):
+        """Setter for bounds."""
+        if values is not None and len(values) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
+            )
+        # convert to float and store
+        try:
+            self._bounds = values if values is None else tuple(map(float, values))
+        except (ValueError, TypeError):
+            raise TypeError("Could not convert `bounds` to float.")
 
     @property
     def mode(self):
