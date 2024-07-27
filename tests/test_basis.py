@@ -546,12 +546,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3),  pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
-            ((1, None),  pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((None, 3),  pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None),  pytest.raises(TypeError, match=r"Could not convert")),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(ValueError, match="could not convert")),
-            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
-            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert"))
         ]
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -1046,12 +1046,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
-            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(ValueError, match="could not convert")),
-            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
-            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert"))
         ]
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -1547,12 +1547,12 @@ class TestMSplineBasis(BasisFuncsTesting):
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
-            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(ValueError, match="could not convert")),
-            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
-            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert"))
         ]
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -2554,12 +2554,12 @@ class TestBSplineBasis(BasisFuncsTesting):
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
-            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(ValueError, match="could not convert")),
-            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
-            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert"))
         ]
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -3110,12 +3110,12 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         "bounds, expectation",
         [
             (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
-            ((1, None), pytest.raises(TypeError, match=r"float\(\) argument must be a string ")),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
             ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(ValueError, match="could not convert")),
-            ((1, "a"), pytest.raises(ValueError, match="could not convert")),
-            (("a", "a"), pytest.raises(ValueError, match="could not convert"))
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert"))
         ]
     )
     def test_vmin_vmax_init(self, bounds, expectation):

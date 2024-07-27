@@ -205,6 +205,12 @@ class TestUnRegularized:
         model.regularizer = regularizer
         assert model.regularizer_strength is None
 
+    def test_get_params(self):
+        """Test get_params() returns expected values."""
+        regularizer = self.cls()
+
+        assert regularizer.get_params() == {}
+
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "BFGS"])
     @pytest.mark.parametrize("solver_kwargs", [{"tol": 10**-10}, {"tols": 10**-10}])
     def test_init_solver_kwargs(self, solver_name, solver_kwargs):
@@ -487,6 +493,12 @@ class TestRidge:
 
         assert model.regularizer_strength == 1.0
 
+    def test_get_params(self):
+        """Test get_params() returns expected values."""
+        regularizer = self.cls()
+
+        assert regularizer.get_params() == {}
+
     @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_is_callable(self, loss):
         """Test Ridge callable loss."""
@@ -702,6 +714,12 @@ class TestLasso:
 
         assert model.regularizer_strength == 1.0
 
+    def test_get_params(self):
+        """Test get_params() returns expected values."""
+        regularizer = self.cls()
+
+        assert regularizer.get_params() == {}
+
     @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_callable(self, loss):
         """Test that the loss function is a callable"""
@@ -904,6 +922,12 @@ class TestGroupLasso:
             model.regularizer = regularizer
 
         assert model.regularizer_strength == 1.0
+
+    def test_get_params(self):
+        """Test get_params() returns expected values."""
+        regularizer = self.cls()
+
+        assert regularizer.get_params() == {"mask": None}
 
     @pytest.mark.parametrize("loss", [lambda a, b, c: 0, 1, None, {}])
     def test_loss_callable(self, loss):
@@ -1281,5 +1305,6 @@ class TestGroupLasso:
 
 def test_available_regularizer_match():
     """Test matching of the two regularizer lists."""
-    assert set(nmo._regularizer_builder.AVAILABLE_REGULARIZERS) == set(nmo.regularizer.__dir__())
-
+    assert set(nmo._regularizer_builder.AVAILABLE_REGULARIZERS) == set(
+        nmo.regularizer.__dir__()
+    )

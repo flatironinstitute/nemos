@@ -74,7 +74,7 @@ def min_max_rescale_samples(
     sample_pts:
         The original samples.
     bounds:
-        Sample bounds. `bounds[0]` abd `bounds[1]` are mapped to 0/1 respectively.
+        Sample bounds. `bounds[0]` and `bounds[1]` are mapped to 0 and 1, respectively.
         Default are `min(sample_pts), max(sample_pts)`.
 
     Raises
@@ -92,7 +92,9 @@ def min_max_rescale_samples(
     vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
     vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
     if vmin and vmax and vmax <= vmin:
-        raise ValueError("Invalid value range. `vmax` must be larger then `vmin`!")
+        raise ValueError(
+            "Invalid value range. `bounds[1]` must be larger then `bounds[0]`!"
+        )
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     # this passes if `samples_pts` contains a single value
@@ -454,7 +456,6 @@ class Basis(Base, abc.ABC):
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
-
     """
 
     def __init__(
@@ -469,14 +470,7 @@ class Basis(Base, abc.ABC):
         self._n_input_dimensionality = 0
         self._check_n_basis_min()
         self._conv_kwargs = kwargs
-
-        if bounds is not None and len(bounds) != 2:
-            raise ValueError(
-                f"The provided `bounds` must be of length two. Length {len(bounds)} provided instead!"
-            )
-
-        # convert to float and store
-        self._bounds = bounds if bounds is None else tuple(map(float, bounds))
+        self.bounds = bounds
 
         # check mode
         if mode not in ["conv", "eval"]:
@@ -508,6 +502,19 @@ class Basis(Base, abc.ABC):
     @property
     def bounds(self):
         return self._bounds
+
+    @bounds.setter
+    def bounds(self, values: Union[None, Tuple[float, float]]):
+        """Setter for bounds."""
+        if values is not None and len(values) != 2:
+            raise ValueError(
+                f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
+            )
+        # convert to float and store
+        try:
+            self._bounds = values if values is None else tuple(map(float, values))
+        except (ValueError, TypeError):
+            raise TypeError("Could not convert `bounds` to float.")
 
     @property
     def mode(self):
@@ -766,6 +773,7 @@ class Basis(Base, abc.ABC):
             # make sure array is at least 1d (so that we succeed when only
             # passed a scalar)
             xi = tuple(np.atleast_1d(np.asarray(x, dtype=float)) for x in xi)
+        # ValueError here surfaces the exception with e.g., `x=np.array["a", "b"])`
         except (TypeError, ValueError):
             raise TypeError("Input samples must be array-like of floats!")
 
@@ -1272,11 +1280,13 @@ class SplineBasis(Basis, abc.ABC):
         if is_cyclic:
             num_interior_knots += self.order - 1
 
+        # Spline basis have support on the semi-open [a, b)  interval, we add a small epsilon
+        # to mx so that the so that basis_element(max(samples)) != 0
         knot_locs = np.concatenate(
             (
                 np.zeros(self.order - 1),
-                np.linspace(0, (1 + 10**-8), num_interior_knots + 2),
-                np.full(self.order - 1, 1 + 10**-8),
+                np.linspace(0, (1 + np.finfo(float).eps), num_interior_knots + 2),
+                np.full(self.order - 1, 1 + np.finfo(float).eps),
             )
         )
         return knot_locs
@@ -1351,8 +1361,11 @@ class MSplineBasis(SplineBasis):
 
     Notes
     -----
-    MSplines must integrate to 1 over their domain. Therefore, if the domain (x-axis) of an MSpline
-    basis is dilated by a factor of $\alpha$, the co-domain (y-axis) values will shrink by a factor of $1/\alpha$.
+    MSplines must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+    (x-axis) of an MSpline basis is expanded by a factor of $\alpha$, the values on the co-domain (y-axis) values
+    will shrink by a factor of $1/\alpha$.
+    For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
+    If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
     """
 
     def __init__(
@@ -1773,10 +1786,10 @@ class RaisedCosineBasisLinear(Basis):
             **kwargs,
         )
         self._n_input_dimensionality = 1
-        self.width = width
-        # if linear raised cosine are initialized
-        # this flag is always true, the samples
-        # must be rescaled to 0 and 1.
+        self._check_width(width)
+        self._width = width
+        # for these linear raised-cosine basis functions,
+        # the samples must be rescaled to 0 and 1.
         self._rescale_samples = True
 
     @property
@@ -1968,7 +1981,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             bounds=bounds,
             **kwargs,
         )
-        # overwrite the flag for scaling the samples to [0,1] in the super.__call__(...).
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
         self._rescale_samples = False
