@@ -14,9 +14,9 @@ The hyperparameters required to initialize this class are:
 
 import matplotlib.pylab as plt
 import numpy as np
+import pynapple as nap
 
 import nemos as nmo
-import pynapple as nap
 
 # Initialize hyperparameters
 order = 4
