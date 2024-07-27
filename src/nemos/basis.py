@@ -1070,11 +1070,13 @@ class SplineBasis(Basis, abc.ABC):
         if is_cyclic:
             num_interior_knots += self.order - 1
 
+        # Spline basis have support on the semi-open [a, b)  interval, we add a small epsilon
+        # to mx so that the so that basis_element(max(samples)) != 0
         knot_locs = np.concatenate(
             (
                 np.zeros(self.order - 1),
-                np.linspace(0, (1 + 10**-8), num_interior_knots + 2),
-                np.full(self.order - 1, 1 + 10**-8),
+                np.linspace(0, (1 + np.finfo(float).eps), num_interior_knots + 2),
+                np.full(self.order - 1, 1 + np.finfo(float).eps),
             )
         )
         return knot_locs
