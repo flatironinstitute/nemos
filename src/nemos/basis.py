@@ -1781,7 +1781,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             bounds=bounds,
             **kwargs,
         )
-        # overwrite the flag for scaling the samples to [0,1] in the super.__call__(...).
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
         self._rescale_samples = False
