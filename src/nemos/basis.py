@@ -1154,8 +1154,11 @@ class MSplineBasis(SplineBasis):
 
     Notes
     -----
-    MSplines must integrate to 1 over their domain. Therefore, if the domain (x-axis) of an MSpline
-    basis is dilated by a factor of $\alpha$, the co-domain (y-axis) values will shrink by a factor of $1/\alpha$.
+    MSplines must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+    (x-axis) of an MSpline basis is expanded by a factor of $\alpha$, the values on the co-domain (y-axis) values
+    will shrink by a factor of $1/\alpha$.
+    For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
+    If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
     """
 
     def __init__(
