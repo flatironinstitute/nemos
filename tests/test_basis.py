@@ -621,6 +621,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         with exception:
             self.cls(3, mode="conv", window_size=10, bounds=bounds)
 
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
+
 
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     cls = basis.RaisedCosineBasisLinear
@@ -1119,6 +1127,14 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(3, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 
 class TestMSplineBasis(BasisFuncsTesting):
@@ -1625,6 +1641,13 @@ class TestMSplineBasis(BasisFuncsTesting):
         with exception:
             self.cls(3, mode="conv", window_size=10, bounds=bounds)
 
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
     cls = basis.OrthExponentialBasis
@@ -2103,9 +2126,18 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
-            bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5], mode="eval", test="hi")
+            self.cls(5, decay_rates=[1, 2, 3, 4, 5], mode="eval", test="hi")
 
-
+    def test_transformer_get_params(self):
+        bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5])
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        rates_transf = params_transf.pop("decay_rates")
+        params_basis = bas.get_params()
+        rates_basis = params_basis.pop("decay_rates")
+        assert params_transf == params_basis
+        assert np.all(rates_transf == rates_basis)
 
 class TestBSplineBasis(BasisFuncsTesting):
     cls = basis.BSplineBasis
@@ -2627,6 +2659,14 @@ class TestBSplineBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(5, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 
 class TestCyclicBSplineBasis(BasisFuncsTesting):
@@ -3183,6 +3223,14 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(5, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 class CombinedBasis(BasisFuncsTesting):
     """

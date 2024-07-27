@@ -2121,16 +2121,26 @@ class OrthExponentialBasis(Basis):
             bounds=bounds,
             **kwargs,
         )
-        self._decay_rates = np.asarray(decay_rates)
-        if self._decay_rates.shape[0] != n_basis_funcs:
-            raise ValueError(
-                f"The number of basis functions must match the number of decay rates provided. "
-                f"Number of basis functions provided: {n_basis_funcs}, "
-                f"Number of decay rates provided: {self._decay_rates.shape[0]}"
-            )
-
+        self.decay_rates = decay_rates
         self._check_rates()
         self._n_input_dimensionality = 1
+
+    @property
+    def decay_rates(self):
+        """Decay rate getter"""
+        return self._decay_rates
+
+    @decay_rates.setter
+    def decay_rates(self, value: NDArray):
+        """Decay rate setter."""
+        value = np.asarray(value)
+        if value.shape[0] != self.n_basis_funcs:
+            raise ValueError(
+                f"The number of basis functions must match the number of decay rates provided. "
+                f"Number of basis functions provided: {self.n_basis_funcs}, "
+                f"Number of decay rates provided: {value.shape[0]}"
+            )
+        self._decay_rates = value
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
