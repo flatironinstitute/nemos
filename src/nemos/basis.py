@@ -71,7 +71,7 @@ def min_max_rescale_samples(
     sample_pts:
         The original samples.
     bounds:
-        Sample bounds. `bounds[0]` abd `bounds[1]` are mapped to 0/1 respectively.
+        Sample bounds. `bounds[0]` and `bounds[1]` are mapped to 0 and 1, respectively.
         Default are `min(sample_pts), max(sample_pts)`.
 
     Raises
