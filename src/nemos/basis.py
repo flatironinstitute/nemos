@@ -89,7 +89,9 @@ def min_max_rescale_samples(
     vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
     vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
     if vmin and vmax and vmax <= vmin:
-        raise ValueError("Invalid value range. `bounds[1]` must be larger then `bounds[0]`!")
+        raise ValueError(
+            "Invalid value range. `bounds[1]` must be larger then `bounds[0]`!"
+        )
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     # this passes if `samples_pts` contains a single value
