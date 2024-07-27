@@ -1588,9 +1588,8 @@ class RaisedCosineBasisLinear(Basis):
         self._n_input_dimensionality = 1
         self._check_width(width)
         self._width = width
-        # if linear raised cosine are initialized
-        # this flag is always true, the samples
-        # must be rescaled to 0 and 1.
+        # for these linear raised-cosine basis functions,
+        # the samples must be rescaled to 0 and 1.
         self._rescale_samples = True
 
     @property
