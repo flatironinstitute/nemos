@@ -15,7 +15,7 @@ In particular, we will learn:
 # %%
 # ## What is a scikit-learn pipeline
 #
-# A pipeline is a sequence of data transformations. Each step in the pipeline transforms the input data into a different representation, with the final step being either another transformation or a model step that fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the `Pipeline` class from scikit-learn.
+# A pipeline is a sequence of data transformations. Each step in the pipeline transforms the input data into a different representation. The final step is either another transformation or a model step that fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the `Pipeline` class from scikit-learn.
 #
 # To set up a scikit-learn `Pipeline`, ensure that:
 #
@@ -43,10 +43,10 @@ In particular, we will learn:
 # Calling `pipe.fit(X, y)` will perform the following computations:
 # ```python
 # # Chain of transformations
-# X1 = transformer_1.transform(X)
-# X2 = transformer_2.transform(X1)
+# X1 = transformer_1.fit_transform(X)
+# X2 = transformer_2.fit_transform(X1)
 # # ...
-# Xn = transformer_n.transform(Xn_1)
+# Xn = transformer_n.fit_transform(Xn_1)
 #
 # # Fit step
 # model.fit(Xn, y)
@@ -142,16 +142,24 @@ pipeline.fit(X, y)
 # Visualize the fit:
 
 # %%
+
+# Predict the rate.
+# Note that you need a 2D input even if x is a flat array.
+# We are using expand dim to add the extra-dimension
+x = np.expand_dims(np.sort(X.flatten()), axis=1)
+predicted_rate = pipeline.predict(x)
+
+# %%
 fig, ax = plt.subplots()
 
 ax.scatter(X.flatten(), y, alpha=0.2, label="generated spike counts")
 ax.set_xlabel("input")
 ax.set_ylabel("spike count")
 
-x = np.sort(X.flatten())
+
 ax.plot(
     x,
-    pipeline.predict(np.expand_dims(x, 1)),
+    predicted_rate,
     label="predicted rate",
     color="tab:orange",
 )
@@ -180,6 +188,18 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
 )
+
+# %%
+# !!! note "Grid definition"
+#     In order to define a parameter grid dictionary for a pipeline, you must structure the dictionary keys as follows:
+#
+#     - Start with the pipeline label (`"glm"` or `"transformerbasis"` for us). This determines which pipeline step has the relevant hyperparameter.
+#     - Add `"__"` followed by the hyperparameter name (for example, `"n_basis_funcs"`).
+#     - If the hyperparameter is itself an object with attributes, add another `"__"` followed by the attribute name. For instance, `"glm__observation_model__inverse_link_function"`
+#       would be a valid key for cross-validating over the link function of the GLM's `observation_model` attribute `inverse_link_function`.
+#     The values in the dictionary are the parameters to be tested.
+
+
 
 # %%
 # #### Run the grid search
@@ -242,8 +262,14 @@ ax.set_ylabel("number of basis functions")
 highlight_max_cell(cvdf_wide, ax)
 
 # %%
-# #### Visualize the predicted
+# #### Visualize the predicted rate
 # Finally, visualize the predicted firing rates using the best model found by our grid-search, which gives a better fit than the randomly chosen parameter values we tried in the beginning:
+
+# %%
+
+# Predict the ate using the best configuration,
+x = np.expand_dims(np.sort(X.flatten()), 1)
+predicted_rate = gridsearch.best_estimator_.predict(x)
 
 # %%
 fig, ax = plt.subplots()
@@ -252,10 +278,10 @@ ax.scatter(X.flatten(), y, alpha=0.2, label="generated spike counts")
 ax.set_xlabel("input")
 ax.set_ylabel("spike count")
 
-x = np.sort(X.flatten())
+
 ax.plot(
     x,
-    gridsearch.best_estimator_.predict(np.expand_dims(x, 1)),
+    predicted_rate,
     label="predicted rate",
     color="tab:orange",
 )
@@ -336,16 +362,21 @@ highlight_max_cell(cvdf_wide, ax)
 # Looks like `RaisedCosineBasisLinear` was probably a decent choice for our toy data:
 
 # %%
+
+# Predict the rate using the optimal configuration
+x = np.expand_dims(np.sort(X.flatten()), 1)
+predicted_rate = gridsearch.best_estimator_.predict(x)
+
+# %%
 fig, ax = plt.subplots()
 
 ax.scatter(X.flatten(), y, alpha=0.2, label="generated spike counts")
 ax.set_xlabel("input")
 ax.set_ylabel("spike count")
 
-x = np.sort(X.flatten())
 ax.plot(
     x,
-    gridsearch.best_estimator_.predict(np.expand_dims(x, 1)),
+    predicted_rate,
     label="predicted rate",
     color="tab:orange",
 )
