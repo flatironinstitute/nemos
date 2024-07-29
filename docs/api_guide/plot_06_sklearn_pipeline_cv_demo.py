@@ -1,36 +1,34 @@
 """
 # Selecting basis by cross-validation with scikit-learn
 
-In this demo we will demonstrate how to select an appropriate basis and its hyperparameters by means of cross-validation.
+In this demo, we will demonstrate how to select an appropriate basis and its hyperparameters using cross-validation.
 In particular, we will learn:
 
-1. What is a scikit-learn pipeline
+1. What a scikit-learn pipeline is.
 2. Why pipelines are useful.
-3. How to combine NeMoS `Basis` and `GLM` object in a pipleline.
-4. How to select the number of basis and the basis type by cross-validation (or any other hyperparameter in the pipeline).
-5. How to use a custom scoring metric for quantifying the performance of each configuration.
+3. How to combine NeMoS `Basis` and `GLM` objects in a pipeline.
+4. How to select the number of bases and the basis type through cross-validation (or any other hyperparameter in the pipeline).
+5. How to use a custom scoring metric to quantify the performance of each configuration.
 
 """
 
 # %%
-# ## What is a scikit-learn pipeline.
-# In general, we can define a pipeline as a chain of data transformations. At each step of the pipeline, the input of the previous step is "transformed" into a different representation by the next tansfomrmation.
-# The last step can be another transformation, or a regression step in which the output of the previous piepline step is used to predict some observations.
-# Setting up such machinery may seem complicated, but that's when scikit-learn `Pipeline` comes to the rescue.
+# ## What is a scikit-learn pipeline
 #
-# To set up a scikit-learn `Pipeline`, we need to make sure that:
+# A pipeline is a sequence of data transformations. Each step in the pipeline transforms the input data into a different representation, with the final step being either another transformation or a model step that fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the `Pipeline` class from scikit-learn.
 #
-# 1. Each intermediate step is a [scikit-learn  transformer object](https://scikit-learn.org/stable/data_transforms.html), i.e. it should implement a `transform` and/or a `fit_transform` method.
-# 2. The final step is another transformer or an [estimator object](https://scikit-learn.org/stable/developers/develop.html#estimators), i.e. it must implement a `fit` method, or a model, which implements and a `predict` and a `score` method as well.
+# To set up a scikit-learn `Pipeline`, ensure that:
 #
-# Each transformation step takes a 2D array `X` of shape `(num_samples, num_original_feature)` as input and output another 2D array of shape `(num_samples, num_transformed_feature)`. The prediction step instead
-# takes as input a pair `(X, y)`, where `X` is as before and `y` a 1D array of shape `(n_samples,)` containing the observations we are trying to model.
-# You can define a pipeline as follows,
+# 1. Each intermediate step is a [scikit-learn transformer object](https://scikit-learn.org/stable/data_transforms.html) with a `transform` and/or `fit_transform` method.
+# 2. The final step is either another transformer or an [estimator object](https://scikit-learn.org/stable/developers/develop.html#estimators) with a `fit` method, or a model with `fit`, `predict`, and `score` methods.
 #
+# Each transformation step takes a 2D array `X` of shape `(num_samples, num_original_features)` as input and outputs another 2D array of shape `(num_samples, num_transformed_features)`. The final step takes a pair `(X, y)`, where `X` is as before, and `y` is a 1D array of shape `(n_samples,)` containing the observations to be modeled.
+#
+# You can define a pipeline as follows:
 # ```python
 # from sklearn.pipeline import Pipeline
 #
-# # assume that transformer_i/preditor is a transformer/model object
+# # Assume transformer_i/predictor is a transformer/model object
 # pipe = Pipeline(
 #     [
 #         ("label_1", transformer_1),
@@ -38,36 +36,31 @@ In particular, we will learn:
 #         ...,
 #         ("label_n", transformer_n),
 #         ("label_model", model)
-#
 #     ]
 # )
 # ```
 #
-#
-# Calling `pipe.fit(X, y)` will perform the following computations,
+# Calling `pipe.fit(X, y)` will perform the following computations:
 # ```python
-# # chain of transformations
+# # Chain of transformations
 # X1 = transformer_1.transform(X)
 # X2 = transformer_2.transform(X1)
 # # ...
 # Xn = transformer_n.transform(Xn_1)
 #
-# # fit step
+# # Fit step
 # model.fit(Xn, y)
 # ```
-#
-#
 # And the same holds for `pipe.score` and `pipe.predict`.
 #
 # ## Why pipelines are useful
-# While clearly pipelining your processing steps streamlines and simplifies your code, this is far from being the only advantage of such a machinery.
-# The real power of this approach becomes evident when a pipeline is combined with the scikit-learn `model_selection` module capabilities.
-# This approach will enable you to tune hyperparameters at each step of the pipeline in a surprisingly streight-forward manner.
-# In the next sessions will showcase this approach in a concrete example: selecting the appropriate basis type and number of basis for a GLM regression in NeMoS.
-
-# %%
+#
+# Pipelines not only streamline and simplify your code but also offer several other advantages. The real power of pipelines becomes evident when combined with the scikit-learn `model_selection` module. This combination allows you to tune hyperparameters at each step of the pipeline in a straightforward manner.
+#
+# In the following sections, we will showcase this approach with a concrete example: selecting the appropriate basis type and number of bases for a GLM regression in NeMoS.
+#
 # ## Combining basis transformations and GLM in a pipeline
-# Let's start by creating some toy data
+# Let's start by creating some toy data.
 
 import nemos as nmo
 import numpy as np
@@ -79,11 +72,9 @@ import seaborn as sns
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 
-# %%
-
 # predictors, shape (n_samples, n_features)
 X = np.random.uniform(low=0, high=1, size=(1000, 1))
-# observed counts, shape (n_samples, )
+# observed counts, shape (n_samples,)
 rate = 2 * (
     scipy.stats.norm.pdf(X, scale=0.1, loc=0.25)
     + scipy.stats.norm.pdf(X, scale=0.1, loc=0.75)
@@ -192,6 +183,7 @@ param_grid = dict(
 
 # %%
 # #### Run the grid search
+# Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn `model_selection.GridsearchCV` class.
 
 # %%
 gridsearch = GridSearchCV(
@@ -211,7 +203,6 @@ gridsearch.fit(X, y)
 # %%
 from matplotlib.patches import Rectangle
 
-
 def highlight_max_cell(cvdf_wide, ax):
     max_col = cvdf_wide.max().idxmax()
     max_col_index = cvdf_wide.columns.get_loc(max_col)
@@ -223,7 +214,6 @@ def highlight_max_cell(cvdf_wide, ax):
             (max_col_index, max_row_index), 1, 1, fill=False, lw=3, color="skyblue"
         )
     )
-
 
 # %%
 cvdf = pd.DataFrame(gridsearch.cv_results_)
@@ -241,6 +231,10 @@ ax = sns.heatmap(
     linecolor="white",
     linewidth=0.5,
 )
+
+# Labeling the colorbar
+colorbar = ax.collections[0].colorbar
+colorbar.set_label('log-likelihood')
 
 ax.set_xlabel("ridge regularization strength")
 ax.set_ylabel("number of basis functions")
@@ -271,8 +265,7 @@ sns.despine(ax=ax)
 
 # %%
 # ### Evaluating different bases directly
-
-# %%
+#
 # In the previous example we set the number of basis functions of the `Basis` wrapped in our `TransformerBasis`. However, if we are for example not sure about the type of basis functions we want to use, or we have already defined some basis functions of our own, then we can use cross-validation to directly evaluate those as well.
 #
 # Here we include `transformerbasis___basis` in the parameter grid to try different values for `TransformerBasis._basis`:
@@ -303,13 +296,14 @@ gridsearch = GridSearchCV(
 # run the 5-fold cross-validation grid search
 gridsearch.fit(X, y)
 
+
 # %%
 # Wrangling the output data a bit and looking at the scores:
 
 # %%
 cvdf = pd.DataFrame(gridsearch.cv_results_)
 
-# read out the number of
+# Read out the number of basis functions
 cvdf["transformerbasis_config"] = [
     f"{b.__class__.__name__} - {b.n_basis_funcs}"
     for b in cvdf["param_transformerbasis___basis"]
@@ -328,6 +322,10 @@ ax = sns.heatmap(
     linecolor="white",
     linewidth=0.5,
 )
+
+# Labeling the colorbar
+colorbar = ax.collections[0].colorbar
+colorbar.set_label('log-likelihood')
 
 ax.set_xlabel("ridge regularization strength")
 ax.set_ylabel("number of basis functions")
@@ -373,9 +371,10 @@ sns.despine(ax=ax)
 #         ),
 #     )
 #     ```
-#
+
+# %%
 # ## Create a custom scorer
-# By default, the GLM score method returns the model log-likelihoood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer that overwrites the default:
+# By default, the GLM score method returns the model log-likelihood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer that overwrites the default:
 
 # %%
 from sklearn.metrics import make_scorer
@@ -398,16 +397,17 @@ gridsearch = GridSearchCV(
     scoring=pseudo_r2,
 )
 
-# run the 5-fold cross-validation grid search
+# Run the 5-fold cross-validation grid search
 gridsearch.fit(X, y)
 
 # %%
 # #### Plot the pseudo-R2 scores
 
-# plot the pseudo-r2 scores
+# %%
+# Plot the pseudo-R2 scores
 cvdf = pd.DataFrame(gridsearch.cv_results_)
 
-# read out the number of
+# Read out the number of basis functions
 cvdf["transformerbasis_config"] = [
     f"{b.__class__.__name__} - {b.n_basis_funcs}"
     for b in cvdf["param_transformerbasis___basis"]
@@ -426,6 +426,10 @@ ax = sns.heatmap(
     linecolor="white",
     linewidth=0.5,
 )
+
+# Labeling the colorbar
+colorbar = ax.collections[0].colorbar
+colorbar.set_label('pseudo-R2')
 
 ax.set_xlabel("ridge regularization strength")
 ax.set_ylabel("number of basis functions")
