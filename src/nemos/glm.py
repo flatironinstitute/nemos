@@ -19,6 +19,10 @@ from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from .solvers import (
+    softplus_poisson_optimal_batch_and_stepsize,
+    softplus_poisson_optimal_stepsize,
+)
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
 
@@ -886,6 +890,34 @@ class GLM(BaseRegressor):
                     )
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        # optionally set auto stepsize and batch size if SVRG is used
+        if (
+            "SVRG" in self.solver_name
+            and isinstance(self.observation_model, obs.PoissonObservations)
+            and self.observation_model.inverse_link_function == jax.nn.softplus
+        ):
+            batch_size = self.solver_kwargs.get("batch_size", None)
+            stepsize = self.solver_kwargs.get("stepsize", None)
+            # following jaxopt, stepsize <= 0 also means auto
+            if stepsize <= 0:
+                stepsize = None
+
+            new_solver_kwargs = self.solver_kwargs.copy()
+
+            # if both are None, determine them together
+            if batch_size is None and stepsize is None:
+                batch_size, stepsize = softplus_poisson_optimal_batch_and_stepsize(
+                    data, y
+                )
+                new_solver_kwargs["batch_size"] = batch_size
+                new_solver_kwargs["stepsize"] = stepsize
+            # if only batch size is given, we can still try to determine the optimal step size for it
+            elif batch_size is not None and stepsize is None:
+                stepsize = softplus_poisson_optimal_stepsize(data, y, batch_size)
+                new_solver_kwargs["stepsize"] = stepsize
+
+            self.solver_kwargs = new_solver_kwargs
 
         #  set up the solver init/run/update attrs
         self.instantiate_solver()

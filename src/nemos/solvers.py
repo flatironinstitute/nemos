@@ -1,3 +1,4 @@
+import warnings
 from functools import partial
 from typing import Any, Callable, NamedTuple, Optional, Union
 
@@ -748,3 +749,178 @@ class SVRG(ProxSVRG):
 
         # substitute None for prox_lambda
         return self._run(init_params, init_state, None, *args)
+
+
+def softplus_poisson_optimal_stepsize(
+    X: jnp.ndarray, y: jnp.ndarray, batch_size: int, n_power_iters: Optional[int] = None
+):
+    """
+    Calculate the optimal stepsize to use for SVRG with a GLM that uses
+    Poisson observations and softplus inverse link function.
+
+    Parameters
+    ----------
+    X : jnp.ndarray
+        Input data.
+    y : jnp.ndarray
+        Output data.
+    batch_size : int
+        Mini-batch size, i.e. number of data points sampled for
+        each inner update of SVRG.
+    n_power_iters: int, optional, default None
+        If None, build the XDX matrix (which has a shape of n_features x n_features)
+        and find its eigenvalues directly.
+        If an integer, it is the max number of iterations to run the power
+        iteration for when finding the largest eigenvalue.
+
+    Returns
+    -------
+    stepsize : scalar jax array
+        Optimal stepsize to use
+    """
+    L_max, L = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
+
+    stepsize = _calc_alpha(batch_size, X.shape[0], L_max, L)
+
+    return stepsize
+
+
+# not using the previous one to avoid calculating L and L_max twice
+def softplus_poisson_optimal_batch_and_stepsize(
+    X: jnp.ndarray,
+    y: jnp.ndarray,
+    n_power_iters: Optional[int] = None,
+    default_batch_size: int = 1,
+    default_stepsize: float = 1e-3,
+):
+    """
+    Calculate the optimal batch size and step size to use for SVRG with a GLM
+    that uses Poisson observations and softplus inverse link function.
+
+    Parameters
+    ----------
+    X : jnp.ndarray
+        Input data.
+    y : jnp.ndarray
+        Output data.
+    n_power_iters: int, optional, default None
+        If None, build the XDX matrix (which has a shape of n_features x n_features)
+        and find its eigenvalues directly.
+        If an integer, it is the max number of iterations to run the power
+        iteration for when finding the largest eigenvalue.
+    default_batch_size : int
+        Batch size to fall back on if the calculation fails.
+    default_stepsize: float
+        Step size to fall back on if the calculation fails.
+
+    Returns
+    -------
+    batch_size : int
+        Optimal batch size to use.
+    stepsize : scalar jax array
+        Optimal stepsize to use.
+    """
+    L_max, L = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
+
+    batch_size = jnp.floor(_calc_b_hat(X.shape[0], L_max, L))
+
+    if not jnp.isfinite(batch_size):
+        batch_size = default_batch_size
+        stepsize = default_stepsize
+
+        warnings.warn(
+            f"Could not determine batch and step size automatically. Falling back on the default values of {batch_size} and {default_stepsize}."
+        )
+    else:
+        stepsize = _calc_alpha(batch_size, X.shape[0], L_max, L)
+
+    return int(batch_size), stepsize
+
+
+def _softplus_poisson_L_max_and_L(
+    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
+):
+    L = _softplus_poisson_L(X, y, n_power_iters)
+    L_max = _softplus_poisson_L_max(X, y)
+
+    return L_max, L
+
+
+def _softplus_poisson_L_multiply(X, y, v):
+    N, _ = X.shape
+
+    def body_fun(i, current_sum):
+        return current_sum + (0.17 * y[i] + 0.25) * jnp.outer(X[i, :], X[i, :]) @ v
+
+    v_new = jax.lax.fori_loop(0, N, body_fun, v)
+
+    return v_new / N
+
+
+def _softplus_poisson_L_with_power_iteration(X, y, n_power_iters: int = 5):
+    # key is fixed to random.key(0)
+    _, d = X.shape
+
+    # initialize to random d-dimensional vector
+    v = random.normal(jax.random.key(0), (d,))
+
+    # run the power iteration until convergence or the max steps
+    for _ in range(n_power_iters):
+        v_prev = v.copy()
+        v = _softplus_poisson_L_multiply(X, y, v)
+
+        if jnp.allclose(v_prev, v):
+            break
+
+    # calculate the eigenvalue
+    return jnp.linalg.norm(_softplus_poisson_L_multiply(X, y, v)) / jnp.linalg.norm(v)
+
+
+def _softplus_poisson_XDX(X, y):
+    N, d = X.shape
+
+    def body_fun(i, current_sum):
+        return current_sum + (0.17 * y[i] + 0.25) * jnp.outer(X[i, :], X[i, :])
+
+    # xi = jax.lax.dynamic_slice(X, (i, 0), (1, d)).reshape((d,))
+    # yi = jax.lax.dynamic_slice(y, (i, 0), (1, 1))
+    # return current_sum + (0.17 * yi + 0.25) * jnp.outer(xi, xi)
+
+    # will be d x d
+    XDX = jax.lax.fori_loop(0, N, body_fun, jnp.zeros((d, d)))
+
+    return XDX / N
+
+
+def _softplus_poisson_L(
+    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
+):
+    if n_power_iters is None:
+        # calculate XDX and its largest eigenvalue directly
+        return jnp.sort(jnp.linalg.eigvals(_softplus_poisson_XDX(X, y)).real)[-1]
+    else:
+        # use the power iteration to calculate the larget eigenvalue
+        return _softplus_poisson_L_with_power_iteration(X, y, n_power_iters)
+
+
+def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
+    N, _ = X.shape
+
+    def body_fun(i, current_max):
+        return jnp.maximum(
+            current_max, jnp.linalg.norm(X[i, :]) ** 2 * (0.17 * y[i] + 0.25)
+        )
+
+    L_max = jax.lax.fori_loop(0, N, body_fun, jnp.array([0.0]))
+
+    return L_max[0]
+
+
+def _calc_b_hat(N: int, L_max: float, L: float):
+    with jax.experimental.enable_x64():
+        return jnp.sqrt(N / 2 * (3 * L_max - L) / (N * L - 3 * L_max))
+
+
+def _calc_alpha(b: int, N: int, L_max: float, L: float):
+    with jax.experimental.enable_x64():
+        return 1 / 2 * b * (N - 1) / (3 * (N - b) * L_max + N * (b - 1) * L)
