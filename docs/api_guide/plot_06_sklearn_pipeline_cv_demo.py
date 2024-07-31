@@ -15,6 +15,11 @@ In particular, we will learn:
 # %%
 # ## What is a scikit-learn pipeline
 #
+# <figure markdown>
+# <img src="../../../assets/pipeline.svg" style="width: 100%"/>
+# <figcaption>Schematic of a scikit-learn pipeline.</figcaption>
+# </figure>
+#
 # A pipeline is a sequence of data transformations. Each step in the pipeline transforms the input data into a different representation. The final step is either another transformation or a model step that fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the `Pipeline` class from scikit-learn.
 #
 # To set up a scikit-learn `Pipeline`, ensure that:
