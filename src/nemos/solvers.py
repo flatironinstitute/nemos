@@ -45,9 +45,9 @@ class ProxSVRG:
     Attributes
     ----------
     fun: Callable
-        smooth function of the form ``fun(x, *args, **kwargs)``.
+        Smooth function of the form ``fun(x, *args, **kwargs)``.
     prox: Callable
-        proximity operator associated with the function ``non_smooth``.
+        Proximal operator associated with the function ``non_smooth``.
         It should be of the form ``prox(params, hyperparams_prox, scale=1.0)``.
         See ``jaxopt.prox`` for examples.
     maxiter : int
@@ -108,7 +108,7 @@ class ProxSVRG:
         Parameters
         ----------
         init_params : Any
-            pytree containing the initial parameters.
+            Pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
         hyperparams_prox : float
             Parameters of the proximal operator, in our case the regularization strength.
