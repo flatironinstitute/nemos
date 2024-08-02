@@ -275,14 +275,15 @@ class TransformerBasis:
         """
         Enable easy access to attributes of the underlying Basis object.
 
-        Example
-        -------
-        from nemos import basis
-
-        bas = basis.RaisedCosineBasisLinear(5)
-        trans_bas = basis.TransformerBasis(bas)
-        print(bas.n_basis_funcs)
-        print(trans_bas.n_basis_funcs)
+        Examples
+        --------
+        >>> from nemos import basis
+        >>> bas = basis.RaisedCosineBasisLinear(5)
+        >>> trans_bas = basis.TransformerBasis(bas)
+        >>> bas.n_basis_funcs
+        5
+        >>> trans_bas.n_basis_funcs
+        5
         """
         return getattr(self._basis, name)
 
@@ -292,15 +293,28 @@ class TransformerBasis:
 
         Setting any other attribute is not allowed.
 
-        Example
+        Returns
         -------
-        trans_bas = nmo.basis.TransformerBasis(nmo.basis.MSplineBasis(10))
-        # allowed
-        trans_bas._basis = nmo.basis.BSplineBasis(10)
-        # allowed
-        trans_bas.n_basis_funcs = 20
-        # not allowed
-        tran_bas.random_attribute_name = "some value"
+        None
+
+        Raises
+        ------
+        ValueError
+            If the attribute being set is not `_basis` or an attribute of `_basis`.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.MSplineBasis(10))
+        >>> # allowed
+        >>> trans_bas._basis = nmo.basis.BSplineBasis(10)
+        >>> # allowed
+        >>> trans_bas.n_basis_funcs = 20
+        >>> # not allowed
+        >>> tran_bas.random_attribute_name = "some value"
+        Traceback (most recent call last):
+        ...
+        ValueError: Only setting _basis or existing attributes of _basis is allowed.
         """
         # allow self._basis = basis
         if name == "_basis":
@@ -334,8 +348,8 @@ class TransformerBasis:
         When used with, sklearn.model_selection, either set the _basis attribute directly,
         or set the parameters of the underlying Basis, but doing both at the same time is not allowed.
 
-        Example
-        -------
+        Examples
+        --------
         >>> from nemos.basis import BSplineBasis, MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10)
         >>> transformer_basis = TransformerBasis(basis=basis)
@@ -348,7 +362,6 @@ class TransformerBasis:
 
         >>> # mixing is not allowed, this will raise an exception
         >>> transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
-
         """
         new_basis = parameters.pop("_basis", None)
         if new_basis is not None:
@@ -974,7 +987,32 @@ class Basis(Base, abc.ABC):
         return result
 
     def to_transformer(self) -> TransformerBasis:
-        """Turn the Basis into a TransformerBasis for use with scikit-learn."""
+        """
+        Turn the Basis into a TransformerBasis for use with scikit-learn.
+
+        Examples
+        --------
+        Jointly cross-validating basis and GLM parameters with scikit-learn.
+
+        >>> import nemos as nmo
+        >>> from sklearn.pipeline import Pipeline
+        >>> from sklearn.model_selection import GridSearchCV
+        >>> basis = nmo.basis.RaisedCosineBasisLinear(10)
+        >>> glm = nmo.glm.GLM(regularizer="Ridge")
+        >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
+        >>> param_grid = dict(
+        ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+        ...     basis__n_basis_funcs=(3, 5, 10, 20, 100),
+        ... )
+        >>> gridsearch = GridSearchCV(
+        ...     pipeline,
+        ...     param_grid=param_grid,
+        ...     cv=5,
+        ...     scoring=pseudo_r2,
+        ... )
+        >>> gridsearch.fit()
+        """
+
         return TransformerBasis(copy.deepcopy(self))
 
 
