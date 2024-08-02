@@ -31,7 +31,6 @@ class SVRGState(NamedTuple):
     stepsize: float
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
-    x_av: Optional[tuple] = None
 
 
 class ProxSVRG:
@@ -141,7 +140,6 @@ class ProxSVRG:
             stepsize=self.stepsize,
             xs=init_params,
             df_xs=df_xs,
-            x_av=init_params,
         )
         return state
 
@@ -250,7 +248,7 @@ class ProxSVRG:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
 
-        Note that this method doesn't update state.x_av, state.xs, state.df_xs, that has to be done outside.
+        Note that this method doesn't update state.xs, state.df_xs, that has to be done outside.
 
         Parameters
         ----------
@@ -277,7 +275,7 @@ class ProxSVRG:
             state : SVRGState
                 Updated state.
         """
-        # NOTE this doesn't update state.x_av, state.xs, state.df_xs, that has to be done outside
+        # NOTE this doesn't update state.xs, state.df_xs, that has to be done outside
 
         next_params = self._xk_update(
             current_params, state.xs, state.df_xs, state.stepsize, prox_lambda, *args
@@ -388,7 +386,6 @@ class ProxSVRG:
 
             # update xs with the final xk or an average over the inner loop's iterations
             xs = xk
-            # xs = state.x_av
 
             state = state._replace(
                 xs=xs,
@@ -460,7 +457,7 @@ class ProxSVRG:
         xs, df_xs = state.xs, state.df_xs
 
         def inner_loop_body(_, carry):
-            xk, x_sum, key = carry
+            xk, key = carry
 
             # sample mini-batch or data point
             key, subkey = random.split(key)
@@ -476,20 +473,13 @@ class ProxSVRG:
                 *(tree_slice(arg, ind) for arg in args),
             )
 
-            # update the sum used for the averaging
-            x_sum = tree_add(x_sum, xk)
+            return (xk, key)
 
-            return (xk, x_sum, key)
-
-        xk, x_sum, key = lax.fori_loop(
+        xk, key = lax.fori_loop(
             0,
             m,
             inner_loop_body,
-            (
-                current_params,
-                tree_zeros_like(xs),  # initialize the sum to zero
-                state.key,
-            ),
+            (current_params, state.key),
         )
 
         # update the state
@@ -497,13 +487,11 @@ class ProxSVRG:
         state = state._replace(
             iter_num=state.iter_num + 1,
             key=key,
-            x_av=tree_scalar_mul(1 / m, x_sum),
         )
 
         # the next anchor point is the parameters at the end of the inner loop
-        # or the average over the inner loop
+        # (or the average over the inner loop)
         return OptStep(params=xk, state=state)
-        # return OptStep(params=state.x_av, state=state)
 
     # @staticmethod
     # def _error(x, x_prev, stepsize):
