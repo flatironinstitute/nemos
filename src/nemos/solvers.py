@@ -135,7 +135,7 @@ class ProxSVRG:
 
         state = SVRGState(
             iter_num=0,
-            key=self.key if self.key is not None else random.key(0),
+            key=self.key if self.key is not None else random.key(123),
             error=jnp.inf,
             stepsize=self.stepsize,
             xs=init_params,
