@@ -29,7 +29,6 @@ class SVRGState(NamedTuple):
     key: KeyArrayLike
     error: float
     stepsize: float
-    # loss_log: jnp.ndarray
     xs: Optional[tuple] = None
     df_xs: Optional[tuple] = None
     x_av: Optional[tuple] = None
@@ -140,44 +139,11 @@ class ProxSVRG:
             key=self.key if self.key is not None else random.key(0),
             error=jnp.inf,
             stepsize=self.stepsize,
-            # loss_log=jnp.zeros((self.maxiter,)),
             xs=init_params,
             df_xs=df_xs,
             x_av=init_params,
         )
         return state
-
-    def _update_loss_log(
-        self,
-        loss_log: jnp.ndarray,
-        i: int,
-        params: Any,
-        *args,
-    ) -> jnp.ndarray:
-        """
-        Update an entry in the array used for storing the log of the loss throughout the optimization.
-
-        Parameters
-        ----------
-        loss_log : jnp.ndarray
-            1D array storing the loss values.
-        i : int
-            Index at which to update, most likely the current iteration number.
-        params : Any
-            Parameters with which to evaluate the loss.
-        args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
-                    Input data.
-                y :
-                    Output data.
-
-        Returns
-        -------
-        Updated loss log.
-        """
-        return loss_log.at[i].set(self.fun(params, *args))
 
     @partial(jit, static_argnums=(0,))
     def _xk_update(
@@ -405,10 +371,6 @@ class ProxSVRG:
             final_state : SVRGState
                 Final optimizer state.
         """
-        # evaluate the loss for the initial parameters, aka iter_num=0
-        # init_state = init_state._replace(
-        #    loss_log=self._update_loss_log(init_state.loss_log, 0, init_params, X, y)
-        # )
 
         # this method assumes that args hold the full data
         def body_fun(step):
@@ -431,9 +393,6 @@ class ProxSVRG:
             state = state._replace(
                 xs=xs,
                 error=self._error(xs, xs_prev, state.stepsize),
-                # loss_log=self._update_loss_log(
-                #    state.loss_log, state.iter_num, xs, X, y
-                # ),
             )
 
             return OptStep(params=xs, state=state)
