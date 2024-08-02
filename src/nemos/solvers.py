@@ -493,21 +493,25 @@ class ProxSVRG:
         # (or the average over the inner loop)
         return OptStep(params=xk, state=state)
 
-    # @staticmethod
-    # def _error(x, x_prev, stepsize):
-    #    diff_norm = tree_l2_norm(tree_sub(x, x_prev))
-    #    return diff_norm / stepsize
-
     @staticmethod
     def _error(x, x_prev, stepsize):
-        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
+        """
+        Calculate the magnitude of the update relative to the parameters.
+        Used for terminating the algorithm if a certain tolerance is reached.
 
-    # @staticmethod
-    # def _error(x, x_prev, stepsize):
-    #    # adapted from scikit-learn's SAG solver
-    #    diff = tree_sub(x, x_prev)
-    #    flat_diff, _ = jax.flatten_util.ravel_pytree(diff)
-    #    return jnp.max(jnp.abs(flat_diff))
+        Params
+        ------
+        x :
+            Parameter values after the update.
+        x_prev :
+            Previous parameter values.
+
+        Returns
+        -------
+        Scaled update magnitude.
+        """
+        # stepsize is an argument to be consistent with jaxopt
+        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
 
 
 class SVRG(ProxSVRG):
