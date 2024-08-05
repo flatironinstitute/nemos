@@ -45,8 +45,8 @@ cd nemos
 pip install -e .[dev]
 ```
 
-> [!NOTE]  In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that 
-> provides guidance on how to create and activate a virtual environment.
+> [!NOTE]
+> In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that provides guidance on how to create and activate a virtual environment.
 
 3) Add the upstream branch:
 
@@ -62,8 +62,8 @@ this make it easy to keep your `nemos` up-to-date with the canonical version by 
 As mentioned previously, each feature in `nemos` is worked on in a separate branch. This allows multiple people developing multiple features simultaneously, without interfering with each other's work. To create
 your own branch, run the following from within your `nemos` directory:
 
-> [!NOTE]  Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of
-> changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release) :D
+> [!NOTE]
+> Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release).
 
 ```bash
 # switch to the development branch on your local copy
@@ -105,11 +105,11 @@ isort src
 flake8 --config=tox.ini src
 ```
 
-> [!IMPORTANT] [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
-> reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your 
-> code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
+> [!IMPORTANT] 
+> [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
 
-> [!NOTE] If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
+> [!NOTE]
+> If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
 
 Now you are ready to make a Pull Request. You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo 
 after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/03-pr/index.html) for a tutorial).
@@ -150,12 +150,11 @@ If you're adding a substantial bunch of tests that are separate from the existin
 it must have an `.py` extension, and it must be contained within the `tests` directory. Assuming you do that, our github actions will automatically find it and 
 add it to the tests-to-run.
 
-> [!NOTE] If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official
-> documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html) and NeMoS [`test_error_invalid_entry`](https://github.com/flatironinstitute/nemos/blob/main/tests/test_vallidation.py#L27) for a concrete implementation.
+> [!NOTE]
+> If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html) and NeMoS [`test_error_invalid_entry`](https://github.com/flatironinstitute/nemos/blob/main/tests/test_vallidation.py#L27) for a concrete implementation.
 
-> [!NOTE] If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to 
-> load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation 
-> [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
+> [!NOTE]
+> If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
 
 ### Documentation 
 
