@@ -51,7 +51,7 @@ def test_svrg_init_state_default(request, regr_setup):
     state = svrg.init_state(param_init, X, y)
 
     assert state.iter_num == 0
-    assert state.key == jax.random.key(0)
+    assert state.key == jax.random.key(123)
     assert state.df_xs is None
     assert state.xs is not None
 
@@ -415,7 +415,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
     batch_size = 1
     maxiter = 10_000
     tol = 1e-12
-    key = jax.random.key(0)
+    key = jax.random.key(123)
 
     m = int((N + batch_size - 1) // batch_size)
 
@@ -493,7 +493,7 @@ def test_svrg_xk_update(request, regr_setup, to_tuple, prox, prox_lambda):
     df_xs = loss_gradient(xs, X, y)
 
     # sample a mini-batch
-    key = jax.random.key(0)
+    key = jax.random.key(123)
     key, subkey = jax.random.split(key)
     ind = jax.random.randint(subkey, (32,), 0, y.shape[0])
     xi, yi = tree_slice(X, ind), tree_slice(y, ind)
