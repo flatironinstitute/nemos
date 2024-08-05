@@ -132,6 +132,17 @@ The next section will talk about the style of your code and specific requirement
 - Longer, descriptive names are preferred (e.g., x is not an appropriate name for a variable), especially for anything user-facing, such as methods, attributes, or arguments.
 - Any public method or function must have a complete type-annotated docstring (see below for details). Hidden ones do not need to have complete docstrings, but they probably should.
 
+### Releases
+
+We create releases on Github, deploy on / distribute via [pypi](https://pypi.org/), and try to follow [semantic versioning](https://semver.org/):
+
+> Given a version number MAJOR.MINOR.PATCH, increment the:
+> 1. MAJOR version when you make incompatible API changes
+> 2. MINOR version when you add functionality in a backward compatible manner
+> 3. PATCH version when you make backward compatible bug fixes
+
+ro release a new version, we [create a Github release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) with a new tag incrementing the version as described above. Creating the Github release will trigger the deployment to pypi, via our `deploy` action (found in `.github/workflows/deploy-pure-python.yml`). The built version will grab the version tag from the Github release, using [setuptools_scm](https://github.com/pypa/setuptools_scm).
+
 ### Testing 
 
 To run all tests, run `pytest` from within the main `nemos` repository. This may take a while as there are many tests, broken into several categories. 
