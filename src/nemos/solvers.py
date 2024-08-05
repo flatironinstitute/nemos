@@ -231,8 +231,13 @@ class ProxSVRG:
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
             state :
                 Updated state.
+
+        Raises
+        ------
+        ValueError
+            The parameter update needs a value for the full gradient at the anchor point, which needs the full data
+            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None, a ValueError is raised.
         """
-        # return self._update_per_random_samples(current_params, state, prox_lambda, X, y)
         if state.df_xs is None:
             raise ValueError(
                 "Full gradient at the anchor point (state.df_xs) has to be set. "
@@ -459,6 +464,11 @@ class ProxSVRG:
                 (... or the average of the parameters over the last inner loop)
             state :
                 Updated state.
+
+        Raises
+        ------
+        ValueError
+            If not all arguments in args have the same sized first dimension.
         """
         n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
         if not len(n_points_per_arg) == 1:
@@ -652,6 +662,12 @@ class SVRG(ProxSVRG):
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
             state :
                 Updated state.
+
+        Raises
+        ------
+        ValueError
+            The parameter update needs a value for the full gradient at the anchor point, which needs the full data
+            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None, a ValueError is raised.
         """
         # substitute None for prox_lambda
         return super().update(current_params, state, None, *args, **kwargs)
