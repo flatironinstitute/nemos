@@ -468,7 +468,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
         (nmo.proximal_operator.prox_lasso, 0.1),
     ],
 )
-def test_svrg_xk_update(request, regr_setup, to_tuple, prox, prox_lambda):
+def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
 
     X, y, true_params, ols_coef, loss_arr = request.getfixturevalue(regr_setup)
 
@@ -552,7 +552,7 @@ def test_svrg_xk_update(request, regr_setup, to_tuple, prox, prox_lambda):
         solver = SVRG(loss)
     else:
         solver = ProxSVRG(loss, prox)
-    svrg_next_xk = solver._xk_update(
+    svrg_next_xk = solver._xk_update_step(
         init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
     )
 

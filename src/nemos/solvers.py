@@ -136,7 +136,7 @@ class ProxSVRG:
         return state
 
     @partial(jit, static_argnums=(0,))
-    def _xk_update(
+    def _xk_update_step(
         self,
         xk: Pytree,
         xs: Pytree,
@@ -176,13 +176,20 @@ class ProxSVRG:
         next_xk :
             Parameter values after applying the update.
         """
-        dfik_xk = self.loss_gradient(xk, *args)
-        dfik_xs = self.loss_gradient(xs, *args)
+        # gradient on batch_{i_k} evaluated at the current parameters (xk)
+        grad_of_fik_at_xk = self.loss_gradient(xk, *args)
+        # gradient on batch_{i_k} evaluated at the anchor point (xs)
+        grad_of_fik_at_xs = self.loss_gradient(xs, *args)
 
-        gk = jax.tree_util.tree_map(lambda a, b, c: a - b + c, dfik_xk, dfik_xs, df_xs)
+        # SVRG gradient estimate
+        gk = jax.tree_util.tree_map(
+            lambda a, b, c: a - b + c, grad_of_fik_at_xk, grad_of_fik_at_xs, df_xs
+        )
 
+        # x_{k+1} = x_{k} - stepsize * g_{k}
         next_xk = tree_add_scalar_mul(xk, -stepsize, gk)
 
+        # apply the proximal operator
         next_xk = self.proximal_operator(next_xk, prox_lambda, scaling=stepsize)
 
         return next_xk
@@ -288,7 +295,7 @@ class ProxSVRG:
         """
         # NOTE this doesn't update state.xs, state.df_xs, that has to be done outside
 
-        next_params = self._xk_update(
+        next_params = self._xk_update_step(
             current_params, state.xs, state.df_xs, state.stepsize, prox_lambda, *args
         )
 
@@ -329,7 +336,7 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            final_xs :
+            final_params :
                 Parameters at the end of the last innner loop.
                 (... or the average of the parameters over the last inner loop)
             final_state :
@@ -379,7 +386,7 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            final_xs :
+            final_params :
                 Parameters at the end of the last innner loop.
                 (... or the average of the parameters over the last inner loop)
             final_state :
@@ -415,14 +422,14 @@ class ProxSVRG:
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
 
-        final_xs, final_state = loop.while_loop(
+        final_params, final_state = loop.while_loop(
             cond_fun=cond_fun,
             body_fun=body_fun,
             init_val=OptStep(params=init_params, state=init_state),
             maxiter=self.maxiter,
             jit=True,
         )
-        return OptStep(params=final_xs, state=final_state)
+        return OptStep(params=final_params, state=final_state)
 
     @partial(jit, static_argnums=(0,))
     def _update_per_random_samples(
@@ -488,7 +495,7 @@ class ProxSVRG:
             ind = random.randint(subkey, (self.batch_size,), 0, N)
 
             # perform a single update on the mini-batch or data point
-            xk = self._xk_update(
+            xk = self._xk_update_step(
                 xk,
                 xs,
                 df_xs,
@@ -700,7 +707,7 @@ class SVRG(ProxSVRG):
         Returns
         -------
         OptStep
-            final_xs :
+            final_params :
                 Parameters at the end of the last innner loop.
                 (... or the average of the parameters over the last inner loop)
             final_state :
