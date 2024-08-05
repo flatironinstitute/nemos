@@ -106,11 +106,14 @@ class ProxSVRG:
             Parameters of the proximal operator, in our case the regularization strength.
             Not used here, but required to be consistent with the jaxopt API.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
         init_full_gradient : bool, default False
             Whether to calculate the full gradient at the initial parameters,
@@ -161,12 +164,20 @@ class ProxSVRG:
         prox_lambda :
             Hyperparameters to `prox`, most commonly regularization strength.
         args:
-            Hyperparameters passed to `prox` and positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
-                    Input datapoint or mini-batch.
-                y :
-                    Output datapoint or mini-batch.
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
+                    Input data.
+                y : jnp.ndarray
+                    Output data.
+
+        Returns
+        -------
+        next_xk :
+            Parameter values after applying the update.
         """
         dfik_xk = self.loss_gradient(xk, *args)
         dfik_xs = self.loss_gradient(xs, *args)
@@ -205,11 +216,14 @@ class ProxSVRG:
         prox_lambda :
             Regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
 
@@ -252,11 +266,14 @@ class ProxSVRG:
         prox_lambda :
             Regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
         Returns
@@ -297,11 +314,14 @@ class ProxSVRG:
         prox_lambda :
             Regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
         Returns
@@ -345,13 +365,15 @@ class ProxSVRG:
         prox_lambda :
             Regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
-
         Returns
         -------
         OptStep
@@ -421,12 +443,15 @@ class ProxSVRG:
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         prox_lambda :
             Regularization strength. Can be None.
-        args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+        args :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
         Returns
@@ -571,11 +596,14 @@ class SVRG(ProxSVRG):
             pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
         init_full_gradient : bool, default False
@@ -608,11 +636,14 @@ class SVRG(ProxSVRG):
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
         Returns
@@ -641,11 +672,14 @@ class SVRG(ProxSVRG):
         init_params :
             Initial parameters to start from.
         args:
-            Positional arguments passed to loss function `fun` and its gradient.
-            For GLMs it is:
-                X :
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            most likely input and output data.
+            They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
+            leaves having the same sized first dimension (corresponding to the number of data points).
+            For GLMs these are:
+                X : DESIGN_INPUT_TYPE
                     Input data.
-                y :
+                y : jnp.ndarray
                     Output data.
 
         Returns
