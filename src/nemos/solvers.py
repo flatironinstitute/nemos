@@ -462,7 +462,7 @@ class ProxSVRG:
                 df_xs,
                 state.stepsize,
                 prox_lambda,
-                *(tree_slice(arg, ind) for arg in args),
+                *tree_slice(args, ind),
             )
 
             return (xk, key)
