@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional, Union
 
 import jax
 import jax.flatten_util
@@ -99,10 +99,10 @@ class ProxSVRG:
 
         Parameters
         ----------
-        init_params : Any
+        init_params :
             Pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
-        hyperparams_prox : float
+        hyperparams_prox :
             Parameters of the proximal operator, in our case the regularization strength.
             Not used here, but required to be consistent with the jaxopt API.
         args:
@@ -118,7 +118,7 @@ class ProxSVRG:
 
         Returns
         -------
-        state : SVRGState
+        state :
             Initialized optimizer state
         """
         df_xs = None
@@ -142,7 +142,7 @@ class ProxSVRG:
         xs: Any,
         df_xs: Any,
         stepsize: float,
-        prox_lambda: float,
+        prox_lambda: Union[float, None],
         *args,
     ) -> Any:
         """
@@ -150,15 +150,15 @@ class ProxSVRG:
 
         Parameters
         ----------
-        xk : pytree
+        xk :
             Current parameters.
-        xs : pytree
+        xs :
             Anchor point.
-        df_xs : pytree
+        df_xs :
             Full gradient at the anchor point.
-        stepsize : float
+        stepsize :
             Step size.
-        prox_lambda : float or None
+        prox_lambda :
             Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Hyperparameters passed to `prox` and positional arguments passed to loss function `fun` and its gradient.
@@ -184,7 +184,7 @@ class ProxSVRG:
         self,
         current_params: Any,
         state: SVRGState,
-        prox_lambda: float,
+        prox_lambda: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -197,12 +197,12 @@ class ProxSVRG:
 
         Parameters
         ----------
-        current_params : Any
+        current_params :
             Parameters at the end of the previous update, used as the starting point for the current update.
-        state : SVRGState
+        state :
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        prox_lambda : float
+        prox_lambda :
             Regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient.
@@ -216,9 +216,9 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            xs : Any
+            xs :
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
-            state : SVRGState
+            state :
                 Updated state.
         """
         # return self._update_per_random_samples(current_params, state, prox_lambda, X, y)
@@ -234,7 +234,7 @@ class ProxSVRG:
         self,
         current_params: Any,
         state: SVRGState,
-        prox_lambda: float,
+        prox_lambda: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -244,12 +244,12 @@ class ProxSVRG:
 
         Parameters
         ----------
-        current_params : Any
+        current_params :
             Parameters at the end of the previous update, used as the starting point for the current update.
-        state : SVRGState
+        state :
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        prox_lambda : float
+        prox_lambda :
             Regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient.
@@ -262,9 +262,9 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            xs : Any
+            xs :
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
-            state : SVRGState
+            state :
                 Updated state.
         """
         # NOTE this doesn't update state.xs, state.df_xs, that has to be done outside
@@ -283,7 +283,7 @@ class ProxSVRG:
     def run(
         self,
         init_params: Any,
-        prox_lambda: float,
+        prox_lambda: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -292,9 +292,9 @@ class ProxSVRG:
 
         Parameters
         ----------
-        init_params : Any
+        init_params :
             Initial parameters to start from.
-        prox_lambda : float
+        prox_lambda :
             Regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient.
@@ -307,10 +307,10 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            final_xs : Any
+            final_xs :
                 Parameters at the end of the last innner loop.
                 (... or the average of the parameters over the last inner loop)
-            final_state : SVRGState
+            final_state :
                 Final optimizer state.
         """
         # initialize the state, including the full gradient at the initial parameters
@@ -328,7 +328,7 @@ class ProxSVRG:
         self,
         init_params: Any,
         init_state: SVRGState,
-        prox_lambda: float,
+        prox_lambda: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -338,11 +338,11 @@ class ProxSVRG:
 
         Parameters
         ----------
-        init_params : Any
+        init_params :
             Initial parameters to start from.
-        init_state : SVRGState
+        init_state :
             Initialized optimizer state returned by `ProxSVRG.init_state`
-        prox_lambda : float
+        prox_lambda :
             Regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient.
@@ -355,10 +355,10 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            final_xs : Any
+            final_xs :
                 Parameters at the end of the last innner loop.
                 (... or the average of the parameters over the last inner loop)
-            final_state : SVRGState
+            final_state :
                 Final optimizer state.
         """
 
@@ -405,7 +405,7 @@ class ProxSVRG:
         self,
         current_params: Any,
         state: SVRGState,
-        prox_lambda: float,
+        prox_lambda: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -414,12 +414,12 @@ class ProxSVRG:
 
         Parameters
         ----------
-        current_params : Any
+        current_params :
             Parameters at the end of the previous update, used as the starting point for the current update.
-        state : SVRGState
+        state :
             Optimizer state at the end of the previous sweep.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        prox_lambda : float
+        prox_lambda :
             Regularization strength. Can be None.
         args:
             Positional arguments passed to loss function `fun` and its gradient.
@@ -432,10 +432,10 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            xs : Any
+            xs :
                 Parameters at the end of the last inner loop.
                 (... or the average of the parameters over the last inner loop)
-            state : SVRGState
+            state :
                 Updated state.
         """
         n_points_per_arg = {leaf.shape[0] for leaf in jax.tree.leaves(args)}
@@ -567,7 +567,7 @@ class SVRG(ProxSVRG):
 
         Parameters
         ----------
-        init_params : Any
+        init_params :
             pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
         args:
@@ -584,7 +584,7 @@ class SVRG(ProxSVRG):
 
         Returns
         -------
-        state : SVRGState
+        state :
             Initialized optimizer state
         """
         # substitute None for prox_lambda
@@ -602,9 +602,9 @@ class SVRG(ProxSVRG):
 
         Parameters
         ----------
-        current_params : Any
+        current_params :
             Parameters at the end of the previous update, used as the starting point for the current update.
-        state : SVRGState
+        state :
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
         args:
@@ -618,9 +618,9 @@ class SVRG(ProxSVRG):
         Returns
         -------
         OptStep
-            xs : Any
+            xs :
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
-            state : SVRGState
+            state :
                 Updated state.
         """
         # substitute None for prox_lambda
@@ -638,7 +638,7 @@ class SVRG(ProxSVRG):
 
         Parameters
         ----------
-        init_params : Any
+        init_params :
             Initial parameters to start from.
         args:
             Positional arguments passed to loss function `fun` and its gradient.
@@ -651,10 +651,10 @@ class SVRG(ProxSVRG):
         Returns
         -------
         OptStep
-            final_xs : Any
+            final_xs :
                 Parameters at the end of the last innner loop.
                 (... or the average of the parameters over the last inner loop)
-            final_state : SVRGState
+            final_state :
                 Final optimizer state.
         """
         # initialize the state, including the full gradient at the initial parameters
