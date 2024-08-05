@@ -5,15 +5,12 @@ import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
-from jax._src.typing import ArrayLike
 from jaxopt import OptStep
 from jaxopt._src import loop
 from jaxopt.prox import prox_none
 
 from .tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
-
-# copying jax.random's annotation
-KeyArrayLike = ArrayLike
+from .typing import KeyArrayLike, Pytree
 
 
 class SVRGState(NamedTuple):
@@ -21,8 +18,8 @@ class SVRGState(NamedTuple):
     key: KeyArrayLike
     error: float
     stepsize: float
-    xs: Optional[tuple] = None
-    df_xs: Optional[tuple] = None
+    xs: Optional[Pytree] = None
+    df_xs: Optional[Pytree] = None
 
 
 class ProxSVRG:
@@ -89,7 +86,7 @@ class ProxSVRG:
 
     def init_state(
         self,
-        init_params: Any,
+        init_params: Pytree,
         hyperparams_prox: Any,
         *args,
         init_full_gradient: bool = False,
@@ -141,13 +138,13 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def _xk_update(
         self,
-        xk: Any,
-        xs: Any,
-        df_xs: Any,
+        xk: Pytree,
+        xs: Pytree,
+        df_xs: Pytree,
         stepsize: float,
         prox_lambda: Union[float, None],
         *args,
-    ) -> Any:
+    ) -> Pytree:
         """
         Body of the inner loop of Prox-SVRG that takes a step.
 
@@ -193,7 +190,7 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def update(
         self,
-        current_params: Any,
+        current_params: Pytree,
         state: SVRGState,
         prox_lambda: Union[float, None],
         *args,
@@ -246,7 +243,7 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def _update_on_batch(
         self,
-        current_params: Any,
+        current_params: Pytree,
         state: SVRGState,
         prox_lambda: Union[float, None],
         *args,
@@ -299,7 +296,7 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def run(
         self,
-        init_params: Any,
+        init_params: Pytree,
         prox_lambda: Union[float, None],
         *args,
     ) -> OptStep:
@@ -346,7 +343,7 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def _run(
         self,
-        init_params: Any,
+        init_params: Pytree,
         init_state: SVRGState,
         prox_lambda: Union[float, None],
         *args,
@@ -425,7 +422,7 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def _update_per_random_samples(
         self,
-        current_params: Any,
+        current_params: Pytree,
         state: SVRGState,
         prox_lambda: Union[float, None],
         *args,
@@ -586,7 +583,7 @@ class SVRG(ProxSVRG):
             batch_size,
         )
 
-    def init_state(self, init_params: Any, *args, **kwargs) -> SVRGState:
+    def init_state(self, init_params: Pytree, *args, **kwargs) -> SVRGState:
         """
         Initialize the solver state
 
@@ -619,7 +616,9 @@ class SVRG(ProxSVRG):
         return super().init_state(init_params, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(self, current_params: Any, state: SVRGState, *args, **kwargs):
+    def update(
+        self, current_params: Pytree, state: SVRGState, *args, **kwargs
+    ) -> OptStep:
         """
         Perform a single parameter update on the passed data (no random sampling or loops)
         and increment `state.iter_num`.
@@ -660,7 +659,7 @@ class SVRG(ProxSVRG):
     @partial(jit, static_argnums=(0,))
     def run(
         self,
-        init_params: Any,
+        init_params: Pytree,
         *args,
     ) -> OptStep:
         """
