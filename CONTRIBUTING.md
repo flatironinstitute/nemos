@@ -111,7 +111,7 @@ flake8 --config=tox.ini src
 > [!NOTE]
 > If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
 
-Now you are ready to make a Pull Request. You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo 
+Now you are ready to make a Pull Request (PR). You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo 
 after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/03-pr/index.html) for a tutorial).
 
 Your pull request should include the following:
@@ -122,6 +122,16 @@ Your pull request should include the following:
 Next, we will be notified of the pull request and will read it over. We will try to give an initial response quickly, and then do a longer in-depth review, at which point 
 you will probably need to respond to our comments, making changes as appropriate. We'll then respond again, and proceed in an iterative fashion until everyone is happy with the proposed 
 changes. 
+
+Additionally, every PR to `main` or `development` will automatically run linters and tests through a [GitHub action](https://docs.github.com/en/actions). Merges can happen only when all check passes.
+
+> [!NOTE]
+> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not installed by default as an optional dependency. If you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
+> ```sh
+> pip install tox
+> tox -e py
+> ```
+> This will execute `tox` with a Python version that matches your local environment. `tox` configurations can be found in the [`tox.ini`](tox.ini) file.
 
 Once your changes are integrated, you will be added as a GitHub contributor and as one of the authors of the package. Thank you for being part of `nemos`!
 
