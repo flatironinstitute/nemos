@@ -85,7 +85,7 @@ The `PopulationGLM` class is an extension of the `GLM`, designed to fit multiple
 
 When crafting a functional (i.e., concrete) GLM class:
 
-- You **must** inherit from or one of its derivatives.
+- You **must** inherit from `GLM` or one of its derivatives.
 - If you inherit directly from  `BaseRegressor`, you **must** implement all the abstract methods, see the [`BaseRegressor` page](03-base_regressor.md)  for more details.
 - If you inherit `GLM` or any of the other concrete classes directly, there won't be any abstract methods. 
 - You **may** embed additional parameter and input checks if required by the specific GLM subclass.

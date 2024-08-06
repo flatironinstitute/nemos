@@ -21,7 +21,7 @@ In order to contribute, you will need to do the following:
 2) Make sure that tests pass and code coverage is maintained
 3) Open a Pull Request
 
-The NeMoS package follows the [GitHub Flow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) workflow. In essence, there are two primary branches, `main` and `development`, to which no one is allowed to
+The NeMoS package follows the [Git Flow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) workflow. In essence, there are two primary branches, `main` and `development`, to which no one is allowed to
 push directly. All development happens in separate feature branches that are then merged into `development` once we have determined they are ready. When enough changes have accumulated, `developemnt` is merged into `main`, and a new release is 
 generated. This process includes adding a new tag to increment the version number and uploading the new release to PyPI. 
 
@@ -45,8 +45,8 @@ cd nemos
 pip install -e .[dev]
 ```
 
-> [!NOTE]  In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that 
-> provides guidance on how to create and activate a virtual environment.
+> [!NOTE]
+> In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that provides guidance on how to create and activate a virtual environment.
 
 3) Add the upstream branch:
 
@@ -62,8 +62,8 @@ this make it easy to keep your `nemos` up-to-date with the canonical version by 
 As mentioned previously, each feature in `nemos` is worked on in a separate branch. This allows multiple people developing multiple features simultaneously, without interfering with each other's work. To create
 your own branch, run the following from within your `nemos` directory:
 
-> [!NOTE]  Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of
-> changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release) :D
+> [!NOTE]
+> Below we are checking out the `development` branch. In terms of the `nemos` contribution workflow cycle, the `development` branch accumulates a series of changes from different feature branches that are then all merged into the `main` branch at one time (normally at the time of a release).
 
 ```bash
 # switch to the development branch on your local copy
@@ -105,11 +105,11 @@ isort src
 flake8 --config=tox.ini src
 ```
 
-> [!IMPORTANT] [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically 
-> reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your 
-> code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
+> [!IMPORTANT] 
+> [`black`](https://black.readthedocs.io/en/stable/) and [`isort`](https://pycqa.github.io/isort/) automatically reformat your code and organize your imports, respectively. [`flake8`](https://flake8.pycqa.org/en/stable/#) does not modify your code directly; instead, it identifies syntax errors and code complexity issues that need to be addressed manually.
 
-> [!NOTE] If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
+> [!NOTE]
+> If some files were reformatted after running `black`, make sure to commit those changes and push them to your feature branch as well. 
 
 Now you are ready to make a Pull Request. You can open a pull request by clicking on the big `Compare & pull request` button that appears at the top of the `nemos` repo 
 after pushing to your branch (see [here](https://intersect-training.org/collaborative-git/03-pr/index.html) for a tutorial).
@@ -132,6 +132,17 @@ The next section will talk about the style of your code and specific requirement
 - Longer, descriptive names are preferred (e.g., x is not an appropriate name for a variable), especially for anything user-facing, such as methods, attributes, or arguments.
 - Any public method or function must have a complete type-annotated docstring (see below for details). Hidden ones do not need to have complete docstrings, but they probably should.
 
+### Releases
+
+We create releases on Github, deploy on / distribute via [pypi](https://pypi.org/), and try to follow [semantic versioning](https://semver.org/):
+
+> Given a version number MAJOR.MINOR.PATCH, increment the:
+> 1. MAJOR version when you make incompatible API changes
+> 2. MINOR version when you add functionality in a backward compatible manner
+> 3. PATCH version when you make backward compatible bug fixes
+
+ro release a new version, we [create a Github release](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository) with a new tag incrementing the version as described above. Creating the Github release will trigger the deployment to pypi, via our `deploy` action (found in `.github/workflows/deploy-pure-python.yml`). The built version will grab the version tag from the Github release, using [setuptools_scm](https://github.com/pypa/setuptools_scm).
+
 ### Testing 
 
 To run all tests, run `pytest` from within the main `nemos` repository. This may take a while as there are many tests, broken into several categories. 
@@ -150,12 +161,11 @@ If you're adding a substantial bunch of tests that are separate from the existin
 it must have an `.py` extension, and it must be contained within the `tests` directory. Assuming you do that, our github actions will automatically find it and 
 add it to the tests-to-run.
 
-> [!NOTE] If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official
-> documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html) and NeMoS [`test_error_invalid_entry`](https://github.com/flatironinstitute/nemos/blob/main/tests/test_vallidation.py#L27) for a concrete implementation.
+> [!NOTE]
+> If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html) and NeMoS [`test_error_invalid_entry`](https://github.com/flatironinstitute/nemos/blob/main/tests/test_vallidation.py#L27) for a concrete implementation.
 
-> [!NOTE] If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to 
-> load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation 
-> [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
+> [!NOTE]
+> If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
 
 ### Documentation 
 
