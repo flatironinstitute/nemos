@@ -51,13 +51,13 @@ class ProxSVRG:
     batch_size: int
         Number of data points to sample per inner loop iteration.
 
-    Example
-    -------
-    def loss_fn(params, X, y):
-        ...
-
-    svrg = ProxSVRG(loss_fn, prox_fun)
-    params, state = svrg.run(init_params, prox_lambda, X, y)
+    Examples
+    --------
+    >>> def loss_fn(params, X, y):
+    >>>    ...
+    >>>
+    >>> svrg = ProxSVRG(loss_fn, prox_fun)
+    >>> params, state = svrg.run(init_params, prox_lambda, X, y)
 
     References
     ----------
@@ -567,13 +567,13 @@ class SVRG(ProxSVRG):
     batch_size: int
         Number of data points to sample per inner loop iteration.
 
-    Example
-    -------
-    def loss_fn(params, X, y):
-        ...
-
-    svrg = SVRG(loss_fn)
-    params, state = svrg.run(init_params, X, y)
+    Examples
+    --------
+    >>> def loss_fn(params, X, y):
+    >>>    ...
+    >>>
+    >>> svrg = SVRG(loss_fn)
+    >>> params, state = svrg.run(init_params, X, y)
 
     References
     ----------
