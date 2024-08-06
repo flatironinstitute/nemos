@@ -206,9 +206,9 @@ class ProxSVRG:
         Perform a single parameter update on the passed data (no random sampling or loops)
         and increment `state.iter_num`.
 
-        Please note that this is called by `GLM.update`, but repeated calls to `GLM.update`
-        on mini-batches passed to it will not result in running the full (Prox-)SVRG,
-        and parts of the algorithm will have to be implemented outside.
+        Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
+        but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
+        will not result in running the full (Prox-)SVRG, and parts of the algorithm will have to be implemented outside.
 
         Parameters
         ----------
@@ -314,7 +314,7 @@ class ProxSVRG:
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called from `GLM.fit` and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
 
         Parameters
         ----------
@@ -362,7 +362,7 @@ class ProxSVRG:
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called from `GLM.fit` and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
         Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
 
         Parameters
@@ -640,9 +640,9 @@ class SVRG(ProxSVRG):
         Perform a single parameter update on the passed data (no random sampling or loops)
         and increment `state.iter_num`.
 
-        Please note that this is called by `GLM.update`, but repeated calls to `GLM.update`
-        on mini-batches passed to it will not result in running the full (Prox-)SVRG,
-        and parts of the algorithm will have to be implemented outside.
+        Please note that this gets called by `BaseRegressor._solver_update` (e.g., as called by `GLM.update`),
+        but repeated calls to `(Prox)SVRG.update` (so in turn e.g. to `GLM.update`) on mini-batches passed to it
+        will not result in running the full (Prox-)SVRG, and parts of the algorithm will have to be implemented outside.
 
         Parameters
         ----------
@@ -687,7 +687,7 @@ class SVRG(ProxSVRG):
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called from `GLM.fit` and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
 
         Parameters
         ----------
