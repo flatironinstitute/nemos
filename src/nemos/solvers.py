@@ -293,8 +293,6 @@ class ProxSVRG:
             state :
                 Updated state.
         """
-        # NOTE this doesn't update state.xs, state.df_xs, that has to be done outside
-
         next_params = self._xk_update_step(
             current_params, state.xs, state.df_xs, state.stepsize, prox_lambda, *args
         )
