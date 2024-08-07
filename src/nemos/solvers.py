@@ -14,6 +14,31 @@ from .typing import KeyArrayLike, Pytree
 
 
 class SVRGState(NamedTuple):
+    """
+    Optimizer state for (Prox)SVRG.
+
+    Fields
+    ------
+    iter_num :
+        Current epoch or iteration number.
+    key :
+        Random key to use when sampling data points or mini-batches.
+    error :
+        Scaled difference (~distance) between subsequent parameter values
+        used to monitor convergence.
+    stepsize :
+        Step size of the individual gradient steps.
+    xs :
+        Anchor/reference point where the full gradient is calculated in the SVRG algorithm.
+        Naming follows pseudocode in [1]_
+    df_xs :
+        Full gradient at the anchor/reference point.
+
+    References
+    ----------
+    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    """
+
     iter_num: int
     key: KeyArrayLike
     error: float
@@ -61,8 +86,9 @@ class ProxSVRG:
 
     References
     ----------
-    1. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
-    2. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
+    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
+    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
     """
 
     def __init__(
@@ -575,8 +601,9 @@ class SVRG(ProxSVRG):
 
     References
     ----------
-    1. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
-    2. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
+    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
+    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
     """
 
     def __init__(
