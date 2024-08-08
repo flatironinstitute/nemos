@@ -20,7 +20,7 @@ In particular, we will learn:
 # <figcaption>Schematic of a scikit-learn pipeline.</figcaption>
 # </figure>
 #
-# A pipeline is a sequence of data transformations. Each step in the pipeline transforms the input data into a different representation. The final step is either another transformation or a model step that fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the `Pipeline` class from scikit-learn.
+# A pipeline is a sequence of data transformations leading up to a model. Each step before the final one transforms the input data into a different representation, and then the final model step fits, predicts, or scores based on the previous step's output and some observations. Setting up such machinery can be simplified using the `Pipeline` class from scikit-learn.
 #
 # To set up a scikit-learn `Pipeline`, ensure that:
 #
