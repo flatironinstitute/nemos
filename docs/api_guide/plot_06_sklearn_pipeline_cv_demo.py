@@ -62,7 +62,7 @@ In particular, we will learn:
 #
 # ## Why pipelines are useful
 #
-# Pipelines not only streamline and simplify your code but also offer several other advantages. The real power of pipelines becomes evident when combined with the scikit-learn `model_selection` module. This combination allows you to tune hyperparameters at each step of the pipeline in a straightforward manner.
+# Pipelines not only streamline and simplify your code but also offer several other advantages. The real power of pipelines becomes evident when combined with the scikit-learn `model_selection` module, which includes cross-validation and similar methods. This combination allows you to tune hyperparameters at each step of the pipeline in a straightforward manner.
 #
 # In the following sections, we will showcase this approach with a concrete example: selecting the appropriate basis type and number of bases for a GLM regression in NeMoS.
 #
@@ -102,10 +102,11 @@ sns.despine(ax=ax)
 # ### Converting NeMoS `Basis` to a transformer
 # In order to use NeMoS `Basis` in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the `TransformerBasis` wrapper class.
 #
-# Instantiating a `TransformerBasis` can be done using the constructor directly or with `Basis.to_transformer()`:
+# Instantiating a `TransformerBasis` can be done either using the constructor directly or with `Basis.to_transformer()`:
 
 # %%
 bas = nmo.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
+# these two ways of creating the TransformerBasis are equivalent
 trans_bas_a = nmo.basis.TransformerBasis(bas)
 trans_bas_b = bas.to_transformer()
 
