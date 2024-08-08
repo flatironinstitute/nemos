@@ -97,7 +97,7 @@ sns.despine(ax=ax)
 # ### Converting NeMoS `Basis` to a transformer
 # In order to use NeMoS `Basis` in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the `TransformerBasis` wrapper class.
 #
-# Instantiating a `TransformerBasis` can be done using the constructor directly or with `Basis.to_transformer()`:
+# Instantiating a `TransformerBasis` can be done either using the constructor directly or with `Basis.to_transformer()`:
 
 # %%
 bas = nmo.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
