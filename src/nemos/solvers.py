@@ -840,6 +840,26 @@ def softplus_poisson_optimal_batch_and_stepsize(
 def _softplus_poisson_L_max_and_L(
     X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
 ):
+    """
+    Calculate the smoothness constant and maximum smoothness constant for SVRG
+    assuming that the optimized function is the log-likelihood of a Poisson GLM
+    with a softplus inverse link function.
+
+    Parameters
+    ----------
+    X :
+        Input data.
+    y :
+        Output data.
+    n_power_iters :
+        If None, calculate X.T @ D @ X and its largest eigenvalue directly.
+        If an integer, the umber of power iterations to use to calculate the largest eigenvalue.
+
+    Returns
+    -------
+    L_max, L :
+        Maximum smoothness constant and smoothness constant.
+    """
     L = _softplus_poisson_L(X, y, n_power_iters)
     L_max = _softplus_poisson_L_max(X, y)
 
@@ -847,6 +867,23 @@ def _softplus_poisson_L_max_and_L(
 
 
 def _softplus_poisson_L_multiply(X, y, v):
+    """
+    Perform the multiplication of v with X.T @ D @ X without forming the full X.T @ D @ X,
+    and iterating through the rows of X and y instead.
+
+    Parameters
+    ----------
+    X :
+        Input data.
+    y :
+        Output data.
+    v :
+        d-dimensionl vector.
+
+    Returns
+    -------
+    X.T @ D @ X @ v
+    """
     N, _ = X.shape
 
     def body_fun(i, current_sum):
@@ -858,6 +895,24 @@ def _softplus_poisson_L_multiply(X, y, v):
 
 
 def _softplus_poisson_L_with_power_iteration(X, y, n_power_iters: int = 5):
+    """
+    Instead of calculating X.T @ D @ X and its largest eigenvalue directly,
+    calculate it using the power method and by iterating through X and y,
+    forming a small product at a time.
+
+    Parameters
+    ----------
+    X :
+        Input data.
+    y :
+        Output data.
+    n_power_iters :
+        Number of power iterations.
+
+    Returns
+    -------
+    The largest eigenvalue of X.T @ D @ X
+    """
     # key is fixed to random.key(0)
     _, d = X.shape
 
@@ -877,6 +932,21 @@ def _softplus_poisson_L_with_power_iteration(X, y, n_power_iters: int = 5):
 
 
 def _softplus_poisson_XDX(X, y):
+    """
+    Calculate the X.T @ D @ X matrix for use in calculating the smoothness constant L.
+
+    Parameters
+    ----------
+    X :
+        Input data.
+    y :
+        Output data.
+
+    Returns
+    -------
+    XDX :
+        d x d matrix
+    """
     N, d = X.shape
 
     def body_fun(i, current_sum):
@@ -895,6 +965,22 @@ def _softplus_poisson_XDX(X, y):
 def _softplus_poisson_L(
     X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
 ):
+    """
+    Calculate the smoothness constant from data, assuming that the optimized
+    function is the log-likelihood of a Poisson GLM with a softplus inverse link function.
+
+    Parameters
+    ----------
+    X :
+        Input data.
+    y :
+        Output data.
+
+    Returns
+    -------
+    L :
+        Smoothness constant of f.
+    """
     if n_power_iters is None:
         # calculate XDX and its largest eigenvalue directly
         return jnp.sort(jnp.linalg.eigvals(_softplus_poisson_XDX(X, y)).real)[-1]
@@ -904,6 +990,23 @@ def _softplus_poisson_L(
 
 
 def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
+    """
+    Calculate the maximum smoothness constant from data, assuming that
+    the optimized function is the log-likelihood of a Poisson GLM with
+    a softplus inverse link function.
+
+    Parameters
+    ----------
+    X :
+        Input data.
+    y :
+        Output data.
+
+    Returns
+    -------
+    L_max :
+        Maximum smoothness constant among f_{i}.
+    """
     N, _ = X.shape
 
     def body_fun(i, current_max):
@@ -917,10 +1020,46 @@ def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
 
 
 def _calc_b_hat(N: int, L_max: float, L: float):
+    """
+    Calculate optimal batch size according to Sebbouh et al. 2019.
+
+    Parameters
+    ----------
+    N :
+        Overall number of data points.
+    L_max :
+        Maximum smoothness constant among f_{i}.
+    L :
+        Smoothness constant.
+
+    Returns
+    -------
+    b_hat :
+        Optimal batch size for the optimization.
+    """
     with jax.experimental.enable_x64():
         return jnp.sqrt(N / 2 * (3 * L_max - L) / (N * L - 3 * L_max))
 
 
 def _calc_alpha(b: int, N: int, L_max: float, L: float):
+    """
+    Calculate optimal step size according to Sebbouh et al. 2019.
+
+    Parameters
+    ----------
+    b :
+        Mini-batch size.
+    N :
+        Overall number of data points.
+    L_max :
+        Maximum smoothness constant among f_{i}.
+    L :
+        Smoothness constant.
+
+    Returns
+    -------
+    alpha :
+        Optimal step size for the optimization.
+    """
     with jax.experimental.enable_x64():
         return 1 / 2 * b * (N - 1) / (3 * (N - b) * L_max + N * (b - 1) * L)
