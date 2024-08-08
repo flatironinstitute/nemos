@@ -17,8 +17,8 @@ class SVRGState(NamedTuple):
     """
     Optimizer state for (Prox)SVRG.
 
-    Fields
-    ------
+    Attributes
+    ----------
     iter_num :
         Current epoch or iteration number.
     key :
