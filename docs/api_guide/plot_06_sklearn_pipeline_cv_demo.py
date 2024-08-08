@@ -179,7 +179,7 @@ ax.legend()
 sns.despine(ax=ax)
 
 # %%
-# The current model captures the bimodal distribution of responses, appropriately picking out the peaks. However, it doesn't do a good job capturing the actual firing rate: the peaks are too low and the valleys are not low enough. This might be because of our choice of basis function and/or regularizer strength, so let's see if tuning those parameters results in a better fit! we could do this manually, but doing this with the sklearn pipeline will make everything much easier!
+# The current model captures the bimodal distribution of responses, appropriately picking out the peaks. However, it doesn't do a good job capturing the actual firing rate: the peaks are too low and the valleys are not low enough. This might be because of our choice of basis and/or regularizer strength, so let's see if tuning those parameters results in a better fit! We could do this manually, but doing this with the sklearn pipeline will make everything much easier!
 
 # %%
 # ### Select the number of basis by cross-validation
