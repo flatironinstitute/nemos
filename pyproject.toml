@@ -63,7 +63,8 @@ docs = [
     "scikit-learn",
     "dandi",
     "ipython",
-    "matplotlib>=3.7"
+    "matplotlib>=3.7",
+    "seaborn",
 ]
 
 
