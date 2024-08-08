@@ -57,10 +57,13 @@ When developing a functional (i.e., concrete) `Regularizer` class:
 - **Must** define a default solver and a tuple of allowed solvers.
 - **May** require extra initialization parameters, like the `mask` argument of `GroupLasso`.
 
-!!! tip
-    It is important to verify that minimizing the penalized loss directly or through the proximal operator  
-    with the `ProximalGradient` algorithm result in the same model parameters on a convex problem (up to numerical 
-    precision). When the regularization scheme is differentiable, you can use `GradientDescent` over the penalized 
-    loss. For non-smooth penalization, you can use non-gradient based method like `Nelder-Mead` 
-    from [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-neldermead.html). 
-    You can refer to NeMoS `test_lasso_convergence` from `tests/test_convergence.py` for a concrete implementation.
+!!! info
+    When adding a new regularizer, you must include a convergence test, which verifies that
+    the model parameters the regularizer finds for a convex problem such as the GLM are identical
+    whether one minimizes the penalized loss directly and uses the proximal operator (i.e., when
+    using `ProximalGradient`). In practice, this means you should test the result of the `ProximalGradient`
+    optimization against that of either `GradientDescent` (if your regularization is differentiable) or
+    `Nelder-Mead` from [`scipy.optimize.minimize`](https://docs.scipy.org/doc/scipy/reference/optimize.minimize-neldermead.html) 
+    (or another non-gradient based method, if your regularization is non-differentiable). You can refer to NeMoS `test_lasso_convergence`
+    from `tests/test_convergence.py` for a concrete example.
+
