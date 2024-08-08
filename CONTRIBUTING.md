@@ -126,7 +126,7 @@ changes.
 Additionally, every PR to `main` or `development` will automatically run linters and tests through a [GitHub action](https://docs.github.com/en/actions). Merges can happen only when all check passes.
 
 > [!NOTE]
-> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not installed by default as an optional dependency. If you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
+> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not included in our optional dependencies, so if you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
 > ```sh
 > pip install tox
 > tox -e py
