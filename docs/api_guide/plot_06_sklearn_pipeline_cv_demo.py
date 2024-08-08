@@ -36,7 +36,7 @@ In particular, we will learn:
 # # Assume transformer_i/predictor is a transformer/model object
 # pipe = Pipeline(
 #     [
-#         ("label_1", transformer_1),
+#         ("label_1", transformer_1), 
 #         ("label_2", transformer_2),
 #         ...,
 #         ("label_n", transformer_n),
@@ -44,6 +44,8 @@ In particular, we will learn:
 #     ]
 # )
 # ```
+#
+# Note that you have to assign a label to each step of the pipeline. Here we used a placeholder `"label_i"` for demonstration; you should choose a more descriptive name depending on the type of transformation step.
 #
 # Calling `pipe.fit(X, y)` will perform the following computations:
 # ```python
