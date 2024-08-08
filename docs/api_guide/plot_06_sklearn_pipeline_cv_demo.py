@@ -255,6 +255,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
+plt.figure()
 ax = sns.heatmap(
     cvdf_wide,
     annot=True,
@@ -352,6 +353,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
+plt.figure()
 ax = sns.heatmap(
     cvdf_wide,
     annot=True,
@@ -461,6 +463,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
+plt.figure()
 ax = sns.heatmap(
     cvdf_wide,
     annot=True,
