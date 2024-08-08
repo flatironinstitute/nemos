@@ -101,6 +101,7 @@ sns.despine(ax=ax)
 
 # %%
 bas = nmo.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
+# these two ways of creating the TransformerBasis are equivalent
 trans_bas_a = nmo.basis.TransformerBasis(bas)
 trans_bas_b = bas.to_transformer()
 
