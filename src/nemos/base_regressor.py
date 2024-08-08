@@ -428,7 +428,7 @@ class BaseRegressor(Base, abc.ABC):
         data_type: Optional[jnp.dtype] = None,
     ) -> Tuple[DESIGN_INPUT_TYPE, jnp.ndarray]:
         """
-        Validate the dimensions and consistency of parameters and data.
+        Validate the dimensions and consistency of parameters.
 
         This function checks the consistency of shapes and dimensions for model
         parameters.
