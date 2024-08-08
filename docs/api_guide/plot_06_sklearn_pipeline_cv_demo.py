@@ -89,6 +89,9 @@ rate = 2 * (
 y = np.random.poisson(rate).astype(float).flatten()
 
 # %%
+# Let's now plot the simulated neuron's tuning curve, which is bimodal, Gaussian-shaped, and has peaks at 0.25 and 0.75.
+
+# %%
 fig, ax = plt.subplots()
 ax.scatter(X.flatten(), y, alpha=0.2)
 ax.set_xlabel("input")
@@ -175,7 +178,7 @@ ax.legend()
 sns.despine(ax=ax)
 
 # %%
-# There is some room for improvement, so in the next section we'll use cross-validation to tune the parameters of our pipeline.
+# The current model captures the bimodal distribution of responses, appropriately picking out the peaks. However, it doesn't do a good job capturing the actual firing rate: the peaks are too low and the valleys are not low enough. This might be because of our choice of basis function and/or regularizer strength, so let's see if tuning those parameters results in a better fit! we could do this manually, but doing this with the sklearn pipeline will make everything much easier!
 
 # %%
 # ### Select the number of basis by cross-validation
