@@ -1525,7 +1525,7 @@ class TestGLM:
         iter_num = 0
         while iter_num < maxiter:
             state = state._replace(
-                df_xs=loss_grad(params, X, y),
+                full_grad_at_reference_point=loss_grad(params, X, y),
             )
 
             prev_params = params
@@ -1536,7 +1536,7 @@ class TestGLM:
                 params, state = glm.update(params, state, xi, yi)
 
             state = state._replace(
-                xs=params,
+                reference_point=params,
             )
 
             iter_num += 1
