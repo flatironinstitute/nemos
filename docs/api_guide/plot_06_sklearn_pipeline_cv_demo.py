@@ -227,6 +227,64 @@ gridsearch = GridSearchCV(
 gridsearch.fit(X, y)
 
 # %%
+# !!! note {Manual cross-validation}
+#     To appreciate how much boiler-plate code we are saving by calling scikit-learn cross-validation, below
+#     we can see how this cross-validation will look like in a manual loop
+#     ```python
+#     from itertools import product
+#     from copy import deepcopy
+#
+#     regularizer_strength = (0.1, 0.01, 0.001, 1e-6)
+#     n_basis_funcs = (3, 5, 10, 20, 100)
+#
+#     # define the folds
+#     n_folds = 5
+#     fold_idx = np.arange(X.shape[0] - X.shape[0] % n_folds).reshape(n_folds, -1)
+#
+#
+#     # Initialize the scores
+#     scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
+#
+#     # Dictionary to store coefficients
+#     coeffs = {}
+#
+#     # initialize basis and model
+#     basis = nmo.basis.TransformerBasis(nmo.basis.RaisedCosineBasisLinear(6))
+#     model = nmo.glm.GLM(regularizer="Ridge")
+#
+#     # loop over combinations
+#     for fold in range(n_folds):
+#         test_idx = fold_idx[fold]
+#         train_idx = fold_idx[[x for x in range(n_folds) if x != fold]].flatten()
+#         for i, params in enumerate(product(regularizer_strength, n_basis_funcs)):
+#             reg_strength, n_basis = params
+#
+#             # deepcopy the basis and model
+#             bas = deepcopy(basis)
+#             glm = deepcopy(model)
+#
+#             # set the parameters
+#             bas.n_basis_funcs = n_basis
+#             glm.regularizer_strength = reg_strength
+#
+#             # fit the model
+#             glm.fit(bas.transform(X[train_idx]), y[train_idx])
+#
+#             # store score and coefficients
+#             scores[i, fold] = glm.score(bas.transform(X[test_idx]), y[test_idx])
+#             coeffs[(i, fold)] = (glm.coef_, glm.intercept_)
+#
+#     # get the best mean test score
+#     i_best = np.argmax(scores.mean(axis=1))
+#     # get the overall best coeffs
+#     fold_best = np.argmax(scores[i_best])
+#
+#     # set up the best model
+#     model.coef_ = coeffs[(i_best, fold_best)][0]
+#     model.intercept_ = coeffs[(i_best, fold_best)][0]
+#     ```
+
+# %%
 # #### Visualize the scores
 #
 # Let's extract the scores from `gridsearch` and take a look at how the different parameter values of our pipeline influence the test score:
