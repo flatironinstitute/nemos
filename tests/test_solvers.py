@@ -82,26 +82,6 @@ def test_svrg_init_state_key(request, regr_setup):
     "regr_setup",
     [
         "linear_regression",
-        "ridge_regression",
-        "linear_regression_tree",
-        "ridge_regression_tree",
-    ],
-)
-def test_svrg_init_state_init_full_gradient(request, regr_setup):
-    jax.config.update("jax_enable_x64", True)
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    svrg = SVRG(loss)
-    state = svrg.init_state(param_init, X, y, init_full_gradient=True)
-
-    assert state.full_grad_at_reference_point is not None
-
-
-@pytest.mark.parametrize(
-    "regr_setup",
-    [
-        "linear_regression",
         "linear_regression_tree",
     ],
 )
@@ -274,9 +254,8 @@ def test_svrg_glm_update(
         **kwargs,
     )
 
-    # TODO init_full_gradient is not passed to initialize_state
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_state(X, y, init_params)  # , init_full_gradient=True)
+    state = glm.initialize_state(X, y, init_params)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun_))
 

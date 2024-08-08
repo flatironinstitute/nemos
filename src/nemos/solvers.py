@@ -115,7 +115,6 @@ class ProxSVRG:
         init_params: Pytree,
         hyperparams_prox: Any,
         *args,
-        init_full_gradient: bool = False,
     ) -> SVRGState:
         """
         Initialize the solver state
@@ -138,26 +137,19 @@ class ProxSVRG:
                     Input data.
                 y : jnp.ndarray
                     Output data.
-        init_full_gradient : bool, default False
-            Whether to calculate the full gradient at the initial parameters,
-            assuming that args hold the full data set, and store this gradient in the initial state.
 
         Returns
         -------
         state :
             Initialized optimizer state
         """
-        full_grad_at_reference_point = None
-        if init_full_gradient:
-            full_grad_at_reference_point = self.loss_gradient(init_params, *args)
-
         state = SVRGState(
             iter_num=0,
             key=self.key if self.key is not None else random.key(123),
             error=jnp.inf,
             stepsize=self.stepsize,
             reference_point=init_params,
-            full_grad_at_reference_point=full_grad_at_reference_point,
+            full_grad_at_reference_point=None,
         )
         return state
 
@@ -278,8 +270,7 @@ class ProxSVRG:
         """
         if state.full_grad_at_reference_point is None:
             raise ValueError(
-                "Full gradient at the anchor point (state.full_grad_at_reference_point) has to be set. "
-                + "Try passing init_full_gradient=True to ProxSVRG.init_state or GLM.initialize_solver."
+                "Full gradient at the anchor point (state.full_grad_at_reference_point) has to be set."
             )
         return self._update_on_batch(params, state, prox_lambda, *args)
 
@@ -381,7 +372,6 @@ class ProxSVRG:
             init_params,
             prox_lambda,
             *args,
-            init_full_gradient=True,
         )
 
         return self._run(init_params, init_state, prox_lambda, *args)
@@ -460,6 +450,12 @@ class ProxSVRG:
         def cond_fun(step):
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
+
+        # initialize the full gradient at the anchor point
+        # the anchor point is init_params at first
+        init_state = init_state._replace(
+            full_grad_at_reference_point=self.loss_gradient(init_params, *args)
+        )
 
         final_params, final_state = loop.while_loop(
             cond_fun=cond_fun,
@@ -656,10 +652,6 @@ class SVRG(ProxSVRG):
                 y : jnp.ndarray
                     Output data.
 
-        init_full_gradient : bool, default False
-            Whether to calculate the full gradient at the initial parameters,
-            assuming that args hold the full data set, and store this gradient in the initial state.
-
         Returns
         -------
         state :
@@ -749,11 +741,7 @@ class SVRG(ProxSVRG):
         """
         # initialize the state, including the full gradient at the initial parameters
         # don't have to pass prox_lambda here
-        init_state = self.init_state(
-            init_params,
-            *args,
-            init_full_gradient=True,
-        )
+        init_state = self.init_state(init_params, *args)
 
         # substitute None for prox_lambda
         return self._run(init_params, init_state, None, *args)
