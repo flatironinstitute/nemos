@@ -900,7 +900,7 @@ class GLM(BaseRegressor):
             batch_size = self.solver_kwargs.get("batch_size", None)
             stepsize = self.solver_kwargs.get("stepsize", None)
             # following jaxopt, stepsize <= 0 also means auto
-            if stepsize <= 0:
+            if stepsize is not None and stepsize <= 0:
                 stepsize = None
 
             new_solver_kwargs = self.solver_kwargs.copy()
