@@ -1041,7 +1041,7 @@ def _calc_b_hat(N: int, L_max: float, L: float):
         return jnp.sqrt(N / 2 * (3 * L_max - L) / (N * L - 3 * L_max))
 
 
-def _calc_alpha(b: int, N: int, L_max: float, L: float):
+def _calc_alpha_old(b: int, N: int, L_max: float, L: float):
     """
     Calculate optimal step size according to Sebbouh et al. 2019.
 
@@ -1063,3 +1063,37 @@ def _calc_alpha(b: int, N: int, L_max: float, L: float):
     """
     with jax.experimental.enable_x64():
         return 1 / 2 * b * (N - 1) / (3 * (N - b) * L_max + N * (b - 1) * L)
+
+
+def _calc_alpha(b: int, N: int, L_max: float, L: float):
+    """
+    Calculate optimal step size.
+
+    Parameters
+    ----------
+    b :
+        Mini-batch size.
+    N :
+        Overall number of data points.
+    L_max :
+        Maximum smoothness constant among f_{i}.
+    L :
+        Smoothness constant.
+
+    Returns
+    -------
+    alpha :
+        Optimal step size for the optimization.
+    """
+    with jax.experimental.enable_x64():
+        L_b = L * N / b * (b - 1) / (N - 1) + L_max / b * (N - b) / (N - 1)
+
+        return 1 / 4 / L_b
+
+
+def _calc_b_tilde(L_max, L, N, mu):
+    with jax.experimental.enable_x64():
+        numerator = (3 * L_max - L) * N
+        denominator = N * (N - 1) * mu - N * L + 3 * L_max
+
+    return numerator / denominator
