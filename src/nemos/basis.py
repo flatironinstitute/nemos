@@ -997,6 +997,8 @@ class Basis(Base, abc.ABC):
         >>> import nemos as nmo
         >>> from sklearn.pipeline import Pipeline
         >>> from sklearn.model_selection import GridSearchCV
+        >>> # load some data
+        >>> X, y = ...  # X: features, y: neural activity
         >>> basis = nmo.basis.RaisedCosineBasisLinear(10)
         >>> glm = nmo.glm.GLM(regularizer="Ridge")
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
@@ -1008,9 +1010,8 @@ class Basis(Base, abc.ABC):
         ...     pipeline,
         ...     param_grid=param_grid,
         ...     cv=5,
-        ...     scoring=pseudo_r2,
         ... )
-        >>> gridsearch.fit()
+        >>> gridsearch.fit(X, y)
         """
 
         return TransformerBasis(copy.deepcopy(self))
