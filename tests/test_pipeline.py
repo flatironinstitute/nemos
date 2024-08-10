@@ -108,7 +108,7 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
     )
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3)
     with pytest.raises(
-        ValueError, match="Set either _basis or parameters for _basis, not both."
+        ValueError, match="Set either new _basis object or parameters for existing _basis, not both."
     ):
         gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
