@@ -1,5 +1,6 @@
 """Collection of methods utilities."""
 
+import warnings
 from typing import Any, Optional, Union
 
 import jax
@@ -275,3 +276,33 @@ def check_tree_structure(tree_1: Any, tree_2: Any, err_message: str):
     """
     if jax.tree_util.tree_structure(tree_1) != jax.tree_util.tree_structure(tree_2):
         raise TypeError(err_message)
+
+
+def check_fraction_valid_samples(*tree: Any, err_msg: str, warn_msg: str) -> None:
+    """
+    Check the fraction of entries that are not infinite or NaN.
+
+    Parameters
+    ----------
+    *tree :
+        Trees containing arrays with the same sample axis.
+    err_msg :
+        The exception message.
+    warn_msg :
+        The warning message.
+
+    Raises
+    ------
+    ValueError
+        If all the samples contain invalid entries (either NaN or Inf).
+
+    Warns
+    -----
+    UserWarning
+        If more than 90% of the sample points contain NaNs or Infs.
+    """
+    valid = get_valid_multitree(tree)
+    if all(~valid):
+        raise ValueError(err_msg)
+    elif valid.mean() <= 0.1:
+        warnings.warn(warn_msg, UserWarning)

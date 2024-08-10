@@ -52,13 +52,14 @@ class Regularizer(Base, abc.ABC):
         super().__init__(**kwargs)
 
     @property
-    def allowed_solvers(self):
+    def allowed_solvers(self) -> Tuple[str]:
         return self._allowed_solvers
 
     @property
-    def default_solver(self):
+    def default_solver(self) -> str:
         return self._default_solver
 
+    @abc.abstractmethod
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """
         Abstract method to penalize loss functions.
@@ -78,6 +79,7 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
