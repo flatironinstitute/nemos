@@ -416,7 +416,7 @@ sns.despine(ax=ax)
 
 # %%
 # ## Create a custom scorer
-# By default, the GLM score method returns the model log-likelihood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer that overwrites the default:
+# By default, the GLM score method returns the model log-likelihood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer and pass it to the cross-validation object:
 
 # %%
 from sklearn.metrics import make_scorer
