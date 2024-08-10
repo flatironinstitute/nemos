@@ -45,7 +45,9 @@ In particular, we will learn:
 # )
 # ```
 #
-# Note that you have to assign a label to each step of the pipeline. Here we used a placeholder `"label_i"` for demonstration; you should choose a more descriptive name depending on the type of transformation step.
+# Note that you have to assign a label to each step of the pipeline.
+# !!! tip
+#     Here we used a placeholder `"label_i"` for demonstration; you should choose a more descriptive name depending on the type of transformation step.
 #
 # Calling `pipe.fit(X, y)` will perform the following computations:
 # ```python
@@ -78,6 +80,8 @@ import seaborn as sns
 
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
+
+from utils import plotting
 
 # predictors, shape (n_samples, n_features)
 X = np.random.uniform(low=0, high=1, size=(1000, 1))
@@ -157,7 +161,7 @@ pipeline.fit(X, y)
 # Predict the rate.
 # Note that you need a 2D input even if x is a flat array.
 # We are using expand dim to add the extra-dimension
-x = np.expand_dims(np.sort(X.flatten()), axis=1)
+x = np.sort(X, axis=0)
 predicted_rate = pipeline.predict(x)
 
 # %%
@@ -215,6 +219,15 @@ param_grid = dict(
 # %%
 # #### Run the grid search
 # Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn `model_selection.GridsearchCV` class.
+# ??? info "K-Fold cross-validation (click to expand/collapse)"
+#     <p align="center">
+#     <img src="../../../assets/grid_search_cross_validation.png" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;">
+#     <br>
+#     <em>K-fold cross-validation (modified from <a href="https://scikit-learn.org/stable/modules/cross_validation.html" target="_blank">scikit-learn docs</a>)</em>
+#     </p>
+#     K-fold cross-validation is a robust method used for selecting hyperparameters. In this procedure, the data is divided into K equally sized chunks (or folds). The model is trained on K-1 of these chunks, with the remaining chunk used for evaluation. This process is repeated K times, with each chunk being used exactly once as the evaluation set.
+#     After completing the K iterations, the K evaluation scores are averaged to provide a reliable estimate of the model's performance. To select the optimal hyperparameters, K-fold cross-validation can be applied over a grid of potential hyperparameters, with the set yielding the highest average score being chosen as the best.
+
 
 # %%
 gridsearch = GridSearchCV(
@@ -227,9 +240,11 @@ gridsearch = GridSearchCV(
 gridsearch.fit(X, y)
 
 # %%
-# !!! note {Manual cross-validation}
+#
+# ??? note "Manual cross-validation (click to expand/collapse)"
 #     To appreciate how much boiler-plate code we are saving by calling scikit-learn cross-validation, below
-#     we can see how this cross-validation will look like in a manual loop
+#     we can see how this cross-validation will look like in a manual loop.
+#
 #     ```python
 #     from itertools import product
 #     from copy import deepcopy
@@ -281,7 +296,11 @@ gridsearch.fit(X, y)
 #
 #     # set up the best model
 #     model.coef_ = coeffs[(i_best, fold_best)][0]
-#     model.intercept_ = coeffs[(i_best, fold_best)][0]
+#     model.intercept_ = coeffs[(i_best, fold_best)][1]
+#
+#     # get the best hyperparameters
+#     best_reg_strength = regularizer_strength[i_best // len(n_basis_funcs)]
+#     best_n_basis = n_basis_funcs[i_best % len(n_basis_funcs)]
 #     ```
 
 # %%
@@ -289,22 +308,7 @@ gridsearch.fit(X, y)
 #
 # Let's extract the scores from `gridsearch` and take a look at how the different parameter values of our pipeline influence the test score:
 
-# %%
-from matplotlib.patches import Rectangle
 
-def highlight_max_cell(cvdf_wide, ax):
-    max_col = cvdf_wide.max().idxmax()
-    max_col_index = cvdf_wide.columns.get_loc(max_col)
-    max_row = cvdf_wide[max_col].idxmax()
-    max_row_index = cvdf_wide.index.get_loc(max_row)
-
-    ax.add_patch(
-        Rectangle(
-            (max_col_index, max_row_index), 1, 1, fill=False, lw=3, color="skyblue"
-        )
-    )
-
-# %%
 cvdf = pd.DataFrame(gridsearch.cv_results_)
 
 cvdf_wide = cvdf.pivot(
@@ -313,32 +317,18 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plt.figure()
-ax = sns.heatmap(
-    cvdf_wide,
-    annot=True,
-    square=True,
-    linecolor="white",
-    linewidth=0.5,
-)
-
-# Labeling the colorbar
-colorbar = ax.collections[0].colorbar
-colorbar.set_label('log-likelihood')
-
-ax.set_xlabel("ridge regularization strength")
-ax.set_ylabel("number of basis functions")
-
-highlight_max_cell(cvdf_wide, ax)
+plotting.plot_heatmap_cv_results(cvdf_wide)
 
 # %%
+# The plot displays the model's log-likelihood for each parameter combination in the grid. The parameter combination with the highest score, which is the one selected by the procedure, is highlighted with a blue rectangle.
+#
 # #### Visualize the predicted rate
 # Finally, visualize the predicted firing rates using the best model found by our grid-search, which gives a better fit than the randomly chosen parameter values we tried in the beginning:
 
 # %%
 
 # Predict the ate using the best configuration,
-x = np.expand_dims(np.sort(X.flatten()), 1)
+x = np.sort(X, axis=0)
 predicted_rate = gridsearch.best_estimator_.predict(x)
 
 # %%
@@ -360,6 +350,9 @@ ax.legend()
 sns.despine(ax=ax)
 
 # %%
+# !!! success
+#     We are now able to capture the distribution of the firing rate appropriately: both peaks and valleys in the spiking activity are matched by our model predicitons.
+#
 # ### Evaluating different bases directly
 #
 # In the previous example we set the number of basis functions of the `Basis` wrapped in our `TransformerBasis`. However, if we are for example not sure about the type of basis functions we want to use, or we have already defined some basis functions of our own, then we can use cross-validation to directly evaluate those as well.
@@ -411,31 +404,16 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plt.figure()
-ax = sns.heatmap(
-    cvdf_wide,
-    annot=True,
-    square=True,
-    linecolor="white",
-    linewidth=0.5,
-)
+plotting.plot_heatmap_cv_results(cvdf_wide)
 
-# Labeling the colorbar
-colorbar = ax.collections[0].colorbar
-colorbar.set_label('log-likelihood')
-
-ax.set_xlabel("ridge regularization strength")
-ax.set_ylabel("number of basis functions")
-
-highlight_max_cell(cvdf_wide, ax)
 
 # %%
-# Looks like `RaisedCosineBasisLinear` was probably a decent choice for our toy data:
-
+# As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear, which appears to be a suitable choice for our toy data.
+# We can confirm that by plotting the firing rate predictions:
 # %%
 
 # Predict the rate using the optimal configuration
-x = np.expand_dims(np.sort(X.flatten()), 1)
+x = np.sort(X, axis=0)
 predicted_rate = gridsearch.best_estimator_.predict(x)
 
 # %%
@@ -454,6 +432,9 @@ ax.plot(
 
 ax.legend()
 sns.despine(ax=ax)
+
+# %%
+# The plot confirms that the firing rate distribution is accurately captured by our model predictions.
 
 # %%
 # !!! warning
@@ -489,7 +470,7 @@ pseudo_r2 = make_scorer(
 )
 
 # %%
-# #### Run the grid search providing the custom scorer
+# We can now run the grid search providing the custom scorer
 
 # %%
 gridsearch = GridSearchCV(
@@ -503,7 +484,7 @@ gridsearch = GridSearchCV(
 gridsearch.fit(X, y)
 
 # %%
-# #### Plot the pseudo-R2 scores
+# And finally, we can plot each model's score.
 
 # %%
 # Plot the pseudo-R2 scores
@@ -521,20 +502,8 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plt.figure()
-ax = sns.heatmap(
-    cvdf_wide,
-    annot=True,
-    square=True,
-    linecolor="white",
-    linewidth=0.5,
-)
+plotting.plot_heatmap_cv_results(cvdf_wide, label="pseudo-R2")
 
-# Labeling the colorbar
-colorbar = ax.collections[0].colorbar
-colorbar.set_label('pseudo-R2')
+# %%
+# As you can see, with this new metric scores are normalized between 0 and 1, the highest the better.
 
-ax.set_xlabel("ridge regularization strength")
-ax.set_ylabel("number of basis functions")
-
-highlight_max_cell(cvdf_wide, ax)
