@@ -368,7 +368,7 @@ class TransformerBasis:
             self._basis = new_basis
             if len(parameters) > 0:
                 raise ValueError(
-                    "Set either _basis or parameters for _basis, not both."
+                    "Set either new _basis object or parameters for existing _basis, not both."
                 )
         else:
             self._basis = self._basis.set_params(**parameters)
