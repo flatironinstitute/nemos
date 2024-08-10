@@ -345,8 +345,8 @@ class TransformerBasis:
         """
         Set TransformerBasis parameters.
 
-        When used with, sklearn.model_selection, either set the _basis attribute directly,
-        or set the parameters of the underlying Basis, but doing both at the same time is not allowed.
+        When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
+        or the parameters of the underlying Basis, but not both.
 
         Examples
         --------
