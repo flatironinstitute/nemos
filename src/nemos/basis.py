@@ -122,8 +122,8 @@ class TransformerBasis:
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
 
-    This could be extremely useful in combination with scikit-learn pipelining and
-    cross-validation, enabling the cross-validation of the basis type and parameters,
+    `TransformerBasis`, unlike `Basis`, is compatible with scikit-learn pipelining and
+    model selection, enabling the cross-validation of the basis type and parameters,
     for example `n_basis_funcs`. See the example section below.
 
     Parameters
