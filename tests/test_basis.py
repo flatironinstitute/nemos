@@ -4355,8 +4355,65 @@ def test_power_of_basis(exponent, basis_class):
 def test_basis_to_transformer(basis_cls):
     n_basis_funcs = 5
     bas = basis_cls(n_basis_funcs)
-    assert isinstance(bas.to_transformer(), basis.TransformerBasis)
-    assert bas.to_transformer().n_basis_funcs == bas.n_basis_funcs
+
+    trans_bas = bas.to_transformer()
+
+    assert isinstance(trans_bas, basis.TransformerBasis)
+
+    # check that things like n_basis_funcs are the same as the original basis
+    for k in bas.__dict__.keys():
+        assert getattr(bas, k) == getattr(trans_bas, k)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformer_has_the_same_public_attributes_as_basis(basis_cls):
+    n_basis_funcs = 5
+    bas = basis_cls(n_basis_funcs)
+
+    public_attrs_basis = {attr for attr in dir(bas) if not attr.startswith("_")}
+    public_attrs_transformerbasis = {
+        attr for attr in dir(bas.to_transformer()) if not attr.startswith("_")
+    }
+
+    assert public_attrs_transformerbasis - public_attrs_basis == {
+        "fit",
+        "fit_transform",
+        "transform",
+    }
+
+    assert public_attrs_basis - public_attrs_transformerbasis == set()
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_to_transformer_and_constructor_are_equivalent(basis_cls):
+    n_basis_funcs = 5
+    bas = basis_cls(n_basis_funcs)
+
+    trans_bas_a = bas.to_transformer()
+    trans_bas_b = basis.TransformerBasis(bas)
+
+    # they both just have a _basis
+    assert list(trans_bas_a.__dict__.keys()) == list(trans_bas_b.__dict__.keys()) == ["_basis"]
+    # and those bases are the same
+    assert trans_bas_a._basis.__dict__ == trans_bas_b._basis.__dict__
+
 
 @pytest.mark.parametrize(
     "basis_cls",
