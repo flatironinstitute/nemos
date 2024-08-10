@@ -1136,7 +1136,7 @@ class TestGroupLasso:
         # ProxSVRG needs the full gradient at the anchor point to be initialized
         # so here just set it to xs, which is not correct, but fine shape-wise
         if solver_name == "ProxSVRG":
-            state = state._replace(df_xs=state.xs)
+            state = state._replace(full_grad_at_reference_point=state.reference_point)
 
         params, state = model.solver_update(true_params, state, X, y)
         # asses that state is a NamedTuple by checking tuple type and the availability of some NamedTuple
