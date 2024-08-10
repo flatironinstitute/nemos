@@ -36,7 +36,9 @@ class SVRGState(NamedTuple):
 
     References
     ----------
-    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik.
+    "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).
+    ](https://arxiv.org/abs/2010.00892)
     """
 
     iter_num: int
@@ -86,9 +88,16 @@ class ProxSVRG:
 
     References
     ----------
-    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
-    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
-    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
+    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik.
+    "Variance-Reduced Methods for Machine Learning."
+    arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    .. 2. [Xiao, Lin, and Tong Zhang.
+    "A proximal stochastic gradient method with progressive variance reduction."
+    SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
+    .. 3. [Johnson, Rie, and Tong Zhang.
+    "Accelerating stochastic gradient descent using predictive variance reduction."
+    Advances in neural information processing systems 26 (2013).
+    ](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
     """
 
     def __init__(
@@ -269,7 +278,8 @@ class ProxSVRG:
         ------
         ValueError
             The parameter update needs a value for the full gradient at the anchor point, which needs the full data
-            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None, a ValueError is raised.
+            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None,
+            a ValueError is raised.
         """
         if state.df_xs is None:
             raise ValueError(
@@ -338,7 +348,8 @@ class ProxSVRG:
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes
+        that X and y are the full data set.
 
         Parameters
         ----------
@@ -386,7 +397,8 @@ class ProxSVRG:
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
+        X and y are the full data set.
         Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
 
         Parameters
@@ -601,9 +613,13 @@ class SVRG(ProxSVRG):
 
     References
     ----------
-    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
-    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
-    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
+    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods
+    for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction."
+     SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
+    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction."
+     Advances in neural information processing systems 26
+     (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
     """
 
     def __init__(
@@ -699,7 +715,8 @@ class SVRG(ProxSVRG):
         ------
         ValueError
             The parameter update needs a value for the full gradient at the anchor point, which needs the full data
-            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None, a ValueError is raised.
+            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None,
+            a ValueError is raised.
         """
         # substitute None for prox_lambda
         return super().update(current_params, state, None, *args, **kwargs)
@@ -712,7 +729,8 @@ class SVRG(ProxSVRG):
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
+        X and y are the full data set.
 
         Parameters
         ----------
