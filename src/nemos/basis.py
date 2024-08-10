@@ -263,7 +263,7 @@ class TransformerBasis:
         """
         Define how to populate the object's state when unpickling.
 
-        Not that during unpickling a new object is created without calling __init__.
+        Note that during unpickling a new object is created without calling __init__.
         Needed to avoid infinite recursion in __getattr__ when unpickling.
 
         See https://docs.python.org/3/library/pickle.html#object.__setstate__
