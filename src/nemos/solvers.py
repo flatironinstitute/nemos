@@ -248,7 +248,8 @@ class ProxSVRG:
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous update.
-            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point (`full_grad_at_reference_point`) already set.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
         prox_lambda :
             Regularization strength.
         args:
@@ -295,7 +296,8 @@ class ProxSVRG:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
 
-        Note that this method doesn't update `state.reference_point`, `state.full_grad_at_reference_point`, that has to be done outside.
+        Note that this method doesn't update `state.reference_point`, `state.full_grad_at_reference_point`,
+        that has to be done outside.
 
         Parameters
         ----------
@@ -303,7 +305,8 @@ class ProxSVRG:
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous update.
-            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point (`full_grad_at_reference_point`) already set.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
         prox_lambda :
             Regularization strength.
         args:
@@ -445,7 +448,8 @@ class ProxSVRG:
                 prev_reference_point, state, prox_lambda, *args
             )
 
-            # update reference point (x_{s}) with the final parameters (x_{m}) or an average over the inner loop's iterations
+            # update reference point (x_{s}) with the final parameters (x_{m}) or an average over
+            # the inner loop's iterations
             # note that the average is currently not implemented
             reference_point = params
 
@@ -496,7 +500,8 @@ class ProxSVRG:
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous sweep.
-            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point (`full_grad_at_reference_point`) already set.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
         prox_lambda :
             Regularization strength. Can be None.
         args :
@@ -693,7 +698,8 @@ class SVRG(ProxSVRG):
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous update.
-            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point (`full_grad_at_reference_point`) already set.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.

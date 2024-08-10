@@ -1148,7 +1148,7 @@ class TestGroupLasso:
             and hasattr(state, "_asdict")
         )
         # check params struct and shapes
-        assert jax.tree_util.tree_structure(params) == jax.tree_structure(true_params)
+        assert jax.tree_util.tree_structure(params) == jax.tree_util.tree_structure(true_params)
         assert all(
             jax.tree_util.tree_leaves(params)[k].shape == p.shape
             for k, p in enumerate(jax.tree_util.tree_leaves(true_params))
