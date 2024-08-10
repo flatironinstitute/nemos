@@ -122,8 +122,8 @@ class TransformerBasis:
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
 
-    This could be extremely useful in combination with scikit-learn pipelining and
-    cross-validation, enabling the cross-validation of the basis type and parameters,
+    `TransformerBasis`, unlike `Basis`, is compatible with scikit-learn pipelining and
+    model selection, enabling the cross-validation of the basis type and parameters,
     for example `n_basis_funcs`. See the example section below.
 
     Parameters
@@ -263,7 +263,7 @@ class TransformerBasis:
         """
         Define how to populate the object's state when unpickling.
 
-        Not that during unpickling a new object is created without calling __init__.
+        Note that during unpickling a new object is created without calling __init__.
         Needed to avoid infinite recursion in __getattr__ when unpickling.
 
         See https://docs.python.org/3/library/pickle.html#object.__setstate__
@@ -345,8 +345,8 @@ class TransformerBasis:
         """
         Set TransformerBasis parameters.
 
-        When used with, sklearn.model_selection, either set the _basis attribute directly,
-        or set the parameters of the underlying Basis, but doing both at the same time is not allowed.
+        When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
+        or the parameters of the underlying Basis, but not both.
 
         Examples
         --------
@@ -368,7 +368,7 @@ class TransformerBasis:
             self._basis = new_basis
             if len(parameters) > 0:
                 raise ValueError(
-                    "Set either _basis or parameters for _basis, not both."
+                    "Set either new _basis object or parameters for existing _basis, not both."
                 )
         else:
             self._basis = self._basis.set_params(**parameters)
