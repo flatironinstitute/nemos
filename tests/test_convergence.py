@@ -135,19 +135,19 @@ def test_group_lasso_convergence():
     """
     jax.config.update("jax_enable_x64", True)
     # generate toy data
-    num_samples, num_features, num_groups = 1000, 2, 2
+    num_samples, num_features, num_groups = 1000, 3, 2
     X = np.random.normal(size=(num_samples, num_features))  # design matrix
-    w = [-0.5, 0.5]  # define some weights
+    w = [-0.5, 0.25, 0.5]  # define some weights
     y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
 
     mask = np.zeros((num_groups, num_features))
-    mask[0] = [1, 0]  # Group 0 includes features 0 and 3
-    mask[1] = [0, 1]  # Group 1 includes features 1
+    mask[0] = [1, 1, 0]  # Group 0 includes features 0 and 1
+    mask[1] = [0, 0, 1]  # Group 1 includes features 1
 
     # instantiate and fit GLM with ProximalGradient
     model_PG = nmo.glm.GLM(
         regularizer=nmo.regularizer.GroupLasso(mask=mask),
-        solver_kwargs=dict(tol=10**-12),
+        solver_kwargs=dict(tol=10**-14, maxiter=10000),
         regularizer_strength=0.2,
     )
     model_PG.fit(X, y)
@@ -172,7 +172,7 @@ def test_group_lasso_convergence():
         args=(X, y),
         method="Nelder-Mead",
         tol=10**-12,
-        options=dict(maxiter=350),
+        options=dict(maxiter=1000),
     )
 
     # assert weights are the same
