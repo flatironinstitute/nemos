@@ -226,7 +226,7 @@ class Ridge(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l2reg, scaling=1.):
+        def prox_op(params, l2reg, scaling=1.0):
             Ws, bs = params
             l2reg /= bs.shape[0]
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
