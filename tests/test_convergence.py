@@ -43,6 +43,7 @@ def test_unregularized_convergence():
 
     # assert weights are the same
     assert np.allclose(model_GD.coef_, model_PG.coef_)
+    assert np.allclose(model_GD.intercept_, model_PG.intercept_)
 
 
 def test_ridge_convergence():
@@ -81,6 +82,7 @@ def test_ridge_convergence():
 
     # assert weights are the same
     assert np.allclose(model_GD.coef_, model_PG.coef_)
+    assert np.allclose(model_GD.intercept_, model_PG.intercept_)
 
 
 def test_lasso_convergence():
@@ -123,6 +125,7 @@ def test_lasso_convergence():
 
     # assert weights are the same
     assert np.allclose(res.x[1:], model_PG.coef_)
+    assert np.allclose(res.x[:1], model_PG.intercept_)
 
 
 def test_group_lasso_convergence():
@@ -174,3 +177,4 @@ def test_group_lasso_convergence():
 
     # assert weights are the same
     assert np.allclose(res.x[1:], model_PG.coef_)
+    assert np.allclose(res.x[:1], model_PG.intercept_)

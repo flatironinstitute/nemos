@@ -226,7 +226,7 @@ class Ridge(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l2reg, scaling=0.5):
+        def prox_op(params, l2reg, scaling=1.):
             Ws, bs = params
             l2reg /= bs.shape[0]
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
@@ -454,7 +454,7 @@ class GroupLasso(Regularizer):
         # divide regularization strength by number of neurons
         regularizer_strength = regularizer_strength / params[1].shape[0]
 
-        return penalty * regularizer_strength
+        return 0.5 * penalty * regularizer_strength
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """Returns a function for calculating the penalized loss using Group Lasso regularization."""
