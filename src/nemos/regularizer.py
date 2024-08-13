@@ -226,7 +226,7 @@ class Ridge(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l2reg, scaling=0.5):
+        def prox_op(params, l2reg, scaling=1.0):
             Ws, bs = params
             l2reg /= bs.shape[0]
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
@@ -447,7 +447,7 @@ class GroupLasso(Regularizer):
         )  # this masks the param, (group, feature, neuron)
 
         penalty = jax.numpy.sum(
-            jax.numpy.linalg.norm(masked_param, axis=1)
+            jax.numpy.linalg.norm(masked_param, axis=1).T
             * jax.numpy.sqrt(self.mask.sum(axis=1))
         )
 
