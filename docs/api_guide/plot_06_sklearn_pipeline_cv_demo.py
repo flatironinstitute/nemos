@@ -505,5 +505,5 @@ cvdf_wide = cvdf.pivot(
 plotting.plot_heatmap_cv_results(cvdf_wide, label="pseudo-R2")
 
 # %%
-# As you can see, with this new metric scores are normalized between 0 and 1, the highest the better.
+# As you can see, the results with pseudo-R2 agree with those of the negative log-likelihood. Note that this new metric is normalized between 0 and 1, with a higher score indicating better performance.
 
