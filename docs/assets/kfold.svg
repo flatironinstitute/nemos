@@ -1,0 +1,882 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="195.21074mm"
+   height="185.72133mm"
+   viewBox="0 0 195.21073 185.72133"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3 (0e150ed, 2023-07-21)"
+   sodipodi:docname="kfold.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="0.58552107"
+     inkscape:cx="391.95857"
+     inkscape:cy="437.2174"
+     inkscape:window-width="1488"
+     inkscape:window-height="751"
+     inkscape:window-x="0"
+     inkscape:window-y="38"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1"
+     showguides="false" />
+  <defs
+     id="defs1">
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect14"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect14-9"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect14-7"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+    <inkscape:path-effect
+       effect="bspline"
+       id="path-effect14-9-0"
+       is_visible="true"
+       lpeversion="1.3"
+       weight="33.333333"
+       steps="2"
+       helper_size="0"
+       apply_no_weight="true"
+       apply_with_weight="true"
+       only_selected="false"
+       uniform="false" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(10.84504,-8.5856581)">
+    <rect
+       style="fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.799999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       id="rect15"
+       width="195.21074"
+       height="185.72133"
+       x="-10.84504"
+       y="8.5856581"
+       rx="0.13655469" />
+    <rect
+       style="fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1"
+       width="154.39346"
+       height="12.903"
+       x="18.242456"
+       y="13.348139"
+       rx="0.12512119" />
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899997;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7"
+       width="117.01868"
+       height="12.903"
+       x="17.249298"
+       y="29.679974"
+       rx="0.09483248" />
+    <rect
+       style="fill:#ddb2cf;fill-opacity:1;stroke-width:0.899998;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-5"
+       width="39.599468"
+       height="12.903201"
+       x="135.7979"
+       y="29.982143"
+       rx="0.032091595" />
+    <rect
+       style="fill:#de84f6;fill-opacity:1;stroke-width:0.899998;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-5-9"
+       width="39.599468"
+       height="12.903201"
+       x="135.7979"
+       y="173.26469"
+       rx="0.032091595" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="96.996475"
+       y="22.162672"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="96.996475"
+         y="22.162672">All Data</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="80.627914"
+       y="37.989712"
+       id="text1-2"><tspan
+         sodipodi:role="line"
+         id="tspan1-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="80.627914"
+         y="37.989712">Tranining</tspan></text>
+    <rect
+       style="fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7"
+       width="21.053354"
+       height="12.903"
+       x="17.454395"
+       y="56.667259"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="27.893064"
+       y="66.249046"
+       id="text1-2-3"
+       transform="scale(1.0135467,0.98663437)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="27.893064"
+         y="66.249046">Fold 1</tspan></text>
+    <rect
+       style="fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6"
+       width="21.053354"
+       height="12.903"
+       x="41.394451"
+       y="56.667259"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="51.151752"
+       y="66.249039"
+       id="text1-2-3-8"
+       transform="scale(1.0135466,0.98663445)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="51.151752"
+         y="66.249039">Fold 2</tspan></text>
+    <rect
+       style="fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4"
+       width="21.053354"
+       height="12.903"
+       x="65.334511"
+       y="56.667259"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="75.763519"
+       y="65.36203"
+       id="text1-2-3-8-4"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="75.763519"
+         y="65.36203">Fold 3</tspan></text>
+    <rect
+       style="fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7"
+       width="21.053354"
+       height="12.903"
+       x="89.274567"
+       y="56.667259"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="99.640015"
+       y="65.363586"
+       id="text1-2-3-8-4-8"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="99.640015"
+         y="65.363586">Fold 4</tspan></text>
+    <rect
+       style="fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-0"
+       width="21.053354"
+       height="12.903"
+       x="113.21462"
+       y="56.667259"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="123.60332"
+       y="65.35273"
+       id="text1-2-3-8-4-8-7"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-8"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="123.60332"
+         y="65.35273">Fold 5</tspan></text>
+    <rect
+       style="fill:#ddb2cf;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-7"
+       width="21.053354"
+       height="12.903"
+       x="17.454395"
+       y="77.04731"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="27.893064"
+       y="87.586891"
+       id="text1-2-3-1"
+       transform="scale(1.0135467,0.98663437)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-7"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="27.893064"
+         y="87.586891">Fold 1</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-5"
+       width="21.053354"
+       height="12.903"
+       x="41.394451"
+       y="77.04731"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="51.151752"
+       y="86.905174"
+       id="text1-2-3-8-1"
+       transform="scale(1.0135466,0.98663445)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-7"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="51.151752"
+         y="86.905174">Fold 2</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-2"
+       width="21.053354"
+       height="12.903"
+       x="65.334511"
+       y="77.04731"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="75.763519"
+       y="85.742081"
+       id="text1-2-3-8-4-5"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-4"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="75.763519"
+         y="85.742081">Fold 3</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-3"
+       width="21.053354"
+       height="12.903"
+       x="89.274567"
+       y="77.04731"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="99.640015"
+       y="85.743637"
+       id="text1-2-3-8-4-8-0"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="99.640015"
+         y="85.743637">Fold 4</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-0-4"
+       width="21.053354"
+       height="12.903"
+       x="113.21462"
+       y="77.04731"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="123.60332"
+       y="85.73278"
+       id="text1-2-3-8-4-8-7-5"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-8-9"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="123.60332"
+         y="85.73278">Fold 5</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-7-4"
+       width="21.053354"
+       height="12.903"
+       x="17.454395"
+       y="96.1791"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="27.893064"
+       y="106.29614"
+       id="text1-2-3-1-0"
+       transform="scale(1.0135467,0.98663437)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-7-8"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="27.893064"
+         y="106.29614">Fold 1</tspan></text>
+    <rect
+       style="fill:#ddb2cf;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-5-0"
+       width="21.053354"
+       height="12.903"
+       x="41.394451"
+       y="96.1791"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="51.151752"
+       y="106.29613"
+       id="text1-2-3-8-1-6"
+       transform="scale(1.0135466,0.98663445)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-7-0"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="51.151752"
+         y="106.29613">Fold 2</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-2-2"
+       width="21.053354"
+       height="12.903"
+       x="65.334511"
+       y="96.1791"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="75.763519"
+       y="104.87387"
+       id="text1-2-3-8-4-5-9"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-4-8"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="75.763519"
+         y="104.87387">Fold 3</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-3-1"
+       width="21.053354"
+       height="12.903"
+       x="89.274567"
+       y="96.1791"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="99.640015"
+       y="104.87543"
+       id="text1-2-3-8-4-8-0-6"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-1-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="99.640015"
+         y="104.87543">Fold 4</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-0-4-8"
+       width="21.053354"
+       height="12.903"
+       x="113.21462"
+       y="96.1791"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="123.60332"
+       y="104.86457"
+       id="text1-2-3-8-4-8-7-5-1"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-8-9-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="123.60332"
+         y="104.86457">Fold 5</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-7-4-3"
+       width="21.053354"
+       height="12.903"
+       x="17.454395"
+       y="115.31088"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="27.893064"
+       y="125.6871"
+       id="text1-2-3-1-0-7"
+       transform="scale(1.0135467,0.98663437)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-7-8-0"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="27.893064"
+         y="125.6871">Fold 1</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-5-0-3"
+       width="21.053354"
+       height="12.903"
+       x="41.394451"
+       y="115.31088"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="51.151752"
+       y="125.68708"
+       id="text1-2-3-8-1-6-4"
+       transform="scale(1.0135466,0.98663445)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-7-0-3"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="51.151752"
+         y="125.68708">Fold 2</tspan></text>
+    <rect
+       style="fill:#ddb2cf;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-2-2-7"
+       width="21.053354"
+       height="12.903"
+       x="65.334511"
+       y="115.31088"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="75.763519"
+       y="124.00565"
+       id="text1-2-3-8-4-5-9-5"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-4-8-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="75.763519"
+         y="124.00565">Fold 3</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-3-1-6"
+       width="21.053354"
+       height="12.903"
+       x="89.274567"
+       y="115.31088"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="99.640015"
+       y="124.00721"
+       id="text1-2-3-8-4-8-0-6-6"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-1-1-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="99.640015"
+         y="124.00721">Fold 4</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-0-4-8-1"
+       width="21.053354"
+       height="12.903"
+       x="113.21462"
+       y="115.31088"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="123.60332"
+       y="123.99635"
+       id="text1-2-3-8-4-8-7-5-1-7"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-8-9-1-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="123.60332"
+         y="123.99635">Fold 5</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-7-4-3-1"
+       width="21.053354"
+       height="12.903"
+       x="17.454395"
+       y="134.44266"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="27.893064"
+       y="145.07805"
+       id="text1-2-3-1-0-7-5"
+       transform="scale(1.0135467,0.98663437)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-7-8-0-0"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="27.893064"
+         y="145.07805">Fold 1</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-5-0-3-5"
+       width="21.053354"
+       height="12.903"
+       x="41.394451"
+       y="134.44266"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="51.151752"
+       y="145.07803"
+       id="text1-2-3-8-1-6-4-3"
+       transform="scale(1.0135466,0.98663445)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-7-0-3-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="51.151752"
+         y="145.07803">Fold 2</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-2-2-7-1"
+       width="21.053354"
+       height="12.903"
+       x="65.334511"
+       y="134.44266"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="75.763519"
+       y="143.13744"
+       id="text1-2-3-8-4-5-9-5-9"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-4-8-1-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="75.763519"
+         y="143.13744">Fold 3</tspan></text>
+    <rect
+       style="fill:#ddb2cf;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-3-1-6-6"
+       width="21.053354"
+       height="12.903"
+       x="89.274567"
+       y="134.44266"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="99.640015"
+       y="143.13899"
+       id="text1-2-3-8-4-8-0-6-6-8"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-1-1-5-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="99.640015"
+         y="143.13899">Fold 4</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-0-4-8-1-7"
+       width="21.053354"
+       height="12.903"
+       x="113.21462"
+       y="134.44266"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="123.60332"
+       y="143.12813"
+       id="text1-2-3-8-4-8-7-5-1-7-9"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-8-9-1-1-6"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="123.60332"
+         y="143.12813">Fold 5</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-7-4-3-1-0"
+       width="21.053354"
+       height="12.903"
+       x="17.454395"
+       y="153.57445"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="27.893064"
+       y="164.46901"
+       id="text1-2-3-1-0-7-5-4"
+       transform="scale(1.0135467,0.98663437)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-7-8-0-0-1"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="27.893064"
+         y="164.46901">Fold 1</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-5-0-3-5-8"
+       width="21.053354"
+       height="12.903"
+       x="41.394451"
+       y="153.57445"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="51.151752"
+       y="164.46899"
+       id="text1-2-3-8-1-6-4-3-1"
+       transform="scale(1.0135466,0.98663445)"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-7-0-3-1-4"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.43603px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-opacity:1"
+         x="51.151752"
+         y="164.46899">Fold 2</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-2-2-7-1-8"
+       width="21.053354"
+       height="12.903"
+       x="65.334511"
+       y="153.57445"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="75.763519"
+       y="162.26923"
+       id="text1-2-3-8-4-5-9-5-9-4"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-4-8-1-5-5"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="75.763519"
+         y="162.26923">Fold 3</tspan></text>
+    <rect
+       style="fill:#c3c2ec;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-3-1-6-6-9"
+       width="21.053354"
+       height="12.903"
+       x="89.274567"
+       y="153.57445"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="99.640015"
+       y="162.27078"
+       id="text1-2-3-8-4-8-0-6-6-8-8"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-1-1-5-5-4"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="99.640015"
+         y="162.27078">Fold 4</tspan></text>
+    <rect
+       style="fill:#ddb2cf;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       id="rect1-7-7-6-4-7-0-4-8-1-7-8"
+       width="21.053354"
+       height="12.903"
+       x="113.21462"
+       y="153.57445"
+       rx="0.01706174" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#c7c9c7;fill-opacity:1;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="123.60332"
+       y="162.25992"
+       id="text1-2-3-8-4-8-7-5-1-7-9-8"><tspan
+         sodipodi:role="line"
+         id="tspan1-5-3-5-9-0-8-9-1-1-6-9"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.9;stroke-opacity:1"
+         x="123.60332"
+         y="162.25992">Fold 5</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-opacity:1;paint-order:stroke markers fill"
+       x="155.78867"
+       y="39.022736"
+       id="text2"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke-width:0.9"
+         x="155.78867"
+         y="39.022736"
+         id="tspan3">Test</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-opacity:1;paint-order:stroke markers fill"
+       x="155.56818"
+       y="181.95181"
+       id="text2-3"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#000000;fill-opacity:1;stroke-width:0.9"
+         x="155.56818"
+         y="181.95181"
+         id="tspan3-8">Test</tspan></text>
+    <g
+       id="g14"
+       transform="matrix(-1.1778434,0,0,1.8059413,263.51582,-254.86703)"
+       style="stroke-width:0.959914;stroke-dasharray:none">
+      <path
+         style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.959914;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+         d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -5.34719,11.37226 -0.22591,3.53973 1.8828,6.70281 2.18404,8.88689 0.30124,2.18408 -1.20499,3.38906 -2.71125,4.59407"
+         id="path14"
+         inkscape:path-effect="#path-effect14"
+         inkscape:original-d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -7.681903,11.74879 2.108803,3.1632 4.217513,6.32628 6.326273,9.48941 -1.50628,1.20503 -3.01251,2.41001 -4.51877,3.61502" />
+      <path
+         style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.959914;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+         d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -5.34719,11.37226 -0.22591,3.53973 1.8828,6.70281 2.18404,8.88689 0.30124,2.18408 -1.20499,3.38906 -2.71125,4.59407"
+         id="path14-5"
+         inkscape:path-effect="#path-effect14-9"
+         inkscape:original-d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -7.681903,11.74879 2.108803,3.1632 4.217513,6.32628 6.326273,9.48941 -1.50628,1.20503 -3.01251,2.41001 -4.51877,3.61502"
+         transform="matrix(1,0,0,-1,0.37529951,417.30453)" />
+    </g>
+    <g
+       id="g14-5"
+       transform="matrix(0.69793561,0,0,0.34261787,57.929865,109.27425)"
+       style="fill:none;stroke:#000000;stroke-width:1.63597;stroke-dasharray:none;stroke-opacity:1">
+      <path
+         style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:1.63597;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+         d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -5.34719,11.37226 -0.22591,3.53973 1.8828,6.70281 2.18404,8.88689 0.30124,2.18408 -1.20499,3.38906 -2.71125,4.59407"
+         id="path14-7"
+         inkscape:path-effect="#path-effect14-7"
+         inkscape:original-d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -7.681903,11.74879 2.108803,3.1632 4.217513,6.32628 6.326273,9.48941 -1.50628,1.20503 -3.01251,2.41001 -4.51877,3.61502" />
+      <path
+         style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:1.63597;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+         d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -5.34719,11.37226 -0.22591,3.53973 1.8828,6.70281 2.18404,8.88689 0.30124,2.18408 -1.20499,3.38906 -2.71125,4.59407"
+         id="path14-5-2"
+         inkscape:path-effect="#path-effect14-9-0"
+         inkscape:original-d="m 106.6429,183.91382 c -2.56063,3.91626 -5.12127,7.83253 -7.681903,11.74879 2.108803,3.1632 4.217513,6.32628 6.326273,9.48941 -1.50628,1.20503 -3.01251,2.41001 -4.51877,3.61502"
+         transform="matrix(1,0,0,-1,0.37529951,417.30453)" />
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:none;fill-opacity:1;stroke:#000000;stroke-width:1.4;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="162.22374"
+       y="120.1992"
+       id="text14"><tspan
+         sodipodi:role="line"
+         id="tspan14"
+         style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.4"
+         x="162.22374"
+         y="120.1992">Finding</tspan><tspan
+         sodipodi:role="line"
+         style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.4"
+         x="162.22374"
+         y="128.1367"
+         id="tspan15">parameters</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:none;fill-opacity:1;stroke:#000000;stroke-width:1.4;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="110.2795"
+       y="179.69423"
+       id="text14-1"><tspan
+         sodipodi:role="line"
+         id="tspan14-7"
+         style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.4"
+         x="110.2795"
+         y="179.69423">Final</tspan><tspan
+         sodipodi:role="line"
+         style="fill:#000000;fill-opacity:1;stroke:none;stroke-width:1.4"
+         x="110.2795"
+         y="187.63173"
+         id="tspan15-6">evaluation</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.799999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="5.0955439"
+       y="85.856575"
+       id="text16"><tspan
+         sodipodi:role="line"
+         id="tspan16"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.8"
+         x="5.0955439"
+         y="85.856575">Split 1</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.799999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="4.3824091"
+       y="104.82021"
+       id="text16-2"><tspan
+         sodipodi:role="line"
+         id="tspan16-9"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.8"
+         x="4.3824091"
+         y="104.82021">Split 2</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.799999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="4.3359003"
+       y="123.78384"
+       id="text16-1"><tspan
+         sodipodi:role="line"
+         id="tspan16-5"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.8"
+         x="4.3359003"
+         y="123.78384">Split 3</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.799999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="4.2087765"
+       y="142.57933"
+       id="text16-2-1"><tspan
+         sodipodi:role="line"
+         id="tspan16-9-7"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.8"
+         x="4.2087765"
+         y="142.57933">Split 4</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:6.35px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.799999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
+       x="4.2552853"
+       y="161.71112"
+       id="text16-2-1-3"><tspan
+         sodipodi:role="line"
+         id="tspan16-9-7-7"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.8"
+         x="4.2552853"
+         y="161.71112">Split 5</tspan></text>
+  </g>
+</svg>

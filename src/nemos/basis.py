@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import abc
+import copy
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -13,6 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
 
+from .base_class import Base
 from .convolve import create_convolutional_predictor
 from .type_casting import support_pynapple
 from .utils import row_wise_kron
@@ -29,6 +31,7 @@ __all__ = [
     "OrthExponentialBasis",
     "AdditiveBasis",
     "MultiplicativeBasis",
+    "TransformerBasis",
 ]
 
 
@@ -119,14 +122,48 @@ class TransformerBasis:
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
 
+    `TransformerBasis`, unlike `Basis`, is compatible with scikit-learn pipelining and
+    model selection, enabling the cross-validation of the basis type and parameters,
+    for example `n_basis_funcs`. See the example section below.
+
     Parameters
     ----------
     basis :
         A concrete subclass of `Basis`.
+
+    Examples
+    --------
+    >>> from nemos.basis import BSplineBasis, TransformerBasis
+    >>> from nemos.glm import GLM
+    >>> from sklearn.pipeline import Pipeline
+    >>> from sklearn.model_selection import GridSearchCV
+    >>> import numpy as np
+    >>> np.random.seed(123)
+
+    >>> # Generate data
+    >>> num_samples, num_features = 10000, 1
+    >>> x = np.random.normal(size=(num_samples, ))  # raw time series
+    >>> basis = BSplineBasis(10)
+    >>> features = basis.compute_features(x)  # basis transformed time series
+    >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
+    >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
+
+    >>> # transformer can be used in pipelines
+    >>> transformer = TransformerBasis(basis)
+    >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
+    >>> pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
+    >>> print(pipeline.predict(np.random.normal(size=(10, 1))))  # predict rate from new data
+
+    >>> # TransformerBasis parameter can be cross-validated.
+    >>> # 5-fold cross-validate the number of basis
+    >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])
+    >>> grid_cv = GridSearchCV(pipeline, param_grid, cv=5)
+    >>> grid_cv.fit(x[:, None], y)
+    >>> print("Cross-validated number of basis:", grid_cv.best_params_)
     """
 
     def __init__(self, basis: Basis):
-        self._basis = basis
+        self._basis = copy.deepcopy(basis)
 
     @staticmethod
     def _unpack_inputs(X: FeatureMatrix):
@@ -213,8 +250,199 @@ class TransformerBasis:
         """
         return self._basis.compute_features(*self._unpack_inputs(X))
 
+    def __getstate__(self):
+        """
+        Explicitly define how to pickle TransformerBasis object.
 
-class Basis(abc.ABC):
+        See https://docs.python.org/3/library/pickle.html#object.__getstate__
+        and https://docs.python.org/3/library/pickle.html#pickle-state
+        """
+        return {"_basis": self._basis}
+
+    def __setstate__(self, state):
+        """
+        Define how to populate the object's state when unpickling.
+
+        Note that during unpickling a new object is created without calling __init__.
+        Needed to avoid infinite recursion in __getattr__ when unpickling.
+
+        See https://docs.python.org/3/library/pickle.html#object.__setstate__
+        and https://docs.python.org/3/library/pickle.html#pickle-state
+        """
+        self._basis = state["_basis"]
+
+    def __getattr__(self, name: str):
+        """
+        Enable easy access to attributes of the underlying Basis object.
+
+        Examples
+        --------
+        >>> from nemos import basis
+        >>> bas = basis.RaisedCosineBasisLinear(5)
+        >>> trans_bas = basis.TransformerBasis(bas)
+        >>> bas.n_basis_funcs
+        5
+        >>> trans_bas.n_basis_funcs
+        5
+        """
+        return getattr(self._basis, name)
+
+    def __setattr__(self, name: str, value) -> None:
+        """
+        Allow setting _basis or the attributes of _basis with a convenient dot assignment syntax.
+
+        Setting any other attribute is not allowed.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If the attribute being set is not `_basis` or an attribute of `_basis`.
+
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.MSplineBasis(10))
+        >>> # allowed
+        >>> trans_bas._basis = nmo.basis.BSplineBasis(10)
+        >>> # allowed
+        >>> trans_bas.n_basis_funcs = 20
+        >>> # not allowed
+        >>> tran_bas.random_attribute_name = "some value"
+        Traceback (most recent call last):
+        ...
+        ValueError: Only setting _basis or existing attributes of _basis is allowed.
+        """
+        # allow self._basis = basis
+        if name == "_basis":
+            super().__setattr__(name, value)
+        # allow changing existing attributes of self._basis
+        elif hasattr(self._basis, name):
+            setattr(self._basis, name, value)
+        # don't allow setting any other attribute
+        else:
+            raise ValueError(
+                "Only setting _basis or existing attributes of _basis is allowed."
+            )
+
+    def __sklearn_clone__(self) -> TransformerBasis:
+        """
+        Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
+
+        By default, scikit-learn tries to clone the object by calling __init__ using the output of get_params,
+        which fails in our case.
+
+        For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
+        """
+        cloned_obj = TransformerBasis(copy.deepcopy(self._basis))
+        cloned_obj._basis.kernel_ = None
+        return cloned_obj
+
+    def set_params(self, **parameters) -> TransformerBasis:
+        """
+        Set TransformerBasis parameters.
+
+        When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
+        or the parameters of the underlying Basis, but not both.
+
+        Examples
+        --------
+        >>> from nemos.basis import BSplineBasis, MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer_basis = TransformerBasis(basis=basis)
+
+        >>> # setting parameters of _basis is allowed
+        >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
+
+        >>> # setting _basis directly is allowed
+        >>> print(transformer_basis.set_params(_basis=BSplineBasis(10))._basis)
+
+        >>> # mixing is not allowed, this will raise an exception
+        >>> transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
+        """
+        new_basis = parameters.pop("_basis", None)
+        if new_basis is not None:
+            self._basis = new_basis
+            if len(parameters) > 0:
+                raise ValueError(
+                    "Set either new _basis object or parameters for existing _basis, not both."
+                )
+        else:
+            self._basis = self._basis.set_params(**parameters)
+
+        return self
+
+    def get_params(self, deep: bool = True) -> dict:
+        """Extend the dict of parameters from the underlying Basis with _basis."""
+        return {"_basis": self._basis, **self._basis.get_params(deep)}
+
+    def __dir__(self) -> list[str]:
+        """Extend the list of properties of methods with the ones from the underlying Basis."""
+        return super().__dir__() + self._basis.__dir__()
+
+    def __add__(self, other: TransformerBasis) -> TransformerBasis:
+        """
+        Add two TransformerBasis objects.
+
+        Parameters
+        ----------
+        other
+            The other TransformerBasis object to add.
+
+        Returns
+        -------
+        : TransformerBasis
+            The resulting Basis object.
+        """
+        return TransformerBasis(self._basis + other._basis)
+
+    def __mul__(self, other: TransformerBasis) -> TransformerBasis:
+        """
+        Multiply two TransformerBasis objects.
+
+        Parameters
+        ----------
+        other
+            The other TransformerBasis object to multiply.
+
+        Returns
+        -------
+        :
+            The resulting Basis object.
+        """
+        return TransformerBasis(self._basis * other._basis)
+
+    def __pow__(self, exponent: int) -> TransformerBasis:
+        """Exponentiation of a TransformerBasis object.
+
+        Define the power of a basis by repeatedly applying the method __mul__.
+        The exponent must be a positive integer.
+
+        Parameters
+        ----------
+        exponent :
+            Positive integer exponent
+
+        Returns
+        -------
+        :
+            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
+
+        Raises
+        ------
+        TypeError
+            If the provided exponent is not an integer.
+        ValueError
+            If the integer is zero or negative.
+        """
+        # errors are handled by Basis.__pow__
+        return TransformerBasis(self._basis**exponent)
+
+
+class Basis(Base, abc.ABC):
     """
     Abstract base class for defining basis functions for feature transformation.
 
@@ -246,7 +474,6 @@ class Basis(abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
@@ -255,7 +482,6 @@ class Basis(abc.ABC):
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._check_n_basis_min()
-        self._conv_args = args
         self._conv_kwargs = kwargs
         self.bounds = bounds
 
@@ -276,10 +502,6 @@ class Basis(abc.ABC):
             if bounds is not None:
                 raise ValueError("`bounds` should only be set when `mode=='eval'`.")
         else:
-            if args:
-                raise ValueError(
-                    f"args should only be set when mode=='conv', but '{mode}' provided instead!"
-                )
             if kwargs:
                 raise ValueError(
                     f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
@@ -287,7 +509,7 @@ class Basis(abc.ABC):
 
         self._window_size = window_size
         self._mode = mode
-        self._kernel = None
+        self.kernel_ = None
         self._identifiability_constraints = False
 
     @property
@@ -401,7 +623,7 @@ class Basis(abc.ABC):
         ValueError:
             If an invalid mode is specified or necessary parameters for the chosen mode are missing.
         """
-        # check if self._kernel is not None for mode="conv"
+        # check if self.kernel_ is not None for mode="conv"
         self._check_has_kernel()
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
@@ -413,7 +635,7 @@ class Basis(abc.ABC):
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
-                self._kernel, *xi, *self._conv_args, **self._conv_kwargs
+                self.kernel_, *xi, **self._conv_kwargs
             )
             # move the time axis to the first dimension
             new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
@@ -450,7 +672,7 @@ class Basis(abc.ABC):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
-        if self._kernel is None:
+        if self.kernel_ is None:
             self._set_kernel(*xi)
         return self._compute_features(*xi)
 
@@ -486,7 +708,7 @@ class Basis(abc.ABC):
         mode exclusively, this method should simply return `self` without modification.
         """
         if self.mode == "conv":
-            self._kernel = self.__call__(np.linspace(0, 1, self.window_size))
+            self.kernel_ = self.__call__(np.linspace(0, 1, self.window_size))
         return self
 
     @abc.abstractmethod
@@ -580,7 +802,7 @@ class Basis(abc.ABC):
 
     def _check_has_kernel(self) -> None:
         """Check that the kernel is pre-computed."""
-        if self.mode == "conv" and self._kernel is None:
+        if self.mode == "conv" and self.kernel_ is None:
             raise ValueError(
                 "You must call `_set_kernel` before `_compute_features` when mode =`conv`."
             )
@@ -763,6 +985,36 @@ class Basis(abc.ABC):
         for _ in range(exponent - 1):
             result = result * self
         return result
+
+    def to_transformer(self) -> TransformerBasis:
+        """
+        Turn the Basis into a TransformerBasis for use with scikit-learn.
+
+        Examples
+        --------
+        Jointly cross-validating basis and GLM parameters with scikit-learn.
+
+        >>> import nemos as nmo
+        >>> from sklearn.pipeline import Pipeline
+        >>> from sklearn.model_selection import GridSearchCV
+        >>> # load some data
+        >>> X, y = ...  # X: features, y: neural activity
+        >>> basis = nmo.basis.RaisedCosineBasisLinear(10)
+        >>> glm = nmo.glm.GLM(regularizer="Ridge")
+        >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
+        >>> param_grid = dict(
+        ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+        ...     basis__n_basis_funcs=(3, 5, 10, 20, 100),
+        ... )
+        >>> gridsearch = GridSearchCV(
+        ...     pipeline,
+        ...     param_grid=param_grid,
+        ...     cv=5,
+        ... )
+        >>> gridsearch.fit(X, y)
+        """
+
+        return TransformerBasis(copy.deepcopy(self))
 
 
 class AdditiveBasis(Basis):
@@ -989,9 +1241,6 @@ class SplineBasis(Basis, abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1017,7 +1266,6 @@ class SplineBasis(Basis, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
@@ -1027,7 +1275,6 @@ class SplineBasis(Basis, abc.ABC):
         self.order = order
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             window_size=window_size,
             bounds=bounds,
@@ -1119,9 +1366,6 @@ class MSplineBasis(SplineBasis):
     n_basis_funcs :
         The number of basis functions to generate. More basis functions allow for
         more flexible data modeling but can lead to overfitting.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1166,7 +1410,6 @@ class MSplineBasis(SplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 2,
         window_size: Optional[int] = None,
@@ -1175,7 +1418,6 @@ class MSplineBasis(SplineBasis):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             order=order,
             window_size=window_size,
@@ -1280,9 +1522,6 @@ class BSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1316,7 +1555,6 @@ class BSplineBasis(SplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
@@ -1325,7 +1563,6 @@ class BSplineBasis(SplineBasis):
     ):
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             order=order,
             window_size=window_size,
@@ -1404,9 +1641,6 @@ class CyclicBSplineBasis(SplineBasis):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1435,7 +1669,6 @@ class CyclicBSplineBasis(SplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         order: int = 4,
         window_size: Optional[int] = None,
@@ -1444,7 +1677,6 @@ class CyclicBSplineBasis(SplineBasis):
     ):
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             order=order,
             window_size=window_size,
@@ -1553,9 +1785,6 @@ class RaisedCosineBasisLinear(Basis):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1582,7 +1811,6 @@ class RaisedCosineBasisLinear(Basis):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         width: float = 2.0,
         window_size: Optional[int] = None,
@@ -1591,7 +1819,6 @@ class RaisedCosineBasisLinear(Basis):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             window_size=window_size,
             bounds=bounds,
@@ -1608,6 +1835,11 @@ class RaisedCosineBasisLinear(Basis):
     def width(self):
         """Return width of the raised cosine."""
         return self._width
+
+    @width.setter
+    def width(self, width: float):
+        self._check_width(width)
+        self._width = width
 
     @staticmethod
     def _check_width(width: float) -> None:
@@ -1738,9 +1970,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1775,7 +2004,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     def __init__(
         self,
         n_basis_funcs: int,
-        *args,
         mode="eval",
         width: float = 2.0,
         time_scaling: float = None,
@@ -1786,7 +2014,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             width=width,
             window_size=window_size,
@@ -1903,9 +2130,6 @@ class OrthExponentialBasis(Basis):
             Number of basis functions.
     decay_rates :
             Decay rates of the exponentials, shape (n_basis_funcs,).
-    *args:
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -1924,7 +2148,6 @@ class OrthExponentialBasis(Basis):
         self,
         n_basis_funcs: int,
         decay_rates: NDArray[np.floating],
-        *args,
         mode="eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
@@ -1932,22 +2155,31 @@ class OrthExponentialBasis(Basis):
     ):
         super().__init__(
             n_basis_funcs,
-            *args,
             mode=mode,
             window_size=window_size,
             bounds=bounds,
             **kwargs,
         )
-        self._decay_rates = np.asarray(decay_rates)
-        if self._decay_rates.shape[0] != n_basis_funcs:
-            raise ValueError(
-                f"The number of basis functions must match the number of decay rates provided. "
-                f"Number of basis functions provided: {n_basis_funcs}, "
-                f"Number of decay rates provided: {self._decay_rates.shape[0]}"
-            )
-
+        self.decay_rates = decay_rates
         self._check_rates()
         self._n_input_dimensionality = 1
+
+    @property
+    def decay_rates(self):
+        """Decay rate getter"""
+        return self._decay_rates
+
+    @decay_rates.setter
+    def decay_rates(self, value: NDArray):
+        """Decay rate setter."""
+        value = np.asarray(value)
+        if value.shape[0] != self.n_basis_funcs:
+            raise ValueError(
+                f"The number of basis functions must match the number of decay rates provided. "
+                f"Number of basis functions provided: {self.n_basis_funcs}, "
+                f"Number of decay rates provided: {value.shape[0]}"
+            )
+        self._decay_rates = value
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
