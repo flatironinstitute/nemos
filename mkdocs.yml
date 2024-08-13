@@ -13,12 +13,18 @@ theme:
     - md_in_html
     - admonition
     - tables
+    - pymdownx.emoji:
+          emoji_index: !!python/name:material.extensions.emoji.twemoji
+          emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 # if footnotes is defined in theme doesn't work
 # If md_in_html is defined outside theme, it also results in
 # an error when building the docs.
 markdown_extensions:
   - footnotes
+  - pymdownx.superfences
+  - pymdownx.details # add notes toggleable notes ???
+
 
 plugins:
   - search
@@ -51,6 +57,7 @@ plugins:
 
 extra_javascript:
   - javascripts/katex.js
+  - javascripts/toggle_code.js
   - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/katex.min.js
   - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/contrib/auto-render.min.js
 

@@ -1,5 +1,6 @@
 import abc
 import inspect
+import pickle
 from contextlib import nullcontext as does_not_raise
 
 import jax.numpy
@@ -8,12 +9,25 @@ import pynapple as nap
 import pytest
 import sklearn.pipeline as pipeline
 import utils_testing
+from sklearn.base import clone as sk_clone
+from sklearn.model_selection import GridSearchCV
 
 import nemos.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
 
 # automatic define user accessible basis and check the methods
+
+def list_all_basis_classes() -> list[type]:
+    """
+    Return all the classes in nemos.basis which are a subclass of Basis,
+    which should be all concrete classes except TransformerBasis. 
+    """
+    return [
+        class_obj
+        for _, class_obj in utils_testing.get_non_abstract_classes(basis)
+        if issubclass(class_obj, basis.Basis)
+    ]
 
 
 def test_all_basis_are_tested() -> None:
@@ -37,9 +51,7 @@ def test_all_basis_are_tested() -> None:
     tested_bases = {test_cls.cls for test_cls in subclasses}
 
     # Create the set of all the concrete basis classes
-    all_bases = {
-        class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)
-    }
+    all_bases = set(list_all_basis_classes())
 
     if all_bases != all_bases.intersection(tested_bases):
         raise ValueError(
@@ -431,12 +443,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -487,7 +499,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -506,10 +518,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            self.cls(5, 10, mode="eval")
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -594,6 +602,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(3, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 
 class TestRaisedCosineLinearBasis(BasisFuncsTesting):
@@ -920,12 +936,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -976,7 +992,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -994,10 +1010,6 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            self.cls(5, 10, mode="eval")
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -1080,6 +1092,14 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(3, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 
 class TestMSplineBasis(BasisFuncsTesting):
@@ -1406,12 +1426,12 @@ class TestMSplineBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -1462,7 +1482,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -1480,10 +1500,6 @@ class TestMSplineBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            self.cls(5, 10, mode="eval")
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -1572,6 +1588,13 @@ class TestMSplineBasis(BasisFuncsTesting):
         with exception:
             self.cls(3, mode="conv", window_size=10, bounds=bounds)
 
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
     cls = basis.OrthExponentialBasis
@@ -1955,12 +1978,12 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         bas._set_kernel(None)
-        assert bas._kernel.shape == (10, 5)
+        assert bas.kernel_.shape == (10, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
@@ -2012,7 +2035,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -2031,15 +2054,20 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs
 
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            self.cls(5, [1, 2, 3, 4, 5], 10, mode="eval")
-
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
             self.cls(5, decay_rates=[1, 2, 3, 4, 5], mode="eval", test="hi")
 
-
+    def test_transformer_get_params(self):
+        bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5])
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        rates_transf = params_transf.pop("decay_rates")
+        params_basis = bas.get_params()
+        rates_basis = params_basis.pop("decay_rates")
+        assert params_transf == params_basis
+        assert np.all(rates_transf == rates_basis)
 
 class TestBSplineBasis(BasisFuncsTesting):
     cls = basis.BSplineBasis
@@ -2387,12 +2415,12 @@ class TestBSplineBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -2443,7 +2471,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -2461,10 +2489,6 @@ class TestBSplineBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            self.cls(5, 10, mode="eval")
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -2548,6 +2572,14 @@ class TestBSplineBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(5, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 
 class TestCyclicBSplineBasis(BasisFuncsTesting):
@@ -2929,12 +2961,12 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     def test_fit_kernel(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel is not None
+        assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
         bas = self.cls(5, mode="conv", window_size=3)
         bas._set_kernel(None)
-        assert bas._kernel.shape == (3, 5)
+        assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
         bas = self.cls(5, mode="conv", window_size=3)
@@ -2967,7 +2999,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
-        conv_2 = convolve.create_convolutional_predictor(bas._kernel, x)
+        conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
         valid = ~np.isnan(conv)
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
@@ -2985,10 +3017,6 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         X = bas(np.linspace(0, 1, 20))
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
-
-    def test_conv_args_error(self):
-        with pytest.raises(ValueError, match="args should only be set"):
-            self.cls(5, 10, mode="eval")
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -3072,6 +3100,14 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
             self.cls(5, mode="conv", window_size=10, bounds=bounds)
+
+    def test_transformer_get_params(self):
+        bas = self.cls(5)
+        bas_transformer = bas.to_transformer()
+        params_transf = bas_transformer.get_params()
+        params_transf.pop("_basis")
+        params_basis = bas.get_params()
+        assert params_transf == params_basis
 
 class CombinedBasis(BasisFuncsTesting):
     """
@@ -3169,14 +3205,8 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("sample_size", [10, 1000])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
     def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
@@ -3207,14 +3237,8 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
     def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
@@ -3239,14 +3263,8 @@ class TestAdditiveBasis(CombinedBasis):
                 f"The second dimension of the output features basis is {eval_basis.shape[0]}",
             )
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -3279,14 +3297,8 @@ class TestAdditiveBasis(CombinedBasis):
             basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_meshgrid_size(
@@ -3305,14 +3317,8 @@ class TestAdditiveBasis(CombinedBasis):
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_basis_size(
@@ -3330,14 +3336,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 5, 6, 11, 30])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_input_number(
@@ -3366,14 +3366,8 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_pynapple_support_compute_features(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
     ):
@@ -3394,14 +3388,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert np.all(out.time_support.values == inp.time_support.values)
 
     # TEST CALL
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     @pytest.mark.parametrize("num_input", [0, 1, 2, 3, 4, 5])
@@ -3433,14 +3421,8 @@ class TestAdditiveBasis(CombinedBasis):
         ],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_input_shape(
@@ -3466,14 +3448,8 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_sample_axis(
@@ -3490,14 +3466,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert basis_obj(*inp).shape[0] == time_axis_shape
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_nan(self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size):
@@ -3518,14 +3488,8 @@ class TestAdditiveBasis(CombinedBasis):
             x[3] = np.nan
         assert all(np.isnan(basis_obj(*inp)[3]))
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_equivalent_in_conv(self, n_basis_a, n_basis_b, basis_a, basis_b):
@@ -3549,14 +3513,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert np.all(bas_con(*x) == bas_eva(*x))
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_pynapple_support(
@@ -3579,14 +3537,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert np.all(y_nap.t == x_nap[0].t)
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [6, 7])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_basis_number(
@@ -3603,14 +3555,8 @@ class TestAdditiveBasis(CombinedBasis):
         assert bas(*x).shape[1] == basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_non_empty(
@@ -3631,14 +3577,8 @@ class TestAdditiveBasis(CombinedBasis):
         [(0, 1, does_not_raise()), (-2, 2, does_not_raise()), (0.1, 2, does_not_raise())],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_sample_range(
@@ -3673,14 +3613,8 @@ class TestAdditiveBasis(CombinedBasis):
         with expectation:
             bas(*([np.linspace(mn, mx, 10)] * bas._n_input_dimensionality))
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_fit_kernel(self, n_basis_a, n_basis_b, basis_a, basis_b):
@@ -3700,20 +3634,14 @@ class TestAdditiveBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj._basis2)
             else:
                 has_kern += [
-                    basis_obj._kernel is not None if basis_obj.mode == "conv" else True
+                    basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
                 ]
             return has_kern
 
         assert all(check_kernel(bas))
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_transform_fails(self, n_basis_a, n_basis_b, basis_a, basis_b):
@@ -3772,14 +3700,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("sample_size", [10, 1000])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
     def test_compute_features_returns_expected_number_of_basis(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
@@ -3802,12 +3724,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs:
             raise ValueError(
-# <<<<<<< HEAD
                 "Dimensions do not agree: The number of basis should match the first dimension of the "
                 "fit_transformed basis."
-# =======
-#                 "Dimensions do not agree: The number of basis should match the first dimension of the output features."
-# >>>>>>> development
                 f"The number of basis is {n_basis_a * n_basis_b}",
                 f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
@@ -3815,14 +3733,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [12, 30, 35])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
     def test_sample_size_of_compute_features_matches_that_of_input(
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
@@ -3848,14 +3760,8 @@ class TestMultiplicativeBasis(CombinedBasis):
                 f"The second dimension of the output features is {eval_basis.shape[0]}",
             )
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -3888,14 +3794,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_meshgrid_size(
@@ -3914,14 +3814,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("sample_size", [11, 20])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_basis_size(
@@ -3939,14 +3833,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 5, 6, 11, 30])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_input_number(
@@ -4002,14 +3890,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_pynapple_support_compute_features(
         self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
     ):
@@ -4027,14 +3909,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert np.all(out.time_support.values == inp.time_support.values)
 
     # TEST CALL
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     @pytest.mark.parametrize("num_input", [0, 1, 2, 3, 4, 5])
@@ -4066,14 +3942,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         ],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_input_shape(
@@ -4099,14 +3969,8 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_sample_axis(
@@ -4123,14 +3987,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert basis_obj(*inp).shape[0] == time_axis_shape
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_nan(self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size):
@@ -4151,14 +4009,8 @@ class TestMultiplicativeBasis(CombinedBasis):
             x[3] = np.nan
         assert all(np.isnan(basis_obj(*inp)[3]))
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_equivalent_in_conv(self, n_basis_a, n_basis_b, basis_a, basis_b):
@@ -4182,14 +4034,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert np.all(bas_con(*x) == bas_eva(*x))
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_pynapple_support(
@@ -4212,14 +4058,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert np.all(y_nap.t == x_nap[0].t)
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [6, 7])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_basis_number(
@@ -4236,14 +4076,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert bas(*x).shape[1] == basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs
 
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_non_empty(
@@ -4264,14 +4098,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         [(0, 1, does_not_raise()), (-2, 2, does_not_raise()), (0.1, 2, does_not_raise())],
     )
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_sample_range(
@@ -4306,14 +4134,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         with expectation:
             bas(*([np.linspace(mn, mx, 10)] * bas._n_input_dimensionality))
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_fit_kernel(self, n_basis_a, n_basis_b, basis_a, basis_b):
@@ -4333,20 +4155,14 @@ class TestMultiplicativeBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj._basis2)
             else:
                 has_kern += [
-                    basis_obj._kernel is not None if basis_obj.mode == "conv" else True
+                    basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
                 ]
             return has_kern
 
         assert all(check_kernel(bas))
 
-    @pytest.mark.parametrize(
-        "basis_a",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
-    @pytest.mark.parametrize(
-        "basis_b",
-        [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_transform_fails(self, n_basis_a, n_basis_b, basis_a, basis_b):
@@ -4367,10 +4183,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 @pytest.mark.parametrize(
     "exponent", [-1, 0, 0.5, basis.RaisedCosineBasisLog(4), 1, 2, 3]
 )
-@pytest.mark.parametrize(
-    "basis_class",
-    [class_obj for _, class_obj in utils_testing.get_non_abstract_classes(basis)],
-)
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
 def test_power_of_basis(exponent, basis_class):
     """Test if the power behaves as expected."""
     raise_exception_type = not type(exponent) is int
@@ -4409,84 +4222,360 @@ def test_power_of_basis(exponent, basis_class):
 
 
 @pytest.mark.parametrize(
-    "bas",
+    "basis_cls",
     [
-        basis.MSplineBasis(5),
-        basis.BSplineBasis(5),
-        basis.CyclicBSplineBasis(5),
-        basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)),
-        basis.RaisedCosineBasisLinear(5),
-        basis.RaisedCosineBasisLog(5),
-        basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5),
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
     ],
 )
-def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
-    X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.TransformerBasis(bas)
-    pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
+def test_basis_to_transformer(basis_cls):
+    n_basis_funcs = 5
+    bas = basis_cls(n_basis_funcs)
 
-    pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+    trans_bas = bas.to_transformer()
+
+    assert isinstance(trans_bas, basis.TransformerBasis)
+
+    # check that things like n_basis_funcs are the same as the original basis
+    for k in bas.__dict__.keys():
+        assert getattr(bas, k) == getattr(trans_bas, k)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformer_has_the_same_public_attributes_as_basis(basis_cls):
+    n_basis_funcs = 5
+    bas = basis_cls(n_basis_funcs)
+
+    public_attrs_basis = {attr for attr in dir(bas) if not attr.startswith("_")}
+    public_attrs_transformerbasis = {
+        attr for attr in dir(bas.to_transformer()) if not attr.startswith("_")
+    }
+
+    assert public_attrs_transformerbasis - public_attrs_basis == {
+        "fit",
+        "fit_transform",
+        "transform",
+    }
+
+    assert public_attrs_basis - public_attrs_transformerbasis == set()
 
 
 @pytest.mark.parametrize(
-    "bas, expected_nans",
+    "basis_cls",
     [
-        (basis.MSplineBasis(5), 0),
-        (basis.BSplineBasis(5), 0),
-        (basis.CyclicBSplineBasis(5), 0),
-        (basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)), 0),
-        (basis.RaisedCosineBasisLinear(5), 0),
-        (basis.RaisedCosineBasisLog(5), 0),
-        (basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5), 0),
-        (basis.MSplineBasis(5, mode="conv", window_size=3), 6),
-        (basis.BSplineBasis(5, mode="conv", window_size=3), 6),
-        (
-            basis.CyclicBSplineBasis(
-                5, mode="conv", window_size=3, predictor_causality="acausal"
-            ),
-            4,
-        ),
-        (
-            basis.OrthExponentialBasis(
-                5, decay_rates=np.linspace(0.1, 1, 5), mode="conv", window_size=7
-            ),
-            14,
-        ),
-        (basis.RaisedCosineBasisLinear(5, mode="conv", window_size=3), 6),
-        (basis.RaisedCosineBasisLog(5, mode="conv", window_size=3), 6),
-        (
-            basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
-            + basis.MSplineBasis(5),
-            6,
-        ),
-        (
-            basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
-            * basis.MSplineBasis(5),
-            6,
-        ),
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
     ],
 )
-def test_sklearn_transformer_pipeline_pynapple(
-    bas, poissonGLM_model_instantiation, expected_nans
-):
-    X, y, model, _, _ = poissonGLM_model_instantiation
+def test_to_transformer_and_constructor_are_equivalent(basis_cls):
+    n_basis_funcs = 5
+    bas = basis_cls(n_basis_funcs)
 
-    # transform input to pynapple
-    ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
-    X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
-    y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
-    bas = basis.TransformerBasis(bas)
-    # fit a pipeline & predict from pynapple
-    pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
-    pipe.fit(X_nap[:, : bas._basis._n_input_dimensionality] ** 2, y_nap)
+    trans_bas_a = bas.to_transformer()
+    trans_bas_b = basis.TransformerBasis(bas)
 
-    # get rate
-    rate = pipe.predict(X_nap[:, : bas._basis._n_input_dimensionality] ** 2)
-    # check rate is Tsd with same time info
-    assert isinstance(rate, nap.Tsd)
-    assert np.all(rate.t == X_nap.t)
-    assert np.all(rate.time_support == X_nap.time_support)
-    assert np.sum(np.isnan(rate.d)) == expected_nans
+    # they both just have a _basis
+    assert list(trans_bas_a.__dict__.keys()) == list(trans_bas_b.__dict__.keys()) == ["_basis"]
+    # and those bases are the same
+    assert trans_bas_a._basis.__dict__ == trans_bas_b._basis.__dict__
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_basis_to_transformer_makes_a_copy(basis_cls):
+    bas_a = basis_cls(5)
+    trans_bas_a = bas_a.to_transformer()
+
+    # changing an attribute in bas should not change trans_bas
+    bas_a.n_basis_funcs = 10
+    assert trans_bas_a.n_basis_funcs == 5
+
+    # changing an attribute in the transformerbasis should not change the original
+    bas_b = basis_cls(5)
+    trans_bas_b = bas_b.to_transformer()
+    trans_bas_b.n_basis_funcs = 100
+    assert bas_b.n_basis_funcs == 5
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize("n_basis_funcs", [5, 10, 20])
+def test_transformerbasis_getattr(basis_cls, n_basis_funcs):
+    trans_basis = basis.TransformerBasis(basis_cls(n_basis_funcs))
+    assert trans_basis.n_basis_funcs == n_basis_funcs
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize("n_basis_funcs_init", [5])
+@pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
+def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_funcs_new):
+    trans_basis = basis.TransformerBasis(basis_cls(n_basis_funcs_init))
+    trans_basis.set_params(n_basis_funcs = n_basis_funcs_new)
+
+    assert trans_basis.n_basis_funcs == n_basis_funcs_new
+    assert trans_basis._basis.n_basis_funcs == n_basis_funcs_new
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_setattr_basis(basis_cls):
+    # setting the _basis attribute should change it
+    trans_bas = basis.TransformerBasis(basis_cls(10))
+    trans_bas._basis = basis_cls(20)
+
+    assert trans_bas.n_basis_funcs == 20
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert isinstance(trans_bas._basis, basis_cls)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_setattr_basis_attribute(basis_cls):
+    # setting an attribute that is an attribute of the underlying _basis
+    # should propagate setting it on _basis itself
+    trans_bas = basis.TransformerBasis(basis_cls(10))
+    trans_bas.n_basis_funcs = 20
+
+    assert trans_bas.n_basis_funcs == 20
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert isinstance(trans_bas._basis, basis_cls)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_copy_basis_on_contsruct(basis_cls):
+    # modifying the transformerbasis's attributes shouldn't
+    # touch the original basis that was used to create it
+    orig_bas = basis_cls(10)
+    trans_bas = basis.TransformerBasis(orig_bas)
+    trans_bas.n_basis_funcs = 20
+
+    assert orig_bas.n_basis_funcs == 10
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert trans_bas._basis.n_basis_funcs == 20
+    assert isinstance(trans_bas._basis, basis_cls)
+    
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_setattr_illegal_attribute(basis_cls):
+    # changing an attribute that is not _basis or an attribute of _basis
+    # is not allowed
+    trans_bas = basis.TransformerBasis(basis_cls(10))
+
+    with pytest.raises(ValueError, match="Only setting _basis or existing attributes of _basis is allowed."):
+        trans_bas.random_attr = "random value"
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_addition(basis_cls):
+    n_basis_funcs_a = 5
+    n_basis_funcs_b = n_basis_funcs_a * 2
+    trans_bas_a = basis.TransformerBasis(basis_cls(n_basis_funcs_a))
+    trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
+    trans_bas_sum = trans_bas_a + trans_bas_b
+    assert isinstance(trans_bas_sum, basis.TransformerBasis)
+    assert isinstance(trans_bas_sum._basis, basis.AdditiveBasis)
+    assert trans_bas_sum.n_basis_funcs == trans_bas_a.n_basis_funcs + trans_bas_b.n_basis_funcs
+    assert trans_bas_sum._n_input_dimensionality == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
+    assert trans_bas_sum._basis1.n_basis_funcs == n_basis_funcs_a
+    assert trans_bas_sum._basis2.n_basis_funcs == n_basis_funcs_b
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_multiplication(basis_cls):
+    n_basis_funcs_a = 5
+    n_basis_funcs_b = n_basis_funcs_a * 2
+    trans_bas_a = basis.TransformerBasis(basis_cls(n_basis_funcs_a))
+    trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
+    trans_bas_prod = trans_bas_a * trans_bas_b
+    assert isinstance(trans_bas_prod, basis.TransformerBasis)
+    assert isinstance(trans_bas_prod._basis, basis.MultiplicativeBasis)
+    assert trans_bas_prod.n_basis_funcs == trans_bas_a.n_basis_funcs * trans_bas_b.n_basis_funcs
+    assert trans_bas_prod._n_input_dimensionality == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
+    assert trans_bas_prod._basis1.n_basis_funcs == n_basis_funcs_a
+    assert trans_bas_prod._basis2.n_basis_funcs == n_basis_funcs_b
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize(
+        "exponent, error_type, error_message",
+        [
+            (2, does_not_raise, None),
+            (5, does_not_raise, None),
+            (0.5, TypeError, "Exponent should be an integer"),
+            (-1, ValueError, "Exponent should be a non-negative integer")
+        ]
+)
+def test_transformerbasis_exponentiation(basis_cls, exponent: int, error_type, error_message):
+    trans_bas = basis.TransformerBasis(basis_cls(5))
+
+    if not isinstance(exponent, int):
+        with pytest.raises(error_type, match=error_message):
+            trans_bas_exp = trans_bas ** exponent
+            assert isinstance(trans_bas_exp, basis.TransformerBasis)
+            assert isinstance(trans_bas_exp._basis, basis.MultiplicativeBasis)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_dir(basis_cls):
+    trans_bas = basis.TransformerBasis(basis_cls(5))
+    for attr_name in ("fit", "transform", "fit_transform", "n_basis_funcs", "mode", "window_size"):
+        assert attr_name in dir(trans_bas)
+
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
+    orig_bas = basis_cls(10, mode="conv", window_size=5)
+    trans_bas = basis.TransformerBasis(orig_bas)
+
+    # kernel should be saved in the object after fit
+    trans_bas.fit(np.random.randn(100, 20))
+    assert isinstance(trans_bas.kernel_, np.ndarray)
+
+    # cloning should set kernel_ to None
+    trans_bas_clone = sk_clone(trans_bas)
+
+    # the original object should still have kernel_
+    assert isinstance(trans_bas.kernel_, np.ndarray)
+    # but the clone should not have one
+    assert trans_bas_clone.kernel_ is None
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    [
+        basis.MSplineBasis,
+        basis.BSplineBasis,
+        basis.CyclicBSplineBasis,
+        basis.RaisedCosineBasisLinear,
+        basis.RaisedCosineBasisLog,
+    ],
+)
+@pytest.mark.parametrize("n_basis_funcs", [5])
+def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
+    # the test that tries cross-validation with n_jobs = 2 already should test this
+    trans_bas = basis.TransformerBasis(basis_cls(n_basis_funcs))
+    filepath = tmpdir / "transformerbasis.pickle"
+    with open(filepath, "wb") as f:
+        pickle.dump(trans_bas, f)
+    with open(filepath, "rb") as f:
+        trans_bas2 = pickle.load(f)
+
+    assert isinstance(trans_bas2, basis.TransformerBasis)
+    assert trans_bas2.n_basis_funcs == n_basis_funcs
 
 
 @pytest.mark.parametrize(
