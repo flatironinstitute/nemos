@@ -350,8 +350,8 @@ ax.legend()
 sns.despine(ax=ax)
 
 # %%
-# !!! success
-#     We are now able to capture the distribution of the firing rate appropriately: both peaks and valleys in the spiking activity are matched by our model predicitons.
+# :rocket::rocket::rocket: **Success!** :rocket::rocket::rocket:
+# We are now able to capture the distribution of the firing rate appropriately: both peaks and valleys in the spiking activity are matched by our model predicitons.
 #
 # ### Evaluating different bases directly
 #
@@ -410,7 +410,6 @@ plotting.plot_heatmap_cv_results(cvdf_wide)
 # %%
 # As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear, which appears to be a suitable choice for our toy data.
 # We can confirm that by plotting the firing rate predictions:
-# %%
 
 # Predict the rate using the optimal configuration
 x = np.sort(X, axis=0)
