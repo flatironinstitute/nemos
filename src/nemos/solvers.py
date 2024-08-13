@@ -122,7 +122,6 @@ class ProxSVRG:
     def init_state(
         self,
         init_params: Pytree,
-        hyperparams_prox: Any,
         *args,
     ) -> SVRGState:
         """
@@ -133,9 +132,6 @@ class ProxSVRG:
         init_params :
             Pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
-        hyperparams_prox :
-            Parameters of the proximal operator, in our case the regularization strength.
-            Not used here, but required to be consistent with the jaxopt API.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -384,7 +380,6 @@ class ProxSVRG:
         # initialize the state, including the full gradient at the initial parameters
         init_state = self.init_state(
             init_params,
-            prox_lambda,
             *args,
         )
 
@@ -535,7 +530,6 @@ class ProxSVRG:
         N = n_points_per_arg.pop()
 
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
-        # m = N
 
         def inner_loop_body(_, carry):
             params, key = carry
@@ -680,7 +674,7 @@ class SVRG(ProxSVRG):
             Initialized optimizer state
         """
         # substitute None for prox_lambda
-        return super().init_state(init_params, None, *args, **kwargs)
+        return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
     def update(self, params: Pytree, state: SVRGState, *args, **kwargs) -> OptStep:
