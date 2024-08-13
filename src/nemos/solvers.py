@@ -656,7 +656,6 @@ class SVRG(ProxSVRG):
         ----------
         init_params :
             pytree containing the initial parameters.
-            For GLMs it's a tuple of (W, b)
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
