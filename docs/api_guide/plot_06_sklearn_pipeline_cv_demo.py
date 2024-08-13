@@ -408,7 +408,7 @@ plotting.plot_heatmap_cv_results(cvdf_wide)
 
 
 # %%
-# As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear, which appears to be a suitable choice for our toy data.
+# As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear basis (as used above), which appears to be a suitable choice for our toy data. 
 # We can confirm that by plotting the firing rate predictions:
 # %%
 
