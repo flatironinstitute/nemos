@@ -221,7 +221,7 @@ param_grid = dict(
 # Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn `model_selection.GridsearchCV` class.
 # ??? info "K-Fold cross-validation (click to expand/collapse)"
 #     <p align="center">
-#     <img src="../../../assets/grid_search_cross_validation.png" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;">
+#     <img src="../../../assets/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;">
 #     <br>
 #     <em>K-fold cross-validation (modified from <a href="https://scikit-learn.org/stable/modules/cross_validation.html" target="_blank">scikit-learn docs</a>)</em>
 #     </p>
