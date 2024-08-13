@@ -320,7 +320,7 @@ cvdf_wide = cvdf.pivot(
 plotting.plot_heatmap_cv_results(cvdf_wide)
 
 # %%
-# The plot displays the model's log-likelihood for each parameter combination in the grid. The parameter combination with the highest score, which is the one selected by the procedure, is highlighted with a blue rectangle.
+# The plot displays the model's log-likelihood for each parameter combination in the grid. The parameter combination with the highest score, which is the one selected by the procedure, is highlighted with a blue rectangle. We can thus see that we need 10 or more basis functions, and that all of the tested regularization strengths agree with each other. In general, we want the fewest number of basis functions required to get a good fit, so we'll choose 10 here.
 #
 # #### Visualize the predicted rate
 # Finally, visualize the predicted firing rates using the best model found by our grid-search, which gives a better fit than the randomly chosen parameter values we tried in the beginning:
@@ -408,7 +408,7 @@ plotting.plot_heatmap_cv_results(cvdf_wide)
 
 
 # %%
-# As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear, which appears to be a suitable choice for our toy data.
+# As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear basis (as used above), which appears to be a suitable choice for our toy data. 
 # We can confirm that by plotting the firing rate predictions:
 
 # Predict the rate using the optimal configuration
