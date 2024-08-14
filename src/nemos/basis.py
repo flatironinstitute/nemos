@@ -46,6 +46,7 @@ def check_transform_input(func: Callable) -> Callable:
     when the wrong number of input is provided to __call__.
     """
 
+    @wraps(func)
     def wrapper(self: Basis, *xi: ArrayLike, **kwargs) -> NDArray:
         xi = self._check_transform_input(*xi)
         return func(self, *xi, **kwargs)  # Call the basis
