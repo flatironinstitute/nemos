@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemos"
-version = "0.1.5"
+version = "0.1.6"
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
@@ -63,7 +63,8 @@ docs = [
     "scikit-learn",
     "dandi",
     "ipython",
-    "matplotlib>=3.7"
+    "matplotlib>=3.7",
+    "seaborn",
 ]
 
 

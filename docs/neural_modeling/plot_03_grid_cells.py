@@ -160,7 +160,9 @@ plt.tight_layout()
 # Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 
 model = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Ridge(regularizer_strength=0.001, solver_name="LBFGS")
+    regularizer="Ridge",
+    solver_name="LBFGS",
+    regularizer_strength=0.001
 )
 
 # %%
@@ -209,7 +211,7 @@ plt.tight_layout()
 from sklearn.model_selection import GridSearchCV
 
 # define the regularization strength that we want cross-validate
-param_grid = dict(regularizer__regularizer_strength=[1e-6, 1e-5, 1e-3])
+param_grid = dict(regularizer_strength=[1e-6, 1e-5, 1e-3])
 
 # pass the model and the grid
 cls = GridSearchCV(model, param_grid=param_grid)
@@ -246,9 +248,9 @@ fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 plt.suptitle("Rate predictions\n")
 axs[0].set_title("Raw Counts")
 axs[0].imshow(smooth_pos_tuning, vmin=vmin, vmax=vmax)
-axs[1].set_title(f"Ridge - strength: {model.regularizer.regularizer_strength}")
+axs[1].set_title(f"Ridge - strength: {model.regularizer_strength}")
 axs[1].imshow(smooth_model, vmin=vmin, vmax=vmax)
-axs[2].set_title(f"Ridge - strength: {best_model.regularizer.regularizer_strength}")
+axs[2].set_title(f"Ridge - strength: {best_model.regularizer_strength}")
 axs[2].imshow(smooth_best_model, vmin=vmin, vmax=vmax)
 plt.tight_layout()
 

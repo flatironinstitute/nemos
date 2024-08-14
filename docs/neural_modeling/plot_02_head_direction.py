@@ -255,7 +255,7 @@ second_half = nap.IntervalSet(start + duration / 2, end)
 
 
 # define the GLM object
-model = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model = nmo.glm.GLM(solver_name="LBFGS")
 
 # Fit over the training epochs
 model.fit(
@@ -282,7 +282,7 @@ plt.legend()
 
 # fit on the test set
 
-model_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model_second_half = nmo.glm.GLM(solver_name="LBFGS")
 model_second_half.fit(
     input_feature.restrict(second_half),
     neuron_count.restrict(second_half)
@@ -422,7 +422,7 @@ plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_mult
 # #### Fit and compare the models
 
 # use restrict on interval set training
-model_basis = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model_basis = nmo.glm.GLM(solver_name="LBFGS")
 model_basis.fit(conv_spk.restrict(first_half), neuron_count.restrict(first_half))
 
 # %%
@@ -456,7 +456,7 @@ plt.legend()
 # Let's check if our new estimate does a better job in terms of over-fitting. We can do that
 # by visual comparison, as we did previously. Let's fit the second half of the dataset.
 
-model_basis_second_half = nmo.glm.GLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"))
+model_basis_second_half = nmo.glm.GLM(solver_name="LBFGS")
 model_basis_second_half.fit(conv_spk.restrict(second_half), neuron_count.restrict(second_half))
 
 # compute responses for the 2nd half fit
@@ -532,7 +532,9 @@ print(f"Convolved count shape: {convolved_count.shape}")
 #
 
 model = nmo.glm.PopulationGLM(
-    regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1, solver_name="LBFGS"),
+    regularizer="Ridge",
+    solver_name="LBFGS",
+    regularizer_strength=0.1
     ).fit(convolved_count, count)
 
 # %%

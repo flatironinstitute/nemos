@@ -10,7 +10,7 @@
 
 
 
-NeMoS (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
+NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
 The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently 

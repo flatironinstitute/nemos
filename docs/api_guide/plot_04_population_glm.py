@@ -104,7 +104,7 @@ print(feature_mask)
 # after the model is fit.
 
 # set a quasi-newton solver and low tolerance for better numerical precision
-model = nmo.glm.PopulationGLM(regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs={"tol": 10**-12}))
+model = nmo.glm.PopulationGLM(solver_name="LBFGS", solver_kwargs={"tol": 10**-12})
 
 # set the mask
 model.feature_mask = feature_mask
@@ -135,7 +135,7 @@ coeff = np.zeros((2, 2))
 # loop over the neurons and fit a GLM
 for neuron in range(2):
     model_neu = nmo.glm.GLM(
-        regularizer=nmo.regularizer.UnRegularized("LBFGS", solver_kwargs={"tol":10**-12})
+        solver_name="LBFGS", solver_kwargs={"tol":10**-12}
     )
     model_neu.fit(input_features[:, features_by_neuron[neuron]], spikes[:, neuron])
     coeff[:, neuron] = model_neu.coef_
@@ -177,7 +177,7 @@ pytree_mask = dict(
 )
 
 # fit a model
-model_tree = nmo.glm.PopulationGLM(regularizer=nmo.regularizer.UnRegularized("LBFGS"), feature_mask=pytree_mask)
+model_tree = nmo.glm.PopulationGLM(solver_name="LBFGS", feature_mask=pytree_mask)
 model_tree.fit(pytree_features, spikes)
 
 # print the coefficients

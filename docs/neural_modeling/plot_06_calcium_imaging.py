@@ -141,9 +141,10 @@ basis = heading_basis + coupling_basis
 #     Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 
 model = nmo.glm.GLM(
-    regularizer=nmo.regularizer.Ridge(solver_name="LBFGS", 
-                                      regularizer_strength=0.02, 
-                                      solver_kwargs=dict(tol=10**-13)),
+    solver_name="LBFGS",
+    solver_kwargs=dict(tol=10**-13),
+    regularizer="Ridge",
+    regularizer_strength=0.02,
     observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jax.nn.softplus)
 )
 

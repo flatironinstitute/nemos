@@ -1,3 +1,4 @@
+import warnings
 from contextlib import nullcontext as does_not_raise
 from typing import Callable
 
@@ -46,29 +47,31 @@ class TestGLM:
     # Test model.__init__
     #######################
     @pytest.mark.parametrize(
-        "regularizer, expectation",
+        "regularizer, solver_name, expectation",
         [
-            (nmo.regularizer.Ridge("BFGS"), does_not_raise()),
+            (nmo.regularizer.Ridge(), "BFGS", does_not_raise()),
             (
                 None,
+                None,
                 pytest.raises(
-                    AttributeError, match="The provided `solver` doesn't implement "
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
             (
                 nmo.regularizer.Ridge,
+                None,
                 pytest.raises(
-                    TypeError, match="The provided `solver` cannot be instantiated"
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
         ],
     )
-    def test_solver_type(self, regularizer, expectation, glm_class):
+    def test_solver_type(self, regularizer, solver_name, expectation, glm_class):
         """
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            glm_class(regularizer=regularizer)
+            glm_class(regularizer=regularizer, solver_name=solver_name)
 
     @pytest.mark.parametrize(
         "observation, expectation",
@@ -98,7 +101,12 @@ class TestGLM:
         when the regularizer name is not present in jaxopt.
         """
         with expectation:
-            glm_class(regularizer=ridge_regularizer, observation_model=observation)
+            glm_class(
+                regularizer=ridge_regularizer,
+                regularizer_strength=0.1,
+                solver_name="LBFGS",
+                observation_model=observation,
+            )
 
     @pytest.mark.parametrize(
         "X, y",
@@ -112,6 +120,78 @@ class TestGLM:
         coef, inter = model._initialize_parameters(X, y)
         assert coef.shape == (X.shape[1],)
         assert inter.shape == (1,)
+
+    def test_get_params(self):
+        """
+        Test that get_params() contains expected values.
+        """
+        expected_keys = {
+            "observation_model__inverse_link_function",
+            "observation_model",
+            "regularizer",
+            "regularizer_strength",
+            "solver_kwargs",
+            "solver_name",
+        }
+
+        model = nmo.glm.GLM()
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # passing params
+        model = nmo.glm.GLM(solver_name="LBFGS", regularizer="UnRegularized")
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing regularizer
+        model.regularizer = "Ridge"
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing solver
+        model.solver_name = "ProximalGradient"
+
+        expected_values = [
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
 
     #######################
     # Test model.fit
@@ -409,9 +489,8 @@ class TestGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
         model.fit(X, y)
 
@@ -462,7 +541,7 @@ class TestGLM:
         assert np.allclose(model.intercept_, model_tree.intercept_)
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
-        assert np.allclose(model.scale, model_tree.scale)
+        assert np.allclose(model.scale_, model_tree.scale_)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -501,7 +580,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
-        assert model.scale != 1
+        assert model.scale_ != 1
 
     #######################
     # Test model.score
@@ -720,7 +799,7 @@ class TestGLM:
         model.observation_model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = 1.0
+        model.scale_ = 1.0
         model.score(X, y)
 
     #######################
@@ -824,7 +903,8 @@ class TestGLM:
         else:
             init_params = true_params + (true_params[0],) * (n_params - 2)
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -875,7 +955,7 @@ class TestGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, true_params[1]))
+            model.initialize_params(X, y, init_params=(init_w, true_params[1]))
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -897,7 +977,8 @@ class TestGLM:
         init_b = jnp.zeros((1,) * dim_intercepts)
         init_w = jnp.zeros((n_features,))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "init_params, expectation",
@@ -947,7 +1028,8 @@ class TestGLM:
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -969,7 +1051,8 @@ class TestGLM:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -991,7 +1074,8 @@ class TestGLM:
         elif delta_dim == 1:
             y = np.zeros((y.shape[0], 1))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1014,7 +1098,8 @@ class TestGLM:
             1,
         )
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -1037,7 +1122,8 @@ class TestGLM:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1062,7 +1148,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -1087,7 +1174,7 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            model.initialize_params(X, y, init_params=true_params)
 
     def test_initialize_solver_mask_grouplasso(
         self, group_sparse_poisson_glm_model_instantiation
@@ -1095,11 +1182,11 @@ class TestGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
-        model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1125,7 +1212,8 @@ class TestGLM:
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X.fill(fill_val)
         with expectation:
-            model.initialize_solver(X, y)
+            params = model.initialize_params(X, y)
+            model.initialize_state(X, y, params)
 
     def test_initializer_solver_set_solver_callable(
         self, poissonGLM_model_instantiation
@@ -1134,7 +1222,8 @@ class TestGLM:
         assert model.solver_init_state is None
         assert model.solver_update is None
         assert model.solver_run is None
-        model.initialize_solver(X, y)
+        init_params = model.initialize_params(X, y)
+        model.initialize_state(X, y, init_params)
         assert isinstance(model.solver_init_state, Callable)
         assert isinstance(model.solver_update, Callable)
         assert isinstance(model.solver_run, Callable)
@@ -1159,7 +1248,8 @@ class TestGLM:
         self, n_samples, expectation, batch_size, poissonGLM_model_instantiation
     ):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         with expectation:
             model.update(
                 params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
@@ -1168,14 +1258,15 @@ class TestGLM:
     @pytest.mark.parametrize("batch_size", [1, 10])
     def test_update_params_stored(self, batch_size, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
-        assert model.scale is None
+        assert model.scale_ is None
         _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
         assert model.coef_ is not None
         assert model.intercept_ is not None
-        assert model.scale is not None
+        assert model.scale_ is not None
 
     @pytest.mark.parametrize("batch_size", [2, 10])
     def test_update_nan_drop_at_jit_comp(
@@ -1183,7 +1274,8 @@ class TestGLM:
     ):
         """Test that jit compilation does not affect the update in the presence of nans."""
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
 
         # extract batch and add nans
         Xnan = X[:batch_size]
@@ -1320,7 +1412,7 @@ class TestGLM:
         model.observation_model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = 1.0
+        model.scale_ = 1.0
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
@@ -1345,13 +1437,62 @@ class TestGLM:
 
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     def test_compatibility_with_sklearn_cv_gamma(self, gammaGLM_model_instantiation):
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
+
+    @pytest.mark.parametrize(
+        "reg, dof",
+        [
+            (nmo.regularizer.UnRegularized(), np.array([5])),
+            (
+                nmo.regularizer.Lasso(),
+                np.array([3]),
+            ),  # this lasso fit has only 3 coeff of the first neuron
+            # surviving
+            (nmo.regularizer.Ridge(), np.array([5])),
+        ],
+    )
+    @pytest.mark.parametrize("n_samples", [1, 20])
+    def test_estimate_dof_resid(
+        self, n_samples, dof, reg, poissonGLM_model_instantiation
+    ):
+        """
+        Test that the dof is an integer.
+        """
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.regularizer = reg
+        model.solver_name = model.regularizer.default_solver
+        model.fit(X, y)
+        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        assert np.allclose(num, n_samples - dof - 1)
+
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_warning_solver_reg_str(self, reg):
+        # check that a warning is triggered
+        # if no param is passed
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+        # # check that the warning is not triggered
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
+
+        # reset to unregularized
+        model.regularizer = "UnRegularized"
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_strength_reset(self, reg):
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None
 
 
 class TestPopulationGLM:
@@ -1365,17 +1506,17 @@ class TestPopulationGLM:
     @pytest.mark.parametrize(
         "regularizer, expectation",
         [
-            (nmo.regularizer.Ridge("BFGS"), does_not_raise()),
+            (nmo.regularizer.Ridge(), does_not_raise()),
             (
                 None,
                 pytest.raises(
-                    AttributeError, match="The provided `solver` doesn't implement "
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
             (
                 nmo.regularizer.Ridge,
                 pytest.raises(
-                    TypeError, match="The provided `solver` cannot be instantiated"
+                    TypeError, match="The regularizer should be either a string from "
                 ),
             ),
         ],
@@ -1386,6 +1527,83 @@ class TestPopulationGLM:
         """
         with expectation:
             population_glm_class(regularizer=regularizer)
+
+    def test_get_params(self):
+        """
+        Test that get_params() contains expected values.
+        """
+        expected_keys = {
+            "feature_mask",
+            "observation_model__inverse_link_function",
+            "observation_model",
+            "regularizer",
+            "regularizer_strength",
+            "solver_kwargs",
+            "solver_name",
+        }
+
+        model = nmo.glm.PopulationGLM()
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # passing params
+        model = nmo.glm.PopulationGLM(solver_name="LBFGS", regularizer="UnRegularized")
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing regularizer
+        model.regularizer = "Ridge"
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
+
+        # changing solver
+        model.solver_name = "ProximalGradient"
+
+        expected_values = [
+            model.feature_mask,
+            model.observation_model.inverse_link_function,
+            model.observation_model,
+            model.regularizer,
+            model.regularizer_strength,
+            model.solver_kwargs,
+            model.solver_name,
+        ]
+
+        assert set(model.get_params().keys()) == expected_keys
+        assert list(model.get_params().values()) == expected_values
 
     @pytest.mark.parametrize(
         "observation, expectation",
@@ -1462,24 +1680,30 @@ class TestPopulationGLM:
             model.fit(X, y, init_params=init_params)
 
     @pytest.mark.parametrize(
-        "reg",
+        "reg, dof",
         [
-            nmo.regularizer.UnRegularized(),
-            nmo.regularizer.Lasso(),
-            nmo.regularizer.Ridge()
-        ]
+            (nmo.regularizer.UnRegularized(), np.array([5, 5, 5])),
+            (
+                nmo.regularizer.Lasso(),
+                np.array([3, 0, 0]),
+            ),  # this lasso fit has only 3 coeff of the first neuron
+            # surviving
+            (nmo.regularizer.Ridge(), np.array([5, 5, 5])),
+        ],
     )
     @pytest.mark.parametrize("n_samples", [1, 20])
     def test_estimate_dof_resid(
-        self, n_samples, reg, poisson_population_GLM_model
+        self, n_samples, dof, reg, poisson_population_GLM_model
     ):
         """
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         model.regularizer = reg
-        num = model.estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        assert int(num) == num
+        model.solver_name = model.regularizer.default_solver
+        model.fit(X, y)
+        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        assert np.allclose(num, n_samples - dof - 1)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -1739,9 +1963,8 @@ class TestPopulationGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
         model.fit(X, y)
 
@@ -1790,7 +2013,7 @@ class TestPopulationGLM:
         assert np.allclose(model.intercept_, model_tree.intercept_)
         assert np.allclose(model.score(X, y), model_tree.score(X_tree, y))
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
-        assert np.allclose(model.scale, model_tree.scale)
+        assert np.allclose(model.scale_, model_tree.scale_)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -1829,12 +2052,12 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
-        assert np.all(model.scale != 1)
+        assert np.all(model.scale_ != 1)
 
     def test_fit_scale_array(self, gamma_population_GLM_model):
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
         model.fit(X, y)
-        assert model.scale.size == y.shape[1]
+        assert model.scale_.size == y.shape[1]
 
     #######################
     # Test model.initialize_solver
@@ -1863,7 +2086,8 @@ class TestPopulationGLM:
         else:
             init_params = true_params + (true_params[0],) * (n_params - 2)
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -1914,7 +2138,8 @@ class TestPopulationGLM:
         else:
             init_w = jnp.zeros((n_features, n_neurons) + (1,) * (dim_weights - 2))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, true_params[1]))
+            params = model.initialize_params(X, y, init_params=(init_w, true_params[1]))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "dim_intercepts, expectation",
@@ -1936,7 +2161,8 @@ class TestPopulationGLM:
         init_b = jnp.zeros((y.shape[1],) * dim_intercepts)
         init_w = jnp.zeros((n_features, y.shape[1]))
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "init_params, expectation",
@@ -1977,7 +2203,8 @@ class TestPopulationGLM:
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         with expectation:
-            model.initialize_solver(X, y, init_params=init_params)
+            params = model.initialize_params(X, y, init_params=init_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -1999,7 +2226,8 @@ class TestPopulationGLM:
         elif delta_dim == 1:
             X = np.zeros((X.shape[0], 1, X.shape[1]))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_dim, expectation",
@@ -2021,7 +2249,8 @@ class TestPopulationGLM:
         elif delta_dim == 1:
             y = np.zeros((*y.shape, 1))
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -2044,7 +2273,8 @@ class TestPopulationGLM:
             y.shape[1],
         )
         with expectation:
-            model.initialize_solver(X, y, init_params=(init_w, init_b))
+            params = model.initialize_params(X, y, init_params=(init_w, init_b))
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_n_features, expectation",
@@ -2067,7 +2297,8 @@ class TestPopulationGLM:
         elif delta_n_features == -1:
             X = X[..., :-1]
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -2092,7 +2323,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "delta_tp, expectation",
@@ -2117,7 +2349,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
         with expectation:
-            model.initialize_solver(X, y, init_params=true_params)
+            params = model.initialize_params(X, y, init_params=true_params)
+            model.initialize_state(X, y, params)
 
     def test_initialize_solver_mask_grouplasso(
         self, group_sparse_poisson_glm_model_instantiation
@@ -2125,11 +2358,11 @@ class TestPopulationGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
-            regularizer=nmo.regularizer.GroupLasso(
-                solver_name="ProximalGradient", mask=mask
-            )
+            regularizer=nmo.regularizer.GroupLasso(mask=mask),
+            solver_name="ProximalGradient",
         )
-        model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
         "fill_val, expectation",
@@ -2155,7 +2388,8 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         X.fill(fill_val)
         with expectation:
-            model.initialize_solver(X, y)
+            params = model.initialize_params(X, y)
+            model.initialize_state(X, y, params)
 
     #######################
     # Test model.update
@@ -2177,7 +2411,8 @@ class TestPopulationGLM:
         self, n_samples, expectation, batch_size, poisson_population_GLM_model
     ):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         with expectation:
             model.update(
                 params, state, X[:batch_size], y[:batch_size], n_samples=n_samples
@@ -2186,14 +2421,15 @@ class TestPopulationGLM:
     @pytest.mark.parametrize("batch_size", [1, 10])
     def test_update_params_stored(self, batch_size, poisson_population_GLM_model):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        params, state = model.initialize_solver(X, y)
+        params = model.initialize_params(X, y)
+        state = model.initialize_state(X, y, params)
         assert model.coef_ is None
         assert model.intercept_ is None
-        assert model.scale is None
+        assert model.scale_ is None
         _, _ = model.update(params, state, X[:batch_size], y[:batch_size])
         assert model.coef_ is not None
         assert model.intercept_ is not None
-        assert model.scale is not None
+        assert model.scale_ is not None
 
     #######################
     # Test model.score
@@ -2411,7 +2647,7 @@ class TestPopulationGLM:
         model.observation_model.inverse_link_function = inv_link
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = np.ones((y.shape[1]))
+        model.scale_ = np.ones((y.shape[1]))
         model.score(X, y)
 
     @pytest.mark.parametrize(
@@ -2636,7 +2872,7 @@ class TestPopulationGLM:
         model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
-        model.scale = jnp.ones((y.shape[1]))
+        model.scale_ = jnp.ones((y.shape[1]))
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
@@ -2661,12 +2897,12 @@ class TestPopulationGLM:
 
     def test_compatibility_with_sklearn_cv(self, poisson_population_GLM_model):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     def test_compatibility_with_sklearn_cv_gamma(self, gamma_population_GLM_model):
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
-        param_grid = {"regularizer__solver_name": ["BFGS", "GradientDescent"]}
+        param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
 
     @pytest.mark.parametrize(
@@ -2801,24 +3037,32 @@ class TestPopulationGLM:
                 getattr(model, attr_name)(X, y)
 
     @pytest.mark.parametrize(
-        "regularizer",
+        "regularizer, regularizer_strength, solver_name, solver_kwargs",
         [
-            nmo.regularizer.UnRegularized(
-                solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}
+            (
+                nmo.regularizer.UnRegularized(),
+                0.001,
+                "LBFGS",
+                {"stepsize": 0.1, "tol": 10**-14},
             ),
-            nmo.regularizer.UnRegularized(
-                solver_name="GradientDescent", solver_kwargs={"tol": 10**-14}
+            (
+                nmo.regularizer.UnRegularized(),
+                1.0,
+                "GradientDescent",
+                {"tol": 10**-14},
             ),
-            nmo.regularizer.Ridge(
-                solver_name="GradientDescent",
-                regularizer_strength=0.001,
-                solver_kwargs={"tol": 10**-14},
+            (
+                nmo.regularizer.Ridge(),
+                1.0,
+                "LBFGS",
+                {"tol": 10**-14},
             ),
-            nmo.regularizer.Ridge(
-                solver_name="LBFGS", solver_kwargs={"stepsize": 0.1, "tol": 10**-14}
-            ),
-            nmo.regularizer.Lasso(
-                regularizer_strength=0.001, solver_kwargs={"tol": 10**-14}
+            (nmo.regularizer.Ridge(), 1.0, "LBFGS", {"stepsize": 0.1, "tol": 10**-14}),
+            (
+                nmo.regularizer.Lasso(),
+                0.001,
+                "ProximalGradient",
+                {"tol": 10**-14},
             ),
         ],
     )
@@ -2840,6 +3084,9 @@ class TestPopulationGLM:
     def test_masked_fit_vs_loop(
         self,
         regularizer,
+        regularizer_strength,
+        solver_name,
+        solver_kwargs,
         mask,
         poisson_population_GLM_model,
         poisson_population_GLM_model_pytree,
@@ -2870,6 +3117,9 @@ class TestPopulationGLM:
         # fit pop glm
         model.feature_mask = mask
         model.regularizer = regularizer
+        model.regularizer_strength = regularizer_strength
+        model.solver_name = solver_name
+        model.solver_kwargs = solver_kwargs
         model.fit(X, y)
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
@@ -2877,7 +3127,12 @@ class TestPopulationGLM:
         intercept_loop = np.zeros((3,))
         # loop over neuron
         for k in range(y.shape[1]):
-            model_single_neu = nmo.glm.GLM(regularizer=regularizer)
+            model_single_neu = nmo.glm.GLM(
+                regularizer=regularizer,
+                regularizer_strength=regularizer_strength,
+                solver_name=solver_name,
+                solver_kwargs=solver_kwargs,
+            )
             if isinstance(mask_bool, dict):
                 X_neu = {}
                 for key, xx in X.items():
@@ -2893,3 +3148,26 @@ class TestPopulationGLM:
             intercept_loop[k] = np.array(model_single_neu.intercept_)[0]
         print(f"\nMAX ERR: {np.abs(coef_loop - coef_vectorized).max()}")
         assert np.allclose(coef_loop, coef_vectorized, atol=10**-5, rtol=0)
+
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_waning_solver_reg_str(self, reg):
+        # check that a warning is triggered
+        # if no param is passed
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+        # check that the warning is not triggered
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
+
+        # reset to unregularized
+        model.regularizer = "UnRegularized"
+        with pytest.warns(UserWarning):
+            nmo.glm.GLM(regularizer=reg)
+
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_strength_reset(self, reg):
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
+        model.regularizer = "UnRegularized"
+        assert model.regularizer_strength is None

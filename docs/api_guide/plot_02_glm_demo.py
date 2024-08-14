@@ -94,17 +94,12 @@ for key, value in model.get_params(deep=True).items():
 # Poisson observation model with soft-plus NL
 observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
 
-# Observation model
-regularizer = nmo.regularizer.Ridge(
-    solver_name="LBFGS",
-    regularizer_strength=0.1,
-    solver_kwargs={"tol":10**-10}
-)
 
 # define the GLM
 model = nmo.glm.GLM(
     observation_model=observation_models,
-    regularizer=regularizer,
+    solver_name="LBFGS",
+    solver_kwargs={"tol":10**-10},
 )
 
 print("Regularizer type:      ", type(model.regularizer))
@@ -138,7 +133,7 @@ print("Updated NL: ", model.observation_model.inverse_link_function)
 # The same exact syntax works for any configuration.
 
 # fit a ridge regression Poisson GLM
-model = nmo.glm.GLM(regularizer=nmo.regularizer.Ridge(regularizer_strength=0.1))
+model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 model.fit(X, spikes)
 
 print("Ridge results")
@@ -156,7 +151,7 @@ print("Recovered weights: ", model.coef_)
 #
 # **Ridge**
 
-parameter_grid = {"regularizer__regularizer_strength": np.logspace(-1.5, 1.5, 6)}
+parameter_grid = {"regularizer_strength": np.logspace(-1.5, 1.5, 6)}
 # in practice, you should use more folds than 2, but for the purposes of this
 # demo, 2 is sufficient.
 cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
@@ -172,7 +167,7 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 #
 # **Lasso**
 
-model.set_params(regularizer=nmo.regularizer.Lasso())
+model.set_params(regularizer=nmo.regularizer.Lasso(), solver_name="ProximalGradient")
 cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
 cls.fit(X, spikes)
 
@@ -189,8 +184,8 @@ mask = np.zeros((2, 5))
 mask[0, [0, -1]] = 1
 mask[1, 1:-1] = 1
 
-regularizer = nmo.regularizer.GroupLasso("ProximalGradient", mask=mask)
-model.set_params(regularizer=regularizer)
+regularizer = nmo.regularizer.GroupLasso(mask=mask)
+model.set_params(regularizer=regularizer, solver_name="ProximalGradient")
 cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
 cls.fit(X, spikes)
 
