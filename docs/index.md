@@ -1,7 +1,7 @@
 # <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="75%"> </div>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
-![Python version](https://img.shields.io/badge/python-3.10-blue.svg)
+![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![PyPI - Version](https://img.shields.io/pypi/v/nemos)
 [![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
