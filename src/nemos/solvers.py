@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional, Union
+from typing import Callable, NamedTuple, Optional, Union
 
 import jax
 import jax.flatten_util
