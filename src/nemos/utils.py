@@ -383,9 +383,9 @@ def row_wise_kron(
     This function computes the row-wise Kronecker product between dense matrices A and C
     using JAX for automatic differentiation and GPU acceleration.
 
-    References
-    ----------
-    1. Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
+    # References
+    ------------
+    [1] Petersen, Kaare Brandt, and Michael Syskind Pedersen. "The matrix cookbook."
     Technical University of Denmark 7.15 (2008): 510.
     """
     if transpose:

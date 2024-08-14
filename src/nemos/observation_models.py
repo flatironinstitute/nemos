@@ -267,8 +267,8 @@ class Observations(Base, abc.ABC):
     ) -> jnp.ndarray:
         r"""Pseudo-$R^2$ calculation for a GLM.
 
-        Compute the pseudo-$R^2$ metric for the GLM, as defined by McFadden et al.[$^1$](#references)
-        or by Cohen et al.[$^2$](#references).
+        Compute the pseudo-$R^2$ metric for the GLM, as defined by McFadden et al.[$^{[1]}$](#references)
+        or by Cohen et al.[$^{[2]}$](#references).
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
         constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
@@ -311,13 +311,13 @@ class Observations(Base, abc.ABC):
          sample, i.e. the maximum value that the likelihood could possibly achieve). $D_M$ and $D_0$ are
          the model and the null deviance, $D_i = -2 \left[ \log(L_s) - \log(L_i) \right]$ for $i=M,0$.
 
-
-        References
-        ----------
-        1. McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
+        # References
+        ------------
+        [1] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
         developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
         London: Croom Helm.
-        2. Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+
+        [2] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
         *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
         3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """

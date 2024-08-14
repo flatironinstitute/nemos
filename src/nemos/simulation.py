@@ -60,7 +60,7 @@ def difference_of_gammas(
 
     References
     ----------
-    1. [SciPy Docs - "scipy.stats.gamma"](https://docs.scipy.org/doc/
+    [1] [SciPy Docs - "scipy.stats.gamma"](https://docs.scipy.org/doc/
     scipy/reference/generated/scipy.stats.gamma.html)
     """
     # check that the gamma parameters are positive (scipy returns
