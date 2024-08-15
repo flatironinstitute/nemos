@@ -1350,7 +1350,7 @@ class SplineBasis(Basis, abc.ABC):
 
 class MSplineBasis(SplineBasis):
     r"""
-    M-spline[$^1$](#references) basis functions for modeling and data transformation.
+    M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
     and data representation. They are positive and integrate to one, making them
@@ -1394,8 +1394,8 @@ class MSplineBasis(SplineBasis):
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = mspline_basis(sample_points)
 
-    References
-    ----------
+    # References
+    ------------
     [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
@@ -1517,7 +1517,7 @@ class MSplineBasis(SplineBasis):
 
 class BSplineBasis(SplineBasis):
     """
-    B-spline[$^1$](#references) 1-dimensional basis functions.
+    B-spline[$^{[1]}$](#references) 1-dimensional basis functions.
 
     Parameters
     ----------
@@ -1546,9 +1546,9 @@ class BSplineBasis(SplineBasis):
         Spline order.
 
 
-    References
-    ----------
-    1. Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    # References
+    ------------
+    [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     """
@@ -1779,7 +1779,7 @@ class CyclicBSplineBasis(SplineBasis):
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
+    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -1801,9 +1801,9 @@ class RaisedCosineBasisLinear(Basis):
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
-    References
-    ----------
-    1. Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    # References
+    ------------
+    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
@@ -1964,7 +1964,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     """Represent log-spaced raised cosine basis functions.
 
     Similar to `RaisedCosineBasisLinear` but the basis functions are log-spaced.
-    This implementation is based on the cosine bumps used by Pillow et al.[$^1$](#references)
+    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -1994,9 +1994,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
-    References
-    ----------
-    1. Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    # References
+    ------------
+    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005

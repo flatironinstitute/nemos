@@ -7,10 +7,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import statsmodels.api as sm
+from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
+from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
 def test_validate_higher_dimensional_data_X(mock_glm):
@@ -855,27 +857,6 @@ class TestGLM:
         with expectation:
             model.predict(X)
 
-    @pytest.mark.parametrize(
-        "is_fit, expectation",
-        [
-            (True, does_not_raise()),
-            (
-                False,
-                pytest.raises(ValueError, match="This GLM instance is not fitted yet"),
-            ),
-        ],
-    )
-    def test_predict_is_fit(self, is_fit, expectation, poissonGLM_model_instantiation):
-        """
-        Test the `score` method on models based on their fit status.
-        Ensure scoring is only possible on fitted models.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        if is_fit:
-            model.fit(X, y)
-        with expectation:
-            model.predict(X)
-
     #######################
     # Test model.initialize_solver
     #######################
@@ -970,7 +951,9 @@ class TestGLM:
         self, dim_intercepts, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities. Check for correct dimensionality.
+        Test the `initialize_solver` method with intercepts of different dimensionalities.
+
+        Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         n_samples, n_features = X.shape
@@ -1023,8 +1006,9 @@ class TestGLM:
         self, init_params, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `initialize_solver` method with various types of initial parameters. Ensure that the provided initial parameters
-        are array-like.
+        Test the `initialize_solver` method with various types of initial parameters.
+
+        Ensure that the provided initial parameters are array-like.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         with expectation:
@@ -1043,7 +1027,9 @@ class TestGLM:
         self, delta_dim, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `initialize_solver` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+        Test the `initialize_solver` method with X input data of different dimensionalities.
+
+        Ensure correct dimensionality for X.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if delta_dim == -1:
@@ -1066,7 +1052,9 @@ class TestGLM:
         self, delta_dim, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `initialize_solver` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
+        Test the `initialize_solver` method with y target data of different dimensionalities.
+
+        Ensure correct dimensionality for y.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         if delta_dim == -1:
@@ -1143,7 +1131,9 @@ class TestGLM:
         self, delta_tp, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
+        Test the `initialize_solver` method for inconsistencies in time-points in data X.
+
+        Ensure the correct number of time-points.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
@@ -1169,7 +1159,9 @@ class TestGLM:
         self, delta_tp, expectation, poissonGLM_model_instantiation
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
+        Test the `initialize_solver` method for inconsistencies in time-points in y.
+
+        Ensure the correct number of time-points.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
@@ -1444,6 +1436,172 @@ class TestGLM:
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
+
+    @pytest.mark.parametrize(
+        "regr_setup, glm_class",
+        [
+            ("poissonGLM_model_instantiation", nmo.glm.GLM),
+            ("poissonGLM_model_instantiation_pytree", nmo.glm.GLM),
+            ("poisson_population_GLM_model", nmo.glm.PopulationGLM),
+            ("poisson_population_GLM_model_pytree", nmo.glm.PopulationGLM),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "key", [jax.random.key(0), jax.random.key(19)]
+    )
+    @pytest.mark.parametrize(
+        "regularizer_class, solver_name",
+        [
+            (nmo.regularizer.UnRegularized, "SVRG"),
+            (nmo.regularizer.Ridge, "SVRG"),
+            (nmo.regularizer.Lasso, "ProxSVRG"),
+            # (nmo.regularizer.GroupLasso, "ProxSVRG"),
+        ]
+    )
+    def test_glm_update_consistent_with_fit_with_svrg(self, request, regr_setup, glm_class, key, regularizer_class,
+                                                      solver_name):
+        """
+        Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
+        is consistent with running the compiled GLM.fit on the same data with the same parameters
+        """
+        jax.config.update("jax_enable_x64", True)
+        X, y, model, true_params, rate = request.getfixturevalue(regr_setup)
+
+        N = y.shape[0]
+        batch_size = 1
+        maxiter = 3  # number of epochs
+        tol = 1e-12
+        stepsize = 1e-3
+
+        # has to match how the number of iterations is calculated in SVRG
+        m = int((N + batch_size - 1) // batch_size)
+
+        regularizer_kwargs = {}
+        if regularizer_class.__name__ == "GroupLasso":
+            n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
+            regularizer_kwargs["mask"] = (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
+
+        glm = glm_class(
+            regularizer=regularizer_class(
+                **regularizer_kwargs,
+            ),
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
+        )
+        glm2 = glm_class(
+            regularizer=regularizer_class(
+                **regularizer_kwargs,
+            ),
+            solver_name=solver_name,
+            solver_kwargs={
+                "batch_size": batch_size,
+                "stepsize": stepsize,
+                "tol": tol,
+                "maxiter": maxiter,
+                "key": key,
+            },
+        )
+        glm2.fit(X, y)
+
+        params = glm.initialize_params(X, y)
+        state = glm.initialize_state(X, y, params)
+        glm.instantiate_solver()
+
+        # NOTE these two are not the same because for example Ridge augments the loss
+        # loss_grad = jax.jit(jax.grad(glm._predict_and_compute_loss))
+        loss_grad = jax.jit(jax.grad(glm._solver_loss_fun_))
+
+        # copied from GLM.fit
+        # grab data if needed (tree map won't function because param is never a FeaturePytree).
+        if isinstance(X, FeaturePytree):
+            X = X.data
+
+        iter_num = 0
+        while iter_num < maxiter:
+            state = state._replace(
+                full_grad_at_reference_point=loss_grad(params, X, y),
+            )
+
+            prev_params = params
+            for _ in range(m):
+                key, subkey = jax.random.split(key)
+                ind = jax.random.randint(subkey, (batch_size,), 0, N)
+                xi, yi = tree_slice(X, ind), tree_slice(y, ind)
+                params, state = glm.update(params, state, xi, yi)
+
+            state = state._replace(
+                reference_point=params,
+            )
+
+            iter_num += 1
+
+            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
+            if _error < tol:
+                break
+
+        assert iter_num == glm2.solver_state_.iter_num
+
+        assert pytree_map_and_reduce(
+            lambda a, b: np.allclose(a, b, atol=10**-5, rtol=0.0),
+            all,
+            (glm.coef_, glm.intercept_),
+            (glm2.coef_, glm2.intercept_),
+        )
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    def test_glm_fit_matches_sklearn_poisson(self, solver_name, poissonGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, _, true_params, firing_rate = poissonGLM_model_instantiation
+
+        model = nmo.glm.GLM(
+            regularizer=nmo.regularizer.UnRegularized(),
+            observation_model=nmo.observation_models.PoissonObservations(),
+            solver_name=solver_name,
+            solver_kwargs={"tol": 10**-12}
+        )
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.fit(X, y)
+
+        model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("GLM.fit estimate does not match sklearn!")
+
+    @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
+    def test_glm_fit_matches_sklearn_gamma(self, solver_name, gammaGLM_model_instantiation):
+        """Test that different solvers converge to the same solution."""
+        jax.config.update("jax_enable_x64", True)
+        X, y, _, true_params, firing_rate = gammaGLM_model_instantiation
+
+        model = nmo.glm.GLM(
+            regularizer=nmo.regularizer.UnRegularized(),
+            observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jnp.exp),
+            solver_name=solver_name,
+            solver_kwargs={"tol": 10**-12},
+        )
+        # set precision to float64 for accurate matching of the results
+        model.data_type = jnp.float64
+        model.fit(X, y)
+
+        model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+        model_skl.fit(X, y)
+
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
+        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
+
+        if (not match_weights) or (not match_intercepts):
+            raise ValueError("GLM.fit estimate does not match sklearn!")
 
     @pytest.mark.parametrize(
         "reg, dof",
@@ -2154,7 +2312,9 @@ class TestPopulationGLM:
         self, dim_intercepts, expectation, poisson_population_GLM_model
     ):
         """
-        Test the `initialize_solver` method with intercepts of different dimensionalities. Check for correct dimensionality.
+        Test the `initialize_solver` method with intercepts of different dimensionalities.
+
+        Check for correct dimensionality.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         n_samples, n_features = X.shape
@@ -2198,8 +2358,9 @@ class TestPopulationGLM:
         self, init_params, expectation, poisson_population_GLM_model
     ):
         """
-        Test the `initialize_solver` method with various types of initial parameters. Ensure that the provided initial parameters
-        are array-like.
+        Test the `initialize_solver` method with various types of initial parameters.
+
+        Ensure that the provided initial parameters are array-like.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         with expectation:
@@ -2218,7 +2379,9 @@ class TestPopulationGLM:
         self, delta_dim, expectation, poisson_population_GLM_model
     ):
         """
-        Test the `initialize_solver` method with X input data of different dimensionalities. Ensure correct dimensionality for X.
+        Test the `initialize_solver` method with X input data of different dimensionalities.
+
+        Ensure correct dimensionality for X.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         if delta_dim == -1:
@@ -2241,7 +2404,9 @@ class TestPopulationGLM:
         self, delta_dim, expectation, poisson_population_GLM_model
     ):
         """
-        Test the `initialize_solver` method with y target data of different dimensionalities. Ensure correct dimensionality for y.
+        Test the `initialize_solver` method with y target data of different dimensionalities.
+
+        Ensure correct dimensionality for y.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         if delta_dim == -1:
@@ -2318,7 +2483,9 @@ class TestPopulationGLM:
         self, delta_tp, expectation, poisson_population_GLM_model
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in data X. Ensure the correct number of time-points.
+        Test the `initialize_solver` method for inconsistencies in time-points in data X.
+
+        Ensure the correct number of time-points.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         X = jnp.zeros((X.shape[0] + delta_tp,) + X.shape[1:])
@@ -2344,7 +2511,9 @@ class TestPopulationGLM:
         self, delta_tp, expectation, poisson_population_GLM_model
     ):
         """
-        Test the `initialize_solver` method for inconsistencies in time-points in y. Ensure the correct number of time-points.
+        Test the `initialize_solver` method for inconsistencies in time-points in y.
+
+        Ensure the correct number of time-points.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         y = jnp.zeros((y.shape[0] + delta_tp,) + y.shape[1:])
@@ -2528,7 +2697,7 @@ class TestPopulationGLM:
             ),
         ],
     )
-    def test_predict_is_fit(self, is_fit, expectation, poisson_population_GLM_model):
+    def test_predict_is_fit_population(self, is_fit, expectation, poisson_population_GLM_model):
         """
         Test the `score` method on models based on their fit status.
         Ensure scoring is only possible on fitted models.

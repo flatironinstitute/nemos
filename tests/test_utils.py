@@ -37,42 +37,6 @@ from nemos import utils
 )
 def test_concatenate_eval(arrays, expected_out):
     """Test various combination of arrays and pyapple time series."""
-    out = utils.pynapple_concatenate_jax(arrays, axis=1)
-    if hasattr(expected_out, "times"):
-        assert np.all(out.d == expected_out.d)
-        assert np.all(out.t == expected_out.t)
-        assert np.all(out.time_support.values == expected_out.time_support.values)
-    else:
-        assert np.all(out == expected_out)
-
-
-@pytest.mark.parametrize(
-    "arrays, expected_out",
-    [
-        ([jnp.zeros((10, 1)), np.zeros((10, 1))], jnp.zeros((10, 2))),
-        ([np.zeros((10, 1)), np.zeros((10, 1))], jnp.zeros((10, 2))),
-        (
-            [np.zeros((10, 1)), nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1)))],
-            nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2))),
-        ),
-        (
-            [
-                nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1))),
-                nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 1))),
-            ],
-            nap.TsdFrame(t=np.arange(10), d=np.zeros((10, 2))),
-        ),
-        (
-            [
-                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
-                nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 1, 2))),
-            ],
-            nap.TsdTensor(t=np.arange(10), d=np.zeros((10, 2, 2))),
-        ),
-    ],
-)
-def test_concatenate_eval(arrays, expected_out):
-    """Test various combination of arrays and pyapple time series."""
     out = utils.pynapple_concatenate_numpy(arrays, axis=1)
     if hasattr(expected_out, "times"):
         assert np.all(out.d == expected_out.d)
