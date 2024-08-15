@@ -84,7 +84,7 @@ class ProxSVRG:
     >>>    ...
     >>>
     >>> svrg = ProxSVRG(loss_fn, prox_fun)
-    >>> params, state = svrg.run(init_params, prox_lambda, X, y)
+    >>> params, state = svrg.run(init_params, hyperparams_prox, X, y)
 
     References
     ----------
@@ -167,7 +167,7 @@ class ProxSVRG:
         reference_point: Pytree,
         full_grad_at_reference_point: Pytree,
         stepsize: float,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> Pytree:
         """
@@ -183,7 +183,7 @@ class ProxSVRG:
             Full gradient at the anchor point.
         stepsize :
             Step size.
-        prox_lambda :
+        hyperparams_prox :
             Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
@@ -220,7 +220,7 @@ class ProxSVRG:
         next_params = tree_add_scalar_mul(params, -stepsize, gk)
 
         # apply the proximal operator
-        next_params = self.proximal_operator(next_params, prox_lambda, scaling=stepsize)
+        next_params = self.proximal_operator(next_params, hyperparams_prox, scaling=stepsize)
 
         return next_params
 
@@ -229,7 +229,7 @@ class ProxSVRG:
         self,
         params: Pytree,
         state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -248,8 +248,8 @@ class ProxSVRG:
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
             (`full_grad_at_reference_point`) already set.
-        prox_lambda :
-            Regularization strength.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -281,14 +281,14 @@ class ProxSVRG:
             raise ValueError(
                 "Full gradient at the anchor point (state.full_grad_at_reference_point) has to be set."
             )
-        return self._update_on_batch(params, state, prox_lambda, *args)
+        return self._update_on_batch(params, state, hyperparams_prox, *args)
 
     @partial(jit, static_argnums=(0,))
     def _update_on_batch(
         self,
         params: Pytree,
         state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -305,8 +305,8 @@ class ProxSVRG:
             Optimizer state at the end of the previous update.
             Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
             (`full_grad_at_reference_point`) already set.
-        prox_lambda :
-            Regularization strength.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -331,7 +331,7 @@ class ProxSVRG:
             state.reference_point,
             state.full_grad_at_reference_point,
             state.stepsize,
-            prox_lambda,
+            hyperparams_prox,
             *args,
         )
 
@@ -345,7 +345,7 @@ class ProxSVRG:
     def run(
         self,
         init_params: Pytree,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -357,8 +357,8 @@ class ProxSVRG:
         ----------
         init_params :
             Initial parameters to start from.
-        prox_lambda :
-            Regularization strength.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -385,14 +385,14 @@ class ProxSVRG:
             *args,
         )
 
-        return self._run(init_params, init_state, prox_lambda, *args)
+        return self._run(init_params, init_state, hyperparams_prox, *args)
 
     @partial(jit, static_argnums=(0,))
     def _run(
         self,
         init_params: Pytree,
         init_state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -407,8 +407,8 @@ class ProxSVRG:
             Initial parameters to start from.
         init_state :
             Initialized optimizer state returned by `ProxSVRG.init_state`
-        prox_lambda :
-            Regularization strength.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -442,7 +442,7 @@ class ProxSVRG:
 
             # run an update over the whole data
             params, state = self._update_per_random_samples(
-                prev_reference_point, state, prox_lambda, *args
+                prev_reference_point, state, hyperparams_prox, *args
             )
 
             # update reference point (x_{s}) with the final parameters (x_{m}) or an average over
@@ -484,7 +484,7 @@ class ProxSVRG:
         self,
         params: Pytree,
         state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -499,8 +499,8 @@ class ProxSVRG:
             Optimizer state at the end of the previous sweep.
             Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
             (`full_grad_at_reference_point`) already set.
-        prox_lambda :
-            Regularization strength. Can be None.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength. Can be None.
         args :
             Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
@@ -546,7 +546,7 @@ class ProxSVRG:
                 state.reference_point,
                 state.full_grad_at_reference_point,
                 state.stepsize,
-                prox_lambda,
+                hyperparams_prox,
                 *tree_slice(args, ind),
             )
 
@@ -593,7 +593,7 @@ class SVRG(ProxSVRG):
     """
     SVRG solver
 
-    Equivalent to ProxSVRG with prox as the identity function and prox_lambda=None.
+    Equivalent to ProxSVRG with prox as the identity function and hyperparams_prox=None.
 
     Attributes
     ----------
@@ -676,7 +676,6 @@ class SVRG(ProxSVRG):
         state :
             Initialized optimizer state
         """
-        # substitute None for prox_lambda
         return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
@@ -723,7 +722,7 @@ class SVRG(ProxSVRG):
             to be calculated and is expected to be stored in `state.full_grad_at_reference_point`.
             So if `state.full_grad_at_reference_point` is None, a ValueError is raised.
         """
-        # substitute None for prox_lambda
+        # substitute None for hyperparams_prox
         return super().update(params, state, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
@@ -762,8 +761,8 @@ class SVRG(ProxSVRG):
                 Final optimizer state.
         """
         # initialize the state, including the full gradient at the initial parameters
-        # don't have to pass prox_lambda here
+        # don't have to pass hyperparams_prox here
         init_state = self.init_state(init_params, *args)
 
-        # substitute None for prox_lambda
+        # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
