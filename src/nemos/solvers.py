@@ -220,7 +220,9 @@ class ProxSVRG:
         next_params = tree_add_scalar_mul(params, -stepsize, gk)
 
         # apply the proximal operator
-        next_params = self.proximal_operator(next_params, hyperparams_prox, scaling=stepsize)
+        next_params = self.proximal_operator(
+            next_params, hyperparams_prox, scaling=stepsize
+        )
 
         return next_params
 
