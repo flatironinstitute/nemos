@@ -30,7 +30,7 @@ class SVRGState(NamedTuple):
         Step size of the individual gradient steps.
     reference_point :
         Anchor/reference/snapshot point where the full gradient is calculated in the SVRG algorithm.
-        Corresponds to `x_{s}` in the pseudocode[$^{[1]}$](#references).
+        Corresponds to $x_{s}$ in the pseudocode[$^{[1]}$](#references).
     full_grad_at_reference_point :
         Full gradient at the anchor/reference point.
 
