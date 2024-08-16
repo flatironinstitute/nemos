@@ -181,6 +181,9 @@ cls = GridSearchCV(model, param_grid=param_grid, cv=5)
 cls.fit(X, counts)
 ```
 
+!!! info "Cross-Validation"
+    For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/api_guide/plot_06_sklearn_pipeline_cv_demo).
+
 Now we can print the best coefficient.
 
 ```python
@@ -188,5 +191,7 @@ Now we can print the best coefficient.
 >>> print(cls.best_params_)
 {'regularizer__regularizer_strength': 0.001}
 ```
+
+For more information, including a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/api_guide/plot_06_sklearn_pipeline_cv_demo).
 
 Enjoy modeling with NeMoS!

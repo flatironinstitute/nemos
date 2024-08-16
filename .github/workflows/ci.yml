@@ -8,17 +8,22 @@ on:
      branches:
        - main
        - development
-     types: [opened, synchronize, reopened, ready_for_review]
+     types:
+       - opened
+       - reopened
+       - synchronize
+       - ready_for_review
    push:
      branches:
        - main
 
 jobs:
   tox:
+    if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.9','3.10', '3.11']
+        python-version: ['3.10', '3.11', '3.12']
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -45,7 +50,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   check:
-    if: always()
+    if: ${{ !github.event.pull_request.draft }}
     needs: tox
     runs-on: ubuntu-latest
     steps:

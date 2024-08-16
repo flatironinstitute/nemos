@@ -1,7 +1,7 @@
 # <div style="text-align: center;"> <img src="docs/assets/NeMoS_Logo_CMYK_Full.svg" width="75%"> </div>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
-![Python version](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-blue.svg)
+![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![PyPI - Version](https://img.shields.io/pypi/v/nemos)
 [![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
@@ -9,7 +9,7 @@
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
 
-NeMoS (NEural MOdelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
+NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 It streamlines the process of creating and selecting models, through a collection of easy-to-use methods for feature design.
 
 The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently 

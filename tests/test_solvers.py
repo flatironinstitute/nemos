@@ -52,8 +52,8 @@ def test_svrg_init_state_default(request, regr_setup):
 
     assert state.iter_num == 0
     assert state.key == jax.random.key(123)
-    assert state.df_xs is None
-    assert state.xs is not None
+    assert state.full_grad_at_reference_point is None
+    assert state.reference_point is not None
 
 
 @pytest.mark.parametrize(
@@ -76,26 +76,6 @@ def test_svrg_init_state_key(request, regr_setup):
     state = svrg.init_state(param_init, X, y)
 
     assert state.key == random_key
-
-
-@pytest.mark.parametrize(
-    "regr_setup",
-    [
-        "linear_regression",
-        "ridge_regression",
-        "linear_regression_tree",
-        "ridge_regression_tree",
-    ],
-)
-def test_svrg_init_state_init_full_gradient(request, regr_setup):
-    jax.config.update("jax_enable_x64", True)
-    X, y, _, params, loss = request.getfixturevalue(regr_setup)
-
-    param_init = jax.tree_util.tree_map(np.zeros_like, params)
-    svrg = SVRG(loss)
-    state = svrg.init_state(param_init, X, y, init_full_gradient=True)
-
-    assert state.df_xs is not None
 
 
 @pytest.mark.parametrize(
@@ -126,7 +106,7 @@ def test_svrg_update_needs_df_xs(request, regr_setup, solver_class, prox, prox_l
 
     with pytest.raises(
         ValueError,
-        match=r"Full gradient at the anchor point \(state\.df_xs\) has to be set",
+        match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
         _, _ = solver_class.update(param_init, state, *args)
 
@@ -231,7 +211,7 @@ def test_svrg_glm_initialize_state(
     init_params = glm.initialize_params(X, y)
     state = glm.initialize_state(X, y, init_params)
 
-    assert state.xs == init_params
+    assert state.reference_point == init_params
 
     for f in (glm._solver_init_state, glm._solver_update, glm._solver_run):
         assert isinstance(inspect.getclosurevars(f).nonlocals["solver"], solver_class)
@@ -274,15 +254,14 @@ def test_svrg_glm_update(
         **kwargs,
     )
 
-    # TODO init_full_gradient is not passed to initialize_state
     init_params = glm.initialize_params(X, y)
-    state = glm.initialize_state(X, y, init_params)  # , init_full_gradient=True)
+    state = glm.initialize_state(X, y, init_params)
 
     loss_gradient = jax.jit(jax.grad(glm._solver_loss_fun_))
 
     # initialize full gradient at the anchor point
     state = state._replace(
-        df_xs=loss_gradient(init_params, X, y),
+        full_grad_at_reference_point=loss_gradient(init_params, X, y),
     )
 
     params, state = glm.update(init_params, state, X, y)
@@ -369,7 +348,7 @@ def test_svrg_glm_fit(
     "glm_class",
     [nmo.glm.GLM, nmo.glm.PopulationGLM],
 )
-def test_svrg_glm_update_needs_df_xs(
+def test_svrg_glm_update_needs_full_grad_at_reference_point(
     glm_class, regularizer_name, solver_class, mask, linear_regression
 ):
     X, y, _, _, loss = linear_regression
@@ -389,7 +368,7 @@ def test_svrg_glm_update_needs_df_xs(
 
     with pytest.raises(
         ValueError,
-        match=r"Full gradient at the anchor point \(state\.df_xs\) has to be set",
+        match=r"Full gradient at the anchor point \(state\.full_grad_at_reference_point\) has to be set",
     ):
         params = glm.initialize_params(X, y)
         state = glm.initialize_state(X, y, params)
@@ -425,7 +404,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
 
     for _ in range(maxiter):
         state = state._replace(
-            df_xs=loss_grad(params, X, y),
+            full_grad_at_reference_point=loss_grad(params, X, y),
         )
 
         prev_params = params
@@ -436,7 +415,7 @@ def test_svrg_update_converges(request, regr_setup, stepsize):
             params, state = solver.update(params, state, xi, yi)
 
         state = state._replace(
-            xs=params,
+            reference_point=params,
         )
 
         _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
@@ -552,7 +531,7 @@ def test_svrg_xk_update_step(request, regr_setup, to_tuple, prox, prox_lambda):
         solver = SVRG(loss)
     else:
         solver = ProxSVRG(loss, prox)
-    svrg_next_xk = solver._xk_update_step(
+    svrg_next_xk = solver._inner_loop_param_update_step(
         init_param, xs, df_xs, stepsize, prox_lambda, xi, yi
     )
 

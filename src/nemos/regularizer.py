@@ -52,13 +52,14 @@ class Regularizer(Base, abc.ABC):
         super().__init__(**kwargs)
 
     @property
-    def allowed_solvers(self):
+    def allowed_solvers(self) -> Tuple[str]:
         return self._allowed_solvers
 
     @property
-    def default_solver(self):
+    def default_solver(self) -> str:
         return self._default_solver
 
+    @abc.abstractmethod
     def penalized_loss(self, loss: Callable, regularizer_strength: float) -> Callable:
         """
         Abstract method to penalize loss functions.
@@ -78,6 +79,7 @@ class Regularizer(Base, abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
@@ -228,7 +230,7 @@ class Ridge(Regularizer):
             term is not regularized.
         """
 
-        def prox_op(params, l2reg, scaling=0.5):
+        def prox_op(params, l2reg, scaling=1.0):
             Ws, bs = params
             l2reg /= bs.shape[0]
             return jaxopt.prox.prox_ridge(Ws, l2reg, scaling=scaling), bs
@@ -455,7 +457,7 @@ class GroupLasso(Regularizer):
         )  # this masks the param, (group, feature, neuron)
 
         penalty = jax.numpy.sum(
-            jax.numpy.linalg.norm(masked_param, axis=1)
+            jax.numpy.linalg.norm(masked_param, axis=1).T
             * jax.numpy.sqrt(self.mask.sum(axis=1))
         )
 

@@ -1,6 +1,6 @@
 import warnings
 from functools import partial
-from typing import Any, Callable, NamedTuple, Optional, Union
+from typing import Callable, NamedTuple, Optional, Union
 
 import jax
 import jax.flatten_util
@@ -18,8 +18,8 @@ class SVRGState(NamedTuple):
     """
     Optimizer state for (Prox)SVRG.
 
-    Fields
-    ------
+    Attributes
+    ----------
     iter_num :
         Current epoch or iteration number.
     key :
@@ -29,23 +29,25 @@ class SVRGState(NamedTuple):
         used to monitor convergence.
     stepsize :
         Step size of the individual gradient steps.
-    xs :
-        Anchor/reference point where the full gradient is calculated in the SVRG algorithm.
-        Naming follows pseudocode in [1]_
-    df_xs :
+    reference_point :
+        Anchor/reference/snapshot point where the full gradient is calculated in the SVRG algorithm.
+        Corresponds to $x_{s}$ in the pseudocode[$^{[1]}$](#references).
+    full_grad_at_reference_point :
         Full gradient at the anchor/reference point.
 
-    References
-    ----------
-    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
+    # References
+    ------------
+    [1] [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik.
+        "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).
+        ](https://arxiv.org/abs/2010.00892)
     """
 
     iter_num: int
     key: KeyArrayLike
     error: float
     stepsize: float
-    xs: Optional[Pytree] = None
-    df_xs: Optional[Pytree] = None
+    reference_point: Optional[Pytree] = None
+    full_grad_at_reference_point: Optional[Pytree] = None
 
 
 class ProxSVRG:
@@ -83,13 +85,22 @@ class ProxSVRG:
     >>>    ...
     >>>
     >>> svrg = ProxSVRG(loss_fn, prox_fun)
-    >>> params, state = svrg.run(init_params, prox_lambda, X, y)
+    >>> params, state = svrg.run(init_params, hyperparams_prox, X, y)
 
     References
     ----------
-    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
-    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
-    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
+    [1] [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik.
+    "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).
+    ](https://arxiv.org/abs/2010.00892)
+
+    [2] [Xiao, Lin, and Tong Zhang.
+    "A proximal stochastic gradient method with progressive variance reduction."
+    SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
+
+    [3] [Johnson, Rie, and Tong Zhang.
+    "Accelerating stochastic gradient descent using predictive variance reduction."
+    Advances in neural information processing systems 26 (2013).
+    ](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
     """
 
     def __init__(
@@ -114,9 +125,7 @@ class ProxSVRG:
     def init_state(
         self,
         init_params: Pytree,
-        hyperparams_prox: Any,
         *args,
-        init_full_gradient: bool = False,
     ) -> SVRGState:
         """
         Initialize the solver state
@@ -126,11 +135,8 @@ class ProxSVRG:
         init_params :
             Pytree containing the initial parameters.
             For GLMs it's a tuple of (W, b)
-        hyperparams_prox :
-            Parameters of the proximal operator, in our case the regularization strength.
-            Not used here, but required to be consistent with the jaxopt API.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -139,37 +145,30 @@ class ProxSVRG:
                     Input data.
                 y : jnp.ndarray
                     Output data.
-        init_full_gradient : bool, default False
-            Whether to calculate the full gradient at the initial parameters,
-            assuming that args hold the full data set, and store this gradient in the initial state.
 
         Returns
         -------
         state :
             Initialized optimizer state
         """
-        df_xs = None
-        if init_full_gradient:
-            df_xs = self.loss_gradient(init_params, *args)
-
         state = SVRGState(
             iter_num=0,
             key=self.key if self.key is not None else random.key(123),
             error=jnp.inf,
             stepsize=self.stepsize,
-            xs=init_params,
-            df_xs=df_xs,
+            reference_point=init_params,
+            full_grad_at_reference_point=None,
         )
         return state
 
     @partial(jit, static_argnums=(0,))
-    def _xk_update_step(
+    def _inner_loop_param_update_step(
         self,
-        xk: Pytree,
-        xs: Pytree,
-        df_xs: Pytree,
+        params: Pytree,
+        reference_point: Pytree,
+        full_grad_at_reference_point: Pytree,
         stepsize: float,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> Pytree:
         """
@@ -177,18 +176,18 @@ class ProxSVRG:
 
         Parameters
         ----------
-        xk :
+        params :
             Current parameters.
-        xs :
+        reference_point :
             Anchor point.
-        df_xs :
+        full_grad_at_reference_point :
             Full gradient at the anchor point.
         stepsize :
             Step size.
-        prox_lambda :
+        hyperparams_prox :
             Hyperparameters to `prox`, most commonly regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -200,33 +199,40 @@ class ProxSVRG:
 
         Returns
         -------
-        next_xk :
+        next_params :
             Parameter values after applying the update.
         """
-        # gradient on batch_{i_k} evaluated at the current parameters (xk)
-        grad_of_fik_at_xk = self.loss_gradient(xk, *args)
-        # gradient on batch_{i_k} evaluated at the anchor point (xs)
-        grad_of_fik_at_xs = self.loss_gradient(xs, *args)
+        # gradient on batch_{i_k} evaluated at the current parameters
+        # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
+        minibatch_grad_at_current_params = self.loss_gradient(params, *args)
+        # gradient on batch_{i_k} evaluated at the anchor point
+        # gradient of f_{i_k} at x_{x} in the pseudocode of Gower et al. 2020
+        minibatch_grad_at_reference_point = self.loss_gradient(reference_point, *args)
 
         # SVRG gradient estimate
         gk = jax.tree_util.tree_map(
-            lambda a, b, c: a - b + c, grad_of_fik_at_xk, grad_of_fik_at_xs, df_xs
+            lambda a, b, c: a - b + c,
+            minibatch_grad_at_current_params,
+            minibatch_grad_at_reference_point,
+            full_grad_at_reference_point,
         )
 
         # x_{k+1} = x_{k} - stepsize * g_{k}
-        next_xk = tree_add_scalar_mul(xk, -stepsize, gk)
+        next_params = tree_add_scalar_mul(params, -stepsize, gk)
 
         # apply the proximal operator
-        next_xk = self.proximal_operator(next_xk, prox_lambda, scaling=stepsize)
+        next_params = self.proximal_operator(
+            next_params, hyperparams_prox, scaling=stepsize
+        )
 
-        return next_xk
+        return next_params
 
     @partial(jit, static_argnums=(0,))
     def update(
         self,
-        current_params: Pytree,
+        params: Pytree,
         state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -239,15 +245,16 @@ class ProxSVRG:
 
         Parameters
         ----------
-        current_params :
+        params :
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous update.
-            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        prox_lambda :
-            Regularization strength.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -261,7 +268,7 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            xs :
+            reference_point :
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
             state :
                 Updated state.
@@ -270,39 +277,41 @@ class ProxSVRG:
         ------
         ValueError
             The parameter update needs a value for the full gradient at the anchor point, which needs the full data
-            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None, a ValueError is raised.
+            to be calculated and is expected to be stored in `state.full_grad_at_reference_point`. So if
+            `state.full_grad_at_reference_point` is None, a ValueError is raised.
         """
-        if state.df_xs is None:
+        if state.full_grad_at_reference_point is None:
             raise ValueError(
-                "Full gradient at the anchor point (state.df_xs) has to be set. "
-                + "Try passing init_full_gradient=True to ProxSVRG.init_state or GLM.initialize_solver."
+                "Full gradient at the anchor point (state.full_grad_at_reference_point) has to be set."
             )
-        return self._update_on_batch(current_params, state, prox_lambda, *args)
+        return self._update_on_batch(params, state, hyperparams_prox, *args)
 
     @partial(jit, static_argnums=(0,))
     def _update_on_batch(
         self,
-        current_params: Pytree,
+        params: Pytree,
         state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
         Update parameters given a mini-batch of data and increment iteration/epoch number in state.
 
-        Note that this method doesn't update state.xs, state.df_xs, that has to be done outside.
+        Note that this method doesn't update `state.reference_point`, `state.full_grad_at_reference_point`,
+        that has to be done outside.
 
         Parameters
         ----------
-        current_params :
+        params :
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous update.
-            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        prox_lambda :
-            Regularization strength.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -315,13 +324,18 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            xs :
+            reference_point :
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
             state :
                 Updated state.
         """
-        next_params = self._xk_update_step(
-            current_params, state.xs, state.df_xs, state.stepsize, prox_lambda, *args
+        next_params = self._inner_loop_param_update_step(
+            params,
+            state.reference_point,
+            state.full_grad_at_reference_point,
+            state.stepsize,
+            hyperparams_prox,
+            *args,
         )
 
         state = state._replace(
@@ -334,21 +348,22 @@ class ProxSVRG:
     def run(
         self,
         init_params: Pytree,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes
+        that X and y are the full data set.
 
         Parameters
         ----------
         init_params :
             Initial parameters to start from.
-        prox_lambda :
-            Regularization strength.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -370,24 +385,23 @@ class ProxSVRG:
         # initialize the state, including the full gradient at the initial parameters
         init_state = self.init_state(
             init_params,
-            prox_lambda,
             *args,
-            init_full_gradient=True,
         )
 
-        return self._run(init_params, init_state, prox_lambda, *args)
+        return self._run(init_params, init_state, hyperparams_prox, *args)
 
     @partial(jit, static_argnums=(0,))
     def _run(
         self,
         init_params: Pytree,
         init_state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
+        X and y are the full data set.
         Assumes the state has been initialized, which works a bit differently for SVRG and ProxSVRG.
 
         Parameters
@@ -396,10 +410,10 @@ class ProxSVRG:
             Initial parameters to start from.
         init_state :
             Initialized optimizer state returned by `ProxSVRG.init_state`
-        prox_lambda :
-            Regularization strength.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -420,32 +434,44 @@ class ProxSVRG:
 
         # this method assumes that args hold the full data
         def body_fun(step):
-            xs_prev, state = step
+            prev_reference_point, state = step
 
             # evaluate and store the full gradient with the params from the last inner loop
             state = state._replace(
-                df_xs=self.loss_gradient(xs_prev, *args),
+                full_grad_at_reference_point=self.loss_gradient(
+                    prev_reference_point, *args
+                )
             )
 
             # run an update over the whole data
-            xk, state = self._update_per_random_samples(
-                xs_prev, state, prox_lambda, *args
+            params, state = self._update_per_random_samples(
+                prev_reference_point, state, hyperparams_prox, *args
             )
 
-            # update xs with the final xk or an average over the inner loop's iterations
-            xs = xk
+            # update reference point (x_{s}) with the final parameters (x_{m}) or an average over
+            # the inner loop's iterations
+            # note that the average is currently not implemented
+            reference_point = params
 
             state = state._replace(
-                xs=xs,
-                error=self._error(xs, xs_prev, state.stepsize),
+                reference_point=reference_point,
+                error=self._error(
+                    reference_point, prev_reference_point, state.stepsize
+                ),
             )
 
-            return OptStep(params=xs, state=state)
+            return OptStep(params=reference_point, state=state)
 
         # at the end of each epoch, check for convergence or reaching the max number of epochs
         def cond_fun(step):
             _, state = step
             return (state.iter_num <= self.maxiter) & (state.error >= self.tol)
+
+        # initialize the full gradient at the anchor point
+        # the anchor point is init_params at first
+        init_state = init_state._replace(
+            full_grad_at_reference_point=self.loss_gradient(init_params, *args)
+        )
 
         final_params, final_state = loop.while_loop(
             cond_fun=cond_fun,
@@ -459,9 +485,9 @@ class ProxSVRG:
     @partial(jit, static_argnums=(0,))
     def _update_per_random_samples(
         self,
-        current_params: Pytree,
+        params: Pytree,
         state: SVRGState,
-        prox_lambda: Union[float, None],
+        hyperparams_prox: Union[float, None],
         *args,
     ) -> OptStep:
         """
@@ -470,15 +496,16 @@ class ProxSVRG:
 
         Parameters
         ----------
-        current_params :
+        params :
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous sweep.
-            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
-        prox_lambda :
-            Regularization strength. Can be None.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
+        hyperparams_prox :
+            Hyperparameters to `prox`, most commonly regularization strength. Can be None.
         args :
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -491,7 +518,7 @@ class ProxSVRG:
         Returns
         -------
         OptStep
-            xs :
+            next_params :
                 Parameters at the end of the last inner loop.
                 (... or the average of the parameters over the last inner loop)
             state :
@@ -508,34 +535,31 @@ class ProxSVRG:
         N = n_points_per_arg.pop()
 
         m = (N + self.batch_size - 1) // self.batch_size  # number of iterations
-        # m = N
-
-        xs, df_xs = state.xs, state.df_xs
 
         def inner_loop_body(_, carry):
-            xk, key = carry
+            params, key = carry
 
             # sample mini-batch or data point
             key, subkey = random.split(key)
             ind = random.randint(subkey, (self.batch_size,), 0, N)
 
             # perform a single update on the mini-batch or data point
-            xk = self._xk_update_step(
-                xk,
-                xs,
-                df_xs,
+            next_params = self._inner_loop_param_update_step(
+                params,
+                state.reference_point,
+                state.full_grad_at_reference_point,
                 state.stepsize,
-                prox_lambda,
+                hyperparams_prox,
                 *tree_slice(args, ind),
             )
 
-            return (xk, key)
+            return (next_params, key)
 
-        xk, key = lax.fori_loop(
+        next_params, key = lax.fori_loop(
             0,
             m,
             inner_loop_body,
-            (current_params, state.key),
+            (params, state.key),
         )
 
         # update the state
@@ -545,9 +569,7 @@ class ProxSVRG:
             key=key,
         )
 
-        # the next anchor point is the parameters at the end of the inner loop
-        # (or the average over the inner loop)
-        return OptStep(params=xk, state=state)
+        return OptStep(params=next_params, state=state)
 
     @staticmethod
     def _error(x, x_prev, stepsize):
@@ -574,7 +596,7 @@ class SVRG(ProxSVRG):
     """
     SVRG solver
 
-    Equivalent to ProxSVRG with prox as the identity function and prox_lambda=None.
+    Equivalent to ProxSVRG with prox as the identity function and hyperparams_prox=None.
 
     Attributes
     ----------
@@ -602,9 +624,16 @@ class SVRG(ProxSVRG):
 
     References
     ----------
-    .. 1. [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik. "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).](https://arxiv.org/abs/2010.00892)
-    .. 2. [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction." SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
-    .. 3. [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction." Advances in neural information processing systems 26 (2013).](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
+    [1] [Gower, Robert M., Mark Schmidt, Francis Bach, and Peter Richtárik.
+    "Variance-Reduced Methods for Machine Learning." arXiv preprint arXiv:2010.00892 (2020).
+    ](https://arxiv.org/abs/2010.00892)
+
+    [2] [Xiao, Lin, and Tong Zhang. "A proximal stochastic gradient method with progressive variance reduction."
+    SIAM Journal on Optimization 24.4 (2014): 2057-2075.](https://arxiv.org/abs/1403.4699v1)
+
+    [3] [Johnson, Rie, and Tong Zhang. "Accelerating stochastic gradient descent using predictive variance reduction."
+    Advances in neural information processing systems 26 (2013).
+    ](https://proceedings.neurips.cc/paper/2013/hash/ac1dd209cbcc5e5d1c6e28598e8cbbe8-Abstract.html)
     """
 
     def __init__(
@@ -634,9 +663,8 @@ class SVRG(ProxSVRG):
         ----------
         init_params :
             pytree containing the initial parameters.
-            For GLMs it's a tuple of (W, b)
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -646,22 +674,15 @@ class SVRG(ProxSVRG):
                 y : jnp.ndarray
                     Output data.
 
-        init_full_gradient : bool, default False
-            Whether to calculate the full gradient at the initial parameters,
-            assuming that args hold the full data set, and store this gradient in the initial state.
-
         Returns
         -------
         state :
             Initialized optimizer state
         """
-        # substitute None for prox_lambda
-        return super().init_state(init_params, None, *args, **kwargs)
+        return super().init_state(init_params, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
-    def update(
-        self, current_params: Pytree, state: SVRGState, *args, **kwargs
-    ) -> OptStep:
+    def update(self, params: Pytree, state: SVRGState, *args, **kwargs) -> OptStep:
         """
         Perform a single parameter update on the passed data (no random sampling or loops)
         and increment `state.iter_num`.
@@ -672,13 +693,14 @@ class SVRG(ProxSVRG):
 
         Parameters
         ----------
-        current_params :
+        params :
             Parameters at the end of the previous update, used as the starting point for the current update.
         state :
             Optimizer state at the end of the previous update.
-            Needs to have the current anchor point (xs) and the gradient at the anchor point (df_xs) already set.
+            Needs to have the current anchor point (`reference_point`) and the gradient at the anchor point
+            (`full_grad_at_reference_point`) already set.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -691,7 +713,7 @@ class SVRG(ProxSVRG):
         Returns
         -------
         OptStep
-            xs :
+            reference_point :
                 Parameters after taking one step defined in the inner loop of Prox-SVRG.
             state :
                 Updated state.
@@ -700,10 +722,11 @@ class SVRG(ProxSVRG):
         ------
         ValueError
             The parameter update needs a value for the full gradient at the anchor point, which needs the full data
-            to be calculated and is expected to be stored in state.df_xs. So if state.df_xs is None, a ValueError is raised.
+            to be calculated and is expected to be stored in `state.full_grad_at_reference_point`.
+            So if `state.full_grad_at_reference_point` is None, a ValueError is raised.
         """
-        # substitute None for prox_lambda
-        return super().update(current_params, state, None, *args, **kwargs)
+        # substitute None for hyperparams_prox
+        return super().update(params, state, None, *args, **kwargs)
 
     @partial(jit, static_argnums=(0,))
     def run(
@@ -713,14 +736,15 @@ class SVRG(ProxSVRG):
     ) -> OptStep:
         """
         Run a whole optimization until convergence or until `maxiter` epochs are reached.
-        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that X and y are the full data set.
+        Called by `BaseRegressor._solver_run` (e.g. as called by `GLM.fit`) and assumes that
+        X and y are the full data set.
 
         Parameters
         ----------
         init_params :
             Initial parameters to start from.
         args:
-            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(current_params, *args)`),
+            Positional arguments passed to loss function `fun` and its gradient (e.g. `fun(params, *args)`),
             most likely input and output data.
             They are expected to be Pytrees with arrays or FeaturePytree as their leaves, with all of their
             leaves having the same sized first dimension (corresponding to the number of data points).
@@ -740,14 +764,10 @@ class SVRG(ProxSVRG):
                 Final optimizer state.
         """
         # initialize the state, including the full gradient at the initial parameters
-        # don't have to pass prox_lambda here
-        init_state = self.init_state(
-            init_params,
-            *args,
-            init_full_gradient=True,
-        )
+        # don't have to pass hyperparams_prox here
+        init_state = self.init_state(init_params, *args)
 
-        # substitute None for prox_lambda
+        # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
 
 
