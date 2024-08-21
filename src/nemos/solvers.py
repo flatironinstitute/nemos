@@ -1,6 +1,6 @@
 import warnings
-from functools import partial
-from typing import Callable, NamedTuple, Optional, Union
+from functools import partial, wraps
+from typing import Callable, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.flatten_util
@@ -771,6 +771,17 @@ class SVRG(ProxSVRG):
         return self._run(init_params, init_state, None, *args)
 
 
+def _convert_to_float(func):
+    """Convert to float."""
+
+    @wraps
+    def wrapper(*args, **kwargs):
+        args, kwargs = jax.tree_util.tree_map(float, (args, kwargs))
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 def softplus_poisson_optimal_stepsize(
     X: jnp.ndarray, y: jnp.ndarray, batch_size: int, n_power_iters: Optional[int] = None
 ):
@@ -800,7 +811,7 @@ def softplus_poisson_optimal_stepsize(
     """
     L_max, L = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
 
-    stepsize = _calc_alpha(batch_size, X.shape[0], L_max, L)
+    stepsize = _calculate_stepsize_saga(batch_size, X.shape[0], L_max, L)
 
     return stepsize
 
@@ -840,9 +851,11 @@ def softplus_poisson_optimal_batch_and_stepsize(
     stepsize : scalar jax array
         Optimal stepsize to use.
     """
-    L_max, L = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
+    l_smooth_max, l_smooth = _softplus_poisson_L_max_and_L(
+        jnp.array(X), jnp.array(y), n_power_iters
+    )
 
-    batch_size = jnp.floor(_calc_b_hat(X.shape[0], L_max, L))
+    batch_size = int(jnp.floor(_calculate_batch_size_hat(X.shape[0], l_smooth_max, l_smooth)))
 
     if not jnp.isfinite(batch_size):
         batch_size = default_batch_size
@@ -852,14 +865,14 @@ def softplus_poisson_optimal_batch_and_stepsize(
             f"Could not determine batch and step size automatically. Falling back on the default values of {batch_size} and {default_stepsize}."
         )
     else:
-        stepsize = _calc_alpha(batch_size, X.shape[0], L_max, L)
+        stepsize = _calculate_stepsize_saga(batch_size, X.shape[0], l_smooth_max, l_smooth)
 
     return int(batch_size), stepsize
 
 
 def _softplus_poisson_L_max_and_L(
     X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
-):
+) -> Tuple[float, float]:
     """
     Calculate the smoothness constant and maximum smoothness constant for SVRG
     assuming that the optimized function is the log-likelihood of a Poisson GLM
@@ -1039,81 +1052,135 @@ def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
     return L_max[0]
 
 
-def _calc_b_hat(N: int, L_max: float, L: float):
+@_convert_to_float
+def _calculate_stepsize_svrg(batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float):
     """
-    Calculate optimal batch size according to Sebbouh et al. 2019.
+    Calculate optimal step size for SVRG$^{[1]}$.
 
     Parameters
     ----------
-    N :
+    batch_size :
+        Mini-batch size.
+    num_samples :
         Overall number of data points.
-    L_max :
+    l_smooth_max :
         Maximum smoothness constant among f_{i}.
-    L :
+    l_smooth :
         Smoothness constant.
 
     Returns
     -------
-    b_hat :
+    :
+        Optimal step size for the optimization.
+
+    References
+    ----------
+    [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
+    Advances in neural information processing systems 32 (2019).
+    """
+    numerator = 0.5 * batch_size * (num_samples - 1)
+    denominator = (3 * (num_samples - batch_size) * l_smooth_max + num_samples * (batch_size - 1) * l_smooth)
+    return numerator / denominator
+
+
+@_convert_to_float
+def _calculate_stepsize_saga(
+    batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float
+) -> float:
+    """
+    Calculate optimal step size for SAGA.
+
+    Parameters
+    ----------
+    batch_size :
+        Mini-batch size.
+    num_samples :
+        Overall number of data points.
+    l_smooth_max :
+        Maximum smoothness constant among f_{i}.
+    l_smooth :
+        Smoothness constant.
+
+    Returns
+    -------
+    :
+        Optimal step size for the optimization.
+
+    References
+    ----------
+    [1] Gazagnadou, Nidham, Robert Gower, and Joseph Salmon.
+    "Optimal mini-batch and step sizes for saga."
+    International conference on machine learning. PMLR, 2019.
+    """
+    # convert any scalar (even if contained in jax.ndarray) to float
+    # this avoids issues with operation on different dtypes, that
+    # can be an issue on jax arrays.
+    batch_size, sample_size, l_smooth_max, l_smooth = map(
+        float, (batch_size, num_samples, l_smooth_max, l_smooth)
+    )
+
+    l_b = l_smooth * num_samples / batch_size * (batch_size - 1) / (
+            num_samples - 1
+        ) + l_smooth_max / batch_size * (num_samples - batch_size) / (num_samples - 1)
+
+    return 0.25 / l_b
+
+
+@_convert_to_float
+def _calculate_batch_size_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
+    """
+    Calculate optimal batch size^{[1]}.
+
+    Parameters
+    ----------
+    num_samples :
+        Overall number of data points.
+    l_smooth_max :
+        Maximum smoothness constant among f_{i}.
+    l_smooth :
+        Smoothness constant.
+
+    Returns
+    -------
+    :
         Optimal batch size for the optimization.
+
+    References
+    ----------
+    [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
+    Advances in neural information processing systems 32 (2019).
     """
-    with jax.experimental.enable_x64():
-        return jnp.sqrt(N / 2 * (3 * L_max - L) / (N * L - 3 * L_max))
+    numerator = num_samples / 2 * (3 * l_smooth_max - l_smooth)
+    denominator = num_samples * l_smooth - 3 * l_smooth_max
+    return jnp.sqrt(numerator / denominator)
 
 
-def _calc_alpha_old(b: int, N: int, L_max: float, L: float):
+@_convert_to_float
+def _calc_b_tilde(num_samples, l_smooth_max, l_smooth, mu):
     """
-    Calculate optimal step size according to Sebbouh et al. 2019.
+    Calculate optimal batch size as in [1].
 
     Parameters
     ----------
-    b :
-        Mini-batch size.
-    N :
+    num_samples :
         Overall number of data points.
-    L_max :
+    l_smooth_max :
         Maximum smoothness constant among f_{i}.
-    L :
+    l_smooth :
         Smoothness constant.
+    mu :
+        Strong convexity constant.
 
     Returns
     -------
-    alpha :
-        Optimal step size for the optimization.
-    """
-    with jax.experimental.enable_x64():
-        return 1 / 2 * b * (N - 1) / (3 * (N - b) * L_max + N * (b - 1) * L)
+    :
+        Optimal batch size for the optimization.
 
-
-def _calc_alpha(b: int, N: int, L_max: float, L: float):
-    """
-    Calculate optimal step size.
-
-    Parameters
+    References
     ----------
-    b :
-        Mini-batch size.
-    N :
-        Overall number of data points.
-    L_max :
-        Maximum smoothness constant among f_{i}.
-    L :
-        Smoothness constant.
-
-    Returns
-    -------
-    alpha :
-        Optimal step size for the optimization.
+    [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
+    Advances in neural information processing systems 32 (2019).
     """
-    with jax.experimental.enable_x64():
-        L_b = L * N / b * (b - 1) / (N - 1) + L_max / b * (N - b) / (N - 1)
-
-        return 1 / 4 / L_b
-
-
-def _calc_b_tilde(L_max, L, N, mu):
-    with jax.experimental.enable_x64():
-        numerator = (3 * L_max - L) * N
-        denominator = N * (N - 1) * mu - N * L + 3 * L_max
-
+    numerator = (3 * l_smooth_max - l_smooth) * num_samples
+    denominator = num_samples * (num_samples - 1) * mu - num_samples * l_smooth + 3 * l_smooth_max
     return numerator / denominator
