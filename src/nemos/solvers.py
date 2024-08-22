@@ -1105,12 +1105,6 @@ def _calculate_stepsize_saga(
     "Optimal mini-batch and step sizes for saga."
     International conference on machine learning. PMLR, 2019.
     """
-    # convert any scalar (even if contained in jax.ndarray) to float
-    # this avoids issues with operation on different dtypes, that
-    # can be an issue on jax arrays.
-    batch_size, sample_size, l_smooth_max, l_smooth = map(
-        float, (batch_size, num_samples, l_smooth_max, l_smooth)
-    )
 
     l_b = l_smooth * num_samples / batch_size * (batch_size - 1) / (
             num_samples - 1
@@ -1121,7 +1115,7 @@ def _calculate_stepsize_saga(
 
 def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_smooth:float, strong_convexity: Optional[float] = None) -> int:
     """
-    Calculate the optimal batch size according to the table in [1].
+    Calculate the optimal batch size according to "Table 1" in [1].
 
     Parameters
     ----------
@@ -1141,8 +1135,13 @@ def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_
 
     """
     if strong_convexity is None:
-        batch_size = 1  # assume that N is large enough for mini-batching
+        # Assume that num_sample is large enough for mini-batching.
+        # This is usually the case for neuroscience where num_sample
+        # is typically very large.
+        # If this assumption is not matched, convergence may be slow.
+        batch_size = 1
     else:
+        # Compute optimal batch size according to Table 1.
         if num_samples >= 3 * l_smooth_max / strong_convexity:
             batch_size = 1
         elif num_samples > l_smooth / strong_convexity:
@@ -1151,18 +1150,19 @@ def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_
                 b_hat = _calculate_b_hat(num_samples, l_smooth_max, l_smooth)
                 batch_size = int(jnp.floor(jnp.minimum(b_hat, b_tilde)))
             else:
-                batch_size = b_tilde
+                batch_size = int(jnp.floor(b_tilde))
         else:
             if l_smooth_max < num_samples * l_smooth / 3:
                 batch_size = int(jnp.floor(_calculate_b_hat(num_samples, l_smooth_max, l_smooth)))
             else:
-                batch_size = num_samples
+                batch_size = int(num_samples)  # reset this to int
     return batch_size
+
 
 @_convert_to_float
 def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
-    """
-    Helper function for calculating the optimal batch size^{[1]}.
+    r"""
+    Helper function for calculating $\hat{b}$ in "Table 1" of [1].
 
     Parameters
     ----------
@@ -1190,8 +1190,8 @@ def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
 
 @_convert_to_float
 def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
-    """
-    Helper function to calculate the optimal batch size as in [1].
+    r"""
+    Helper function for calculating $\tilde{b}$ as in "Table 1" of [1].
 
     Parameters
     ----------
