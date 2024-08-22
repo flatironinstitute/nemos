@@ -594,9 +594,10 @@ class ProxSVRG:
 
 class SVRG(ProxSVRG):
     """
-    SVRG solver
+    SVRG solver.
 
-    Equivalent to ProxSVRG with prox as the identity function and hyperparams_prox=None.
+    This solver implements "Algorithm 3" of [1]. Equivalent to ProxSVRG with prox as the identity
+    function and hyperparams_prox=None.
 
     Attributes
     ----------
@@ -783,11 +784,11 @@ def _convert_to_float(func):
 
 
 def softplus_poisson_optimal_stepsize(
-    X: jnp.ndarray, y: jnp.ndarray, batch_size: int, n_power_iters: Optional[int] = None
+    X: jnp.ndarray, y: jnp.ndarray, batch_size: int, n_power_iters: Optional[int] = 20
 ):
     """
     Calculate the optimal stepsize to use for SVRG with a GLM that uses
-    Poisson observations and softplus inverse link function.
+    Poisson observations and soft-plus inverse link function.
 
     Parameters
     ----------
@@ -809,9 +810,9 @@ def softplus_poisson_optimal_stepsize(
     stepsize : scalar jax array
         Optimal stepsize to use
     """
-    L_max, L = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
+    l_smooth_max, l_smooth = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
 
-    stepsize = _calculate_stepsize_saga(batch_size, X.shape[0], L_max, L)
+    stepsize = _calculate_stepsize_svrg(batch_size, X.shape[0], l_smooth_max, l_smooth)
 
     return stepsize
 
@@ -871,7 +872,7 @@ def softplus_poisson_optimal_batch_and_stepsize(
 
 
 def _softplus_poisson_L_max_and_L(
-    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
+    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = 20
 ) -> Tuple[float, float]:
     """
     Calculate the smoothness constant and maximum smoothness constant for SVRG
@@ -890,19 +891,20 @@ def _softplus_poisson_L_max_and_L(
 
     Returns
     -------
-    L_max, L :
+    l_smooth_max, l_smooth :
         Maximum smoothness constant and smoothness constant.
     """
-    L = _softplus_poisson_L(X, y, n_power_iters)
-    L_max = _softplus_poisson_L_max(X, y)
+    l_smooth = _softplus_poisson_L(X, y, n_power_iters)
+    l_smooth_max = _softplus_poisson_L_max(X, y)
 
-    return L_max, L
+    return l_smooth_max, l_smooth
 
 
 def _softplus_poisson_L_multiply(X, y, v):
     """
-    Perform the multiplication of v with X.T @ D @ X without forming the full X.T @ D @ X,
-    and iterating through the rows of X and y instead.
+    Perform the multiplication of v with X.T @ D @ X without forming the full X.T @ D @ X.
+
+    This assumes that X fits in memory. This estimate is based on calculating the hessian of the loss.
 
     Parameters
     ----------
@@ -911,23 +913,18 @@ def _softplus_poisson_L_multiply(X, y, v):
     y :
         Output data.
     v :
-        d-dimensionl vector.
+        d-dimensional vector.
 
     Returns
     -------
-    X.T @ D @ X @ v
+    :
+        X.T @ D @ X @ v
     """
     N, _ = X.shape
-
-    def body_fun(i, current_sum):
-        return current_sum + (0.17 * y[i] + 0.25) * jnp.outer(X[i, :], X[i, :]) @ v
-
-    v_new = jax.lax.fori_loop(0, N, body_fun, v)
-
-    return v_new / N
+    return X.T.dot((0.17 * y + 0.25) * X.dot(v)) / N
 
 
-def _softplus_poisson_L_with_power_iteration(X, y, n_power_iters: int = 5):
+def _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters: int = 20):
     """
     Instead of calculating X.T @ D @ X and its largest eigenvalue directly,
     calculate it using the power method and by iterating through X and y,
@@ -949,50 +946,21 @@ def _softplus_poisson_L_with_power_iteration(X, y, n_power_iters: int = 5):
     # key is fixed to random.key(0)
     _, d = X.shape
 
-    # initialize to random d-dimensional vector
-    v = random.normal(jax.random.key(0), (d,))
+    # initialize a random d-dimensional vector
+    v = jnp.ones((d, ))
 
     # run the power iteration until convergence or the max steps
     for _ in range(n_power_iters):
         v_prev = v.copy()
         v = _softplus_poisson_L_multiply(X, y, v)
+        v /= v.max()
 
         if jnp.allclose(v_prev, v):
             break
 
     # calculate the eigenvalue
-    return jnp.linalg.norm(_softplus_poisson_L_multiply(X, y, v)) / jnp.linalg.norm(v)
-
-
-def _softplus_poisson_XDX(X, y):
-    """
-    Calculate the X.T @ D @ X matrix for use in calculating the smoothness constant L.
-
-    Parameters
-    ----------
-    X :
-        Input data.
-    y :
-        Output data.
-
-    Returns
-    -------
-    XDX :
-        d x d matrix
-    """
-    N, d = X.shape
-
-    def body_fun(i, current_sum):
-        return current_sum + (0.17 * y[i] + 0.25) * jnp.outer(X[i, :], X[i, :])
-
-    # xi = jax.lax.dynamic_slice(X, (i, 0), (1, d)).reshape((d,))
-    # yi = jax.lax.dynamic_slice(y, (i, 0), (1, 1))
-    # return current_sum + (0.17 * yi + 0.25) * jnp.outer(xi, xi)
-
-    # will be d x d
-    XDX = jax.lax.fori_loop(0, N, body_fun, jnp.zeros((d, d)))
-
-    return XDX / N
+    v /= jnp.linalg.norm(v)
+    return _softplus_poisson_L_multiply(X, y, v).dot(v)
 
 
 def _softplus_poisson_L(
@@ -1015,11 +983,12 @@ def _softplus_poisson_L(
         Smoothness constant of f.
     """
     if n_power_iters is None:
-        # calculate XDX and its largest eigenvalue directly
-        return jnp.sort(jnp.linalg.eigvals(_softplus_poisson_XDX(X, y)).real)[-1]
+        # calculate XDX/n and its largest eigenvalue directly
+        XDX = X.T.dot((0.17 * y.reshape(y.shape[0], 1) + 0.25) * X) / y.shape[0]
+        return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
     else:
-        # use the power iteration to calculate the larget eigenvalue
-        return _softplus_poisson_L_with_power_iteration(X, y, n_power_iters)
+        # use the power iteration to calculate the largest eigenvalue
+        return _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters)
 
 
 def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
@@ -1047,7 +1016,7 @@ def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
             current_max, jnp.linalg.norm(X[i, :]) ** 2 * (0.17 * y[i] + 0.25)
         )
 
-    L_max = jax.lax.fori_loop(0, N, body_fun, jnp.array([0.0]))
+    L_max = jax.lax.fori_loop(0, N, body_fun, jnp.array([-jnp.inf]))
 
     return L_max[0]
 
