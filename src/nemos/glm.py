@@ -20,7 +20,8 @@ from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers import (
-    softplus_poisson_optimal_batch_and_stepsize,
+    svrg_optimal_batch_and_stepsize,
+    _softplus_poisson_l_max_and_l,
     softplus_poisson_optimal_stepsize,
 )
 from .type_casting import jnp_asarray_if, support_pynapple
@@ -907,7 +908,8 @@ class GLM(BaseRegressor):
 
             # if both are None, determine them together
             if batch_size is None and stepsize is None:
-                batch_size, stepsize = softplus_poisson_optimal_batch_and_stepsize(
+                batch_size, stepsize = svrg_optimal_batch_and_stepsize(
+                    _softplus_poisson_l_max_and_l,
                     data, y
                 )
                 new_solver_kwargs["batch_size"] = batch_size

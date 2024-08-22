@@ -1,6 +1,6 @@
 import warnings
 from functools import partial, wraps
-from typing import Callable, NamedTuple, Optional, Tuple, Union
+from typing import Any, Callable, NamedTuple, Optional, Tuple, Union
 
 import jax
 import jax.flatten_util
@@ -107,7 +107,7 @@ class ProxSVRG:
         self,
         fun: Callable,
         prox: Callable,
-        maxiter: int = 10_000,
+        maxiter: int = 1_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-3,
@@ -640,7 +640,7 @@ class SVRG(ProxSVRG):
     def __init__(
         self,
         fun: Callable,
-        maxiter: int = 10_000,
+        maxiter: int = 1_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-3,
@@ -775,7 +775,7 @@ class SVRG(ProxSVRG):
 def _convert_to_float(func):
     """Convert to float."""
 
-    @wraps
+    @wraps(func)
     def wrapper(*args, **kwargs):
         args, kwargs = jax.tree_util.tree_map(float, (args, kwargs))
         return func(*args, **kwargs)
@@ -810,7 +810,7 @@ def softplus_poisson_optimal_stepsize(
     stepsize : scalar jax array
         Optimal stepsize to use
     """
-    l_smooth_max, l_smooth = _softplus_poisson_L_max_and_L(jnp.array(X), jnp.array(y), n_power_iters)
+    l_smooth_max, l_smooth = _softplus_poisson_l_max_and_l(jnp.array(X), jnp.array(y), n_power_iters)
 
     stepsize = _calculate_stepsize_svrg(batch_size, X.shape[0], l_smooth_max, l_smooth)
 
@@ -818,12 +818,13 @@ def softplus_poisson_optimal_stepsize(
 
 
 # not using the previous one to avoid calculating L and L_max twice
-def softplus_poisson_optimal_batch_and_stepsize(
-    X: jnp.ndarray,
-    y: jnp.ndarray,
+def svrg_optimal_batch_and_stepsize(
+    compute_smoothness_constants: Callable,
+    *data: Any,
     n_power_iters: Optional[int] = None,
     default_batch_size: int = 1,
     default_stepsize: float = 1e-3,
+    strong_convexity: Optional[float] = None
 ):
     """
     Calculate the optimal batch size and step size to use for SVRG with a GLM
@@ -831,10 +832,10 @@ def softplus_poisson_optimal_batch_and_stepsize(
 
     Parameters
     ----------
-    X : jnp.ndarray
-        Input data.
-    y : jnp.ndarray
-        Output data.
+    compute_smoothness_constants:
+        Function that computes l_smooth and l_smooth_max for the problem.
+    data :
+        The input data. For a GLM, X and y.
     n_power_iters: int, optional, default None
         If None, build the XDX matrix (which has a shape of n_features x n_features)
         and find its eigenvalues directly.
@@ -851,12 +852,33 @@ def softplus_poisson_optimal_batch_and_stepsize(
         Optimal batch size to use.
     stepsize : scalar jax array
         Optimal stepsize to use.
-    """
-    l_smooth_max, l_smooth = _softplus_poisson_L_max_and_L(
-        jnp.array(X), jnp.array(y), n_power_iters
-    )
 
-    batch_size = int(jnp.floor(_calculate_batch_size_hat(X.shape[0], l_smooth_max, l_smooth)))
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.solvers import svrg_optimal_batch_and_stepsize as compute_opt_params
+    >>> from nemos.solvers import _softplus_poisson_l_max_and_l
+    >>> np.random.seed(123)
+    >>> X = np.random.normal(size=(500, 5))
+    >>> y = np.random.poisson(np.exp(X.dot(np.ones(X.shape[1]))))
+    >>> batch_size, stepsize = compute_opt_params(_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08)
+    """
+    data = jax.tree_util.tree_map(jnp.asarray, data)
+
+    num_samples = {dd.shape[0] for dd in jax.tree_util.tree_leaves(data)}
+
+    if len(num_samples) != 1:
+        raise ValueError("Each array in data must have the same number of samples.")
+    num_samples = num_samples.pop()
+
+    l_smooth_max, l_smooth = compute_smoothness_constants(*data, n_power_iters=n_power_iters)
+
+    batch_size = _calculate_optimal_batch_size_svrg(
+        num_samples,
+        l_smooth_max,
+        l_smooth,
+        strong_convexity=strong_convexity
+    )
 
     if not jnp.isfinite(batch_size):
         batch_size = default_batch_size
@@ -866,13 +888,13 @@ def softplus_poisson_optimal_batch_and_stepsize(
             f"Could not determine batch and step size automatically. Falling back on the default values of {batch_size} and {default_stepsize}."
         )
     else:
-        stepsize = _calculate_stepsize_saga(batch_size, X.shape[0], l_smooth_max, l_smooth)
+        stepsize = _calculate_stepsize_svrg(batch_size, num_samples, l_smooth_max, l_smooth)
 
     return int(batch_size), stepsize
 
 
-def _softplus_poisson_L_max_and_L(
-    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = 20
+def _softplus_poisson_l_max_and_l(
+    *data, n_power_iters: Optional[int] = 20
 ) -> Tuple[float, float]:
     """
     Calculate the smoothness constant and maximum smoothness constant for SVRG
@@ -881,10 +903,8 @@ def _softplus_poisson_L_max_and_L(
 
     Parameters
     ----------
-    X :
-        Input data.
-    y :
-        Output data.
+    data:
+        Tuple of X and y.
     n_power_iters :
         If None, calculate X.T @ D @ X and its largest eigenvalue directly.
         If an integer, the umber of power iterations to use to calculate the largest eigenvalue.
@@ -894,9 +914,13 @@ def _softplus_poisson_L_max_and_L(
     l_smooth_max, l_smooth :
         Maximum smoothness constant and smoothness constant.
     """
+    X, y = data
+
+    # concatenate all data (if X is FeaturePytree)
+    X = jnp.hstack(jax.tree_util.tree_leaves(X))
+
     l_smooth = _softplus_poisson_L(X, y, n_power_iters)
     l_smooth_max = _softplus_poisson_L_max(X, y)
-
     return l_smooth_max, l_smooth
 
 
@@ -1095,10 +1119,50 @@ def _calculate_stepsize_saga(
     return 0.25 / l_b
 
 
-@_convert_to_float
-def _calculate_batch_size_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
+def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_smooth:float, strong_convexity: Optional[float] = None) -> int:
     """
-    Calculate optimal batch size^{[1]}.
+    Calculate the optimal batch size according to the table in [1].
+
+    Parameters
+    ----------
+    num_samples:
+        The number of samples.
+    l_smooth_max:
+        The Lmax smoothness constant.
+    l_smooth:
+        The L smoothness constant.
+    strong_convexity:
+        The strong convexity constant.
+
+    Returns
+    -------
+    batch_size:
+        The batch size.
+
+    """
+    if strong_convexity is None:
+        batch_size = 1  # assume that N is large enough for mini-batching
+    else:
+        if num_samples >= 3 * l_smooth_max / strong_convexity:
+            batch_size = 1
+        elif num_samples > l_smooth / strong_convexity:
+            b_tilde = _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity)
+            if l_smooth_max < num_samples * l_smooth / 3:
+                b_hat = _calculate_b_hat(num_samples, l_smooth_max, l_smooth)
+                batch_size = int(jnp.floor(jnp.minimum(b_hat, b_tilde)))
+            else:
+                batch_size = b_tilde
+        else:
+            if l_smooth_max < num_samples * l_smooth / 3:
+                batch_size = int(jnp.floor(_calculate_b_hat(num_samples, l_smooth_max, l_smooth)))
+            else:
+                batch_size = num_samples
+    return batch_size
+
+@_convert_to_float
+def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
+    """
+    Helper function for calculating the optimal batch size^{[1]}.
 
     Parameters
     ----------
@@ -1125,9 +1189,9 @@ def _calculate_batch_size_hat(num_samples: int, l_smooth_max: float, l_smooth: f
 
 
 @_convert_to_float
-def _calc_b_tilde(num_samples, l_smooth_max, l_smooth, mu):
+def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
     """
-    Calculate optimal batch size as in [1].
+    Helper function to calculate the optimal batch size as in [1].
 
     Parameters
     ----------
@@ -1137,7 +1201,7 @@ def _calc_b_tilde(num_samples, l_smooth_max, l_smooth, mu):
         Maximum smoothness constant among f_{i}.
     l_smooth :
         Smoothness constant.
-    mu :
+    strong_convexity :
         Strong convexity constant.
 
     Returns
@@ -1151,5 +1215,5 @@ def _calc_b_tilde(num_samples, l_smooth_max, l_smooth, mu):
     Advances in neural information processing systems 32 (2019).
     """
     numerator = (3 * l_smooth_max - l_smooth) * num_samples
-    denominator = num_samples * (num_samples - 1) * mu - num_samples * l_smooth + 3 * l_smooth_max
+    denominator = num_samples * (num_samples - 1) * strong_convexity - num_samples * l_smooth + 3 * l_smooth_max
     return numerator / denominator
