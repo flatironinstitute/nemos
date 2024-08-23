@@ -247,7 +247,7 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(self, *args) -> BaseRegressor:
+    def instantiate_solver(self, *args, solver_kwargs: Optional[dict] = None) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -266,6 +266,9 @@ class BaseRegressor(Base, abc.ABC):
         *args:
             Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
             strength for proximal gradient methods.
+        solver_kwargs:
+            Optional dictionary with the solver kwargs.
+            If nothing is provided, it defaults to self.solver_kwargs.
 
         Returns
         -------
@@ -290,8 +293,9 @@ class BaseRegressor(Base, abc.ABC):
         else:
             loss = self._predict_and_compute_loss
 
-        # copy dictionary of kwargs to avoid modifying user settings
-        solver_kwargs = deepcopy(self.solver_kwargs)
+        if solver_kwargs is None:
+            # copy dictionary of kwargs to avoid modifying user settings
+            solver_kwargs = deepcopy(self.solver_kwargs)
 
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
@@ -577,3 +581,22 @@ class BaseRegressor(Base, abc.ABC):
                 )
 
         return solver_class
+
+    def optimize_solver_params(self, X, y):
+        """
+        Compute solver optimal defaults if available.
+
+        Parameters
+        ----------
+        X:
+            Input predictions.
+        y:
+            Output observations.
+
+        Returns
+        -------
+        :
+            A dictionary with the optimal defaults.
+
+        """
+        return self.solver_kwargs

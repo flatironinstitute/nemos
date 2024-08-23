@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
-from nemos.solvers import SVRG, ProxSVRG, SVRGState
+from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 

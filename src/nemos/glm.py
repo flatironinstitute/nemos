@@ -19,15 +19,63 @@ from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from .solvers import (
-    _softplus_poisson_l_max_and_l,
-    softplus_poisson_optimal_stepsize,
+from .solvers._svrg_defaults import (
+    softplus_poisson_l_max_and_l,
     svrg_optimal_batch_and_stepsize,
 )
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
+
+
+_OPTIMAL_CONFIGURATIONS = {
+    "SVRG": [
+        {
+            "required_params": {
+                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
+                "regularizer": lambda x: not isinstance(x, Ridge)
+            },
+            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_defaults": svrg_optimal_batch_and_stepsize,
+            "strong_convexity": None
+        },
+        {
+            "required_params": {
+                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
+                "regularizer": lambda x: isinstance(x, Ridge)
+            },
+            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_defaults": svrg_optimal_batch_and_stepsize,
+            "strong_convexity": "regularizer_strength"
+        }
+    ],
+    "ProxSVRG": [
+        {
+            "required_params": {
+                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
+                "regularizer": lambda x: not isinstance(x, Ridge)
+            },
+            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_defaults": svrg_optimal_batch_and_stepsize,
+            "strong_convexity": None
+        },
+        {
+            "required_params": {
+                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
+                "regularizer": lambda x: isinstance(x, Ridge)
+            },
+            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_defaults": svrg_optimal_batch_and_stepsize,
+            "strong_convexity": "regularizer_strength"
+        }
+
+    ],
+}
 
 
 def cast_to_jax(func):
@@ -892,36 +940,10 @@ class GLM(BaseRegressor):
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
-        # optionally set auto stepsize and batch size if SVRG is used
-        if (
-            "SVRG" in self.solver_name
-            and isinstance(self.observation_model, obs.PoissonObservations)
-            and self.observation_model.inverse_link_function == jax.nn.softplus
-        ):
-            batch_size = self.solver_kwargs.get("batch_size", None)
-            stepsize = self.solver_kwargs.get("stepsize", None)
-            # following jaxopt, stepsize <= 0 also means auto
-            if stepsize is not None and stepsize <= 0:
-                stepsize = None
-
-            new_solver_kwargs = self.solver_kwargs.copy()
-
-            # if both are None, determine them together
-            if batch_size is None and stepsize is None:
-                batch_size, stepsize = svrg_optimal_batch_and_stepsize(
-                    _softplus_poisson_l_max_and_l, data, y
-                )
-                new_solver_kwargs["batch_size"] = batch_size
-                new_solver_kwargs["stepsize"] = stepsize
-            # if only batch size is given, we can still try to determine the optimal step size for it
-            elif batch_size is not None and stepsize is None:
-                stepsize = softplus_poisson_optimal_stepsize(data, y, batch_size)
-                new_solver_kwargs["stepsize"] = stepsize
-
-            self.solver_kwargs = new_solver_kwargs
+        opt_solver_kwargs = self.optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
-        self.instantiate_solver()
+        self.instantiate_solver(solver_kwargs=opt_solver_kwargs)
 
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
@@ -1014,6 +1036,39 @@ class GLM(BaseRegressor):
         )
 
         return opt_step
+
+    def optimize_solver_params(self, X, y):
+        """
+        Compute solver optimal defaults if available.
+
+        Returns
+        -------
+        :
+            A dictionary with the optimal defaults.
+        """
+        new_solver_kwargs = self.solver_kwargs.copy()
+        if self.solver_name in _OPTIMAL_CONFIGURATIONS:
+            configs = _OPTIMAL_CONFIGURATIONS[self.solver_name]
+            model_params = self.get_params()
+            for conf in configs:
+
+                # check if config is known
+                known_config = all([check(model_params[key]) for key, check in conf["required_params"].items()])
+
+                if known_config:
+
+                    compute_defaults = conf["compute_defaults"]
+                    strong_convexity = model_params[conf["strong_convexity"]] if conf["strong_convexity"] else None
+
+                    # grab the batch and step parameters if set by the user
+                    batch_size = new_solver_kwargs["batch_size"] if "batch_size" in new_solver_kwargs else None
+                    stepsize = new_solver_kwargs["stepsize"] if "stepsize" in new_solver_kwargs else None
+
+                    # compute the optimal when batch_size and/or stepsize are not provided and update the parameters.
+                    new_params = compute_defaults(conf["compute_l_smooth"], X, y, batch_size=batch_size, stepsize=stepsize, strong_convexity=strong_convexity)
+                    new_solver_kwargs.update(new_params)
+
+        return new_solver_kwargs
 
 
 class PopulationGLM(GLM):
