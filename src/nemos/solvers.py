@@ -107,7 +107,7 @@ class ProxSVRG:
         self,
         fun: Callable,
         prox: Callable,
-        maxiter: int = 1_000,
+        maxiter: int = 10_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-3,
@@ -640,7 +640,7 @@ class SVRG(ProxSVRG):
     def __init__(
         self,
         fun: Callable,
-        maxiter: int = 1_000,
+        maxiter: int = 10_000,
         key: Optional[KeyArrayLike] = None,
         stepsize: float = 1e-3,
         tol: float = 1e-3,
@@ -810,7 +810,9 @@ def softplus_poisson_optimal_stepsize(
     stepsize : scalar jax array
         Optimal stepsize to use
     """
-    l_smooth_max, l_smooth = _softplus_poisson_l_max_and_l(jnp.array(X), jnp.array(y), n_power_iters)
+    l_smooth_max, l_smooth = _softplus_poisson_l_max_and_l(
+        jnp.array(X), jnp.array(y), n_power_iters
+    )
 
     stepsize = _calculate_stepsize_svrg(batch_size, X.shape[0], l_smooth_max, l_smooth)
 
@@ -824,7 +826,7 @@ def svrg_optimal_batch_and_stepsize(
     n_power_iters: Optional[int] = None,
     default_batch_size: int = 1,
     default_stepsize: float = 1e-3,
-    strong_convexity: Optional[float] = None
+    strong_convexity: Optional[float] = None,
 ):
     """
     Calculate the optimal batch size and step size to use for SVRG with a GLM
@@ -871,13 +873,12 @@ def svrg_optimal_batch_and_stepsize(
         raise ValueError("Each array in data must have the same number of samples.")
     num_samples = num_samples.pop()
 
-    l_smooth_max, l_smooth = compute_smoothness_constants(*data, n_power_iters=n_power_iters)
+    l_smooth_max, l_smooth = compute_smoothness_constants(
+        *data, n_power_iters=n_power_iters
+    )
 
     batch_size = _calculate_optimal_batch_size_svrg(
-        num_samples,
-        l_smooth_max,
-        l_smooth,
-        strong_convexity=strong_convexity
+        num_samples, l_smooth_max, l_smooth, strong_convexity=strong_convexity
     )
 
     if not jnp.isfinite(batch_size):
@@ -888,7 +889,9 @@ def svrg_optimal_batch_and_stepsize(
             f"Could not determine batch and step size automatically. Falling back on the default values of {batch_size} and {default_stepsize}."
         )
     else:
-        stepsize = _calculate_stepsize_svrg(batch_size, num_samples, l_smooth_max, l_smooth)
+        stepsize = _calculate_stepsize_svrg(
+            batch_size, num_samples, l_smooth_max, l_smooth
+        )
 
     return int(batch_size), stepsize
 
@@ -971,7 +974,7 @@ def _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters: int = 2
     _, d = X.shape
 
     # initialize a random d-dimensional vector
-    v = jnp.ones((d, ))
+    v = jnp.ones((d,))
 
     # run the power iteration until convergence or the max steps
     for _ in range(n_power_iters):
@@ -1046,7 +1049,9 @@ def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
 
 
 @_convert_to_float
-def _calculate_stepsize_svrg(batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float):
+def _calculate_stepsize_svrg(
+    batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float
+):
     """
     Calculate optimal step size for SVRG$^{[1]}$.
 
@@ -1072,7 +1077,10 @@ def _calculate_stepsize_svrg(batch_size: int, num_samples: int, l_smooth_max: fl
     Advances in neural information processing systems 32 (2019).
     """
     numerator = 0.5 * batch_size * (num_samples - 1)
-    denominator = (3 * (num_samples - batch_size) * l_smooth_max + num_samples * (batch_size - 1) * l_smooth)
+    denominator = (
+        3 * (num_samples - batch_size) * l_smooth_max
+        + num_samples * (batch_size - 1) * l_smooth
+    )
     return numerator / denominator
 
 
@@ -1107,13 +1115,18 @@ def _calculate_stepsize_saga(
     """
 
     l_b = l_smooth * num_samples / batch_size * (batch_size - 1) / (
-            num_samples - 1
-        ) + l_smooth_max / batch_size * (num_samples - batch_size) / (num_samples - 1)
+        num_samples - 1
+    ) + l_smooth_max / batch_size * (num_samples - batch_size) / (num_samples - 1)
 
     return 0.25 / l_b
 
 
-def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_smooth:float, strong_convexity: Optional[float] = None) -> int:
+def _calculate_optimal_batch_size_svrg(
+    num_samples: int,
+    l_smooth_max: float,
+    l_smooth: float,
+    strong_convexity: Optional[float] = None,
+) -> int:
     """
     Calculate the optimal batch size according to "Table 1" in [1].
 
@@ -1145,7 +1158,9 @@ def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_
         if num_samples >= 3 * l_smooth_max / strong_convexity:
             batch_size = 1
         elif num_samples > l_smooth / strong_convexity:
-            b_tilde = _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity)
+            b_tilde = _calculate_b_tilde(
+                num_samples, l_smooth_max, l_smooth, strong_convexity
+            )
             if l_smooth_max < num_samples * l_smooth / 3:
                 b_hat = _calculate_b_hat(num_samples, l_smooth_max, l_smooth)
                 batch_size = int(jnp.floor(jnp.minimum(b_hat, b_tilde)))
@@ -1153,7 +1168,9 @@ def _calculate_optimal_batch_size_svrg(num_samples: int, l_smooth_max: float, l_
                 batch_size = int(jnp.floor(b_tilde))
         else:
             if l_smooth_max < num_samples * l_smooth / 3:
-                batch_size = int(jnp.floor(_calculate_b_hat(num_samples, l_smooth_max, l_smooth)))
+                batch_size = int(
+                    jnp.floor(_calculate_b_hat(num_samples, l_smooth_max, l_smooth))
+                )
             else:
                 batch_size = int(num_samples)  # reset this to int
     return batch_size
@@ -1215,5 +1232,9 @@ def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
     Advances in neural information processing systems 32 (2019).
     """
     numerator = (3 * l_smooth_max - l_smooth) * num_samples
-    denominator = num_samples * (num_samples - 1) * strong_convexity - num_samples * l_smooth + 3 * l_smooth_max
+    denominator = (
+        num_samples * (num_samples - 1) * strong_convexity
+        - num_samples * l_smooth
+        + 3 * l_smooth_max
+    )
     return numerator / denominator
