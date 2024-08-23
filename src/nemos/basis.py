@@ -579,7 +579,7 @@ class Basis(Base, abc.ABC):
 
         rank = np.linalg.matrix_rank(add_constant(X))
         # mean center
-        X -= np.nanmean(X, axis=0)
+        X = X - np.nanmean(X, axis=0)
         while rank < X.shape[1] + 1:
             # drop a column
             X = X[:, :-1]
