@@ -1,5 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
+import inspect
 from typing import Callable
 
 import jax
@@ -1651,6 +1652,96 @@ class TestGLM:
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
         model.regularizer = "UnRegularized"
         assert model.regularizer_strength is None
+
+    @pytest.mark.parametrize(
+        "solver_name, reg",
+        [
+            ("SVRG", "Ridge"),
+            ("SVRG", "UnRegularized"),
+            ("ProxSVRG", "Ridge"),
+            ("ProxSVRG", "UnRegularized"),
+            ("ProxSVRG", "Lasso"),
+            ("ProxSVRG", "GroupLasso")
+        ]
+    )
+    @pytest.mark.parametrize(
+        "obs",
+        [
+            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
+        ]
+    )
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    def test_glm_optimal_config_set(self, solver_name, batch_size, stepsize, reg, obs, poissonGLM_model_instantiation):
+        X, y, _, true_params, _ = poissonGLM_model_instantiation
+        model = nmo.glm.GLM(
+            solver_name=solver_name,
+            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
+            observation_model=obs,
+            regularizer=reg
+        )
+        opt_state = model.initialize_state(X, y, true_params)
+        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+
+        if stepsize is not None:
+            assert opt_state.stepsize == stepsize
+            assert solver.stepsize == stepsize
+        else:
+            assert opt_state.stepsize > 0
+            assert isinstance(opt_state.stepsize, float)
+            model.fit(X, y)
+
+        if batch_size is not None:
+            assert solver.batch_size == batch_size
+        else:
+            assert isinstance(solver.batch_size, int)
+            assert solver.batch_size > 0
+            model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "solver_name, reg",
+        [
+            ("SVRG", "Ridge"),
+            ("SVRG", "UnRegularized"),
+            ("ProxSVRG", "Ridge"),
+            ("ProxSVRG", "UnRegularized"),
+            ("ProxSVRG", "Lasso"),
+        ]
+    )
+    @pytest.mark.parametrize(
+        "obs",
+        [
+            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
+        ]
+    )
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    def test_glm_optimal_config_set_pytree(self, solver_name, batch_size, stepsize, reg, obs, poissonGLM_model_instantiation_pytree):
+        X, y, _, true_params, _ = poissonGLM_model_instantiation_pytree
+        model = nmo.glm.GLM(
+            solver_name=solver_name,
+            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
+            observation_model=obs,
+            regularizer=reg
+        )
+        opt_state = model.initialize_state(X, y, true_params)
+        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+
+        if stepsize is not None:
+            assert opt_state.stepsize == stepsize
+            assert solver.stepsize == stepsize
+        else:
+            assert opt_state.stepsize > 0
+            assert isinstance(opt_state.stepsize, float)
+            model.fit(X, y)
+
+        if batch_size is not None:
+            assert solver.batch_size == batch_size
+        else:
+            assert isinstance(solver.batch_size, int)
+            assert solver.batch_size > 0
+            model.fit(X, y)
+
 
 
 class TestPopulationGLM:
@@ -3340,6 +3431,96 @@ class TestPopulationGLM:
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
         model.regularizer = "UnRegularized"
         assert model.regularizer_strength is None
+
+    @pytest.mark.parametrize(
+        "solver_name, reg",
+        [
+            ("SVRG", "Ridge"),
+            ("SVRG", "UnRegularized"),
+            ("ProxSVRG", "Ridge"),
+            ("ProxSVRG", "UnRegularized"),
+            ("ProxSVRG", "Lasso"),
+            ("ProxSVRG", "GroupLasso")
+        ]
+    )
+    @pytest.mark.parametrize(
+        "obs",
+        [
+            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
+        ]
+    )
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    def test_glm_optimal_config_set(self, solver_name, batch_size, stepsize, reg, obs, poisson_population_GLM_model):
+        X, y, _, true_params, _ = poisson_population_GLM_model
+        model = nmo.glm.PopulationGLM(
+            solver_name=solver_name,
+            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
+            observation_model=obs,
+            regularizer=reg
+        )
+        opt_state = model.initialize_state(X, y, true_params)
+        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+
+        if stepsize is not None:
+            assert opt_state.stepsize == stepsize
+            assert solver.stepsize == stepsize
+        else:
+            assert opt_state.stepsize > 0
+            assert isinstance(opt_state.stepsize, float)
+            model.fit(X, y)
+
+        if batch_size is not None:
+            assert solver.batch_size == batch_size
+        else:
+            assert isinstance(solver.batch_size, int)
+            assert solver.batch_size > 0
+            model.fit(X, y)
+
+    @pytest.mark.parametrize(
+        "solver_name, reg",
+        [
+            ("SVRG", "Ridge"),
+            ("SVRG", "UnRegularized"),
+            ("ProxSVRG", "Ridge"),
+            ("ProxSVRG", "UnRegularized"),
+            ("ProxSVRG", "Lasso"),
+        ]
+    )
+    @pytest.mark.parametrize(
+        "obs",
+        [
+            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
+        ]
+    )
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    def test_glm_optimal_config_set_pytree(self, solver_name, batch_size, stepsize, reg, obs,
+                                           poisson_population_GLM_model_pytree):
+        X, y, _, true_params, _ = poisson_population_GLM_model_pytree
+        model = nmo.glm.PopulationGLM(
+            solver_name=solver_name,
+            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
+            observation_model=obs,
+            regularizer=reg
+        )
+        opt_state = model.initialize_state(X, y, true_params)
+        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+
+        if stepsize is not None:
+            assert opt_state.stepsize == stepsize
+            assert solver.stepsize == stepsize
+        else:
+            assert opt_state.stepsize > 0
+            assert isinstance(opt_state.stepsize, float)
+            model.fit(X, y)
+
+        if batch_size is not None:
+            assert solver.batch_size == batch_size
+        else:
+            assert isinstance(solver.batch_size, int)
+            assert solver.batch_size > 0
+            model.fit(X, y)
 
 
 def test_optimal_config_all_required_keys_present():
