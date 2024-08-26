@@ -254,7 +254,7 @@ def test_svrg_optimal_batch_and_stepsize_num_samples(x_sample, y_sample, delta_n
         (100, 18.0, 0.5, 0.005, 100),
     ]
 )
-def test_calculate_optimal_batch_size_svrg(num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size):
+def test_calculate_optimal_batch_size_svrg_all_config(num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size):
     """Test the calculation of the optimal batch size for SVRG."""
     batch_size = _svrg_defaults._calculate_optimal_batch_size_svrg(
         num_samples, l_smooth_max, l_smooth, strong_convexity
