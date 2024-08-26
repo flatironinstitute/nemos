@@ -233,4 +233,30 @@ def test_svrg_optimal_batch_and_stepsize_num_samples(x_sample, y_sample, delta_n
             strong_convexity=0.1,
         )
 
-
+@pytest.mark.parametrize(
+    "num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size",
+    [
+        # Case 1: strong_convexity is None
+        (100, 10.0, 2.0, None, 1),  # strong_convexity is None, should return batch_size = 1
+        # Case 2: num_samples >= 3 * l_smooth_max / strong_convexity
+        (100, 10.0, 2.0, 0.8, 1),  # num_samples >= 3 * l_smooth_max / strong_convexity, should return batch_size = 1
+        # Case 3: num_samples > l_smooth / strong_convexity
+        (100, 10.0, 2.0, 0.1, 2),  # num_samples > l_smooth / strong_convexity, and b_tilde is the minimum
+        # Case 4: l_smooth_max < num_samples * l_smooth / 3 and b_hat < b_tilde
+        (100, 5.0, 0.2, 0.1, 1),  # l_smooth_max < num_samples * l_smooth / 3, use minimum(b_hat, b_tilde)
+        # Case 5: l_smooth_max >= num_samples * l_smooth / 3
+        (100, 10.0, 0.2, 0.01, 27),  # l_smooth_max >= num_samples * l_smooth / 3, batch_size = num_samples
+        # Case 6: l_smooth_max >= num_samples * l_smooth / 3, but falls back to b_tilde
+        (100, 5.0, 0.05, 0.1, 1),  # l_smooth_max >= num_samples * l_smooth / 3, but falls back to b_tilde
+        # Case 7: l_smooth_max < num_samples * l_smooth / 3
+        (100, 5.0, 0.5, 0.005, 4),
+        # Case 8:  l_smooth_max > num_samples * l_smooth / 3
+        (100, 18.0, 0.5, 0.005, 100),
+    ]
+)
+def test_calculate_optimal_batch_size_svrg(num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size):
+    """Test the calculation of the optimal batch size for SVRG."""
+    batch_size = _svrg_defaults._calculate_optimal_batch_size_svrg(
+        num_samples, l_smooth_max, l_smooth, strong_convexity
+    )
+    assert batch_size == expected_batch_size, f"Expected batch_size {expected_batch_size}, got {batch_size}"
