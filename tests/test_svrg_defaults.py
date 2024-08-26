@@ -3,9 +3,9 @@ import jax.numpy as jnp
 from nemos.solvers import _svrg_defaults
 from contextlib import nullcontext as does_not_raise
 
-# Define fixtures for X_sample and y_sample
+
 @pytest.fixture
-def X_sample():
+def x_sample():
     return jnp.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
 
 @pytest.fixture
@@ -21,10 +21,10 @@ def test_convert_to_float_decorator():
     result = sample_function(1)
     assert isinstance(result, float)
 
-def test_svrg_optimal_batch_and_stepsize(X_sample, y_sample):
+def test_svrg_optimal_batch_and_stepsize(x_sample, y_sample):
     """Test calculation of optimal batch size and step size for SVRG."""
     result = _svrg_defaults.svrg_optimal_batch_and_stepsize(
-        _svrg_defaults.glm_softplus_poisson_l_max_and_l, X_sample, y_sample, strong_convexity=0.1
+        _svrg_defaults.glm_softplus_poisson_l_max_and_l, x_sample, y_sample, strong_convexity=0.1
     )
     assert "batch_size" in result
     assert "stepsize" in result
@@ -33,20 +33,20 @@ def test_svrg_optimal_batch_and_stepsize(X_sample, y_sample):
     assert isinstance(result["batch_size"], int)
     assert isinstance(result["stepsize"], float)
 
-def test_softplus_poisson_l_smooth_multiply(X_sample, y_sample):
+def test_softplus_poisson_l_smooth_multiply(x_sample, y_sample):
     """Test multiplication with X.T @ D @ X without forming the matrix."""
     v_sample = jnp.array([0.5, 1.0])
-    result = _svrg_defaults._glm_softplus_poisson_l_smooth_multiply(X_sample, y_sample, v_sample)
+    result = _svrg_defaults._glm_softplus_poisson_l_smooth_multiply(x_sample, y_sample, v_sample)
     diag_mat = jnp.diag(y_sample * 0.17 + 0.25)
-    expected_result = X_sample.T.dot(diag_mat).dot(X_sample.dot(v_sample)) / X_sample.shape[0]
+    expected_result = x_sample.T.dot(diag_mat).dot(x_sample.dot(v_sample)) / x_sample.shape[0]
     assert jnp.allclose(result, expected_result)
 
-def test_softplus_poisson_l_smooth_with_power_iteration(X_sample, y_sample):
+def test_softplus_poisson_l_smooth_with_power_iteration(x_sample, y_sample):
     """Test the power iteration method for finding the largest eigenvalue."""
-    result = _svrg_defaults._glm_softplus_poisson_l_smooth_with_power_iteration(X_sample, y_sample, n_power_iters=20)
+    result = _svrg_defaults._glm_softplus_poisson_l_smooth_with_power_iteration(x_sample, y_sample, n_power_iters=20)
     # compute eigvals directly
     diag_mat = jnp.diag(y_sample * 0.17 + 0.25)
-    XDX = X_sample.T.dot(diag_mat).dot(X_sample) / X_sample.shape[0]
+    XDX = x_sample.T.dot(diag_mat).dot(x_sample) / x_sample.shape[0]
     eigmax = jnp.linalg.eigvalsh(XDX).max()
 
     assert result > 0
@@ -113,11 +113,11 @@ def test_calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity
     ]
 )
 def test_svrg_optimal_batch_and_stepsize_with_provided_defaults(batch_size, stepsize, expected_batch_size,
-                                                                expected_stepsize, X_sample, y_sample):
+                                                                expected_stepsize, x_sample, y_sample):
     """Test that provided defaults for batch_size and stepsize are returned as-is or computed correctly."""
     result = _svrg_defaults.svrg_optimal_batch_and_stepsize(
         _svrg_defaults.glm_softplus_poisson_l_max_and_l,
-        X_sample,
+        x_sample,
         y_sample,
         batch_size=batch_size,
         stepsize=stepsize
@@ -139,12 +139,12 @@ def test_svrg_optimal_batch_and_stepsize_with_provided_defaults(batch_size, step
         (None, None, 0.1, does_not_raise()),
     ]
 )
-def test_warnigns_svrg_optimal_batch_and_stepsize(batch_size, stepsize, strong_convexity, expectation, X_sample, y_sample):
+def test_warnigns_svrg_optimal_batch_and_stepsize(batch_size, stepsize, strong_convexity, expectation, x_sample, y_sample):
     """Test that warnings are correctly raised during SVRG optimization when appropriate."""
     with expectation:
         _svrg_defaults.svrg_optimal_batch_and_stepsize(
             _svrg_defaults.glm_softplus_poisson_l_max_and_l,
-            X_sample,
+            x_sample,
             y_sample,
             batch_size=batch_size,
             stepsize=stepsize,
