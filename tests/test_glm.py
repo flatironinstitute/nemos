@@ -1,6 +1,6 @@
+import inspect
 import warnings
 from contextlib import nullcontext as does_not_raise
-import inspect
 from typing import Callable
 
 import jax
