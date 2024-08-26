@@ -1,8 +1,9 @@
 """Module for calculating theoretical optimal defaults for SVRG and GLM configurations."""
 
-from functools import wraps
 import warnings
-from typing import Optional, Callable, Any, Tuple
+from functools import wraps
+from typing import Any, Callable, Optional, Tuple
+
 import jax
 import jax.numpy as jnp
 

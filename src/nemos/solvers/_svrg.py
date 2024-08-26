@@ -1,5 +1,4 @@
-import warnings
-from functools import partial, wraps
+from functools import partial
 from typing import Callable, NamedTuple, Optional, Union
 
 import jax
