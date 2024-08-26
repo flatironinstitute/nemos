@@ -111,10 +111,35 @@ class GLM(BaseRegressor):
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG                                           |
+    | GroupLasso    | ProximalGradient | ProximalGradient, , ProxSVRG                                         |
+
+
+    **Fitting Large Models**
+
+    For very large models, you may consider using the Stochastic Variance Reduced Gradient
+    ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
+    ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
+    which take advantage of batched computation.
+
+    The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
+    hyperparameters. These parameters control the size of the mini-batches used for gradient computations
+    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
+    convergence or even divergence of the optimization process.
+
+    To assist with this, for certain GLM configurations, we provide recommended `batch_size` and `stepsize`
+    values that are theoretically guaranteed to ensure fast convergence.
+
+    Below is a list of the configurations for which we can provide guaranteed hyperparameters:
+
+    | GLM / PopulationGLM Configuration | Stepsize |  Batch Size |
+    | --------------------------------- | :------: | :---------: |
+    | Poisson + soft-plus + UnRegularized | ✅         | ❌                |
+    | Poisson + soft-plus + Ridge         | ✅         | ✅                |
+    | Poisson + soft-plus + Lasso         | ✅         | ❌                |
+    | Poisson + soft-plus + GroupLasso    | ✅         | ❌                |
 
     Parameters
     ----------
@@ -1134,10 +1159,35 @@ class PopulationGLM(GLM):
 
     | Regularizer   | Default Solver   | Available Solvers                                           |
     | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
-    | Lasso         | ProximalGradient | ProximalGradient                                            |
-    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
+    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG                                           |
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG                                            |
+
+
+    **Fitting Large Models**
+
+    For very large models, you may consider using the Stochastic Variance Reduced Gradient
+    ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
+    ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
+    which take advantage of batched computation.
+
+    The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
+    hyperparameters. These parameters control the size of the mini-batches used for gradient computations
+    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
+    convergence or even divergence of the optimization process.
+
+    To assist with this, for certain GLM configurations, we provide recommended `batch_size` and `stepsize`
+    values that are theoretically guaranteed to ensure fast convergence.
+
+    Below is a list of the configurations for which we can provide guaranteed hyperparameters:
+
+    | GLM / PopulationGLM Configuration | Stepsize |  Batch Size |
+    | --------------------------------- | :------: | :---------: |
+    | Poisson + soft-plus + UnRegularized | ✅         | ❌                |
+    | Poisson + soft-plus + Ridge         | ✅         | ✅                |
+    | Poisson + soft-plus + Lasso         | ✅         | ❌                |
+    | Poisson + soft-plus + GroupLasso    | ✅         | ❌                |
 
     Parameters
     ----------
