@@ -207,3 +207,30 @@ def test_warnigns_svrg_optimal_batch_and_stepsize(
             stepsize=stepsize,
             strong_convexity=strong_convexity,
         )
+
+
+@pytest.mark.parametrize("n_power_iter", [None, 1, 10])
+def test_glm_softplus_poisson_l_smooth_power_iter(x_sample, y_sample, n_power_iter):
+    _svrg_defaults._glm_softplus_poisson_l_smooth(x_sample, y_sample, n_power_iter)
+
+
+@pytest.mark.parametrize(
+    "delta_num_sample, expectation",
+    [
+        (0, does_not_raise()),
+        (1, pytest.raises(ValueError, match="Each array in data must have the same number"))
+    ]
+                         )
+def test_svrg_optimal_batch_and_stepsize_num_samples(x_sample, y_sample, delta_num_sample, expectation):
+    y_sample = y_sample[delta_num_sample:]
+    with expectation:
+        _svrg_defaults.svrg_optimal_batch_and_stepsize(
+            _svrg_defaults.glm_softplus_poisson_l_max_and_l,
+            x_sample,
+            y_sample,
+            batch_size=1,
+            stepsize=0.1,
+            strong_convexity=0.1,
+        )
+
+

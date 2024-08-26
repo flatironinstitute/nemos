@@ -94,9 +94,6 @@ def svrg_optimal_batch_and_stepsize(
     >>> y = np.random.poisson(np.exp(X.dot(np.ones(X.shape[1]))))
     >>> batch_size, stepsize = compute_opt_params(glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08)
     """
-    # If both parameters are set by the user, return them directly
-    if batch_size is not None and stepsize is not None:
-        return {"batch_size": batch_size, "stepsize": stepsize}
 
     # Ensure data is converted to JAX arrays
     data = jax.tree_util.tree_map(jnp.asarray, data)
@@ -106,6 +103,10 @@ def svrg_optimal_batch_and_stepsize(
     if len(num_samples) != 1:
         raise ValueError("Each array in data must have the same number of samples.")
     num_samples = num_samples.pop()
+
+    # If both parameters are set by the user, return them directly
+    if batch_size is not None and stepsize is not None:
+        return {"batch_size": batch_size, "stepsize": stepsize}
 
     # Compute smoothness constants
     l_smooth_max, l_smooth = compute_smoothness_constants(
