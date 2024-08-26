@@ -247,7 +247,9 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(self, *args, solver_kwargs: Optional[dict] = None) -> BaseRegressor:
+    def instantiate_solver(
+        self, *args, solver_kwargs: Optional[dict] = None
+    ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 

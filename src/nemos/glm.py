@@ -33,47 +33,50 @@ _OPTIMAL_CONFIGURATIONS = {
     "SVRG": [
         {
             "required_params": {
-                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model__inverse_link_function": lambda x: x
+                == jax.nn.softplus,
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: not isinstance(x, Ridge)
+                "regularizer": lambda x: not isinstance(x, Ridge),
             },
             "compute_l_smooth": softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": None
+            "strong_convexity": None,
         },
         {
             "required_params": {
-                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model__inverse_link_function": lambda x: x
+                == jax.nn.softplus,
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: isinstance(x, Ridge)
+                "regularizer": lambda x: isinstance(x, Ridge),
             },
             "compute_l_smooth": softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": "regularizer_strength"
-        }
+            "strong_convexity": "regularizer_strength",
+        },
     ],
     "ProxSVRG": [
         {
             "required_params": {
-                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model__inverse_link_function": lambda x: x
+                == jax.nn.softplus,
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: not isinstance(x, Ridge)
+                "regularizer": lambda x: not isinstance(x, Ridge),
             },
             "compute_l_smooth": softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": None
+            "strong_convexity": None,
         },
         {
             "required_params": {
-                "observation_model__inverse_link_function": lambda x: x == jax.nn.softplus,
+                "observation_model__inverse_link_function": lambda x: x
+                == jax.nn.softplus,
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: isinstance(x, Ridge)
+                "regularizer": lambda x: isinstance(x, Ridge),
             },
             "compute_l_smooth": softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": "regularizer_strength"
-        }
-
+            "strong_convexity": "regularizer_strength",
+        },
     ],
 }
 
@@ -1039,35 +1042,81 @@ class GLM(BaseRegressor):
 
     def optimize_solver_params(self, X, y):
         """
-        Compute solver optimal defaults if available.
+        Compute and update solver parameters with optimal defaults if available.
+
+        This method checks the current solver configuration and, if an optimal
+        configuration is known for the given model parameters, computes the optimal
+        batch size, step size, and other hyperparameters to ensure faster convergence.
+
+        Parameters
+        ----------
+        X : array-like
+            Input data used to compute smoothness and strong convexity constants.
+        y : array-like
+            Target values used in conjunction with X for the same purpose.
 
         Returns
         -------
-        :
-            A dictionary with the optimal defaults.
-        """
-        new_solver_kwargs = self.solver_kwargs.copy()
-        if self.solver_name in _OPTIMAL_CONFIGURATIONS:
-            configs = _OPTIMAL_CONFIGURATIONS[self.solver_name]
-            model_params = self.get_params()
-            for conf in configs:
+        dict
+            A dictionary containing the solver parameters, updated with optimal defaults
+            where applicable.
 
-                # check if config is known
-                known_config = all([check(model_params[key]) for key, check in conf["required_params"].items()])
+        Notes
+        -----
+        The method first looks up the known configurations for the solver in the
+        `_OPTIMAL_CONFIGURATIONS` dictionary. If a configuration matches the model's
+        parameters, it uses the associated functions to compute the optimal solver
+        parameters. If `batch_size` or `stepsize` is already provided by the user,
+        those values are used; otherwise, optimal defaults are computed.
+        """
+
+        # Start with a copy of the existing solver parameters
+        new_solver_kwargs = self.solver_kwargs.copy()
+
+        # Check if the current solver has any known optimal configurations
+        if self.solver_name in _OPTIMAL_CONFIGURATIONS:
+            # Retrieve the list of configurations for the solver
+            configs = _OPTIMAL_CONFIGURATIONS[self.solver_name]
+            # Get the model parameters to check against the required conditions
+            model_params = self.get_params()
+
+            # Iterate through each configuration
+            for conf in configs:
+                # Determine if the current model matches the configuration's requirements
+                known_config = all(
+                    [
+                        check(model_params[key])
+                        for key, check in conf["required_params"].items()
+                    ]
+                )
 
                 if known_config:
-
+                    # Extract the function to compute optimal defaults
                     compute_defaults = conf["compute_defaults"]
-                    strong_convexity = model_params[conf["strong_convexity"]] if conf["strong_convexity"] else None
 
-                    # grab the batch and step parameters if set by the user
-                    batch_size = new_solver_kwargs["batch_size"] if "batch_size" in new_solver_kwargs else None
-                    stepsize = new_solver_kwargs["stepsize"] if "stepsize" in new_solver_kwargs else None
+                    # Extract strong convexity if it is relevant for this configuration
+                    strong_convexity = (
+                        model_params[conf["strong_convexity"]]
+                        if conf["strong_convexity"]
+                        else None
+                    )
 
-                    # compute the optimal when batch_size and/or stepsize are not provided and update the parameters.
-                    new_params = compute_defaults(conf["compute_l_smooth"], X, y, batch_size=batch_size, stepsize=stepsize, strong_convexity=strong_convexity)
+                    # Check if the user has provided batch size or stepsize, or else use None
+                    batch_size = new_solver_kwargs.get("batch_size", None)
+                    stepsize = new_solver_kwargs.get("stepsize", None)
+
+                    # Compute the optimal batch size and stepsize based on smoothness, strong convexity, etc.
+                    new_params = compute_defaults(
+                        conf["compute_l_smooth"],
+                        X,
+                        y,
+                        batch_size=batch_size,
+                        stepsize=stepsize,
+                        strong_convexity=strong_convexity,
+                    )
+
+                    # Update the solver parameters with the computed optimal values
                     new_solver_kwargs.update(new_params)
-
         return new_solver_kwargs
 
 

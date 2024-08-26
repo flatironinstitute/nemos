@@ -3340,3 +3340,43 @@ class TestPopulationGLM:
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
         model.regularizer = "UnRegularized"
         assert model.regularizer_strength is None
+
+
+def test_optimal_config_all_required_keys_present():
+    """Test that all required keys are present in each configuration."""
+    required_keys = ["required_params", "compute_l_smooth", "compute_defaults", "strong_convexity"]
+    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+        for config in configs:
+            for key in required_keys:
+                assert key in config, f"Configuration for solver '{solver}' is missing the required key: '{key}'."
+
+
+def test_optimal_config_required_params_is_dict():
+    """Test that 'required_params' is a dictionary."""
+    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+        for config in configs:
+            assert isinstance(config["required_params"], dict), f"'required_params' should be a dictionary in the configuration for solver '{solver}'."
+
+
+def test_optimal_config_compute_l_smooth_is_callable():
+    """Test that 'compute_l_smooth' is a callable function."""
+    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+        for config in configs:
+            assert callable(config["compute_l_smooth"]), f"'compute_l_smooth' should be callable in the configuration for solver '{solver}'."
+
+
+def test_optimal_config_compute_defaults_is_callable():
+    """Test that 'compute_defaults' is a callable function."""
+    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+        for config in configs:
+            assert callable(config["compute_defaults"]), f"'compute_defaults' should be callable in the configuration for solver '{solver}'."
+
+
+def test_optimal_config_strong_convexity_is_valid_type():
+    """Test that 'strong_convexity' is either None, a string, or callable."""
+    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+        for config in configs:
+            strong_convexity = config["strong_convexity"]
+            assert strong_convexity is None or isinstance(strong_convexity, (str, type(None))), \
+                f"'strong_convexity' should be either None, a string, or callable in the configuration for solver '{solver}'."
+

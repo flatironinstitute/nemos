@@ -24,10 +24,10 @@ def svrg_optimal_batch_and_stepsize(
     *data: Any,
     batch_size: Optional[int] = None,
     stepsize: Optional[float] = None,
+    strong_convexity: Optional[float] = None,
     n_power_iters: Optional[int] = None,
     default_batch_size: int = 1,
     default_stepsize: float = 1e-3,
-    strong_convexity: Optional[float] = None,
 ):
     """
     Calculate the optimal batch size and step size to use for SVRG with a GLM
@@ -48,6 +48,9 @@ def svrg_optimal_batch_and_stepsize(
         The batch_size set by the user.
     stepsize:
         The stepsize set by the user.
+    strong_convexity:
+        The strong convexity constant. For penalized losses with an L2 component (Ridge, Elastic Net, etc.)
+        the convexity constant should be equal to the penalization strength.
     default_batch_size : int
         Batch size to fall back on if the calculation fails.
     default_stepsize: float
@@ -93,10 +96,9 @@ def svrg_optimal_batch_and_stepsize(
 
     if not jnp.isfinite(batch_size):
         batch_size = default_batch_size
-        stepsize = default_stepsize
-
         warnings.warn(
-            f"Could not determine batch and step size automatically. Falling back on the default values of {batch_size} and {default_stepsize}."
+            "Could not determine batch and step size automatically. "
+            f"Falling back on the default values of {batch_size} and {default_stepsize}."
         )
 
     if stepsize is None:
@@ -136,12 +138,12 @@ def softplus_poisson_l_max_and_l(
     # concatenate all data (if X is FeaturePytree)
     X = jnp.hstack(jax.tree_util.tree_leaves(X))
 
-    l_smooth = _softplus_poisson_L(X, y, n_power_iters)
-    l_smooth_max = _softplus_poisson_L_max(X, y)
+    l_smooth = _softplus_poisson_l_smooth(X, y, n_power_iters)
+    l_smooth_max = _softplus_poisson_l_smooth_max(X, y)
     return l_smooth_max, l_smooth
 
 
-def _softplus_poisson_L_multiply(X, y, v):
+def _softplus_poisson_l_smooth_multiply(X, y, v):
     """
     Perform the multiplication of v with X.T @ D @ X without forming the full X.T @ D @ X.
 
@@ -193,7 +195,7 @@ def _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters: int = 2
     # run the power iteration until convergence or the max steps
     for _ in range(n_power_iters):
         v_prev = v.copy()
-        v = _softplus_poisson_L_multiply(X, y, v)
+        v = _softplus_poisson_l_smooth_multiply(X, y, v)
         v /= v.max()
 
         if jnp.allclose(v_prev, v):
@@ -201,10 +203,10 @@ def _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters: int = 2
 
     # calculate the eigenvalue
     v /= jnp.linalg.norm(v)
-    return _softplus_poisson_L_multiply(X, y, v).dot(v)
+    return _softplus_poisson_l_smooth_multiply(X, y, v).dot(v)
 
 
-def _softplus_poisson_L(
+def _softplus_poisson_l_smooth(
     X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
 ):
     """
@@ -232,7 +234,7 @@ def _softplus_poisson_L(
         return _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters)
 
 
-def _softplus_poisson_L_max(X: jnp.ndarray, y: jnp.ndarray):
+def _softplus_poisson_l_smooth_max(X: jnp.ndarray, y: jnp.ndarray):
     """
     Calculate the maximum smoothness constant from data, assuming that
     the optimized function is the log-likelihood of a Poisson GLM with

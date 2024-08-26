@@ -770,4 +770,3 @@ class SVRG(ProxSVRG):
 
         # substitute None for hyperparams_prox
         return self._run(init_params, init_state, None, *args)
-
