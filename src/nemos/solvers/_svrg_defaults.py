@@ -122,9 +122,9 @@ def svrg_optimal_batch_and_stepsize(
     if not jnp.isfinite(batch_size):
         batch_size = default_batch_size
         warnings.warn(
-            "Could not determine batch and step size automatically. "
-            f"Falling back on the default values of {batch_size} and {default_stepsize}.",
-            UserWarning
+            "Could not determine batch size automatically. "
+            f"Falling back on the default values of {default_batch_size}.",
+            UserWarning,
         )
 
     # Compute optimal step size if not provided by the user
@@ -132,7 +132,13 @@ def svrg_optimal_batch_and_stepsize(
         stepsize = _calculate_stepsize_svrg(
             batch_size, num_samples, l_smooth_max, l_smooth
         )
-
+        if stepsize < 0:
+            stepsize = default_stepsize
+            warnings.warn(
+                "Could not determine step size automatically. "
+                f"Falling back on the default value of {default_stepsize}.",
+                UserWarning,
+            )
     return {"batch_size": int(batch_size), "stepsize": stepsize}
 
 
@@ -171,7 +177,9 @@ def glm_softplus_poisson_l_max_and_l(
     return l_smooth_max, l_smooth
 
 
-def _glm_softplus_poisson_l_smooth_multiply(X: jnp.ndarray, y: jnp.ndarray, v: jnp.ndarray):
+def _glm_softplus_poisson_l_smooth_multiply(
+    X: jnp.ndarray, y: jnp.ndarray, v: jnp.ndarray
+):
     """
     Multiply vector `v` with the matrix X.T @ D @ X without forming it explicitly.
 
@@ -196,7 +204,9 @@ def _glm_softplus_poisson_l_smooth_multiply(X: jnp.ndarray, y: jnp.ndarray, v: j
     return X.T.dot((0.17 * y + 0.25) * X.dot(v)) / N
 
 
-def _glm_softplus_poisson_l_smooth_with_power_iteration(X: jnp.ndarray, y: jnp.ndarray, n_power_iters: int = 20):
+def _glm_softplus_poisson_l_smooth_with_power_iteration(
+    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: int = 20
+):
     """
     Compute the largest eigenvalue of X.T @ D @ X using the power method.
 
@@ -239,7 +249,7 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(X: jnp.ndarray, y: jnp.n
 
 
 def _glm_softplus_poisson_l_smooth(
-        X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
+    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
 ) -> jnp.ndarray:
     """
     Calculate the smoothness constant `L` for a Poisson GLM with softplus inverse link.
