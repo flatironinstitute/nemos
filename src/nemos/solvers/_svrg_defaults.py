@@ -1,4 +1,4 @@
-"""Calculate theoretical optimal defaults if available."""
+"""Module for calculating theoretical optimal defaults for SVRG and GLM configurations."""
 
 from functools import wraps
 import warnings
@@ -8,7 +8,21 @@ import jax.numpy as jnp
 
 
 def _convert_to_float(func):
-    """Convert to float."""
+    """
+    Decorator to convert all inputs to float before passing them to the function.
+
+    Ensures that calculations within the function are performed with floating-point precision.
+
+    Parameters
+    ----------
+    func :
+        The function to be wrapped by the decorator.
+
+    Returns
+    -------
+    :
+        Wrapped function with inputs converted to floats.
+    """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -30,77 +44,90 @@ def svrg_optimal_batch_and_stepsize(
     default_stepsize: float = 1e-3,
 ):
     """
-    Calculate the optimal batch size and step size to use for SVRG with a GLM
-    that uses Poisson observations and softplus inverse link function.
+    Calculate the optimal batch size and step size for SVRG optimization in GLMs.
+
+    This function computes the optimal batch size and step size parameters for SVRG,
+    based on the smoothness constants and strong convexity of the loss function.
 
     Parameters
     ----------
-    compute_smoothness_constants:
-        Function that computes l_smooth and l_smooth_max for the problem.
-    data :
-        The input data. For a GLM, X and y.
-    n_power_iters: int, optional, default None
-        If None, build the XDX matrix (which has a shape of n_features x n_features)
-        and find its eigenvalues directly.
-        If an integer, it is the max number of iterations to run the power
-        iteration for when finding the largest eigenvalue.
-    batch_size:
-        The batch_size set by the user.
-    stepsize:
-        The stepsize set by the user.
-    strong_convexity:
-        The strong convexity constant. For penalized losses with an L2 component (Ridge, Elastic Net, etc.)
-        the convexity constant should be equal to the penalization strength.
-    default_batch_size : int
-        Batch size to fall back on if the calculation fails.
-    default_stepsize: float
-        Step size to fall back on if the calculation fails.
+    compute_smoothness_constants : Callable
+        Function that computes the smoothness constants `l_smooth` and `l_smooth_max` for the problem.
+        This is problem (loss function) specific.
+    data : Any
+        Input data, typically (X, y) for a GLM.
+    batch_size : Optional[int], default None
+        The batch size set by the user. If None, it will be calculated.
+    stepsize : Optional[float], default None
+        The step size set by the user. If None, it will be calculated.
+    strong_convexity : Optional[float], default None
+        The strong convexity constant. For L2-regularized losses, this should be the regularization strength.
+    n_power_iters : Optional[int], default None
+        Maximum number of iterations for the power method when finding the largest eigenvalue.
+    default_batch_size : int, default 1
+        Default batch size to use if the optimal calculation fails.
+    default_stepsize : float, default 1e-3
+        Default step size to use if the optimal calculation fails.
 
     Returns
     -------
-    batch_size : int
-        Optimal batch size to use.
-    stepsize : scalar jax array
-        Optimal stepsize to use.
+    dict
+        Dictionary containing the optimal `batch_size` and `stepsize`.
+
+    Raises
+    ------
+    ValueError
+        If the data provided has inconsistent numbers of samples.
+
+    Warnings
+    --------
+    UserWarning
+        Warns the user if the calculation fails and defaults are used instead.
 
     Examples
     --------
     >>> import numpy as np
     >>> from nemos.solvers import svrg_optimal_batch_and_stepsize as compute_opt_params
-    >>> from nemos.solvers import softplus_poisson_l_max_and_l
+    >>> from nemos.solvers import glm_softplus_poisson_l_max_and_l
     >>> np.random.seed(123)
     >>> X = np.random.normal(size=(500, 5))
     >>> y = np.random.poisson(np.exp(X.dot(np.ones(X.shape[1]))))
-    >>> batch_size, stepsize = compute_opt_params(softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08)
+    >>> batch_size, stepsize = compute_opt_params(glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08)
     """
-    # if both parameters are set by the user then just return them
+    # If both parameters are set by the user, return them directly
     if batch_size is not None and stepsize is not None:
         return {"batch_size": batch_size, "stepsize": stepsize}
 
+    # Ensure data is converted to JAX arrays
     data = jax.tree_util.tree_map(jnp.asarray, data)
 
+    # Get the number of samples, ensuring consistency across all inputs
     num_samples = {dd.shape[0] for dd in jax.tree_util.tree_leaves(data)}
-
     if len(num_samples) != 1:
         raise ValueError("Each array in data must have the same number of samples.")
     num_samples = num_samples.pop()
 
+    # Compute smoothness constants
     l_smooth_max, l_smooth = compute_smoothness_constants(
         *data, n_power_iters=n_power_iters
     )
 
+    # Compute optimal batch size if not provided by the user
     if batch_size is None:
         batch_size = _calculate_optimal_batch_size_svrg(
             num_samples, l_smooth_max, l_smooth, strong_convexity=strong_convexity
         )
 
+    # Fall back to defaults if batch size calculation fails
     if not jnp.isfinite(batch_size):
         batch_size = default_batch_size
         warnings.warn(
             "Could not determine batch and step size automatically. "
-            f"Falling back on the default values of {batch_size} and {default_stepsize}."
+            f"Falling back on the default values of {batch_size} and {default_stepsize}.",
+            UserWarning
         )
 
+    # Compute optimal step size if not provided by the user
     if stepsize is None:
         stepsize = _calculate_stepsize_svrg(
             batch_size, num_samples, l_smooth_max, l_smooth
@@ -109,26 +136,27 @@ def svrg_optimal_batch_and_stepsize(
     return {"batch_size": int(batch_size), "stepsize": stepsize}
 
 
-def softplus_poisson_l_max_and_l(
-    *data, n_power_iters: Optional[int] = 20
+def glm_softplus_poisson_l_max_and_l(
+    *data: jnp.ndarray, n_power_iters: Optional[int] = 20
 ) -> Tuple[float, float]:
     """
-    Calculate the smoothness constant and maximum smoothness constant for SVRG
-    assuming that the optimized function is the log-likelihood of a Poisson GLM
-    with a softplus inverse link function.
+    Calculate smoothness constants for a Poisson GLM with a softplus inverse link function.
+
+    Computes the smoothness constant (`l_smooth`) and the maximum smoothness constant
+    (`l_smooth_max`) for SVRG, given the data and the GLM structure.
 
     Parameters
     ----------
-    data:
-        Tuple of X and y.
+    data :
+        Input data, typically (X, y).
     n_power_iters :
-        If None, calculate X.T @ D @ X and its largest eigenvalue directly.
-        If an integer, the umber of power iterations to use to calculate the largest eigenvalue.
+        Number of power iterations to use when finding the largest eigenvalue. If None,
+        the eigenvalue is calculated directly.
 
     Returns
     -------
-    l_smooth_max, l_smooth :
-        Maximum smoothness constant and smoothness constant.
+    :
+        Maximum smoothness constant (`l_smooth_max`) and smoothness constant (`l_smooth`).
     """
     X, y = data
 
@@ -138,119 +166,129 @@ def softplus_poisson_l_max_and_l(
     # concatenate all data (if X is FeaturePytree)
     X = jnp.hstack(jax.tree_util.tree_leaves(X))
 
-    l_smooth = _softplus_poisson_l_smooth(X, y, n_power_iters)
-    l_smooth_max = _softplus_poisson_l_smooth_max(X, y)
+    l_smooth = _glm_softplus_poisson_l_smooth(X, y, n_power_iters)
+    l_smooth_max = _glm_softplus_poisson_l_smooth_max(X, y)
     return l_smooth_max, l_smooth
 
 
-def _softplus_poisson_l_smooth_multiply(X, y, v):
+def _glm_softplus_poisson_l_smooth_multiply(X: jnp.ndarray, y: jnp.ndarray, v: jnp.ndarray):
     """
-    Perform the multiplication of v with X.T @ D @ X without forming the full X.T @ D @ X.
+    Multiply vector `v` with the matrix X.T @ D @ X without forming it explicitly.
 
-    This assumes that X fits in memory. This estimate is based on calculating the hessian of the loss.
+    This method estimates the multiplication by calculating the Hessian of the loss.
+    It is efficient for situations where X can fit in memory.
 
     Parameters
     ----------
     X :
-        Input data.
+        Input data matrix (N x d).
     y :
-        Output data.
+        Output data vector (N,).
     v :
-        d-dimensional vector.
+        Vector to be multiplied (d,).
 
     Returns
     -------
     :
-        X.T @ D @ X @ v
+        Result of the multiplication (X.T @ D @ X) @ v.
     """
     N, _ = X.shape
     return X.T.dot((0.17 * y + 0.25) * X.dot(v)) / N
 
 
-def _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters: int = 20):
+def _glm_softplus_poisson_l_smooth_with_power_iteration(X: jnp.ndarray, y: jnp.ndarray, n_power_iters: int = 20):
     """
-    Instead of calculating X.T @ D @ X and its largest eigenvalue directly,
-    calculate it using the power method and by iterating through X and y,
-    forming a small product at a time.
+    Compute the largest eigenvalue of X.T @ D @ X using the power method.
+
+    Instead of calculating the full matrix and its eigenvalue directly, this function
+    uses the power iteration method, which is more memory efficient and scales better
+    with large datasets.
 
     Parameters
     ----------
     X :
-        Input data.
+        Input data matrix (N x d).
     y :
-        Output data.
+        Output data vector (N,).
     n_power_iters :
-        Number of power iterations.
+        Maximum number of power iterations to use.
 
     Returns
     -------
-    The largest eigenvalue of X.T @ D @ X
+    :
+        The largest eigenvalue of X.T @ D @ X.
     """
-    # key is fixed to random.key(0)
     _, d = X.shape
 
-    # initialize a random d-dimensional vector
+    # Initialize a random d-dimensional vector for power iteration
     v = jnp.ones((d,))
 
-    # run the power iteration until convergence or the max steps
+    # Run power iteration to approximate the largest eigenvalue
     for _ in range(n_power_iters):
         v_prev = v.copy()
-        v = _softplus_poisson_l_smooth_multiply(X, y, v)
+        v = _glm_softplus_poisson_l_smooth_multiply(X, y, v)
         v /= v.max()
 
+        # Check for convergence
         if jnp.allclose(v_prev, v):
             break
 
-    # calculate the eigenvalue
+    # Final eigenvalue calculation
     v /= jnp.linalg.norm(v)
-    return _softplus_poisson_l_smooth_multiply(X, y, v).dot(v)
+    return _glm_softplus_poisson_l_smooth_multiply(X, y, v).dot(v)
 
 
-def _softplus_poisson_l_smooth(
-    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
-):
+def _glm_softplus_poisson_l_smooth(
+        X: jnp.ndarray, y: jnp.ndarray, n_power_iters: Optional[int] = None
+) -> jnp.ndarray:
     """
-    Calculate the smoothness constant from data, assuming that the optimized
-    function is the log-likelihood of a Poisson GLM with a softplus inverse link function.
+    Calculate the smoothness constant `L` for a Poisson GLM with softplus inverse link.
+
+    Depending on whether `n_power_iters` is provided, this function either computes
+    the largest eigenvalue directly or uses the power method.
 
     Parameters
     ----------
-    X :
-        Input data.
-    y :
-        Output data.
+    X : jnp.ndarray
+        Input data matrix (N x d).
+    y : jnp.ndarray
+        Output data vector (N,).
+    n_power_iters : Optional[int], default None
+        Number of power iterations to use when finding the largest eigenvalue. If None,
+        the eigenvalue is calculated directly.
 
     Returns
     -------
-    L :
-        Smoothness constant of f.
+    :
+        Smoothness constant `L`.
     """
     if n_power_iters is None:
-        # calculate XDX/n and its largest eigenvalue directly
+        # Calculate the Hessian directly and find the largest eigenvalue
         XDX = X.T.dot((0.17 * y.reshape(y.shape[0], 1) + 0.25) * X) / y.shape[0]
         return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
     else:
-        # use the power iteration to calculate the largest eigenvalue
-        return _softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters)
+        # Use power iteration to find the largest eigenvalue
+        return _glm_softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters)
 
 
-def _softplus_poisson_l_smooth_max(X: jnp.ndarray, y: jnp.ndarray):
+def _glm_softplus_poisson_l_smooth_max(X: jnp.ndarray, y: jnp.ndarray) -> jnp.ndarray:
     """
-    Calculate the maximum smoothness constant from data, assuming that
-    the optimized function is the log-likelihood of a Poisson GLM with
-    a softplus inverse link function.
+    Calculate the maximum smoothness constant `L_max` for individual observations.
+
+    This function estimates the maximum smoothness constant among the individual
+    components of the loss function.
 
     Parameters
     ----------
     X :
-        Input data.
+        Input data matrix (N x d).
     y :
-        Output data.
+        Output data vector (N,).
 
     Returns
     -------
-    L_max :
-        Maximum smoothness constant among f_{i}.
+    l_max :
+        Maximum smoothness constant `L_max`.
     """
     N, _ = X.shape
 
@@ -259,9 +297,9 @@ def _softplus_poisson_l_smooth_max(X: jnp.ndarray, y: jnp.ndarray):
             current_max, jnp.linalg.norm(X[i, :]) ** 2 * (0.17 * y[i] + 0.25)
         )
 
-    L_max = jax.lax.fori_loop(0, N, body_fun, jnp.array([-jnp.inf]))
+    l_max = jax.lax.fori_loop(0, N, body_fun, jnp.array([-jnp.inf]))
 
-    return L_max[0]
+    return l_max[0]
 
 
 @_convert_to_float
@@ -269,7 +307,7 @@ def _calculate_stepsize_svrg(
     batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float
 ):
     """
-    Calculate optimal step size for SVRG$^{[1]}$.
+    Calculate optimal step size for SVRG according to [1].
 
     Parameters
     ----------
@@ -305,7 +343,7 @@ def _calculate_stepsize_saga(
     batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float
 ) -> float:
     """
-    Calculate optimal step size for SAGA.
+    Calculate optimal step size for SAGA according to [1].
 
     Parameters
     ----------
@@ -343,25 +381,32 @@ def _calculate_optimal_batch_size_svrg(
     l_smooth: float,
     strong_convexity: Optional[float] = None,
 ) -> int:
-    """
-    Calculate the optimal batch size according to "Table 1" in [1].
+    r"""
+    Calculate the optimal batch size for SVRG based on theoretical guidelines.
+
+    The batch size is computed according to the smoothness constants, strong convexity,
+    and number of samples, following the recommendations in Table 1 of [1].
 
     Parameters
     ----------
     num_samples:
         The number of samples.
     l_smooth_max:
-        The Lmax smoothness constant.
+        The $L\_{\text{max}}$ smoothness constant.
     l_smooth:
-        The L smoothness constant.
+        The $L$ smoothness constant.
     strong_convexity:
         The strong convexity constant.
 
     Returns
     -------
     batch_size:
-        The batch size.
+        The optimal mini-batch size for SVRG.
 
+    References
+    ----------
+    [1] Sebbouh, Othmane, et al. "Towards closing the gap between the theory and practice of SVRG."
+    Advances in neural information processing systems 32 (2019).
     """
     if strong_convexity is None:
         # Assume that num_sample is large enough for mini-batching.
@@ -395,21 +440,24 @@ def _calculate_optimal_batch_size_svrg(
 @_convert_to_float
 def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
     r"""
-    Helper function for calculating $\hat{b}$ in "Table 1" of [1].
+    Calculate the optimal `b_hat` batch size parameter for SVRG.
+
+    This is a helper function to compute the theoretical batch size $\hat{b}$, as detailed
+    in "Table 1" of [1].
 
     Parameters
     ----------
     num_samples :
-        Overall number of data points.
+        Total number of data points.
     l_smooth_max :
-        Maximum smoothness constant among f_{i}.
+        Maximum smoothness constant $L\_{\text{max}}$.
     l_smooth :
-        Smoothness constant.
+        Smoothness constant $L$.
 
     Returns
     -------
-    :
-        Optimal batch size for the optimization.
+    float
+        Optimal batch size parameter `b_hat`.
 
     References
     ----------
@@ -424,23 +472,26 @@ def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
 @_convert_to_float
 def _calculate_b_tilde(num_samples, l_smooth_max, l_smooth, strong_convexity):
     r"""
-    Helper function for calculating $\tilde{b}$ as in "Table 1" of [1].
+    Calculate the optimal $\tilde{b}$ batch size parameter for SVRG.
+
+    This is a helper function to compute the theoretical batch size  $\tilde{b}$, as detailed
+    in "Table 1" of [1].
 
     Parameters
     ----------
     num_samples :
-        Overall number of data points.
+        Total number of data points.
     l_smooth_max :
-        Maximum smoothness constant among f_{i}.
+        Maximum smoothness constant `L_max`.
     l_smooth :
-        Smoothness constant.
+        Smoothness constant `L`.
     strong_convexity :
         Strong convexity constant.
 
     Returns
     -------
     :
-        Optimal batch size for the optimization.
+        Optimal batch size parameter `b_tilde`.
 
     References
     ----------

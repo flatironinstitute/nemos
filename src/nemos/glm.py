@@ -20,7 +20,7 @@ from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers._svrg_defaults import (
-    softplus_poisson_l_max_and_l,
+    glm_softplus_poisson_l_max_and_l,
     svrg_optimal_batch_and_stepsize,
 )
 from .type_casting import jnp_asarray_if, support_pynapple
@@ -38,7 +38,7 @@ _OPTIMAL_CONFIGURATIONS = {
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
                 "regularizer": lambda x: not isinstance(x, Ridge),
             },
-            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
             "strong_convexity": None,
         },
@@ -49,7 +49,7 @@ _OPTIMAL_CONFIGURATIONS = {
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
                 "regularizer": lambda x: isinstance(x, Ridge),
             },
-            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
             "strong_convexity": "regularizer_strength",
         },
@@ -62,7 +62,7 @@ _OPTIMAL_CONFIGURATIONS = {
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
                 "regularizer": lambda x: not isinstance(x, Ridge),
             },
-            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
             "strong_convexity": None,
         },
@@ -73,7 +73,7 @@ _OPTIMAL_CONFIGURATIONS = {
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
                 "regularizer": lambda x: isinstance(x, Ridge),
             },
-            "compute_l_smooth": softplus_poisson_l_max_and_l,
+            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
             "compute_defaults": svrg_optimal_batch_and_stepsize,
             "strong_convexity": "regularizer_strength",
         },
