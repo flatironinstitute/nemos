@@ -878,7 +878,7 @@ def check_observation_model(observation_model):
     ...         return -aggregate_sample_scores(y_true * jax.scipy.special.logit(params) + \
     ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
     ...     def pseudo_r2(self, params, y_true, aggregate_sample_scores):
-    ...         return 1 - (self._negative_log_likelihood(y_true,params,aggregate_sample_scores) /
+    ...         return 1 - (self._negative_log_likelihood(y_true, params, aggregate_sample_scores) /
     ...                     jnp.sum((y_true - y_true.mean()) ** 2))
     ...     def sample_generator(self, key, params):
     ...         return jax.random.bernoulli(key, params)
