@@ -1,3 +1,3 @@
-import importlib.resources as pkg_resources
+import importlib.resources as _pkg_resources
 
-plot_style = pkg_resources.files(__package__) / "nemos.mplstyle"
+plot_style = _pkg_resources.files(__package__) / "nemos.mplstyle"
