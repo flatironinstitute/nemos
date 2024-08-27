@@ -4,7 +4,7 @@ __version__ = "0.1.6"
 from . import (
     basis,
     convolve,
-    data,
+    fetch,
     exceptions,
     glm,
     observation_models,
