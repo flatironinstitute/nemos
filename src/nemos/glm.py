@@ -362,7 +362,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(predicted_rate, y)
+        return self._observation_model._negative_log_likelihood(y, predicted_rate)
 
     def score(
         self,
@@ -467,15 +467,15 @@ class GLM(BaseRegressor):
 
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
-                self._predict(params, data),
                 y,
+                self._predict(params, data),
                 self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict(params, data),
                 y,
+                self._predict(params, data),
                 score_type=score_type,
                 scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
@@ -639,7 +639,7 @@ class GLM(BaseRegressor):
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
         # note that this will include an error value, which is not the same as
@@ -977,7 +977,7 @@ class GLM(BaseRegressor):
             X, n_samples=n_samples
         )
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
         return opt_step

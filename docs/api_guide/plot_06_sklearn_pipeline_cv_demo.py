@@ -463,9 +463,7 @@ from sklearn.metrics import make_scorer
 
 # NOTE: the order of the arguments is reversed
 pseudo_r2 = make_scorer(
-    lambda y_true, y_pred: nmo.observation_models.PoissonObservations().pseudo_r2(
-        y_pred, y_true
-    )
+    nmo.observation_models.PoissonObservations().pseudo_r2
 )
 
 # %%

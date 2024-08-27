@@ -125,7 +125,7 @@ class TestPoissonObservations:
         """
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model.observation_model.deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
@@ -135,7 +135,7 @@ class TestPoissonObservations:
         Assesses if the model estimates are close to statsmodels' results.
         """
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
-        ll_model = model.observation_model.log_likelihood(firing_rate, y)
+        ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_scipy = sts.poisson(firing_rate).logpmf(y).mean()
         if not np.allclose(ll_model, ll_scipy):
             raise ValueError("Log-likelihood doesn't match scipy!")
@@ -146,9 +146,7 @@ class TestPoissonObservations:
         Compute the pseudo-r2 and check that is < 1.
         """
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
-        pseudo_r2 = model.observation_model.pseudo_r2(
-            firing_rate, y, score_type=score_type
-        )
+        pseudo_r2 = model.observation_model.pseudo_r2(y, firing_rate, score_type=score_type)
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
 
@@ -158,9 +156,7 @@ class TestPoissonObservations:
         Check that the pseudo-r2 of the null model is 0.
         """
         _, y, model, _, _ = poissonGLM_model_instantiation
-        pseudo_r2 = model.observation_model.pseudo_r2(
-            y.mean(), y, score_type=score_type
-        )
+        pseudo_r2 = model.observation_model.pseudo_r2(y, y.mean(), score_type=score_type)
         if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
@@ -197,7 +193,7 @@ class TestPoissonObservations:
     ):
         _, y, model, _, firing_rate = poissonGLM_model_instantiation
         with expectation:
-            model.observation_model.pseudo_r2(firing_rate, y, score_type)
+            model.observation_model.pseudo_r2(y, firing_rate, score_type)
 
     @pytest.mark.parametrize(
         "scale, expectation",
@@ -244,58 +240,40 @@ class TestPoissonObservations:
         pr2_sms = mdl.pseudo_rsquared("mcf")
 
         # set params
-        pr2_model = model.observation_model.pseudo_r2(
-            mdl.mu, y, score_type="pseudo-r2-McFadden"
-        )
+        pr2_model = model.observation_model.pseudo_r2(y, mdl.mu, score_type="pseudo-r2-McFadden")
 
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
     def test_aggregation_score_neg_ll(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model._negative_log_likelihood(firing_rate, y, jnp.sum)
-        mn = model.observation_model._negative_log_likelihood(firing_rate, y, jnp.mean)
+        sm = model.observation_model._negative_log_likelihood(y, firing_rate, jnp.sum)
+        mn = model.observation_model._negative_log_likelihood(y, firing_rate, jnp.mean)
         assert np.allclose(sm, mn * y.shape[0])
 
     def test_aggregation_score_ll(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model.log_likelihood(
-            firing_rate, y, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model.log_likelihood(
-            firing_rate, y, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model.log_likelihood(y, firing_rate, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model.log_likelihood(y, firing_rate, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn * y.shape[0])
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
     def test_aggregation_score_pr2(self, score_type, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model.pseudo_r2(
-            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model.pseudo_r2(
-            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model.pseudo_r2(y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model.pseudo_r2(y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_mcfadden(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_mcfadden(
-            firing_rate, y, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model._pseudo_r2_mcfadden(
-            firing_rate, y, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model._pseudo_r2_mcfadden(y, firing_rate, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model._pseudo_r2_mcfadden(y, firing_rate, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_choen(self, poissonGLM_model_instantiation):
         X, y, model, _, firing_rate = poissonGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_cohen(
-            firing_rate, y, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model._pseudo_r2_cohen(
-            firing_rate, y, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model._pseudo_r2_cohen(y, firing_rate, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model._pseudo_r2_cohen(y, firing_rate, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn)
 
 
@@ -403,7 +381,7 @@ class TestGammaObservations:
         """
         _, y, model, _, firing_rate = gammaGLM_model_instantiation
         dev = sm.families.Gamma().deviance(y, firing_rate)
-        dev_model = model.observation_model.deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
@@ -413,7 +391,7 @@ class TestGammaObservations:
         Assesses if the model estimates are close to statsmodels' results.
         """
         _, y, model, _, firing_rate = gammaGLM_model_instantiation
-        ll_model = model.observation_model.log_likelihood(firing_rate, y)
+        ll_model = model.observation_model.log_likelihood(y, firing_rate)
         ll_sms = sm.families.Gamma().loglike(y, firing_rate) / y.shape[0]
         if not np.allclose(ll_model, ll_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
@@ -432,7 +410,7 @@ class TestGammaObservations:
         ysim, _ = model.simulate(jax.random.PRNGKey(123), X)
         pseudo_r2 = nmo.observation_models.GammaObservations(
             inverse_link_function=lambda x: 1 / x
-        ).pseudo_r2(rate, ysim, score_type=score_type)
+        ).pseudo_r2(ysim, rate, score_type=score_type)
         if (pseudo_r2 > 1) or (pseudo_r2 < 0):
             raise ValueError(f"pseudo-r2 of {pseudo_r2} outside the [0,1] range!")
 
@@ -442,9 +420,7 @@ class TestGammaObservations:
         Check that the pseudo-r2 of the null model is 0.
         """
         _, y, model, _, _ = gammaGLM_model_instantiation
-        pseudo_r2 = model.observation_model.pseudo_r2(
-            y.mean(), y, score_type=score_type
-        )
+        pseudo_r2 = model.observation_model.pseudo_r2(y, y.mean(), score_type=score_type)
         if not np.allclose(pseudo_r2, 0, atol=10**-7, rtol=0.0):
             raise ValueError(
                 f"pseudo-r2 of {pseudo_r2} for the null model. Should be equal to 0!"
@@ -481,7 +457,7 @@ class TestGammaObservations:
     ):
         _, y, model, _, firing_rate = gammaGLM_model_instantiation
         with expectation:
-            model.observation_model.pseudo_r2(firing_rate, y, score_type)
+            model.observation_model.pseudo_r2(y, firing_rate, score_type)
 
     @pytest.mark.parametrize(
         "scale, expectation",
@@ -529,56 +505,38 @@ class TestGammaObservations:
         pr2_sms = mdl.pseudo_rsquared("mcf")
 
         # set params
-        pr2_model = model.observation_model.pseudo_r2(
-            mdl.mu, y, score_type="pseudo-r2-McFadden", scale=mdl.scale
-        )
+        pr2_model = model.observation_model.pseudo_r2(y, mdl.mu, score_type="pseudo-r2-McFadden", scale=mdl.scale)
 
         if not np.allclose(pr2_model, pr2_sms):
             raise ValueError("Log-likelihood doesn't match statsmodels!")
 
     def test_aggregation_score_neg_ll(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model._negative_log_likelihood(firing_rate, y, jnp.sum)
-        mn = model.observation_model._negative_log_likelihood(firing_rate, y, jnp.mean)
+        sm = model.observation_model._negative_log_likelihood(y, firing_rate, jnp.sum)
+        mn = model.observation_model._negative_log_likelihood(y, firing_rate, jnp.mean)
         assert np.allclose(sm, mn * y.shape[0])
 
     def test_aggregation_score_ll(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model.log_likelihood(
-            firing_rate, y, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model.log_likelihood(
-            firing_rate, y, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model.log_likelihood(y, firing_rate, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model.log_likelihood(y, firing_rate, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn * y.shape[0])
 
     @pytest.mark.parametrize("score_type", ["pseudo-r2-McFadden", "pseudo-r2-Cohen"])
     def test_aggregation_score_pr2(self, score_type, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model.pseudo_r2(
-            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model.pseudo_r2(
-            firing_rate, y, score_type=score_type, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model.pseudo_r2(y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model.pseudo_r2(y, firing_rate, score_type=score_type, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_mcfadden(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_mcfadden(
-            firing_rate, y, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model._pseudo_r2_mcfadden(
-            firing_rate, y, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model._pseudo_r2_mcfadden(y, firing_rate, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model._pseudo_r2_mcfadden(y, firing_rate, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn)
 
     def test_aggregation_score_choen(self, gammaGLM_model_instantiation):
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
-        sm = model.observation_model._pseudo_r2_cohen(
-            firing_rate, y, aggregate_sample_scores=jnp.sum
-        )
-        mn = model.observation_model._pseudo_r2_cohen(
-            firing_rate, y, aggregate_sample_scores=jnp.mean
-        )
+        sm = model.observation_model._pseudo_r2_cohen(y, firing_rate, aggregate_sample_scores=jnp.sum)
+        mn = model.observation_model._pseudo_r2_cohen(y, firing_rate, aggregate_sample_scores=jnp.mean)
         assert np.allclose(sm, mn)
