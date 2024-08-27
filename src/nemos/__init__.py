@@ -4,16 +4,15 @@ __version__ = "0.1.6"
 from . import (
     basis,
     convolve,
-    fetch,
     exceptions,
+    fetch,
     glm,
     observation_models,
     pytrees,
     regularizer,
     simulation,
+    styles,
     tree_utils,
     type_casting,
     utils,
-    styles
 )
-

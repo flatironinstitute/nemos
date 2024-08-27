@@ -1,10 +1,12 @@
 """Fetch data using pooch."""
+
 import hashlib
 import pathlib
 from typing import List, Optional, Union
 
 import pooch
 import requests
+
 from .. import __version__
 
 REGISTRY_DATA = {
@@ -16,18 +18,20 @@ REGISTRY_DATA = {
 }
 
 REGISTRY_UTILS = {
-    '0.1.1': '369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291',
-    '0.1.2': '369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291',
-    '0.1.3': '369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291',
-    '0.1.4': '369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291',
-    '0.1.5': '369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291',
-    '0.1.6': '369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291'
+    "0.1.1": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
+    "0.1.2": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
+    "0.1.3": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
+    "0.1.4": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
+    "0.1.5": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
+    "0.1.6": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
 }
 
 
 OSF_TEMPLATE = "https://osf.io/{}/download"
-GITHUB_TEMPLATE_PLOTTING = ("https://raw.githubusercontent.com/flatironinstitute/nemos"
-                            "/{}/docs/neural_modeling/examples_utils/plotting.py")
+GITHUB_TEMPLATE_PLOTTING = (
+    "https://raw.githubusercontent.com/flatironinstitute/nemos"
+    "/{}/docs/neural_modeling/examples_utils/plotting.py"
+)
 
 # these are all from the OSF project at https://osf.io/ts37w/.
 REGISTRY_URLS_DATA = {
@@ -150,17 +154,21 @@ def _get_github_utils_registry():
     api_url = "https://api.github.com/repos/flatironinstitute/nemos/tags"
     response = requests.get(api_url)
     response.raise_for_status()  # Raise an error for bad status codes
-    tags = [tag['name'] for tag in response.json()]
+    tags = [tag["name"] for tag in response.json()]
 
     for version in tags:
-        url = (f"https://raw.githubusercontent.com/flatironinstitute/nemos/{version}/docs/neural_modeling"
-               f"/examples_utils/plotting.py")
+        url = (
+            f"https://raw.githubusercontent.com/flatironinstitute/nemos/{version}/docs/neural_modeling"
+            f"/examples_utils/plotting.py"
+        )
         try:
             actual_path = pooch.retrieve(
                 url=url,
                 known_hash=None,  # Add a hash here if needed for verification
-                fname=fname.format(version), # Local filename
-                path=pooch.os_cache("nemos-cache"),         # Cache the file in the package-specific cache directory
+                fname=fname.format(version),  # Local filename
+                path=pooch.os_cache(
+                    "nemos-cache"
+                ),  # Cache the file in the package-specific cache directory
             )
             print(actual_path)
         except Exception as e:
@@ -168,7 +176,10 @@ def _get_github_utils_registry():
             continue
 
     tmp = _calculate_sha256(pooch.os_cache("nemos-cache"))
-    registry_hash = {key.split("plotting_")[1].split(".py")[0]: tmp[key] for key in sorted(tmp.keys())}
+    registry_hash = {
+        key.split("plotting_")[1].split(".py")[0]: tmp[key]
+        for key in sorted(tmp.keys())
+    }
 
     return registry_hash
 
@@ -199,4 +210,3 @@ def fetch_utils(path=None):
 
     # Return the path to the renamed file
     return fixed_file_name.as_posix()
-
