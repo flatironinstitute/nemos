@@ -158,7 +158,9 @@ def _find_shared_directory(paths: List[pathlib.Path]) -> pathlib.Path:
     """
     # Iterate through the parents of the first path to find a common directory.
     if len(paths) == 0:
-        raise ValueError("Must provide at least one path. The input list of paths is empty.")
+        raise ValueError(
+            "Must provide at least one path. The input list of paths is empty."
+        )
 
     if len(paths[0].parents) == 0:
         raise ValueError("The provided path does not have any parent directories.")
@@ -234,6 +236,7 @@ def _retrieve_data(dataset_name: str, retriever: pooch.Pooch) -> pathlib.Path:
         file_name = pathlib.Path(file_name)
 
     return file_name
+
 
 def _get_all_tags() -> List[str]:
     """
