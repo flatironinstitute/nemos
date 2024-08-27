@@ -8,9 +8,6 @@ For the example dataset, we will be working with a recording of a freely-moving 
 
 The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https://www.peyrachelab.com/).
 
-!!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
-
 
 """
 

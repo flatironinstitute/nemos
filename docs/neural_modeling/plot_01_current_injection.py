@@ -2,10 +2,6 @@
 
 """# Fit injected current
 
-!!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
-
-
 For our first example, we will look at a very simple dataset: patch-clamp
 recordings from a single neuron in layer 4 of mouse primary visual cortex. This
 data is from the [Allen Brain
