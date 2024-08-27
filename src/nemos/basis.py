@@ -464,9 +464,6 @@ class Basis(Base, abc.ABC):
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bonuds, the basis will return NaN.
-    *args :
-        Only used in "conv" mode. Additional positional arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
