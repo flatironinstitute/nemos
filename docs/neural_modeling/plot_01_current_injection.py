@@ -50,7 +50,6 @@ Linear Model and how to fit it with NeMoS.
 
 """
 
-import examples_utils.data as data
 import examples_utils.plotting as plotting
 
 # Import everything

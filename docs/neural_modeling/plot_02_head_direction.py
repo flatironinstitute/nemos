@@ -17,7 +17,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from examples_utils import data, plotting
+from examples_utils import plotting
 
 import nemos as nmo
 

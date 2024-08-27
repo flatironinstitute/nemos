@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pynapple as nap
-from examples_utils import data, plotting
+from examples_utils import plotting
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
