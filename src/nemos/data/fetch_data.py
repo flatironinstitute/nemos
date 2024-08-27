@@ -19,14 +19,15 @@ REGISTRY_URLS = {
 }
 DOWNLOADABLE_FILES = list(REGISTRY_URLS.keys())
 
-import pathlib
-from typing import List, Optional, Union
-import pooch
-import click
-import requests
-from tqdm import tqdm
 import hashlib
 import os
+import pathlib
+from typing import List, Optional, Union
+
+import click
+import pooch
+import requests
+from tqdm import tqdm
 
 # default to "./data" for downloads
 _DEFAULT_DATA_DIR = pathlib.Path("data")

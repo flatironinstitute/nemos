@@ -4,6 +4,7 @@ __version__ = "0.1.6"
 from . import (
     basis,
     convolve,
+    data,
     exceptions,
     glm,
     observation_models,
@@ -13,5 +14,4 @@ from . import (
     tree_utils,
     type_casting,
     utils,
-    data,
 )
