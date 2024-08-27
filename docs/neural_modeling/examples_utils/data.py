@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 
-import math
-import os
-import os.path as op
 from typing import Union
 
-import click
 import numpy as np
 import pynapple as nap
-import requests
-import tqdm.auto as tqdm
 
 TsdType = Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor]
 
@@ -20,20 +14,6 @@ from fsspec.implementations.cached import CachingFileSystem
 
 # Dandi stuffs
 from pynwb import NWBHDF5IO
-
-
-def download_data(filename, url, data_dir):
-    if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
-    filename = op.join(data_dir, filename)
-    if not os.path.exists(filename):
-        r = requests.get(url, stream=True)
-        block_size = 1024*1024
-        with open(filename, "wb") as f:
-            for data in tqdm.tqdm(r.iter_content(block_size), unit="MB", unit_scale=True,
-                                  total=math.ceil(int(r.headers.get("content-length", 0))//block_size)):
-                f.write(data)
-    return filename
 
 
 def download_dandi_data(dandiset_id, filepath):
@@ -55,7 +35,6 @@ def download_dandi_data(dandiset_id, filepath):
     io = NWBHDF5IO(file=file, load_namespaces=True)
 
     return io
-
 
 
 def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
@@ -96,18 +75,3 @@ def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
         filled_d[fill_idx:fill_idx + ts_ep.t.shape[0]][idxs >= 0] = data_ep.d[idxs[idxs>=0]]
         fill_idx += ts_ep.t.shape[0]
     return type(data)(t=time_series.t, d=filled_d, time_support=ep)
-
-
-@click.command()
-@click.argument('data_dir')
-def main(data_dir):
-    download_data("allen_478498617.nwb", "https://osf.io/vf2nj/download",
-                  data_dir)
-    download_data("m691l1.nwb", "https://osf.io/xesdm/download",
-                  data_dir)
-    download_data("Mouse32-140822.nwb", "https://osf.io/jb2gd/download",
-                  data_dir)
-
-
-if __name__ == '__main__':
-    main()
