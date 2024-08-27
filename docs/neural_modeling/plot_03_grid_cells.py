@@ -12,7 +12,6 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from examples_utils import data
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
@@ -22,7 +21,37 @@ import nemos as nmo
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-io = data.download_dandi_data(
+import fsspec
+import h5py
+from dandi.dandiapi import DandiAPIClient
+from fsspec.implementations.cached import CachingFileSystem
+
+# Dandi stuffs
+from pynwb import NWBHDF5IO
+
+
+def download_dandi_data(dandiset_id, filepath):
+    with DandiAPIClient() as client:
+        asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
+        s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
+
+    # first, create a virtual filesystem based on the http protocol
+    fs = fsspec.filesystem("http")
+
+    # create a cache to save downloaded data to disk (optional)
+    fs = CachingFileSystem(
+        fs=fs,
+        cache_storage="nwb-cache",  # Local folder for the cache
+    )
+
+    # next, open the file
+    file = h5py.File(fs.open(s3_url, "rb"))
+    io = NWBHDF5IO(file=file, load_namespaces=True)
+
+    return io
+
+
+io = download_dandi_data(
     "000582",
     "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb",
 )
