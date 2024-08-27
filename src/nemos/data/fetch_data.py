@@ -25,8 +25,8 @@ REGISTRY_URLS = {
 DOWNLOADABLE_FILES = list(REGISTRY_URLS.keys())
 
 
-# default to "./data" for downloads when no env var is set.
-_DEFAULT_DATA_DIR = pathlib.Path("data")
+# default to "~/nemos-data-cache" for downloads when no env var is set.
+_DEFAULT_DATA_DIR = pathlib.Path.home() / "nemos-data-cache"
 
 
 def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
@@ -66,6 +66,8 @@ def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
 def _create_retriever(path: Optional[pathlib.Path] = None):
 
     if path is None:
+        # create the directory if it doesn't exist and save.
+        _DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
         path = _DEFAULT_DATA_DIR
 
     return pooch.create(
