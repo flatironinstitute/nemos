@@ -1,4 +1,9 @@
 """Fetch data using pooch."""
+import hashlib
+import pathlib
+from typing import List, Optional, Union
+
+import pooch
 
 REGISTRY = {
     "A0670-221213.nwb": "8587dd6dde107504bd4a17a68ce8fb934fcbcccc337e653f31484611ee51f50a",
@@ -19,15 +24,6 @@ REGISTRY_URLS = {
 }
 DOWNLOADABLE_FILES = list(REGISTRY_URLS.keys())
 
-import hashlib
-import os
-import pathlib
-from typing import List, Optional, Union
-
-import click
-import pooch
-import requests
-from tqdm import tqdm
 
 # default to "./data" for downloads
 _DEFAULT_DATA_DIR = pathlib.Path("data")
