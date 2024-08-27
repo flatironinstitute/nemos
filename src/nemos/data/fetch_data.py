@@ -25,7 +25,7 @@ REGISTRY_URLS = {
 DOWNLOADABLE_FILES = list(REGISTRY_URLS.keys())
 
 
-# default to "./data" for downloads
+# default to "./data" for downloads when no env var is set.
 _DEFAULT_DATA_DIR = pathlib.Path("data")
 
 
