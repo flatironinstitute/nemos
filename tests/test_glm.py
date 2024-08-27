@@ -1424,7 +1424,7 @@ class TestGLM:
         model.intercept_ = true_params[1]
         # get the rate
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model.observation_model.deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
@@ -3151,7 +3151,7 @@ class TestPopulationGLM:
         model.intercept_ = true_params[1]
         # get the rate
         dev = sm.families.Poisson().deviance(y, firing_rate)
-        dev_model = model.observation_model.deviance(firing_rate, y).sum()
+        dev_model = model.observation_model.deviance(y, firing_rate).sum()
         if not np.allclose(dev, dev_model):
             raise ValueError("Deviance doesn't match statsmodels!")
 
