@@ -25,9 +25,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 # ## Data Streaming
 #
 
-path = data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
-                                         '../data')
-
+path = nmo.data.fetch_data("m691l1.nwb")
 
 # %%
 # ## Pynapple

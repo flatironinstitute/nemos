@@ -89,8 +89,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 # data.
 
 
-path = data.download_data("allen_478498617.nwb", "https://osf.io/vf2nj/download",
-                                         '../data')
+path = nmo.data.fetch_data("allen_478498617.nwb")
 
 # %%
 # ## Pynapple

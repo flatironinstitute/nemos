@@ -26,9 +26,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = data.download_data(
-    "Achilles_10252013.nwb", "https://osf.io/hu5ma/download", "../data"
-)
+path = nmo.data.fetch_data("Achilles_10252013.nwb")
 
 # %%
 # ## Pynapple

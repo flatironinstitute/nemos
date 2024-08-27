@@ -33,10 +33,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = data.download_data(
-    "A0670-221213.nwb", "https://osf.io/sbnaw/download", "../data"
-)
-
+path = nmo.data.fetch_data("A0670-221213.nwb")
 
 # %%
 # ***

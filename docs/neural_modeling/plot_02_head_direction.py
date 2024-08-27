@@ -32,8 +32,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = data.download_data("Mouse32-140822.nwb", "https://osf.io/jb2gd/download",
-                                         '../data')
+path = nmo.data.fetch_data("Mouse32-140822.nwb")
 
 # %%
 # ## Pynapple
