@@ -9,24 +9,29 @@
 The data for this example are from [Grosmark, Andres D., and György Buzsáki. "Diversity in neural firing dynamics supports both rigid and learned hippocampal sequences." Science 351.6280 (2016): 1440-1443](https://www.science.org/doi/full/10.1126/science.aad1935).
 
 """
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pynapple as nap
-from examples_utils import plotting
+
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
 
+if not os.path.exists("examples_utils/plotting.py"):
+    nmo.fetch.fetch_utils()
+from examples_utils import plotting
+
 # configure plots some
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 # %%
 # ## Data Streaming
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = nmo.data.fetch_data("Achilles_10252013.nwb")
+path = nmo.fetch.fetch_data("Achilles_10252013.nwb")
 
 # %%
 # ## Pynapple

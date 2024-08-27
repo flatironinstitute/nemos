@@ -50,9 +50,10 @@ Linear Model and how to fit it with NeMoS.
 
 """
 
-import examples_utils.plotting as plotting
+
 
 # Import everything
+import os
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,8 +61,13 @@ import pynapple as nap
 
 import nemos as nmo
 
+if not os.path.exists("examples_utils/plotting.py"):
+    nmo.fetch.fetch_utils()
+
+import examples_utils.plotting as plotting
+
 # configure plots some
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 # %%
 # ## Data Streaming
@@ -88,7 +94,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 # data.
 
 
-path = nmo.data.fetch_data("allen_478498617.nwb")
+path = nmo.fetch.fetch_data("allen_478498617.nwb")
 
 # %%
 # ## Pynapple

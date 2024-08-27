@@ -1,4 +1,4 @@
-"""Fetch fetch using pooch."""
+"""Fetch data using pooch."""
 import hashlib
 import pathlib
 from typing import List, Optional, Union
@@ -26,8 +26,8 @@ REGISTRY_UTILS = {
 
 
 OSF_TEMPLATE = "https://osf.io/{}/download"
-GITHUB_TEMPLATE = ("https://raw.githubusercontent.com/flatironinstitute/nemos"
-                   "/{}/docs/neural_modeling/examples_utils/plotting.py")
+GITHUB_TEMPLATE_PLOTTING = ("https://raw.githubusercontent.com/flatironinstitute/nemos"
+                            "/{}/docs/neural_modeling/examples_utils/plotting.py")
 
 # these are all from the OSF project at https://osf.io/ts37w/.
 REGISTRY_URLS_DATA = {
@@ -39,14 +39,14 @@ REGISTRY_URLS_DATA = {
 }
 
 REGISTRY_URLS_UTILS = {
-    version: GITHUB_TEMPLATE.format(version)
+    version: GITHUB_TEMPLATE_PLOTTING.format(version)
     for version in REGISTRY_UTILS.keys()
 }
 
 
 # default to "~/nemos-fetch-cache" for downloads when no env var is set.
 _DEFAULT_DATA_DIR = pathlib.Path.home() / "nemos-fetch-cache"
-_DEFAULT_UTILS_DIR = pathlib.Path(".")
+_DEFAULT_UTILS_DIR = pathlib.Path(".") / "examples_utils"
 
 
 def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
@@ -71,6 +71,8 @@ def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
     # Initialize the registry dict
     registry_hash = dict()
     for file_path in data_dir.iterdir():
+        if file_path.is_dir():
+            continue
         # Open the file in binary mode
         with open(file_path, "rb") as f:
             # Initialize the hash
@@ -112,7 +114,7 @@ def _find_shared_directory(paths: List[pathlib.Path]) -> pathlib.Path:
 
 def fetch_data(
     dataset_name: str, path: Optional[Union[pathlib.Path, str]] = None
-) -> pathlib.Path:
+) -> str:
     """Download fetch, using pooch. These are largely used for testing.
 
     To view list of downloadable files, look at `DOWNLOADABLE_FILES`.
@@ -124,7 +126,7 @@ def fetch_data(
 
     """
     retriever = _create_retriever(path)
-    return _retrieve_data(dataset_name, retriever)
+    return _retrieve_data(dataset_name, retriever).as_posix()
 
 
 def _retrieve_data(dataset_name: str, retriever):
@@ -173,7 +175,7 @@ def _get_github_utils_registry():
 
 def fetch_utils(path=None):
     if path is None:
-        path = pathlib.Path(".")
+        path = _DEFAULT_UTILS_DIR
 
     version = __version__
 
@@ -196,5 +198,5 @@ def fetch_utils(path=None):
     pathlib.Path(file_name).rename(fixed_file_name)
 
     # Return the path to the renamed file
-    return fixed_file_name
+    return fixed_file_name.as_posix()
 

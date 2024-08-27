@@ -18,7 +18,7 @@ import pynapple as nap
 import nemos as nmo
 
 # configure plots some
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 
 # utility for filling a time series
@@ -66,7 +66,7 @@ def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
 # ## Data Streaming
 #
 
-path = nmo.data.fetch_data("m691l1.nwb")
+path = nmo.fetch.fetch_data("m691l1.nwb")
 
 # %%
 # ## Pynapple

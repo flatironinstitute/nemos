@@ -24,7 +24,7 @@ import nemos as nmo
 
 # %%
 # configure plots
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 
 # %%
@@ -32,7 +32,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = nmo.data.fetch_data("A0670-221213.nwb")
+path = nmo.fetch.fetch_data("A0670-221213.nwb")
 
 # %%
 # ***

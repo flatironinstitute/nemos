@@ -14,25 +14,30 @@
 
 """
 
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from examples_utils import plotting
 
 import nemos as nmo
+
+if not os.path.exists("examples_utils/plotting.py"):
+    nmo.fetch.fetch_utils()
+
+from examples_utils import plotting
 
 # configure pynapple to ignore conversion warning
 nap.nap_config.suppress_conversion_warnings = True
 
 # configure plots some
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 # %%
 # ## Data Streaming
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = nmo.data.fetch_data("Mouse32-140822.nwb")
+path = nmo.fetch.fetch_data("Mouse32-140822.nwb")
 
 # %%
 # ## Pynapple

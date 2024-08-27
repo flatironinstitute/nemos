@@ -101,9 +101,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 from background_utils import plotting
+import nemos as nmo
 
 # configure plots some
-plt.style.use("../neural_modeling/examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 # %%
 # to simplify things, we will look at three simple LNP neuron models as 
