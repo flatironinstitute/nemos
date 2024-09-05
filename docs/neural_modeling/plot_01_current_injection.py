@@ -56,11 +56,8 @@ import numpy as np
 import pynapple as nap
 
 import nemos as nmo
-
-if not os.path.exists("examples_utils/plotting.py"):
-    nmo.fetch.fetch_utils()
-
-import examples_utils.plotting as plotting
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
 
 # configure plots some
 plt.style.use(nmo.styles.plot_style)
@@ -310,10 +307,10 @@ print(type(firing_rate))
 #
 #     We're hiding the details of the plotting function for the purposes of this
 #     tutorial, but you can find it in [the source
-#     code](https://github.com/flatironinstitute/nemos/blob/development/docs/neural_modeling/examples_utils/plotting.py)
+#     code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documetation_utils/plotting.py)
 #     if you are interested.
 
-plotting.current_injection_plot(current, spikes, firing_rate)
+doc_plots.current_injection_plot(current, spikes, firing_rate)
 
 # %%
 #
@@ -356,7 +353,7 @@ tuning_curve
 # neuron in this case) and each row is a bin over the feature (here, the input
 # current). We can easily plot the tuning curve of the neuron:
 
-plotting.tuning_curve_plot(tuning_curve)
+doc_plots.tuning_curve_plot(tuning_curve)
 
 # %%
 #
@@ -550,11 +547,11 @@ predicted_fr = predicted_fr / bin_size
 smooth_predicted_fr = predicted_fr.smooth(0.05, size_factor=20)
 
 # and plot!
-plotting.current_injection_plot(current, spikes, firing_rate,
-                                      # plot the predicted firing rate that has
-                                      # been smoothed the same way as the
-                                      # smoothed spike train
-                                      predicted_firing_rate=smooth_predicted_fr)
+doc_plots.current_injection_plot(current, spikes, firing_rate,
+                                 # plot the predicted firing rate that has
+                                 # been smoothed the same way as the
+                                 # smoothed spike train
+                                 predicted_firing_rate=smooth_predicted_fr)
 
 # %%
 #
@@ -596,7 +593,7 @@ print(f"Predicted mean firing rate: {np.mean(predicted_fr)} Hz")
 # beginning of this notebook. Pynapple can help us again with this:
 
 tuning_curve_model = nap.compute_1d_tuning_curves_continuous(predicted_fr[:, np.newaxis], current, 15)
-fig = plotting.tuning_curve_plot(tuning_curve)
+fig = doc_plots.tuning_curve_plot(tuning_curve)
 fig.axes[0].plot(tuning_curve_model, color="tomato", label="glm")
 fig.axes[0].legend()
 

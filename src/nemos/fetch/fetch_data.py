@@ -44,22 +44,8 @@ REGISTRY_DATA = {
 }
 DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
-# Registry of utility script versions and their corresponding SHA256 hashes.
-REGISTRY_UTILS = {
-    "0.1.1": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
-    "0.1.2": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
-    "0.1.3": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
-    "0.1.4": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
-    "0.1.5": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
-    "0.1.6": "369b5d0db98172856363072e48e51f16a2c41f20c4c7d5d988e29987b391c291",
-}
-
 # URL templates for downloading datasets and utility scripts.
 OSF_TEMPLATE = "https://osf.io/{}/download"
-GITHUB_TEMPLATE_PLOTTING = (
-    "https://raw.githubusercontent.com/flatironinstitute/nemos"
-    "/{}/docs/neural_modeling/examples_utils/plotting.py"
-)
 
 # Mapping of dataset filenames to their download URLs.
 REGISTRY_URLS_DATA = {
@@ -69,16 +55,6 @@ REGISTRY_URLS_DATA = {
     "allen_478498617.nwb": OSF_TEMPLATE.format("vf2nj"),
     "m691l1.nwb": OSF_TEMPLATE.format("xesdm"),
 }
-
-# Mapping of utility script versions to their download URLs.
-REGISTRY_URLS_UTILS = {
-    version: GITHUB_TEMPLATE_PLOTTING.format(version)
-    for version in REGISTRY_UTILS.keys()
-}
-
-# Default directories for storing downloaded data and utility scripts.
-_DEFAULT_DATA_DIR = pathlib.Path.home() / "nemos-fetch-cache"
-_DEFAULT_UTILS_DIR = pathlib.Path(".") / "examples_utils"
 
 
 def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
@@ -118,8 +94,7 @@ def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
 
 
 def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
-    """
-    Create a pooch retriever for fetching datasets.
+    """Create a pooch retriever for fetching datasets.
 
     This function sets up the pooch retriever, which manages the
     downloading and caching of files, including handling retries
@@ -129,17 +104,17 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
     ----------
     path :
         The directory where datasets will be stored. If not provided,
-        defaults to _DEFAULT_DATA_DIR.
+        defaults to pooch's cache (check ``pooch.os_cache('nemos')`` for that path)
 
     Returns
     -------
     :
         A configured pooch retriever object.
+
     """
     if path is None:
         # Use the default data directory if none is provided.
-        _DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        path = _DEFAULT_DATA_DIR
+        path = pooch.os_cache('nemos')
 
     return pooch.create(
         path=path,
@@ -258,130 +233,6 @@ def _retrieve_data(dataset_name: str, retriever: Pooch) -> pathlib.Path:
         file_name = pathlib.Path(file_name)
 
     return file_name
-
-
-def _get_all_tags() -> List[str]:
-    """
-    Retrieve all available tags.
-
-    Returns
-    -------
-    :
-        List of all available tags.
-    """
-    api_url = "https://api.github.com/repos/flatironinstitute/nemos/tags"
-
-    # Request the list of tags (versions) from the GitHub API.
-    response = requests.get(api_url)
-    response.raise_for_status()  # Raise an error for bad status codes.
-    return [tag["name"] for tag in response.json()]
-
-
-def _get_hash_for_plotting_utils_registry(version: Optional[str] = None) -> dict:
-    """
-    Fetch and hash the plotting.py utility script from GitHub for a given package version.
-
-    This function computes the SHA256 hash for the downloaded script.
-    This function should help updating the hash registry when a new
-    version of NeMoS is released.
-
-    Parameters
-    ----------
-    version :
-        The version tag string.
-
-    Returns
-    -------
-    :
-        The hash of the script in a dict with key the version.
-    """
-    try:
-        if version is None:
-            version = __version__
-
-        url = (
-            f"https://raw.githubusercontent.com/flatironinstitute/nemos/{version}/docs/"
-            f"neural_modeling/examples_utils/plotting.py"
-        )
-        _ = pooch.retrieve(
-            url=url,
-            known_hash=None,  # Add a hash here if needed for verification.
-            fname="plotting_" + version + ".py",  # Local filename.
-            path=pooch.os_cache("nemos-cache"),
-        )
-
-        # Calculate and return SHA256 hashes for all downloaded scripts.
-        tmp = _calculate_sha256(pooch.os_cache("nemos-cache"))
-        registry_hash = {
-            key.split("plotting_")[1].split(".py")[0]: tmp[key]
-            for key in sorted(tmp.keys())
-        }
-    finally:
-        # clear cache
-        if pooch.os_cache("nemos-cache").exists():
-            shutil.rmtree(pooch.os_cache("nemos-cache"))
-    return registry_hash
-
-
-def fetch_utils(path=None, version: Optional[str] = None):
-    """
-    Fetch the utility script corresponding to the specified NeMoS version.
-
-    This function downloads the utility script (`plotting.py`) corresponding
-    to the current version of the library. The script is renamed to a fixed
-    filename and stored in the specified directory.
-
-    Parameters
-    ----------
-    path :
-        The directory where the utility script will be stored. If not provided,
-        defaults to _DEFAULT_UTILS_DIR.
-    version :
-        The package version. Default is the current version.
-
-    Returns
-    -------
-    :
-        The path to the downloaded and renamed utility script.
-
-    Raises
-    ------
-    ValueError
-        If the version is not in the regisrtry.
-    """
-    if pooch is None:
-        raise ImportError("Missing optional dependency 'pooch'."
-                          " Please use pip or "
-                          "conda to install 'pooch'.")
-    if path is None:
-        path = _DEFAULT_UTILS_DIR
-
-    if version is None:
-        version = __version__
-
-    if version not in REGISTRY_UTILS:
-        raise ValueError(f"Version {version} is not available in the registry.")
-
-    # Create the pooch retriever for fetching the utility script.
-    retriever = pooch.create(
-        path=path,
-        base_url="",
-        urls=REGISTRY_URLS_UTILS,
-        registry=REGISTRY_UTILS,
-        retry_if_failed=2,
-        allow_updates="POOCH_ALLOW_UPDATES",
-    )
-
-    # Retrieve the utility script.
-    file_name = _retrieve_data(version, retriever)
-
-    # Define the fixed name for the utility script.
-    fixed_file_name = pathlib.Path(file_name).parent / "plotting.py"
-
-    # Rename the script to the fixed filename.
-    pathlib.Path(file_name).rename(fixed_file_name)
-
-    return fixed_file_name.as_posix()
 
 
 def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:

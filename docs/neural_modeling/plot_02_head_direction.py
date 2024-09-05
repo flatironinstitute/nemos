@@ -17,11 +17,8 @@ import numpy as np
 import pynapple as nap
 
 import nemos as nmo
-
-if not os.path.exists("examples_utils/plotting.py"):
-    nmo.fetch.fetch_utils()
-
-from examples_utils import plotting
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
 
 # configure pynapple to ignore conversion warning
 nap.nap_config.suppress_conversion_warnings = True
@@ -105,7 +102,7 @@ plt.tight_layout()
 # Let's plot the preferred heading
 #
 
-fig = plotting.plot_head_direction_tuning(
+fig = doc_plots.plot_head_direction_tuning(
     tuning_curves, spikes, angle, threshold_hz=1, start=8910, end=8960
 )
 
@@ -173,7 +170,7 @@ plt.tight_layout()
 # set the size of the spike history window in seconds
 window_size_sec = 0.8
 
-plotting.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
+doc_plots.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
 
 
 # %%
@@ -182,7 +179,7 @@ plotting.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
 # the figure).
 
 
-plotting.run_animation(neuron_count, epoch_one_spk.start[0])
+doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
 
 # %%
 # If $t$ is smaller than the window size, we won't have a full window of spike history for estimating the rate.
@@ -222,7 +219,7 @@ print(f"Feature shape: {input_feature.shape}")
 
 suptitle = "Input feature: Count History"
 neuron_id = 0
-plotting.plot_features(input_feature, count.rate, suptitle)
+doc_plots.plot_features(input_feature, count.rate, suptitle)
 
 # %%
 # As you may see, the time axis is backward, this happens because convolution flips the time axis.
@@ -332,7 +329,7 @@ plt.legend()
 # whereas whether an input happened 51 or 55 msec ago is less important.
 
 
-plotting.plot_basis()
+doc_plots.plot_basis()
 
 # %%
 # !!! info
@@ -377,7 +374,7 @@ time *= window_size_sec
 lsq_coef, _, _, _ = np.linalg.lstsq(basis_kernels, np.squeeze(model.coef_), rcond=-1)
 
 # plot the basis and the approximation
-plotting.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
+doc_plots.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
 
 # %%
 #
@@ -412,7 +409,7 @@ print(f"Compressed count history as feature: {conv_spk.shape}")
 epoch_one_spk = nap.IntervalSet(8917.5, 8918.5)
 epoch_multi_spk = nap.IntervalSet(8979.2, 8980.2)
 
-plotting.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_multi_spk)
+doc_plots.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_multi_spk)
 
 # find interval with two spikes to show the accumulation, in a second row
 
@@ -499,7 +496,7 @@ rate_history = model.predict(input_feature) * conv_spk.rate
 ep = nap.IntervalSet(start=8819.4, end=8821)
 
 # plot the rates
-plotting.plot_rates_and_smoothed_counts(
+doc_plots.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection raw history":rate_history, "Self-connection bsais": rate_basis}
 )
@@ -548,13 +545,13 @@ predicted_firing_rate = model.predict(convolved_count) * conv_spk.rate
 # Plot fit predictions over a short window not used for training.
 
 # use pynapple for time axis for all variables plotted for tick labels in imshow
-plotting.plot_head_direction_tuning_model(tuning_curves, predicted_firing_rate, spikes, angle, threshold_hz=1,
+doc_plots.plot_head_direction_tuning_model(tuning_curves, predicted_firing_rate, spikes, angle, threshold_hz=1,
                                           start=8910, end=8960, cmap_label="hsv")
 # %%
 # Let's see if our firing rate predictions improved and in what sense.
 
 # mkdocs_gallery_thumbnail_number = 2
-plotting.plot_rates_and_smoothed_counts(
+doc_plots.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection: raw history": rate_history,
      "Self-connection: bsais": rate_basis,
@@ -587,6 +584,4 @@ print(responses.shape)
 # Finally, we can visualize the pairwise interactions by plotting
 # all the coupling filters.
 
-plotting.plot_coupling(responses, tuning)
-
-
+doc_plots.plot_coupling(responses, tuning)
