@@ -100,9 +100,11 @@ import matplotlib.pyplot as plt
 # first import things
 import numpy as np
 import pynapple as nap
-from background_utils import plotting
 
 import nemos as nmo
+
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
 
 # configure plots some
 plt.style.use(nmo.styles.plot_style)
@@ -121,7 +123,7 @@ input_feature[50:] = 1
 input_feature *= np.random.rand(100)
 input_feature = nap.Tsd(np.linspace(0, 100, 100), input_feature)
 
-fig = plotting.lnp_schematic(input_feature, weights, intercepts)
+fig = doc_plots.lnp_schematic(input_feature, weights, intercepts)
 
 # %%
 #
@@ -137,8 +139,8 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts)
 # firing rate is always positive. We can visualize this second stage of the LNP model
 # by adding the `plot_nonlinear` keyword to our `lnp_schematic()` plotting function:
 
-fig = plotting.lnp_schematic(input_feature, weights, intercepts,
-                             plot_nonlinear=True)
+fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
+                              plot_nonlinear=True)
 
 # %%
 # !!! info
@@ -160,8 +162,8 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 # the generated spikes spikes look like!
 
 # mkdocs_gallery_thumbnail_number = 3
-fig = plotting.lnp_schematic(input_feature, weights, intercepts,
-                             plot_nonlinear=True, plot_spikes=True)
+fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
+                              plot_nonlinear=True, plot_spikes=True)
 
 # %%
 #

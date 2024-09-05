@@ -81,7 +81,9 @@ import seaborn as sns
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 
-from utils import plotting
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
+
 
 # predictors, shape (n_samples, n_features)
 X = np.random.uniform(low=0, high=1, size=(1000, 1))
@@ -317,7 +319,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plotting.plot_heatmap_cv_results(cvdf_wide)
+doc_plots.plot_heatmap_cv_results(cvdf_wide)
 
 # %%
 # The plot displays the model's log-likelihood for each parameter combination in the grid. The parameter combination with the highest score, which is the one selected by the procedure, is highlighted with a blue rectangle. We can thus see that we need 10 or more basis functions, and that all of the tested regularization strengths agree with each other. In general, we want the fewest number of basis functions required to get a good fit, so we'll choose 10 here.
@@ -404,7 +406,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plotting.plot_heatmap_cv_results(cvdf_wide)
+doc_plots.plot_heatmap_cv_results(cvdf_wide)
 
 
 # %%
@@ -499,7 +501,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plotting.plot_heatmap_cv_results(cvdf_wide, label="pseudo-R2")
+doc_plots.plot_heatmap_cv_results(cvdf_wide, label="pseudo-R2")
 
 # %%
 # As you can see, the results with pseudo-R2 agree with those of the negative log-likelihood. Note that this new metric is normalized between 0 and 1, with a higher score indicating better performance.
