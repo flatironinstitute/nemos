@@ -7,14 +7,15 @@ The data for this example are from [Grosmark, Andres D., and György Buzsáki. "
 
 """
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pynapple as nap
-
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
+
 # some helper plotting functions
 from nemos import _documentation_utils as doc_plots
 

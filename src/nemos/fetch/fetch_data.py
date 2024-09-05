@@ -9,16 +9,14 @@ calculate hashes for local files and manage file paths.
 
 import hashlib
 import pathlib
-import shutil
 from typing import List, Optional, Union
 
 try:
     import pooch
-    from pooch import pooch
+    from pooch import Pooch
 except ImportError:
     pooch = None
     Pooch = None
-import requests
 
 try:
     import dandi
@@ -31,8 +29,6 @@ except ImportError:
     dandi = None
     NWBHDF5IO = None
 
-
-from .. import __version__
 
 # Registry of dataset filenames and their corresponding SHA256 hashes.
 REGISTRY_DATA = {
@@ -114,7 +110,7 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
     """
     if path is None:
         # Use the default data directory if none is provided.
-        path = pooch.os_cache('nemos')
+        path = pooch.os_cache("nemos")
 
     return pooch.create(
         path=path,
@@ -191,9 +187,11 @@ def fetch_data(
         The path to the downloaded file or directory.
     """
     if pooch is None:
-        raise ImportError("Missing optional dependency 'pooch'."
-                          " Please use pip or "
-                          "conda to install 'pooch'.")
+        raise ImportError(
+            "Missing optional dependency 'pooch'."
+            " Please use pip or "
+            "conda to install 'pooch'."
+        )
     retriever = _create_retriever(path)
     return _retrieve_data(dataset_name, retriever).as_posix()
 
@@ -260,9 +258,11 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
 
     """
     if dandi is None:
-        raise ImportError("Missing optional dependency 'dandi'."
-                          " Please use pip or "
-                          "conda to install 'dandi'.")
+        raise ImportError(
+            "Missing optional dependency 'dandi'."
+            " Please use pip or "
+            "conda to install 'dandi'."
+        )
     with DandiAPIClient() as client:
         asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
         s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)

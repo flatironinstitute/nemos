@@ -101,6 +101,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 from background_utils import plotting
+
 import nemos as nmo
 
 # configure plots some

@@ -12,11 +12,13 @@
 """
 
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 
 import nemos as nmo
+
 # some helper plotting functions
 from nemos import _documentation_utils as doc_plots
 

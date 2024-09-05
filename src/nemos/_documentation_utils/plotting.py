@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
-from typing import Optional, Union
+from typing import Optional
 
 import jax
+
 try:
     import matplotlib as mpl
 except ImportError:
-    raise ImportError("Missing optional dependency 'matplotlib'."
-                      " Please use pip or "
-                      "conda to install 'matplotlib'.")
+    raise ImportError(
+        "Missing optional dependency 'matplotlib'."
+        " Please use pip or "
+        "conda to install 'matplotlib'."
+    )
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -17,16 +20,17 @@ import seaborn as sns
 from IPython.display import HTML
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Rectangle
-from numpy.typing import NDArray
 
 from ..basis import RaisedCosineBasisLog
 
 
-def lnp_schematic(input_feature: nap.Tsd,
-                  weights: np.ndarray,
-                  intercepts: np.ndarray,
-                  plot_nonlinear: bool = False,
-                  plot_spikes: bool = False):
+def lnp_schematic(
+    input_feature: nap.Tsd,
+    weights: np.ndarray,
+    intercepts: np.ndarray,
+    plot_nonlinear: bool = False,
+    plot_spikes: bool = False,
+):
     """Create LNP schematic.
 
     - Works best with len(weights)==3.
@@ -36,10 +40,12 @@ def lnp_schematic(input_feature: nap.Tsd,
     - plot_nonlinear=False and plot_spikes=True will look weird
 
     """
-    assert len(weights) == len(intercepts), "weights and intercepts must have same length!"
-    fig, axes = plt.subplots(len(weights), 4, sharex=True,
-                             sharey='col',
-                             gridspec_kw={'wspace': .65})
+    assert len(weights) == len(
+        intercepts
+    ), "weights and intercepts must have same length!"
+    fig, axes = plt.subplots(
+        len(weights), 4, sharex=True, sharey="col", gridspec_kw={"wspace": 0.65}
+    )
     for ax in axes.flatten():
         ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(1))
     weights = np.expand_dims(weights, -1)
@@ -51,33 +57,45 @@ def lnp_schematic(input_feature: nap.Tsd,
     linear = weights * input_feature + intercepts
     axes[0, 0].set_visible(False)
     axes[2, 0].set_visible(False)
-    axes[1, 0].plot(times, input_feature[0], 'gray')
-    axes[1, 0].set_title('$x$', fontsize=10)
-    axes[1, 0].tick_params('x', labelbottom=True)
-    axes[0, 1].tick_params('y', labelleft=True)
-    axes[2, 1].tick_params('y', labelleft=True)
-    arrowkwargs = {'xycoords': 'axes fraction', 'textcoords': 'axes fraction',
-                   'ha': 'center', 'va': 'center'}
-    arrowprops = {'color': '0', 'arrowstyle': '->', 'lw': 1,
-                  'connectionstyle': 'arc,angleA=0,angleB=180,armA=20,armB=25,rad=5'}
-    y_vals = [1.7, .5, -.7]
+    axes[1, 0].plot(times, input_feature[0], "gray")
+    axes[1, 0].set_title("$x$", fontsize=10)
+    axes[1, 0].tick_params("x", labelbottom=True)
+    axes[0, 1].tick_params("y", labelleft=True)
+    axes[2, 1].tick_params("y", labelleft=True)
+    arrowkwargs = {
+        "xycoords": "axes fraction",
+        "textcoords": "axes fraction",
+        "ha": "center",
+        "va": "center",
+    }
+    arrowprops = {
+        "color": "0",
+        "arrowstyle": "->",
+        "lw": 1,
+        "connectionstyle": "arc,angleA=0,angleB=180,armA=20,armB=25,rad=5",
+    }
+    y_vals = [1.7, 0.5, -0.7]
     for y in y_vals:
-        axes[1, 0].annotate('', (1.5, y), (1, .5), arrowprops=arrowprops, **arrowkwargs)
+        axes[1, 0].annotate(
+            "", (1.5, y), (1, 0.5), arrowprops=arrowprops, **arrowkwargs
+        )
     titles = []
     for i, l in enumerate(linear):
         axes[i, 1].plot(times, l)
         if intercepts[i, 0] < 0:
-            s = '-'
+            s = "-"
         else:
-            s = '+'
+            s = "+"
         titles.append(f"{weights[i, 0]}x {s} {abs(intercepts[i, 0])}")
-        axes[i, 1].set_title(f"${titles[-1]}$", y=.95, fontsize=10)
+        axes[i, 1].set_title(f"${titles[-1]}$", y=0.95, fontsize=10)
     nonlinear = np.exp(linear)
     if plot_nonlinear:
         for i, l in enumerate(nonlinear):
             axes[i, 2].plot(times, l)
-            axes[i, 2].set_title(f"$\\exp({titles[i]})$", y=.95, fontsize=10)
-            axes[i, 1].annotate('', (1.5, .5), (1, .5), arrowprops=arrowprops, **arrowkwargs)
+            axes[i, 2].set_title(f"$\\exp({titles[i]})$", y=0.95, fontsize=10)
+            axes[i, 1].annotate(
+                "", (1.5, 0.5), (1, 0.5), arrowprops=arrowprops, **arrowkwargs
+            )
     else:
         for i, _ in enumerate(nonlinear):
             axes[i, 2].set_visible(False)
@@ -90,16 +108,18 @@ def lnp_schematic(input_feature: nap.Tsd,
             ax = None
             for j in range(3):
                 ax = fig.add_subplot(gs[j, 0], sharey=ax)
-                spikes = jax.random.poisson(jax.random.PRNGKey(j*i + j + i), l)
+                spikes = jax.random.poisson(jax.random.PRNGKey(j * i + j + i), l)
                 spike_times = np.where(spikes)
                 spike_heights = spikes[spike_times]
-                ax.vlines(times[spike_times], 0, spike_heights, color='k')
+                ax.vlines(times[spike_times], 0, spike_heights, color="k")
                 ax.yaxis.set_visible(False)
                 if j != 2 or i != len(nonlinear) - 1:
                     ax.xaxis.set_visible(False)
                 else:
                     ax.set_xticks([times.min(), times.max()])
-            axes[i, 2].annotate('', (1.5, .5), (1, .5), arrowprops=arrowprops, **arrowkwargs)
+            axes[i, 2].annotate(
+                "", (1.5, 0.5), (1, 0.5), arrowprops=arrowprops, **arrowkwargs
+            )
     else:
         for i, _ in enumerate(nonlinear):
             axes[i, 3].set_visible(False)
@@ -107,26 +127,43 @@ def lnp_schematic(input_feature: nap.Tsd,
     suptitles_to_add = [True, True, plot_nonlinear, plot_spikes]
     for b, ax, t in zip(suptitles_to_add, axes[0, :], suptitles):
         if b:
-            axes[0, 1].text(.5, 1.4, t, transform=ax.transAxes,
-                            horizontalalignment='center',
-                            verticalalignment='top', fontsize=12)
+            axes[0, 1].text(
+                0.5,
+                1.4,
+                t,
+                transform=ax.transAxes,
+                horizontalalignment="center",
+                verticalalignment="top",
+                fontsize=12,
+            )
     return fig
+
 
 def tuning_curve_plot(tuning_curve: pd.DataFrame):
     fig, ax = plt.subplots(1, 1)
     tc_idx = tuning_curve.index.to_numpy()
     tc_val = tuning_curve.values.flatten()
-    width = tc_idx[1]-tc_idx[0]
-    ax.bar(tc_idx, tc_val, width, facecolor="grey", edgecolor="k",
-           label="observed", alpha=0.4)
+    width = tc_idx[1] - tc_idx[0]
+    ax.bar(
+        tc_idx,
+        tc_val,
+        width,
+        facecolor="grey",
+        edgecolor="k",
+        label="observed",
+        alpha=0.4,
+    )
     ax.set_xlabel("Current (pA)")
     ax.set_ylabel("Firing rate (Hz)")
     return fig
 
 
-def current_injection_plot(current: nap.Tsd, spikes: nap.TsGroup,
-                           firing_rate: nap.TsdFrame,
-                           predicted_firing_rate: Optional[nap.TsdFrame] = None):
+def current_injection_plot(
+    current: nap.Tsd,
+    spikes: nap.TsGroup,
+    firing_rate: nap.TsdFrame,
+    predicted_firing_rate: Optional[nap.TsdFrame] = None,
+):
     ex_intervals = current.threshold(0.0).time_support
 
     # define plotting parameters
@@ -143,22 +180,54 @@ def current_injection_plot(current: nap.Tsd, spikes: nap.TsGroup,
     ax.set_ylabel("Current (pA)")
     ax.set_title("Injected Current")
     ax.set_xticklabels([])
-    ax.axvspan(ex_intervals.loc[0,"start"], ex_intervals.loc[0,"end"], alpha=alpha, color=cmap(color_levs[0]))
-    ax.axvspan(ex_intervals.loc[1,"start"], ex_intervals.loc[1,"end"], alpha=alpha, color=cmap(color_levs[1]))
-    ax.axvspan(ex_intervals.loc[2,"start"], ex_intervals.loc[2,"end"], alpha=alpha, color=cmap(color_levs[2]))
+    ax.axvspan(
+        ex_intervals.loc[0, "start"],
+        ex_intervals.loc[0, "end"],
+        alpha=alpha,
+        color=cmap(color_levs[0]),
+    )
+    ax.axvspan(
+        ex_intervals.loc[1, "start"],
+        ex_intervals.loc[1, "end"],
+        alpha=alpha,
+        color=cmap(color_levs[1]),
+    )
+    ax.axvspan(
+        ex_intervals.loc[2, "start"],
+        ex_intervals.loc[2, "end"],
+        alpha=alpha,
+        color=cmap(color_levs[2]),
+    )
 
     # second row subplot: response
     resp_ax = plt.subplot2grid((4, 3), loc=(1, 0), rowspan=1, colspan=3, fig=fig)
     resp_ax.plot(firing_rate, color="k", label="Observed firing rate")
     if predicted_firing_rate:
-        resp_ax.plot(predicted_firing_rate, color="tomato", label='Predicted firing rate')
+        resp_ax.plot(
+            predicted_firing_rate, color="tomato", label="Predicted firing rate"
+        )
     resp_ax.plot(spikes.to_tsd([-1.5]), "|", color="k", ms=10, label="Observed spikes")
     resp_ax.set_ylabel("Firing rate (Hz)")
     resp_ax.set_xlabel("Time (s)")
-    resp_ax.set_title("Neural response", y=.95)
-    resp_ax.axvspan(ex_intervals.loc[0,"start"], ex_intervals.loc[0,"end"], alpha=alpha, color=cmap(color_levs[0]))
-    resp_ax.axvspan(ex_intervals.loc[1,"start"], ex_intervals.loc[1,"end"], alpha=alpha, color=cmap(color_levs[1]))
-    resp_ax.axvspan(ex_intervals.loc[2,"start"], ex_intervals.loc[2,"end"], alpha=alpha, color=cmap(color_levs[2]))
+    resp_ax.set_title("Neural response", y=0.95)
+    resp_ax.axvspan(
+        ex_intervals.loc[0, "start"],
+        ex_intervals.loc[0, "end"],
+        alpha=alpha,
+        color=cmap(color_levs[0]),
+    )
+    resp_ax.axvspan(
+        ex_intervals.loc[1, "start"],
+        ex_intervals.loc[1, "end"],
+        alpha=alpha,
+        color=cmap(color_levs[1]),
+    )
+    resp_ax.axvspan(
+        ex_intervals.loc[2, "start"],
+        ex_intervals.loc[2, "end"],
+        alpha=alpha,
+        color=cmap(color_levs[2]),
+    )
     ylim = resp_ax.get_ylim()
 
     # third subplot: zoomed responses
@@ -171,7 +240,7 @@ def current_injection_plot(current: nap.Tsd, spikes: nap.TsGroup,
         if predicted_firing_rate:
             ax.plot(predicted_firing_rate.restrict(interval), color="tomato")
         else:
-                ax.set_ylim(ylim)
+            ax.set_ylim(ylim)
         if i == 0:
             ax.set_ylabel("Firing rate (Hz)")
         ax.set_xlabel("Time (s)")
@@ -183,8 +252,11 @@ def current_injection_plot(current: nap.Tsd, spikes: nap.TsGroup,
             ax.spines[spine].set_linewidth(2)
         zoom_axes.append(ax)
 
-    resp_ax.legend(loc='upper center', bbox_to_anchor=(.5, -.4),
-                   bbox_transform=zoom_axes[1].transAxes)
+    resp_ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.4),
+        bbox_transform=zoom_axes[1].transAxes,
+    )
 
 
 def plot_weighted_sum_basis(time, weights, basis_kernels, basis_coeff):
@@ -241,20 +313,20 @@ def plot_weighted_sum_basis(time, weights, basis_kernels, basis_coeff):
     return fig
 
 
-class PlotSlidingWindow():
+class PlotSlidingWindow:
     def __init__(
-            self,
-            counts: nap.Tsd,
-            start: float,
-            n_shift: int = 20,
-            history_window: float = 0.8,
-            bin_size: float = 0.01,
-            ylim: tuple[float, float] = (0, 3),
-            plot_every: int = 1,
-            figsize: tuple[float, float] = (8, 8),
-            interval: int = 200,
-            add_before: float = 0.,
-            add_after: float = 0.
+        self,
+        counts: nap.Tsd,
+        start: float,
+        n_shift: int = 20,
+        history_window: float = 0.8,
+        bin_size: float = 0.01,
+        ylim: tuple[float, float] = (0, 3),
+        plot_every: int = 1,
+        figsize: tuple[float, float] = (8, 8),
+        interval: int = 200,
+        add_before: float = 0.0,
+        add_after: float = 0.0,
     ):
         self.counts = counts
         self.n_shift = n_shift
@@ -265,7 +337,9 @@ class PlotSlidingWindow():
         self.ylim = ylim
         self.add_before = add_before
         self.add_after = add_after
-        self.fig, self.rect_obs, self.rect_hist, self.line_tree, self.rect_hist_ax2 = self.set_up(figsize)
+        self.fig, self.rect_obs, self.rect_hist, self.line_tree, self.rect_hist_ax2 = (
+            self.set_up(figsize)
+        )
         self.interval = interval
         self.count_frame_0 = -1
 
@@ -275,15 +349,32 @@ class PlotSlidingWindow():
         # set up the plot for the sliding history window
         ax = plt.subplot2grid((5, 1), (0, 0), rowspan=1, colspan=1, fig=fig)
         # create the two rectangles, prediction and current observation
-        rect_hist = plt.Rectangle((self.start, 0),  self.history_window, self.ylim[1] - self.ylim[0],
-                                       alpha=0.3, color="orange")
-        rect_obs = plt.Rectangle((self.start + self.history_window, 0), self.bin_size, self.ylim[1] - self.ylim[0],
-                                       alpha=0.3,
-                                       color="tomato")
-        plot_ep = nap.IntervalSet(- self.add_before + self.start,
-                                  self.start + self.history_window + (self.n_shift - 1)*self.bin_size*self.plot_every +
-                                  self.add_after)
-        color = ax.step(self.counts.restrict(plot_ep).t, self.counts.restrict(plot_ep).d, where="post")[0].get_color()
+        rect_hist = plt.Rectangle(
+            (self.start, 0),
+            self.history_window,
+            self.ylim[1] - self.ylim[0],
+            alpha=0.3,
+            color="orange",
+        )
+        rect_obs = plt.Rectangle(
+            (self.start + self.history_window, 0),
+            self.bin_size,
+            self.ylim[1] - self.ylim[0],
+            alpha=0.3,
+            color="tomato",
+        )
+        plot_ep = nap.IntervalSet(
+            -self.add_before + self.start,
+            self.start
+            + self.history_window
+            + (self.n_shift - 1) * self.bin_size * self.plot_every
+            + self.add_after,
+        )
+        color = ax.step(
+            self.counts.restrict(plot_ep).t,
+            self.counts.restrict(plot_ep).d,
+            where="post",
+        )[0].get_color()
 
         ax.add_patch(rect_obs)
         ax.add_patch(rect_hist)
@@ -294,19 +385,28 @@ class PlotSlidingWindow():
 
         line_tree = []
         for frame in range(self.n_shift):
-            iset = nap.IntervalSet(start=rect_hist.get_x() + self.bin_size*self.plot_every*frame,
-                                   end=rect_hist.get_x() + rect_hist.get_width() + self.bin_size*self.plot_every*frame)
+            iset = nap.IntervalSet(
+                start=rect_hist.get_x() + self.bin_size * self.plot_every * frame,
+                end=rect_hist.get_x()
+                + rect_hist.get_width()
+                + self.bin_size * self.plot_every * frame,
+            )
             cnt = self.counts.restrict(iset).d
-            line_tree.append(fig.axes[1].step(np.arange(cnt.shape[0])*self.bin_size,
-                                  np.diff(self.ylim) * (self.n_shift - frame - 1) + cnt,
-                                  where="post", color=color))
+            line_tree.append(
+                fig.axes[1].step(
+                    np.arange(cnt.shape[0]) * self.bin_size,
+                    np.diff(self.ylim) * (self.n_shift - frame - 1) + cnt,
+                    where="post",
+                    color=color,
+                )
+            )
             if frame == 0:
                 rect_hist_ax2 = plt.Rectangle(
                     (0, (self.ylim[1] - self.ylim[0]) * (self.n_shift - 1)),
-                    (cnt.shape[0] - 1)*self.bin_size,
+                    (cnt.shape[0] - 1) * self.bin_size,
                     self.ylim[1] - self.ylim[0],
                     alpha=0.3,
-                    color="orange"
+                    color="orange",
                 )
                 ax.add_patch(rect_hist_ax2)
 
@@ -314,7 +414,9 @@ class PlotSlidingWindow():
         yticks = ax.get_yticks()
         original_ytick_labels = ax.get_yticklabels()
         ax.set_yticks(yticks + self.ylim[1] - self.ylim[0])
-        reverse_ytick_labels = [label.get_text() for label in reversed(original_ytick_labels)]
+        reverse_ytick_labels = [
+            label.get_text() for label in reversed(original_ytick_labels)
+        ]
         ax.set_yticklabels(reverse_ytick_labels)
 
         ax.set_ylabel("Sample Index")
@@ -333,9 +435,13 @@ class PlotSlidingWindow():
             self.set_lines_visible(self.line_tree, False)
             self.rect_hist_ax2.set_y((self.ylim[1] - self.ylim[0]) * (self.n_shift - 1))
         else:
-            self.rect_obs.set_x(self.rect_obs.get_x() + self.bin_size*self.plot_every)
-            self.rect_hist.set_x(self.rect_hist.get_x() + self.bin_size*self.plot_every)
-            self.rect_hist_ax2.set_y(self.rect_hist_ax2.get_y() - (self.ylim[1] - self.ylim[0]))
+            self.rect_obs.set_x(self.rect_obs.get_x() + self.bin_size * self.plot_every)
+            self.rect_hist.set_x(
+                self.rect_hist.get_x() + self.bin_size * self.plot_every
+            )
+            self.rect_hist_ax2.set_y(
+                self.rect_hist_ax2.get_y() - (self.ylim[1] - self.ylim[0])
+            )
             self.rect_hist_ax2.set_height(self.ylim[1] - self.ylim[0])
 
         self.set_lines_visible(self.line_tree[frame], True)
@@ -345,24 +451,32 @@ class PlotSlidingWindow():
         jax.tree_util.tree_map(lambda line: line.set_visible(visible), line_tree)
 
     def run(self):
-        anim = FuncAnimation(self.fig, self.update_fig, self.n_shift, interval=self.interval, repeat=True)
+        anim = FuncAnimation(
+            self.fig, self.update_fig, self.n_shift, interval=self.interval, repeat=True
+        )
         plt.close(self.fig)
         return anim
 
 
 def run_animation(counts: nap.Tsd, start: float):
-    anim = PlotSlidingWindow(
-        counts,
-        start
-    ).run()
+    anim = PlotSlidingWindow(counts, start).run()
     return HTML(anim.to_html5_video())
 
 
-def plot_coupling(responses, tuning, cmap_name="seismic",
-                      figsize=(10, 8), fontsize=15, alpha=0.5, cmap_label="hsv"):
+def plot_coupling(
+    responses,
+    tuning,
+    cmap_name="seismic",
+    figsize=(10, 8),
+    fontsize=15,
+    alpha=0.5,
+    cmap_label="hsv",
+):
     pref_ang = tuning.idxmax()
     cmap_tun = plt.get_cmap(cmap_label)
-    color_tun = (pref_ang.values - pref_ang.values.min()) / (pref_ang.values.max() - pref_ang.values.min())
+    color_tun = (pref_ang.values - pref_ang.values.min()) / (
+        pref_ang.values.max() - pref_ang.values.min()
+    )
 
     # plot heatmap
     sum_resp = np.sum(responses, axis=2)
@@ -387,9 +501,12 @@ def plot_coupling(responses, tuning, cmap_name="seismic",
             axs[rec, send].axhline(0, color="k", lw=0.5)
             if rec == n_row - 1:
                 axs[n_row, send].remove()  # Remove the original axis
-                axs[n_row, send] = fig.add_subplot(n_row+1, n_col+1,
-                                                   np.ravel_multi_index((n_row, send+1),(n_row + 1, n_col+1)),
-                                                   polar=True)  # Add new polar axis
+                axs[n_row, send] = fig.add_subplot(
+                    n_row + 1,
+                    n_col + 1,
+                    np.ravel_multi_index((n_row, send + 1), (n_row + 1, n_col + 1)),
+                    polar=True,
+                )  # Add new polar axis
 
                 axs[n_row, send].fill_between(
                     tuning.iloc[:, send].index,
@@ -402,8 +519,12 @@ def plot_coupling(responses, tuning, cmap_name="seismic",
                 axs[n_row, send].set_yticks([])
 
         axs[rec, send + 1].remove()  # Remove the original axis
-        axs[rec, send + 1] = fig.add_subplot(n_row+1, n_col+1,
-                                             np.ravel_multi_index((rec, send+1),(n_row+1, n_col+1)) + 1, polar=True)  # Add new polar axis
+        axs[rec, send + 1] = fig.add_subplot(
+            n_row + 1,
+            n_col + 1,
+            np.ravel_multi_index((rec, send + 1), (n_row + 1, n_col + 1)) + 1,
+            polar=True,
+        )  # Add new polar axis
 
         axs[rec, send + 1].fill_between(
             tuning.iloc[:, rec].index,
@@ -428,7 +549,7 @@ def plot_coupling(responses, tuning, cmap_name="seismic",
                 ylim[1] - ylim[0],
                 alpha=alpha,
                 color=cmap(color[rec, send]),
-                zorder=1
+                zorder=1,
             )
             axs[rec, send].add_patch(rect)
             axs[rec, send].set_xlim(xlim)
@@ -454,7 +575,9 @@ def plot_history_window(neuron_count, interval, window_size_sec):
 
     fig, _ = plt.subplots(1, 1, figsize=(8, 3.5))
     plt.step(
-        neuron_count.restrict(interval).t, neuron_count.restrict(interval).d, where="post"
+        neuron_count.restrict(interval).t,
+        neuron_count.restrict(interval).d,
+        where="post",
     )
     ylim = plt.ylim()
     plt.axvspan(
@@ -499,8 +622,9 @@ def plot_convolved_counts(counts, conv_spk, *epochs, figsize=(6.5, 4.5)):
     return fig
 
 
-def plot_rates_and_smoothed_counts(counts, rate_dict,
-                                   start=8819.4, end=8821, smooth_std=0.05, smooth_ws_scale=20):
+def plot_rates_and_smoothed_counts(
+    counts, rate_dict, start=8819.4, end=8821, smooth_std=0.05, smooth_ws_scale=20
+):
     ep = nap.IntervalSet(start=start, end=end)
     fig = plt.figure()
     for key in rate_dict:
@@ -508,7 +632,12 @@ def plot_rates_and_smoothed_counts(counts, rate_dict,
 
     idx_spikes = np.where(counts.restrict(ep).d > 0)[0]
     plt.vlines(counts.restrict(ep).t[idx_spikes], -8, -1, color="k")
-    plt.plot(counts.smooth(smooth_std, size_factor=smooth_ws_scale).restrict(ep) * counts.rate, color="k", label="Smoothed spikes")
+    plt.plot(
+        counts.smooth(smooth_std, size_factor=smooth_ws_scale).restrict(ep)
+        * counts.rate,
+        color="k",
+        label="Smoothed spikes",
+    )
     plt.axhline(0, color="k")
     plt.xlabel("Time (sec)")
     plt.ylabel("Firing Rate (Hz)")
@@ -525,9 +654,10 @@ def plot_basis(n_basis_funcs=8, window_size_sec=0.8):
     plt.xlabel("time (sec)")
     return fig
 
+
 def plot_position_phase_speed_tuning(
     pf, glm_pf, tc_speed, glm_speed, tc_pos_theta, glm_pos_theta, xybins
-    ):
+):
     fig = plt.figure()
     gs = plt.GridSpec(2, 2)
     plt.subplot(gs[0, 0])
@@ -559,6 +689,7 @@ def plot_position_phase_speed_tuning(
     plt.tight_layout()
 
     return fig
+
 
 def plot_position_speed_tuning(axis, tc, pf, tc_speed, m):
     gs = axis.subgridspec(1, 2)
@@ -602,7 +733,7 @@ def plot_heatmap_cv_results(cvdf_wide, label=None):
     # Labeling the colorbar
     colorbar = ax.collections[0].colorbar
     if not label:
-        colorbar.set_label('log-likelihood')
+        colorbar.set_label("log-likelihood")
     else:
         colorbar.set_label(label)
 
