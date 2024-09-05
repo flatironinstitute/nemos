@@ -20,6 +20,18 @@ except ImportError:
     Pooch = None
 import requests
 
+try:
+    import dandi
+    import fsspec
+    import h5py
+    from dandi.dandiapi import DandiAPIClient
+    from fsspec.implementations.cached import CachingFileSystem
+    from pynwb import NWBHDF5IO
+except ImportError:
+    dandi = None
+    NWBHDF5IO = None
+
+
 from .. import __version__
 
 # Registry of dataset filenames and their corresponding SHA256 hashes.
@@ -370,3 +382,51 @@ def fetch_utils(path=None, version: Optional[str] = None):
     pathlib.Path(file_name).rename(fixed_file_name)
 
     return fixed_file_name.as_posix()
+
+
+def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
+    """Download a dataset from the DANDI Archive (https://dandiarchive.org/)
+
+    Parameters
+    ----------
+    dandiset_id :
+        6-character string of numbers giving the ID of the dandiset.
+    filepath :
+        filepath to the specific .nwb file within the dandiset we wish to return.
+
+    Returns
+    -------
+    io :
+        NWB file containing specified data.
+
+    Examples
+    --------
+    >>> import nemos as nmo
+    >>> io = nmo.fetch.download_dandi_data("000582",
+                                           "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb")
+    >>> nwb = nap.NWBFile(io.read(), lazy_loading=False)
+    >>> print(nwb)
+
+    """
+    if dandi is None:
+        raise ImportError("Missing optional dependency 'dandi'."
+                          " Please use pip or "
+                          "conda to install 'dandi'.")
+    with DandiAPIClient() as client:
+        asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
+        s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
+
+    # first, create a virtual filesystem based on the http protocol
+    fs = fsspec.filesystem("http")
+
+    # create a cache to save downloaded data to disk (optional)
+    fs = CachingFileSystem(
+        fs=fs,
+        cache_storage="nwb-cache",  # Local folder for the cache
+    )
+
+    # next, open the file
+    file = h5py.File(fs.open(s3_url, "rb"))
+    io = NWBHDF5IO(file=file, load_namespaces=True)
+
+    return io
