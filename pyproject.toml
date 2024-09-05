@@ -28,7 +28,6 @@ dependencies = [
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
     "pynapple>=0.6.6",
-    "pooch",
 ]
 
 
@@ -66,6 +65,7 @@ docs = [
     "ipython",
     "matplotlib>=3.7",
     "seaborn",
+    "pooch",
 ]
 
 

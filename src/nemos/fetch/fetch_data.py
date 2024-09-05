@@ -12,7 +12,12 @@ import pathlib
 import shutil
 from typing import List, Optional, Union
 
-import pooch
+try:
+    import pooch
+    from pooch import pooch
+except ImportError:
+    pooch = None
+    Pooch = None
 import requests
 
 from .. import __version__
@@ -25,6 +30,7 @@ REGISTRY_DATA = {
     "allen_478498617.nwb": "262393d7485a5b39cc80fb55011dcf21f86133f13d088e35439c2559fd4b49fa",
     "m691l1.nwb": "1990d8d95a70a29af95dade51e60ffae7a176f6207e80dbf9ccefaf418fe22b6",
 }
+DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
 # Registry of utility script versions and their corresponding SHA256 hashes.
 REGISTRY_UTILS = {
@@ -99,7 +105,7 @@ def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
     return registry_hash
 
 
-def _create_retriever(path: Optional[pathlib.Path] = None) -> pooch.Pooch:
+def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
     """
     Create a pooch retriever for fetching datasets.
 
@@ -197,11 +203,15 @@ def fetch_data(
     :
         The path to the downloaded file or directory.
     """
+    if pooch is None:
+        raise ImportError("Missing optional dependency 'pooch'."
+                          " Please use pip or "
+                          "conda to install 'pooch'.")
     retriever = _create_retriever(path)
     return _retrieve_data(dataset_name, retriever).as_posix()
 
 
-def _retrieve_data(dataset_name: str, retriever: pooch.Pooch) -> pathlib.Path:
+def _retrieve_data(dataset_name: str, retriever: Pooch) -> pathlib.Path:
     """
     Helper function to fetch and process a dataset.
 
@@ -327,6 +337,10 @@ def fetch_utils(path=None, version: Optional[str] = None):
     ValueError
         If the version is not in the regisrtry.
     """
+    if pooch is None:
+        raise ImportError("Missing optional dependency 'pooch'."
+                          " Please use pip or "
+                          "conda to install 'pooch'.")
     if path is None:
         path = _DEFAULT_UTILS_DIR
 
