@@ -26,11 +26,11 @@ from ..basis import RaisedCosineBasisLog
 
 
 def lnp_schematic(
-        input_feature: nap.Tsd,
-        weights: np.ndarray,
-        intercepts: np.ndarray,
-        plot_nonlinear: bool = False,
-        plot_spikes: bool = False,
+    input_feature: nap.Tsd,
+    weights: np.ndarray,
+    intercepts: np.ndarray,
+    plot_nonlinear: bool = False,
+    plot_spikes: bool = False,
 ):
     """Create LNP schematic.
 
@@ -38,10 +38,14 @@ def lnp_schematic(
     - Requires len(weights) == len(intercepts).
     - plot_nonlinear=False and plot_spikes=True will look weird.
     """
-    assert len(weights) == len(intercepts), "weights and intercepts must have same length!"
+    assert len(weights) == len(
+        intercepts
+    ), "weights and intercepts must have same length!"
 
     n_weights = len(weights)
-    fig, axes = plt.subplots(n_weights, 4, sharex=True, sharey="col", gridspec_kw={"wspace": 0.65})
+    fig, axes = plt.subplots(
+        n_weights, 4, sharex=True, sharey="col", gridspec_kw={"wspace": 0.65}
+    )
 
     times = input_feature.t
     input_feature = np.expand_dims(input_feature, 0)
@@ -68,8 +72,16 @@ def lnp_schematic(
     # Draw arrows from input to linear layer
     y_vals = [1.7, 0.5, -0.7]
     for y in y_vals:
-        axes[1, 0].annotate("", (1.5, y), (1, 0.5), xycoords="axes fraction", textcoords="axes fraction", ha="center",
-                            va="center", arrowprops=arrowprops)
+        axes[1, 0].annotate(
+            "",
+            (1.5, y),
+            (1, 0.5),
+            xycoords="axes fraction",
+            textcoords="axes fraction",
+            ha="center",
+            va="center",
+            arrowprops=arrowprops,
+        )
 
     titles = []
     for i in range(n_weights):
@@ -81,8 +93,16 @@ def lnp_schematic(
         if plot_nonlinear:
             axes[i, 2].plot(times, nonlinear[i])
             axes[i, 2].set_title(f"$\\exp({titles[i]})$", y=0.95, fontsize=10)
-            axes[i, 1].annotate("", (1.5, 0.5), (1, 0.5), xycoords="axes fraction", textcoords="axes fraction",
-                                ha="center", va="center", arrowprops=arrowprops)
+            axes[i, 1].annotate(
+                "",
+                (1.5, 0.5),
+                (1, 0.5),
+                xycoords="axes fraction",
+                textcoords="axes fraction",
+                ha="center",
+                va="center",
+                arrowprops=arrowprops,
+            )
         else:
             axes[i, 2].set_visible(False)
 
@@ -94,7 +114,9 @@ def lnp_schematic(
             ax = None
             for j in range(3):
                 ax = fig.add_subplot(gs[j, 0], sharey=ax)
-                spikes = jax.random.poisson(jax.random.PRNGKey(j * i + j + i), nonlinear[i])
+                spikes = jax.random.poisson(
+                    jax.random.PRNGKey(j * i + j + i), nonlinear[i]
+                )
                 spike_times = np.where(spikes)
                 ax.vlines(times[spike_times], 0, spikes[spike_times], color="k")
                 ax.yaxis.set_visible(False)
@@ -102,8 +124,16 @@ def lnp_schematic(
                     ax.xaxis.set_visible(False)
                 else:
                     ax.set_xticks([times.min(), times.max()])
-            axes[i, 2].annotate("", (1.5, 0.5), (1, 0.5), xycoords="axes fraction", textcoords="axes fraction",
-                                ha="center", va="center", arrowprops=arrowprops)
+            axes[i, 2].annotate(
+                "",
+                (1.5, 0.5),
+                (1, 0.5),
+                xycoords="axes fraction",
+                textcoords="axes fraction",
+                ha="center",
+                va="center",
+                arrowprops=arrowprops,
+            )
         else:
             axes[i, 3].set_visible(False)
 
