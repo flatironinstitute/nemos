@@ -271,9 +271,11 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
     fs = fsspec.filesystem("http")
 
     # create a cache to save downloaded data to disk (optional)
+    cache_dir = pooch.os_cache("nemos") / "nwb-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     fs = CachingFileSystem(
         fs=fs,
-        cache_storage="nwb-cache",  # Local folder for the cache
+        cache_storage=cache_dir.as_posix(),  # Local folder for the cache
     )
 
     # next, open the file
