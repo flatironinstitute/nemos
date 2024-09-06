@@ -56,42 +56,6 @@ REGISTRY_URLS_DATA = {
 _NEMOS_ENV = "NEMOS_DATA_DIR"
 
 
-def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
-    """
-    Calculate the SHA256 hash for each file in a directory.
-
-    This function iterates through files in the specified directory
-    and computes their SHA256 hash. This is useful for verifying
-    file integrity or generating new registry entries.
-
-    Parameters
-    ----------
-    data_dir :
-        The path to the directory containing the files to hash.
-
-    Returns
-    -------
-    :
-        A dictionary where the keys are filenames and the values
-        are their corresponding SHA256 hashes.
-    """
-    data_dir = pathlib.Path(data_dir)
-
-    # Initialize the registry dictionary to store file hashes.
-    registry_hash = dict()
-    for file_path in data_dir.iterdir():
-        if file_path.is_dir():
-            continue
-        # Open the file in binary mode to read it.
-        with open(file_path, "rb") as f:
-            sha256_hash = hashlib.sha256()  # Initialize the SHA256 hash object.
-            # Read the file in chunks to avoid loading it all into memory.
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)  # Update the hash with the chunk.
-            registry_hash[file_path.name] = sha256_hash.hexdigest()  # Store the hash.
-    return registry_hash
-
-
 def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
     """Create a pooch retriever for fetching datasets.
 

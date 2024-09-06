@@ -67,6 +67,15 @@ docs = [
     "seaborn",
     "pooch",
 ]
+examples = [
+    "scikit-learn",
+    "dandi",
+    "ipython",
+    "matplotlib>=3.7",
+    "seaborn",
+    "pooch",
+    "fsspec",
+]
 
 
 [tool.black]
