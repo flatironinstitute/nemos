@@ -110,6 +110,12 @@ profile = "black"
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
 
+[tool.coverage.run]
+omit = [
+    "src/nemos/fetch/*",
+    "src/nemos/_documentation_utils/*"
+]
+
 [tool.coverage.report]
 exclude_lines = [
     "@abc.abstractmethod",
