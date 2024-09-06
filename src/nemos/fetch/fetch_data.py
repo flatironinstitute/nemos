@@ -8,6 +8,7 @@ calculate hashes for local files and manage file paths.
 """
 
 import hashlib
+import os
 import pathlib
 from typing import List, Optional, Union
 
@@ -51,6 +52,8 @@ REGISTRY_URLS_DATA = {
     "allen_478498617.nwb": OSF_TEMPLATE.format("vf2nj"),
     "m691l1.nwb": OSF_TEMPLATE.format("xesdm"),
 }
+
+_NEMOS_ENV = "NEMOS_DATA_DIR"
 
 
 def _calculate_sha256(data_dir: Union[str, pathlib.Path]):
@@ -119,7 +122,7 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
         registry=REGISTRY_DATA,
         retry_if_failed=2,
         allow_updates="POOCH_ALLOW_UPDATES",
-        env="NEMOS_DATA_DIR",
+        env=_NEMOS_ENV,
     )
 
 
@@ -271,8 +274,13 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
     fs = fsspec.filesystem("http")
 
     # create a cache to save downloaded data to disk (optional)
-    cache_dir = pooch.os_cache("nemos") / "nwb-cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    # mimicking caching behavior of pooch create
+    if _NEMOS_ENV in os.environ:
+        cache_dir = pathlib.Path(os.environ[_NEMOS_ENV])
+    else:
+        cache_dir = pooch.os_cache("nemos") / "nwb-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
     fs = CachingFileSystem(
         fs=fs,
         cache_storage=cache_dir.as_posix(),  # Local folder for the cache
