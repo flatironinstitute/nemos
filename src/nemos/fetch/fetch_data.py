@@ -168,7 +168,7 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
         cache_dir = pathlib.Path(os.environ[_NEMOS_ENV])
     else:
         cache_dir = pooch.os_cache("nemos") / "nwb-cache"
-        cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
     fs = CachingFileSystem(
         fs=fs,
