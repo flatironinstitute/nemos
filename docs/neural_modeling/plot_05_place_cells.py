@@ -7,18 +7,17 @@ The data for this example are from [Grosmark, Andres D., and György Buzsáki. "
 
 """
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pynapple as nap
-
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
 
-if not os.path.exists("examples_utils/plotting.py"):
-    nmo.fetch.fetch_utils()
-from examples_utils import plotting
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
 
 # configure plots some
 plt.style.use(nmo.styles.plot_style)
@@ -286,7 +285,7 @@ glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis
 
 # %%
 # Let's display both tuning curves together.
-fig = plotting.plot_position_phase_speed_tuning(
+fig = doc_plots.plot_position_phase_speed_tuning(
     pf[neuron], 
     glm_pf[0], 
     tc_speed[neuron], 
@@ -391,7 +390,7 @@ tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20, ep=test_iset)
 fig = plt.figure(figsize=(8, 4))
 outer_grid = fig.add_gridspec(2, 2)
 for i, m in enumerate(models):
-    plotting.plot_position_speed_tuning(
+    doc_plots.plot_position_speed_tuning(
         outer_grid[i // 2, i % 2], 
         tuning_curves[m],
         pf[neuron],

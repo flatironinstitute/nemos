@@ -1,1 +1,1 @@
-from .fetch_data import fetch_data, fetch_utils
+from .fetch_data import DOWNLOADABLE_FILES, download_dandi_data, fetch_data
