@@ -90,44 +90,6 @@ def _create_retriever(path: Optional[pathlib.Path] = None) -> Pooch:
     )
 
 
-def _find_shared_directory(paths: List[pathlib.Path]) -> pathlib.Path:
-    """
-    Find the common parent directory shared by all given paths.
-
-    This function takes a list of file paths and determines the
-    highest-level directory that all paths share.
-
-    Parameters
-    ----------
-    paths :
-        A list of file paths.
-
-    Returns
-    -------
-    :
-        The shared parent directory.
-
-    Raises
-    ------
-    ValueError
-        If no paths are provided or if the paths do not share a common directory.
-    """
-    # Iterate through the parents of the first path to find a common directory.
-    if len(paths) == 0:
-        raise ValueError(
-            "Must provide at least one path. The input list of paths is empty."
-        )
-
-    if len(paths[0].parents) == 0:
-        raise ValueError("The provided path does not have any parent directories.")
-
-    for directory in paths[0].parents:
-        if all([directory in p.parents for p in paths]):
-            return directory
-
-    raise ValueError("The provided paths do not share a common parent directory.")
-
-
 def fetch_data(
     dataset_name: str, path: Optional[Union[pathlib.Path, str]] = None
 ) -> str:
@@ -160,44 +122,8 @@ def fetch_data(
             "conda to install 'pooch'."
         )
     retriever = _create_retriever(path)
-    return _retrieve_data(dataset_name, retriever).as_posix()
-
-
-def _retrieve_data(dataset_name: str, retriever: Pooch) -> pathlib.Path:
-    """
-    Helper function to fetch and process a dataset.
-
-    This function is used internally to download a dataset and, if
-    necessary, decompress it.
-
-    Parameters
-    ----------
-    dataset_name :
-        The name of the dataset to download.
-    retriever :
-        The pooch retriever object used to fetch the dataset.
-
-    Returns
-    -------
-    :
-        The path to the downloaded file or directory.
-    """
-    # Determine if the dataset is an archive and set the appropriate processor.
-    if dataset_name.endswith(".tar.gz"):
-        processor = pooch.Untar()
-    else:
-        processor = None
-
     # Fetch the dataset using pooch.
-    file_name = retriever.fetch(dataset_name, progressbar=True, processor=processor)
-
-    # If the dataset was an archive, find the shared directory; otherwise, return the file path.
-    if dataset_name.endswith(".tar.gz"):
-        file_name = _find_shared_directory([pathlib.Path(f) for f in file_name])
-    else:
-        file_name = pathlib.Path(file_name)
-
-    return file_name
+    return retriever.fetch(dataset_name, progressbar=True)
 
 
 def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
