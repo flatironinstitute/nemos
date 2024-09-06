@@ -7,7 +7,6 @@ SHA256 hash verification. It also provides helper functions to
 calculate hashes for local files and manage file paths.
 """
 
-import hashlib
 import os
 import pathlib
 from typing import List, Optional, Union
