@@ -9,7 +9,7 @@ calculate hashes for local files and manage file paths.
 
 import os
 import pathlib
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 try:
     import pooch
