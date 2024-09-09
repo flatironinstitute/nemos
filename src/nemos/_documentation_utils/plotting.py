@@ -13,6 +13,8 @@ except ImportError:
         "conda to install 'matplotlib'."
     )
 import matplotlib.pyplot as plt
+import warnings
+warnings.warn("plotting functions contained within `_documentation_utils` are intended for nemos's documentation. Feel free to use them, but they will probably not work as intended with other datasets / in other contexts.")
 import numpy as np
 import pandas as pd
 import pynapple as nap
