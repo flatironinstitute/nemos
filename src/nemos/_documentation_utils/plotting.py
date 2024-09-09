@@ -12,14 +12,31 @@ except ImportError:
         " Please use pip or "
         "conda to install 'matplotlib'."
     )
+
+try:
+    import seaborn as sns
+except ImportError:
+    raise ImportError(
+        "Missing optional dependency 'seaborn'."
+        " Please use pip or "
+        "conda to install 'seaborn'."
+    )
+
+try:
+    from IPython.display import HTML
+except ImportError:
+    raise ImportError(
+        "Missing optional dependency 'ipython'."
+        " Please use pip or "
+        "conda to install 'ipython'."
+    )
+
 import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pynapple as nap
-import seaborn as sns
-from IPython.display import HTML
 from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Rectangle
 from numpy.typing import NDArray
