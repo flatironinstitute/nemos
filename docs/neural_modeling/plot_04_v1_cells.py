@@ -6,28 +6,64 @@ The data presented in this notebook was collected by [Sonica Saraf](https://www.
 
 The notebook focuses on fitting a V1 cell model.
 
-!!! warning
-    To execute this notebook locally, ensure you download the necessary [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) into the same directory as this notebook.
-
 """
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from examples_utils import data
 
 import nemos as nmo
 
 # configure plots some
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
+
+
+# utility for filling a time series
+def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
+    """
+    Fill a time series forward in time with data.
+
+    Parameters
+    ----------
+    time_series:
+        The time series to match.
+    data: Tsd, TsdFrame, or TsdTensor
+        The time series with data to be extend.
+
+    Returns
+    -------
+    : Tsd, TsdFrame, or TsdTensor
+        The data time series filled forward.
+
+    """
+    assert isinstance(data, (nap.Tsd, nap.TsdFrame, nap.TsdTensor))
+
+    if ep is None:
+        ep = time_series.time_support
+    else:
+        assert isinstance(ep, nap.IntervalSet)
+        time_series.restrict(ep)
+
+    data = data.restrict(ep)
+    starts = ep.start
+    ends = ep.end
+
+    filled_d = np.full((time_series.t.shape[0], *data.shape[1:]), out_of_range, dtype=data.dtype)
+    fill_idx = 0
+    for start, end in zip(starts, ends):
+        data_ep = data.get(start, end)
+        ts_ep = time_series.get(start, end)
+        idxs = np.searchsorted(data_ep.t, ts_ep.t, side="right") - 1
+        filled_d[fill_idx:fill_idx + ts_ep.t.shape[0]][idxs >= 0] = data_ep.d[idxs[idxs>=0]]
+        fill_idx += ts_ep.t.shape[0]
+    return type(data)(t=time_series.t, d=filled_d, time_support=ep)
+
 
 # %%
 # ## Data Streaming
 #
 
-path = data.download_data("m691l1.nwb", "https://osf.io/xesdm/download",
-                                         '../data')
-
+path = nmo.fetch.fetch_data("m691l1.nwb")
 
 # %%
 # ## Pynapple
@@ -206,7 +242,7 @@ print(filtered_stimulus[:5])
 # as time 0. At time 0.0015? Same thing, up until we pass time 0.025017. Thus,
 # we want to "fill forward" the values of our input, and we have pynapple
 # convenience function to do so:
-filtered_stimulus = data.fill_forward(counts, filtered_stimulus)
+filtered_stimulus = fill_forward(counts, filtered_stimulus)
 filtered_stimulus
 
 # %%

@@ -3,16 +3,11 @@
 """
 # Fit grid cell
 
-!!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
-
 """
 
-import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
-from examples_utils import data
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
@@ -22,7 +17,7 @@ import nemos as nmo
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-io = data.download_dandi_data(
+io = nmo.fetch.download_dandi_data(
     "000582",
     "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb",
 )

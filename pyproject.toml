@@ -27,7 +27,7 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple>=0.6.6"
+    "pynapple>=0.6.6",
 ]
 
 
@@ -65,6 +65,16 @@ docs = [
     "ipython",
     "matplotlib>=3.7",
     "seaborn",
+    "pooch",
+]
+examples = [
+    "scikit-learn",
+    "dandi",
+    "ipython",
+    "matplotlib>=3.7",
+    "seaborn",
+    "pooch",
+    "fsspec",
 ]
 
 
@@ -99,6 +109,12 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
+
+[tool.coverage.run]
+omit = [
+    "src/nemos/fetch/*",
+    "src/nemos/_documentation_utils/*"
+]
 
 [tool.coverage.report]
 exclude_lines = [

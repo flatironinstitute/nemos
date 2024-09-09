@@ -8,9 +8,6 @@ For the example dataset, we will be working with a recording of a freely-moving 
 
 The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https://www.peyrachelab.com/).
 
-!!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
-
 
 """
 
@@ -18,14 +15,13 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pynapple as nap
-from examples_utils import data, plotting
 from sklearn.linear_model import LinearRegression
 
 import nemos as nmo
 
 # %%
 # configure plots
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 
 # %%
@@ -33,10 +29,7 @@ plt.style.use("examples_utils/nemos.mplstyle")
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = data.download_data(
-    "A0670-221213.nwb", "https://osf.io/sbnaw/download", "../data"
-)
-
+path = nmo.fetch.fetch_data("A0670-221213.nwb")
 
 # %%
 # ***
