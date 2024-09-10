@@ -22,6 +22,8 @@ for path in sorted(Path("src").rglob("*.py")):
         full_doc_path = full_doc_path.with_name("index.md")
     elif parts[-1] == "__main__":
         continue
+    elif any(p.startswith("_") for p in parts):
+        continue
 
     nav[parts] = doc_path.as_posix()
     # if the md file name is `module.md`, generate documentation from docstrings
@@ -36,9 +38,14 @@ for path in sorted(Path("src").rglob("*.py")):
         for module_scripts in sorted(this_module_path.rglob("*.py")):
             if "__init__" in module_scripts.name:
                 continue
+            elif any(p.startswith("_") for p in module_scripts.parts):
+                continue
+
             module_index += f"* [{module_scripts.name.replace('.py', '')}]" \
                             f"({module_scripts.name.replace('.py', '.md')})\n"
-
+        if any(p.startswith("_") for p in full_doc_path.parts) or full_doc_path.parts[-2] == "styles":
+            continue
+        print(full_doc_path)
         with mkdocs_gen_files.open(full_doc_path, "w") as fd:
             fd.write(module_index)
 

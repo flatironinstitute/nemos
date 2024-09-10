@@ -463,7 +463,6 @@ sns.despine(ax=ax)
 # %%
 from sklearn.metrics import make_scorer
 
-# NOTE: the order of the arguments is reversed
 pseudo_r2 = make_scorer(
     nmo.observation_models.PoissonObservations().pseudo_r2
 )
