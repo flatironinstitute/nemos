@@ -77,7 +77,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
             </p>
             <hr>
             <p>
-                Already familiar with the concepts? Learn how you can process and analyze your data with NeMoS.  <br><br><i>Requires familiarity with the theory</i>
+                Already familiar with the concepts? Learn how you can process and analyze your data with NeMoS.  <br><br><i>Requires familiarity with the theory</i>.
             </p>
             <p>
                 <a href="../generated/how_to_guide">
@@ -411,7 +411,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
             </p>
             <hr>
             <p>
-                Our detailed description of each module and function. You will find what each method does, what are the parameters, and how it works. <br><br><i>Requires familiarity with the theory</i>
+                Our detailed description of each module and function. You will find what each method does, what are the parameters, and how it works. <br><br><i>Requires familiarity with the theory</i>.
             </p>
             <p>
                 <a href="../reference/SUMMARY/">
