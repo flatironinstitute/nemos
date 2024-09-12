@@ -14,6 +14,7 @@ theme:
   # If md_in_html is defined outside theme, it also results in
   # an error when building the docs.
   markdown_extensions:
+    - attr_list
     - md_in_html
     - admonition
     - tables
@@ -45,16 +46,16 @@ plugins:
   - search
   - gallery:
         conf_script: docs/gallery_conf.py
-        # path to the directory containing our background/neural_modeling
+        # path to the directory containing our background/tutorials
         examples_dirs:
           - docs/background
-          - docs/api_guide
-          - docs/neural_modeling
+          - docs/how_to_guide
+          - docs/tutorials
         # path to the directory where mkdocs will save the generated output
         gallery_dirs:
           - docs/generated/background
-          - docs/generated/api_guide
-          - docs/generated/neural_modeling
+          - docs/generated/how_to_guide
+          - docs/generated/tutorials
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py            # Specify the script to generate the code reference pages
@@ -81,10 +82,10 @@ extra_css:
 
 nav:
     - Home: index.md                          # Link to the index.md file (home page)
-    - Installation Instructions: installation.md # Link to the installation.md file
+    - Install: installation.md # Link to the installation.md file
     - Quickstart: quickstart.md
     - Background: generated/background    # Link to the generated gallery Tutorials
-    - API Guide: generated/api_guide # Link to the generated gallery neural_modeling
-    - Neural Modeling: generated/neural_modeling # Link to the generated gallery neural_modeling
+    - How-To-Guide: generated/how_to_guide # Link to the generated gallery tutorials
+    - Tutorials: generated/tutorials # Link to the generated gallery tutorials
+    - API Guide: reference/             # Link to the reference/ directory
     - For Developers: developers_notes/       # Link to the developers notes
-    - Code References: reference/             # Link to the reference/ directory

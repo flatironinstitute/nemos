@@ -228,7 +228,7 @@ print(filtered_stimulus.rate)
 # %%
 #
 # Hold on, our stimulus is at a much lower rate than what we want for our rates
-# -- in previous neural_modeling, our input has been at a higher rate than our spikes,
+# -- in previous tutorials, our input has been at a higher rate than our spikes,
 # and so we used `bin_average` to down-sample to the appropriate rate. When the
 # input is at a lower rate, we need to think a little more carefully about how
 # to up-sample.
