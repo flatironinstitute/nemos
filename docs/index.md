@@ -82,10 +82,11 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
                 <hr>
                 <p>
-                    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.  <br><br><i>Requires familiarity with the theory</i>.
+                    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
                 </p>
             </div>
             <p>
+                <i>Requires familiarity with the theory</i>.<br>
                 <a href="../generated/how_to_guide">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -396,10 +397,11 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
                 <hr>
                 <p>
-                    Explore fully worked examples to learn how to analyze neural recordings from scratch. <br><br><i>Requires familiarity with the theory</i>.
+                    Explore fully worked examples to learn how to analyze neural recordings from scratch.
                 </p>
                 </div>
             <p>
+               <i>Requires familiarity with the theory</i>.<br>
                 <a href="../generated/tutorials">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -421,9 +423,10 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 <hr>
                 </div>
             <p>
-                Access a detailed description of each module and function, including parameters and functionality. <br><br><i>Requires familiarity with the theory</i>.
+                Access a detailed description of each module and function, including parameters and functionality.
             </p>
             <p>
+                <i>Requires familiarity with the theory</i>.<br>
                 <a href="../reference/SUMMARY/">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
