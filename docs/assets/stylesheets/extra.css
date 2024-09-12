@@ -1,0 +1,20 @@
+/* Flexbox layout for the list items */
+.grid.cards ul > li {
+    display: flex !important; /* Ensure flexbox is applied */
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure the link stays at the bottom */
+.grid.cards ul > li .card-link {
+    margin-top: auto;
+    padding-top: 10px; /* Optional spacing */
+}
+
+/* Adjust the spacing for the hr element */
+.grid.cards ul > li .card-content hr {
+    margin: 10px 0; /* Adjust this value to match the original spacing */
+    flex-shrink: 0; /* Prevent the hr from shrinking */
+}
