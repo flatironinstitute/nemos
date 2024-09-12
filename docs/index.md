@@ -55,7 +55,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
                 <hr>
                 <p>
-                    Need a theory refresher before jumping into data analysis? Take a look at our notes.
+                    Refresh your theoretical knowledge before diving into data analysis with our notes.
                 </p>
             </div>
             <p>
@@ -82,7 +82,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
                 <hr>
                 <p>
-                    Already familiar with the concepts? Learn how you can process and analyze your data with NeMoS.  <br><br><i>Requires familiarity with the theory</i>.
+                    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.  <br><br><i>Requires familiarity with the theory</i>.
                 </p>
             </div>
             <p>
@@ -396,7 +396,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
                 <hr>
                 <p>
-                    Learn how to analyze neural recordings from scratch with our fully worked out examples. <br><br><i>Requires familiarity with the theory</i>.
+                    Explore fully worked examples to learn how to analyze neural recordings from scratch. <br><br><i>Requires familiarity with the theory</i>.
                 </p>
                 </div>
             <p>
@@ -421,7 +421,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 <hr>
                 </div>
             <p>
-                Our detailed description of each module and function. You will find what each method does, what are the parameters, and how it works. <br><br><i>Requires familiarity with the theory</i>.
+                Access a detailed description of each module and function, including parameters and functionality. <br><br><i>Requires familiarity with the theory</i>.
             </p>
             <p>
                 <a href="../reference/SUMMARY/">
