@@ -250,7 +250,7 @@ filtered_stimulus
 # We can see that the time points are now aligned, and we've filled forward the
 # values the way we'd like.
 #
-# Now, similar to the [head direction tutorial](../02_head_direction), we'll
+# Now, similar to the [head direction tutorial](../plot_02_head_direction), we'll
 # use the log-stretched raised cosine basis to create the predictor for our
 # GLM:
 

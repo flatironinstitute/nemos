@@ -192,6 +192,4 @@ Now we can print the best coefficient.
 {'regularizer__regularizer_strength': 0.001}
 ```
 
-For more information, including a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
-
 Enjoy modeling with NeMoS!
