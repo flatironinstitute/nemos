@@ -66,7 +66,7 @@ plugins:
       handlers:
         python:
           options:
-            docstring_style: numpy         
+            docstring_style: numpy
             show_source: true
             members_order: source
             inherited_members: true

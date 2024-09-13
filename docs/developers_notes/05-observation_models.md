@@ -42,6 +42,7 @@ To implement an observation model class you
 [^1]: 
     In statistics, a statistic is sufficient with respect to a statistical model and its associated unknown parameters if "no other statistic that can be calculated from the same sample provides any additional information as to the value of the parameters", adapted from Fisher R. A.
     1922. On the mathematical foundations of theoretical statistics. *Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character* 222:309–368. http://doi.org/10.1098/rsta.1922.0009.
+
 [^2]:
     Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken. 
     *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*. 
