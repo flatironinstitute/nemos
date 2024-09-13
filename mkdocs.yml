@@ -9,10 +9,6 @@ theme:
     primary: 'light blue'                   # The primary color palette for the theme
     features:
       - navigation.tabs                    # Enable navigation tabs feature for the theme
-
-  # if footnotes is defined in theme doesn't work
-  # If md_in_html is defined outside theme, it also results in
-  # an error when building the docs.
   markdown_extensions:
     - attr_list
     - md_in_html
@@ -21,9 +17,6 @@ theme:
     - pymdownx.emoji:
           emoji_index: !!python/name:material.extensions.emoji.twemoji
           emoji_generator: !!python/name:material.extensions.emoji.to_svg
-    - footnotes
-    - pymdownx.superfences
-    - pymdownx.details # add notes toggleable notes ???
   features:
     - content.tabs.link
     - content.code.annotate
@@ -40,6 +33,12 @@ theme:
     - search.highlights
     - search.share
     - search.suggest
+
+markdown_extensions:
+    - footnotes
+    - pymdownx.superfences
+    - pymdownx.details # add notes toggleable notes ???
+
 
 plugins:
   - search
