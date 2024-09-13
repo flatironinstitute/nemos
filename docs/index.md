@@ -35,7 +35,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
              </div>
             <p>
-                <a href="quickstart/" data-preview="">
+                <a href="/quickstart/" data-preview="">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             <path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path>
@@ -59,7 +59,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </p>
             </div>
             <p>
-                <a href="generated/background/" data-preview="">
+                <a href="/generated/background/" data-preview="">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             <path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path>
@@ -87,7 +87,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
             </div>
             <p>
                 <i>Requires familiarity with the theory</i>.<br>
-                <a href="generated/how_to_guide">
+                <a href="/generated/how_to_guide">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             <path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path>
@@ -402,7 +402,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
                 </div>
             <p>
                <i>Requires familiarity with the theory</i>.<br>
-                <a href="generated/tutorials">
+                <a href="/generated/tutorials">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             <path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path>
@@ -427,7 +427,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
             </p>
             <p>
                 <i>Requires familiarity with the theory</i>.<br>
-                <a href="reference/SUMMARY/">
+                <a href="/reference/SUMMARY/">
                     <span class="twemoji">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             <path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"></path>
