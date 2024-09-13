@@ -218,12 +218,11 @@ plt.eventplot(np.where(spikes)[0])
 # filters are known or inferred.
 #
 # !!! warning
-#     Making sure that the dynamics of your recurrent neural network are stable is non-trivial[^1]. In particular,
+#     Making sure that the dynamics of your recurrent neural network are stable is non-trivial[$^{[1]}$](#ref-1). In particular,
 #     coupling weights obtained by fitting a GLM by maximum-likelihood can generate unstable dynamics. If the
 #     dynamics of your recurrently coupled model are unstable, you can try a `soft-plus` non-linearity
 #     instead of an exponential, and you can "shrink" your weights until stability is reached.
 #
-# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
 
 # Neural population parameters
 n_neurons = 2
@@ -362,4 +361,6 @@ plt.ylim(-0.011, .13)
 plt.ylabel("count/bin")
 plt.legend()
 
-
+# %%
+# ## References
+# [1] <span id="ref-1"><a href="https://proceedings.neurips.cc/paper/2020/hash/186b690e29892f137b4c34cfa40a3a4d-Abstract.html">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>

@@ -239,8 +239,7 @@ plt.show()
 
 # %%
 # While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data. 
-#  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[^1] for an example of simulating activity with a GLM.
-# [^1]: Peyrache, A., Schieferstein, N. & Buzsáki, G. Transformation of the head-direction signal into a spatial code. Nat Commun 8, 1752 (2017). https://doi.org/10.1038/s41467-017-01908-3
+#  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[$^{[1]}$](#ref-1) for an example of simulating activity with a GLM.
 #
 # Another way to compare models is to compute tuning curves. Here we use the function `compute_1d_tuning_curves_continuous` from pynapple.
 
@@ -266,3 +265,8 @@ plt.show()
 #     the levels of review and validation that they have for fitting spike data. Users should consider
 #     this a relatively unexplored territory, and we hope that we hope that NeMoS will help researchers
 #     explore this new space of models.
+#
+# ## References
+#
+# [1] <span id="ref-1"><a href="https://doi.org/10.1038/s41467-017-01908-3">Peyrache, A., Schieferstein, N. & Buzsáki, G. Transformation of the head-direction signal into a spatial code. Nat Commun 8, 1752 (2017). https://doi.org/10.1038/s41467-017-01908-3</a></span>
+

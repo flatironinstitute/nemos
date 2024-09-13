@@ -629,19 +629,12 @@ spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 # including spike history is often helpful, it can sometimes make simulations unstable:
 # if your GLM includes auto-regressive inputs (e.g., neurons are
 # connected to themselves or each other), simulations can sometimes can behave 
-# poorly because of runaway excitation [^1][^2].
+# poorly because of runaway excitation [$^{[1, 2]}$](#ref-1).
 #
 # Finally, you may want a number with which to evaluate your model's
 # performance. As discussed earlier, the model optimizes log-likelihood to find
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
-#
-# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
-# [^2]: Hocker, David, and Memming Park. "Multistep inference for generalized linear 
-# spiking models curbs runaway excitation." International IEEE/EMBS Conference on Neural Engineering,
-# May 2017.
-
-
 
 log_likelihood = model.score(predictor, count, score_type="log-likelihood")
 print(f"log-likelihood: {log_likelihood}")
@@ -694,4 +687,8 @@ model.score(predictor, count, score_type='pseudo-r2-Cohen')
 # neuron diversification. Nature, 598(7879):151-158. doi:
 # 10.1038/s41586-021-03813-8
 #
+# ## References
 #
+# [1] <span id="ref-1"><a href="https://proceedings.neurips.cc/paper/2020/hash/186b690e29892f137b4c34cfa40a3a4d-Abstract.html">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>
+#
+# [2] <a href="https://ieeexplore.ieee.org/document/8008426">Hocker, David, and Memming Park. "Multistep inference for generalized linear spiking models curbs runaway excitation." International IEEE/EMBS Conference on Neural Engineering, May 2017.</a>
