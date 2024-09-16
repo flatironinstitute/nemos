@@ -21,13 +21,13 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
 -   :material-clock-fast:{ .lg .middle } __Getting Started__
 
-    ---
+      ---
 
-    New to NeMoS? Get the ball rolling with our quickstart.
+      New to NeMoS? Get the ball rolling with our quickstart.
 
-    [:octicons-arrow-right-24: Quickstart](quickstart.md)
+      [:octicons-arrow-right-24: Quickstart](quickstart.md)
 
--   <img src="assets/menu_book.svg" alt="Background"> __Background__
+-   ![Background](assets/menu_book.svg) __Background__
 
     ---
 
@@ -35,7 +35,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
     [:octicons-arrow-right-24: Background](generated/background)
 
--   <img src="assets/light_bulb.svg" alt="How-To Guide"> __How-To Guide__
+-   ![How-To Guide](assets/light_bulb.svg) __How-To Guide__
 
     ---
 
@@ -44,7 +44,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     *Requires familiarity with the theory.*<br>
     [:octicons-arrow-right-24: How-To Guide](generated/how_to_guide)
 
--   <img src="assets/brain-illustration-1-svgrepo-com.svg" alt="Neural Modeling">  __Neural Modeling__
+-   ![Neural Modeling](assets/brain-illustration-1-svgrepo-com.svg)  __Neural Modeling__
 
     ---
 
@@ -53,7 +53,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     *Requires familiarity with the theory.*<br>
     [:octicons-arrow-right-24: Tutorials](generated/tutorials)
 
--   <img src="assets/settings.svg" alt="API Guide"> __API Guide__
+-   ![API Guide](assets/settings.svg) __API Guide__
 
     ---
 
@@ -62,7 +62,9 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     *Requires familiarity with the theory.*<br>
     [:octicons-arrow-right-24: API Guide](generated/api_guide)
 
--   :material-scale-balance:{ .lg .middle } __Open Source, MIT__
+-   :material-scale-balance:{ .lg .middle } __Open Source, MIT__ 
+
+    ---
 
     NeMoS is licensed under MIT.
 
