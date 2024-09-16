@@ -1,3 +1,7 @@
+---
+hide:
+  - navigation
+---
 
 This tutorial will introduce the main NeMoS functionalities. This is intended for users that are 
 already familiar with the GLM framework but want to learn how to interact with the NeMoS API. 
