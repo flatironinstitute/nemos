@@ -84,7 +84,7 @@ nav:
     - Install: installation.md # Link to the installation.md file
     - Quickstart: quickstart.md
     - Background: generated/background    # Link to the generated gallery Tutorials
-    - How-To-Guide: generated/how_to_guide # Link to the generated gallery tutorials
+    - How-To Guide: generated/how_to_guide # Link to the generated gallery tutorials
     - Tutorials: generated/tutorials # Link to the generated gallery tutorials
     - API Guide: reference/             # Link to the reference/ directory
     - For Developers: developers_notes/       # Link to the developers notes
