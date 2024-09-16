@@ -35,7 +35,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
 <div class="grid cards" markdown>
 
--   :material-clock-fast:{ .lg .middle } __Getting Started__
+-   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__
 
       ---
 
