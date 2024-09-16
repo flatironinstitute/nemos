@@ -38,6 +38,8 @@ markdown_extensions:
     - footnotes
     - pymdownx.superfences
     - pymdownx.details # add notes toggleable notes ???
+    - pymdownx.tabbed:
+        alternate_style: true
 
 
 plugins:
