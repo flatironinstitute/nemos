@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+  - toc
+---
 
 We communicate via several channels on Github:
 

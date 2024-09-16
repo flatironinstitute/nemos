@@ -1,3 +1,7 @@
+---
+hide:
+  - navigation
+---
 
 At his core, NeMoS consists of two primary modules: the `basis` and the `glm` module.
 
