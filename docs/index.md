@@ -8,6 +8,8 @@
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
+__Useful links:__ [:material-alert-circle-outline:{ .lg .middle } Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md) | [:material-scale-balance:{ .lg .middle } MIT License](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
+
 ## Overview
 
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
@@ -61,7 +63,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     Access a detailed description of each module and function, including parameters and functionality. 
 
     *Requires familiarity with the theory.*<br>
-    [:octicons-arrow-right-24: API Guide](generated/api_guide)
+    [:octicons-arrow-right-24: API Guide](reference/SUMMARY.md)
 
 -   ![Install](assets/construction_24dp_5F6368_FILL0_wght400_GRAD0_opsz24.svg) __Installation Instructions__ 
 
@@ -93,24 +95,3 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     For those looking to get a better grasp of the Generalized Linear Model, we recommend checking out the 
     Neuromatch Academy's lesson [here](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) and Jonathan Pillow's tutorial 
     from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
-
-
-## Getting help and getting in touch
-
-We communicate via several channels on Github:
-
-- To report a bug, open an
-  [issue](https://github.com/flatironinstitute/nemos/issues).
-- To ask usage questions, discuss broad issues, or show off what you’ve made
-  with NeMoS, go to
-  [Discussions](https://github.com/flatironinstitute/nemos/discussions).
-- To send suggestions for extensions or enhancements, please post in the
-  [ideas](https://github.com/flatironinstitute/nemos/discussions/categories/ideas)
-  section of discussions first. We’ll discuss it there and, if we decide to
-  pursue it, open an issue to track progress.
-- To contribute to the project, see the [contributing
-  guide](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md).
-
-In all cases, we request that you respect our [code of
-conduct](https://github.com/flatironinstitute/nemos?tab=coc-ov-file).
-
