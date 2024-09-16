@@ -15,27 +15,26 @@
 
 ### Creating and Activating a Virtual Environment
 
-**For macOS and Linux:**
+=== "macOS/Linux"
 
-1. Open a terminal.
+   1. Open a terminal.
 
-2. Run the following commands to create and activate the virtual environment:
+   2. Run the following commands to create and activate the virtual environment:
 
-    ```bash
-    python -m venv ~/python_venvs/nemos
-    source ~/python_venvs/nemos/bin/activate
-    ```
+       ```bash
+       python -m venv ~/python_venvs/nemos
+       source ~/python_venvs/nemos/bin/activate
+       ```
+=== "Windows"
 
-**For Windows:**
+   1. Open a command prompt.
 
-1. Open a command prompt.
-
-2. Execute the commands below to create and activate the virtual environment:
-    ```
-    python -m venv C:%HOMEPATH%\python_venvs\nemos
-    cd C:%HOMEPATH%\python_venvs\nemos\
-    .\Scripts\activate
-    ```
+   2. Execute the commands below to create and activate the virtual environment:
+       ```
+       python -m venv C:%HOMEPATH%\python_venvs\nemos
+       cd C:%HOMEPATH%\python_venvs\nemos\
+       .\Scripts\activate
+       ```
 
 ## Installation Steps
 After creating you virtual environment, follow one of the following sections below, depending on whether you need GPU support or not:

@@ -63,34 +63,27 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     *Requires familiarity with the theory.*<br>
     [:octicons-arrow-right-24: API Guide](generated/api_guide)
 
--   :material-scale-balance:{ .lg .middle } __Open Source, MIT__ 
+-   ![Install](assets/construction_24dp_5F6368_FILL0_wght400_GRAD0_opsz24.svg) __Installation Instructions__ 
 
     ---
+    
+    Run the following `pip` command in your virtual environment.
+    === "macOS/Linux"
 
-    NeMoS is licensed under MIT.
+        ```bash
+        pip install nemos
+        ```
 
-    [:octicons-arrow-right-24: License](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
+    === "Windows"
+    
+        ```
+        python -m pip install nemos
+        ```
+    
+    *For more information see:*<br>
+    [:octicons-arrow-right-24: Install](installation.md)
 
 </div>
-
-## Installation
-Run the following `pip` command in your virtual environment.
-
-
-=== "macOS/Linux"
-
-    ```bash
-    pip install nemos
-    ```
-
-=== "Windows"
-
-    ```
-    python -m pip install nemos
-    ```
-
-For more details, including specifics for GPU users and developers, refer to NeMoS [docs](https://nemos.readthedocs.io/en/latest/installation/).
-
 
 !!! warning "Disclaimer"
     Please note that this package is currently under development. While you can
