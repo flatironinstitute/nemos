@@ -99,8 +99,7 @@ ll = glm.score(X, y)
 <img src="docs/assets/glm_population_scheme.svg" width="84%">
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/how_to_guide
-/plot_04_population_glm/) object.
+The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/how_to_guide/plot_04_population_glm/) object.
 
 #### Feature Representation
 
