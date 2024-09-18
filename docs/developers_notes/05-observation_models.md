@@ -24,7 +24,7 @@ For subclasses derived from `Observations` to function correctly, they must impl
 
 - **estimate_scale**: A method for estimating the scale parameter of the model. Rate and scale are sufficient to fully characterize distributions from the exponential family.
 
-???+ info "<span id="suff-stat">Sufficient statistics (Click to expand/collapse)</span>"
+???+ info "<span id="suff-stat">Sufficient statistics</span>"
     In statistics, a statistic is sufficient with respect to a statistical model and its associated unknown parameters if "no other statistic that can be calculated from the same sample provides any additional information as to the value of the parameters", adapted from [[1]](#ref-1).
 
 ### Public Methods

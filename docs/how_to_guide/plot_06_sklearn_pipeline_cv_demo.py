@@ -221,7 +221,7 @@ param_grid = dict(
 # %%
 # #### Run the grid search
 # Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn `model_selection.GridsearchCV` class.
-# ??? info "K-Fold cross-validation (click to expand/collapse)"
+# ??? info "K-Fold cross-validation"
 #     <p align="center">
 #     <img src="../../../assets/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;">
 #     <br>
@@ -243,7 +243,7 @@ gridsearch.fit(X, y)
 
 # %%
 #
-# ??? note "Manual cross-validation (click to expand/collapse)"
+# ??? note "Manual cross-validation"
 #     To appreciate how much boiler-plate code we are saving by calling scikit-learn cross-validation, below
 #     we can see how this cross-validation will look like in a manual loop.
 #

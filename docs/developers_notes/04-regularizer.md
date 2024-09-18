@@ -57,7 +57,7 @@ When developing a functional (i.e., concrete) `Regularizer` class:
 - **Must** define a default solver and a tuple of allowed solvers.
 - **May** require extra initialization parameters, like the `mask` argument of `GroupLasso`.
 
-??? tip "Convergence Test (Click to expand/collapse)"
+??? tip "Convergence Test"
     When adding a new regularizer, you must include a convergence test, which verifies that
     the model parameters the regularizer finds for a convex problem such as the GLM are identical
     whether one minimizes the penalized loss directly and uses the proximal operator (i.e., when

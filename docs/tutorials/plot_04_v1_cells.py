@@ -97,7 +97,7 @@ spikes = units[[34]]
 
 # %%
 # How could we predict neuron's response to white noise stimulus?
-# 
+#
 # - we could fit the instantaneous spatial response. that is, just predict
 #   neuron's response to a given frame of white noise. this will give an x by y
 #   filter. implicitly assumes that there's no temporal info: only matters what
@@ -269,7 +269,7 @@ convolved_input = basis.compute_features(filtered_stimulus)
 # Now we're ready to fit the model! Let's do it, same as before:
 
 
-model = nmo.glm.GLM(solver_name="LBFGS")
+model = nmo.glm.GLM()
 model.fit(convolved_input, counts)
 
 # %%

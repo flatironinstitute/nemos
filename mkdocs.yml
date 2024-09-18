@@ -46,12 +46,14 @@ plugins:
   - search
   - gallery:
         conf_script: docs/gallery_conf.py
-        # path to the directory containing our background/tutorials
+        # These directories contain the input .py scripts for mkdocs-gallery
         examples_dirs:
           - docs/background
           - docs/how_to_guide
           - docs/tutorials
-        # path to the directory where mkdocs will save the generated output
+        # These are the output directories for mkdocs-gallery, and correspond
+        # directly to the input dirs listed above. their contents should not be
+        # touched
         gallery_dirs:
           - docs/generated/background
           - docs/generated/how_to_guide
