@@ -26,7 +26,7 @@ of `(n_time_points, n_features)`.
 On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights, 
 evaluating the model performance, and explore its behavior on new input.
 
-### Basic Model Fitting
+### Model Fitting
 
 Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
