@@ -8,7 +8,6 @@ For the example dataset, we will be working with a recording of a freely-moving 
 
 The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https://www.peyrachelab.com/).
 
-
 """
 
 import jax
@@ -34,7 +33,7 @@ path = nmo.fetch.fetch_data("A0670-221213.nwb")
 # %%
 # ***
 # ## pynapple preprocessing
-# 
+#
 # Now that we have the file, let's load the data. The NWB file contains multiple entries.
 data = nap.load_file(path)
 print(data)
@@ -47,7 +46,7 @@ print(transients)
 
 # %%
 # `transients` is a `TsdFrame`. Each column contains the activity of one neuron.
-# 
+#
 # The mouse was recorded for a 20 minute recording epoch as we can see from the `time_support` property of the `transients` object.
 
 ep = transients.time_support
@@ -68,7 +67,7 @@ ax[1].set_xlabel("Time(s)")
 plt.tight_layout()
 
 # %%
-# You can see that the calcium signals are both nonnegative, and noisy. One (neuron 4) has much higher SNR than the other. We cannot typically resolve individual action potentials, but instead see slow calcium fluctuations that result from an unknown underlying electrical signal (estimating the spikes from calcium traces is known as _deconvolution_ and is beyond the scope of this demo). 
+# You can see that the calcium signals are both nonnegative, and noisy. One (neuron 4) has much higher SNR than the other. We cannot typically resolve individual action potentials, but instead see slow calcium fluctuations that result from an unknown underlying electrical signal (estimating the spikes from calcium traces is known as _deconvolution_ and is beyond the scope of this demo).
 
 # %%
 # We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function `compute_1d_tuning_curves_continuous`.
@@ -96,7 +95,7 @@ plt.tight_layout()
 
 Y = transients.bin_average(0.1, ep)
 
-# %% 
+# %%
 # We can visualize the downsampled transients for the first 50 seconds of data.
 plt.figure()
 plt.plot(transients[:,0].get(0, 50), linewidth=5, label="30 Hz")
@@ -111,7 +110,7 @@ plt.show()
 
 # %%
 # ## Basis instantiation
-# 
+#
 # We can define a cyclic-BSpline for capturing the encoding of the heading angle, and a log-spaced raised cosine basis for the coupling filters between neurons. Note that we are not including a self-coupling (spike history) filter, because in practice we have found it results in overfitting.
 #
 # We can combine the two bases.
@@ -134,7 +133,6 @@ basis = heading_basis + coupling_basis
 #     Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 
 model = nmo.glm.GLM(
-    solver_name="LBFGS",
     solver_kwargs=dict(tol=10**-13),
     regularizer="Ridge",
     regularizer_strength=0.02,
@@ -168,7 +166,7 @@ print(Y.shape)
 # ## Design matrix
 #
 # We can now create the design matrix by combining the head-direction of the animal and the activity of all other neurons.
-# 
+#
 X = basis.compute_features(head_direction, Y[:, selected_neurons])
 
 # %%
@@ -192,7 +190,7 @@ Ytest = Y.restrict(test_ep)
 
 # %%
 # ## Model fitting
-# 
+#
 # It's time to fit the model on the data from the neuron we left out.
 
 model.fit(Xtrain, Ytrain[:, neu])
@@ -209,7 +207,7 @@ valid = ~jnp.isnan(Xtrain.d.sum(axis=1)) # Scikit learn does not like nans.
 mdl.fit(Xtrain[valid], Ytrain[valid, neu])
 
 
-# %% 
+# %%
 # We now have 2 models we can compare. Let's predict the activity of the neuron during the test epoch.
 
 yp = model.predict(Xtest)
@@ -238,7 +236,7 @@ plt.ylabel("Fluorescence")
 plt.show()
 
 # %%
-# While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data. 
+# While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data.
 #  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[$^{[1]}$](#ref-1) for an example of simulating activity with a GLM.
 #
 # Another way to compare models is to compute tuning curves. Here we use the function `compute_1d_tuning_curves_continuous` from pynapple.
@@ -269,4 +267,3 @@ plt.show()
 # ## References
 #
 # [1] <span id="ref-1"><a href="https://doi.org/10.1038/s41467-017-01908-3">Peyrache, A., Schieferstein, N. & Buzsáki, G. Transformation of the head-direction signal into a spatial code. Nat Commun 8, 1752 (2017). https://doi.org/10.1038/s41467-017-01908-3</a></span>
-

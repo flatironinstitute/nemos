@@ -156,7 +156,6 @@ plt.tight_layout()
 
 model = nmo.glm.GLM(
     regularizer="Ridge",
-    solver_name="LBFGS",
     regularizer_strength=0.001
 )
 
