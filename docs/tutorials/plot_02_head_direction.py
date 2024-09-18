@@ -11,8 +11,6 @@
 
 """
 
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
@@ -111,7 +109,7 @@ fig = doc_plots.plot_head_direction_tuning(
 # %%
 # As we can see, the population activity tracks very well the current head-direction of the animal.
 # **Question : are neurons constantly tuned to head-direction and can we use it to predict the spiking activity of each neuron based only on the activity of other neurons?**
-# 
+#
 # To fit the GLM faster, we will use only the first 3 min of wake
 
 

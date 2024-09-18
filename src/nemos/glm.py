@@ -313,7 +313,7 @@ class GLM(BaseRegressor):
             Score predicted rates against target spike counts.
         - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
             Simulate neural activity in response to a feed-forward input .
-        - [simulate_recurrent (feed-forward + coupling)](../glm/#nemos.glm.GLMRecurrent.simulate_recurrent)
+        - [simulate_recurrent (feed-forward + coupling)](../simulation/#nemos.simulation.simulate_recurrent)
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network.
         """

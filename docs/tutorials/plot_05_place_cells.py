@@ -6,7 +6,6 @@
 The data for this example are from [Grosmark, Andres D., and György Buzsáki. "Diversity in neural firing dynamics supports both rigid and learned hippocampal sequences." Science 351.6280 (2016): 1440-1443](https://www.science.org/doi/full/10.1126/science.aad1935).
 
 """
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -111,7 +110,7 @@ print(data)
 
 
 # %%
-# `data` is a `TsdFrame` that contains the position and phase. Before calling `compute_2d_tuning_curves` from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron. 
+# `data` is a `TsdFrame` that contains the position and phase. Before calling `compute_2d_tuning_curves` from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
 #
 # There are a lot of neurons but for this analysis, we will focus on one neuron only.
 neuron = 175
@@ -286,12 +285,12 @@ glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis
 # %%
 # Let's display both tuning curves together.
 fig = doc_plots.plot_position_phase_speed_tuning(
-    pf[neuron], 
-    glm_pf[0], 
-    tc_speed[neuron], 
-    glm_speed[0], 
+    pf[neuron],
+    glm_pf[0],
+    tc_speed[neuron],
+    glm_speed[0],
     tc_pos_theta[neuron],
-    glm_pos_theta[0], 
+    glm_pos_theta[0],
     xybins
     )
 
@@ -391,7 +390,7 @@ fig = plt.figure(figsize=(8, 4))
 outer_grid = fig.add_gridspec(2, 2)
 for i, m in enumerate(models):
     doc_plots.plot_position_speed_tuning(
-        outer_grid[i // 2, i % 2], 
+        outer_grid[i // 2, i % 2],
         tuning_curves[m],
         pf[neuron],
         tc_speed[neuron],

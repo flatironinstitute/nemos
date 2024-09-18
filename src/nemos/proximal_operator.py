@@ -112,7 +112,7 @@ def prox_group_lasso(
     $$
     where $G$ is the number of groups, and $\beta_g$ is the parameter vector
     associated with the $g$-th group.
-    The analytical solution[^1] for the beta is,
+    The analytical solution[$^{[1]}$](#references). for the beta is,
 
     $$
     \text{prox}(\beta\_g) = \max \left(1 - \frac{\lambda \sqrt{p\_g}}{\Vert \hat{\beta}\_g \Vert_2},
@@ -126,9 +126,10 @@ def prox_group_lasso(
     \Vert \hat{\beta}\_g \Vert_2 \le \frac{1}{\lambda \sqrt{p\_g}}.
     $$
 
-    [^1]:
-        Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
-        Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
+    # References
+    ------------
+    [1] Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
+    Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
 
     """
     weights, intercepts = params

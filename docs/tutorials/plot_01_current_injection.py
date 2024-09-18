@@ -49,8 +49,6 @@ Linear Model and how to fit it with NeMoS.
 
 
 # Import everything
-import os
-
 import jax
 import matplotlib.pyplot as plt
 import numpy as np
@@ -105,8 +103,8 @@ print(data)
 
 # %%
 #
-# The dataset contains several different pynapple objects, which we will 
-# explore throughout this demo. The following illustrates how these fields relate to the data 
+# The dataset contains several different pynapple objects, which we will
+# explore throughout this demo. The following illustrates how these fields relate to the data
 # we visualized above:
 #
 # ![Annotated view of the data we will analyze.](../../assets/allen_data_annotated.gif)
@@ -124,12 +122,11 @@ print(data)
 
 
 trial_interval_set = data["epochs"]
-# convert current from Ampere to pico-amperes, to match the above visualization
-# and move the values to a more reasonable range.
-current = data["stimulus"] * 1e12
+
+current = data["stimulus"]
 spikes = data["units"]
 
-# %% 
+# %%
 # First, let's examine `trial_interval_set`:
 
 
@@ -140,7 +137,7 @@ trial_interval_set.keys()
 # `trial_interval_set` is a dictionary with strings for keys and
 # [`IntervalSets`](https://pynapple-org.github.io/pynapple/reference/core/interval_set/)
 # for values. Each key defines the stimulus protocol, with the value defining
-# the begining and end of that stimulation protocol.
+# the beginning and end of that stimulation protocol.
 
 noise_interval = trial_interval_set["Noise 1"]
 noise_interval
@@ -159,8 +156,6 @@ noise_interval
 #
 # Now let's examine `current`:
 
-
-
 current
 
 # %%
@@ -169,16 +164,18 @@ current
 # ([TimeSeriesData](https://pynapple-org.github.io/pynapple/reference/core/time_series/))
 # object with 2 columns. Like all `Tsd` objects, the first column contains the
 # time index and the second column contains the data; in this case, the current
-# in pA.
+# in Ampere (A).
 #
-# Currently `current` contains the entire ~900 second experiment but, as
+# Currently, `current` contains the entire ~900 second experiment but, as
 # discussed above, we only want one of the "Noise 1" sweeps. Fortunately,
 # `pynapple` makes it easy to grab out the relevant time points by making use
 # of the `noise_interval` we defined above:
 
 
-
 current = current.restrict(noise_interval)
+# convert current from Ampere to pico-amperes, to match the above visualization
+# and move the values to a more reasonable range.
+current = current * 1e12
 current
 
 # %%
@@ -249,7 +246,7 @@ ax.set_xlabel("Time (s)")
 # makes sense: the firing rate should be high where there are many spikes, and
 # vice versa. However, it can be difficult to figure out if your model is doing
 # a good job by squinting at the observed spikes and the predicted firing rates
-# plotted together. 
+# plotted together.
 #
 # One common way to visualize a rough estimate of firing rate is to smooth
 # the spikes by convolving them with a Gaussian filter.
@@ -287,7 +284,7 @@ count
 # this:
 
 # the inputs to this function are the standard deviation of the gaussian in seconds and
-# the full width of the window, in standard deviations. So std=.05 and size_factor=20 
+# the full width of the window, in standard deviations. So std=.05 and size_factor=20
 # gives a total filter size of 0.05 sec * 20 = 1 sec.
 firing_rate = count.smooth(std=0.05, size_factor=20)
 # convert from spikes per bin to spikes per second (Hz)
@@ -296,7 +293,7 @@ firing_rate = firing_rate / bin_size
 # %%
 #
 # Note that firing_rate is a [`TsdFrame`](https://pynapple-org.github.io/pynapple/reference/core/time_series/)!
-# 
+#
 
 print(type(firing_rate))
 
@@ -484,7 +481,7 @@ print(f"count shape: {count.shape}")
 # - Observation model: this object links the firing rate and the observed
 #   data (in this case spikes), describing the distribution of neural activity (and thus changing
 #   the log-likelihood). For spiking data, we use the Poisson observation model, but
-#   we discuss other options for continuous data 
+#   we discuss other options for continuous data
 #   in [the calcium imaging analysis demo](../plot_06_calcium_imaging/).
 #
 # For this example, we'll use an un-regularized LBFGS solver. We'll discuss
@@ -623,25 +620,18 @@ spikes = jax.random.poisson(jax.random.PRNGKey(123), predicted_fr.values)
 # %%
 #
 # Note that this is not actually that informative and, in general, it is
-# recommended that you focus on firing rates when interpreting your model. 
+# recommended that you focus on firing rates when interpreting your model.
 #
-# Also, while 
+# Also, while
 # including spike history is often helpful, it can sometimes make simulations unstable:
 # if your GLM includes auto-regressive inputs (e.g., neurons are
-# connected to themselves or each other), simulations can sometimes can behave 
-# poorly because of runaway excitation [^1][^2].
+# connected to themselves or each other), simulations can sometimes can behave
+# poorly because of runaway excitation [$^{[1, 2]}$](#ref-1).
 #
 # Finally, you may want a number with which to evaluate your model's
 # performance. As discussed earlier, the model optimizes log-likelihood to find
 # the best-fitting weights, and we can calculate this number using its `score`
 # method:
-#
-# [^1]: Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.
-# [^2]: Hocker, David, and Memming Park. "Multistep inference for generalized linear 
-# spiking models curbs runaway excitation." International IEEE/EMBS Conference on Neural Engineering,
-# May 2017.
-
-
 
 log_likelihood = model.score(predictor, count, score_type="log-likelihood")
 print(f"log-likelihood: {log_likelihood}")
@@ -694,4 +684,8 @@ model.score(predictor, count, score_type='pseudo-r2-Cohen')
 # neuron diversification. Nature, 598(7879):151-158. doi:
 # 10.1038/s41586-021-03813-8
 #
+# ## References
 #
+# [1] <span id="ref-1"><a href="https://proceedings.neurips.cc/paper/2020/hash/186b690e29892f137b4c34cfa40a3a4d-Abstract.html">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>
+#
+# [2] <a href="https://ieeexplore.ieee.org/document/8008426">Hocker, David, and Memming Park. "Multistep inference for generalized linear spiking models curbs runaway excitation." International IEEE/EMBS Conference on Neural Engineering, May 2017.</a>

@@ -22,7 +22,9 @@ for path in sorted(Path("src").rglob("*.py")):
         full_doc_path = full_doc_path.with_name("index.md")
     elif parts[-1] == "__main__":
         continue
-    elif any(p.startswith("_") for p in parts):
+
+    # if the submodule is private, skip
+    if len(parts) > 1 and parts[1].startswith("_"):
         continue
 
     nav[parts] = doc_path.as_posix()

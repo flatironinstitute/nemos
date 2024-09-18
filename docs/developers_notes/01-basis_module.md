@@ -72,7 +72,7 @@ The `nemos.basis.Basis` class has the following abstract methods, which every co
 To write a usable (i.e., concrete, non-abstract) basis object, you
 
 - **Must** inherit the abstract superclass `Basis`
-- **Must** define the `__call__` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/nemos/basis/) for the specifics.
+- **Must** define the `__call__` and `_check_n_basis_min` methods with the expected input/output format, see [API Guide](../../reference/nemos/basis/) for the specifics.
 - **Should not** overwrite the `compute_features` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 

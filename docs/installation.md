@@ -1,3 +1,8 @@
+---
+hide:
+  - navigation
+---
+
 ## Prerequisites
 
 1. **Ensure you have Python version `3.10` or above**: Check that Python `3.10` or above is installed in your system by opening the terminal/command prompt and executing the following command,

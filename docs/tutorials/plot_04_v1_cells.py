@@ -97,7 +97,7 @@ spikes = units[[34]]
 
 # %%
 # How could we predict neuron's response to white noise stimulus?
-# 
+#
 # - we could fit the instantaneous spatial response. that is, just predict
 #   neuron's response to a given frame of white noise. this will give an x by y
 #   filter. implicitly assumes that there's no temporal info: only matters what
@@ -228,7 +228,7 @@ print(filtered_stimulus.rate)
 # %%
 #
 # Hold on, our stimulus is at a much lower rate than what we want for our rates
-# -- in previous neural_modeling, our input has been at a higher rate than our spikes,
+# -- in previous tutorials, our input has been at a higher rate than our spikes,
 # and so we used `bin_average` to down-sample to the appropriate rate. When the
 # input is at a lower rate, we need to think a little more carefully about how
 # to up-sample.
@@ -250,7 +250,7 @@ filtered_stimulus
 # We can see that the time points are now aligned, and we've filled forward the
 # values the way we'd like.
 #
-# Now, similar to the [head direction tutorial](../02_head_direction), we'll
+# Now, similar to the [head direction tutorial](../plot_02_head_direction), we'll
 # use the log-stretched raised cosine basis to create the predictor for our
 # GLM:
 
@@ -269,7 +269,7 @@ convolved_input = basis.compute_features(filtered_stimulus)
 # Now we're ready to fit the model! Let's do it, same as before:
 
 
-model = nmo.glm.GLM(solver_name="LBFGS")
+model = nmo.glm.GLM()
 model.fit(convolved_input, counts)
 
 # %%
