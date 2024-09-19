@@ -3,6 +3,8 @@ hide:
   - navigation
 ---
 
+NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data. 
+
 At its core, NeMoS consists of two primary modules: the __`basis`__ and the __`glm`__ module.
 
 The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature 
@@ -30,7 +32,7 @@ evaluating the model performance, and explore its behavior on new input.
 
 Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
-#### Poisson GLM for features analysis
+#### Poisson GLM for Feature Analysis
 
 !!! info "Non-Linear Mapping"
     This section showcases the use of basis as a non-linear mapping.
@@ -54,6 +56,7 @@ basis_1 = nmo.basis.MSplineBasis(n_basis_funcs=5)
 basis_2 = nmo.basis.CyclicBSplineBasis(n_basis_funcs=6)
 basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=7)
 
+# Combine the basis functions with addition and multiplication
 basis = basis_1 * basis_2 + basis_3
 
 # Generate the design matrix starting from some raw 
@@ -96,7 +99,7 @@ Model coefficients shape: (37, )
 Model intercept: [0.38439313]
 ```
 
-#### Poisson GLM for neural population
+#### Poisson GLM for Neural Population
 
 !!! info "Convolution"
     This section demonstrates how to use the basis module to convolve an input (in this case, spike counts) 
@@ -140,7 +143,7 @@ ll = glm.score(X, spike_counts)
 
 ### __Continuous Observations__
 
-By default, NeMoS' GLM models Poisson observations. This is a natural choice for spike counts, however, the package provides a Gamma GLM that is more suitable to model continuous and non-negative observations, like calcium transients.
+By default, NeMoS' GLM uses Poisson observations, which are a natural choice for spike counts. However, the package also supports a Gamma GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
 To change the default observation model, follow the example below,
 
