@@ -1,4 +1,4 @@
-from docs.generated.how_to_guide.plot_02_glm_demo import regularizer---
+---
 hide:
   - navigation
 ---
@@ -35,7 +35,8 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
 #### Poisson GLM for Feature Analysis
 
 !!! info "Non-Linear Mapping"
-    This section showcases the use of basis as a non-linear mapping.
+    This section showcases the use of basis as a non-linear mapping.<br>
+    For a real-data example, check out [this tutorial](../generated/tutorials/plot_05_place_cells).
 
 <img src="../assets/glm_features_scheme.svg" width="100%">
 
@@ -103,7 +104,8 @@ Model intercept: [0.38439313]
 
 !!! info "Convolution"
     This section demonstrates how to use the basis module to convolve an input (in this case, spike counts) 
-    with a bank of kernels.
+    with a bank of kernels.<br>
+    For a real-data example, check out [this tutorial](../generated/tutorials/plot_02_head_direction).
 
 <img src="../assets/glm_population_scheme.svg" width="84%">
 
