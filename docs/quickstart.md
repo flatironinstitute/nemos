@@ -65,22 +65,12 @@ basis = basis_1 * basis_2 + basis_3
 X = basis.compute_features(input_1, input_2, input_3)
 ```
 
-###### Simulate Spike Counts
-
-Next, we'll generate spike counts using a Poisson distribution, where the rate parameter is derived 
-from the exponential of the dot product between the features and coefficients.
-
-```python
-# true coefficients for each feature, shape (n_features, )
-coef = np.random.normal(scale=0.1, size=(X.shape[1], ))
-
-# observed counts, shape (n_samples, )
-spike_counts = np.random.poisson(np.exp(np.matmul(X, coef)))
-```
-
 ###### Fit a GLM
 
 ```python
+
+# generate some random counts (for demonstration only)
+spike_counts = np.random.poisson(size=X.shape[0])
 
 # model definition
 model = nmo.glm.GLM()
@@ -97,7 +87,7 @@ Model coefficients shape: (37, )
 
 >>> # model coefficients, shape (1, )
 >>> print(f"Model intercept: {model.intercept_}")
-Model intercept: [0.38439313]
+Model intercept: [-0.26412687]
 ```
 
 #### Poisson GLM for Neural Population
