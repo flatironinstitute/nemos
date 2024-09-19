@@ -44,7 +44,7 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
 In this example, we'll construct a time-series of features using the basis objects.
 
 
-##### Feature Representation
+#### Feature Representation
 
 ```python
 import nemos as nmo
@@ -66,7 +66,7 @@ basis = basis_1 * basis_2 + basis_3
 X = basis.compute_features(input_1, input_2, input_3)
 ```
 
-##### Fit a GLM
+#### Fit a GLM
 
 ```python
 
