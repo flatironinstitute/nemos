@@ -150,13 +150,13 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="1.4102804"
-     inkscape:cx="387.15705"
-     inkscape:cy="132.2432"
-     inkscape:window-width="2248"
-     inkscape:window-height="1212"
-     inkscape:window-x="163"
-     inkscape:window-y="25"
+     inkscape:zoom="0.84588025"
+     inkscape:cx="389.53504"
+     inkscape:cy="-45.514717"
+     inkscape:window-width="1512"
+     inkscape:window-height="862"
+     inkscape:window-x="0"
+     inkscape:window-y="38"
      inkscape:window-maximized="0"
      inkscape:current-layer="layer-oc1">
     <inkscape:page
@@ -936,5 +936,31 @@
          x="575.43066"
          y="106.776"
          id="tspan127">y</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;stroke-width:3.02362;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="473.01282"
+       y="212.82329"
+       id="text2"><tspan
+         sodipodi:role="line"
+         id="tspan2"
+         x="473.01282"
+         y="212.82329"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">* r.v. = random variable</tspan><tspan
+         sodipodi:role="line"
+         x="473.01282"
+         y="226.15666"
+         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
+         id="tspan3" /></text>
+    <text
+       xml:space="preserve"
+       style="font-style:italic;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';text-align:center;text-anchor:middle;fill:#000000;stroke-width:3.02362;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+       x="509.43045"
+       y="66.697922"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         x="509.43045"
+         y="66.697922">*</tspan></text>
   </g>
 </svg>
