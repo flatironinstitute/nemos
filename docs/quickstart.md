@@ -69,7 +69,7 @@ X = basis.compute_features(input_1, input_2, input_3)
 
 ```python
 
-# generate some random counts (for demonstration only)
+# assume that we observe these spike_counts of shape (n_samples, )
 spike_counts = np.random.poisson(size=X.shape[0])
 
 # model definition
