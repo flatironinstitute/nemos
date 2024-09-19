@@ -3,7 +3,7 @@ hide:
   - navigation
 ---
 
-At his core, NeMoS consists of two primary modules: the `basis` and the `glm` module.
+At its core, NeMoS consists of two primary modules: the `basis` and the `glm` module.
 
 The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature 
 constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented 
