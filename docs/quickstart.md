@@ -2,6 +2,7 @@
 hide:
   - navigation
 ---
+## __Overview__
 
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data. 
 
@@ -28,11 +29,11 @@ of `(n_time_points, n_features)`.
 On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights, 
 evaluating the model performance, and explore its behavior on new input.
 
-### __Basic Usage__
+## __Basic Usage__
 
 Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
-#### Poisson GLM for Feature Analysis
+### Poisson GLM for Feature Analysis
 
 !!! info "Non-Linear Mapping"
     This section showcases the use of basis as a non-linear mapping.<br>
@@ -43,7 +44,7 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
 In this example, we'll construct a time-series of features using the basis objects.
 
 
-###### Feature Representation
+##### Feature Representation
 
 ```python
 import nemos as nmo
@@ -65,7 +66,7 @@ basis = basis_1 * basis_2 + basis_3
 X = basis.compute_features(input_1, input_2, input_3)
 ```
 
-###### Fit a GLM
+##### Fit a GLM
 
 ```python
 
@@ -90,7 +91,7 @@ Model coefficients shape: (37, )
 Model intercept: [-0.26412687]
 ```
 
-#### Poisson GLM for Neural Population
+### Poisson GLM for Neural Population
 
 !!! info "Convolution"
     This section demonstrates how to use the basis module to convolve an input (in this case, spike counts) 
@@ -102,7 +103,7 @@ Model intercept: [-0.26412687]
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
 The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](generated/how_to_guide/plot_04_population_glm.md) object.
 
-##### Feature Representation
+#### Feature Representation
 
 ```python
 # assume that the population spike counts time-series is stored 
@@ -120,7 +121,7 @@ X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
     the convolution performed by the basis objects will be done epoch-by-epoch, helping to avoid artifacts 
     introduced by gaps in your time-series.
 
-##### Fit a Population GLM
+#### Fit a Population GLM
 
 ```python
 # fit a GLM to the first neuron counts time-series
@@ -133,7 +134,7 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, spike_counts)
 ```
 
-### __Continuous Observations__
+## __Continuous Observations__
 
 By default, NeMoS' GLM uses Poisson observations, which are a natural choice for spike counts. However, the package also supports a Gamma GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
@@ -148,7 +149,7 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 
 Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) for a detailed example.
 
-### __Regularization__
+## __Regularization__
 
 NeMoS supports various regularization schemes, including Ridge ($L_2$), Lasso ($L_1$), and Group Lasso, to prevent overfitting and improve model generalization.
 
@@ -162,7 +163,7 @@ glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 ```
 
 
-### __Pre-processing with `pynapple`__
+## __Pre-processing with `pynapple`__
 
 !!! warning
     This section assumes some familiarity with the `pynapple` package for time series manipulation and data 
@@ -241,7 +242,7 @@ plt.show()
 
 ![Alt text](head_dir_tuning.jpg)
 
-### __Compatibility with `scikit-learn`__
+## __Compatibility with `scikit-learn`__
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 
