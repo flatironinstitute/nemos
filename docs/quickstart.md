@@ -1,9 +1,9 @@
----
+from docs.generated.how_to_guide.plot_02_glm_demo import regularizer---
 hide:
   - navigation
 ---
 
-At its core, NeMoS consists of two primary modules: the `basis` and the `glm` module.
+At its core, NeMoS consists of two primary modules: the __`basis`__ and the __`glm`__ module.
 
 The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature 
 constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented 
@@ -26,15 +26,19 @@ of `(n_time_points, n_features)`.
 On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights, 
 evaluating the model performance, and explore its behavior on new input.
 
-### Model Fitting
+### __Basic Usage__
 
 Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
 #### Poisson GLM for features analysis
 
+!!! info "Non-Linear Mapping"
+    This section showcases the use of basis as a non-linear mapping.
+
 <img src="../assets/glm_features_scheme.svg" width="100%">
 
 In this example, we'll construct a time-series of features using the basis objects.
+
 
 ###### Feature Representation
 
@@ -59,10 +63,11 @@ X = basis.compute_features(input_1, input_2, input_3)
 
 ###### Simulate Spike Counts
 
-Let's generate some spikes from a Poisson model.
+Next, we'll generate spike counts using a Poisson distribution, where the rate parameter is derived 
+from the exponential of the dot product between the features and coefficients.
 
 ```python
-# true coefficients, shape (n_features, )
+# true coefficients for each feature, shape (n_features, )
 coef = np.random.normal(scale=0.1, size=(X.shape[1], ))
 
 # observed counts, shape (n_samples, )
@@ -79,7 +84,7 @@ model = nmo.glm.GLM()
 model.fit(X, spike_counts)
 ```
 
-Once fit, you can retrieve model parameters as follows,
+Once the model is fit, you can retrieve the model parameters as shown below.
 
 ```python
 >>> # model coefficients shape is (37, ), or 5 * 6 + 7
@@ -92,6 +97,10 @@ Model intercept: [0.38439313]
 ```
 
 #### Poisson GLM for neural population
+
+!!! info "Convolution"
+    This section demonstrates how to use the basis module to convolve an input (in this case, spike counts) 
+    with a bank of kernels.
 
 <img src="../assets/glm_population_scheme.svg" width="84%">
 
@@ -112,10 +121,11 @@ X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
 ```
 
 !!! note "Multi-epoch convolution"
-    If your data (`spike_counts` in this example) is formatted as a `pynapple` time-series, the convolution performed by the basis objects will be 
-    executed epoch-by-epoch, avoiding the risk of introducing artifacts from gaps in your time-series. See [below](#pre-processing-with-pynapple).
+    If your data (such as spike_counts in this example) is formatted as a [`pynapple` time-series](#pre-processing-with-pynapple), 
+    the convolution performed by the basis objects will be done epoch-by-epoch, helping to avoid artifacts 
+    introduced by gaps in your time-series.
 
-##### Population GLM
+##### Fit a Population GLM
 
 ```python
 # fit a GLM to the first neuron counts time-series
@@ -128,27 +138,36 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, spike_counts)
 ```
 
-### Model Arguments
+### __Continuous Observations__
 
-During initialization, the `GLM` class accepts the following optional input arguments,
+By default, NeMoS' GLM models Poisson observations. This is a natural choice for spike counts, however, the package provides a Gamma GLM that is more suitable to model continuous and non-negative observations, like calcium transients.
 
-1. `model.observation_model`: The statistical model for the observed variable. The available option so far are `nemos.observation_models.PoissonObservation` and  `nemos.observation_models.GammaObservations`, which are the most common choices for modeling spike counts and calcium imaging traces respectively.
-2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`. This parameter can be provided either as a string ("UnRegularized", "Ridge", "Lasso", or "GroupLasso") or as an instance of `nemos.regularizer.Regularizer`.
-
-For more information on how to change default arguments, see the API guide for [`observation_models`](reference/nemos/observation_models.md) and
-[`regularizer`](reference/nemos/regularizer.md).
+To change the default observation model, follow the example below,
 
 ```python
 import nemos as nmo
 
-# initialize a Gamma GLM with Ridge regularization
-model = nmo.glm.GLM(
-    regularizer="Ridge", 
-    observation_model=nmo.observation_models.GammaObservations()
-)
+# set up a Gamma GLM for modeling continuous non-negative data
+glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 ```
 
-### Pre-processing with `pynapple`
+Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) for a detailed example.
+
+### __Regularization__
+
+NeMoS supports various regularization schemes, including Ridge ($L_2$), Lasso ($L_1$), and Group Lasso, to prevent overfitting and improve model generalization.
+
+You can specify the regularization scheme and its strength when initializing the GLM model, as shown below:
+
+```python
+import nemos as nmo
+
+# Instantiate a GLM with Ridge (L2) regularization
+glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+```
+
+
+### __Pre-processing with `pynapple`__
 
 !!! warning
     This section assumes some familiarity with the `pynapple` package for time series manipulation and data 
@@ -227,7 +246,7 @@ plt.show()
 
 ![Alt text](head_dir_tuning.jpg)
 
-### Compatibility with `scikit-learn`
+### __Compatibility with `scikit-learn`__
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 
