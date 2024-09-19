@@ -34,8 +34,7 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
 
 <img src="../assets/glm_features_scheme.svg" width="100%">
 
-In this example, we'll construct a time-series of features using the basis objects, applying a non-linear mapping
-(default behavior):
+In this example, we'll construct a time-series of features using the basis objects.
 
 ###### Feature Representation
 
