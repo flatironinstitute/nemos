@@ -240,7 +240,7 @@ plt.xlabel("heading angle")
 plt.show()
 ```
 
-![Alt text](head_dir_tuning.jpg)
+<img src="../head_dir_tuning.jpg" width="40%">
 
 ## __Compatibility with `scikit-learn`__
 
