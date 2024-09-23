@@ -6,7 +6,7 @@ hide:
 
 # <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%"> </div>
 
-<div style="text-align: center;" markdown>
+<div style="text-align: center;">
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
 ![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
@@ -23,6 +23,13 @@ __Useful Links:__ [:material-chat-question: Getting Help](getting_help.md) | [:m
 
 
 
+```{card} Card title
+:header: The _Header_
+:footer: Footer
+
+Card content
+```
+
 ## __Overview__
 
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
@@ -33,8 +40,26 @@ focusing on the Generalized Linear Model (GLM).
 
 We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
 
-<div class="grid cards" markdown>
 
+::::{grid} 1 1 2 3
+
+:::{card}
+:header: Text content ✏️
+Structure books with text files and Jupyter Notebooks with minimal configuration.
+:::
+
+:::{card}
+:header: MyST Markdown ✨
+Write MyST Markdown to create enriched documents with publication-quality features.
+:::
+
+:::{card}
+:header: Executable content 🔁
+Execute notebook cells, store results, and insert outputs across pages.
+:::
+::::
+
+<div class="grid cards" markdown>
 -   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__
 
       ---
@@ -99,6 +124,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     [:octicons-arrow-right-24: Install](installation.md)
 
 </div>
+
 
 ## :material-scale-balance:{ .lg } License
 
