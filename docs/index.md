@@ -6,7 +6,9 @@ hide:
 
 # <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%"> </div>
 
-<div style="text-align: center;">
+
+<div style="text-align: center;" markdown>
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
 ![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
@@ -15,11 +17,12 @@ hide:
 [![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
 [![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
 
+</div>
+
 
 __Learning Resources:__ [:material-book-open-variant-outline: Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [:material-youtube: Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br> 
 __Useful Links:__ [:material-chat-question: Getting Help](getting_help.md) | [:material-alert-circle-outline: Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [:material-order-bool-ascending-variant: Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
 
-</div>
 
 
 
@@ -60,6 +63,7 @@ Execute notebook cells, store results, and insert outputs across pages.
 ::::
 
 <div class="grid cards" markdown>
+
 -   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__
 
       ---

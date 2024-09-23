@@ -15,22 +15,24 @@ release = '0'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ['myst_parser',
-              'sphinx_design']
+              'sphinx_design',
+            #   'myst_nb',
+              ]
 
 myst_enable_extensions = [
     "amsmath",
     "attrs_inline",
     "colon_fence",
-    "deflist",
+    # "deflist",
     "dollarmath",
-    "fieldlist",
+    # "fieldlist",
     "html_admonition",
     "html_image",
-    "replacements",
-    "smartquotes",
-    "strikethrough",
-    "substitution",
-    "tasklist",
+    # "replacements",
+    # "smartquotes",
+    # "strikethrough",
+    # "substitution",
+    # "tasklist",
 ]
 
 templates_path = ['_templates']
@@ -41,5 +43,5 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_book_theme'
+html_theme = 'sphinx_material'
 html_static_path = ['_static']
