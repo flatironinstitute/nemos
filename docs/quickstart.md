@@ -4,15 +4,49 @@ hide:
 ---
 ## __Overview__
 
-NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data. 
+NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
+ powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 
-At its core, NeMoS consists of two primary modules: the __`basis`__ and the __`glm`__ module.
+At its core, NeMoS consists of two primary modules: the __`glm`__ and the __`basis`__ module.
 
-The `basis` module focuses on designing model features (inputs) for the GLM. It includes a suite of composable feature 
-constructors that accept time-series data as inputs. These inputs can be any observed variables, such as presented 
-stimuli, head direction, position, or spike counts. 
+The **`glm`** module implements Generalized Linear Models (GLMs) to map features to neural activity, such as 
+spike counts or calcium transients. It supports learning GLM weights, evaluating model performance, and exploring 
+model behavior on new inputs.
 
-The basis objects can perform two types of transformations on the inputs:
+
+The `basis` module focuses on designing model features (inputs) for the GLM. 
+It includes a suite of composable feature constructors that accept time-series data, allowing users to model a wide 
+range of observed variables—such as stimuli, head direction, position, or spike counts— as inputs to the GLM.
+
+
+
+
+[//]: # (The basis objects can perform two types of transformations on the inputs:)
+
+[//]: # ()
+[//]: # (1. **Non-linear Mapping:** This process transforms the input data through a non-linear function, )
+
+[//]: # (   allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates. )
+
+[//]: # (   Importantly, this transformation preserves the properties that makes GLM easy to fit and guarantee a )
+
+[//]: # (   single optimal solution &#40;e.g. convexity&#41;.)
+
+[//]: # ()
+[//]: # (2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to )
+
+[//]: # (   capture linear temporal effects. This transformation is particularly useful when analyzing data with )
+
+[//]: # (   inherent time dependencies or when the temporal dynamics of the input are significant.)
+
+[//]: # (Both transformations produce a vector of features `X` that changes over time, with a shape )
+
+[//]: # (of `&#40;n_time_points, n_features&#41;`.)
+
+
+## __Basis For Feature Construction__
+
+The `basis` module includes objects that perform two types of transformations on the inputs:
 
 1. **Non-linear Mapping:** This process transforms the input data through a non-linear function, 
    allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates. 
@@ -22,14 +56,88 @@ The basis objects can perform two types of transformations on the inputs:
 2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to 
    capture linear temporal effects. This transformation is particularly useful when analyzing data with 
    inherent time dependencies or when the temporal dynamics of the input are significant.
+    Both transformations produce a vector of features `X` that changes over time, with a shape 
+    of `(n_time_points, n_features)`.
 
-Both transformations produce a vector of features `X` that changes over time, with a shape 
-of `(n_time_points, n_features)`.
+### Non-linear Mapping
 
-On the other hand, the `glm` module maps the feature to spike counts. It is used to learn the GLM weights, 
-evaluating the model performance, and explore its behavior on new input.
+<figure class="custom-figure">
+    <img src="../assets/glm_features_scheme.svg" width="100%">
+    <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
+</figure>
 
-## __Basic Usage__
+Non-linear mapping is the default mode of operation of any basis object. To instantiate a basis with this configuration, 
+one needs to provide the number of basis functions, and, in a few cases, an additional argument specific to the basis 
+kind (see the [API Guide](../reference/nemos/basis) for specifics).
+
+```python
+>>> import nemos as nmo
+
+>>> n_basis_funcs = 10
+>>> basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs)
+```
+
+The method `compute_features` of basis receives an input of shape `(n_samples, )`, and passes the input through
+each basis function, returning a 2-dimensional array of shape `(n_samples, n_basis_funcs)`.
+
+```python
+>>> import numpy as np
+
+>>> # generate an input
+>>> x = np.arange(100)
+
+>>> # evaluate the basis
+>>> X = basis.compute_features(x)
+>>> X.shape
+(100, 10)
+```
+
+###  Convolution
+
+<figure class="custom-figure">
+    <img src="../assets/glm_population_scheme.svg" alt="GLM Population Scheme">
+    <figcaption><strong>Figure 2:</strong> Basis as a bank of convolutional filters. The figure shows a population GLM for functional connectivity analysis, a classical use-case for basis functions in convolutional mode.</figcaption>
+
+</figure>
+
+If you want to convolve a bank of basis functions with an input you must set the mode of operation of a basis object to 
+`"conv"` and you must provide an integer `window_size` parameter, which defines the length of the filter bank in 
+number of sample points.
+
+```python
+>>> import nemos as nmo
+
+>>> n_basis_funcs = 10
+>>> # define a filter bank of 10 basis function, 200 samples long.
+>>> basis = nmo.basis.BSplineBasis(n_basis_funcs, mode="conv", window_size=200)
+```
+
+Once the basis is initialized, you can call `compute_features` on an input of shape `(n_samples, )` or 
+`(n_samples, n_signals)` to perform the convolution. The output will be a 2-dimensional array of shape 
+`(n_samples, n_basis_funcs)` or `(n_samples, n_basis_funcs * n_signals)` respectively.
+
+!!! warning "Signal length and window size"
+    The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+
+```python
+>>> import numpy as np
+
+>>> x = np.ones(500)
+
+>>> # convolve a single signal
+>>> X = basis.compute_features(x)
+>>> X.shape
+(500, 10)
+
+>>> x_multi = np.ones((500, 3))
+
+>>> # convolve a multiple signals
+>>> X_multi = basis.compute_features(x_multi)
+>>> X_multi.shape
+(500, 30)
+```
+
+For additional information on one-dimensional convolutions, see [here](../generated/background/plot_03_1D_convolution).
 
 Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
@@ -39,7 +147,7 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
     This section showcases the use of basis as a non-linear mapping.<br>
     For a real-data example, check out [this tutorial](../generated/tutorials/plot_05_place_cells).
 
-<img src="../assets/glm_features_scheme.svg" width="100%">
+
 
 In this example, we'll construct a time-series of features using the basis objects.
 
