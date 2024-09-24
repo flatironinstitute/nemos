@@ -20,9 +20,6 @@ import nemos as nmo
 # some helper plotting functions
 from nemos import _documentation_utils as doc_plots
 
-# set the output format for animations in Jupyter notebooks to use JavaScript
-plt.rcParams['animation.html'] = 'jshtml'
-
 # configure pynapple to ignore conversion warning
 nap.nap_config.suppress_conversion_warnings = True
 
@@ -182,7 +179,7 @@ doc_plots.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
 # the figure).
 
 
-doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
+anim = doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
 
 # %%
 # If $t$ is smaller than the window size, we won't have a full window of spike history for estimating the rate.
