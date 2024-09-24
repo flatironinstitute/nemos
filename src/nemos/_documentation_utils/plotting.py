@@ -502,8 +502,7 @@ class PlotSlidingWindow:
 
 
 def run_animation(counts: nap.Tsd, start: float):
-    anim = PlotSlidingWindow(counts, start).run()
-    return HTML(anim.to_html5_video())
+    return PlotSlidingWindow(counts, start).run()
 
 
 def plot_coupling(
