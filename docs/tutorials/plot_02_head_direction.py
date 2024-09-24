@@ -20,6 +20,9 @@ import nemos as nmo
 # some helper plotting functions
 from nemos import _documentation_utils as doc_plots
 
+# set the output format for animations in Jupyter notebooks to use JavaScript
+plt.rcParams['animation.html'] = 'jshtml'
+
 # configure pynapple to ignore conversion warning
 nap.nap_config.suppress_conversion_warnings = True
 
