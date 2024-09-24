@@ -179,7 +179,7 @@ doc_plots.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
 # the figure).
 
 
-anim = doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
+doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
 
 # %%
 # If $t$ is smaller than the window size, we won't have a full window of spike history for estimating the rate.
