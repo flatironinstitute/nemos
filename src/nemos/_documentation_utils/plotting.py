@@ -22,14 +22,6 @@ except ImportError:
         "conda to install 'seaborn'."
     )
 
-try:
-    from IPython.display import HTML
-except ImportError:
-    raise ImportError(
-        "Missing optional dependency 'ipython'."
-        " Please use pip or "
-        "conda to install 'ipython'."
-    )
 
 import warnings
 
@@ -502,8 +494,7 @@ class PlotSlidingWindow:
 
 
 def run_animation(counts: nap.Tsd, start: float):
-    anim = PlotSlidingWindow(counts, start).run()
-    return HTML(anim.to_html5_video())
+    return PlotSlidingWindow(counts, start).run()
 
 
 def plot_coupling(

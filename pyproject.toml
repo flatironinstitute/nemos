@@ -62,7 +62,6 @@ docs = [
     "mkdocs-autorefs>=0.5",
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
@@ -70,7 +69,6 @@ docs = [
 examples = [
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
