@@ -1,6 +1,8 @@
 site_name: NeMoS
 repo_url: https://github.com/flatironinstitute/nemos
 
+strict: true
+
 theme:
   name: 'material'                         # The theme name, using the 'material' theme
   favicon: assets/NeMoS_favicon.ico
