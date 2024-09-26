@@ -17,16 +17,9 @@ build:
       - htmlproofer --help
     post_build:
       # Check everything but the reference (because mkdocstrings do not set href=)
-      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts \
-        --ignore-urls "https://fonts.gstatic.com,https://doi.org/10.1523/JNEUROSCI.3305-05.2005" \
-        --assume-extension --check-external-hash \
-        --ignore-status-codes 403 \
-        --ignore-files "/.+\/site\/reference\/.+/"
+      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts --ignore-urls "https://fonts.gstatic.com,https://doi.org/10.1523/JNEUROSCI.3305-05.2005" --assume-extension --check-external-hash --ignore-status-codes 403 --ignore-files "/.+\/site\/reference\/.+/"
       # Check the reference allowing missing href
-      - htmlproofer $READTHEDOCS_OUTPUT/html \
-        --assume-extension --check-external-hash \
-        --ignore-urls "https://fonts.gstatic.com" \
-        --allow-missing-href --ignore-status-codes 403
+      - htmlproofer $READTHEDOCS_OUTPUT/html --assume-extension --check-external-hash --ignore-urls "https://fonts.gstatic.com" --allow-missing-href --ignore-status-codes 403
 
 mkdocs:
   configuration: mkdocs.yml
