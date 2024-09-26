@@ -21,7 +21,7 @@ build:
         --ignore-status-codes 403 \
         --ignore-files "/.+\/site\/reference\/.+/"
       # Check the reference allowing missing href
-      - htmlproofer ./html \
+      - htmlproofer $READTHEDOCS_OUTPUT/html \
         --assume-extension --check-external-hash \
         --ignore-urls "https://fonts.gstatic.com" \
         --allow-missing-href --ignore-status-codes 403
