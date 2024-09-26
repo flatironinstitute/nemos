@@ -29,10 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .[docs]
       - name: Generate refs
-        run: |
-          cd docs
-          python gen_ref_pages.py
-          cd ..
+        run: python docs/gen_ref_pages.py
       - uses: byrnereese/github-action-mkdocs-link-check@1.0
   tox:
     if: ${{ !github.event.pull_request.draft }}
