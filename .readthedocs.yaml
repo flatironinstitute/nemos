@@ -10,9 +10,9 @@ build:
   tools:
     python: "3.11"
   jobs:
-    post_build:
-      - apt-get update && apt-get install -y ruby-full
+    pre_build:
       - gem install html-proofer
+    post_build:
       # Check everything but the reference (because mkdocstrings do not set href=)
       - htmlproofer ./site --checks Links,Scripts \
         --ignore-urls "https://fonts.gstatic.com,https://doi.org/10.1523/JNEUROSCI.3305-05.2005" \
