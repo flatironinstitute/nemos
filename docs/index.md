@@ -4,7 +4,7 @@ hide:
   - toc
 ---
 
-# <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%"> </div>
+# <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%" alt="NeMoS logo."> </div>
 
 <div style="text-align: center;" markdown>
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)

@@ -189,7 +189,7 @@ doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
 #
 # A fast way to compute this feature matrix is convolving the counts with the identity matrix.
 # We can apply the convolution and NaN-padding in a single step using the
-# [`nemos.utils.create_convolutional_predictor`](../../../reference/nemos/utils/#nemos.utils.create_convolutional_predictor)
+# [`nemos.convolve.create_convolutional_predictor`](../../../reference/nemos/convolve/#nemos.convolve.create_convolutional_predictor)
 # function.
 
 # convert the prediction window to bins (by multiplying with the sampling rate)
@@ -322,7 +322,7 @@ plt.legend()
 # while preserving convexity, is to use a set of basis functions.
 # For history-type inputs, whether of the spiking history or of the current
 # history, we'll use the raised cosine log-stretched basis first described in
-# [Pillow et al., 2005](https://www.jneurosci.org/content/25/47/11003). This
+# [Pillow et al., 2005](https://doi.org/10.1523/JNEUROSCI.3305-05.2005). This
 # basis set has the nice property that their precision drops linearly with
 # distance from event, which is a makes sense for many history-related inputs
 # in neuroscience: whether an input happened 1 or 5 msec ago matters a lot,

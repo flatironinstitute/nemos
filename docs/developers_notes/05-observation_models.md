@@ -44,7 +44,7 @@ To implement an observation model class you
 
 ## References
 <p id="ref-1">[1]
-    <a href="http://doi.org/10.1098/rsta.1922.0009">Fisher R. A. 1922. On the mathematical foundations of theoretical statistics. <em>Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character</em> 222:309–368. http://doi.org/10.1098/rsta.1922.0009</a>.
+    <a href="https://doi.org/10.1098/rsta.1922.0009">Fisher R. A. 1922. On the mathematical foundations of theoretical statistics. <em>Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character</em> 222:309–368. http://doi.org/10.1098/rsta.1922.0009</a>.
 </p>
 
 <p id="ref-2">

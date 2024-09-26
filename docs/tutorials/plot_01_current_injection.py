@@ -77,7 +77,7 @@ plt.style.use(nmo.styles.plot_style)
 # !!! tip
 #
 #     Pynapple can stream any NWB-formatted dataset! See [their
-#     documentation](https://pynapple-org.github.io/pynapple/generated/gallery/tutorial_pynapple_dandi/)
+#     documentation](https://pynapple.org/generated/examples/tutorial_pynapple_dandi/)
 #     for more details, and see the [DANDI Archive](https://dandiarchive.org/)
 #     for a repository of compliant datasets.
 #
@@ -306,7 +306,7 @@ print(type(firing_rate))
 #
 #     We're hiding the details of the plotting function for the purposes of this
 #     tutorial, but you can find it in [the source
-#     code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documetation_utils/plotting.py)
+#     code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documentation_utils/plotting.py)
 #     if you are interested.
 
 doc_plots.current_injection_plot(current, spikes, firing_rate)
