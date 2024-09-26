@@ -18,6 +18,11 @@ on:
        - main
 
 jobs:
+  mkdocs-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: byrnereese/github-action-mkdocs-link-check@v1
   tox:
     if: ${{ !github.event.pull_request.draft }}
     strategy:
