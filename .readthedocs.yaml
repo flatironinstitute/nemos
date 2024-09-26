@@ -13,8 +13,9 @@ build:
   jobs:
     pre_build:
       - gem install html-proofer
-      - echo $READTHEDOCS_OUTPUT
+      - ls $READTHEDOCS_OUTPUT
     post_build:
+      - ls $READTHEDOCS_OUTPUT
       # Check everything but the reference (because mkdocstrings do not set href=)
       - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts \
         --ignore-urls "https://fonts.gstatic.com,https://doi.org/10.1523/JNEUROSCI.3305-05.2005" \
