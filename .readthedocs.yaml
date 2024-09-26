@@ -13,9 +13,9 @@ build:
   jobs:
     pre_build:
       - gem install html-proofer
-      - ls ${READTHEDOCS_OUTPUT}/..
+      - pwd
+      - find . -name 'site'  # Search for the site directory
     post_build:
-      - ls ${READTHEDOCS_OUTPUT}/..
       - ls $READTHEDOCS_OUTPUT
       # Check everything but the reference (because mkdocstrings do not set href=)
       - htmlproofer $READTHEDOCS_OUTPUT/site  --checks Links,Scripts \
