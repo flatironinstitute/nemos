@@ -10,9 +10,9 @@ build:
   tools:
     python: "3.11"
     ruby: "3.3"
-  commands:
-    - gem install html-proofer
   jobs:
+    pre_build:
+      - gem install html-proofer
     post_build:
       # Check everything but the reference (because mkdocstrings do not set href=)
       - htmlproofer ./site --checks Links,Scripts \
