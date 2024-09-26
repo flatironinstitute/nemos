@@ -15,7 +15,7 @@ build:
       - gem install html-proofer -v ">= 5.0.9"  # Ensure version >= 5.0.9
     post_build:
       # Check everything but the reference (because mkdocstrings do not set href=)
-      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts --ignore-urls "https://fonts.gstatic.com,https://doi.org/10.1523/JNEUROSCI.3305-05.2005" --assume-extension --check-external-hash --ignore-status-codes 403 --ignore-files "/.+\/html\/reference\/.+/"
+      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts --ignore-urls "https://fonts.gstatic.com,https://doi.org\/10.1523\/JNEUROSCI.3305-05.2005" --assume-extension --check-external-hash --ignore-status-codes 403 --ignore-files "/.+\/html\/reference\/.+/"
       # Check the reference allowing missing href
       - htmlproofer $READTHEDOCS_OUTPUT/html --assume-extension --check-external-hash --ignore-urls "https://fonts.gstatic.com" --allow-missing-href --ignore-status-codes 403
 
