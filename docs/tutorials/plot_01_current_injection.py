@@ -77,7 +77,7 @@ plt.style.use(nmo.styles.plot_style)
 # !!! tip
 #
 #     Pynapple can stream any NWB-formatted dataset! See [their
-#     documentation](https://pynapple.org/generated/examples/tutorial_pynapple_dandi/)
+#     documentation](https://pynapple-org.github.io/pynapple/generated/examples/tutorial_pynapple_dandi/)
 #     for more details, and see the [DANDI Archive](https://dandiarchive.org/)
 #     for a repository of compliant datasets.
 #
