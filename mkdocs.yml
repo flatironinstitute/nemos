@@ -1,8 +1,6 @@
 site_name: NeMoS
 repo_url: https://github.com/flatironinstitute/nemos
 
-strict: true
-
 theme:
   name: 'material'                         # The theme name, using the 'material' theme
   favicon: assets/NeMoS_favicon.ico
@@ -16,8 +14,9 @@ theme:
     - admonition
     - tables
     - pymdownx.emoji:
-          emoji_index: !!python/name:material.extensions.emoji.twemoji
-          emoji_generator: !!python/name:material.extensions.emoji.to_svg
+        emoji_index: !!python/name:material.extensions.emoji.twemoji
+        emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
   features:
     - content.tabs.link
     - content.code.annotate
@@ -34,6 +33,12 @@ theme:
     - search.highlights
     - search.share
     - search.suggest
+
+validation:
+  omitted_files: info
+  absolute_links: warn  # Or 'relative_to_docs' - new in MkDocs 1.6
+  unrecognized_links: info
+  anchors: warn  # New in MkDocs 1.6
 
 markdown_extensions:
     - md_in_html
@@ -77,7 +82,6 @@ plugins:
 
 extra_javascript:
   - javascripts/katex.js
-  - javascripts/toggle_code.js
   - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/katex.min.js
   - https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.7/contrib/auto-render.min.js
 

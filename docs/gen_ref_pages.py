@@ -42,6 +42,8 @@ for path in sorted(Path("src").rglob("*.py")):
                 continue
             elif any(p.startswith("_") for p in module_scripts.parts):
                 continue
+            elif any(p == "styles" for p in module_scripts.parts):
+                continue
 
             module_index += f"* [{module_scripts.name.replace('.py', '')}]" \
                             f"({module_scripts.name.replace('.py', '.md')})\n"
