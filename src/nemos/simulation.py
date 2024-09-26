@@ -41,11 +41,11 @@ def difference_of_gammas(
     Notes
     -----
     The probability density function of a gamma distribution is parametrized as
-    follows[$^{[1]}$](#references),
+    follows<a href="#ref-1">$^{[1]}$</a>:,
     $$
         p(x;\; a, b) = \frac{b^a x^{a-1} e^{-x}}{\Gamma(a)},
     $$
-    where $\Gamma(a)$ refers to the gamma function, see [[1]](#references).
+    where $\Gamma(a)$ refers to the gamma function, see <a href="#ref-1">[1]</a>:.
 
     Returns
     -------
@@ -58,9 +58,12 @@ def difference_of_gammas(
         - If any of the Gamma parameters is lesser or equal to 0.
         - If the upper_percentile is not in [0, 1).
 
-    # References
-    ------------
-    [1] SciPy Docs - ["scipy.stats.gamma"](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html)
+    References
+    ----------
+    <span id="ref-1">[1]
+    <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html">
+    SciPy Docs - "scipy.stats.gamma"
+    </a></span>
     """
     # check that the gamma parameters are positive (scipy returns
     # nans otherwise but no exception is raised)
