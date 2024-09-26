@@ -9,7 +9,23 @@ version: 2
 build:
   os: ubuntu-22.04
   tools:
-    python: "3.10"
+    python: "3.11"
+  jobs:
+    post_build:
+      - apt-get update && apt-get install -y ruby-full
+      - gem install html-proofer
+      - mkdocs build --strict
+      # Check everything but the reference (bcause mkdocstrings do not set href=)
+      - htmlproofer ./site \
+        --checks Links,Scripts \
+        --ignore-urls "https://fonts.gstatic.com,https://doi.org/10.1523/JNEUROSCI.3305-05.2005" \ # this link exists but requires some extra permissions
+        --assume-extension \
+        --check-external-hash \
+        --ignore-status-codes 403 \
+        --ignore-files "/.+\/site\/reference\/.+/"
+      # Check the reference allowing missing href
+      - htmlproofer ./site/reference --assume-extension --check-external-hash --ignore-urls "https://fonts.gstatic.com" --allow-missing-href --ignore-status-codes 403
+
 
 mkdocs:
   configuration: mkdocs.yml
