@@ -76,7 +76,7 @@ def difference_of_gammas(
     for name, value in variables.items():
         if value <= 0:
             raise ValueError(f"Gamma parameter {name} must be >0.")
-    # check for valid pecentile
+    # check for valid percentile
     if upper_percentile < 0 or upper_percentile >= 1:
         raise ValueError(
             f"upper_percentile should lie in the [0, 1) interval. {upper_percentile} provided instead!"
