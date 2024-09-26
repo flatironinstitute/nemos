@@ -12,7 +12,9 @@ build:
     ruby: "3.3"
   jobs:
     pre_build:
-      - gem install html-proofer
+      - gem install html-proofer -v ">= 5.0.9"  # Ensure version >= 5.0.9
+      - htmlproofer --version  # Verify the version of html-proofer installed
+      - htmlproofer --help
     post_build:
       # Check everything but the reference (because mkdocstrings do not set href=)
       - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts \
