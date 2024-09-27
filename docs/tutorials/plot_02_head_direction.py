@@ -189,7 +189,7 @@ doc_plots.run_animation(neuron_count, epoch_one_spk.start[0])
 #
 # A fast way to compute this feature matrix is convolving the counts with the identity matrix.
 # We can apply the convolution and NaN-padding in a single step using the
-# [`nemos.utils.create_convolutional_predictor`](../../../reference/nemos/utils/#nemos.utils.create_convolutional_predictor)
+# [`nemos.convolve.create_convolutional_predictor`](../../../reference/nemos/convolve/#nemos.convolve.create_convolutional_predictor)
 # function.
 
 # convert the prediction window to bins (by multiplying with the sampling rate)

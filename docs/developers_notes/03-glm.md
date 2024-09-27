@@ -15,7 +15,7 @@ Our design aligns with the `scikit-learn` API, facilitating seamless integration
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant. 
 
-Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](../05-observation_models/#the-abstract-class-observations), [`nemos.regularizer.Regularizer`](../04-regularizer/#the-abstract-class-regularizer) objects as well as the compatible `jaxopt` solvers, respectively.
+Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](../05-observation_models/#the-abstract-class-observations), [`nemos.regularizer.Regularizer`](../06-regularizer/#the-abstract-class-regularizer) objects as well as the compatible `jaxopt` solvers, respectively.
 
 
 <figure markdown>
@@ -31,7 +31,7 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 
 ### Inheritance
 
-`GLM` inherits from [`BaseRegressor`](../02-base_class/#the-abstract-class-baseregressor). This inheritance mandates the direct implementation of methods like `predict`, `fit`, `score` `update`, and `simulate`, plus a number of validation methods.
+`GLM` inherits from [`BaseRegressor`](../02-base_regressor/#the-abstract-class-baseregressor). This inheritance mandates the direct implementation of methods like `predict`, `fit`, `score` `update`, and `simulate`, plus a number of validation methods.
 
 ### Attributes
 
@@ -42,7 +42,7 @@ The `GLM` class provides a direct implementation of the GLM model and is designe
 - **`scale_`**: The scale parameter of the observation distribution, which together with the rate, uniquely specifies a distribution of the exponential family. Example: a 1D Gaussian is specified by the mean which is the rate, and the standard deviation, which is the scale.
 - **`solver_state_`**: Indicates the solver's state. For specific solver states, refer to the [`jaxopt` documentation](https://jaxopt.github.io/stable/index.html#).
 
-Additionally, the `GLM` class inherits the attributes of `BaseRegressor`, see the [relative note](03-base_regressor.md) for more information.
+Additionally, the `GLM` class inherits the attributes of `BaseRegressor`, see the [relative note](02-base_regressor.md) for more information.
 
 ### Public Methods
 
@@ -86,7 +86,7 @@ The `PopulationGLM` class is an extension of the `GLM`, designed to fit multiple
 When crafting a functional (i.e., concrete) GLM class:
 
 - You **must** inherit from `GLM` or one of its derivatives.
-- If you inherit directly from  `BaseRegressor`, you **must** implement all the abstract methods, see the [`BaseRegressor` page](03-base_regressor.md)  for more details.
+- If you inherit directly from  `BaseRegressor`, you **must** implement all the abstract methods, see the [`BaseRegressor` page](02-base_regressor.md)  for more details.
 - If you inherit `GLM` or any of the other concrete classes directly, there won't be any abstract methods. 
 - You **may** embed additional parameter and input checks if required by the specific GLM subclass.
 - You **may** override some of the computations if needed by the model specifications.

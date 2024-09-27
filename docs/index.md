@@ -4,7 +4,7 @@ hide:
   - toc
 ---
 
-# <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%"> </div>
+# <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%" alt="NeMoS logo."> </div>
 
 <div style="text-align: center;" markdown>
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
@@ -17,7 +17,7 @@ hide:
 
 
 __Learning Resources:__ [:material-book-open-variant-outline: Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [:material-youtube: Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br> 
-__Useful Links:__ [:material-chat-question: Getting Help](getting_help.md) | [:material-alert-circle-outline: Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [:material-order-bool-ascending-variant: Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
+__Useful Links:__ [:material-chat-question: Getting Help](getting_help) | [:material-alert-circle-outline: Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [:material-order-bool-ascending-variant: Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
 
 </div>
 
@@ -41,7 +41,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
       New to NeMoS? Get the ball rolling with our quickstart.
 
-      [:octicons-arrow-right-24: Quickstart](quickstart.md)
+      [:octicons-arrow-right-24: Quickstart](quickstart)
 
 -   :material-book-open-variant-outline:{ .lg .middle } &nbsp; __Background__
 
@@ -76,7 +76,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     Access a detailed description of each module and function, including parameters and functionality. 
 
     *Requires familiarity with the theory.*<br>
-    [:octicons-arrow-right-24: API Guide](reference/SUMMARY.md)
+    [:octicons-arrow-right-24: API Guide](reference/SUMMARY)
 
 -   :material-hammer-wrench:{ .lg .middle } &nbsp; __Installation Instructions__ 
 
@@ -96,7 +96,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
         ```
     
     *For more information see:*<br>
-    [:octicons-arrow-right-24: Install](installation.md)
+    [:octicons-arrow-right-24: Install](installation)
 
 </div>
 

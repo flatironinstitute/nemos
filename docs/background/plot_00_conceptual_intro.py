@@ -56,7 +56,7 @@ model: a linear-nonlinear-Poisson model.
 
 <figure markdown>
 <!-- note that the src here has an extra ../ compared to other images, necessary when specifying path directly in html -->
-<img src="../../../assets/lnp_model.svg" style="width: 100%"/>
+<img src="../../../assets/lnp_model.svg" style="width: 100%", alt="Linear-Non Linear-Poisson illustration."/>
 <figcaption>LNP model schematic. Modified from Pillow et al., 2008.</figcaption>
 </figure>
 

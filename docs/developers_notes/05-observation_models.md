@@ -4,7 +4,7 @@
 
 The `observation_models` module provides objects representing the observations of GLM-like models.
 
-The abstract class `Observations` defines the structure of the subclasses which specify observation types, such as Poisson, Gamma, etc. These objects serve as attributes of the [`nemos.glm.GLM`](../06-glm/#the-concrete-class-glm) class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
+The abstract class `Observations` defines the structure of the subclasses which specify observation types, such as Poisson, Gamma, etc. These objects serve as attributes of the [`nemos.glm.GLM`](../03-glm/#the-concrete-class-glm) class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
 
 ## The Abstract class `Observations`
 
@@ -44,7 +44,7 @@ To implement an observation model class you
 
 ## References
 <p id="ref-1">[1]
-    <a href="http://doi.org/10.1098/rsta.1922.0009">Fisher R. A. 1922. On the mathematical foundations of theoretical statistics. <em>Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character</em> 222:309–368. http://doi.org/10.1098/rsta.1922.0009</a>.
+    <a href="https://doi.org/10.1098/rsta.1922.0009">Fisher R. A. 1922. On the mathematical foundations of theoretical statistics. <em>Philosophical Transactions of the Royal Society of London. Series A, Containing Papers of a Mathematical or Physical Character</em> 222:309–368. http://doi.org/10.1098/rsta.1922.0009</a>.
 </p>
 
 <p id="ref-2">
