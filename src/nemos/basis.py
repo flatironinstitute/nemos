@@ -315,8 +315,8 @@ class TransformerBasis:
         >>> try:
         ...     trans_bas.random_attribute_name = "some value"
         ... except ValueError as e:
-        ...     print(e)
-        Only setting _basis or existing attributes of _basis is allowed.
+        ...     print(repr(e))
+        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
         """
         # allow self._basis = basis
         if name == "_basis":
@@ -366,8 +366,8 @@ class TransformerBasis:
         >>> try:
         ...     transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
         ... except ValueError as e:
-        ...     print(e)
-        Set either new _basis object or parameters for existing _basis, not both.
+        ...     print(repr(e))
+        ValueError('Set either new _basis object or parameters for existing _basis, not both.')
         """
         new_basis = parameters.pop("_basis", None)
         if new_basis is not None:
