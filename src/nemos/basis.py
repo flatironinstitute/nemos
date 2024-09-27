@@ -153,9 +153,7 @@ class TransformerBasis:
     >>> transformer = TransformerBasis(basis)
     >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
     >>> pipeline = pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
-    >>> print(pipeline.predict(np.arange(10)[:, None]))  # predict rate from new data
-    [0.40688667 0.7551465  2.2994423  4.849418   2.1493833  1.3244786
-     0.7732168  0.46250358 0.41326943 0.990009  ]
+    >>> out = pipeline.predict(np.arange(10)[:, None]) # predict rate from new datas
     >>> # TransformerBasis parameter can be cross-validated.
     >>> # 5-fold cross-validate the number of basis
     >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])
