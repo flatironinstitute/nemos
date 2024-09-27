@@ -1517,7 +1517,6 @@ class MSplineBasis(SplineBasis):
         >>> plt.ylabel('Basis Function Value')
         Text(0, 0.5, 'Basis Function Value')
         >>> l = plt.legend()
-        >>> plt.show()
         """
         return super().evaluate_on_grid(n_samples)
 
