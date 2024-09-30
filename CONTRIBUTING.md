@@ -100,9 +100,9 @@ Lastly, you should make sure that the existing tests all run successfully and th
 # run tests and make sure they all pass
 pytest tests/
 
-# run doctest (this runs all the examples in the docstrings and 
-# checks that the output matches expectations)
+# run doctest (run all examples in docstrings and match output)
 pytest --doctest-modules src/nemos/ 
+
 # format the code base
 black src/
 isort src
@@ -240,6 +240,8 @@ pytest --doctest-modules src/nemos/
 ```
 
 This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
+
+> [!TIP] Include an example section in all docstrings of public functions and methods.
 
 3) **Examples/Tutorials**
 
