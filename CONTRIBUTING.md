@@ -204,21 +204,21 @@ properly documented as outlined below.
         You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
         
         ```markdown
-        ```python
-        """
-            ... Docstrings content
-        
-            Examples
-            --------
-            An expected output is required.
-            >>> 1 + 2
-            3
-        
-            Unless the output is captured.
-            >>> out = 1 + 2
-      
-        """
-        ```
+            ```python
+            """
+                ... Docstrings content
+            
+                Examples
+                --------
+                An expected output is required.
+                >>> 1 + 2
+                3
+            
+                Unless the output is captured.
+                >>> out = 1 + 2
+          
+            """
+            ```
         ```
       
         To validate all your docstrings examples, run pytest `--doctest-module` flag,
@@ -231,13 +231,13 @@ properly documented as outlined below.
         Doctests can also be included in text files like Markdown by using code blocks with the `python` language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
         
         ```markdown
-        ```python
-        >>> # Add any code
-        >>> x = 3 ** 2
-        >>> x + 1
-        10
+           ```python
+           >>> # Add any code
+           >>> x = 3 ** 2
+           >>> x + 1
+           10
       
-        ```
+           ```
         ```
       
         To run doctests on a text file, use the following command:
