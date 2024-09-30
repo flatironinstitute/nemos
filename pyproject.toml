@@ -116,7 +116,7 @@ testpaths = ["tests"]             # Specify the directory where test files are l
 [tool.coverage.run]
 omit = [
     "src/nemos/fetch/*",
-    "src/nemos/_documentation_utils/*"
+    "src/nemos/_documentation_utils/*",
 ]
 
 [tool.coverage.report]

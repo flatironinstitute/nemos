@@ -203,25 +203,35 @@ We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions
 
 2) **Doctest**
 
-Doctests are a great way to ensure that your examples in the documentation remain accurate as the code changes. 
-To add doctests, include an `Example` usage section within your docstrings. These examples should be formatted as interactive Python sessions, showing inputs and expected outputs. The format should be as follows:
+Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. You can add doctests to docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
 
-```python
-"""
-    ... Docstrings content
+- **Docstrings:**
+    You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
+    ```python
+    """
+        ... Docstrings content
+        
+        Examples
+        --------
+        An expected output is required.
+        >>> 1 + 2
+        3
+        
+        Unless the output is captured.
+        >>> out = 1 + 2
     
-    Examples
-    --------
-    An expected output is required.
-    >>> 1 + 2
-    3
-    
-    Unless the output is captured.
-    >>> out = 1 + 2
+    """
+    ```
 
-"""
+- **Documentation Pages:**
+    Doctests can also be included in text files like Markdown by using code blocks with the python language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
+    ```python
+    # Check any code
+    >>> x = 3**2
+    >>> x + 1
+    10
+    ```
 
-```
 
 To run doctests, use the following command:
 
