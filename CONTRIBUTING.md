@@ -206,40 +206,39 @@ properly documented as outlined below.
     Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. You can add doctests to docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
     
     - **Docstrings:**
-        You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
-        ```python
-        """
-            ... Docstrings content
-            
-            Examples
-            --------
-            An expected output is required.
-            >>> 1 + 2
-            3
-            
-            Unless the output is captured.
-            >>> out = 1 + 2
+    You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
+    ```python
+    """
+        ... Docstrings content
         
-        """
-        ```
+        Examples
+        --------
+        An expected output is required.
+        >>> 1 + 2
+        3
+        
+        Unless the output is captured.
+        >>> out = 1 + 2
     
-      - **Documentation Pages:**
-          Doctests can also be included in text files like Markdown by using code blocks with the python language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
-          ```python
-          # Check any code
-          >>>   x = 3 ** 2
-          >>>   x + 1
-          10
+    """
+    ```
+    
+    - **Documentation Pages:**
+    Doctests can also be included in text files like Markdown by using code blocks with the python language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
+    ```python
+    >>> # Add any code
+    >>> x = 3 ** 2
+    >>> x + 1
+    10
       
-          ```
-      To run doctests, use the following command:
-      ```sh
-      pytest --doctest-modules src/nemos/
-      ```
-    
-      This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
-    
-> Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
+    ```
+    To run doctests, use the following command:
+    ```sh
+    pytest --doctest-modules src/nemos/
+    ```
+    This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
+    > [!TIP]
+    > Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
 
 3. **Examples/Tutorials**
     
