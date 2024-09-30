@@ -239,7 +239,7 @@ To run doctests, use the following command:
 pytest --doctest-modules src/nemos/
 ```
 
-This command will find and run all doctests within the source files under src/nemos/. Be sure to test your doctests locally before committing any changes to avoid errors.
+This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
 
 3) **Examples/Tutorials**
 
