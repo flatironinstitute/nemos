@@ -227,9 +227,10 @@ Doctests are a great way to ensure that code examples in your documentation rema
     Doctests can also be included in text files like Markdown by using code blocks with the python language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
     ```python
     # Check any code
-    >>> x = 3**2
+    >>> x = 3 ** 2
     >>> x + 1
     10
+  
     ```
 
 
