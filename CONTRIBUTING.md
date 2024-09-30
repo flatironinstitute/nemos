@@ -236,8 +236,8 @@ properly documented as outlined below.
       
     This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
 
-    > [!TIP]
-    > Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
+> [!TIP]
+> Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
 
 3. **Examples/Tutorials**
 
