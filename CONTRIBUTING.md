@@ -204,33 +204,21 @@ We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions
 2) **Doctest**
 
 Doctests are a great way to ensure that your examples in the documentation remain accurate as the code changes. 
-To add doctests, include example usage within your docstrings. These examples should be formatted as interactive Python sessions, showing inputs and expected outputs. The format should be as follows:
+To add doctests, include an `Example` usage section within your docstrings. These examples should be formatted as interactive Python sessions, showing inputs and expected outputs. The format should be as follows:
 
 ```python
-def add(a: float, b: float) -> float:
-    """
-    Adds two numbers together.
+"""
+Examples
+--------
+An expected output is required.
+>>> 1 + 2
+3
 
-    Parameters
-    ----------
-    a : 
-        The first number to add.
-    b : 
-        The second number to add.
+Unless the output is captured.
+>>> out = 1 + 2
 
-    Returns
-    -------
-    :
-        The sum of `a` and `b`.
+"""
 
-    Examples
-    --------
-    >>> add(2, 3)
-    5
-    >>> add(0, 0)
-    0
-    """
-    return a + b
 ```
 
 To run doctests, use the following command:
@@ -242,7 +230,7 @@ pytest --doctest-modules src/nemos/
 This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
 
 > [!TIP] 
-> Include an example section in all docstrings of public functions and methods.
+> Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
 
 3) **Examples/Tutorials**
 
