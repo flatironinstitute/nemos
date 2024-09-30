@@ -8,7 +8,6 @@ import numpy as np
 import pynapple as nap
 import pytest
 import sklearn.pipeline as pipeline
-import statsmodels.api as sm
 import utils_testing
 from sklearn.base import clone as sk_clone
 from sklearn.model_selection import GridSearchCV
@@ -479,23 +478,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
-            ("eval", None, does_not_raise()),
-            ("conv", 2, does_not_raise()),
-            ("eval", 2, does_not_raise()),
-            (
-                "conv",
-                None,
-                pytest.raises(ValueError, match="If the basis is in `conv`"),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation):
-        with expectation:
-            self.cls(5, mode=mode, window_size=ws)
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
             ("conv", 2, does_not_raise()),
             (
                 "conv",
@@ -539,7 +521,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
-            bas = self.cls(5, mode="eval", test="hi")
+            self.cls(5, mode="eval", test="hi")
 
 
     @pytest.mark.parametrize(
@@ -841,7 +823,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
-    ## TEST CALL
+    # TEST CALL
     @pytest.mark.parametrize(
         "num_input, expectation",
         [
@@ -989,23 +971,6 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
-            ("eval", None, does_not_raise()),
-            ("conv", 2, does_not_raise()),
-            ("eval", 2, does_not_raise()),
-            (
-                "conv",
-                None,
-                pytest.raises(ValueError, match="If the basis is in `conv`"),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation):
-        with expectation:
-            self.cls(5, mode=mode, window_size=ws)
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
             ("conv", 2, does_not_raise()),
             (
                 "conv",
@@ -1048,7 +1013,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
-            bas = self.cls(5, mode="eval", test="hi")
+            self.cls(5, mode="eval", test="hi")
 
     @pytest.mark.parametrize(
         "bounds, expectation",
@@ -1353,7 +1318,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
-    ## TEST CALL
+    # TEST CALL
     @pytest.mark.parametrize(
         "num_input, expectation",
         [
@@ -1496,23 +1461,6 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
-            ("eval", None, does_not_raise()),
-            ("conv", 2, does_not_raise()),
-            ("eval", 2, does_not_raise()),
-            (
-                "conv",
-                None,
-                pytest.raises(ValueError, match="If the basis is in `conv`"),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation):
-        with expectation:
-            self.cls(5, mode=mode, window_size=ws)
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
             ("conv", 2, does_not_raise()),
             (
                 "conv",
@@ -1553,10 +1501,9 @@ class TestMSplineBasis(BasisFuncsTesting):
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
 
-
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
-            bas = self.cls(5, mode="eval", test="hi")
+            self.cls(5, mode="eval", test="hi")
 
 
     @pytest.mark.parametrize(
@@ -1900,7 +1847,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
-    ## TEST CALL
+    # TEST CALL
     @pytest.mark.parametrize(
         "num_input, expectation",
         [
@@ -2062,23 +2009,6 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         window_size = None if mode == "eval" else 10
         with expectation:
             self.cls(5, mode=mode, window_size=window_size, decay_rates=np.arange(1, 6))
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
-            ("eval", None, does_not_raise()),
-            ("conv", 10, does_not_raise()),
-            ("eval", 2, does_not_raise()),
-            (
-                "conv",
-                None,
-                pytest.raises(ValueError, match="If the basis is in `conv`"),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation):
-        with expectation:
-            self.cls(5, mode=mode, window_size=ws, decay_rates=np.arange(1, 6))
 
     @pytest.mark.parametrize(
         "mode, ws, expectation",
@@ -2315,7 +2245,7 @@ class TestBSplineBasis(BasisFuncsTesting):
             with pytest.raises(
                 ValueError,
                 match=r"Invalid input data|"
-                rf"All sample counts provided must be greater",
+                r"All sample counts provided must be greater",
             ):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
@@ -2520,23 +2450,6 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
-            ("eval", None, does_not_raise()),
-            ("conv", 2, does_not_raise()),
-            ("eval", 2, does_not_raise()),
-            (
-                "conv",
-                None,
-                pytest.raises(ValueError, match="If the basis is in `conv`"),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation):
-        with expectation:
-            self.cls(5, mode=mode, window_size=ws)
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
             ("conv", 2, does_not_raise()),
             (
                 "conv",
@@ -2579,7 +2492,7 @@ class TestBSplineBasis(BasisFuncsTesting):
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
-            bas = self.cls(5, mode="eval", test="hi")
+            self.cls(5, mode="eval", test="hi")
 
 
     @pytest.mark.parametrize(
@@ -3063,41 +2976,6 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             bas._compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
-        "mode, expectation",
-        [
-            ("eval", does_not_raise()),
-            ("conv", does_not_raise()),
-            (
-                "invalid",
-                pytest.raises(
-                    ValueError, match="`mode` should be either 'conv' or 'eval'"
-                ),
-            ),
-        ],
-    )
-    def test_init_mode(self, mode, expectation):
-        window_size = None if mode == "eval" else 2
-        with expectation:
-            self.cls(5, mode=mode, window_size=window_size)
-
-    @pytest.mark.parametrize(
-        "mode, ws, expectation",
-        [
-            ("eval", None, does_not_raise()),
-            ("conv", 2, does_not_raise()),
-            ("eval", 2, does_not_raise()),
-            (
-                "conv",
-                None,
-                pytest.raises(ValueError, match="If the basis is in `conv`"),
-            ),
-        ],
-    )
-    def test_init_window_size(self, mode, ws, expectation):
-        with expectation:
-            self.cls(5, mode=mode, window_size=ws)
-
-    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -3140,10 +3018,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
         assert X.shape[1] == bas.n_basis_funcs - 1
 
-
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
-            bas = self.cls(5, mode="eval", test="hi")
+            self.cls(5, mode="eval", test="hi")
 
 
     @pytest.mark.parametrize(
@@ -3847,7 +3724,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         if eval_basis.shape[1] != basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs:
             raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the output features."
+                "Dimensions do not agree: The number of basis should match the first dimension of the "
+                "fit_transformed basis."
                 f"The number of basis is {n_basis_a * n_basis_b}",
                 f"The first dimension of the output features is {eval_basis.shape[1]}",
             )
@@ -3862,7 +3740,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
     ):
         """
-        Test whether the output sample size from the `MultiplicativeBasis` compute_features function matches the input sample size.
+        Test whether the output sample size from the `MultiplicativeBasis` fit_transform function
+        matches the input sample size.
         """
         basis_a_obj = self.instantiate_basis(
             n_basis_a, basis_a, mode=mode, window_size=window_size

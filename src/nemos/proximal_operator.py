@@ -24,7 +24,7 @@ References
 [1]  Parikh, Neal, and Stephen Boyd. *"Proximal Algorithms, ser. Foundations and Trends (r) in Optimization."* (2013).
 """
 
-from typing import Tuple
+from typing import Any, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -112,7 +112,7 @@ def prox_group_lasso(
     $$
     where $G$ is the number of groups, and $\beta_g$ is the parameter vector
     associated with the $g$-th group.
-    The analytical solution[^1] for the beta is,
+    The analytical solution[$^{[1]}$](#references). for the beta is,
 
     $$
     \text{prox}(\beta\_g) = \max \left(1 - \frac{\lambda \sqrt{p\_g}}{\Vert \hat{\beta}\_g \Vert_2},
@@ -126,12 +126,14 @@ def prox_group_lasso(
     \Vert \hat{\beta}\_g \Vert_2 \le \frac{1}{\lambda \sqrt{p\_g}}.
     $$
 
-    [^1]:
-        Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
-        Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
+    # References
+    ------------
+    [1] Yuan, Ming, and Yi Lin. "Model selection and estimation in regression with grouped variables."
+    Journal of the Royal Statistical Society Series B: Statistical Methodology 68.1 (2006): 49-67.
 
     """
     weights, intercepts = params
+    shape = weights.shape
     # divide the reg strength by the number of neurons
     regularizer_strength /= intercepts.shape[0]
     # add an extra dim if not 2D, do nothing otherwise.
@@ -143,4 +145,42 @@ def prox_group_lasso(
     # Avoid shrinkage of features that do not belong to any group
     # by setting the shrinkage factor to 1.
     not_regularized = jnp.outer(jnp.ones(factor.shape[0]), 1 - mask.sum(axis=0))
-    return jnp.squeeze(weights * (factor @ mask + not_regularized)).T, intercepts
+    return (weights * (factor @ mask + not_regularized)).T.reshape(shape), intercepts
+
+
+def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any:
+    r"""Proximal operator for the l1 norm, i.e., soft-thresholding operator.
+
+    Minimizes the following function:
+
+    $$
+      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||\_2^2
+      + \text{scaling} \cdot \text{l1reg} \cdot ||y||\_1
+    $$
+
+    When `l1reg` is a pytree, the weights are applied coordinate-wise.
+
+    Parameters
+    ----------
+    x :
+        Input pytree.
+    l1reg :
+        Regularization strength, float or pytree with the same structure as `x`. Default is None.
+    scaling : float, optional
+        A scaling factor. Default is 1.0.
+
+    Returns
+    -------
+    :
+        Output pytree with the same structure as `x`.
+    """
+    if l1reg is None:
+        l1reg = 1.0
+
+    if jnp.isscalar(l1reg):
+        l1reg = jax.tree_util.tree_map(lambda y: l1reg * jnp.ones_like(y), x)
+
+    def fun(u, v):
+        return jnp.sign(u) * jax.nn.relu(jnp.abs(u) - v * scaling)
+
+    return jax.tree_util.tree_map(fun, x, l1reg)

@@ -16,7 +16,7 @@ In particular, we will learn:
 # ## What is a scikit-learn pipeline
 #
 # <figure markdown>
-# <img src="../../../assets/pipeline.svg" style="width: 100%"/>
+# <img src="../../../assets/pipeline.svg" style="width: 100%" alt="Pipeline illustration."/>
 # <figcaption>Schematic of a scikit-learn pipeline.</figcaption>
 # </figure>
 #
@@ -81,7 +81,9 @@ import seaborn as sns
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 
-from utils import plotting
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
+
 
 # predictors, shape (n_samples, n_features)
 X = np.random.uniform(low=0, high=1, size=(1000, 1))
@@ -219,9 +221,9 @@ param_grid = dict(
 # %%
 # #### Run the grid search
 # Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn `model_selection.GridsearchCV` class.
-# ??? info "K-Fold cross-validation (click to expand/collapse)"
+# ??? info "K-Fold cross-validation"
 #     <p align="center">
-#     <img src="../../../assets/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;">
+#     <img src="../../../assets/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;", alt="K-fold illustration.">
 #     <br>
 #     <em>K-fold cross-validation (modified from <a href="https://scikit-learn.org/stable/modules/cross_validation.html" target="_blank">scikit-learn docs</a>)</em>
 #     </p>
@@ -241,7 +243,7 @@ gridsearch.fit(X, y)
 
 # %%
 #
-# ??? note "Manual cross-validation (click to expand/collapse)"
+# ??? note "Manual cross-validation"
 #     To appreciate how much boiler-plate code we are saving by calling scikit-learn cross-validation, below
 #     we can see how this cross-validation will look like in a manual loop.
 #
@@ -317,7 +319,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plotting.plot_heatmap_cv_results(cvdf_wide)
+doc_plots.plot_heatmap_cv_results(cvdf_wide)
 
 # %%
 # The plot displays the model's log-likelihood for each parameter combination in the grid. The parameter combination with the highest score, which is the one selected by the procedure, is highlighted with a blue rectangle. We can thus see that we need 10 or more basis functions, and that all of the tested regularization strengths agree with each other. In general, we want the fewest number of basis functions required to get a good fit, so we'll choose 10 here.
@@ -404,7 +406,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plotting.plot_heatmap_cv_results(cvdf_wide)
+doc_plots.plot_heatmap_cv_results(cvdf_wide)
 
 
 # %%
@@ -461,11 +463,8 @@ sns.despine(ax=ax)
 # %%
 from sklearn.metrics import make_scorer
 
-# NOTE: the order of the arguments is reversed
 pseudo_r2 = make_scorer(
-    lambda y_true, y_pred: nmo.observation_models.PoissonObservations().pseudo_r2(
-        y_pred, y_true
-    )
+    nmo.observation_models.PoissonObservations().pseudo_r2
 )
 
 # %%
@@ -501,7 +500,7 @@ cvdf_wide = cvdf.pivot(
     values="mean_test_score",
 )
 
-plotting.plot_heatmap_cv_results(cvdf_wide, label="pseudo-R2")
+doc_plots.plot_heatmap_cv_results(cvdf_wide, label="pseudo-R2")
 
 # %%
 # As you can see, the results with pseudo-R2 agree with those of the negative log-likelihood. Note that this new metric is normalized between 0 and 1, with a higher score indicating better performance.

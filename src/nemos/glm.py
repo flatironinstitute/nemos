@@ -313,7 +313,7 @@ class GLM(BaseRegressor):
             Score predicted rates against target spike counts.
         - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
             Simulate neural activity in response to a feed-forward input .
-        - [simulate_recurrent (feed-forward + coupling)](../glm/#nemos.glm.GLMRecurrent.simulate_recurrent)
+        - [simulate_recurrent (feed-forward + coupling)](../simulation/#nemos.simulation.simulate_recurrent)
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network.
         """
@@ -362,7 +362,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(predicted_rate, y)
+        return self._observation_model._negative_log_likelihood(y, predicted_rate)
 
     def score(
         self,
@@ -467,15 +467,15 @@ class GLM(BaseRegressor):
 
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
-                self._predict(params, data),
                 y,
+                self._predict(params, data),
                 self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict(params, data),
                 y,
+                self._predict(params, data),
                 score_type=score_type,
                 scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
@@ -622,19 +622,6 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        # check if mask has been set is using group lasso
-        # if mask has not been set, use a single group as default
-        if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
-                warnings.warn(
-                    UserWarning(
-                        "Mask has not been set. Defaulting to a single group for all parameters. "
-                        "Please see the documentation on GroupLasso regularization for defining a "
-                        "mask."
-                    )
-                )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
-
         self.initialize_state(data, y, init_params)
 
         params, state = self.solver_run(init_params, data, y)
@@ -652,7 +639,7 @@ class GLM(BaseRegressor):
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
         # note that this will include an error value, which is not the same as
@@ -882,13 +869,27 @@ class GLM(BaseRegressor):
         NamedTuple
             The initialized solver state
         """
-        #  set up the solver init/run/update attrs
-        self.instantiate_solver()
-
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
+
+        # check if mask has been set is using group lasso
+        # if mask has not been set, use a single group as default
+        if isinstance(self.regularizer, GroupLasso):
+            if self.regularizer.mask is None:
+                warnings.warn(
+                    UserWarning(
+                        "Mask has not been set. Defaulting to a single group for all parameters. "
+                        "Please see the documentation on GroupLasso regularization for defining a "
+                        "mask."
+                    )
+                )
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        #  set up the solver init/run/update attrs
+        self.instantiate_solver()
+
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
 
@@ -976,7 +977,7 @@ class GLM(BaseRegressor):
             X, n_samples=n_samples
         )
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
         return opt_step
@@ -1311,7 +1312,7 @@ class PopulationGLM(GLM):
             axis_2=1,
             err_message="Inconsistent number of neurons. "
             f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
-            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
+            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
         )
 
     @cast_to_jax

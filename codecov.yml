@@ -1,0 +1,3 @@
+ignore:
+  - "src/nemos/_documentation_utils"
+  - "src/nemos/fetch"

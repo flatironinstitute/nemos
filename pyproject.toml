@@ -8,16 +8,16 @@ version = "0.1.6"
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["neuroscience", "Poisson-GLM"]
 license = { file = "LICENSE" }
 classifiers = [
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11"
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"
 ]
 
 # Define dependencies for the project
@@ -27,7 +27,7 @@ dependencies = [
     "numpy>1.20",                   # Numerical computing library
     "scipy>=1.10",                  # Scientific computing library
     "typing_extensions>=4.6",       # Typing extensions for Python
-    "pynapple>=0.6.6"
+    "pynapple>=0.6.6",
 ]
 
 
@@ -60,11 +60,20 @@ docs = [
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
     "mkdocs-material",              # Material theme for mkdocs
     "mkdocs-autorefs>=0.5",
+    "mkdocs-linkcheck",             # Check relative links
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
+    "pooch",
+]
+examples = [
+    "scikit-learn",
+    "dandi",
+    "matplotlib>=3.7",
+    "seaborn",
+    "pooch",
+    "fsspec",
 ]
 
 
@@ -99,6 +108,12 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
+
+[tool.coverage.run]
+omit = [
+    "src/nemos/fetch/*",
+    "src/nemos/_documentation_utils/*"
+]
 
 [tool.coverage.report]
 exclude_lines = [

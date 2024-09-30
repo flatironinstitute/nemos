@@ -120,6 +120,8 @@ class UnRegularized(Regularizer):
         "LBFGS",
         "NonlinearCG",
         "ProximalGradient",
+        "SVRG",
+        "ProxSVRG",
     )
 
     _default_solver = "GradientDescent"
@@ -165,6 +167,8 @@ class Ridge(Regularizer):
         "LBFGS",
         "NonlinearCG",
         "ProximalGradient",
+        "SVRG",
+        "ProxSVRG",
     )
 
     _default_solver = "GradientDescent"
@@ -242,7 +246,10 @@ class Lasso(Regularizer):
     set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
     """
 
-    _allowed_solvers = ("ProximalGradient",)
+    _allowed_solvers = (
+        "ProximalGradient",
+        "ProxSVRG",
+    )
 
     _default_solver = "ProximalGradient"
 
@@ -351,7 +358,10 @@ class GroupLasso(Regularizer):
     >>> print(f"coeff: {model.coef_}")
     """
 
-    _allowed_solvers = ("ProximalGradient",)
+    _allowed_solvers = (
+        "ProximalGradient",
+        "ProxSVRG",
+    )
 
     _default_solver = "ProximalGradient"
 

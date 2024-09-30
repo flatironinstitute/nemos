@@ -45,9 +45,9 @@ def reshape_convolve(array: NDArray, eval_basis: NDArray):
 
     Notes
     -----
-        The convolution implemented here is in mode 'valid'. This implies that the time axis shrinks
-        num_samples - window_size + 1, where num_samples is the first size of the first axis of 'array'
-        and 'window_size' is the size of the first axis in 'eval_basis'.
+    The convolution implemented here is in mode `"valid"`. This implies that the time axis shrinks
+    `num_samples - window_size + 1`, where num_samples is the first size of the first axis of `array`
+    and `window_size` is the size of the first axis in `eval_basis`.
     """
     # flatten over other dims & apply vectorized conv
     conv = _CORR_VEC(array.reshape(array.shape[0], -1), eval_basis)

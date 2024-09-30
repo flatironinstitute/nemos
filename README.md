@@ -1,7 +1,7 @@
 # <div style="text-align: center;"> <img src="docs/assets/NeMoS_Logo_CMYK_Full.svg" width="75%"> </div>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
-![Python version](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-blue.svg)
+![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 ![PyPI - Version](https://img.shields.io/pypi/v/nemos)
 [![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
@@ -99,7 +99,7 @@ ll = glm.score(X, y)
 <img src="docs/assets/glm_population_scheme.svg" width="84%">
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/api_guide/plot_04_population_glm/) object.
+The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/how_to_guide/plot_04_population_glm/) object.
 
 #### Feature Representation
 

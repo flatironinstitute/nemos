@@ -1,6 +1,6 @@
-# Background
+# How-to Guide
 
-These notes aim to provide the essential background knowledge needed to understand the models and data processing techniques implemented in NeMoS.
+Familiarize with NeMoS modules and learn how to take advantage of the `pynapple` and `scikit-learn` compatibility.
 
 ??? attention "Additional requirements"
     To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
