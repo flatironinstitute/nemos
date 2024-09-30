@@ -51,6 +51,9 @@ dev = [
     "statsmodels",                  # Used to compare model pseudo-r2 in testing
     "scikit-learn",                 # Testing compatibility with CV & pipelines
     "matplotlib>=3.7",              # Needed by doctest to run docstrings examples
+    "pooch",                        # Required by doctest for fetch module
+    "dandi",                        # Required by doctest for fetch module
+    "seaborn",                      # Required by doctest for _documentation_utils module
 ]
 docs = [
     "mkdocs",                       # Documentation generator

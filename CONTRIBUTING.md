@@ -99,6 +99,10 @@ Lastly, you should make sure that the existing tests all run successfully and th
 ```bash
 # run tests and make sure they all pass
 pytest tests/
+
+# run doctest (this runs all the examples in the docstrings and 
+# checks that the output matches expectations)
+pytest --doctest-modules src/nemos/ 
 # format the code base
 black src/
 isort src
@@ -197,7 +201,47 @@ but do not need to be as extensive.
 
 We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
 
-2) **Examples/Tutorials**
+2) **Doctest**
+
+Doctests are a great way to ensure that your examples in the documentation remain accurate as the code changes. 
+To add doctests, include example usage within your docstrings. These examples should be formatted as interactive Python sessions, showing inputs and expected outputs. The format should be as follows:
+
+```python
+def add(a: float, b: float) -> float:
+    """
+    Adds two numbers together.
+
+    Parameters
+    ----------
+    a : 
+        The first number to add.
+    b : 
+        The second number to add.
+
+    Returns
+    -------
+    :
+        The sum of `a` and `b`.
+
+    Examples
+    --------
+    >>> add(2, 3)
+    5
+    >>> add(0, 0)
+    0
+    """
+    return a + b
+```
+
+To run doctests, use the following command:
+
+```sh
+pytest --doctest-modules src/nemos/
+```
+
+This command will find and run all doctests within the source files under src/nemos/. Be sure to test your doctests locally before committing any changes to avoid errors.
+
+3) **Examples/Tutorials**
 
 If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or 
 a new example may need to be added.
