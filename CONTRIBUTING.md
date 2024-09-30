@@ -215,6 +215,7 @@ properly documented as outlined below.
         
             Unless the output is captured.
             >>> out = 1 + 2
+      
         """
         ```
     
@@ -226,6 +227,7 @@ properly documented as outlined below.
         >>> x = 3 ** 2
         >>> x + 1
         10
+      
         ```
       
         To run doctests, use the following command:
