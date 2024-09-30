@@ -208,14 +208,16 @@ To add doctests, include an `Example` usage section within your docstrings. Thes
 
 ```python
 """
-Examples
---------
-An expected output is required.
->>> 1 + 2
-3
-
-Unless the output is captured.
->>> out = 1 + 2
+    ... Docstrings content
+    
+    Examples
+    --------
+    An expected output is required.
+    >>> 1 + 2
+    3
+    
+    Unless the output is captured.
+    >>> out = 1 + 2
 
 """
 
