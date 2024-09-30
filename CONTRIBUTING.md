@@ -188,82 +188,78 @@ properly documented as outlined below.
 
 #### Adding documentation
 
-1) **Docstrings**
+1. **Docstrings**
 
-All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, 
-a medium-length description of the function / class and what it does, and a complete description of all arguments and return values. 
-Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature 
-should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary 
-for a user to use the code.
-
-Private functions and classes should have sufficient explanation that other developers know what the function / class does and how to use it, 
-but do not need to be as extensive.
-
-We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
-
-2) **Doctest**
-
-Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. You can add doctests to docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
-
-- **Docstrings:**
-    You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
-    ```python
-    """
-        ... Docstrings content
-        
-        Examples
-        --------
-        An expected output is required.
-        >>> 1 + 2
-        3
-        
-        Unless the output is captured.
-        >>> out = 1 + 2
+    All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, 
+    a medium-length description of the function / class and what it does, and a complete description of all arguments and return values. 
+    Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature 
+    should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary 
+    for a user to use the code.
     
-    """
-    ```
+    Private functions and classes should have sufficient explanation that other developers know what the function / class does and how to use it, 
+    but do not need to be as extensive.
+    
+    We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
 
-- **Documentation Pages:**
-    Doctests can also be included in text files like Markdown by using code blocks with the python language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
-    ```python
-    # Check any code
-    >>> x = 3 ** 2
-    >>> x + 1
-    10
-  
-    ```
+2. **Doctest**
 
-
-To run doctests, use the following command:
-
-```sh
-pytest --doctest-modules src/nemos/
-```
-
-This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
-
-> [!TIP] 
+    Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. You can add doctests to docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
+    
+    - **Docstrings:**
+        You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
+        ```python
+        """
+            ... Docstrings content
+            
+            Examples
+            --------
+            An expected output is required.
+            >>> 1 + 2
+            3
+            
+            Unless the output is captured.
+            >>> out = 1 + 2
+        
+        """
+        ```
+    
+      - **Documentation Pages:**
+          Doctests can also be included in text files like Markdown by using code blocks with the python language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
+          ```python
+          # Check any code
+          >>>   x = 3 ** 2
+          >>>   x + 1
+          10
+      
+          ```
+      To run doctests, use the following command:
+      ```sh
+      pytest --doctest-modules src/nemos/
+      ```
+    
+      This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
+    
 > Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
 
-3) **Examples/Tutorials**
-
-If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or 
-a new example may need to be added.
-
-All examples live within the `docs/` subfolder of `nemos`.  These are written as `.py` files but are converted to 
-notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example 
-gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
-
-We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control. 
-
-To see if changes you have made break the current documentation, you can build the documentation locally. 
-
-```bash
-# Clear the cached documentation pages
-# This step is only necessary if your changes affected the src/ directory
-rm -r docs/generated
-# build the docs within the nemos repo
-mkdocs build
-```
-
-If the build fails, you will see line-specific errors that prompted the failure.
+3. **Examples/Tutorials**
+    
+    If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or 
+    a new example may need to be added.
+    
+    All examples live within the `docs/` subfolder of `nemos`.  These are written as `.py` files but are converted to 
+    notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example 
+    gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
+    
+    We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control. 
+    
+    To see if changes you have made break the current documentation, you can build the documentation locally. 
+    
+    ```bash
+    # Clear the cached documentation pages
+    # This step is only necessary if your changes affected the src/ directory
+    rm -r docs/generated
+    # build the docs within the nemos repo
+    mkdocs build
+    ```
+    
+    If the build fails, you will see line-specific errors that prompted the failure.
