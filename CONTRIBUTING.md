@@ -203,26 +203,24 @@ properly documented as outlined below.
     - **Docstrings:**
         You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
         
-        ```markdown
-            ```python
-            def add(a, b):
-                """
-                The sum of two numbers.
+        ```python
+        def add(a, b):
+            """
+            The sum of two numbers.
                 
-                ...Other docstrings sections (Parameters, Returns...)
+            ...Other docstrings sections (Parameters, Returns...)
                 
-                Examples
-                --------
-                An expected output is required.
-                >>> add(1, 2)
-                3
-                
-                Unless the output is captured.
-                >>> out = add(1, 2)
-              
-                """
-                return a + b
-            ```
+            Examples
+            --------
+            An expected output is required.
+            >>> add(1, 2)
+            3
+            
+            Unless the output is captured.
+            >>> out = add(1, 2)
+            
+            """
+            return a + b
         ```
       
         To validate all your docstrings examples, run pytest `--doctest-module` flag,
