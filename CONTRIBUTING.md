@@ -205,19 +205,23 @@ properly documented as outlined below.
         
         ```markdown
             ```python
-            """
-                ... Docstrings content
-            
+            def add(a, b):
+                """
+                The sum of two numbers.
+                
+                ...Other docstrings sections (Parameters, Returns...)
+                
                 Examples
                 --------
                 An expected output is required.
-                >>> 1 + 2
+                >>> add(1, 2)
                 3
-            
+                
                 Unless the output is captured.
-                >>> out = 1 + 2
-          
-            """
+                >>> out = add(1, 2)
+              
+                """
+                return a + b
             ```
         ```
       
