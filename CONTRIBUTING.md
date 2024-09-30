@@ -241,7 +241,8 @@ pytest --doctest-modules src/nemos/
 
 This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
 
-> [!TIP] Include an example section in all docstrings of public functions and methods.
+> [!TIP] 
+> Include an example section in all docstrings of public functions and methods.
 
 3) **Examples/Tutorials**
 
