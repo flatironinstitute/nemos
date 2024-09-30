@@ -218,6 +218,12 @@ properly documented as outlined below.
       
         """
         ```
+      
+        To validate all your docstrings examples, run pytest `--doctest-module` flag,
+        
+        ```
+        pytest --doctest-modules src/nemos/
+        ```
     
     - **Documentation Pages:**
         Doctests can also be included in text files like Markdown by using code blocks with the `python` language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
@@ -230,10 +236,10 @@ properly documented as outlined below.
       
         ```
       
-        To run doctests, use the following command:
+        To run doctests on a text file, use the following command:
         
         ```
-        python -m doctest -v path-to-your-text-file/file.md
+        python -m doctest -v path-to-your-text-file/file_name.md
         ```
       
     This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
