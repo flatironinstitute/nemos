@@ -148,7 +148,7 @@ plt.show()
 # Other Basis Types
 # -----------------
 # Each basis type may necessitate specific hyperparameters for instantiation. For a comprehensive description,
-# please refer to the  [Code References](../../../reference/nemos/basis). After instantiation, all classes
+# please refer to the  [API Guide](../../../reference/nemos/basis). After instantiation, all classes
 # share the same syntax for basis evaluation. The following is an example of how to instantiate and
 # evaluate a log-spaced cosine raised function basis.
 

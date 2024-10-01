@@ -4,7 +4,7 @@
 
 The `regularizer` module introduces an archetype class `Regularizer` which provides the structural components for each concrete sub-class.
 
-Objects of type `Regularizer` provide methods to define a regularized optimization objective. These objects serve as attribute of the [`nemos.glm.GLM`](../05-glm/#the-concrete-class-glm), equipping the glm with an appropriate regularization scheme.
+Objects of type `Regularizer` provide methods to define a regularized optimization objective. These objects serve as attribute of the [`nemos.glm.GLM`](../03-glm/#the-concrete-class-glm), equipping the glm with an appropriate regularization scheme.
 
 Each `Regularizer` object defines a default solver, and a set of allowed solvers, which depends on the loss function characteristics (smooth vs non-smooth).
 
@@ -57,7 +57,7 @@ When developing a functional (i.e., concrete) `Regularizer` class:
 - **Must** define a default solver and a tuple of allowed solvers.
 - **May** require extra initialization parameters, like the `mask` argument of `GroupLasso`.
 
-!!! info
+??? tip "Convergence Test"
     When adding a new regularizer, you must include a convergence test, which verifies that
     the model parameters the regularizer finds for a convex problem such as the GLM are identical
     whether one minimizes the penalized loss directly and uses the proximal operator (i.e., when

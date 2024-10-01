@@ -1,3 +1,7 @@
+---
+hide:
+  - navigation
+---
 
 This tutorial will introduce the main NeMoS functionalities. This is intended for users that are 
 already familiar with the GLM framework but want to learn how to interact with the NeMoS API. 
@@ -55,8 +59,8 @@ During initialization, the `GLM` class accepts the following optional input argu
 1. `model.observation_model`: The statistical model for the observed variable. The available option so far are `nemos.observation_models.PoissonObservation` and  `nemos.observation_models.GammaObservations`, which are the most common choices for modeling spike counts and calcium imaging traces respectively.
 2. `model.regularizer`: Determines the regularization type, defaulting to `nemos.regularizer.Unregularized`. This parameter can be provided either as a string ("unregularized", "ridge", "lasso", or "group_lasso") or as an instance of `nemos.regularizer.Regularizer`.
 
-For more information on how to change default arguments, see the API guide for [`observation_models`](reference/nemos/observation_models.md) and
-[`regularizer`](reference/nemos/regularizer.md).
+For more information on how to change default arguments, see the API guide for [`observation_models`](../reference/nemos/observation_models) and
+[`regularizer`](../reference/nemos/regularizer).
 
 ```python
 import nemos as nmo
@@ -182,7 +186,7 @@ cls.fit(X, counts)
 ```
 
 !!! info "Cross-Validation"
-    For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/api_guide/plot_06_sklearn_pipeline_cv_demo).
+    For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
 
 Now we can print the best coefficient.
 
@@ -191,7 +195,5 @@ Now we can print the best coefficient.
 >>> print(cls.best_params_)
 {'regularizer__regularizer_strength': 0.001}
 ```
-
-For more information, including a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/api_guide/plot_06_sklearn_pipeline_cv_demo).
 
 Enjoy modeling with NeMoS!

@@ -26,7 +26,7 @@ Abstract Class Basis
 └─ Concrete Subclass OrthExponentialBasis
 ```
 
-The super-class `Basis` provides two public methods, [`compute_features`](#the-public-method-evaluate) and [`evaluate_on_grid`](#the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the abstract method `__call__` that is specific for each concrete class. See below for more details.
+The super-class `Basis` provides two public methods, [`compute_features`](#the-public-method-compute_features) and [`evaluate_on_grid`](#the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the abstract method `__call__` that is specific for each concrete class. See below for more details.
 
 ## The Class `nemos.basis.Basis`
 
@@ -72,7 +72,7 @@ The `nemos.basis.Basis` class has the following abstract methods, which every co
 To write a usable (i.e., concrete, non-abstract) basis object, you
 
 - **Must** inherit the abstract superclass `Basis`
-- **Must** define the `__call__` and `_check_n_basis_min` methods with the expected input/output format, see [Code References](../../reference/nemos/basis/) for the specifics.
+- **Must** define the `__call__` and `_check_n_basis_min` methods with the expected input/output format, see [API Guide](../../reference/nemos/basis/) for the specifics.
 - **Should not** overwrite the `compute_features` and `evaluate_on_grid` methods inherited from `Basis`.
 - **May** inherit any number of abstract intermediate classes (e.g., `SplineBasis`). 
 

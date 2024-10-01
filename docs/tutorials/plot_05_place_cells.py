@@ -3,32 +3,30 @@
 """
 # Fit place cell
 
-!!! warning
-    To run this notebook locally, please download the [utility functions](https://github.com/flatironinstitute/nemos/tree/main/docs/neural_modeling/examples_utils) in the same folder as the example notebook.
-
 The data for this example are from [Grosmark, Andres D., and György Buzsáki. "Diversity in neural firing dynamics supports both rigid and learned hippocampal sequences." Science 351.6280 (2016): 1440-1443](https://www.science.org/doi/full/10.1126/science.aad1935).
 
 """
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pynapple as nap
-from examples_utils import data, plotting
 from scipy.ndimage import gaussian_filter
 
 import nemos as nmo
 
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
+
 # configure plots some
-plt.style.use("examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 # %%
 # ## Data Streaming
 #
 # Here we load the data from OSF. The data is a NWB file.
 
-path = data.download_data(
-    "Achilles_10252013.nwb", "https://osf.io/hu5ma/download", "../data"
-)
+path = nmo.fetch.fetch_data("Achilles_10252013.nwb")
 
 # %%
 # ## Pynapple
@@ -112,7 +110,7 @@ print(data)
 
 
 # %%
-# `data` is a `TsdFrame` that contains the position and phase. Before calling `compute_2d_tuning_curves` from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron. 
+# `data` is a `TsdFrame` that contains the position and phase. Before calling `compute_2d_tuning_curves` from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
 #
 # There are a lot of neurons but for this analysis, we will focus on one neuron only.
 neuron = 175
@@ -286,13 +284,13 @@ glm_speed = nap.compute_1d_tuning_curves_continuous(predicted_rate[:, np.newaxis
 
 # %%
 # Let's display both tuning curves together.
-fig = plotting.plot_position_phase_speed_tuning(
-    pf[neuron], 
-    glm_pf[0], 
-    tc_speed[neuron], 
-    glm_speed[0], 
+fig = doc_plots.plot_position_phase_speed_tuning(
+    pf[neuron],
+    glm_pf[0],
+    tc_speed[neuron],
+    glm_speed[0],
     tc_pos_theta[neuron],
-    glm_pos_theta[0], 
+    glm_pos_theta[0],
     xybins
     )
 
@@ -391,8 +389,8 @@ tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20, ep=test_iset)
 fig = plt.figure(figsize=(8, 4))
 outer_grid = fig.add_gridspec(2, 2)
 for i, m in enumerate(models):
-    plotting.plot_position_speed_tuning(
-        outer_grid[i // 2, i % 2], 
+    doc_plots.plot_position_speed_tuning(
+        outer_grid[i // 2, i % 2],
         tuning_curves[m],
         pf[neuron],
         tc_speed[neuron],
