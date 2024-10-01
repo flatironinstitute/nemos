@@ -103,3 +103,10 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 ## :material-scale-balance:{ .lg } License
 
 Open source, [licensed under MIT](https://github.com/flatironinstitute/nemos/blob/main/LICENSE).
+
+
+## Support
+
+This package is supported by the Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation.  
+
+<img src="assets/CCN-logo-wText.png" width="20%" alt="Flatiron Center for Computational Neuroscience logo."> 
