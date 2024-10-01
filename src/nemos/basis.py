@@ -1351,7 +1351,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    r"""
+    """
     M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
