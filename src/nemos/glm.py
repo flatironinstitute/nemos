@@ -28,7 +28,7 @@ from .typing import DESIGN_INPUT_TYPE
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
-
+# make this a helper func in the
 _OPTIMAL_CONFIGURATIONS = {
     "SVRG": [
         {
@@ -38,8 +38,8 @@ _OPTIMAL_CONFIGURATIONS = {
                 "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
                 "regularizer": lambda x: not isinstance(x, Ridge),
             },
-            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
-            "compute_defaults": svrg_optimal_batch_and_stepsize,
+            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,  # rename with the shared part at the beginning
+            "compute_defaults": svrg_optimal_batch_and_stepsize,  # rename with the shared part at the beginning
             "strong_convexity": None,
         },
         {
