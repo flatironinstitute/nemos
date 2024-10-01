@@ -60,9 +60,9 @@ docs = [
     "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
     "mkdocs-material",              # Material theme for mkdocs
     "mkdocs-autorefs>=0.5",
+    "mkdocs-linkcheck",             # Check relative links
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
@@ -70,7 +70,6 @@ docs = [
 examples = [
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",

@@ -4,7 +4,7 @@
 
 The `regularizer` module introduces an archetype class `Regularizer` which provides the structural components for each concrete sub-class.
 
-Objects of type `Regularizer` provide methods to define a regularized optimization objective. These objects serve as attribute of the [`nemos.glm.GLM`](../05-glm/#the-concrete-class-glm), equipping the glm with an appropriate regularization scheme.
+Objects of type `Regularizer` provide methods to define a regularized optimization objective. These objects serve as attribute of the [`nemos.glm.GLM`](../03-glm/#the-concrete-class-glm), equipping the glm with an appropriate regularization scheme.
 
 Each `Regularizer` object defines a default solver, and a set of allowed solvers, which depends on the loss function characteristics (smooth vs non-smooth).
 

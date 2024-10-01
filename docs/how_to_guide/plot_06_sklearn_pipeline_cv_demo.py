@@ -16,7 +16,7 @@ In particular, we will learn:
 # ## What is a scikit-learn pipeline
 #
 # <figure markdown>
-# <img src="../../../assets/pipeline.svg" style="width: 100%"/>
+# <img src="../../../assets/pipeline.svg" style="width: 100%" alt="Pipeline illustration."/>
 # <figcaption>Schematic of a scikit-learn pipeline.</figcaption>
 # </figure>
 #
@@ -223,7 +223,7 @@ param_grid = dict(
 # Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn `model_selection.GridsearchCV` class.
 # ??? info "K-Fold cross-validation"
 #     <p align="center">
-#     <img src="../../../assets/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;">
+#     <img src="../../../assets/kfold.svg" alt="Grid Search Cross Validation" style="max-width: 80%; height: auto;", alt="K-fold illustration.">
 #     <br>
 #     <em>K-fold cross-validation (modified from <a href="https://scikit-learn.org/stable/modules/cross_validation.html" target="_blank">scikit-learn docs</a>)</em>
 #     </p>

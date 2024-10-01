@@ -212,6 +212,7 @@ Model intercept: [-0.26412687]
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
 The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](generated/how_to_guide/plot_04_population_glm.md) object.
 
+
 #### Feature Representation
 
 ```python
