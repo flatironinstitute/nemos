@@ -196,7 +196,27 @@ properly documented as outlined below.
     
     We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
 
-2. **Doctest**
+2. **Examples/Tutorials**
+
+    If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or a new example may need to be added.
+    
+    All examples live within the `docs/` subfolder of `nemos`. These are written as `.py` files but are converted to notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
+    
+    We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control.
+    
+    To see if changes you have made break the current documentation, you can build the documentation locally.
+    
+    ```
+    # Clear the cached documentation pages
+    # This step is only necessary if your changes affected the src/ directory
+    rm -r docs/generated
+    # build the docs within the nemos repo
+    mkdocs build
+    ```
+    
+    If the build fails, you will see line-specific errors that prompted the failure.
+
+3. **Doctest: Test the example code in your docs**
 
     Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. You can add doctests to docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
     
@@ -252,23 +272,3 @@ properly documented as outlined below.
 
 > [!TIP]
 > Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
-
-3. **Examples/Tutorials**
-
-    If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or a new example may need to be added.
-    
-    All examples live within the `docs/` subfolder of `nemos`. These are written as `.py` files but are converted to notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
-    
-    We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control.
-    
-    To see if changes you have made break the current documentation, you can build the documentation locally.
-    
-    ```
-    # Clear the cached documentation pages
-    # This step is only necessary if your changes affected the src/ directory
-    rm -r docs/generated
-    # build the docs within the nemos repo
-    mkdocs build
-    ```
-    
-    If the build fails, you will see line-specific errors that prompted the failure.
