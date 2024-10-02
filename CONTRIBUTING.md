@@ -190,7 +190,7 @@ properly documented as outlined below.
 
 1. **Docstrings**
 
-    All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, a medium-length description of the function/class and what it does, and a complete description of all arguments and return values. Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary for a user to use the code.
+    All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, a medium-length description of the function/class and what it does, a complete description of all arguments and return values, and an example to illustrate usage. Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary for a user to use the code.
     
     Private functions and classes should have sufficient explanation that other developers know what the function/class does and how to use it, but do not need to be as extensive.
     
@@ -218,10 +218,10 @@ properly documented as outlined below.
 
 3. **Doctest: Test the example code in your docs**
 
-    Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. You can add doctests to docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
+    Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. With doctests, we will test any docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
     
     - **Docstrings:**
-        You can include doctests in your function and class docstrings by adding an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
+        To include doctests in your function and class docstrings you must add an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
         
         ```python
         def add(a, b):
@@ -248,6 +248,8 @@ properly documented as outlined below.
         ```
         pytest --doctest-modules src/nemos/
         ```
+      
+        This test is part of the Continuous Integration, every example must pass before we can merge a PR.
     
     - **Documentation Pages:**
         Doctests can also be included in text files like Markdown by using code blocks with the `python` language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
@@ -267,8 +269,5 @@ properly documented as outlined below.
         ```
         python -m doctest -v path-to-your-text-file/file_name.md
         ```
-      
-    This command will find and run all doctests within the source files under `src/nemos/`. Be sure to test your doctests locally before committing any changes to avoid errors.
-
-> [!TIP]
-> Include an `Examples` section in all docstrings of public functions and methods. This will greatly enhance the code usability by showing concrete usage scenarios.
+        
+        All MarkDown files will be tested as part of the Continuous Integration.
