@@ -19,32 +19,115 @@ It includes a suite of composable feature constructors that accept time-series d
 range of observed variables—such as stimuli, head direction, position, or spike counts— as inputs to the GLM.
 
 
+## __Generalized Linear Model__
+
+NeMoS provides two implementations of the GLM: one for fitting a single neuron, and one for fitting a  neural population simultaneously. 
+
+### __Single Neuron GLM__
+
+You can define a single neuron GLM by instantiating an `GLM` object from the `nemos.glm` module.
+
+```python
+
+>>> import nemos as nmo
+
+>>> # Instantiate the single model
+>>> model = nmo.glm.GLM()
+
+```
+
+The maximum-likelihood parameters can be learned by invoking the `fit` method of `GLM`. The method requires a design 
+matrix of shape `(num_samples, num_features)`, and the output neural activity of shape `(num_samples, )`.
+
+```python
+>>> import numpy as np
+>>> num_samples, num_features = 100, 3
+
+>>> # Generate a design matrix
+>>> X = np.random.normal(size=(num_samples, num_features))
+>>> # generate some counts
+>>> spike_counts = np.random.poisson(size=num_samples)
+
+>>> # define fit the model
+>>> model.fit(X, spike_counts)
+
+```
+
+Once the model is fit, you can retrieve the model parameters as shown below.
+
+```python
+>>> # model coefficients shape is (num_features, )
+>>> print(f"Model coefficients shape: {model.coef_.shape}")
+Model coefficients shape: (3,)
+
+>>> # model intercept, shape (1,)
+>>> print(f"Model intercept shape: {model.intercept_.shape}")
+Model intercept shape: (1,)
+```
+
+Additionally, you can predict the firing rate and call the compute the model log-likelihood by calling the `predict` and the `score` method respectively.
+
+```python
+
+>>> # predict the rate
+>>> predicted_rate = model.predict(X)
+>>> predicted_rate.shape  # expected shape: (num_samples,)
+(100,)
+
+>>> # compute the log-likelihood of the model
+>>> log_likelihood = model.score(X, spike_counts)
+
+```
+
+### __Population GLM__
+
+You can set up a population GLM by instantiating a `PopulationGLM` object from the `nemos.glm` module.  
+
+```python
+>>> import nemos as nmo
+>>> population_model = nmo.glm.PopulationGLM()
+
+```
+
+As for the single neuron GLM, you can learn the model parameters by invoking the `fit` method; The input of `fit` are the `(num_samples, num_features)` design matrix, and the population activity stored in two-dimensional array of shape `(num samples, num neurons)`.
+Once the model is fit, you can use `predict` and `score` to predict the firing rate and the log-likelihood.
+
+```python
+>>> import numpy as np
+>>> num_samples, num_features, num_neurons = 100, 3, 5
+
+>>> # Generate a design matrix
+>>> X = np.random.normal(size=(num_samples, num_features))
+>>> # generate some counts
+>>> spike_counts = np.random.poisson(size=(num_samples, num_neurons))
+
+>>> # define fit the model
+>>> population_model.fit(X, spike_counts)
+
+>>> # predict the rate of each neuron in the population
+>>> predicted_rate = model.predict(X)
+>>> predicted_rate.shape  # expected shape: (num_samples, num_neurons)
+(100, 5)
+
+>>> # compute the log-likelihood of the model
+>>> log_likelihood = model.score(X, spike_counts)
+
+```
+
+The learned coefficient and intercept will have shape `(num_features, num_neurons)` and `(num_neurons, )` respectively.
+
+```python
+>>> # model coefficients shape is (num_features, )
+>>> print(f"Model coefficients shape: {population_model.coef_.shape}")
+Model coefficients shape: (3, 5)
+
+>>> # model intercept, shape (1,)
+>>> print(f"Model intercept shape: {population_model.intercept_.shape}")
+Model intercept shape: (5, )
+```
 
 
-[//]: # (The basis objects can perform two types of transformations on the inputs:)
-
-[//]: # ()
-[//]: # (1. **Non-linear Mapping:** This process transforms the input data through a non-linear function, )
-
-[//]: # (   allowing it to capture complex, non-linear relationships between inputs and neuronal firing rates. )
-
-[//]: # (   Importantly, this transformation preserves the properties that makes GLM easy to fit and guarantee a )
-
-[//]: # (   single optimal solution &#40;e.g. convexity&#41;.)
-
-[//]: # ()
-[//]: # (2. **Convolution:** This applies a convolution of the input data with a bank of filters, designed to )
-
-[//]: # (   capture linear temporal effects. This transformation is particularly useful when analyzing data with )
-
-[//]: # (   inherent time dependencies or when the temporal dynamics of the input are significant.)
-
-[//]: # (Both transformations produce a vector of features `X` that changes over time, with a shape )
-
-[//]: # (of `&#40;n_time_points, n_features&#41;`.)
-
-
-## __Basis For Feature Construction__
+## __Basis: Feature Construction__
 
 The `basis` module includes objects that perform two types of transformations on the inputs:
 
@@ -59,7 +142,7 @@ The `basis` module includes objects that perform two types of transformations on
     Both transformations produce a vector of features `X` that changes over time, with a shape 
     of `(n_time_points, n_features)`.
 
-### Non-linear Mapping
+### __Non-linear Mapping__
 
 <figure class="custom-figure">
     <img src="../assets/glm_features_scheme.svg" width="100%">
@@ -93,7 +176,7 @@ shape `(n_samples, n_basis_funcs)`, where each column represents a feature gener
 (100, 10)
 ```
 
-###  Convolution
+### __Convolution__
 
 <figure class="custom-figure">
     <img src="../assets/glm_population_scheme.svg" alt="GLM Population Scheme">
@@ -142,107 +225,6 @@ For additional information on one-dimensional convolutions, see [here](../genera
 
 Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
 
-### Poisson GLM for Feature Analysis
-
-!!! info "Non-Linear Mapping"
-    This section showcases the use of basis as a non-linear mapping.<br>
-    For a real-data example, check out [this tutorial](../generated/tutorials/plot_05_place_cells).
-
-
-
-In this example, we'll construct a time-series of features using the basis objects.
-
-
-#### Feature Representation
-
-```python
-import nemos as nmo
-import numpy as np
-
-# define 3 input features of shape (n_samples, )
-input_1, input_2, input_3 = 0.2 * np.random.normal(size=(3, 100))
-
-# Instantiate the basis
-basis_1 = nmo.basis.MSplineBasis(n_basis_funcs=5)
-basis_2 = nmo.basis.CyclicBSplineBasis(n_basis_funcs=6)
-basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=7)
-
-# Combine the basis functions with addition and multiplication
-basis = basis_1 * basis_2 + basis_3
-
-# Generate the design matrix starting from some raw 
-# input time series, i.e. LFP phase, position, etc.
-X = basis.compute_features(input_1, input_2, input_3)
-```
-
-#### Fit a GLM
-
-```python
-
-# assume that we observe these spike_counts of shape (n_samples, )
-spike_counts = np.random.poisson(size=X.shape[0])
-
-# model definition
-model = nmo.glm.GLM()
-# model fitting
-model.fit(X, spike_counts)
-```
-
-Once the model is fit, you can retrieve the model parameters as shown below.
-
-```python
->>> # model coefficients shape is (37, ), or 5 * 6 + 7
->>> print(f"Model coefficients shape: {model.coef_.shape}")
-Model coefficients shape: (37, )
-
->>> # model coefficients, shape (1, )
->>> print(f"Model intercept: {model.intercept_}")
-Model intercept: [-0.26412687]
-```
-
-### Poisson GLM for Neural Population
-
-!!! info "Convolution"
-    This section demonstrates how to use the basis module to convolve an input (in this case, spike counts) 
-    with a bank of kernels.<br>
-    For a real-data example, check out [this tutorial](../generated/tutorials/plot_02_head_direction).
-
-<img src="../assets/glm_population_scheme.svg" width="84%">
-
-This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](generated/how_to_guide/plot_04_population_glm.md) object.
-
-
-#### Feature Representation
-
-```python
-# assume that the population spike counts time-series is stored 
-# in a 2D array spike_counts of shape (n_samples, n_neurons).
-spike_counts = np.random.poisson(size=(1000, 3))  
-
-# generate 5 basis functions of 100 time-bins, 
-# and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
-    ).compute_features(spike_counts)
-```
-
-!!! note "Multi-epoch convolution"
-    If your data (such as spike_counts in this example) is formatted as a [`pynapple` time-series](#pre-processing-with-pynapple), 
-    the convolution performed by the basis objects will be done epoch-by-epoch, helping to avoid artifacts 
-    introduced by gaps in your time-series.
-
-#### Fit a Population GLM
-
-```python
-# fit a GLM to the first neuron counts time-series
-glm = nmo.glm.PopulationGLM().fit(X, spike_counts)
-
-# compute the rate
-firing_rate = glm.predict(X)
-
-# compute log-likelihood
-ll = glm.score(X, spike_counts)
-```
 
 ## __Continuous Observations__
 
@@ -261,7 +243,7 @@ Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) fo
 
 ## __Regularization__
 
-NeMoS supports various regularization schemes, including Ridge ($L_2$), Lasso ($L_1$), and Group Lasso, to prevent overfitting and improve model generalization.
+NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model, as shown below:
 
