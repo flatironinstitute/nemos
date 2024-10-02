@@ -250,7 +250,7 @@ properly documented as outlined below.
         ```
     
     - **Documentation Pages:**
-        Doctests can also be included in text files like Markdown by using code blocks with the `python` language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
+        Doctests can also be included in Markdown files by using code blocks with the `python` language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
         
         ```markdown
            ```python
