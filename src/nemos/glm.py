@@ -523,11 +523,11 @@ class GLM(BaseRegressor):
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
         >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
-        >>> coeff, intercept = nmo.glm.GLM._initialize_parameters(X, y)
+        >>> coeff, intercept = nmo.glm.GLM()._initialize_parameters(X, y)
         >>> coeff.shape
-        (5, )
+        (5,)
         >>> intercept.shape
-        (1, )
+        (1,)
         """
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -823,9 +823,12 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        >>> X, y = load_data()  # Hypothetical function to load data
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_state(X, y)
+        >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         if init_params is None:
@@ -950,7 +953,10 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> glm_instance = nmo.glm.GLM().fit(X, y)
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
@@ -1057,15 +1063,15 @@ class PopulationGLM(GLM):
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> # Define a feature mask, shape (num_features, num_neurons)
     >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
-    >>> print("Feature mask:")
-    >>> print(feature_mask)
+    >>> feature_mask
+    Array([[1, 0],
+           [1, 1],
+           [0, 1]], dtype=int32)
     >>> # Create and fit the model
-    >>> model = PopulationGLM(feature_mask=feature_mask)
-    >>> model.fit(X, y)
-    >>> # Check the fitted coefficients and intercepts
-    >>> print("Model coefficients:")
-    >>> print(model.coef_)
-
+    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> # Check the fitted coefficients
+    >>> print(model.coef_.shape)
+    (3, 2)
     >>> # Example with a FeaturePytree mask
     >>> from nemos.pytrees import FeaturePytree
     >>> # Define two features
@@ -1078,14 +1084,17 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
+
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
-    >>> print("Feature mask:")
     >>> print(feature_mask)
+    feature_1: shape (2,), dtype int32
+    feature_2: shape (2,), dtype int32
+
     >>> # Fit a PopulationGLM
-    >>> model = PopulationGLM(feature_mask=feature_mask)
-    >>> model.fit(X, y)
-    >>> print("Model coefficients:")
-    >>> print(model.coef_)
+    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> # Coefficients are stored in a dictionary with keys the feature labels
+    >>> print(model.coef_.keys())
+    dict_keys(['feature_1', 'feature_2'])
     """
 
     def __init__(

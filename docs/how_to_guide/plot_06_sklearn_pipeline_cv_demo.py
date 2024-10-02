@@ -71,19 +71,18 @@ In particular, we will learn:
 # ## Combining basis transformations and GLM in a pipeline
 # Let's start by creating some toy data.
 
-import nemos as nmo
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats
-import matplotlib.pyplot as plt
 import seaborn as sns
-
-from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+
+import nemos as nmo
 
 # some helper plotting functions
 from nemos import _documentation_utils as doc_plots
-
 
 # predictors, shape (n_samples, n_features)
 X = np.random.uniform(low=0, high=1, size=(1000, 1))

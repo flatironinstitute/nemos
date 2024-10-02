@@ -152,15 +152,15 @@ class TransformerBasis:
     >>> # transformer can be used in pipelines
     >>> transformer = TransformerBasis(basis)
     >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
-    >>> pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
-    >>> print(pipeline.predict(np.random.normal(size=(10, 1))))  # predict rate from new data
-
+    >>> pipeline = pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
+    >>> out = pipeline.predict(np.arange(10)[:, None]) # predict rate from new datas
     >>> # TransformerBasis parameter can be cross-validated.
     >>> # 5-fold cross-validate the number of basis
     >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])
     >>> grid_cv = GridSearchCV(pipeline, param_grid, cv=5)
-    >>> grid_cv.fit(x[:, None], y)
+    >>> grid_cv = grid_cv.fit(x[:, None], y)
     >>> print("Cross-validated number of basis:", grid_cv.best_params_)
+    Cross-validated number of basis: {'compute_features__n_basis_funcs': 10}
     """
 
     def __init__(self, basis: Basis):
@@ -289,7 +289,7 @@ class TransformerBasis:
         return getattr(self._basis, name)
 
     def __setattr__(self, name: str, value) -> None:
-        """
+        r"""
         Allow setting _basis or the attributes of _basis with a convenient dot assignment syntax.
 
         Setting any other attribute is not allowed.
@@ -312,10 +312,11 @@ class TransformerBasis:
         >>> # allowed
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
-        >>> tran_bas.random_attribute_name = "some value"
-        Traceback (most recent call last):
-        ...
-        ValueError: Only setting _basis or existing attributes of _basis is allowed.
+        >>> try:
+        ...     trans_bas.random_attribute_name = "some value"
+        ... except ValueError as e:
+        ...     print(repr(e))
+        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
         """
         # allow self._basis = basis
         if name == "_basis":
@@ -343,7 +344,7 @@ class TransformerBasis:
         return cloned_obj
 
     def set_params(self, **parameters) -> TransformerBasis:
-        """
+        r"""
         Set TransformerBasis parameters.
 
         When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
@@ -357,12 +358,16 @@ class TransformerBasis:
 
         >>> # setting parameters of _basis is allowed
         >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
-
+        8
         >>> # setting _basis directly is allowed
-        >>> print(transformer_basis.set_params(_basis=BSplineBasis(10))._basis)
-
+        >>> print(type(transformer_basis.set_params(_basis=BSplineBasis(10))._basis))
+        <class 'nemos.basis.BSplineBasis'>
         >>> # mixing is not allowed, this will raise an exception
-        >>> transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
+        >>> try:
+        ...     transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
+        ... except ValueError as e:
+        ...     print(repr(e))
+        ValueError('Set either new _basis object or parameters for existing _basis, not both.')
         """
         new_basis = parameters.pop("_basis", None)
         if new_basis is not None:
@@ -996,8 +1001,8 @@ class Basis(Base, abc.ABC):
         >>> from sklearn.pipeline import Pipeline
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
-        >>> X, y = ...  # X: features, y: neural activity
-        >>> basis = nmo.basis.RaisedCosineBasisLinear(10)
+        >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
+        >>> basis = nmo.basis.RaisedCosineBasisLinear(10).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge")
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
@@ -1009,7 +1014,7 @@ class Basis(Base, abc.ABC):
         ...     param_grid=param_grid,
         ...     cv=5,
         ... )
-        >>> gridsearch.fit(X, y)
+        >>> gridsearch = gridsearch.fit(X, y)
         """
 
         return TransformerBasis(copy.deepcopy(self))
@@ -1346,7 +1351,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    r"""
+    """
     M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
@@ -1502,12 +1507,14 @@ class MSplineBasis(SplineBasis):
         >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
         >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
         >>> for i in range(4):
-        ...     plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
         >>> plt.title('M-Spline Basis Functions')
+        Text(0.5, 1.0, 'M-Spline Basis Functions')
         >>> plt.xlabel('Domain')
+        Text(0.5, 0, 'Domain')
         >>> plt.ylabel('Basis Function Value')
-        >>> plt.legend()
-        >>> plt.show()
+        Text(0, 0.5, 'Basis Function Value')
+        >>> l = plt.legend()
         """
         return super().evaluate_on_grid(n_samples)
 
