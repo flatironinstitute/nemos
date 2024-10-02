@@ -107,6 +107,7 @@ class GLM(BaseRegressor):
     Examples
     --------
     >>> from nemos.glm import GLM
+    
     # define simple GLM model
     >>> model = nmo.glm.GLM()
     >>> print("Regularization type: ", type(model.regularizer))
@@ -319,6 +320,11 @@ class GLM(BaseRegressor):
             - If `X` is not three-dimensional.
             - If there's an inconsistent number of features between spike basis coefficients and `X`.
 
+        Examples
+        --------
+        >>> model = nmo.glm.GLM()
+        >>> model.fit(X, y)
+
         See Also
         --------
         - [score](./#nemos.glm.GLM.score)
@@ -418,6 +424,11 @@ class GLM(BaseRegressor):
         ValueError
             If X structure doesn't match the params, and if X and y have different
             number of samples.
+
+        Examples
+        --------
+
+        >>> 
 
         Notes
         -----
@@ -616,6 +627,33 @@ class GLM(BaseRegressor):
         TypeError
             - If `init_params` are not array-like
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+
+        Examples
+        -------
+
+        # fit a ridge regression Poisson GLM
+        >>> import nemos as nmo
+        # random design tensor. Shape (n_time_points, n_features).
+        >>> X = 0.5*np.random.normal(size=(100, 5))
+
+        # set log-rates & weights, shape (1, ) and (n_features, ) respectively.
+        >>> b_true = np.zeros((1, ))
+        >>> w_true = np.random.normal(size=(5, ))
+
+        # sparsify weights
+        >>> w_true[1:4] = 0.
+
+        # generate counts
+        >>> rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+        >>> spikes = np.random.poisson(rate)
+
+        # define and fit model
+        >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+        >>> model.fit(X, y)
+
+        >>> print("Ridge results")
+        >>> print("True weights:      ", w_true)
+        >>> print("Recovered weights: ", model.coef_)
 
         """
         # validate the inputs & initialize solver
