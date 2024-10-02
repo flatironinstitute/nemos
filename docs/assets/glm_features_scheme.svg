@@ -61,12 +61,12 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="1.1664061"
-     inkscape:cx="470.24787"
-     inkscape:cy="133.74415"
+     inkscape:cx="492.53858"
+     inkscape:cy="133.74416"
      inkscape:window-width="1512"
      inkscape:window-height="861"
      inkscape:window-x="0"
-     inkscape:window-y="38"
+     inkscape:window-y="25"
      inkscape:window-maximized="0"
      inkscape:current-layer="g168">
     <inkscape:page
@@ -331,38 +331,28 @@
          style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
          aria-label="Poisson"
          transform="matrix(1.3333333,0,0,1.3333333,589.86667,34.972)" />
-      <path
-         id="path63"
-         d="M 0.66866406,-5.2272469 H 1.5006953 v 0.9023438 c 0.070312,-0.178711 0.2373047,-0.3925781 0.5039063,-0.6445313 0.2636718,-0.2490234 0.5742187,-0.375 0.9257812,-0.375 0.014649,0 0.041016,0.00586 0.082031,0.011719 0.038086,0 0.1054687,0.00586 0.1992187,0.011719 v 0.9257813 c -0.055664,-0.00586 -0.1054687,-0.011719 -0.1523437,-0.011719 -0.041016,-0.00586 -0.087891,-0.011719 -0.140625,-0.011719 -0.4394532,0 -0.7792969,0.1464844 -1.0195313,0.4335937 -0.234375,0.28125 -0.3515625,0.6064453 -0.3515625,0.9726563 V -6.84375e-4 H 0.66866406 Z M 3.6393672,-1.0670906 H 4.6588984 V -6.84375e-4 H 3.6393672 Z m 3,-4.1601563 1.3945312,4.25390628 1.453125,-4.25390628 H 10.447961 L 8.4792109,-6.84375e-4 h -0.9375 L 5.6198359,-5.2272469 Z m 4.0400388,4.1601563 h 1.019532 v 1.066406225 h -1.019532 z m 0,0"
-         style="fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none"
-         aria-label="r.v."
-         transform="matrix(1.3333333,0,0,1.3333333,605.18267,48.3056)" />
       <text
          xml:space="preserve"
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;stroke-width:3.02362;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
-         x="582.9707"
-         y="170.57396"
-         id="text2"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.3333px;font-family:'Helvetica Neue';-inkscape-font-specification:'Helvetica Neue, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;stroke-width:3.02362;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+         x="614.67737"
+         y="48.545818"
+         id="text5"><tspan
            sodipodi:role="line"
-           id="tspan2"
-           x="582.9707"
-           y="170.57396"
-           style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">* r.v. = random variable</tspan><tspan
-           sodipodi:role="line"
-           x="582.9707"
-           y="183.90733"
-           style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
-           id="tspan3" /></text>
+           x="614.67737"
+           y="48.545818"
+           id="tspan6"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.3333px;font-family:'Helvetica Neue';-inkscape-font-specification:'Helvetica Neue, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">random</tspan></text>
       <text
          xml:space="preserve"
-         style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.6667px;font-family:Arial;-inkscape-font-specification:'Arial, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;stroke-width:3.02362;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
-         x="622.39337"
-         y="47.116474"
-         id="text4"><tspan
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.3333px;font-family:'Helvetica Neue';-inkscape-font-specification:'Helvetica Neue, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#000000;stroke-width:3.02362;stroke-linejoin:round;stroke-miterlimit:7.3;paint-order:stroke markers fill"
+         x="614.13654"
+         y="62.629745"
+         id="text5-3"><tspan
            sodipodi:role="line"
-           id="tspan4"
-           x="622.39337"
-           y="47.116474">*</tspan></text>
+           x="614.13654"
+           y="62.629745"
+           id="tspan6-9"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.3333px;font-family:'Helvetica Neue';-inkscape-font-specification:'Helvetica Neue, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal">variable</tspan></text>
     </g>
     <path
        id="path64"
