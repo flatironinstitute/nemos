@@ -9,7 +9,7 @@ NeMoS is a neural modeling software package designed to model neural spiking act
 
 At its core, NeMoS consists of two primary modules: the __`glm`__ and the __`basis`__ module.
 
-The **`glm`** module implements Generalized Linear Models (GLMs) to map features to neural activity, such as 
+The **`glm`** module implements a Generalized Linear Model (GLM) to map features to neural activity, such as 
 spike counts or calcium transients. It supports learning GLM weights, evaluating model performance, and exploring 
 model behavior on new inputs.
 
@@ -36,7 +36,7 @@ You can define a single neuron GLM by instantiating an `GLM` object from the `ne
 
 ```
 
-The maximum-likelihood parameters can be learned by invoking the `fit` method of `GLM`. The method requires a design 
+The coefficients can be learned by invoking the `fit` method of `GLM`. The method requires a design 
 matrix of shape `(num_samples, num_features)`, and the output neural activity of shape `(num_samples, )`.
 
 ```python
@@ -244,7 +244,6 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
 
 By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
-
 To change the default observation model, follow the example below,
 
 
@@ -266,7 +265,6 @@ Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) fo
 
 NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
-
 You can specify the regularization scheme and its strength when initializing the GLM model, as shown below:
 
 
@@ -286,24 +284,17 @@ You can specify the regularization scheme and its strength when initializing the
 
 !!! warning
 
-    This section assumes some familiarity with the `pynapple` package for time series manipulation and data 
-
+    This section assumes some familiarity with the `pynapple` package for time series manipulation and data
     exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
 
 
-`pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such 
-
-as restricting your time series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common 
-
+`pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such
+as restricting your time series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common
 pre-processing steps in a robust and efficient manner. This includes bin-averaging, counting, convolving, smoothing and many
-
 others. All these operations can be easily concatenated for a quick and easy data pre-processing.
 
-
-In NeMoS, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will 
-
+In NeMoS, if a transformation  preserve the time axis and you use a `pynapple` time series as input, the result will
 also be a `pynapple` time series.
-
 
 A canonical example of this behavior is the `predict` method of `GLM`.
 
@@ -320,26 +311,20 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 >>> print(type(X))  # shape (num samples, num features)
 <class 'pynapple.core.time_series.TsdFrame'>
 
-
 >>> model = model.fit(X, y)  # the following works
-
 
 >>> firing_rate = model.predict(X)  # predict the firing rate of the neuron
 
-
 >>>  # this will still be a pynapple time series
-
 >>> print(type(firing_rate))  # shape (num_samples, )
 <class 'pynapple.core.time_series.Tsd'>
 
 ```
 
-
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and NeMoS.
 
 
 !!! note
-
     You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
 
 
@@ -358,13 +343,13 @@ Let's see how you can greatly streamline your analysis pipeline by integrating `
 >>> # restrict and bin
 >>> counts = spikes[6].count(0.01, ep=head_dir.time_support)
 
->>> # up-sample head direction
+>>> # down-sample head direction
 >>> upsampled_head_dir = head_dir.bin_average(0.01)  
 
-# create your features
+>>> # create your features
 >>> X = nmo.basis.CyclicBSplineBasis(10).compute_features(upsampled_head_dir)
 
-# add a neuron axis and fit model
+>>> # add a neuron axis and fit model
 >>> model = nmo.glm.GLM().fit(X, counts) 
 
 ```
@@ -406,16 +391,9 @@ Finally, let's compare the tuning curves
 
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
+NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
 
-
-NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time 
-
-compilation and GPU-acceleration!
-
-
-For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we
-
-could easily run a `K-Fold` cross-validation using `scikit-learn`.
+For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we  could easily run a `K-Fold` cross-validation using `scikit-learn`.
 
 
 ```python
