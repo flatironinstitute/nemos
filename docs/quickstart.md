@@ -228,7 +228,7 @@ Here's a brief demonstration of how the `basis` and `glm` modules work together 
 
 ## __Continuous Observations__
 
-By default, NeMoS' GLM uses Poisson observations, which are a natural choice for spike counts. However, the package also supports a Gamma GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
+By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
 To change the default observation model, follow the example below,
 
