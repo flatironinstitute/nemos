@@ -104,6 +104,18 @@ class GLM(BaseRegressor):
     TypeError
         If provided `regularizer` or `observation_model` are not valid.
 
+    Examples
+    --------
+    >>> from nemos.glm import GLM
+    # define simple GLM model
+    >>> model = nmo.glm.GLM()
+    >>> print("Regularization type: ", type(model.regularizer))
+    >>> print("Observation model: ", type(model.observation_model))
+
+    # define GLM model of PoissonObservations model with soft-plus NL
+    >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
+    >>> model = nmo.glm.GLM(observation_model=observation_models,   \
+    ...                        solver_name="LBFGS")
     """
 
     def __init__(
