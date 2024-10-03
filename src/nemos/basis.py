@@ -6,7 +6,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Callable, Generator, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, Literal, Optional, Tuple, Union, Any
 
 import numpy as np
 import scipy.linalg
@@ -546,13 +546,6 @@ class Basis(Base, abc.ABC):
         except (ValueError, TypeError):
             raise TypeError("Could not convert `bounds` to float.")
 
-    @property
-    def mode(self):
-        return self._mode
-
-    @property
-    def window_size(self):
-        return self._window_size
 
     @property
     def identifiability_constraints(self):
