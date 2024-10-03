@@ -15,6 +15,9 @@ import numpy as np
 import pytest
 
 import nemos as nmo
+import pynapple as nap
+
+nap.nap_config.suppress_conversion_warnings = True
 
 
 # Sample subclass to test instantiation and methods
