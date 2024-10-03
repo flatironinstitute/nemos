@@ -236,9 +236,6 @@ Once the basis is initialized, you can call `compute_features` on an input of sh
 
 For additional information on one-dimensional convolutions, see [here](../generated/background/plot_03_1D_convolution).
 
-Here's a brief demonstration of how the `basis` and `glm` modules work together within NeMoS.
-
-
 ## __Continuous Observations__
 
 
