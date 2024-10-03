@@ -56,10 +56,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Make .sh executable
-        run: chmod +x prevent_absolute_links_to_docs.sh
+        run: chmod +x bash_scripts/prevent_absolute_links_to_docs.sh
 
       - name: Check links
-        run: ./prevent_absolute_links_to_docs.sh
+        run: ./bash_scripts/prevent_absolute_links_to_docs.sh
 
   check:
     if: ${{ !github.event.pull_request.draft }}
