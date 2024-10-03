@@ -156,8 +156,7 @@ The `basis` module includes objects that perform two types of transformations on
 </figure>
 
 Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping, 
-you need to specify the number of basis functions. In some cases, additional arguments specific to the type of 
-basis may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
+you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
 
 ```python
 
