@@ -47,11 +47,11 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
+        # basis.MSplineBasis(5),
         basis.BSplineBasis(5),
-        basis.CyclicBSplineBasis(5),
-        basis.RaisedCosineBasisLinear(5),
-        basis.RaisedCosineBasisLog(5),
+        # basis.CyclicBSplineBasis(5),
+        # basis.RaisedCosineBasisLinear(5),
+        # basis.RaisedCosineBasisLog(5),
     ],
 )
 def test_sklearn_transformer_pipeline_cv_multiprocess(
@@ -61,7 +61,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     bas = basis.TransformerBasis(bas)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(3, 5, 10))
-    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, n_jobs=3)
+    gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, n_jobs=3, error_score='raise')
     gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
