@@ -156,8 +156,7 @@ The `basis` module includes objects that perform two types of transformations on
 </figure>
 
 Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping, 
-you need to specify the number of basis functions. In some cases, additional arguments specific to the type of 
-basis may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
+you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
 
 ```python
 
@@ -242,7 +241,7 @@ For additional information on one-dimensional convolutions, see [here](../genera
 
 By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
-To change the default observation model, follow the example below,
+To change the default observation model, set the `observation_model` argument during initialization:
 
 
 ```python
@@ -263,7 +262,7 @@ Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) fo
 
 NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
-You can specify the regularization scheme and its strength when initializing the GLM model, as shown below:
+You can specify the regularization scheme and its strength when initializing the GLM model:
 
 
 ```python
@@ -430,7 +429,7 @@ Fit a 5-fold cross-validation scheme for comparing two different regularizer str
 
     For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
 
-Finally we can print the model coefficients.
+Finally, we can print the regularizer strength with the best cross-validated performance:
 
 ```python
 
