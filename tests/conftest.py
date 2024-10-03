@@ -10,6 +10,12 @@ Note:
 """
 import multiprocessing as mp
 
+try:
+    mp.set_start_method('spawn')
+except RuntimeError:
+    # Context has already been set, so ignore this error.
+    pass
+
 
 import jax
 import jax.numpy as jnp
@@ -20,13 +26,6 @@ import nemos as nmo
 import pynapple as nap
 
 
-@pytest.fixture(scope="session", autouse=True)
-def set_multiprocessing_method():
-    try:
-        mp.set_start_method('spawn', force=True)
-    except RuntimeError:
-        # Context has already been set, so ignore this error.
-        pass
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
