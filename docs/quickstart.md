@@ -390,8 +390,9 @@ Finally, let's compare the tuning curves
 [`scikit-learn`](https://scikit-learn.org/stable/) is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
 
-For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we  could easily run a `K-Fold` cross-validation using `scikit-learn`.
+For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we  could easily run a `K-Fold` cross-validation[^1] using `scikit-learn`.
 
+[^1]: For a detailed explanation and practical examples, refer to the [cross-validation page](https://scikit-learn.org/stable/modules/cross_validation.html) in the `scikit-learn` documentation.
 
 ```python
 
@@ -425,7 +426,7 @@ Fit a 5-fold cross-validation scheme for comparing two different regularizer str
 ```
 
 
-!!! info "Cross-Validation"
+!!! info "Cross-Validation in NeMoS"
 
     For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
 
