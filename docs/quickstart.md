@@ -2,12 +2,12 @@
 hide:
   - navigation
 ---
-## __Overview__
+## **Overview**
 
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
  powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 
-At its core, NeMoS consists of two primary modules: the __`glm`__ and the __`basis`__ module.
+At its core, NeMoS consists of two primary modules: the **`glm`** and the **`basis`** module:
 
 The **`glm`** module implements a Generalized Linear Model (GLM) to map features to neural activity, such as 
 spike counts or calcium transients. It supports learning GLM weights, evaluating model performance, and exploring 
@@ -19,11 +19,11 @@ It includes a suite of composable feature constructors that accept time-series d
 range of observed variables—such as stimuli, head direction, position, or spike counts— as inputs to the GLM.
 
 
-## __Generalized Linear Model__
+## **Generalized Linear Model**
 
 NeMoS provides two implementations of the GLM: one for fitting a single neuron, and one for fitting a  neural population simultaneously. 
 
-### __Single Neuron GLM__
+### **Single Neuron GLM**
 
 You can define a single neuron GLM by instantiating an `GLM` object from the `nemos.glm` module.
 
@@ -81,7 +81,7 @@ Additionally, you can predict the firing rate and call the compute the model log
 
 ```
 
-### __Population GLM__
+### **Population GLM**
 
 You can set up a population GLM by instantiating a `PopulationGLM` object from the `nemos.glm` module.  
 
@@ -132,7 +132,7 @@ Model intercept shape: (5,)
 ```
 
 
-## __Basis: Feature Construction__
+## **Basis: Feature Construction**
 
 The `basis` module includes objects that perform two types of transformations on the inputs:
 
@@ -147,7 +147,7 @@ The `basis` module includes objects that perform two types of transformations on
     Both transformations produce a vector of features `X` that changes over time, with a shape 
     of `(n_time_points, n_features)`.
 
-### __Non-linear Mapping__
+### **Non-linear Mapping**
 
 <figure class="custom-figure">
     <img src="../assets/glm_features_scheme.svg" width="100%">
@@ -185,7 +185,7 @@ shape `(n_samples, n_basis_funcs)`, where each column represents a feature gener
 
 ```
 
-### __Convolution__
+### **Convolution**
 
 <figure class="custom-figure">
     <img src="../assets/glm_population_scheme.svg" alt="GLM Population Scheme">
@@ -236,7 +236,7 @@ Once the basis is initialized, you can call `compute_features` on an input of sh
 
 For additional information on one-dimensional convolutions, see [here](../generated/background/plot_03_1D_convolution).
 
-## __Continuous Observations__
+## **Continuous Observations**
 
 
 By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
@@ -257,7 +257,7 @@ To change the default observation model, follow the example below,
 Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) for a detailed example.
 
 
-## __Regularization__
+## **Regularization**
 
 
 NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
@@ -276,7 +276,7 @@ You can specify the regularization scheme and its strength when initializing the
 
 
 
-## __Pre-processing with `pynapple`__
+## **Pre-processing with `pynapple`**
 
 
 !!! warning
@@ -384,7 +384,7 @@ Finally, let's compare the tuning curves
 <img src="../head_dir_tuning.jpg" width="40%">
 
 
-## __Compatibility with `scikit-learn`__
+## **Compatibility with `scikit-learn`**
 
 
 `scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
