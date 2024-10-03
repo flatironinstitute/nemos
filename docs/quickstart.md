@@ -93,7 +93,7 @@ You can set up a population GLM by instantiating a `PopulationGLM`.
 
 ```
 
-As for the single neuron GLM, you can learn the model parameters by invoking the `fit` method; The input of `fit` are the `(num_samples, num_features)` design matrix, and the population activity stored in two-dimensional array of shape `(num samples, num neurons)`.
+As for the single neuron GLM, you can learn the model parameters by invoking the `fit` method: the input of `fit` are the design matrix (with shape `(num_samples, num_features)` ), and the population activity (with shape `(num_samples, num_neurons)`).
 Once the model is fit, you can use `predict` and `score` to predict the firing rate and the log-likelihood.
 
 ```python
