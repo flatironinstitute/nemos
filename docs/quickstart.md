@@ -262,7 +262,7 @@ Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) fo
 
 NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
-You can specify the regularization scheme and its strength when initializing the GLM model, as shown below:
+You can specify the regularization scheme and its strength when initializing the GLM model:
 
 
 ```python
