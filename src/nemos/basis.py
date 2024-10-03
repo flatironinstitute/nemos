@@ -482,11 +482,11 @@ class Basis(Base, abc.ABC):
         bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
-        self.n_basis_funcs = n_basis_funcs
+
         self._n_input_dimensionality = 0
-        self._check_n_basis_min()
         self._conv_kwargs = kwargs
         self.bounds = bounds
+        self.n_basis_funcs = n_basis_funcs
 
         # check mode
         if mode not in ["conv", "eval"]:
@@ -514,6 +514,20 @@ class Basis(Base, abc.ABC):
         self._mode = mode
         self.kernel_ = None
         self._identifiability_constraints = False
+
+    @property
+    def n_basis_funcs(self):
+        return self._n_basis_funcs
+
+    @n_basis_funcs.setter
+    def n_basis_funcs(self, value):
+        orig_n_basis = copy.deepcopy(getattr(self, '_n_basis_funcs', None))
+        self._n_basis_funcs = value
+        try:
+            self._check_n_basis_min()
+        except ValueError as e:
+            self._n_basis_funcs = orig_n_basis
+            raise e
 
     @property
     def bounds(self):
@@ -1275,7 +1289,7 @@ class SplineBasis(Basis, abc.ABC):
         bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
-        self.order = order
+        self._order = order
         super().__init__(
             n_basis_funcs,
             mode=mode,
@@ -1283,9 +1297,28 @@ class SplineBasis(Basis, abc.ABC):
             bounds=bounds,
             **kwargs,
         )
+
         self._n_input_dimensionality = 1
-        if self.order < 1:
+
+    @property
+    def order(self):
+        return self._order
+
+    @order.setter
+    def order(self, value):
+        """Setter for the order parameter."""
+
+        if value < 1:
             raise ValueError("Spline order must be positive!")
+
+        orig_order = copy.deepcopy(getattr(self, "_order", None))
+
+        try:
+            self._order = value
+            self._check_n_basis_min()
+        except ValueError as e:
+            self._order = orig_order
+            raise e
 
     def _generate_knots(
         self,
