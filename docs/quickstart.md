@@ -84,7 +84,7 @@ Additionally, you can predict the firing rate and call the compute the model log
 
 ### **Population GLM**
 
-You can set up a population GLM by instantiating a `PopulationGLM`.  
+You can set up a population GLM by instantiating a `PopulationGLM`. The API for the `PopulationGLM` is the same as for the single-neuron `GLM`; the only difference you'll notice is that some of the methods' inputs and outputs have an additional dimension for the different neurons.
 
 ```python
 
