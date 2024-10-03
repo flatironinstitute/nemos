@@ -241,7 +241,7 @@ For additional information on one-dimensional convolutions, see [here](../genera
 
 By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
-To change the default observation model, follow the example below,
+To change the default observation model, set the `observation_model` argument during initialization:
 
 
 ```python
