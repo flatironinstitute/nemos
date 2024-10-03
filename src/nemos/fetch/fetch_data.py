@@ -145,10 +145,21 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
     Examples
     --------
     >>> import nemos as nmo
+    >>> import pynapple as nap
     >>> io = nmo.fetch.download_dandi_data("000582",
-                                           "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb")
+    ...                                    "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb")
     >>> nwb = nap.NWBFile(io.read(), lazy_loading=False)
     >>> print(nwb)
+    07020602
+    ┍━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━┑
+    │ Keys                │ Type     │
+    ┝━━━━━━━━━━━━━━━━━━━━━┿━━━━━━━━━━┥
+    │ units               │ TsGroup  │
+    │ ElectricalSeriesLFP │ Tsd      │
+    │ SpatialSeriesLED2   │ TsdFrame │
+    │ SpatialSeriesLED1   │ TsdFrame │
+    │ ElectricalSeries    │ Tsd      │
+    ┕━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┙
 
     """
     if dandi is None:

@@ -35,7 +35,27 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
 <div class="grid cards" markdown>
 
--   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__
+-   :material-hammer-wrench:{ .lg .middle } &nbsp; __Installation Instructions__ 
+
+    ---
+    
+    Run the following `pip` command in your __virtual environment__.
+    === "macOS/Linux"
+
+        ```bash
+        pip install nemos
+        ```
+
+    === "Windows"
+    
+        ```
+        python -m pip install nemos
+        ```
+    
+    *For more information see:*<br>
+    [:octicons-arrow-right-24: Install](installation)
+
+-   :material-clock-fast:{ .lg .middle } __Getting Started__
 
       ---
 
@@ -51,15 +71,6 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
     [:octicons-arrow-right-24: Background](generated/background)
 
--   :material-lightbulb-on-10:{ .lg .middle } &nbsp; __How-To Guide__
-
-    ---
-
-    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
-
-    *Requires familiarity with the theory.*<br>
-    [:octicons-arrow-right-24: How-To Guide](generated/how_to_guide)
-
 -   :material-brain:{ .lg .middle} &nbsp;  __Neural Modeling__
 
     ---
@@ -69,6 +80,15 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
     *Requires familiarity with the theory.*<br>
     [:octicons-arrow-right-24: Tutorials](generated/tutorials)
 
+-   :material-lightbulb-on-10:{ .lg .middle } &nbsp; __How-To Guide__
+
+    ---
+
+    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
+
+    *Requires familiarity with the theory.*<br>
+    [:octicons-arrow-right-24: How-To Guide](generated/how_to_guide)
+
 -   :material-cog:{ .lg .middle } &nbsp; __API Guide__
 
     ---
@@ -77,26 +97,6 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 
     *Requires familiarity with the theory.*<br>
     [:octicons-arrow-right-24: API Guide](reference/SUMMARY)
-
--   :material-hammer-wrench:{ .lg .middle } &nbsp; __Installation Instructions__ 
-
-    ---
-    
-    Run the following `pip` command in your virtual environment.
-    === "macOS/Linux"
-
-        ```bash
-        pip install nemos
-        ```
-
-    === "Windows"
-    
-        ```
-        python -m pip install nemos
-        ```
-    
-    *For more information see:*<br>
-    [:octicons-arrow-right-24: Install](installation)
 
 </div>
 
