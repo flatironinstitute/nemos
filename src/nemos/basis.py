@@ -521,7 +521,7 @@ class Basis(Base, abc.ABC):
 
     @n_basis_funcs.setter
     def n_basis_funcs(self, value):
-        orig_n_basis = copy.deepcopy(getattr(self, '_n_basis_funcs', None))
+        orig_n_basis = copy.deepcopy(getattr(self, "_n_basis_funcs", None))
         self._n_basis_funcs = value
         try:
             self._check_n_basis_min()
@@ -1289,7 +1289,7 @@ class SplineBasis(Basis, abc.ABC):
         bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
-        self._order = order
+        self.order = order
         super().__init__(
             n_basis_funcs,
             mode=mode,
@@ -1311,14 +1311,19 @@ class SplineBasis(Basis, abc.ABC):
         if value < 1:
             raise ValueError("Spline order must be positive!")
 
+        # Set to None only the first time the setter is called.
         orig_order = copy.deepcopy(getattr(self, "_order", None))
 
-        try:
-            self._order = value
-            self._check_n_basis_min()
-        except ValueError as e:
-            self._order = orig_order
-            raise e
+        # Set the order
+        self._order = value
+
+        # If the order was already initialized, re-check basis
+        if orig_order is not None:
+            try:
+                self._check_n_basis_min()
+            except ValueError as e:
+                self._order = orig_order
+                raise e
 
     def _generate_knots(
         self,
