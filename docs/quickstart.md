@@ -429,7 +429,7 @@ Fit a 5-fold cross-validation scheme for comparing two different regularizer str
 
     For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
 
-Finally we can print the model coefficients.
+Finally, we can print the regularizer strength with the best cross-validated performance:
 
 ```python
 
