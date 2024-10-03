@@ -6,7 +6,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Callable, Generator, Literal, Optional, Tuple, Union, Any
+from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
 import scipy.linalg
@@ -547,7 +547,9 @@ class Basis(Base, abc.ABC):
             raise TypeError("Could not convert `bounds` to float.")
 
         if values is not None and values[1] <= values[0]:
-            raise ValueError(f"Invalid bound {values}. Lower bound is greater or equal than the upper bound.")
+            raise ValueError(
+                f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
+            )
 
     @property
     def mode(self):
