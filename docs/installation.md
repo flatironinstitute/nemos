@@ -31,7 +31,6 @@ hide:
     source ~/python_venvs/nemos/bin/activate
     ```
 
-test ci failure https://nemos.readthedocs.io/en/latest/reference/SUMMARY/
 **For Windows:**
 
 1. Open a command prompt.
