@@ -25,7 +25,7 @@ NeMoS provides two implementations of the GLM: one for fitting a single neuron, 
 
 ### **Single Neuron GLM**
 
-You can define a single neuron GLM by instantiating an `GLM` object from the `nemos.glm` module.
+You can define a single neuron GLM by instantiating an `GLM` object.
 
 ```python
 
@@ -61,7 +61,7 @@ Once the model is fit, you can retrieve the model parameters as shown below.
 >>> print(f"Model coefficients shape: {model.coef_.shape}")
 Model coefficients shape: (3,)
 
->>> # model intercept, shape (1,)
+>>> # model intercept, shape (1,) since there is only one neuron.
 >>> print(f"Model intercept shape: {model.intercept_.shape}")
 Model intercept shape: (1,)
 
@@ -73,7 +73,8 @@ Additionally, you can predict the firing rate and call the compute the model log
 
 >>> # predict the rate
 >>> predicted_rate = model.predict(X)
->>> predicted_rate.shape  # expected shape: (num_samples,)
+>>> # firing rate has shape: (num_samples,)
+>>> predicted_rate.shape
 (100,)
 
 >>> # compute the log-likelihood of the model
@@ -83,7 +84,7 @@ Additionally, you can predict the firing rate and call the compute the model log
 
 ### **Population GLM**
 
-You can set up a population GLM by instantiating a `PopulationGLM` object from the `nemos.glm` module.  
+You can set up a population GLM by instantiating a `PopulationGLM`.  
 
 ```python
 
@@ -100,12 +101,12 @@ Once the model is fit, you can use `predict` and `score` to predict the firing r
 >>> import numpy as np
 >>> num_samples, num_features, num_neurons = 100, 3, 5
 
->>> # Generate a design matrix
+>>> # simulate a design matrix
 >>> X = np.random.normal(size=(num_samples, num_features))
->>> # generate some counts
+>>> # simulate some counts
 >>> spike_counts = np.random.poisson(size=(num_samples, num_neurons))
 
->>> # define fit the model
+>>> # fit the model
 >>> population_model = population_model.fit(X, spike_counts)
 
 >>> # predict the rate of each neuron in the population
@@ -121,11 +122,11 @@ Once the model is fit, you can use `predict` and `score` to predict the firing r
 The learned coefficient and intercept will have shape `(num_features, num_neurons)` and `(num_neurons, )` respectively.
 
 ```python
->>> # model coefficients shape is (num_features, )
+>>> # model coefficients shape is (num_features, num_neurons)
 >>> print(f"Model coefficients shape: {population_model.coef_.shape}")
 Model coefficients shape: (3, 5)
 
->>> # model intercept, shape (1,)
+>>> # model intercept, (num_neurons,)
 >>> print(f"Model intercept shape: {population_model.intercept_.shape}")
 Model intercept shape: (5,)
 
@@ -387,7 +388,7 @@ Finally, let's compare the tuning curves
 ## **Compatibility with `scikit-learn`**
 
 
-`scikit-learn` is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
+[`scikit-learn`](https://scikit-learn.org/stable/) is a machine learning toolkit that offers advanced features like pipelines and cross-validation methods. 
 NeMoS takes advantage of these features, while still gaining the benefit of JAX's just-in-time compilation and GPU-acceleration!
 
 For example, if we would like to tune the critical hyper-parameter `regularizer_strength`, we  could easily run a `K-Fold` cross-validation using `scikit-learn`.
