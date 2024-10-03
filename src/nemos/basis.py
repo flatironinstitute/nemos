@@ -482,11 +482,10 @@ class Basis(Base, abc.ABC):
         bounds: Optional[Tuple[float, float]] = None,
         **kwargs,
     ) -> None:
-
+        self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._conv_kwargs = kwargs
         self.bounds = bounds
-        self.n_basis_funcs = n_basis_funcs
 
         # check mode
         if mode not in ["conv", "eval"]:
@@ -540,12 +539,23 @@ class Basis(Base, abc.ABC):
             raise ValueError(
                 f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
             )
+
         # convert to float and store
         try:
             self._bounds = values if values is None else tuple(map(float, values))
         except (ValueError, TypeError):
             raise TypeError("Could not convert `bounds` to float.")
 
+        if values is not None and values[1] <= values[0]:
+            raise ValueError(f"Invalid bound {values}. Lower bound is greater or equal than the upper bound.")
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @property
+    def window_size(self):
+        return self._window_size
 
     @property
     def identifiability_constraints(self):

@@ -60,7 +60,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     X, y, model, _, _ = poissonGLM_model_instantiation
     bas = basis.TransformerBasis(bas)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
-    param_grid = dict(basis__n_basis_funcs=(3, 5, 10))
+    param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, n_jobs=3, error_score='raise')
     gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 

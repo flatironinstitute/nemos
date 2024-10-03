@@ -541,6 +541,25 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             bas = self.cls(3, bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
+    @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            ((2, 1), pytest.raises(ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater")),
+        ]
+    )
+    def test_vmin_vmax_setter(self, bounds, expectation):
+        bas = self.cls(3, bounds=(1, 3))
+        with expectation:
+            bas.set_params(bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
 
     @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
@@ -1033,6 +1052,25 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            ((2, 1), pytest.raises(ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater")),
+        ]
+    )
+    def test_vmin_vmax_setter(self, bounds, expectation):
+        bas = self.cls(5, bounds=(1, 3))
+        with expectation:
+            bas.set_params(bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
+    @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
         [
             (None, None, np.arange(5), []),
@@ -1383,7 +1421,7 @@ class TestMSplineBasis(BasisFuncsTesting):
             (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
             (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
             (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
-            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples"))
         ]
     )
     def test_call_vmin_vmax(self, samples, vmin, vmax, expectation):
@@ -1505,6 +1543,24 @@ class TestMSplineBasis(BasisFuncsTesting):
         with pytest.raises(ValueError, match="kwargs should only be set"):
             self.cls(5, mode="eval", test="hi")
 
+    @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            ((2, 1), pytest.raises(ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater")),
+        ]
+    )
+    def test_vmin_vmax_init(self, bounds, expectation):
+        with expectation:
+            bas = self.cls(3, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
 
     @pytest.mark.parametrize(
         "bounds, expectation",
@@ -1515,13 +1571,16 @@ class TestMSplineBasis(BasisFuncsTesting):
             ((1, 3), does_not_raise()),
             (("a", 3), pytest.raises(TypeError, match="Could not convert")),
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert"))
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            ((2, 1), pytest.raises(ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater")),
         ]
     )
-    def test_vmin_vmax_init(self, bounds, expectation):
+    def test_vmin_vmax_setter(self, bounds, expectation):
+        bas = self.cls(3, bounds=(1, 3))
         with expectation:
-            bas = self.cls(3, bounds=bounds)
+            bas.set_params(bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
+
 
     @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
@@ -2513,6 +2572,25 @@ class TestBSplineBasis(BasisFuncsTesting):
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            ((2, 1), pytest.raises(ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater")),
+        ]
+    )
+    def test_vmin_vmax_setter(self, bounds, expectation):
+        bas = self.cls(5, bounds=(1, 3))
+        with expectation:
+            bas.set_params(bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
+    @pytest.mark.parametrize(
         "vmin, vmax, samples, nan_idx",
         [
             (None, None, np.arange(5), []),
@@ -3038,6 +3116,25 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
     def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
             bas = self.cls(5, bounds=bounds)
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
+    @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            ((2, 1), pytest.raises(ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater")),
+        ]
+    )
+    def test_vmin_vmax_setter(self, bounds, expectation):
+        bas = self.cls(5, bounds=(1, 3))
+        with expectation:
+            bas.set_params(bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
