@@ -151,14 +151,14 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="2.3925106"
-     inkscape:cx="437.82459"
-     inkscape:cy="242.21418"
-     inkscape:window-width="1512"
+     inkscape:cx="365.93359"
+     inkscape:cy="99.268108"
+     inkscape:window-width="2128"
      inkscape:window-height="862"
      inkscape:window-x="0"
      inkscape:window-y="25"
      inkscape:window-maximized="0"
-     inkscape:current-layer="layer-oc1">
+     inkscape:current-layer="g137-8">
     <inkscape:page
        x="0"
        y="0"
@@ -765,11 +765,11 @@
        id="text95"
        xml:space="preserve"
        x="358.97763"
-       y="55.009335"
-       style="font-size:16px;stroke-width:1.33333"><tspan
-         style="font-variant:normal;font-weight:normal;font-size:13.3333px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
-         x="358.97763 368.60696 376.02298 378.98563 386.40164 393.81763 397.52164"
-         y="55.009335"
+       y="55.009159"
+       style="font-size:15.9997px;stroke-width:1.33333"><tspan
+         style="font-variant:normal;font-weight:normal;font-size:13.3331px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
+         x="358.97763 368.60678 376.02267 378.98526 386.40112 393.81699 397.52094"
+         y="55.009159"
          sodipodi:role="line"
          id="tspan95">weights</tspan></text>
     <path
@@ -880,12 +880,12 @@
       <text
          id="text123"
          xml:space="preserve"
-         x="429.23599"
-         y="54.972"
-         style="font-size:16px;stroke-width:1.33333"><tspan
-           style="font-variant:normal;font-weight:normal;font-size:13.3333px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
-           x="429.23599 432.19867 439.61465 446.28265 453.69867 458.13998 464.80801"
-           y="54.972"
+         x="429.23605"
+         y="54.971512"
+         style="font-size:15.9992px;stroke-width:1.33333"><tspan
+           style="font-variant:normal;font-weight:normal;font-size:13.3326px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
+           x="429.23605 432.19858 439.61417 446.28183 453.69748 458.13855 464.80624"
+           y="54.971512"
            sodipodi:role="line"
            id="tspan123">inverse</tspan></text>
       <text
@@ -917,12 +917,12 @@
       <text
          id="text126-4"
          xml:space="preserve"
-         x="514.367"
-         y="68.305336"
-         style="font-size:16px;stroke-width:1.33333"><tspan
-           style="font-variant:normal;font-weight:normal;font-size:13.3333px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
-           x="514.367"
-           y="68.305336"
+         x="514.55896"
+         y="68.298973"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.1299px;font-family:Helvetica;-inkscape-font-specification:'Helvetica, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;stroke-width:1.33333"><tspan
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.1299px;font-family:Helvetica;-inkscape-font-specification:'Helvetica, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
+           x="514.55896"
+           y="68.298973"
            sodipodi:role="line"
            id="tspan126-8">random</tspan></text>
       <text
@@ -930,8 +930,8 @@
          xml:space="preserve"
          x="513.82013"
          y="81.25721"
-         style="font-size:16px;stroke-width:1.33333"><tspan
-           style="font-variant:normal;font-weight:normal;font-size:13.3333px;font-family:Arial;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333"
+         style="font-size:13.1299px;stroke-width:1.33333;-inkscape-font-specification:'Helvetica, Normal';font-family:Helvetica;font-weight:normal;font-style:normal;font-stretch:normal;font-variant:normal;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"><tspan
+           style="font-variant:normal;font-weight:normal;font-size:13.12989333px;font-family:Helvetica;writing-mode:lr-tb;fill:#000000;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:1.33333;-inkscape-font-specification:'Helvetica, Normal';font-style:normal;font-stretch:normal;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
            x="513.82013"
            y="81.25721"
            sodipodi:role="line"
