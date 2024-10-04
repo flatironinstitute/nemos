@@ -322,8 +322,12 @@ class GLM(BaseRegressor):
 
         Examples
         --------
+        # define and fit a GLM 
         >>> model = nmo.glm.GLM()
-        >>> model.fit(X, y)
+        >>> model.fit(X_train, y)
+
+        # predict spike data
+        >>> model.predict(X_test)
 
         See Also
         --------
@@ -429,6 +433,8 @@ class GLM(BaseRegressor):
         --------
         >>> model = nmo.glm.GLM()
         >>> model.fit(X, y)
+
+        # get model score
         >>> print(f"GLM log-likelihood: {model.score(X, y)}")
         >>> print(f"GLM  pseudo-r2-McFadden: {model.score(X, y, score_type='pseudo-r2-McFadden')}")
 
@@ -750,8 +756,8 @@ class GLM(BaseRegressor):
         Examples
         --------
         # generate spikes and rates given X
+        >>> random_key = jax.random.key(123)
         >>> spikes, rates = model.simulate(random_key, X)
-
 
         See Also
         --------
