@@ -427,8 +427,10 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-
-        >>> 
+        >>> model = nmo.glm.GLM()
+        >>> model.fit(X, y)
+        >>> print(f"GLM log-likelihood: {model.score(X, y)}")
+        >>> print(f"GLM  pseudo-r2-McFadden: {model.score(X, y, score_type='pseudo-r2-McFadden')}")
 
         Notes
         -----
@@ -633,26 +635,10 @@ class GLM(BaseRegressor):
 
         # fit a ridge regression Poisson GLM
         >>> import nemos as nmo
-        # random design tensor. Shape (n_time_points, n_features).
-        >>> X = 0.5*np.random.normal(size=(100, 5))
-
-        # set log-rates & weights, shape (1, ) and (n_features, ) respectively.
-        >>> b_true = np.zeros((1, ))
-        >>> w_true = np.random.normal(size=(5, ))
-
-        # sparsify weights
-        >>> w_true[1:4] = 0.
-
-        # generate counts
-        >>> rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
-        >>> spikes = np.random.poisson(rate)
-
-        # define and fit model
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
         >>> model.fit(X, y)
 
         >>> print("Ridge results")
-        >>> print("True weights:      ", w_true)
         >>> print("Recovered weights: ", model.coef_)
 
         """
@@ -760,6 +746,11 @@ class GLM(BaseRegressor):
             If the model hasn't been fitted prior to calling this method.
         ValueError
             - If the instance has not been previously fitted.
+
+        Examples
+        --------
+        # generate spikes and rates given X
+        >>> spikes, rates = model.simulate(random_key, X)
 
 
         See Also
