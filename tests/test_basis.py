@@ -781,12 +781,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
@@ -1293,12 +1293,12 @@ class TestMSplineBasis(BasisFuncsTesting):
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
@@ -1787,12 +1787,12 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
@@ -2280,12 +2280,12 @@ class TestBSplineBasis(BasisFuncsTesting):
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
@@ -2811,12 +2811,12 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         if n_input == 0:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) missing 1 required positional argument",
+                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
                 TypeError,
-                match="evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
@@ -4602,7 +4602,7 @@ def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
         (2, False, "anti-causal", [20, 75]),
         (2, None, "anti-causal", [20, 19, 75, 74]),
         (3, False, "acausal", [0, 20, 50, 75]),
-        (2, False, "acausal", [20, 75]),
+        (5, False, "acausal", [ 0,  1, 19, 20, 50, 51, 74, 75]),
     ],
 )
 @pytest.mark.parametrize(
@@ -4690,7 +4690,7 @@ def test_multi_epoch_pynapple_basis(
         (2, False, "anti-causal", [20, 75]),
         (2, None, "anti-causal", [20, 19, 75, 74]),
         (3, False, "acausal", [0, 20, 50, 75]),
-        (2, False, "acausal", [20, 75]),
+        (5, False, "acausal", [0,  1, 19, 20, 50, 51, 74, 75]),
     ],
 )
 @pytest.mark.parametrize(
