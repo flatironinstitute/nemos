@@ -1,10 +1,15 @@
+---
+hide:
+  - navigation
+---
+
 ## Prerequisites
 
-1. **Ensure you have Python version `3.9` or above**: Check that Python `3.9` or above is installed in your system by opening the terminal/command prompt and executing the following command,
+1. **Ensure you have Python version `3.10` or above**: Check that Python `3.10` or above is installed in your system by opening the terminal/command prompt and executing the following command,
     ```bash
     python --version
     ```
-    If you are unable to run the command, or if your Python version is below `3.9`, install/update Python.
+    If you are unable to run the command, or if your Python version is below `3.10`, install/update Python.
 
     We suggest downloading an installer from [Anaconda](https://docs.anaconda.com/free/anaconda/install/) or [Miniconda](https://docs.anaconda.com/free/miniconda/). The former includes a comprehensive selection of Python packages for data-science and machine learning. The latter is a minimal installer which includes only few packages. 
     If you are not sure which one works best for you, take a look at the [Anaconda guidelines](https://docs.anaconda.com/free/distro-or-miniconda/).

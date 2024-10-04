@@ -76,7 +76,7 @@ def test_abstract_class():
 def test_invalid_concrete_class():
     """Ensure that classes missing implementation of required abstract methods raise errors."""
     with pytest.raises(TypeError, match="Can't instantiate abstract"):
-        model = MockBaseRegressorInvalid()
+        MockBaseRegressorInvalid()
 
 
 def test_empty_set(mock_regressor):

@@ -116,12 +116,8 @@ mapped['feature_1']
 # values are scalars or non-arrays), we return a dictionary of arrays instead:
 print(jax.tree_util.tree_map(jnp.mean, example_pytree))
 print(jax.tree_util.tree_map(lambda x: x.shape, example_pytree))
-import fsspec
-import h5py
 import matplotlib.pyplot as plt
 import pynapple as nap
-from dandi.dandiapi import DandiAPIClient
-from fsspec.implementations.cached import CachingFileSystem
 
 # %%
 #
@@ -132,37 +128,18 @@ from fsspec.implementations.cached import CachingFileSystem
 #
 # First, let's get our dataset and do some initial exploration of it. To do so,
 # we'll use pynapple to [stream
-# data](https://pynapple-org.github.io/pynapple/generated/gallery/tutorial_pynapple_dandi/)
+# data](https://pynapple-org.github.io/pynapple/generated/examples/tutorial_pynapple_dandi/)
 # from the DANDI archive.
 #
 # !!! attention
 #
 #     We need some additional packages for this portion, which you can install
 #     with `pip install dandi pynapple`
-from pynwb import NWBHDF5IO
 
-# ecephys
-dandiset_id, filepath = (
+io = nmo.fetch.download_dandi_data(
     "000582",
     "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb",
 )
-
-with DandiAPIClient() as client:
-    asset = client.get_dandiset(dandiset_id, "draft").get_asset_by_path(filepath)
-    s3_url = asset.get_content_url(follow_redirects=1, strip_query=True)
-
-# first, create a virtual filesystem based on the http protocol
-fs = fsspec.filesystem("http")
-
-# create a cache to save downloaded data to disk (optional)
-fs = CachingFileSystem(
-    fs=fs,
-    cache_storage="nwb-cache",  # Local folder for the cache
-)
-
-# next, open the file
-file = h5py.File(fs.open(s3_url, "rb"))
-io = NWBHDF5IO(file=file, load_namespaces=True)
 
 nwb = nap.NWBFile(io.read(), lazy_loading=False)
 

@@ -331,7 +331,7 @@ class GLM(BaseRegressor):
             Score predicted rates against target spike counts.
         - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
             Simulate neural activity in response to a feed-forward input .
-        - [simulate_recurrent (feed-forward + coupling)](../glm/#nemos.glm.GLMRecurrent.simulate_recurrent)
+        - [simulate_recurrent (feed-forward + coupling)](../simulation/#nemos.simulation.simulate_recurrent)
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network.
         """
@@ -380,7 +380,7 @@ class GLM(BaseRegressor):
 
         """
         predicted_rate = self._predict(params, X)
-        return self._observation_model._negative_log_likelihood(predicted_rate, y)
+        return self._observation_model._negative_log_likelihood(y, predicted_rate)
 
     def score(
         self,
@@ -492,15 +492,15 @@ class GLM(BaseRegressor):
 
         if score_type == "log-likelihood":
             score = self._observation_model.log_likelihood(
-                self._predict(params, data),
                 y,
+                self._predict(params, data),
                 self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
             )
         elif score_type.startswith("pseudo-r2"):
             score = self._observation_model.pseudo_r2(
-                self._predict(params, data),
                 y,
+                self._predict(params, data),
                 score_type=score_type,
                 scale=self.scale_,
                 aggregate_sample_scores=aggregate_sample_scores,
@@ -548,11 +548,11 @@ class GLM(BaseRegressor):
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
         >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
-        >>> coeff, intercept = nmo.glm.GLM._initialize_parameters(X, y)
+        >>> coeff, intercept = nmo.glm.GLM()._initialize_parameters(X, y)
         >>> coeff.shape
-        (5, )
+        (5,)
         >>> intercept.shape
-        (1, )
+        (1,)
         """
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -658,19 +658,6 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        # check if mask has been set is using group lasso
-        # if mask has not been set, use a single group as default
-        if isinstance(self.regularizer, GroupLasso):
-            if self.regularizer.mask is None:
-                warnings.warn(
-                    UserWarning(
-                        "Mask has not been set. Defaulting to a single group for all parameters. "
-                        "Please see the documentation on GroupLasso regularization for defining a "
-                        "mask."
-                    )
-                )
-                self.regularizer.mask = jnp.ones((1, data.shape[1]))
-
         self.initialize_state(data, y, init_params)
 
         params, state = self.solver_run(init_params, data, y)
@@ -688,7 +675,7 @@ class GLM(BaseRegressor):
 
         self.dof_resid_ = self._estimate_resid_degrees_of_freedom(X)
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
         # note that this will include an error value, which is not the same as
@@ -877,9 +864,12 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        >>> X, y = load_data()  # Hypothetical function to load data
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_state(X, y)
+        >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         if init_params is None:
@@ -923,13 +913,27 @@ class GLM(BaseRegressor):
         NamedTuple
             The initialized solver state
         """
-        #  set up the solver init/run/update attrs
-        self.instantiate_solver()
-
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
+
+        # check if mask has been set is using group lasso
+        # if mask has not been set, use a single group as default
+        if isinstance(self.regularizer, GroupLasso):
+            if self.regularizer.mask is None:
+                warnings.warn(
+                    UserWarning(
+                        "Mask has not been set. Defaulting to a single group for all parameters. "
+                        "Please see the documentation on GroupLasso regularization for defining a "
+                        "mask."
+                    )
+                )
+                self.regularizer.mask = jnp.ones((1, data.shape[1]))
+
+        #  set up the solver init/run/update attrs
+        self.instantiate_solver()
+
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
 
@@ -990,7 +994,10 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> glm_instance = nmo.glm.GLM().fit(X, y)
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
@@ -1017,7 +1024,7 @@ class GLM(BaseRegressor):
             X, n_samples=n_samples
         )
         self.scale_ = self.observation_model.estimate_scale(
-            self._predict(params, data), y, dof_resid=self.dof_resid_
+            y, self._predict(params, data), dof_resid=self.dof_resid_
         )
 
         return opt_step
@@ -1097,15 +1104,15 @@ class PopulationGLM(GLM):
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> # Define a feature mask, shape (num_features, num_neurons)
     >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
-    >>> print("Feature mask:")
-    >>> print(feature_mask)
+    >>> feature_mask
+    Array([[1, 0],
+           [1, 1],
+           [0, 1]], dtype=int32)
     >>> # Create and fit the model
-    >>> model = PopulationGLM(feature_mask=feature_mask)
-    >>> model.fit(X, y)
-    >>> # Check the fitted coefficients and intercepts
-    >>> print("Model coefficients:")
-    >>> print(model.coef_)
-
+    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> # Check the fitted coefficients
+    >>> print(model.coef_.shape)
+    (3, 2)
     >>> # Example with a FeaturePytree mask
     >>> from nemos.pytrees import FeaturePytree
     >>> # Define two features
@@ -1118,14 +1125,17 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
+
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
-    >>> print("Feature mask:")
     >>> print(feature_mask)
+    feature_1: shape (2,), dtype int32
+    feature_2: shape (2,), dtype int32
+
     >>> # Fit a PopulationGLM
-    >>> model = PopulationGLM(feature_mask=feature_mask)
-    >>> model.fit(X, y)
-    >>> print("Model coefficients:")
-    >>> print(model.coef_)
+    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> # Coefficients are stored in a dictionary with keys the feature labels
+    >>> print(model.coef_.keys())
+    dict_keys(['feature_1', 'feature_2'])
     """
 
     def __init__(
@@ -1352,7 +1362,7 @@ class PopulationGLM(GLM):
             axis_2=1,
             err_message="Inconsistent number of neurons. "
             f"feature_mask has {jax.tree_util.tree_map(lambda m: m.shape[neural_axis], self.feature_mask)} neurons, "
-            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], X)}  instead!",
+            f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
         )
 
     @cast_to_jax
