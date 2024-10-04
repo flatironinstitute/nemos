@@ -64,7 +64,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, n_jobs=3, error_score='raise')
     # use threading instead of fork (this avoids conflicts with jax)
-    with joblib.parallel_backend("threading", n_jobs=3):
+    with joblib.parallel_backend("threading"):
         gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
