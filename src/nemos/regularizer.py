@@ -434,7 +434,7 @@ class GroupLasso(Regularizer):
     def _penalization(
         self, params: Tuple[DESIGN_INPUT_TYPE, jnp.ndarray], regularizer_strength: float
     ) -> jnp.ndarray:
-        """
+        r"""
         Calculate the penalization.
 
         Note: the penalty is being calculated according to the following formula:
