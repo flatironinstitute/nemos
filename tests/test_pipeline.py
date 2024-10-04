@@ -1,3 +1,4 @@
+import joblib
 import numpy as np
 import pynapple as nap
 import pytest
@@ -62,7 +63,9 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, n_jobs=3, error_score='raise')
-    gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
+    # use threading instead of fork (this avoids conflicts with jax)
+    with joblib.parallel_backend("threading", n_jobs=3):
+        gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
 @pytest.mark.parametrize(

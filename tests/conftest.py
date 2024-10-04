@@ -8,24 +8,14 @@ Note:
     This module primarily serves as a utility for test configurations, setting up initial conditions,
     and loading predefined parameters for testing various functionalities of the NeMoS library.
 """
-import multiprocessing as mp
-
-try:
-    mp.set_start_method('spawn')
-except RuntimeError:
-    # Context has already been set, so ignore this error.
-    pass
-
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 
 import nemos as nmo
-import pynapple as nap
-
-
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
