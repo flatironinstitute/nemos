@@ -485,32 +485,23 @@ class Basis(Base, abc.ABC):
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
         self._conv_kwargs = kwargs
-        self.bounds = bounds
+
 
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(
                 f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!"
             )
-        if mode == "conv":
-            if window_size is None:
-                raise ValueError(
-                    "If the basis is in `conv` mode, you must provide a window_size!"
-                )
-            elif not (isinstance(window_size, int) and window_size > 0):
-                raise ValueError(
-                    f"`window_size` must be a positive integer. {window_size} provided instead!"
-                )
-            if bounds is not None:
-                raise ValueError("`bounds` should only be set when `mode=='eval'`.")
-        else:
-            if kwargs:
-                raise ValueError(
-                    f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
-                )
 
-        self._window_size = window_size
         self._mode = mode
+        self.window_size = window_size
+        self.bounds = bounds
+
+        if mode == "eval" and kwargs:
+            raise ValueError(
+                f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
+            )
+
         self.kernel_ = None
         self._identifiability_constraints = False
 
@@ -535,6 +526,10 @@ class Basis(Base, abc.ABC):
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
         """Setter for bounds."""
+
+        if values is not None and self.mode == "conv":
+            raise ValueError("`bounds` should only be set when `mode=='eval'`.")
+
         if values is not None and len(values) != 2:
             raise ValueError(
                 f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
@@ -558,6 +553,28 @@ class Basis(Base, abc.ABC):
     @property
     def window_size(self):
         return self._window_size
+
+    @window_size.setter
+    def window_size(self, window_size):
+        """Setter for the window size parameter."""
+        if self.mode == "eval":
+            if window_size:
+                raise ValueError("If basis is in `mode=='eval'`, `window_size` should be None.")
+
+        else:
+            if window_size is None:
+                raise ValueError(
+                    "If the basis is in `conv` mode, you must provide a window_size!"
+                )
+
+            elif not (isinstance(window_size, int) and window_size > 0):
+                raise ValueError(
+                    f"`window_size` must be a positive integer. {window_size} provided instead!"
+                )
+
+        self._window_size = window_size
+
+
 
     @property
     def identifiability_constraints(self):
@@ -2071,18 +2088,25 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
         self._rescale_samples = False
-
-        self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
-            self._time_scaling = 50.0
-        else:
-            self._check_time_scaling(time_scaling)
-            self._time_scaling = time_scaling
+            time_scaling = 50.0
+
+        self.time_scaling = time_scaling
+        self.enforce_decay_to_zero = enforce_decay_to_zero
+
 
     @property
     def time_scaling(self):
         """Getter property for time_scaling."""
         return self._time_scaling
+
+    @time_scaling.setter
+    def time_scaling(self, time_scaling):
+        """Setter property for time_scaling."""
+        self._check_time_scaling(time_scaling)
+        self._time_scaling = time_scaling
+
+
 
     @staticmethod
     def _check_time_scaling(time_scaling: float) -> None:

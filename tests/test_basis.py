@@ -587,8 +587,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ]
     )
     def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
-        bas_no_range = self.cls(3, mode="eval", window_size=10, bounds=None)
-        bas = self.cls(3, mode="eval", window_size=10, bounds=(vmin, vmax))
+        bas_no_range = self.cls(3, mode="eval", bounds=None)
+        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1, out2)
@@ -3219,6 +3219,10 @@ class CombinedBasis(BasisFuncsTesting):
     @staticmethod
     def instantiate_basis(n_basis, basis_class, mode="eval", window_size=10):
         """Instantiate and return two basis of the type specified."""
+
+        if mode == "eval":
+            window_size = None
+
         if basis_class == basis.MSplineBasis:
             basis_obj = basis_class(
                 n_basis_funcs=n_basis, order=4, mode=mode, window_size=window_size
