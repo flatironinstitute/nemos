@@ -567,7 +567,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -1202,7 +1202,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -1836,7 +1836,7 @@ class TestMSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -2041,7 +2041,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             return
         if len(samples) == 0:
             with pytest.raises(
-                ValueError, match="All sample provided must be non empty"
+                ValueError, match="All sampTestCyclicBSplineBasis.test_set_paramsle provided must be non empty"
             ):
                 self.cls(
                     5, decay_rates=np.arange(1, 6), mode=mode, window_size=window_size
@@ -2557,7 +2557,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -3136,7 +3136,7 @@ class TestBSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -3792,7 +3792,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
