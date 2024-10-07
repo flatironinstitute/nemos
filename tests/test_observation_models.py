@@ -1,3 +1,4 @@
+import warnings
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -501,7 +502,9 @@ class TestGammaObservations:
         X, y, model, _, firing_rate = gammaGLM_model_instantiation
 
         # statsmodels mcfadden
-        mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Gamma()).fit()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="The InversePower link function does")
+            mdl = sm.GLM(y, sm.add_constant(X), family=sm.families.Gamma()).fit()
         pr2_sms = mdl.pseudo_rsquared("mcf")
 
         # set params
