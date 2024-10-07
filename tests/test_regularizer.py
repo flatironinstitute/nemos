@@ -218,9 +218,8 @@ class TestUnRegularized:
 
         assert model.regularizer_strength == 1.0
 
-        # assert change back to unregularized is none
         model.regularizer = regularizer
-        assert model.regularizer_strength is None
+        assert model.regularizer_strength == 1.
 
     def test_get_params(self):
         """Test get_params() returns expected values."""
@@ -535,13 +534,13 @@ class TestRidge:
 
         assert model.regularizer_strength == 1.0
 
-        # if changed to regularized, should go to None
-        model.regularizer = "UnRegularized"
-        assert model.regularizer_strength is None
+        with pytest.warns(UserWarning):
+            # if changed to regularized, is kept to 1.
+            model.regularizer = "UnRegularized"
+        assert model.regularizer_strength == 1.0
 
         # if changed back, should warn and set to 1.0
-        with pytest.warns(UserWarning):
-            model.regularizer = "Ridge"
+        model.regularizer = "Ridge"
 
         assert model.regularizer_strength == 1.0
 
