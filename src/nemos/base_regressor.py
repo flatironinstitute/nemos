@@ -170,19 +170,16 @@ class BaseRegressor(Base, abc.ABC):
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Union[float, None]):
-        # if using unregularized, strength will be None no matter what
-        if isinstance(self._regularizer, UnRegularized):
-            self._regularizer_strength = None
         # check regularizer strength
-        elif strength is None:
+        if strength is None and not isinstance(self._regularizer, UnRegularized):
             warnings.warn(
                 UserWarning(
                     "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
                     "the documentation for best practices in setting regularization strength."
                 )
             )
-            self._regularizer_strength = 1.0
-        else:
+            strength = 1.0
+        elif strength is not None:
             try:
                 # force conversion to float to prevent weird GPU issues
                 strength = float(strength)
@@ -191,7 +188,16 @@ class BaseRegressor(Base, abc.ABC):
                 raise ValueError(
                     f"Could not convert the regularizer strength: {strength} to a float."
                 )
-            self._regularizer_strength = strength
+            if isinstance(self._regularizer, UnRegularized):
+                warnings.warn(
+                    UserWarning(
+                        "Unused parameter `regularizer_strength` for UnRegularized GLM. "
+                        "The regularizer strength parameter is not required and won't be used when the regularizer "
+                        "is set to UnRegularized."
+                    )
+                )
+
+        self._regularizer_strength = strength
 
     @property
     def solver_name(self) -> str:

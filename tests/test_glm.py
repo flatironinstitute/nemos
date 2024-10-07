@@ -491,6 +491,7 @@ class TestGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
+            regularizer_strength=1.,
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
@@ -2527,6 +2528,7 @@ class TestPopulationGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
+            regularizer_strength=1.,
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
@@ -3262,7 +3264,7 @@ class TestPopulationGLM:
     ):
         jax.config.update("jax_enable_x64", True)
         if isinstance(mask, dict):
-            X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+            X, y, _, true_params, firing_rate = poisson_population_GLM_model_pytree
 
             def map_neu(k, coef_):
                 key_ind = {"input_1": [0, 1, 2], "input_2": [3, 4]}
@@ -3275,7 +3277,7 @@ class TestPopulationGLM:
                 return ind_array, coef_stack
 
         else:
-            X, y, model, true_params, firing_rate = poisson_population_GLM_model
+            X, y, _, true_params, firing_rate = poisson_population_GLM_model
 
             def map_neu(k, coef_):
                 ind_array = np.where(mask[:, k])[0]
@@ -3284,11 +3286,14 @@ class TestPopulationGLM:
 
         mask_bool = jax.tree_util.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
-        model.feature_mask = mask
-        model.regularizer = regularizer
-        model.regularizer_strength = regularizer_strength
-        model.solver_name = solver_name
-        model.solver_kwargs = solver_kwargs
+        kwargs = dict(
+            feature_mask=mask,
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        model = nmo.glm.PopulationGLM(**kwargs)
         model.fit(X, y)
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
@@ -3338,5 +3343,8 @@ class TestPopulationGLM:
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "UnRegularized"
-        assert model.regularizer_strength is None
+        with pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM"):
+            model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        with pytest.warns(UserWarning, match="Caution: regularizer strength has not been set"):
+            model.regularizer = "Ridge"
