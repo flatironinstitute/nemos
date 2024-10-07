@@ -1,13 +1,18 @@
 import abc
 import inspect
+import itertools
 import pickle
 from contextlib import nullcontext as does_not_raise
+from re import match
 
 import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
 import sklearn.pipeline as pipeline
+from joblib.testing import raises
+from markdown import markdown
+
 import utils_testing
 from sklearn.base import clone as sk_clone
 from sklearn.model_selection import GridSearchCV
@@ -15,6 +20,7 @@ from sklearn.model_selection import GridSearchCV
 import nemos.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
+from typing import Literal
 
 # automatic define user accessible basis and check the methods
 
@@ -489,6 +495,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            ("eval", None, does_not_raise()),
+            (
+            "eval", 10, pytest.raises(ValueError, match=r"If basis is in `mode=='eval'`, `window_size` should be None"))
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
@@ -1001,6 +1010,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            ("eval", None, does_not_raise()),
+            (
+            "eval", 10, pytest.raises(ValueError, match=r"If basis is in `mode=='eval'`, `window_size` should be None"))
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
@@ -1510,11 +1522,62 @@ class TestMSplineBasis(BasisFuncsTesting):
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            ("eval", None, does_not_raise()),
+            (
+            "eval", 10, pytest.raises(ValueError, match=r"If basis is in `mode=='eval'`, `window_size` should be None"))
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
         with expectation:
             self.cls(5, mode=mode, window_size=ws)
+
+    @pytest.mark.parametrize(
+        "order, window_size, n_basis_funcs, bounds, mode",
+        [
+            (4, None, 10, (1, 2), "eval"),
+            (4, 10, 10, None, "conv"),
+        ]
+    )
+    def test_set_params(self, order, window_size, n_basis_funcs, bounds, mode: Literal["eval", "conv"]):
+        """Test the read-only and read/write property of the parameters."""
+        pars = dict(order=order, window_size=window_size, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        keys = list(pars.keys())
+        bas = self.cls(order=order, window_size=window_size, n_basis_funcs=n_basis_funcs, mode=mode)
+        for i in range(len(pars)):
+            for j in range(i + 1, len(pars)):
+                par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]]}
+                bas.set_params(**par_set)
+        for i in range(len(pars)):
+            for j in range(i + 1, len(pars)):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                    par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]], "mode": mode}
+                    bas.set_params(**par_set)
+
+    @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()), (
+    "conv", pytest.raises(ValueError, match="`bounds` should only be set"))])
+    def test_set_bounds(self, mode, expectation):
+        ws = dict(eval=None, conv=10)
+        with expectation:
+            self.cls(window_size=ws[mode], n_basis_funcs=10, mode=mode, bounds=(1, 2))
+
+        bas = self.cls(window_size=10, n_basis_funcs=10, mode="conv", bounds=None)
+        with pytest.raises(ValueError, match="`bounds` should only be set"):
+            bas.set_params(bounds=(1, 2))
+
+    @pytest.mark.parametrize("mode, expectation", [
+        ("conv", does_not_raise()), ("eval", pytest.raises(ValueError, match="If basis is in `mode=='eval'`"))])
+    def test_set_window_size(self, mode, expectation):
+        """Test window size set behavior."""
+        with expectation:
+            self.cls(window_size=10, n_basis_funcs=10, mode=mode)
+
+        bas = self.cls(window_size=10, n_basis_funcs=10, mode="conv")
+        with pytest.raises(ValueError, match="If the basis is in `conv` mode"):
+            bas.set_params(window_size=None)
+
+        bas = self.cls(window_size=None, n_basis_funcs=10, mode="eval")
+        with pytest.raises(ValueError, match="If basis is in `mode=='eval'`"):
+            bas.set_params(window_size=10)
 
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10)
@@ -2084,11 +2147,62 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            ("eval", None, does_not_raise()),
+            (
+            "eval", 10, pytest.raises(ValueError, match=r"If basis is in `mode=='eval'`, `window_size` should be None"))
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
         with expectation:
             self.cls(5, mode=mode, window_size=ws, decay_rates=np.arange(1, 6))
+
+    @pytest.mark.parametrize(
+        "decay_rates, window_size, n_basis_funcs, bounds, mode",
+        [
+            (np.arange(1, 11), None, 10, (1, 2), "eval"),
+            (np.arange(1, 11), 10, 10, None, "conv"),
+        ]
+    )
+    def test_set_params(self, decay_rates, window_size, n_basis_funcs, bounds, mode: Literal["eval", "conv"]):
+        """Test the read-only and read/write property of the parameters."""
+        pars = dict(decay_rates=decay_rates, window_size=window_size, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        keys = list(pars.keys())
+        bas = self.cls(decay_rates=decay_rates, window_size=window_size, n_basis_funcs=n_basis_funcs, mode=mode)
+        for i in range(len(pars)):
+            for j in range(i + 1, len(pars)):
+                par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]]}
+                bas.set_params(**par_set)
+        for i in range(len(pars)):
+            for j in range(i + 1, len(pars)):
+                with pytest.raises(AttributeError, match="can't set attribute 'mode'"):
+                    par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]], "mode": mode}
+                    bas.set_params(**par_set)
+
+    @pytest.mark.parametrize("mode, expectation", [("eval", does_not_raise()), ("conv", pytest.raises(ValueError, match="`bounds` should only be set"))])
+    def test_set_bounds(self, mode, expectation):
+        ws = dict(eval=None, conv=10)
+        with expectation:
+            self.cls(decay_rates=np.arange(1, 11), window_size=ws[mode], n_basis_funcs=10, mode=mode, bounds=(1, 2))
+
+        bas = self.cls(decay_rates=np.arange(1, 11), window_size=10, n_basis_funcs=10, mode="conv", bounds=None)
+        with pytest.raises(ValueError, match="`bounds` should only be set"):
+            bas.set_params(bounds=(1, 2))
+
+    @pytest.mark.parametrize("mode, expectation", [
+        ("conv", does_not_raise()), ("eval", pytest.raises(ValueError, match="If basis is in `mode=='eval'`"))])
+    def test_set_window_size(self, mode, expectation):
+        """Test window size set behavior."""
+        with expectation:
+            self.cls(decay_rates=np.arange(1, 11), window_size=10, n_basis_funcs=10, mode=mode)
+
+        bas = self.cls(decay_rates=np.arange(1, 11), window_size=10, n_basis_funcs=10, mode="conv")
+        with pytest.raises(ValueError, match="If the basis is in `conv` mode"):
+            bas.set_params(window_size=None)
+
+        bas = self.cls(decay_rates=np.arange(1, 11), window_size=None, n_basis_funcs=10, mode="eval")
+        with pytest.raises(ValueError, match="If basis is in `mode=='eval'`"):
+            bas.set_params(window_size=10)
+
 
     def test_convolution_is_performed(self):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
@@ -2520,6 +2634,8 @@ class TestBSplineBasis(BasisFuncsTesting):
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            ("eval", None, does_not_raise()),
+            ("eval", 10, pytest.raises(ValueError, match=r"If basis is in `mode=='eval'`, `window_size` should be None"))
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
@@ -3067,6 +3183,9 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 1.5,
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
+            ("eval", None, does_not_raise()),
+            (
+            "eval", 10, pytest.raises(ValueError, match=r"If basis is in `mode=='eval'`, `window_size` should be None"))
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
