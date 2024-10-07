@@ -12,7 +12,6 @@ from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
-from nemos.regularizer import Regularizer
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
@@ -74,7 +73,7 @@ class TestGLM:
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            glm_class(regularizer=regularizer, solver_name=solver_name)
+            glm_class(regularizer=regularizer, solver_name=solver_name, regularizer_strength=1)
 
     @pytest.mark.parametrize(
         "observation, expectation",
@@ -167,7 +166,7 @@ class TestGLM:
         assert list(model.get_params().values()) == expected_values
 
         # changing regularizer
-        model.regularizer = "Ridge"
+        model.set_params(regularizer="Ridge", regularizer_strength=1.)
 
         expected_values = [
             model.observation_model.inverse_link_function,
@@ -1178,6 +1177,7 @@ class TestGLM:
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
+            regularizer_strength=1.,
         )
         params = model.initialize_params(X, y)
         model.initialize_state(X, y, params)
@@ -1483,10 +1483,11 @@ class TestGLM:
             n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
             regularizer_kwargs["mask"] = (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
 
+        reg = regularizer_class(**regularizer_kwargs)
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.
         glm = glm_class(
-            regularizer=regularizer_class(
-                **regularizer_kwargs,
-            ),
+            regularizer=reg,
+            regularizer_strength=strength,
             solver_name=solver_name,
             solver_kwargs={
                 "batch_size": batch_size,
@@ -1497,9 +1498,7 @@ class TestGLM:
             },
         )
         glm2 = glm_class(
-            regularizer=regularizer_class(
-                **regularizer_kwargs,
-            ),
+            regularizer=reg,
             solver_name=solver_name,
             solver_kwargs={
                 "batch_size": batch_size,
@@ -1508,6 +1507,7 @@ class TestGLM:
                 "maxiter": maxiter,
                 "key": key,
             },
+            regularizer_strength=strength,
         )
         glm2.fit(X, y)
 
@@ -1625,7 +1625,8 @@ class TestGLM:
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.regularizer = reg
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.
+        model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
@@ -1644,7 +1645,7 @@ class TestGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "UnRegularized"
+        model.set_params(regularizer = "UnRegularized", regularizer_strength=None)
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
@@ -1739,7 +1740,7 @@ class TestPopulationGLM:
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            population_glm_class(regularizer=regularizer)
+            population_glm_class(regularizer=regularizer, regularizer_strength=1.)
 
     def test_get_params(self):
         """
@@ -1787,7 +1788,7 @@ class TestPopulationGLM:
         assert list(model.get_params().values()) == expected_values
 
         # changing regularizer
-        model.regularizer = "Ridge"
+        model.set_params(regularizer="Ridge", regularizer_strength=1.)
 
         expected_values = [
             model.feature_mask,
@@ -1847,7 +1848,7 @@ class TestPopulationGLM:
         """
         with expectation:
             population_glm_class(
-                regularizer=ridge_regularizer, observation_model=observation
+                regularizer=ridge_regularizer, observation_model=observation, regularizer_strength=1.
             )
 
     @pytest.mark.parametrize(
@@ -1912,7 +1913,8 @@ class TestPopulationGLM:
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        model.regularizer = reg
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.
+        model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
@@ -2178,6 +2180,7 @@ class TestPopulationGLM:
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
+            regularizer_strength=1.,
         )
         model.fit(X, y)
 
@@ -3266,13 +3269,13 @@ class TestPopulationGLM:
         [
             (
                 nmo.regularizer.UnRegularized(),
-                0.001,
+                None,
                 "LBFGS",
                 {"stepsize": 0.1, "tol": 10**-14},
             ),
             (
                 nmo.regularizer.UnRegularized(),
-                1.0,
+                None,
                 "GradientDescent",
                 {"tol": 10**-14},
             ),
@@ -3390,7 +3393,7 @@ class TestPopulationGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "UnRegularized"
+        model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
