@@ -398,7 +398,7 @@ def example_data_prox_operator():
         ),
     )
     regularizer_strength = 0.1
-    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]]).astype(float)
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling

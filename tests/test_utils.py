@@ -1,3 +1,4 @@
+import warnings
 from contextlib import nullcontext as does_not_raise
 
 import jax
@@ -6,7 +7,6 @@ import numpy as np
 import pynapple as nap
 import pytest
 from scipy.interpolate import splev
-import warnings
 
 from nemos import utils
 
