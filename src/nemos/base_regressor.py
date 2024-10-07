@@ -139,6 +139,18 @@ class BaseRegressor(Base, abc.ABC):
         """
         return self._solver_run
 
+    def set_params(self, **params: Any):
+        """Manage warnings in case of multiple parameter settings."""
+        # if both regularizer and regularizer_strength are set, then only
+        # warn in case the strength is not expected for the regularizer type
+        if "regularizer" in params and "regularizer_strength" in params:
+            reg = params.pop("regularizer")
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning, message="Caution: regularizer strength.*")
+                super().set_params(regularizer=reg)
+
+        return super().set_params(**params)
+
     @property
     def regularizer(self) -> Union[None, Regularizer]:
         """Getter for the regularizer attribute."""
