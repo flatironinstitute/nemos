@@ -2041,7 +2041,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             return
         if len(samples) == 0:
             with pytest.raises(
-                ValueError, match="All sampTestCyclicBSplineBasis.test_set_paramsle provided must be non empty"
+                ValueError, match="All sample provided must be non empty"
             ):
                 self.cls(
                     5, decay_rates=np.arange(1, 6), mode=mode, window_size=window_size
