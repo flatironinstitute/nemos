@@ -846,7 +846,7 @@ class GammaObservations(Observations):
 
 
 def check_observation_model(observation_model):
-    """
+    r"""
     Check the attributes of an observation model for compliance.
 
     This function ensures that the observation model has the required attributes and that each
@@ -877,10 +877,10 @@ def check_observation_model(observation_model):
     ...     def _negative_log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
     ...         return -aggregate_sample_scores(y_true * jax.scipy.special.logit(params) + \
     ...                 (1 - y_true) * jax.scipy.special.logit(1 - params))
-    ...     def pseudo_r2(self, params, y_true, aggregate_sample_scores):
+    ...     def pseudo_r2(self, params, y_true, aggregate_sample_scores=jnp.mean):
     ...         return 1 - (self._negative_log_likelihood(y_true, params, aggregate_sample_scores) /
     ...                     jnp.sum((y_true - y_true.mean()) ** 2))
-    ...     def sample_generator(self, key, params):
+    ...     def sample_generator(self, key, params, scale=1.):
     ...         return jax.random.bernoulli(key, params)
     >>> model = MyObservationModel()
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.

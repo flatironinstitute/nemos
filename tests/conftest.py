@@ -12,9 +12,13 @@ Note:
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 
 import nemos as nmo
+
+# shut-off conversion warnings
+nap.nap_config.suppress_conversion_warnings = True
 
 
 # Sample subclass to test instantiation and methods
