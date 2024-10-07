@@ -339,7 +339,7 @@ def test_svrg_glm_fit(
     "regularizer_name, solver_class, mask",
     [
         ("Lasso", ProxSVRG, None),
-        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(-1, 1).astype(float)),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
     ],
@@ -356,15 +356,19 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
-    kwargs = {}
-    if mask is not None and glm_class == nmo.glm.PopulationGLM:
-        kwargs["feature_mask"] = mask
-
-    glm = glm_class(
+    kwargs = dict(
         regularizer=regularizer_name,
         solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
     )
+
+    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = mask
+
+    if glm_class != nmo.regularizer.UnRegularized:
+        kwargs["regularizer_strength"] = 0.1
+
+    glm = glm_class(**kwargs)
 
     with pytest.raises(
         ValueError,
