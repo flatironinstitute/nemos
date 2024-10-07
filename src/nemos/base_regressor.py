@@ -146,9 +146,12 @@ class BaseRegressor(Base, abc.ABC):
         if "regularizer" in params and "regularizer_strength" in params:
             reg = params.pop("regularizer")
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning,
-                                        message="Caution: regularizer strength.*"
-                                                "|Unused parameter `regularizer_strength`.*")
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="Caution: regularizer strength.*"
+                    "|Unused parameter `regularizer_strength`.*",
+                )
                 super().set_params(regularizer=reg)
 
         return super().set_params(**params)
