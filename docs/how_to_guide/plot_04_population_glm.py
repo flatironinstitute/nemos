@@ -23,10 +23,9 @@ Let's generate some synthetic data and fit a population model.
 """
 
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
-import numpy as np
-
 import nemos as nmo
+import numpy as np
+import matplotlib.pyplot as plt
 
 np.random.seed(123)
 
