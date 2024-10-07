@@ -486,7 +486,6 @@ class Basis(Base, abc.ABC):
         self._n_input_dimensionality = 0
         self._conv_kwargs = kwargs
 
-
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(
@@ -559,7 +558,9 @@ class Basis(Base, abc.ABC):
         """Setter for the window size parameter."""
         if self.mode == "eval":
             if window_size:
-                raise ValueError("If basis is in `mode=='eval'`, `window_size` should be None.")
+                raise ValueError(
+                    "If basis is in `mode=='eval'`, `window_size` should be None."
+                )
 
         else:
             if window_size is None:
@@ -573,8 +574,6 @@ class Basis(Base, abc.ABC):
                 )
 
         self._window_size = window_size
-
-
 
     @property
     def identifiability_constraints(self):
@@ -2094,7 +2093,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         self.time_scaling = time_scaling
         self.enforce_decay_to_zero = enforce_decay_to_zero
 
-
     @property
     def time_scaling(self):
         """Getter property for time_scaling."""
@@ -2105,8 +2103,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         """Setter property for time_scaling."""
         self._check_time_scaling(time_scaling)
         self._time_scaling = time_scaling
-
-
 
     @staticmethod
     def _check_time_scaling(time_scaling: float) -> None:
