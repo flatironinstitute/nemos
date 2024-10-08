@@ -19,66 +19,11 @@ from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
-from .solvers._svrg_defaults import (
-    glm_softplus_poisson_l_max_and_l,
-    svrg_optimal_batch_and_stepsize,
-)
+from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
-
-# make this a helper func in the
-_OPTIMAL_CONFIGURATIONS = {
-    "SVRG": [
-        {
-            "required_params": {
-                "observation_model__inverse_link_function": lambda x: x
-                == jax.nn.softplus,
-                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: not isinstance(x, Ridge),
-            },
-            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,  # rename with the shared part at the beginning
-            "compute_defaults": svrg_optimal_batch_and_stepsize,  # rename with the shared part at the beginning
-            "strong_convexity": None,
-        },
-        {
-            "required_params": {
-                "observation_model__inverse_link_function": lambda x: x
-                == jax.nn.softplus,
-                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: isinstance(x, Ridge),
-            },
-            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
-            "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": "regularizer_strength",
-        },
-    ],
-    "ProxSVRG": [
-        {
-            "required_params": {
-                "observation_model__inverse_link_function": lambda x: x
-                == jax.nn.softplus,
-                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: not isinstance(x, Ridge),
-            },
-            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
-            "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": None,
-        },
-        {
-            "required_params": {
-                "observation_model__inverse_link_function": lambda x: x
-                == jax.nn.softplus,
-                "observation_model": lambda x: isinstance(x, obs.PoissonObservations),
-                "regularizer": lambda x: isinstance(x, Ridge),
-            },
-            "compute_l_smooth": glm_softplus_poisson_l_max_and_l,
-            "compute_defaults": svrg_optimal_batch_and_stepsize,
-            "strong_convexity": "regularizer_strength",
-        },
-    ],
-}
 
 
 def cast_to_jax(func):
@@ -1104,50 +1049,27 @@ class GLM(BaseRegressor):
         # Start with a copy of the existing solver parameters
         new_solver_kwargs = self.solver_kwargs.copy()
 
-        # Check if the current solver has any known optimal configurations
-        if self.solver_name in _OPTIMAL_CONFIGURATIONS:
-            # Retrieve the list of configurations for the solver
-            configs = _OPTIMAL_CONFIGURATIONS[self.solver_name]
-            # Get the model parameters to check against the required conditions
-            model_params = self.get_params()
+        # get the model specific configs
+        compute_defaults, compute_l_smooth, strong_convexity = (
+            glm_compute_optimal_stepsize_configs(self)
+        )
+        if compute_defaults and compute_l_smooth:
+            # Check if the user has provided batch size or stepsize, or else use None
+            batch_size = new_solver_kwargs.get("batch_size", None)
+            stepsize = new_solver_kwargs.get("stepsize", None)
 
-            # Iterate through each configuration
-            for conf in configs:
-                # Determine if the current model matches the configuration's requirements
-                known_config = all(
-                    [
-                        check(model_params[key])
-                        for key, check in conf["required_params"].items()
-                    ]
-                )
+            # Compute the optimal batch size and stepsize based on smoothness, strong convexity, etc.
+            new_params = compute_defaults(
+                compute_l_smooth,
+                X,
+                y,
+                batch_size=batch_size,
+                stepsize=stepsize,
+                strong_convexity=strong_convexity,
+            )
 
-                if known_config:
-                    # Extract the function to compute optimal defaults
-                    compute_defaults = conf["compute_defaults"]
-
-                    # Extract strong convexity if it is relevant for this configuration
-                    strong_convexity = (
-                        model_params[conf["strong_convexity"]]
-                        if conf["strong_convexity"]
-                        else None
-                    )
-
-                    # Check if the user has provided batch size or stepsize, or else use None
-                    batch_size = new_solver_kwargs.get("batch_size", None)
-                    stepsize = new_solver_kwargs.get("stepsize", None)
-
-                    # Compute the optimal batch size and stepsize based on smoothness, strong convexity, etc.
-                    new_params = compute_defaults(
-                        conf["compute_l_smooth"],
-                        X,
-                        y,
-                        batch_size=batch_size,
-                        stepsize=stepsize,
-                        strong_convexity=strong_convexity,
-                    )
-
-                    # Update the solver parameters with the computed optimal values
-                    new_solver_kwargs.update(new_params)
+            # Update the solver parameters with the computed optimal values
+            new_solver_kwargs.update(new_params)
         return new_solver_kwargs
 
 

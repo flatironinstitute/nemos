@@ -228,7 +228,7 @@ class BaseRegressor(Base, abc.ABC):
         if solver_name not in self._regularizer.allowed_solvers:
             raise ValueError(
                 f"The solver: {solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
         self._solver_name = solver_name
@@ -304,7 +304,7 @@ class BaseRegressor(Base, abc.ABC):
         if self.solver_name not in self.regularizer.allowed_solvers:
             raise ValueError(
                 f"The solver: {self.solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
 

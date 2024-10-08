@@ -1,5 +1,6 @@
 """Module for calculating theoretical optimal defaults for SVRG and GLM configurations."""
 
+import copy
 import warnings
 from functools import wraps
 from typing import Any, Callable, Optional, Tuple
