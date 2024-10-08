@@ -1804,11 +1804,14 @@ class TestGLM:
         poissonGLM_model_instantiation,
     ):
         X, y, _, true_params, _ = poissonGLM_model_instantiation
+        if reg == "GroupLasso":
+            reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
         model = nmo.glm.GLM(
             solver_name=solver_name,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
+            regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -1863,6 +1866,7 @@ class TestGLM:
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
+            regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -1939,6 +1943,7 @@ class TestGLM:
                 solver_name=solver_name,
                 observation_model=obs,
                 solver_kwargs=solver_kwargs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
             )
         except ValueError as e:
             if not str(e).startswith(
@@ -2025,6 +2030,7 @@ class TestGLM:
                 solver_name=solver_name,
                 observation_model=obs,
                 solver_kwargs=solver_kwargs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
             )
         except ValueError as e:
             if not str(e).startswith(
@@ -3786,11 +3792,16 @@ class TestPopulationGLM:
         self, solver_name, batch_size, stepsize, reg, obs, poisson_population_GLM_model
     ):
         X, y, _, true_params, _ = poisson_population_GLM_model
+
+        if reg == "GroupLasso":
+            reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
+
         model = nmo.glm.PopulationGLM(
             solver_name=solver_name,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
+            regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -3845,6 +3856,7 @@ class TestPopulationGLM:
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
             regularizer=reg,
+            regularizer_strength=None if reg == "UnRegularized" else 1.0,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -4015,6 +4027,7 @@ class TestPopulationGLM:
                 solver_name=solver_name,
                 observation_model=obs,
                 solver_kwargs=solver_kwargs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
             )
         except ValueError as e:
             if not str(e).startswith(
@@ -4101,6 +4114,7 @@ class TestPopulationGLM:
                 solver_name=solver_name,
                 observation_model=obs,
                 solver_kwargs=solver_kwargs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
             )
         except ValueError as e:
             if not str(e).startswith(
@@ -4129,22 +4143,6 @@ class TestPopulationGLM:
         else:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
-
-
-def test_optimal_config_all_required_keys_present():
-    """Test that all required keys are present in each configuration."""
-    required_keys = [
-        "required_params",
-        "compute_l_smooth",
-        "compute_defaults",
-        "strong_convexity",
-    ]
-    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
-        for config in configs:
-            for key in required_keys:
-                assert (
-                    key in config
-                ), f"Configuration for solver '{solver}' is missing the required key: '{key}'."
 
 
 @pytest.mark.parametrize(
@@ -4186,7 +4184,10 @@ def test_optimal_config_outputs(
     # if the regularizer is not allowed for the solver type, return
     try:
         model = nmo.glm.GLM(
-            regularizer=regularizer, solver_name=solver_name, observation_model=obs
+            regularizer=regularizer,
+            solver_name=solver_name,
+            observation_model=obs,
+            regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
         )
     except ValueError as e:
         if not str(e).startswith(

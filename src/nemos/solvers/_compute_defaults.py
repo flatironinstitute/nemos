@@ -22,7 +22,7 @@ def glm_compute_optimal_stepsize_configs(
     Compute configuration functions for optimal step size selection based on the model.
 
     This function returns a tuple of three elements that are used for configuring the
-    optimal step size and batch size for stochastic variance reduced gradient (SVRG and
+    optimal step size and batch size for variance reduced gradient (SVRG and
     ProxSVRG) algorithms. If the model is configured with specific solver names,
     the appropriate computation functions are returned. Additionally, it determines the
     smoothness and strong convexity constants based on the model's observation and regularizer.
