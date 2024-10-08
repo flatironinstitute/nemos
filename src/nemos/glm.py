@@ -1016,61 +1016,8 @@ class GLM(BaseRegressor):
 
         return opt_step
 
-    def optimize_solver_params(self, X, y):
-        """
-        Compute and update solver parameters with optimal defaults if available.
-
-        This method checks the current solver configuration and, if an optimal
-        configuration is known for the given model parameters, computes the optimal
-        batch size, step size, and other hyperparameters to ensure faster convergence.
-
-        Parameters
-        ----------
-        X : array-like
-            Input data used to compute smoothness and strong convexity constants.
-        y : array-like
-            Target values used in conjunction with X for the same purpose.
-
-        Returns
-        -------
-        dict
-            A dictionary containing the solver parameters, updated with optimal defaults
-            where applicable.
-
-        Notes
-        -----
-        The method first looks up the known configurations for the solver in the
-        `_OPTIMAL_CONFIGURATIONS` dictionary. If a configuration matches the model's
-        parameters, it uses the associated functions to compute the optimal solver
-        parameters. If `batch_size` or `stepsize` is already provided by the user,
-        those values are used; otherwise, optimal defaults are computed.
-        """
-
-        # Start with a copy of the existing solver parameters
-        new_solver_kwargs = self.solver_kwargs.copy()
-
-        # get the model specific configs
-        compute_defaults, compute_l_smooth, strong_convexity = (
-            glm_compute_optimal_stepsize_configs(self)
-        )
-        if compute_defaults and compute_l_smooth:
-            # Check if the user has provided batch size or stepsize, or else use None
-            batch_size = new_solver_kwargs.get("batch_size", None)
-            stepsize = new_solver_kwargs.get("stepsize", None)
-
-            # Compute the optimal batch size and stepsize based on smoothness, strong convexity, etc.
-            new_params = compute_defaults(
-                compute_l_smooth,
-                X,
-                y,
-                batch_size=batch_size,
-                stepsize=stepsize,
-                strong_convexity=strong_convexity,
-            )
-
-            # Update the solver parameters with the computed optimal values
-            new_solver_kwargs.update(new_params)
-        return new_solver_kwargs
+    def get_optimal_solver_params_config(self):
+        return glm_compute_optimal_stepsize_configs(self)
 
 
 class PopulationGLM(GLM):

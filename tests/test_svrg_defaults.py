@@ -138,9 +138,9 @@ def test_calculate_b_tilde(
 @pytest.mark.parametrize(
     "batch_size, stepsize, expected_batch_size, expected_stepsize",
     [
-        # (32, 0.01, 32, 0.01),  # Both batch_size and stepsize provided
+        (32, 0.01, 32, 0.01),  # Both batch_size and stepsize provided
         (32, None, 32, None),  # Only batch_size provided
-        # (None, 0.01, None, 0.01),  # Only stepsize provided
+        (None, 0.01, None, 0.01),  # Only stepsize provided
     ],
 )
 def test_svrg_optimal_batch_and_stepsize_with_provided_defaults(
