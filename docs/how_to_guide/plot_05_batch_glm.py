@@ -6,11 +6,10 @@ by batching and using the `update` method of the model class.
 
 """
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pynapple as nap
-
 import nemos as nmo
+import numpy as np
+import matplotlib.pyplot as plt
 
 nap.nap_config.suppress_conversion_warnings = True
 

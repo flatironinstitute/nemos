@@ -31,13 +31,3 @@
 .grid.cards ul > li > p:first-of-type img {
     margin-right: 8px;
 }
-
-/* this sets up the figure in the quickstart to have the appropriate size*/
-.custom-figure {
-    width: 70% !important; /* Set the desired width */
-}
-
-/* Apply this style to the image within the figure */
-.custom-figure img {
-    width: 100%; /* Ensure the image fits the figure */
-}

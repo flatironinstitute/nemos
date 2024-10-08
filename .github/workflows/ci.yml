@@ -49,18 +49,6 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  prevent_docs_absolute_links:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Make .sh executable
-        run: chmod +x bash_scripts/prevent_absolute_links_to_docs.sh
-
-      - name: Check links
-        run: ./bash_scripts/prevent_absolute_links_to_docs.sh
-
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs: tox

@@ -49,8 +49,6 @@ markdown_extensions:
     - pymdownx.details # add notes toggleable notes ???
     - pymdownx.tabbed:
         alternate_style: true
-    - toc:
-        title: On this page
 
 
 plugins:

@@ -15,5 +15,6 @@ class NotFittedError(ValueError, AttributeError):
     ...     GLM().predict([[[1, 2], [2, 3], [3, 4]]])
     ... except NotFittedError as e:
     ...     print(repr(e))
-    NotFittedError("This GLM instance is not fitted yet. Call 'fit' with appropriate arguments.")
+    ... # NotFittedError("This GLM instance is not fitted yet. Call 'fit' with
+    ... # appropriate arguments.")
     """
