@@ -37,6 +37,7 @@ REGISTRY_DATA = {
     "Achilles_10252013.nwb": "42857015aad4c2f7f6f3d4022611a69bc86d714cf465183ce30955731e614990",
     "allen_478498617.nwb": "262393d7485a5b39cc80fb55011dcf21f86133f13d088e35439c2559fd4b49fa",
     "m691l1.nwb": "1990d8d95a70a29af95dade51e60ffae7a176f6207e80dbf9ccefaf418fe22b6",
+    "A2929-200711.nwb": "f698d7319efa5dfeb18fb5fe718ec1a84fdf96b85a158177849a759cd5e396fe",
 }
 DOWNLOADABLE_FILES = list(REGISTRY_DATA.keys())
 
@@ -50,6 +51,7 @@ REGISTRY_URLS_DATA = {
     "Achilles_10252013.nwb": OSF_TEMPLATE.format("hu5ma"),
     "allen_478498617.nwb": OSF_TEMPLATE.format("vf2nj"),
     "m691l1.nwb": OSF_TEMPLATE.format("xesdm"),
+    "A2929-200711.nwb": OSF_TEMPLATE.format("y7zwd"),
 }
 
 _NEMOS_ENV = "NEMOS_DATA_DIR"
@@ -143,10 +145,21 @@ def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:
     Examples
     --------
     >>> import nemos as nmo
+    >>> import pynapple as nap
     >>> io = nmo.fetch.download_dandi_data("000582",
-                                           "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb")
+    ...                                    "sub-11265/sub-11265_ses-07020602_behavior+ecephys.nwb")
     >>> nwb = nap.NWBFile(io.read(), lazy_loading=False)
     >>> print(nwb)
+    07020602
+    ┍━━━━━━━━━━━━━━━━━━━━━┯━━━━━━━━━━┑
+    │ Keys                │ Type     │
+    ┝━━━━━━━━━━━━━━━━━━━━━┿━━━━━━━━━━┥
+    │ units               │ TsGroup  │
+    │ ElectricalSeriesLFP │ Tsd      │
+    │ SpatialSeriesLED2   │ TsdFrame │
+    │ SpatialSeriesLED1   │ TsdFrame │
+    │ ElectricalSeries    │ Tsd      │
+    ┕━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━━┙
 
     """
     if dandi is None:

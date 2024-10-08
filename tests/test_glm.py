@@ -74,7 +74,9 @@ class TestGLM:
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            glm_class(regularizer=regularizer, solver_name=solver_name)
+            glm_class(
+                regularizer=regularizer, solver_name=solver_name, regularizer_strength=1
+            )
 
     @pytest.mark.parametrize(
         "observation, expectation",
@@ -167,7 +169,7 @@ class TestGLM:
         assert list(model.get_params().values()) == expected_values
 
         # changing regularizer
-        model.regularizer = "Ridge"
+        model.set_params(regularizer="Ridge", regularizer_strength=1.0)
 
         expected_values = [
             model.observation_model.inverse_link_function,
@@ -492,6 +494,7 @@ class TestGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
+            regularizer_strength=1.0,
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
@@ -1177,6 +1180,7 @@ class TestGLM:
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
+            regularizer_strength=1.0,
         )
         params = model.initialize_params(X, y)
         model.initialize_state(X, y, params)
@@ -1447,9 +1451,7 @@ class TestGLM:
             ("poisson_population_GLM_model_pytree", nmo.glm.PopulationGLM),
         ],
     )
-    @pytest.mark.parametrize(
-        "key", [jax.random.key(0), jax.random.key(19)]
-    )
+    @pytest.mark.parametrize("key", [jax.random.key(0), jax.random.key(19)])
     @pytest.mark.parametrize(
         "regularizer_class, solver_name",
         [
@@ -1457,10 +1459,11 @@ class TestGLM:
             (nmo.regularizer.Ridge, "SVRG"),
             (nmo.regularizer.Lasso, "ProxSVRG"),
             # (nmo.regularizer.GroupLasso, "ProxSVRG"),
-        ]
+        ],
     )
-    def test_glm_update_consistent_with_fit_with_svrg(self, request, regr_setup, glm_class, key, regularizer_class,
-                                                      solver_name):
+    def test_glm_update_consistent_with_fit_with_svrg(
+        self, request, regr_setup, glm_class, key, regularizer_class, solver_name
+    ):
         """
         Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
         is consistent with running the compiled GLM.fit on the same data with the same parameters
@@ -1480,12 +1483,15 @@ class TestGLM:
         regularizer_kwargs = {}
         if regularizer_class.__name__ == "GroupLasso":
             n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
-            regularizer_kwargs["mask"] = (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
+            regularizer_kwargs["mask"] = (
+                (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
+            )
 
+        reg = regularizer_class(**regularizer_kwargs)
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
         glm = glm_class(
-            regularizer=regularizer_class(
-                **regularizer_kwargs,
-            ),
+            regularizer=reg,
+            regularizer_strength=strength,
             solver_name=solver_name,
             solver_kwargs={
                 "batch_size": batch_size,
@@ -1496,9 +1502,7 @@ class TestGLM:
             },
         )
         glm2 = glm_class(
-            regularizer=regularizer_class(
-                **regularizer_kwargs,
-            ),
+            regularizer=reg,
             solver_name=solver_name,
             solver_kwargs={
                 "batch_size": batch_size,
@@ -1507,6 +1511,7 @@ class TestGLM:
                 "maxiter": maxiter,
                 "key": key,
             },
+            regularizer_strength=strength,
         )
         glm2.fit(X, y)
 
@@ -1542,7 +1547,9 @@ class TestGLM:
 
             iter_num += 1
 
-            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(prev_params)
+            _error = tree_l2_norm(tree_sub(params, prev_params)) / tree_l2_norm(
+                prev_params
+            )
             if _error < tol:
                 break
 
@@ -1556,7 +1563,9 @@ class TestGLM:
         )
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
-    def test_glm_fit_matches_sklearn_poisson(self, solver_name, poissonGLM_model_instantiation):
+    def test_glm_fit_matches_sklearn_poisson(
+        self, solver_name, poissonGLM_model_instantiation
+    ):
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
         X, y, _, true_params, firing_rate = poissonGLM_model_instantiation
@@ -1565,7 +1574,7 @@ class TestGLM:
             regularizer=nmo.regularizer.UnRegularized(),
             observation_model=nmo.observation_models.PoissonObservations(),
             solver_name=solver_name,
-            solver_kwargs={"tol": 10**-12}
+            solver_kwargs={"tol": 10**-12},
         )
         # set precision to float64 for accurate matching of the results
         model.data_type = jnp.float64
@@ -1574,20 +1583,26 @@ class TestGLM:
         model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
-        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
-        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.0)
+        match_intercepts = jnp.allclose(
+            model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.0
+        )
         if (not match_weights) or (not match_intercepts):
             raise ValueError("GLM.fit estimate does not match sklearn!")
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
-    def test_glm_fit_matches_sklearn_gamma(self, solver_name, gammaGLM_model_instantiation):
+    def test_glm_fit_matches_sklearn_gamma(
+        self, solver_name, gammaGLM_model_instantiation
+    ):
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
         X, y, _, true_params, firing_rate = gammaGLM_model_instantiation
 
         model = nmo.glm.GLM(
             regularizer=nmo.regularizer.UnRegularized(),
-            observation_model=nmo.observation_models.GammaObservations(inverse_link_function=jnp.exp),
+            observation_model=nmo.observation_models.GammaObservations(
+                inverse_link_function=jnp.exp
+            ),
             solver_name=solver_name,
             solver_kwargs={"tol": 10**-12},
         )
@@ -1598,8 +1613,10 @@ class TestGLM:
         model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
         model_skl.fit(X, y)
 
-        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.)
-        match_intercepts = jnp.allclose(model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.)
+        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.0)
+        match_intercepts = jnp.allclose(
+            model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.0
+        )
 
         if (not match_weights) or (not match_intercepts):
             raise ValueError("GLM.fit estimate does not match sklearn!")
@@ -1624,7 +1641,8 @@ class TestGLM:
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.regularizer = reg
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
+        model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
@@ -1643,15 +1661,117 @@ class TestGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "UnRegularized"
+        model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "UnRegularized"
-        assert model.regularizer_strength is None
+        with pytest.warns(
+            UserWarning,
+            match="Unused parameter `regularizer_strength` for UnRegularized GLM",
+        ):
+            model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        with pytest.warns(
+            UserWarning, match="Caution: regularizer strength has not been set"
+        ):
+            model.regularizer = "Ridge"
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer
+            (
+                {"regularizer": "Ridge"},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            (
+                {"regularizer": "Lasso"},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            (
+                {"regularizer": "GroupLasso"},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            ({"regularizer": "UnRegularized"}, does_not_raise()),
+            # set both None or number
+            (
+                {"regularizer": "Ridge", "regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            ({"regularizer": "Ridge", "regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer": "Lasso", "regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            ({"regularizer": "Lasso", "regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer": "GroupLasso", "regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            (
+                {"regularizer": "GroupLasso", "regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "UnRegularized", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "UnRegularized", "regularizer_strength": 1.0},
+                pytest.warns(
+                    UserWarning,
+                    match="Unused parameter `regularizer_strength` for UnRegularized GLM",
+                ),
+            ),
+            # set regularizer str only
+            (
+                {"regularizer_strength": 1.0},
+                pytest.warns(
+                    UserWarning,
+                    match="Unused parameter `regularizer_strength` for UnRegularized GLM",
+                ),
+            ),
+            ({"regularizer_strength": None}, does_not_raise()),
+        ],
+    )
+    def test_reg_set_params(self, params, warns):
+        model = nmo.glm.GLM()
+        with warns:
+            model.set_params(**params)
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            ({"regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_set_params_reg_str_only(self, params, warns, reg):
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1)
+        with warns:
+            model.set_params(**params)
 
     @pytest.mark.parametrize(
         "solver_name, reg",
@@ -1661,24 +1781,34 @@ class TestGLM:
             ("ProxSVRG", "Ridge"),
             ("ProxSVRG", "UnRegularized"),
             ("ProxSVRG", "Lasso"),
-            ("ProxSVRG", "GroupLasso")
-        ]
+            ("ProxSVRG", "GroupLasso"),
+        ],
     )
     @pytest.mark.parametrize(
         "obs",
         [
-            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
-        ]
+            nmo.observation_models.PoissonObservations(
+                inverse_link_function=jax.nn.softplus
+            )
+        ],
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
-    def test_glm_optimal_config_set(self, solver_name, batch_size, stepsize, reg, obs, poissonGLM_model_instantiation):
+    def test_glm_optimal_config_set(
+        self,
+        solver_name,
+        batch_size,
+        stepsize,
+        reg,
+        obs,
+        poissonGLM_model_instantiation,
+    ):
         X, y, _, true_params, _ = poissonGLM_model_instantiation
         model = nmo.glm.GLM(
             solver_name=solver_name,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
-            regularizer=reg
+            regularizer=reg,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -1706,23 +1836,33 @@ class TestGLM:
             ("ProxSVRG", "Ridge"),
             ("ProxSVRG", "UnRegularized"),
             ("ProxSVRG", "Lasso"),
-        ]
+        ],
     )
     @pytest.mark.parametrize(
         "obs",
         [
-            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
-        ]
+            nmo.observation_models.PoissonObservations(
+                inverse_link_function=jax.nn.softplus
+            )
+        ],
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
-    def test_glm_optimal_config_set_pytree(self, solver_name, batch_size, stepsize, reg, obs, poissonGLM_model_instantiation_pytree):
+    def test_glm_optimal_config_set_pytree(
+        self,
+        solver_name,
+        batch_size,
+        stepsize,
+        reg,
+        obs,
+        poissonGLM_model_instantiation_pytree,
+    ):
         X, y, _, true_params, _ = poissonGLM_model_instantiation_pytree
         model = nmo.glm.GLM(
             solver_name=solver_name,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
-            regularizer=reg
+            regularizer=reg,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -1741,7 +1881,6 @@ class TestGLM:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
             model.fit(X, y)
-
 
 
 class TestPopulationGLM:
@@ -1775,7 +1914,7 @@ class TestPopulationGLM:
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            population_glm_class(regularizer=regularizer)
+            population_glm_class(regularizer=regularizer, regularizer_strength=1.0)
 
     def test_get_params(self):
         """
@@ -1823,7 +1962,7 @@ class TestPopulationGLM:
         assert list(model.get_params().values()) == expected_values
 
         # changing regularizer
-        model.regularizer = "Ridge"
+        model.set_params(regularizer="Ridge", regularizer_strength=1.0)
 
         expected_values = [
             model.feature_mask,
@@ -1883,7 +2022,9 @@ class TestPopulationGLM:
         """
         with expectation:
             population_glm_class(
-                regularizer=ridge_regularizer, observation_model=observation
+                regularizer=ridge_regularizer,
+                observation_model=observation,
+                regularizer_strength=1.0,
             )
 
     @pytest.mark.parametrize(
@@ -1948,7 +2089,8 @@ class TestPopulationGLM:
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        model.regularizer = reg
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
+        model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
@@ -2214,6 +2356,7 @@ class TestPopulationGLM:
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
+            regularizer_strength=1.0,
         )
         model.fit(X, y)
 
@@ -2618,6 +2761,7 @@ class TestPopulationGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
+            regularizer_strength=1.0,
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
@@ -2788,7 +2932,9 @@ class TestPopulationGLM:
             ),
         ],
     )
-    def test_predict_is_fit_population(self, is_fit, expectation, poisson_population_GLM_model):
+    def test_predict_is_fit_population(
+        self, is_fit, expectation, poisson_population_GLM_model
+    ):
         """
         Test the `score` method on models based on their fit status.
         Ensure scoring is only possible on fitted models.
@@ -3301,13 +3447,13 @@ class TestPopulationGLM:
         [
             (
                 nmo.regularizer.UnRegularized(),
-                0.001,
+                None,
                 "LBFGS",
                 {"stepsize": 0.1, "tol": 10**-14},
             ),
             (
                 nmo.regularizer.UnRegularized(),
-                1.0,
+                None,
                 "GradientDescent",
                 {"tol": 10**-14},
             ),
@@ -3353,7 +3499,7 @@ class TestPopulationGLM:
     ):
         jax.config.update("jax_enable_x64", True)
         if isinstance(mask, dict):
-            X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+            X, y, _, true_params, firing_rate = poisson_population_GLM_model_pytree
 
             def map_neu(k, coef_):
                 key_ind = {"input_1": [0, 1, 2], "input_2": [3, 4]}
@@ -3366,7 +3512,7 @@ class TestPopulationGLM:
                 return ind_array, coef_stack
 
         else:
-            X, y, model, true_params, firing_rate = poisson_population_GLM_model
+            X, y, _, true_params, firing_rate = poisson_population_GLM_model
 
             def map_neu(k, coef_):
                 ind_array = np.where(mask[:, k])[0]
@@ -3375,11 +3521,14 @@ class TestPopulationGLM:
 
         mask_bool = jax.tree_util.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
-        model.feature_mask = mask
-        model.regularizer = regularizer
-        model.regularizer_strength = regularizer_strength
-        model.solver_name = solver_name
-        model.solver_kwargs = solver_kwargs
+        kwargs = dict(
+            feature_mask=mask,
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        model = nmo.glm.PopulationGLM(**kwargs)
         model.fit(X, y)
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
@@ -3422,15 +3571,23 @@ class TestPopulationGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "UnRegularized"
+        model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
-        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "UnRegularized"
-        assert model.regularizer_strength is None
+        model = nmo.glm.PopulationGLM(regularizer=reg, regularizer_strength=1.0)
+        with pytest.warns(
+            UserWarning,
+            match="Unused parameter `regularizer_strength` for UnRegularized GLM",
+        ):
+            model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        with pytest.warns(
+            UserWarning, match="Caution: regularizer strength has not been set"
+        ):
+            model.regularizer = "Ridge"
 
     @pytest.mark.parametrize(
         "solver_name, reg",
@@ -3440,24 +3597,28 @@ class TestPopulationGLM:
             ("ProxSVRG", "Ridge"),
             ("ProxSVRG", "UnRegularized"),
             ("ProxSVRG", "Lasso"),
-            ("ProxSVRG", "GroupLasso")
-        ]
+            ("ProxSVRG", "GroupLasso"),
+        ],
     )
     @pytest.mark.parametrize(
         "obs",
         [
-            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
-        ]
+            nmo.observation_models.PoissonObservations(
+                inverse_link_function=jax.nn.softplus
+            )
+        ],
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
-    def test_glm_optimal_config_set(self, solver_name, batch_size, stepsize, reg, obs, poisson_population_GLM_model):
+    def test_glm_optimal_config_set(
+        self, solver_name, batch_size, stepsize, reg, obs, poisson_population_GLM_model
+    ):
         X, y, _, true_params, _ = poisson_population_GLM_model
         model = nmo.glm.PopulationGLM(
             solver_name=solver_name,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
-            regularizer=reg
+            regularizer=reg,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -3485,24 +3646,33 @@ class TestPopulationGLM:
             ("ProxSVRG", "Ridge"),
             ("ProxSVRG", "UnRegularized"),
             ("ProxSVRG", "Lasso"),
-        ]
+        ],
     )
     @pytest.mark.parametrize(
         "obs",
         [
-            nmo.observation_models.PoissonObservations(inverse_link_function=jax.nn.softplus)
-        ]
+            nmo.observation_models.PoissonObservations(
+                inverse_link_function=jax.nn.softplus
+            )
+        ],
     )
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
-    def test_glm_optimal_config_set_pytree(self, solver_name, batch_size, stepsize, reg, obs,
-                                           poisson_population_GLM_model_pytree):
+    def test_glm_optimal_config_set_pytree(
+        self,
+        solver_name,
+        batch_size,
+        stepsize,
+        reg,
+        obs,
+        poisson_population_GLM_model_pytree,
+    ):
         X, y, _, true_params, _ = poisson_population_GLM_model_pytree
         model = nmo.glm.PopulationGLM(
             solver_name=solver_name,
             solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
             observation_model=obs,
-            regularizer=reg
+            regularizer=reg,
         )
         opt_state = model.initialize_state(X, y, true_params)
         solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
@@ -3522,42 +3692,147 @@ class TestPopulationGLM:
             assert solver.batch_size > 0
             model.fit(X, y)
 
+    def test_optimal_config_all_required_keys_present():
+        """Test that all required keys are present in each configuration."""
+        required_keys = [
+            "required_params",
+            "compute_l_smooth",
+            "compute_defaults",
+            "strong_convexity",
+        ]
+        for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+            for config in configs:
+                for key in required_keys:
+                    assert (
+                        key in config
+                    ), f"Configuration for solver '{solver}' is missing the required key: '{key}'."
 
-def test_optimal_config_all_required_keys_present():
-    """Test that all required keys are present in each configuration."""
-    required_keys = ["required_params", "compute_l_smooth", "compute_defaults", "strong_convexity"]
-    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
-        for config in configs:
-            for key in required_keys:
-                assert key in config, f"Configuration for solver '{solver}' is missing the required key: '{key}'."
+    def test_optimal_config_required_params_is_dict():
+        """Test that 'required_params' is a dictionary."""
+        for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+            for config in configs:
+                assert isinstance(
+                    config["required_params"], dict
+                ), f"'required_params' should be a dictionary in the configuration for solver '{solver}'."
 
+    def test_optimal_config_compute_l_smooth_is_callable():
+        """Test that 'compute_l_smooth' is a callable function."""
+        for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+            for config in configs:
+                assert callable(
+                    config["compute_l_smooth"]
+                ), f"'compute_l_smooth' should be callable in the configuration for solver '{solver}'."
 
-def test_optimal_config_required_params_is_dict():
-    """Test that 'required_params' is a dictionary."""
-    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
-        for config in configs:
-            assert isinstance(config["required_params"], dict), f"'required_params' should be a dictionary in the configuration for solver '{solver}'."
+    def test_optimal_config_compute_defaults_is_callable():
+        """Test that 'compute_defaults' is a callable function."""
+        for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+            for config in configs:
+                assert callable(
+                    config["compute_defaults"]
+                ), f"'compute_defaults' should be callable in the configuration for solver '{solver}'."
 
+    def test_optimal_config_strong_convexity_is_valid_type():
+        """Test that 'strong_convexity' is either None, a string, or callable."""
+        for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
+            for config in configs:
+                strong_convexity = config["strong_convexity"]
+                assert strong_convexity is None or isinstance(
+                    strong_convexity, (str, type(None))
+                ), (
+                    f"'strong_convexity' should be either None, a string, or callable in the "
+                    f"configuration for solver '{solver}'."
+                )
 
-def test_optimal_config_compute_l_smooth_is_callable():
-    """Test that 'compute_l_smooth' is a callable function."""
-    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
-        for config in configs:
-            assert callable(config["compute_l_smooth"]), f"'compute_l_smooth' should be callable in the configuration for solver '{solver}'."
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer
+            (
+                {"regularizer": "Ridge"},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            (
+                {"regularizer": "Lasso"},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            (
+                {"regularizer": "GroupLasso"},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            ({"regularizer": "UnRegularized"}, does_not_raise()),
+            # set both None or number
+            (
+                {"regularizer": "Ridge", "regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            ({"regularizer": "Ridge", "regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer": "Lasso", "regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            ({"regularizer": "Lasso", "regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer": "GroupLasso", "regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+            (
+                {"regularizer": "GroupLasso", "regularizer_strength": 1.0},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "UnRegularized", "regularizer_strength": None},
+                does_not_raise(),
+            ),
+            (
+                {"regularizer": "UnRegularized", "regularizer_strength": 1.0},
+                pytest.warns(
+                    UserWarning,
+                    match="Unused parameter `regularizer_strength` for UnRegularized GLM",
+                ),
+            ),
+            # set regularizer str only
+            (
+                {"regularizer_strength": 1.0},
+                pytest.warns(
+                    UserWarning,
+                    match="Unused parameter `regularizer_strength` for UnRegularized GLM",
+                ),
+            ),
+            ({"regularizer_strength": None}, does_not_raise()),
+        ],
+    )
+    def test_reg_set_params(self, params, warns):
+        model = nmo.glm.PopulationGLM()
+        with warns:
+            model.set_params(**params)
 
-
-def test_optimal_config_compute_defaults_is_callable():
-    """Test that 'compute_defaults' is a callable function."""
-    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
-        for config in configs:
-            assert callable(config["compute_defaults"]), f"'compute_defaults' should be callable in the configuration for solver '{solver}'."
-
-
-def test_optimal_config_strong_convexity_is_valid_type():
-    """Test that 'strong_convexity' is either None, a string, or callable."""
-    for solver, configs in nmo.glm._OPTIMAL_CONFIGURATIONS.items():
-        for config in configs:
-            strong_convexity = config["strong_convexity"]
-            assert strong_convexity is None or isinstance(strong_convexity, (str, type(None))), \
-                f"'strong_convexity' should be either None, a string, or callable in the configuration for solver '{solver}'."
-
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            ({"regularizer_strength": 1.0}, does_not_raise()),
+            (
+                {"regularizer_strength": None},
+                pytest.warns(
+                    UserWarning, match="Caution: regularizer strength has not been set"
+                ),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_set_params_reg_str_only(self, params, warns, reg):
+        model = nmo.glm.PopulationGLM(regularizer=reg, regularizer_strength=1)
+        with warns:
+            model.set_params(**params)

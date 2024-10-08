@@ -370,7 +370,7 @@ def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
         (
             [
                 nap.Tsd(t=np.arange(10), d=np.arange(10)),
-                nap.Tsd(t=np.arange(1), d=np.arange(1)),
+                nap.Tsd(t=np.arange(1), d=np.arange(1), time_support=nap.IntervalSet(0, 10)),
                 nap.Tsd(t=np.arange(10), d=np.arange(10)),
             ],
             pytest.raises(

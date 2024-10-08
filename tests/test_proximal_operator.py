@@ -121,6 +121,7 @@ def test_prox_operator_shrinks_only_masked(example_data_prox_operator):
 
 def test_prox_operator_shrinks_only_masked_multineuron(example_data_prox_operator_multineuron):
     params, _, mask, _ = example_data_prox_operator_multineuron
+    mask = mask.astype(float)
     mask = mask.at[:, 1].set(jnp.zeros(2))
     params_new = prox_group_lasso(params, 0.05, mask)
     assert jnp.all(params_new[0][1] == params[0][1])

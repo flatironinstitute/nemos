@@ -1,5 +1,5 @@
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from nemos import tree_utils

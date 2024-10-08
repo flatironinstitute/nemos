@@ -12,9 +12,13 @@ Note:
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 
 import nemos as nmo
+
+# shut-off conversion warnings
+nap.nap_config.suppress_conversion_warnings = True
 
 
 # Sample subclass to test instantiation and methods
@@ -394,7 +398,7 @@ def example_data_prox_operator():
         ),
     )
     regularizer_strength = 0.1
-    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=jnp.float32)
+    mask = jnp.array([[1, 0, 1, 0], [0, 1, 0, 1]]).astype(float)
     scaling = 0.5
 
     return params, regularizer_strength, mask, scaling

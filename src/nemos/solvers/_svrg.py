@@ -80,11 +80,13 @@ class ProxSVRG:
 
     Examples
     --------
-    >>> def loss_fn(params, X, y):
-    >>>    ...
-    >>>
-    >>> svrg = ProxSVRG(loss_fn, prox_fun)
-    >>> params, state = svrg.run(init_params, hyperparams_prox, X, y)
+    >>> import numpy as np
+    >>> from jaxopt.prox import prox_lasso
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
+    >>> svrg = ProxSVRG(loss_fn, prox_lasso)
+    >>> hyperparams_prox = 0.1
+    >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
+
 
     References
     ----------
@@ -616,11 +618,10 @@ class SVRG(ProxSVRG):
 
     Examples
     --------
-    >>> def loss_fn(params, X, y):
-    >>>    ...
-    >>>
+    >>> import numpy as np
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = SVRG(loss_fn)
-    >>> params, state = svrg.run(init_params, X, y)
+    >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
 
     References
     ----------
