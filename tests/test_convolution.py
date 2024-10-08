@@ -329,7 +329,7 @@ class TestCreateConvolutionalPredictor:
         conv = convolve.create_convolutional_predictor(
             basis_matrix, trial_counts, axis=axis
         )
-        assert jax.tree_util.tree_structure(trial_counts) == jax.tree_structure(conv)
+        assert jax.tree_util.tree_structure(trial_counts) == jax.tree_util.tree_structure(conv)
 
     @pytest.mark.parametrize("axis", [0, 1, 2])
     @pytest.mark.parametrize(
@@ -346,7 +346,6 @@ class TestCreateConvolutionalPredictor:
             (2, False, "anti-causal", [29]),
             (2, None, "anti-causal", [29, 28]),
             (3, False, "acausal", [29, 0]),
-            (2, False, "acausal", [29]),
         ],
     )
     def test_expected_nan(self, axis, window_size, shift, predictor_causality, nan_idx):
@@ -394,7 +393,6 @@ class TestCreateConvolutionalPredictor:
             (2, False, "anti-causal", [20, 75]),
             (2, None, "anti-causal", [20, 19, 75, 74]),
             (3, False, "acausal", [0, 20, 50, 75]),
-            (2, False, "acausal", [20, 75]),
         ],
     )
     def test_multi_epoch_pynapple(

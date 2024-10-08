@@ -139,6 +139,23 @@ class BaseRegressor(Base, abc.ABC):
         """
         return self._solver_run
 
+    def set_params(self, **params: Any):
+        """Manage warnings in case of multiple parameter settings."""
+        # if both regularizer and regularizer_strength are set, then only
+        # warn in case the strength is not expected for the regularizer type
+        if "regularizer" in params and "regularizer_strength" in params:
+            reg = params.pop("regularizer")
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="Caution: regularizer strength.*"
+                    "|Unused parameter `regularizer_strength`.*",
+                )
+                super().set_params(regularizer=reg)
+
+        return super().set_params(**params)
+
     @property
     def regularizer(self) -> Union[None, Regularizer]:
         """Getter for the regularizer attribute."""
@@ -170,19 +187,16 @@ class BaseRegressor(Base, abc.ABC):
 
     @regularizer_strength.setter
     def regularizer_strength(self, strength: Union[float, None]):
-        # if using unregularized, strength will be None no matter what
-        if isinstance(self._regularizer, UnRegularized):
-            self._regularizer_strength = None
         # check regularizer strength
-        elif strength is None:
+        if strength is None and not isinstance(self._regularizer, UnRegularized):
             warnings.warn(
                 UserWarning(
                     "Caution: regularizer strength has not been set. Defaulting to 1.0. Please see "
                     "the documentation for best practices in setting regularization strength."
                 )
             )
-            self._regularizer_strength = 1.0
-        else:
+            strength = 1.0
+        elif strength is not None:
             try:
                 # force conversion to float to prevent weird GPU issues
                 strength = float(strength)
@@ -191,7 +205,16 @@ class BaseRegressor(Base, abc.ABC):
                 raise ValueError(
                     f"Could not convert the regularizer strength: {strength} to a float."
                 )
-            self._regularizer_strength = strength
+            if isinstance(self._regularizer, UnRegularized):
+                warnings.warn(
+                    UserWarning(
+                        "Unused parameter `regularizer_strength` for UnRegularized GLM. "
+                        "The regularizer strength parameter is not required and won't be used when the regularizer "
+                        "is set to UnRegularized."
+                    )
+                )
+
+        self._regularizer_strength = strength
 
     @property
     def solver_name(self) -> str:
