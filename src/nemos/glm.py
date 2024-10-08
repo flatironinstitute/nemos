@@ -1017,6 +1017,7 @@ class GLM(BaseRegressor):
         return opt_step
 
     def get_optimal_solver_params_config(self):
+        """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
 
 
