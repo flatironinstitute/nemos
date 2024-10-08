@@ -362,7 +362,7 @@ def test_svrg_glm_fit(
     "regularizer_name, solver_class, mask",
     [
         ("Lasso", ProxSVRG, None),
-        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(-1, 1).astype(float)),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
     ],
