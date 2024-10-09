@@ -6238,9 +6238,9 @@ def test__get_splitter(mode1, mode2, mode3, bas1, bas2, bas3, operator1, operato
             n_input_basis[i] = 1
             kwrgs.pop("window_size")
 
-    bas1_instance = bas1(n_basis[0], mode=mode1, n_basis_input=n_input_basis[0], **extra_kwargs[0], label="1")
-    bas2_instance = bas2(n_basis[1], mode=mode2, n_basis_input=n_input_basis[1], **extra_kwargs[1], label="2")
-    bas3_instance = bas3(n_basis[2], mode=mode3, n_basis_input=n_input_basis[2], **extra_kwargs[2], label="3")
+    bas1_instance = bas1(n_basis[0], mode=mode1, n_output_features=n_input_basis[0], **extra_kwargs[0], label="1")
+    bas2_instance = bas2(n_basis[1], mode=mode2, n_output_features=n_input_basis[1], **extra_kwargs[1], label="2")
+    bas3_instance = bas3(n_basis[2], mode=mode3, n_output_features=n_input_basis[2], **extra_kwargs[2], label="3")
 
 
     func1 = getattr(bas1_instance, operator1)
