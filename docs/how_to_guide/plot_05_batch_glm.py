@@ -6,14 +6,12 @@ by batching and using the `update` method of the model class.
 
 """
 
-import pynapple as nap
-import nemos as nmo
-import numpy as np
-import jax
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
+import pynapple as nap
 
-# jax.config.update("jax_enable_x64", True)
+import nemos as nmo
+
 nap.nap_config.suppress_conversion_warnings = True
 
 # set random seed

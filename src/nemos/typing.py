@@ -4,10 +4,16 @@ from typing import Any, Callable, NamedTuple, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
+from jax._src.typing import ArrayLike
 
 from .pytrees import FeaturePytree
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
+
+Pytree = Any
+
+# copying jax.random's annotation
+KeyArrayLike = ArrayLike
 
 SolverRun = Callable[
     [

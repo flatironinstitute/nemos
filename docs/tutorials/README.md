@@ -1,6 +1,6 @@
-# Background
+# Tutorials
 
-These notes aim to provide the essential background knowledge needed to understand the models and data processing techniques implemented in NeMoS.
+A gallery of fully worked out tutorials analyzing neural recordings from different brain regions and recording modalities.
 
 ??? attention "Additional requirements"
     To run the tutorials, you may need to install some additional packages used for plotting and data fetching.

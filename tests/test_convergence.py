@@ -3,12 +3,16 @@ method with just penalized loss."""
 
 import jax
 import numpy as np
+import pytest
 from scipy.optimize import minimize
 
 import nemos as nmo
 
 
-def test_unregularized_convergence():
+@pytest.mark.parametrize(
+    "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
+)
+def test_unregularized_convergence(solver_names):
     """
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     unregularized GLM is the same.
@@ -46,7 +50,10 @@ def test_unregularized_convergence():
     assert np.allclose(model_GD.intercept_, model_PG.intercept_)
 
 
-def test_ridge_convergence():
+@pytest.mark.parametrize(
+    "solver_names", [("GradientDescent", "ProximalGradient"), ("SVRG", "ProxSVRG")]
+)
+def test_ridge_convergence(solver_names):
     """
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     ridge GLM is the same.
@@ -85,7 +92,8 @@ def test_ridge_convergence():
     assert np.allclose(model_GD.intercept_, model_PG.intercept_)
 
 
-def test_lasso_convergence():
+@pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+def test_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
     lasso GLM is the same.
@@ -128,7 +136,8 @@ def test_lasso_convergence():
     assert np.allclose(res.x[:1], model_PG.intercept_)
 
 
-def test_group_lasso_convergence():
+@pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
+def test_group_lasso_convergence(solver_name):
     """
     Assert that solution found when using ProximalGradient versus Nelder-Mead method using
     group lasso GLM is the same.

@@ -56,7 +56,7 @@ model: a linear-nonlinear-Poisson model.
 
 <figure markdown>
 <!-- note that the src here has an extra ../ compared to other images, necessary when specifying path directly in html -->
-<img src="../../../assets/lnp_model.svg" style="width: 100%"/>
+<img src="../../../assets/lnp_model.svg" style="width: 100%", alt="Linear-Non Linear-Poisson illustration."/>
 <figcaption>LNP model schematic. Modified from Pillow et al., 2008.</figcaption>
 </figure>
 
@@ -100,10 +100,14 @@ import matplotlib.pyplot as plt
 # first import things
 import numpy as np
 import pynapple as nap
-from background_utils import plotting
+
+import nemos as nmo
+
+# some helper plotting functions
+from nemos import _documentation_utils as doc_plots
 
 # configure plots some
-plt.style.use("../neural_modeling/examples_utils/nemos.mplstyle")
+plt.style.use(nmo.styles.plot_style)
 
 # %%
 # to simplify things, we will look at three simple LNP neuron models as 
@@ -119,7 +123,7 @@ input_feature[50:] = 1
 input_feature *= np.random.rand(100)
 input_feature = nap.Tsd(np.linspace(0, 100, 100), input_feature)
 
-fig = plotting.lnp_schematic(input_feature, weights, intercepts)
+fig = doc_plots.lnp_schematic(input_feature, weights, intercepts)
 
 # %%
 #
@@ -135,8 +139,8 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts)
 # firing rate is always positive. We can visualize this second stage of the LNP model
 # by adding the `plot_nonlinear` keyword to our `lnp_schematic()` plotting function:
 
-fig = plotting.lnp_schematic(input_feature, weights, intercepts,
-                             plot_nonlinear=True)
+fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
+                              plot_nonlinear=True)
 
 # %%
 # !!! info
@@ -158,8 +162,8 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 # the generated spikes spikes look like!
 
 # mkdocs_gallery_thumbnail_number = 3
-fig = plotting.lnp_schematic(input_feature, weights, intercepts,
-                             plot_nonlinear=True, plot_spikes=True)
+fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
+                              plot_nonlinear=True, plot_spikes=True)
 
 # %%
 #
@@ -196,7 +200,9 @@ fig = plotting.lnp_schematic(input_feature, weights, intercepts,
 #     (4). This method is used under the hood during optimization.
 
 # %%
-### More general GLMs
-# So far, we have focused on the relatively simple LNP model of spike generation, which is a special case of a GLM. The LNP model has some known shortcomings[^1]. For instance, LNP ignores things like refactory periods and other history-dependent features of spiking in a neuron. As we will show in other demos, such _spike history filters_ can be built into GLMs to give more accurate results. We will also show how, if you have recordings from a large _population_ of neurons simultaneously, you can build connections between the neurons into the GLM in the form of _coupling filters_. This can help answer the degree to which activity is driven primarily by the input X, or by network influences in the population.
+# ## More general GLMs
+# So far, we have focused on the relatively simple LNP model of spike generation, which is a special case of a GLM. The LNP model has some known shortcomings[$^{[1]}$](#ref-1). For instance, LNP ignores things like refactory periods and other history-dependent features of spiking in a neuron. As we will show in other demos, such _spike history filters_ can be built into GLMs to give more accurate results. We will also show how, if you have recordings from a large _population_ of neurons simultaneously, you can build connections between the neurons into the GLM in the form of _coupling filters_. This can help answer the degree to which activity is driven primarily by the input X, or by network influences in the population.
 #
-# [^1]: Pillow, JW, Shlens, J, Paninski, L, Sher, A,  Litke, AM, Chichilnisky, EJ, Simoncelli, EP (2008),  "Spatio-temporal correlations and visual signalling in a complete neuronal population." Nature 454: 995-9.
+# ## References
+#
+# [1] <span id="ref-1"><a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2684455/">Pillow, JW, Shlens, J, Paninski, L, Sher, A,  Litke, AM, Chichilnisky, EJ, Simoncelli, EP (2008),  "Spatio-temporal correlations and visual signalling in a complete neuronal population." Nature 454: 995-9.</a></span>

@@ -12,9 +12,13 @@ Note:
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pynapple as nap
 import pytest
 
 import nemos as nmo
+
+# shut-off conversion warnings
+nap.nap_config.suppress_conversion_warnings = True
 
 
 # Sample subclass to test instantiation and methods
@@ -542,3 +546,83 @@ def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
         observation_model=model.observation_model, regularizer=model.regularizer
     )
     return X_tree, spikes, model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def regr_data():
+    np.random.seed(123)
+    # define inputs and coeff
+    n_samples, n_features = 50, 3
+    X = np.random.normal(size=(n_samples, n_features))
+    coef = np.random.normal(size=(n_features))
+    # set y according to lin reg eqn
+    y = X.dot(coef) + 0.1 * np.random.normal(size=(n_samples,))
+    return X, y, coef
+
+
+@pytest.fixture
+def linear_regression(regr_data):
+    X, y, coef = regr_data
+    # solve least-squares
+    ols, _, _, _ = np.linalg.lstsq(X, y, rcond=-1)
+
+    # set the loss
+    def loss(params, X, y):
+        return jnp.power(y - jnp.dot(X, params), 2).mean()
+
+    return X, y, coef, ols, loss
+
+
+@pytest.fixture
+def ridge_regression(regr_data):
+    X, y, coef = regr_data
+
+    # solve least-squares
+    yagu = np.hstack((y, np.zeros_like(coef)))
+    Xagu = np.vstack((X, np.sqrt(0.5) * np.eye(coef.shape[0])))
+    ridge, _, _, _ = np.linalg.lstsq(Xagu, yagu, rcond=-1)
+
+    # set the loss
+    def loss(params, XX, yy):
+        return (
+            jnp.power(yy - jnp.dot(XX, params), 2).sum()
+            + 0.5 * jnp.power(params, 2).sum()
+        )
+
+    return X, y, coef, ridge, loss
+
+
+@pytest.fixture
+def linear_regression_tree(linear_regression):
+    X, y, coef, ols, loss = linear_regression
+    X_tree = dict(input_1=X[..., :2], input_2=X[..., 2:])
+    coef_tree = dict(input_1=coef[:2], input_2=coef[2:])
+    ols_tree = dict(input_1=ols[:2], input_2=ols[2:])
+
+    nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, X_tree, coef_tree)
+
+    def loss_tree(params, XX, yy):
+        pred = nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, XX, params)
+        return jnp.power(yy - pred, 2).sum()
+
+    return X_tree, y, coef_tree, ols_tree, loss_tree
+
+
+@pytest.fixture()
+def ridge_regression_tree(ridge_regression):
+    X, y, coef, ridge, loss = ridge_regression
+    X_tree = dict(input_1=X[..., :2], input_2=X[..., 2:])
+    coef_tree = dict(input_1=coef[:2], input_2=coef[2:])
+    ridge_tree = dict(input_1=ridge[:2], input_2=ridge[2:])
+
+    def loss_tree(params, XX, yy):
+        pred = nmo.tree_utils.pytree_map_and_reduce(jnp.dot, sum, XX, params)
+        norm = (
+            0.5
+            * nmo.tree_utils.pytree_map_and_reduce(
+                lambda x: jnp.power(x, 2).sum(), sum, params
+            ).sum()
+        )
+        return jnp.power(yy - pred, 2).sum() + norm
+
+    return X_tree, y, coef_tree, ridge_tree, loss_tree
