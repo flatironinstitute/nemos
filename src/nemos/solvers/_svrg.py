@@ -207,7 +207,7 @@ class ProxSVRG:
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
         minibatch_grad_at_current_params = self.loss_gradient(params, *args)
         # gradient on batch_{i_k} evaluated at the anchor point
-        # gradient of f_{i_k} at x_{x} in the pseudocode of Gower et al. 2020
+        # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
         minibatch_grad_at_reference_point = self.loss_gradient(reference_point, *args)
 
         # SVRG gradient estimate
