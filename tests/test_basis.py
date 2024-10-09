@@ -1,5 +1,6 @@
 import abc
 import inspect
+import itertools
 import pickle
 from contextlib import nullcontext as does_not_raise
 from typing import Literal
@@ -6171,3 +6172,97 @@ def test_multi_epoch_pynapple_basis_transformer(
     assert np.all(times_nan_found == np.array(nan_index))
     idx_nan = [np.where(res.t == k)[0][0] for k in nan_index]
     assert np.all(np.isnan(res.d[idx_nan]))
+
+
+@pytest.mark.parametrize(
+    "bas1, bas2, bas3",
+    list(itertools.product(*[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))]*3))
+)
+@pytest.mark.parametrize(
+    "mode1, mode2, mode3",
+    list(itertools.product(["eval", "conv"], ["eval", "conv"], ["eval", "conv"])))
+@pytest.mark.parametrize(
+    "operator1, operator2, compute_slice",
+    [
+        (
+            "__add__",
+            "__add__",
+            lambda bas1, bas2, bas3: (
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs,  bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs),
+                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)
+            )
+        ),
+        (
+            "__add__",
+            "__mul__",
+            lambda bas1, bas2, bas3: (
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs)
+            )
+        ),
+        (
+            "__mul__",
+            "__add__",
+            lambda bas1, bas2, bas3: (
+                    # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * (bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)),
+            ),
+        ),
+        (
+            "__mul__",
+            "__mul__",
+            lambda bas1, bas2, bas3: (
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs),
+            )
+        ),
+    ]
+)
+def test__get_splitter(mode1, mode2, mode3, bas1, bas2, bas3, operator1, operator2, compute_slice):
+    # skip nested
+    if any(bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis) for bas in [bas1, bas2, bas3]):
+        return
+    # define the basis
+    n_basis = [5, 6, 7]
+    n_input_basis = [1, 2, 3]
+    extra_kwargs =  (
+        {"decay_rates": np.arange(1, n_basis[0] + 1), "window_size": 5},
+        {"decay_rates": np.arange(1, n_basis[1] + 1), "window_size": 5},
+        {"decay_rates": np.arange(1, n_basis[2] + 1), "window_size": 5}
+    )
+    for i, val in enumerate(zip([bas1, bas2, bas3], [mode1, mode2, mode3], extra_kwargs)):
+        bas, mode, kwrgs = val
+        if bas != basis.OrthExponentialBasis:
+            kwrgs.pop("decay_rates")
+        if mode == "eval":
+            n_input_basis[i] = 1
+            kwrgs.pop("window_size")
+
+    bas1_instance = bas1(n_basis[0], mode=mode1, n_basis_input=n_input_basis[0], **extra_kwargs[0], label="1")
+    bas2_instance = bas2(n_basis[1], mode=mode2, n_basis_input=n_input_basis[1], **extra_kwargs[1], label="2")
+    bas3_instance = bas3(n_basis[2], mode=mode3, n_basis_input=n_input_basis[2], **extra_kwargs[2], label="3")
+
+
+    func1 = getattr(bas1_instance, operator1)
+    func2 = getattr(bas2_instance, operator2)
+    bas23 = func2(bas3_instance)
+    bas123 = func1(bas23)
+
+    splitter_dict, _ = bas123._get_splitter()
+    exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
+    for i, val in enumerate(splitter_dict.values()):
+        assert val == exp_slices[i]
+
+    label = "1"
+    if operator1 == "__add__":
+        label += " + "
+    else:
+        label += " * "
+    label += "2"
+    if operator2 == "__add__":
+        label += " + "
+    else:
+        label += " * "
+    label += "3"
+
+    assert label == bas123.label
