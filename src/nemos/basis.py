@@ -1089,12 +1089,12 @@ class Basis(Base, abc.ABC):
 
         return TransformerBasis(copy.deepcopy(self))
 
-    def _get_n_coeff(self) -> int:
+    def _get_num_features(self) -> int:
         """Recursively find the number features the basis generates."""
         if isinstance(self, AdditiveBasis):
-            n_coeff = self._basis1._get_n_coeff() + self._basis2._get_n_coeff()
+            n_coeff = self._basis1._get_num_features() + self._basis2._get_num_features()
         elif isinstance(self, MultiplicativeBasis):
-            n_coeff = self._basis1._get_n_coeff() * self._basis2._get_n_coeff()
+            n_coeff = self._basis1._get_num_features() * self._basis2._get_num_features()
         else:
             n_coeff = self.n_basis_funcs * self.n_basis_input[0]
         return n_coeff
@@ -1123,9 +1123,9 @@ class Basis(Base, abc.ABC):
                 else:
                     split_dict.update({key: val})
         else:
-            n_coeff = self._get_n_coeff()
-            split_dict = {self.label: slice(start_slice, start_slice + n_coeff, None)}
-            start_slice += n_coeff
+            n_features = self._get_num_features()
+            split_dict = {self.label: slice(start_slice, start_slice + n_features, None)}
+            start_slice += n_features
         return split_dict, start_slice
 
 
