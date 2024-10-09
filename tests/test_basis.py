@@ -6188,17 +6188,17 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             "__add__",
             lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
-                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs,  bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs),
-                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)
+                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs),
+                    slice(bas1.n_output_features[0] * bas1.n_basis_funcs, bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs),
+                    slice(bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs, bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs + bas3.n_output_features[0] * bas3.n_basis_funcs)
             )
         ),
         (
             "__add__",
             "__mul__",
             lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
-                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs)
+                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs),
+                    slice(bas1.n_output_features[0] * bas1.n_basis_funcs, bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs * bas3.n_output_features[0] * bas3.n_basis_funcs)
             )
         ),
         (
@@ -6206,14 +6206,14 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             lambda bas1, bas2, bas3: (
                     # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * (bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)),
+                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs * (bas2.n_output_features[0] * bas2.n_basis_funcs + bas3.n_output_features[0] * bas3.n_basis_funcs)),
             ),
         ),
         (
             "__mul__",
             "__mul__",
             lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs),
+                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs * bas2.n_output_features[0] * bas2.n_basis_funcs * bas3.n_output_features[0] * bas3.n_basis_funcs),
             )
         ),
     ]

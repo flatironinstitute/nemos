@@ -472,7 +472,7 @@ class Basis(Base, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
+    n_output_features :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
@@ -486,7 +486,7 @@ class Basis(Base, abc.ABC):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
+        n_output_features: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
@@ -500,7 +500,7 @@ class Basis(Base, abc.ABC):
             )
 
         self._mode = mode
-        self._n_basis_input = (1 if n_basis_input is None else int(n_basis_input),)
+        self._n_output_features = (1 if n_output_features is None else int(n_output_features),)
         self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
@@ -510,10 +510,10 @@ class Basis(Base, abc.ABC):
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
             )
 
-        if any(inp <= 0 for inp in self._n_basis_input):
-            raise ValueError(f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!")
+        if any(inp <= 0 for inp in self._n_output_features):
+            raise ValueError(f"`n_output_features` must be positive. `n_output_features = {self.n_output_features}` provided instead!")
 
-        elif any(inp > 1 for inp in self._n_basis_input) and mode == "eval":
+        elif any(inp > 1 for inp in self._n_output_features) and mode == "eval":
             raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
 
         self.kernel_ = None
@@ -524,8 +524,8 @@ class Basis(Base, abc.ABC):
         return self._label
 
     @property
-    def n_basis_input(self) -> tuple:
-        return self._n_basis_input
+    def n_output_features(self) -> tuple:
+        return self._n_output_features
 
     @property
     def n_basis_funcs(self):
@@ -700,10 +700,10 @@ class Basis(Base, abc.ABC):
             # has the expectation. We can check xi[0] only, since convolution
             # are applied at the end of the recursion, ensuring len(xi) == 1.
             n_provided_inputs = np.prod(tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape)))
-            if n_provided_inputs != self.n_basis_input:
+            if n_provided_inputs != self.n_output_features:
                 raise ValueError("The number of convolutional input does not match expectation."
-                                 f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
-                                 f"Set `n_basis_input` to {n_provided_inputs} at basis initialization.")
+                                 f"Expected number of inputs {self.n_output_features}, actual {n_provided_inputs}. "
+                                 f"Set `_n_output_features` to {n_provided_inputs} at basis initialization.")
 
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
@@ -1096,7 +1096,7 @@ class Basis(Base, abc.ABC):
         elif isinstance(self, MultiplicativeBasis):
             n_coeff = self._basis1._get_num_features() * self._basis2._get_num_features()
         else:
-            n_coeff = self.n_basis_funcs * self.n_basis_input[0]
+            n_coeff = self.n_basis_funcs * self.n_output_features[0]
         return n_coeff
 
 
@@ -1105,12 +1105,12 @@ class Basis(Base, abc.ABC):
     def _get_splitter(self, n_inputs: Optional[tuple]=None, start_slice: Optional[int]=None) -> Tuple[dict, int]:
 
         if n_inputs is None:
-            n_inputs = self._n_basis_input
+            n_inputs = self._n_output_features
             start_slice = 0
 
         if isinstance(self, AdditiveBasis):
-            split_dict, start_slice = self._basis1._get_splitter(n_inputs[: len(self._basis1._n_basis_input)], start_slice)
-            sp2, start_slice = self._basis2._get_splitter(n_inputs[len(self._basis1._n_basis_input):], start_slice)
+            split_dict, start_slice = self._basis1._get_splitter(n_inputs[: len(self._basis1._n_output_features)], start_slice)
+            sp2, start_slice = self._basis2._get_splitter(n_inputs[len(self._basis1._n_output_features):], start_slice)
             common = set(sp2.keys()).intersection(split_dict.keys())
             for key, val in sp2.items():
                 if key in common:
@@ -1154,7 +1154,7 @@ class AdditiveBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._n_output_features = (*basis1._n_output_features, *basis2._n_output_features)
         self._label = basis1.label + " + " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
@@ -1267,7 +1267,7 @@ class MultiplicativeBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = (*basis1.n_basis_input, *basis2.n_basis_input)
+        self._n_output_features = (*basis1.n_output_features, *basis2.n_output_features)
         self._label = basis1.label + " * " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
