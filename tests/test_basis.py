@@ -6188,17 +6188,17 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             "__add__",
             lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs),
-                    slice(bas1.n_output_features[0] * bas1.n_basis_funcs, bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs),
-                    slice(bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs, bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs + bas3.n_output_features[0] * bas3.n_basis_funcs)
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs,  bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs),
+                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)
             )
         ),
         (
             "__add__",
             "__mul__",
             lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs),
-                    slice(bas1.n_output_features[0] * bas1.n_basis_funcs, bas1.n_output_features[0] * bas1.n_basis_funcs + bas2.n_output_features[0] * bas2.n_basis_funcs * bas3.n_output_features[0] * bas3.n_basis_funcs)
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs)
             )
         ),
         (
@@ -6206,14 +6206,14 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             lambda bas1, bas2, bas3: (
                     # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
-                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs * (bas2.n_output_features[0] * bas2.n_basis_funcs + bas3.n_output_features[0] * bas3.n_basis_funcs)),
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * (bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)),
             ),
         ),
         (
             "__mul__",
             "__mul__",
             lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_output_features[0] * bas1.n_basis_funcs * bas2.n_output_features[0] * bas2.n_basis_funcs * bas3.n_output_features[0] * bas3.n_basis_funcs),
+                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs),
             )
         ),
     ]
@@ -6238,9 +6238,9 @@ def test__get_splitter(mode1, mode2, mode3, bas1, bas2, bas3, operator1, operato
             n_input_basis[i] = 1
             kwrgs.pop("window_size")
 
-    bas1_instance = bas1(n_basis[0], mode=mode1, n_output_features=n_input_basis[0], **extra_kwargs[0], label="1")
-    bas2_instance = bas2(n_basis[1], mode=mode2, n_output_features=n_input_basis[1], **extra_kwargs[1], label="2")
-    bas3_instance = bas3(n_basis[2], mode=mode3, n_output_features=n_input_basis[2], **extra_kwargs[2], label="3")
+    bas1_instance = bas1(n_basis[0], mode=mode1, n_basis_input=n_input_basis[0], **extra_kwargs[0], label="1")
+    bas2_instance = bas2(n_basis[1], mode=mode2, n_basis_input=n_input_basis[1], **extra_kwargs[1], label="2")
+    bas3_instance = bas3(n_basis[2], mode=mode3, n_basis_input=n_input_basis[2], **extra_kwargs[2], label="3")
 
 
     func1 = getattr(bas1_instance, operator1)
