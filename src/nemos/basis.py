@@ -469,6 +469,11 @@ class Basis(Base, abc.ABC):
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bonuds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_conv_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -480,6 +485,8 @@ class Basis(Base, abc.ABC):
         mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_conv_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
@@ -493,6 +500,8 @@ class Basis(Base, abc.ABC):
             )
 
         self._mode = mode
+        self._n_conv_input = 1 if n_conv_input is None else int(n_conv_input)
+        self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
 
@@ -501,8 +510,22 @@ class Basis(Base, abc.ABC):
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
             )
 
+        if self._n_conv_input <= 0:
+            raise ValueError(f"`n_conv_input must` be positive. `n_conv_input = {self.n_conv_input}` provided instead!")
+
+        elif self._n_conv_input > 1 and mode == "eval":
+            raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
+
         self.kernel_ = None
         self._identifiability_constraints = False
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    @property
+    def n_conv_input(self) -> int:
+        return self._n_conv_input
 
     @property
     def n_basis_funcs(self):
@@ -659,7 +682,9 @@ class Basis(Base, abc.ABC):
         Raises
         ------
         ValueError:
-            If an invalid mode is specified or necessary parameters for the chosen mode are missing.
+            - If an invalid mode is specified or necessary parameters for the chosen mode are missing.
+            - In mode "conv", if the number of inputs to be convolved, doesn't match the number of inputs
+            set at initialization.
         """
         # check if self.kernel_ is not None for mode="conv"
         self._check_has_kernel()
@@ -670,6 +695,16 @@ class Basis(Base, abc.ABC):
                 axis = 0
             else:
                 axis = self._conv_kwargs["axis"]
+
+            # before calling the convolve, check that the input matches
+            # has the expectation. We can check xi[0] only, since convolution
+            # are applied at the end of the recursion, ensuring len(xi) == 1.
+            n_provided_inputs = np.prod(tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape)))
+            if n_provided_inputs != self.n_conv_input:
+                raise ValueError("The number of convolutional input does not match expectation."
+                                 f"Expected number of inputs {self.n_conv_input}, actual {n_provided_inputs}. "
+                                 f"Set `n_conv_input` to {n_provided_inputs} at basis initialization.")
+
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(

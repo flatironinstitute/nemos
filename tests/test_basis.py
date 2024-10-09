@@ -100,6 +100,91 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
 
+    @pytest.mark.parametrize("n_basis_funcs", [4, 5])
+    @pytest.mark.parametrize("time_scaling", [50, 70])
+    @pytest.mark.parametrize("enforce_decay", [True, False])
+    @pytest.mark.parametrize("window_size", [10, 15])
+    @pytest.mark.parametrize(
+        "input_shape, expected_n_input, expectation",
+        [
+            ((20,), 1, does_not_raise()),
+            ((20, 1), 1, does_not_raise()),
+            ((20, 2), 2, does_not_raise()),
+            ((20, 1, 2), 2, does_not_raise()),
+            ((20, 2, 1), 2, does_not_raise()),
+            ((20, 2, 2), 4, does_not_raise()),
+            (
+                (20,),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1, 2),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 1),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 2),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+        ],
+    )
+    def test_compute_features_conv_input(
+        self,
+        n_basis_funcs,
+        time_scaling,
+        enforce_decay,
+        window_size,
+        input_shape,
+        expected_n_input,
+        expectation,
+    ):
+        x = np.ones(input_shape)
+        bas = self.cls(
+            n_basis_funcs=n_basis_funcs,
+            time_scaling=time_scaling,
+            mode="conv",
+            window_size=window_size,
+            n_conv_input=expected_n_input,
+            enforce_decay_to_zero=enforce_decay,
+        )
+        with expectation:
+            bas.compute_features(x)
+
     @pytest.mark.parametrize(
         "args, sample_size",
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
@@ -567,7 +652,10 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -779,6 +867,80 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
+
+    @pytest.mark.parametrize("n_basis_funcs", [4, 5])
+    @pytest.mark.parametrize("window_size", [10, 15])
+    @pytest.mark.parametrize(
+        "input_shape, expected_n_input, expectation",
+        [
+            ((20,), 1, does_not_raise()),
+            ((20, 1), 1, does_not_raise()),
+            ((20, 2), 2, does_not_raise()),
+            ((20, 1, 2), 2, does_not_raise()),
+            ((20, 2, 1), 2, does_not_raise()),
+            ((20, 2, 2), 4, does_not_raise()),
+            (
+                (20,),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1, 2),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 1),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 2),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+        ],
+    )
+    def test_compute_features_conv_input(
+        self, n_basis_funcs, window_size, input_shape, expected_n_input, expectation
+    ):
+        x = np.ones(input_shape)
+        bas = self.cls(
+            n_basis_funcs=n_basis_funcs,
+            mode="conv",
+            window_size=window_size,
+            n_conv_input=expected_n_input,
+        )
+        with expectation:
+            bas.compute_features(x)
 
     @pytest.mark.parametrize(
         "args, sample_size",
@@ -1202,7 +1364,10 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -1413,6 +1578,88 @@ class TestMSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
+
+    @pytest.mark.parametrize("n_basis_funcs", [2, 3])
+    @pytest.mark.parametrize("order", [1, 2])
+    @pytest.mark.parametrize("window_size", [10, 15])
+    @pytest.mark.parametrize(
+        "input_shape, expected_n_input, expectation",
+        [
+            ((20,), 1, does_not_raise()),
+            ((20, 1), 1, does_not_raise()),
+            ((20, 2), 2, does_not_raise()),
+            ((20, 1, 2), 2, does_not_raise()),
+            ((20, 2, 1), 2, does_not_raise()),
+            ((20, 2, 2), 4, does_not_raise()),
+            (
+                (20,),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1, 2),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 1),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 2),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+        ],
+    )
+    def test_compute_features_conv_input(
+        self,
+        n_basis_funcs,
+        order,
+        window_size,
+        input_shape,
+        expected_n_input,
+        expectation,
+    ):
+        x = np.ones(input_shape)
+        bas = self.cls(
+            n_basis_funcs=n_basis_funcs,
+            order=order,
+            mode="conv",
+            window_size=window_size,
+            n_conv_input=expected_n_input,
+        )
+        with expectation:
+            bas.compute_features(x)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
@@ -1836,7 +2083,10 @@ class TestMSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -2069,6 +2319,81 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
                 basis_obj.compute_features(eval_input)
         else:
             basis_obj.compute_features(eval_input)
+
+    @pytest.mark.parametrize("n_basis_funcs", [2, 3])
+    @pytest.mark.parametrize("window_size", [10, 15])
+    @pytest.mark.parametrize(
+        "input_shape, expected_n_input, expectation",
+        [
+            ((20,), 1, does_not_raise()),
+            ((20, 1), 1, does_not_raise()),
+            ((20, 2), 2, does_not_raise()),
+            ((20, 1, 2), 2, does_not_raise()),
+            ((20, 2, 1), 2, does_not_raise()),
+            ((20, 2, 2), 4, does_not_raise()),
+            (
+                (20,),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1, 2),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 1),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 2),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+        ],
+    )
+    def test_compute_features_conv_input(
+        self, n_basis_funcs, window_size, input_shape, expected_n_input, expectation
+    ):
+        x = np.ones(input_shape)
+        bas = self.cls(
+            n_basis_funcs=n_basis_funcs,
+            mode="conv",
+            window_size=window_size,
+            n_conv_input=expected_n_input,
+            decay_rates=0.1 * np.arange(1, n_basis_funcs + 1),
+        )
+        with expectation:
+            bas.compute_features(x)
 
     @pytest.mark.parametrize("n_basis_funcs", [1, 2, 4, 8])
     @pytest.mark.parametrize("sample_size", [10, 1000])
@@ -2557,7 +2882,10 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -2691,6 +3019,88 @@ class TestBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
+
+    @pytest.mark.parametrize("n_basis_funcs", [2, 3])
+    @pytest.mark.parametrize("order", [1, 2])
+    @pytest.mark.parametrize("window_size", [10, 15])
+    @pytest.mark.parametrize(
+        "input_shape, expected_n_input, expectation",
+        [
+            ((20,), 1, does_not_raise()),
+            ((20, 1), 1, does_not_raise()),
+            ((20, 2), 2, does_not_raise()),
+            ((20, 1, 2), 2, does_not_raise()),
+            ((20, 2, 1), 2, does_not_raise()),
+            ((20, 2, 2), 4, does_not_raise()),
+            (
+                (20,),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1, 2),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 1),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 2),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+        ],
+    )
+    def test_compute_features_conv_input(
+        self,
+        n_basis_funcs,
+        order,
+        window_size,
+        input_shape,
+        expected_n_input,
+        expectation,
+    ):
+        x = np.ones(input_shape)
+        bas = self.cls(
+            n_basis_funcs=n_basis_funcs,
+            order=order,
+            mode="conv",
+            window_size=window_size,
+            n_conv_input=expected_n_input,
+        )
+        with expectation:
+            bas.compute_features(x)
 
     @pytest.mark.parametrize("n_basis_funcs", [6, 8, 10])
     @pytest.mark.parametrize("order", range(1, 6))
@@ -3136,7 +3546,10 @@ class TestBSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -3347,6 +3760,88 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         """
         basis_obj = self.cls(n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
+
+    @pytest.mark.parametrize("n_basis_funcs", [4, 5])
+    @pytest.mark.parametrize("order", [3, 2])
+    @pytest.mark.parametrize("window_size", [10, 15])
+    @pytest.mark.parametrize(
+        "input_shape, expected_n_input, expectation",
+        [
+            ((20,), 1, does_not_raise()),
+            ((20, 1), 1, does_not_raise()),
+            ((20, 2), 2, does_not_raise()),
+            ((20, 1, 2), 2, does_not_raise()),
+            ((20, 2, 1), 2, does_not_raise()),
+            ((20, 2, 2), 4, does_not_raise()),
+            (
+                (20,),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 1, 2),
+                3,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 1),
+                1,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+            (
+                (20, 2, 2),
+                2,
+                pytest.raises(
+                    ValueError,
+                    match="The number of convolutional input does not match expectation",
+                ),
+            ),
+        ],
+    )
+    def test_compute_features_conv_input(
+        self,
+        n_basis_funcs,
+        order,
+        window_size,
+        input_shape,
+        expected_n_input,
+        expectation,
+    ):
+        x = np.ones(input_shape)
+        bas = self.cls(
+            n_basis_funcs=n_basis_funcs,
+            order=order,
+            mode="conv",
+            window_size=window_size,
+            n_conv_input=expected_n_input,
+        )
+        with expectation:
+            bas.compute_features(x)
 
     @pytest.mark.parametrize("n_basis_funcs", [8, 10])
     @pytest.mark.parametrize("order", range(2, 6))
@@ -3792,7 +4287,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
