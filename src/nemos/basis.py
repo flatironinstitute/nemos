@@ -472,7 +472,7 @@ class Basis(Base, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_conv_input :
+    n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
@@ -486,7 +486,7 @@ class Basis(Base, abc.ABC):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_conv_input: Optional[int] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
@@ -500,7 +500,7 @@ class Basis(Base, abc.ABC):
             )
 
         self._mode = mode
-        self._n_conv_input = 1 if n_conv_input is None else int(n_conv_input)
+        self._n_conv_input = (1 if n_basis_input is None else int(n_basis_input),)
         self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
@@ -510,10 +510,10 @@ class Basis(Base, abc.ABC):
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
             )
 
-        if self._n_conv_input <= 0:
+        if any(inp <= 0 for inp in self._n_conv_input):
             raise ValueError(f"`n_conv_input must` be positive. `n_conv_input = {self.n_conv_input}` provided instead!")
 
-        elif self._n_conv_input > 1 and mode == "eval":
+        elif any(inp > 1 for inp in self._n_conv_input) and mode == "eval":
             raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
 
         self.kernel_ = None
@@ -524,7 +524,7 @@ class Basis(Base, abc.ABC):
         return self._label
 
     @property
-    def n_conv_input(self) -> int:
+    def n_conv_input(self) -> tuple:
         return self._n_conv_input
 
     @property
@@ -1089,6 +1089,34 @@ class Basis(Base, abc.ABC):
 
         return TransformerBasis(copy.deepcopy(self))
 
+    def _get_splitter(self, n_inputs: Optional[tuple]=None, start_slice: Optional[int]=None) -> Tuple[dict, int]:
+
+        if n_inputs is None:
+            n_inputs = self._n_conv_input
+            start_slice = 0
+
+        if isinstance(self, AdditiveBasis):
+            split_dict, start_slice = self._basis1._get_splitter(n_inputs[: len(self._basis1._n_conv_input)], start_slice)
+            sp2, start_slice = self._basis2._get_splitter(n_inputs[len(self._basis1._n_conv_input):], start_slice)
+            common = set(sp2.keys()).intersection(split_dict.keys())
+            for key, val in sp2.items():
+                if key in common:
+                    extra = 1
+                    new_key = key + "-" + str(extra)
+                    while new_key in split_dict.keys():
+                        extra += 1
+                        new_key = key + "-" + str(extra)
+                    split_dict.update({new_key: val})
+                else:
+                    split_dict.update({key: val})
+
+        else:
+            assert len(n_inputs) == 1, "Recursion logic is off!" # must never been hit!
+            n_coeff = n_inputs[0] * self.n_basis_funcs
+            split_dict = {self.label: slice(start_slice, start_slice + n_coeff, None)}
+            start_slice += n_coeff
+        return split_dict, start_slice
+
 
 class AdditiveBasis(Basis):
     """
@@ -1115,6 +1143,8 @@ class AdditiveBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+        self._n_conv_input = (*basis1._n_conv_input, *basis2._n_conv_input)
+        self._label = basis1.label + " + " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -1226,6 +1256,8 @@ class MultiplicativeBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+        self._n_conv_input = (np.prod(basis1._n_conv_input) * np.prod(basis2._n_conv_input), )
+        self._label = basis1.label + " * " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
         return
