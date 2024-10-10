@@ -118,7 +118,8 @@ plt.show()
 heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
 
 # define a basis that expect all the other neurons as predictors, i.e. shape (num_samples, num_neurons - 1)
-coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10, n_basis_input=Y.shape[1] - 1)
+num_neurons = Y.shape[1]
+coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10, n_basis_input=num_neurons - 1)
 
 # %%
 # We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an `AdditiveBasis` object).
