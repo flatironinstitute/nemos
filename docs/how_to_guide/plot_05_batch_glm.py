@@ -54,7 +54,7 @@ glm = nmo.glm.PopulationGLM(
 #
 # Here we instantiate the basis. `ws` is 40 time bins. It corresponds to a 200 ms windows
 ws = 40
-basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=ws)
+basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=ws, n_basis_input=10)
 
 # %%
 # ## Batch definition

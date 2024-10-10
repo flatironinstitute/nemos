@@ -6,6 +6,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
+from numbers import Number
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -500,7 +501,9 @@ class Basis(Base, abc.ABC):
             )
 
         self._mode = mode
+
         self._n_basis_input = (1 if n_basis_input is None else int(n_basis_input),)
+
         # pre-compute the expected output feature dimensionality
         self._num_output_features = self._n_basis_input[0] * n_basis_funcs
         self._label = str(label)
@@ -528,7 +531,12 @@ class Basis(Base, abc.ABC):
         return self._label
 
     @property
-    def n_basis_input(self) -> tuple:
+    def n_basis_input(self) -> tuple | int:
+        # needed for sklearn to work properly
+        # cloning of sklearn requires that the
+        # property provided at init is unchanged.
+        if len(self._n_basis_input) == 1:
+            return self._n_basis_input[0]
         return self._n_basis_input
 
     @property
@@ -705,7 +713,7 @@ class Basis(Base, abc.ABC):
             n_provided_inputs = np.prod(
                 tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape))
             )
-            if n_provided_inputs != self.n_basis_input:
+            if n_provided_inputs != self._n_basis_input:
                 raise ValueError(
                     "The number of convolutional input does not match expectation."
                     f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
@@ -1106,7 +1114,7 @@ class Basis(Base, abc.ABC):
                 self._basis1._get_num_features() * self._basis2._get_num_features()
             )
         else:
-            n_coeff = self.n_basis_funcs * self.n_basis_input[0]
+            n_coeff = self.n_basis_funcs * self._n_basis_input[0]
         return n_coeff
 
     def _get_feature_slicing(
@@ -1330,7 +1338,7 @@ class MultiplicativeBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = (*basis1.n_basis_input, *basis2.n_basis_input)
+        self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
         self._num_output_features = (
             basis1._num_output_features * basis2._num_output_features
         )
