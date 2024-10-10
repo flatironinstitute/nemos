@@ -6310,7 +6310,7 @@ def test__get_splitter(
     bas23 = func2(bas3_instance)
     bas123 = func1(bas23)
 
-    splitter_dict, _ = bas123._get_feature_slicing()
+    splitter_dict, _ = bas123._get_feature_slicing(split_by_input=False)
     exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
     assert exp_slices == splitter_dict
 
@@ -6474,6 +6474,6 @@ def test__get_splitter_split_by_input(
     func1 = getattr(bas1_instance, operator)
     bas12 = func1(bas2_instance)
 
-    splitter_dict, _ = bas12._get_feature_slicing(split_by_input=True)
+    splitter_dict, _ = bas12._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance)
     assert exp_slices == splitter_dict

@@ -1108,8 +1108,40 @@ class Basis(Base, abc.ABC):
         self,
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
-        split_by_input: bool = False,
+        split_by_input: bool = True,
     ) -> Tuple[dict, int]:
+        """
+        Calculate and return the slicing for features based on the input structure.
+
+        This method determines how to slice the features for different basis types.
+        If the instance is of `AdditiveBasis` type, the slicing is calculated recursively
+        for each component basis. Otherwise, it determines the slicing based on
+        the number of basis functions and `split_by_input` flag.
+
+        Parameters
+        ----------
+        n_inputs :
+            The number of input basis for each component, by default it uses `self._n_basis_input`.
+        start_slice :
+            The starting index for slicing, by default it starts from 0.
+        split_by_input :
+            Flag indicating whether to split the slicing by individual inputs or not.
+            If `False`, a single slice is generated for all inputs.
+
+        Returns
+        -------
+        split_dict :
+            Dictionary with keys as labels and values as slices representing
+            the slicing for each input or additive component, if split_by_input equals to
+            True or False respectively.
+        start_slice :
+            The updated starting index after slicing.
+
+        See Also
+        --------
+        _get_default_slicing : Handles default slicing logic.
+        _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
+        """
         # Set default values for n_inputs and start_slice if not provided
         n_inputs = n_inputs or self._n_basis_input
         start_slice = start_slice or 0
