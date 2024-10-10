@@ -531,9 +531,11 @@ class Basis(Base, abc.ABC):
 
     @property
     def n_basis_input(self) -> tuple | int:
-        # needed for sklearn to work properly
-        # cloning of sklearn requires that the
-        # property provided at init is unchanged.
+        # Needed for sklearn to work properly; cloning of sklearn requires that the
+        # parameter provided at initialization is returned as is: if an int is provided
+        # the same int is expected.
+        # Internally, for code consistency, the parameter is stored as a tuple for
+        # all basis.
         if len(self._n_basis_input) == 1:
             return self._n_basis_input[0]
         return self._n_basis_input
