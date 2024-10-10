@@ -468,7 +468,7 @@ class Basis(Base, abc.ABC):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -1403,7 +1403,12 @@ class SplineBasis(Basis, abc.ABC):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1422,6 +1427,8 @@ class SplineBasis(Basis, abc.ABC):
         order: int = 2,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.order = order
@@ -1430,6 +1437,8 @@ class SplineBasis(Basis, abc.ABC):
             mode=mode,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1554,7 +1563,12 @@ class MSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs:
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1590,6 +1604,8 @@ class MSplineBasis(SplineBasis):
         order: int = 2,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1598,6 +1614,8 @@ class MSplineBasis(SplineBasis):
             order=order,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1712,7 +1730,12 @@ class BSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1737,6 +1760,8 @@ class BSplineBasis(SplineBasis):
         order: int = 4,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1745,6 +1770,8 @@ class BSplineBasis(SplineBasis):
             order=order,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1831,7 +1858,12 @@ class CyclicBSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1851,6 +1883,8 @@ class CyclicBSplineBasis(SplineBasis):
         order: int = 4,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1859,6 +1893,8 @@ class CyclicBSplineBasis(SplineBasis):
             order=order,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
         if self.order < 2:
@@ -1973,7 +2009,12 @@ class RaisedCosineBasisLinear(Basis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1993,6 +2034,8 @@ class RaisedCosineBasisLinear(Basis):
         width: float = 2.0,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -2000,6 +2043,8 @@ class RaisedCosineBasisLinear(Basis):
             mode=mode,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
         self._n_input_dimensionality = 1
@@ -2166,7 +2211,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -2188,6 +2238,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         enforce_decay_to_zero: bool = True,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -2197,6 +2249,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             window_size=window_size,
             bounds=bounds,
             **kwargs,
+            label=label,
+            n_basis_input=n_basis_input
         )
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
@@ -2320,7 +2374,12 @@ class OrthExponentialBasis(Basis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -2333,6 +2392,8 @@ class OrthExponentialBasis(Basis):
         mode="eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -2340,6 +2401,8 @@ class OrthExponentialBasis(Basis):
             mode=mode,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
         self.decay_rates = decay_rates
