@@ -78,12 +78,6 @@ def min_max_rescale_samples(
         Sample bounds. `bounds[0]` and `bounds[1]` are mapped to 0 and 1, respectively.
         Default are `min(sample_pts), max(sample_pts)`.
 
-    Raises
-    ------
-    ValueError
-        If all the samples contain invalid entries (either NaN or Inf).
-        This may happen if `max(sample) < bounds[0]` or `min(sample) >  bounds[1]`.
-
     Warns
     -----
     UserWarning
@@ -92,10 +86,6 @@ def min_max_rescale_samples(
     sample_pts = sample_pts.astype(float)
     vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
     vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
-    if vmin and vmax and vmax <= vmin:
-        raise ValueError(
-            "Invalid value range. `bounds[1]` must be larger then `bounds[0]`!"
-        )
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     # this passes if `samples_pts` contains a single value
@@ -468,7 +458,12 @@ class Basis(Base, abc.ABC):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -480,6 +475,8 @@ class Basis(Base, abc.ABC):
         mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
@@ -493,6 +490,12 @@ class Basis(Base, abc.ABC):
             )
 
         self._mode = mode
+
+        self._n_basis_input = (1 if n_basis_input is None else int(n_basis_input),)
+
+        # pre-compute the expected output feature dimensionality
+        self._num_output_features = self._n_basis_input[0] * n_basis_funcs
+        self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
 
@@ -501,8 +504,31 @@ class Basis(Base, abc.ABC):
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
             )
 
+        if any(inp <= 0 for inp in self._n_basis_input):
+            raise ValueError(
+                f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!"
+            )
+
+        elif any(inp > 1 for inp in self._n_basis_input) and mode == "eval":
+            raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
+
         self.kernel_ = None
         self._identifiability_constraints = False
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    @property
+    def n_basis_input(self) -> tuple | int:
+        # Needed for sklearn to work properly; cloning of sklearn requires that the
+        # parameter provided at initialization is returned as is: if an int is provided
+        # the same int is expected.
+        # Internally, for code consistency, the parameter is stored as a tuple for
+        # all basis.
+        if len(self._n_basis_input) == 1:
+            return self._n_basis_input[0]
+        return self._n_basis_input
 
     @property
     def n_basis_funcs(self):
@@ -525,7 +551,6 @@ class Basis(Base, abc.ABC):
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
         """Setter for bounds."""
-
         if values is not None and self.mode == "conv":
             raise ValueError("`bounds` should only be set when `mode=='eval'`.")
 
@@ -659,7 +684,9 @@ class Basis(Base, abc.ABC):
         Raises
         ------
         ValueError:
-            If an invalid mode is specified or necessary parameters for the chosen mode are missing.
+            - If an invalid mode is specified or necessary parameters for the chosen mode are missing.
+            - In mode "conv", if the number of inputs to be convolved, doesn't match the number of inputs
+            set at initialization.
         """
         # check if self.kernel_ is not None for mode="conv"
         self._check_has_kernel()
@@ -670,6 +697,20 @@ class Basis(Base, abc.ABC):
                 axis = 0
             else:
                 axis = self._conv_kwargs["axis"]
+
+            # before calling the convolve, check that the input matches
+            # the expectation. We can check xi[0] only, since convolution
+            # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
+            n_provided_inputs = np.prod(
+                tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape))
+            )
+            if n_provided_inputs != self._n_basis_input:
+                raise ValueError(
+                    "The number of convolutional input does not match expectation. "
+                    f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
+                    f"Set `n_basis_input` to {n_provided_inputs} at basis initialization."
+                )
+
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
@@ -1051,8 +1092,118 @@ class Basis(Base, abc.ABC):
         ... )
         >>> gridsearch = gridsearch.fit(X, y)
         """
-
         return TransformerBasis(copy.deepcopy(self))
+
+    def _get_feature_slicing(
+        self,
+        n_inputs: Optional[tuple] = None,
+        start_slice: Optional[int] = None,
+        split_by_input: bool = True,
+    ) -> Tuple[dict, int]:
+        """
+        Calculate and return the slicing for features based on the input structure.
+
+        This method determines how to slice the features for different basis types.
+        If the instance is of `AdditiveBasis` type, the slicing is calculated recursively
+        for each component basis. Otherwise, it determines the slicing based on
+        the number of basis functions and `split_by_input` flag.
+
+        Parameters
+        ----------
+        n_inputs :
+            The number of input basis for each component, by default it uses `self._n_basis_input`.
+        start_slice :
+            The starting index for slicing, by default it starts from 0.
+        split_by_input :
+            Flag indicating whether to split the slicing by individual inputs or not.
+            If `False`, a single slice is generated for all inputs.
+
+        Returns
+        -------
+        split_dict :
+            Dictionary with keys as labels and values as slices representing
+            the slicing for each input or additive component, if split_by_input equals to
+            True or False respectively.
+        start_slice :
+            The updated starting index after slicing.
+
+        See Also
+        --------
+        _get_default_slicing : Handles default slicing logic.
+        _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
+        """
+        # Set default values for n_inputs and start_slice if not provided
+        n_inputs = n_inputs or self._n_basis_input
+        start_slice = start_slice or 0
+
+        # If the instance is of AdditiveBasis type, handle slicing for the additive components
+        if isinstance(self, AdditiveBasis):
+            split_dict, start_slice = self._basis1._get_feature_slicing(
+                n_inputs[: len(self._basis1._n_basis_input)],
+                start_slice,
+                split_by_input=split_by_input,
+            )
+            sp2, start_slice = self._basis2._get_feature_slicing(
+                n_inputs[len(self._basis1._n_basis_input) :],
+                start_slice,
+                split_by_input=split_by_input,
+            )
+            split_dict = self._merge_slicing_dicts(split_dict, sp2)
+        else:
+            # Handle the default case for other basis types
+            split_dict, start_slice = self._get_default_slicing(
+                split_by_input, start_slice
+            )
+
+        return split_dict, start_slice
+
+    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
+        """Merge two slicing dictionaries, handling key conflicts."""
+        for key, val in dict2.items():
+            if key in dict1:
+                new_key = self._generate_unique_key(dict1, key)
+                dict1[new_key] = val
+            else:
+                dict1[key] = val
+        return dict1
+
+    @staticmethod
+    def _generate_unique_key(existing_dict: dict, key: str) -> str:
+        """Generate a unique key if there is a conflict."""
+        extra = 1
+        new_key = f"{key}-{extra}"
+        while new_key in existing_dict:
+            extra += 1
+            new_key = f"{key}-{extra}"
+        return new_key
+
+    def _get_default_slicing(
+        self, split_by_input: bool, start_slice: int
+    ) -> Tuple[dict, int]:
+        """Handle default slicing logic."""
+        if split_by_input:
+            if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
+                split_dict = {
+                    self.label: slice(
+                        start_slice, start_slice + self._num_output_features
+                    )
+                }
+            else:
+                split_dict = {
+                    self.label: {
+                        f"{i}": slice(
+                            start_slice + i * self.n_basis_funcs,
+                            start_slice + (i + 1) * self.n_basis_funcs,
+                        )
+                        for i in range(self._n_basis_input[0])
+                    }
+                }
+        else:
+            split_dict = {
+                self.label: slice(start_slice, start_slice + self._num_output_features)
+            }
+        start_slice += self._num_output_features
+        return split_dict, start_slice
 
 
 class AdditiveBasis(Basis):
@@ -1080,6 +1231,11 @@ class AdditiveBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+        self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._num_output_features = (
+            basis1._num_output_features + basis2._num_output_features
+        )
+        self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -1136,7 +1292,7 @@ class AdditiveBasis(Basis):
         # the numpy conversion is important, there is some in-place
         # array modification in basis.
         hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
-        return hstack_pynapple(
+        X = hstack_pynapple(
             (
                 self._basis1._compute_features(
                     *xi[: self._basis1._n_input_dimensionality]
@@ -1146,6 +1302,9 @@ class AdditiveBasis(Basis):
                 ),
             ),
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     def _set_kernel(self, *xi: ArrayLike) -> Basis:
         """Call fit on the added basis.
@@ -1191,6 +1350,11 @@ class MultiplicativeBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+        self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._num_output_features = (
+            basis1._num_output_features * basis2._num_output_features
+        )
+        self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -1264,11 +1428,14 @@ class MultiplicativeBasis(Basis):
 
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
-        return kron(
+        X = kron(
             self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
             self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality :]),
             transpose=False,
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
 
 class SplineBasis(Basis, abc.ABC):
@@ -1289,7 +1456,12 @@ class SplineBasis(Basis, abc.ABC):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1308,6 +1480,8 @@ class SplineBasis(Basis, abc.ABC):
         order: int = 2,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.order = order
@@ -1316,6 +1490,8 @@ class SplineBasis(Basis, abc.ABC):
             mode=mode,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1328,9 +1504,13 @@ class SplineBasis(Basis, abc.ABC):
     @order.setter
     def order(self, value):
         """Setter for the order parameter."""
-
+        if value != int(value):
+            raise ValueError(
+                f"Spline order must be an integer! Order {value} provided."
+            )
+        value = int(value)
         if value < 1:
-            raise ValueError("Spline order must be positive!")
+            raise ValueError(f"Spline order must be positive! Order {value} provided.")
 
         # Set to None only the first time the setter is called.
         orig_order = copy.deepcopy(getattr(self, "_order", None))
@@ -1410,7 +1590,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """
+    r"""
     M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
@@ -1440,7 +1620,12 @@ class MSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs:
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1476,6 +1661,8 @@ class MSplineBasis(SplineBasis):
         order: int = 2,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1484,6 +1671,8 @@ class MSplineBasis(SplineBasis):
             order=order,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1598,7 +1787,12 @@ class BSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1623,6 +1817,8 @@ class BSplineBasis(SplineBasis):
         order: int = 4,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1631,6 +1827,8 @@ class BSplineBasis(SplineBasis):
             order=order,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1717,7 +1915,12 @@ class CyclicBSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1737,6 +1940,8 @@ class CyclicBSplineBasis(SplineBasis):
         order: int = 4,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1745,6 +1950,8 @@ class CyclicBSplineBasis(SplineBasis):
             order=order,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
         if self.order < 2:
@@ -1859,7 +2066,12 @@ class RaisedCosineBasisLinear(Basis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1879,6 +2091,8 @@ class RaisedCosineBasisLinear(Basis):
         width: float = 2.0,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1886,6 +2100,8 @@ class RaisedCosineBasisLinear(Basis):
             mode=mode,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
         self._n_input_dimensionality = 1
@@ -2052,7 +2268,12 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -2074,6 +2295,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         enforce_decay_to_zero: bool = True,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -2083,6 +2306,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             window_size=window_size,
             bounds=bounds,
             **kwargs,
+            label=label,
+            n_basis_input=n_basis_input,
         )
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
@@ -2206,7 +2431,12 @@ class OrthExponentialBasis(Basis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    n_basis_input :
+        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -2219,6 +2449,8 @@ class OrthExponentialBasis(Basis):
         mode="eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = None,
+        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -2226,6 +2458,8 @@ class OrthExponentialBasis(Basis):
             mode=mode,
             window_size=window_size,
             bounds=bounds,
+            label=label,
+            n_basis_input=n_basis_input,
             **kwargs,
         )
         self.decay_rates = decay_rates
@@ -2234,7 +2468,7 @@ class OrthExponentialBasis(Basis):
 
     @property
     def decay_rates(self):
-        """Decay rate getter"""
+        """Decay rate getter."""
         return self._decay_rates
 
     @decay_rates.setter
