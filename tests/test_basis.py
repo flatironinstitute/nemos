@@ -6187,34 +6187,34 @@ def test_multi_epoch_pynapple_basis_transformer(
         (
             "__add__",
             "__add__",
-            lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
-                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs,  bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs),
-                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)
-            )
+            lambda bas1, bas2, bas3: {
+                    "1": slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                    "2": slice(bas1.n_basis_input[0] * bas1.n_basis_funcs,  bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs),
+                    "3": slice(bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)
+            }
         ),
         (
             "__add__",
             "__mul__",
-            lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
-                    slice(bas1.n_basis_input[0] * bas1.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs)
-            )
+            lambda bas1, bas2, bas3: {
+                    "1": slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                    "2 * 3": slice(bas1.n_basis_input[0] * bas1.n_basis_funcs, bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs)
+            }
         ),
         (
             "__mul__",
             "__add__",
-            lambda bas1, bas2, bas3: (
+            lambda bas1, bas2, bas3: {
                     # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * (bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)),
-            ),
+                    "1 * 2 + 3": slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * (bas2.n_basis_input[0] * bas2.n_basis_funcs + bas3.n_basis_input[0] * bas3.n_basis_funcs)),
+            }
         ),
         (
             "__mul__",
             "__mul__",
-            lambda bas1, bas2, bas3: (
-                    slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs),
-            )
+            lambda bas1, bas2, bas3: {
+                    "1 * 2 * 3": slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_input[0] * bas2.n_basis_funcs * bas3.n_basis_input[0] * bas3.n_basis_funcs),
+            }
         ),
     ]
 )
@@ -6250,19 +6250,121 @@ def test__get_splitter(mode1, mode2, mode3, bas1, bas2, bas3, operator1, operato
 
     splitter_dict, _ = bas123._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
-    for i, val in enumerate(splitter_dict.values()):
-        assert val == exp_slices[i]
+    assert exp_slices == splitter_dict
 
-    label = "1"
-    if operator1 == "__add__":
-        label += " + "
-    else:
-        label += " * "
-    label += "2"
-    if operator2 == "__add__":
-        label += " + "
-    else:
-        label += " * "
-    label += "3"
 
-    assert label == bas123.label
+
+
+@pytest.mark.parametrize(
+    "bas1, bas2",
+    list(itertools.product(*[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))]*2))
+)
+@pytest.mark.parametrize(
+    "operator, n_input_basis_1, n_input_basis_2, compute_slice",
+    [
+        (
+            "__add__",
+            1,
+            1,
+            lambda bas1, bas2: {
+                "1" : slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs),
+                "2": slice(bas1.n_basis_input[0] * bas1.n_basis_funcs,  bas1.n_basis_input[0] * bas1.n_basis_funcs + bas2.n_basis_input[0] * bas2.n_basis_funcs)
+             }
+        ),
+        (
+            "__mul__",
+            1,
+            1,
+            lambda bas1, bas2: {"1 * 2": slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_input[0] * bas2.n_basis_funcs)}
+        ),
+        (
+            "__add__",
+            2,
+            1,
+            lambda bas1, bas2: {
+                "1": {
+                    "0": slice(0, bas1.n_basis_funcs),
+                    "1": slice(bas1.n_basis_funcs, 2 * bas1.n_basis_funcs),
+                },
+                "2": slice(2 * bas1.n_basis_funcs,  2 * bas1.n_basis_funcs + bas2.n_basis_funcs),
+            }
+
+        ),
+        (
+            "__mul__",
+            2,
+            1,
+            lambda bas1, bas2: {"1 * 2": slice(0, bas1.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_funcs)}
+        ),
+        (
+                "__add__",
+                1,
+                2,
+                lambda bas1, bas2: {
+                    "1": slice(0, bas1.n_basis_funcs),
+                    "2": {
+                        "0": slice(bas1.n_basis_funcs, bas1.n_basis_funcs + bas2.n_basis_funcs),
+                        "1": slice(bas1.n_basis_funcs + bas2.n_basis_funcs, bas1.n_basis_funcs + 2*bas2.n_basis_funcs),
+                    },
+                }
+
+        ),
+        (
+                "__mul__",
+                1,
+                2,
+                lambda bas1, bas2: {"1 * 2": slice(0, bas2.n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_funcs)}
+        ),
+        (
+                "__add__",
+                2,
+                2,
+                lambda bas1, bas2: {
+                    "1": {
+                        "0": slice(0, bas1.n_basis_funcs),
+                        "1": slice(bas1.n_basis_funcs, 2 * bas1.n_basis_funcs),
+                    },
+                    "2": {
+                        "0": slice(2*bas1.n_basis_funcs, 2*bas1.n_basis_funcs + bas2.n_basis_funcs),
+                        "1": slice(2*bas1.n_basis_funcs + bas2.n_basis_funcs, 2*bas1.n_basis_funcs + 2*bas2.n_basis_funcs),
+                    },
+                }
+
+        ),
+        (
+                "__mul__",
+                2,
+                2,
+                lambda bas1, bas2: {
+                    "1 * 2": slice(0,  2*bas1.n_basis_funcs * 2*bas2.n_basis_funcs)
+                }
+        ),
+    ]
+)
+def test__get_splitter_split_by_input(bas1, bas2, operator, n_input_basis_1, n_input_basis_2, compute_slice):
+    # skip nested
+    if any(bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis) for bas in
+           [bas1, bas2]):
+        return
+    # define the basis
+    n_basis = [5, 6]
+    mode = "conv"
+    extra_kwargs = (
+        {"decay_rates": np.arange(1, n_basis[0] + 1), "window_size": 5},
+        {"decay_rates": np.arange(1, n_basis[1] + 1), "window_size": 5},
+    )
+    for i, val in enumerate(zip([bas1, bas2], extra_kwargs)):
+        bas, kwrgs = val
+        if bas != basis.OrthExponentialBasis:
+            kwrgs.pop("decay_rates")
+
+    bas1_instance = bas1(n_basis[0], mode=mode, n_basis_input=n_input_basis_1, **extra_kwargs[0], label="1")
+    bas2_instance = bas2(n_basis[1], mode=mode, n_basis_input=n_input_basis_2, **extra_kwargs[1], label="2")
+
+    func1 = getattr(bas1_instance, operator)
+    bas12 = func1(bas2_instance)
+
+    splitter_dict, _ = bas12._get_feature_slicing(split_by_input=True)
+    exp_slices = compute_slice(bas1_instance, bas2_instance)
+    assert exp_slices == splitter_dict
+
