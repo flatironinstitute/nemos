@@ -1225,7 +1225,7 @@ class AdditiveBasis(Basis):
         self._num_output_features = (
             basis1._num_output_features + basis2._num_output_features
         )
-        self._label = basis1.label + " + " + basis2.label
+        self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
         return
@@ -1341,7 +1341,7 @@ class MultiplicativeBasis(Basis):
         self._num_output_features = (
             basis1._num_output_features * basis2._num_output_features
         )
-        self._label = basis1.label + " * " + basis2.label
+        self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
         return

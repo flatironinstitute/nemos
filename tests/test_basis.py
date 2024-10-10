@@ -6213,7 +6213,7 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__mul__",
             lambda bas1, bas2, bas3: {
                 "1": slice(0, bas1._n_basis_input[0] * bas1.n_basis_funcs),
-                "2 * 3": slice(
+                "(2 * 3)": slice(
                     bas1._n_basis_input[0] * bas1.n_basis_funcs,
                     bas1._n_basis_input[0] * bas1.n_basis_funcs
                     + bas2._n_basis_input[0]
@@ -6228,7 +6228,7 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             lambda bas1, bas2, bas3: {
                 # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
-                "1 * 2 + 3": slice(
+                "(1 * (2 + 3))": slice(
                     0,
                     bas1._n_basis_input[0]
                     * bas1.n_basis_funcs
@@ -6243,7 +6243,7 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__mul__",
             "__mul__",
             lambda bas1, bas2, bas3: {
-                "1 * 2 * 3": slice(
+                "(1 * (2 * 3))": slice(
                     0,
                     bas1._n_basis_input[0]
                     * bas1.n_basis_funcs
@@ -6344,7 +6344,7 @@ def test__get_splitter(
             1,
             1,
             lambda bas1, bas2: {
-                "1 * 2": slice(
+                "(1 * 2)": slice(
                     0,
                     bas1._n_basis_input[0]
                     * bas1.n_basis_funcs
@@ -6372,7 +6372,7 @@ def test__get_splitter(
             2,
             1,
             lambda bas1, bas2: {
-                "1 * 2": slice(
+                "(1 * 2)": slice(
                     0, bas1._n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
                 )
             },
@@ -6399,7 +6399,7 @@ def test__get_splitter(
             1,
             2,
             lambda bas1, bas2: {
-                "1 * 2": slice(
+                "(1 * 2)": slice(
                     0, bas2._n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
                 )
             },
@@ -6430,7 +6430,7 @@ def test__get_splitter(
             2,
             2,
             lambda bas1, bas2: {
-                "1 * 2": slice(0, 2 * bas1.n_basis_funcs * 2 * bas2.n_basis_funcs)
+                "(1 * 2)": slice(0, 2 * bas1.n_basis_funcs * 2 * bas2.n_basis_funcs)
             },
         ),
     ],
