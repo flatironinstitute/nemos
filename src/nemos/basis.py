@@ -550,7 +550,6 @@ class Basis(Base, abc.ABC):
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
         """Setter for bounds."""
-
         if values is not None and self.mode == "conv":
             raise ValueError("`bounds` should only be set when `mode=='eval'`.")
 
@@ -1088,7 +1087,6 @@ class Basis(Base, abc.ABC):
         ... )
         >>> gridsearch = gridsearch.fit(X, y)
         """
-
         return TransformerBasis(copy.deepcopy(self))
 
     def _get_num_features(self) -> int:
@@ -1124,7 +1122,7 @@ class Basis(Base, abc.ABC):
         return split_dict, start_slice
 
     def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
-        """Helper function to merge two slicing dictionaries, handling key conflicts."""
+        """Merge two slicing dictionaries, handling key conflicts."""
         for key, val in dict2.items():
             if key in dict1:
                 new_key = self._generate_unique_key(dict1, key)
@@ -1135,7 +1133,7 @@ class Basis(Base, abc.ABC):
 
     @staticmethod
     def _generate_unique_key(existing_dict: dict, key: str) -> str:
-        """Helper function to generate a unique key if there is a conflict."""
+        """Generate a unique key if there is a conflict."""
         extra = 1
         new_key = f"{key}-{extra}"
         while new_key in existing_dict:
@@ -1144,7 +1142,7 @@ class Basis(Base, abc.ABC):
         return new_key
 
     def _get_default_slicing(self, split_by_input: bool, start_slice: int) -> Tuple[dict, int]:
-        """Helper function to handle default slicing logic."""
+        """Handle default slicing logic."""
         if split_by_input:
             if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
                 split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features)}
@@ -1451,7 +1449,6 @@ class SplineBasis(Basis, abc.ABC):
     @order.setter
     def order(self, value):
         """Setter for the order parameter."""
-
         if value < 1:
             raise ValueError("Spline order must be positive!")
 
@@ -1533,7 +1530,7 @@ class SplineBasis(Basis, abc.ABC):
 
 
 class MSplineBasis(SplineBasis):
-    """
+    r"""
     M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
@@ -2411,7 +2408,7 @@ class OrthExponentialBasis(Basis):
 
     @property
     def decay_rates(self):
-        """Decay rate getter"""
+        """Decay rate getter."""
         return self._decay_rates
 
     @decay_rates.setter
