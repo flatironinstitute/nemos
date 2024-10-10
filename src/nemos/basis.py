@@ -716,7 +716,7 @@ class Basis(Base, abc.ABC):
             )
             if n_provided_inputs != self._n_basis_input:
                 raise ValueError(
-                    "The number of convolutional input does not match expectation."
+                    "The number of convolutional input does not match expectation. "
                     f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
                     f"Set `n_basis_input` to {n_provided_inputs} at basis initialization."
                 )
