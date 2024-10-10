@@ -3204,6 +3204,65 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_len(
+        self, n_basis_a, n_basis_b, basis_a, basis_b,
+    ):
+        """
+        Test for __len__ of basis
+        """
+        # define the two basis
+        basis_a_obj = self.instantiate_basis(
+            n_basis_a, basis_a, mode="eval"
+        )
+        basis_b_obj = self.instantiate_basis(
+            n_basis_b, basis_b, mode="eval"
+        )
+
+        basis_obj = basis_a_obj + basis_b_obj
+
+        assert hasattr(basis_obj, "__len__")
+        assert len(basis_a_obj) == basis_a_obj.n_basis_funcs
+        assert len(basis_b_obj) == basis_b_obj.n_basis_funcs
+        assert len(basis_obj) == basis_obj.n_basis_funcs
+
+    @pytest.mark.parametrize("n", [1, 6])
+    @pytest.mark.parametrize("basis", list_all_basis_classes())
+    def test_basis_multiply_with_integer(
+        self, n, basis,
+    ):
+        """
+        Test for __mul__ of basis with integer
+        """
+        # define the two basis
+        basis_obj = self.instantiate_basis(
+            5, basis, mode="eval"
+        )
+        new_basis_obj = basis_obj * n
+
+        assert new_basis_obj.n_basis_funcs == n * basis_obj.n_basis_funcs
+
+    @pytest.mark.parametrize("basis", list_all_basis_classes())
+    @pytest.mark.parametrize("n, expected", [
+        (-2, pytest.raises(ValueError, match=r"Multiplier should be a non-negative integer!")),
+        ("6", pytest.raises(TypeError, match=r"Basis can only be multiplied with another basis or an integer!"))
+    ])
+    def test_basis_multiply_errors(
+        self, basis, n, expected
+    ):
+        """
+        Test for __mul__ of basis. raise errors
+        """
+        # define the two basis
+        basis_obj = self.instantiate_basis(
+            5, basis, mode="eval"
+        )
+        with expected:
+            basis_obj * n
+
+    @pytest.mark.parametrize("n_basis_a", [5, 6])
+    @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("sample_size", [10, 1000])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())

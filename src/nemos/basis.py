@@ -185,7 +185,6 @@ class TransformerBasis:
             A tuple of each individual input.
 
         """
-
         return (X[:, k] for k in range(X.shape[1]))
 
     def fit(self, X: FeatureMatrix, y=None):
@@ -947,7 +946,8 @@ class Basis(Base, abc.ABC):
 
     def __mul__(self, other: (Basis, int)) -> MultiplicativeBasis:
         """
-        Multiply two Basis objects together.
+        Multiply two Basis objects together or replicate the basis
+        by multiplying it with an integer.
 
         Parameters
         ----------
@@ -965,11 +965,13 @@ class Basis(Base, abc.ABC):
             if other <= 0:
                 raise ValueError("Multiplier should be a non-negative integer!")
             result = self
-            for _ in range(other-1):
+            for _ in range(other - 1):
                 result = result + self
             return result
         else:
-            raise TypeError("Basis can only be multiplied with another basis or an integer!")
+            raise TypeError(
+                "Basis can only be multiplied with another basis or an integer!"
+            )
 
     def __pow__(self, exponent: int) -> MultiplicativeBasis:
         """Exponentiation of a Basis object.
