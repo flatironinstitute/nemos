@@ -180,7 +180,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             time_scaling=time_scaling,
             mode="conv",
             window_size=window_size,
-            n_conv_input=expected_n_input,
+            n_basis_input=expected_n_input,
             enforce_decay_to_zero=enforce_decay,
         )
         with expectation:
@@ -938,7 +938,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             n_basis_funcs=n_basis_funcs,
             mode="conv",
             window_size=window_size,
-            n_conv_input=expected_n_input,
+            n_basis_input=expected_n_input,
         )
         with expectation:
             bas.compute_features(x)
@@ -1657,7 +1657,7 @@ class TestMSplineBasis(BasisFuncsTesting):
             order=order,
             mode="conv",
             window_size=window_size,
-            n_conv_input=expected_n_input,
+            n_basis_input=expected_n_input,
         )
         with expectation:
             bas.compute_features(x)
@@ -2390,7 +2390,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             n_basis_funcs=n_basis_funcs,
             mode="conv",
             window_size=window_size,
-            n_conv_input=expected_n_input,
+            n_basis_input=expected_n_input,
             decay_rates=0.1 * np.arange(1, n_basis_funcs + 1),
         )
         with expectation:
@@ -3098,7 +3098,7 @@ class TestBSplineBasis(BasisFuncsTesting):
             order=order,
             mode="conv",
             window_size=window_size,
-            n_conv_input=expected_n_input,
+            n_basis_input=expected_n_input,
         )
         with expectation:
             bas.compute_features(x)
@@ -3839,7 +3839,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             order=order,
             mode="conv",
             window_size=window_size,
-            n_conv_input=expected_n_input,
+            n_basis_input=expected_n_input,
         )
         with expectation:
             bas.compute_features(x)

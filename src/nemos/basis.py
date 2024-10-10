@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from numbers import Number
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
