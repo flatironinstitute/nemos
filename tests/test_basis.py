@@ -5584,7 +5584,9 @@ class TestAdditiveBasis(CombinedBasis):
         bas2 = basis_cls2(5, **kwargs2)
         bas_add = bas1 + bas2
         bas_add.identifiability_constraints = True
-        bas_add.compute_features(np.arange(10), np.arange(10))
+        X1 = bas_add.compute_features(np.arange(10), np.arange(10))
+        X2 = bas_add(np.arange(10), np.arange(10))
+        assert np.all(X1 == X2)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
@@ -6148,7 +6150,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas2 = basis_cls2(5, **kwargs2)
         bas_prod = bas1 * bas2
         bas_prod.identifiability_constraints = True
-        bas_prod.compute_features(np.arange(10), np.arange(10))
+        X1 = bas_prod.compute_features(np.arange(10), np.arange(10))
+        X2 = bas_prod(np.arange(10), np.arange(10))
+        assert np.all(X1 == X2)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])

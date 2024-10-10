@@ -1292,7 +1292,7 @@ class AdditiveBasis(Basis):
         # the numpy conversion is important, there is some in-place
         # array modification in basis.
         hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
-        return hstack_pynapple(
+        X = hstack_pynapple(
             (
                 self._basis1._compute_features(
                     *xi[: self._basis1._n_input_dimensionality]
@@ -1302,6 +1302,9 @@ class AdditiveBasis(Basis):
                 ),
             ),
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
     def _set_kernel(self, *xi: ArrayLike) -> Basis:
         """Call fit on the added basis.
@@ -1425,11 +1428,14 @@ class MultiplicativeBasis(Basis):
 
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
-        return kron(
+        X = kron(
             self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
             self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality :]),
             transpose=False,
         )
+        if self.identifiability_constraints:
+            X = self._apply_identifiability_constraints(X)
+        return X
 
 
 class SplineBasis(Basis, abc.ABC):
