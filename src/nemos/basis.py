@@ -501,6 +501,8 @@ class Basis(Base, abc.ABC):
 
         self._mode = mode
         self._n_basis_input = (1 if n_basis_input is None else int(n_basis_input),)
+        # pre-compute the expected output feature dimensionality
+        self._num_output_features = self._n_basis_input[0] * n_basis_funcs
         self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
@@ -1102,15 +1104,15 @@ class Basis(Base, abc.ABC):
 
 
 
-    def _get_splitter(self, n_inputs: Optional[tuple]=None, start_slice: Optional[int]=None) -> Tuple[dict, int]:
+    def _get_feature_slicing(self, n_inputs: Optional[tuple]=None, start_slice: Optional[int]=None) -> Tuple[dict, int]:
 
         if n_inputs is None:
             n_inputs = self._n_basis_input
             start_slice = 0
 
         if isinstance(self, AdditiveBasis):
-            split_dict, start_slice = self._basis1._get_splitter(n_inputs[: len(self._basis1._n_basis_input)], start_slice)
-            sp2, start_slice = self._basis2._get_splitter(n_inputs[len(self._basis1._n_basis_input):], start_slice)
+            split_dict, start_slice = self._basis1._get_feature_slicing(n_inputs[: len(self._basis1._n_basis_input)], start_slice)
+            sp2, start_slice = self._basis2._get_feature_slicing(n_inputs[len(self._basis1._n_basis_input):], start_slice)
             common = set(sp2.keys()).intersection(split_dict.keys())
             for key, val in sp2.items():
                 if key in common:
@@ -1123,9 +1125,8 @@ class Basis(Base, abc.ABC):
                 else:
                     split_dict.update({key: val})
         else:
-            n_features = self._get_num_features()
-            split_dict = {self.label: slice(start_slice, start_slice + n_features, None)}
-            start_slice += n_features
+            split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features, None)}
+            start_slice += self._num_output_features
         return split_dict, start_slice
 
 
@@ -1155,6 +1156,7 @@ class AdditiveBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._num_output_features = basis1._num_output_features + basis2._num_output_features
         self._label = basis1.label + " + " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
@@ -1268,6 +1270,7 @@ class MultiplicativeBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = (*basis1.n_basis_input, *basis2.n_basis_input)
+        self._num_output_features = basis1._num_output_features * basis2._num_output_features
         self._label = basis1.label + " * " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2

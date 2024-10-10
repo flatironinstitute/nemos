@@ -6248,7 +6248,7 @@ def test__get_splitter(mode1, mode2, mode3, bas1, bas2, bas3, operator1, operato
     bas23 = func2(bas3_instance)
     bas123 = func1(bas23)
 
-    splitter_dict, _ = bas123._get_splitter()
+    splitter_dict, _ = bas123._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
     for i, val in enumerate(splitter_dict.values()):
         assert val == exp_slices[i]
