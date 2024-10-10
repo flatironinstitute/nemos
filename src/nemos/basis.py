@@ -513,7 +513,9 @@ class Basis(Base, abc.ABC):
             )
 
         if any(inp <= 0 for inp in self._n_basis_input):
-            raise ValueError(f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!")
+            raise ValueError(
+                f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!"
+            )
 
         elif any(inp > 1 for inp in self._n_basis_input) and mode == "eval":
             raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
@@ -700,11 +702,15 @@ class Basis(Base, abc.ABC):
             # before calling the convolve, check that the input matches
             # has the expectation. We can check xi[0] only, since convolution
             # are applied at the end of the recursion, ensuring len(xi) == 1.
-            n_provided_inputs = np.prod(tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape)))
+            n_provided_inputs = np.prod(
+                tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape))
+            )
             if n_provided_inputs != self.n_basis_input:
-                raise ValueError("The number of convolutional input does not match expectation."
-                                 f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
-                                 f"Set `n_basis_input` to {n_provided_inputs} at basis initialization.")
+                raise ValueError(
+                    "The number of convolutional input does not match expectation."
+                    f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
+                    f"Set `n_basis_input` to {n_provided_inputs} at basis initialization."
+                )
 
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
@@ -1092,15 +1098,22 @@ class Basis(Base, abc.ABC):
     def _get_num_features(self) -> int:
         """Recursively find the number features the basis generates."""
         if isinstance(self, AdditiveBasis):
-            n_coeff = self._basis1._get_num_features() + self._basis2._get_num_features()
+            n_coeff = (
+                self._basis1._get_num_features() + self._basis2._get_num_features()
+            )
         elif isinstance(self, MultiplicativeBasis):
-            n_coeff = self._basis1._get_num_features() * self._basis2._get_num_features()
+            n_coeff = (
+                self._basis1._get_num_features() * self._basis2._get_num_features()
+            )
         else:
             n_coeff = self.n_basis_funcs * self.n_basis_input[0]
         return n_coeff
 
     def _get_feature_slicing(
-    self, n_inputs: Optional[tuple] = None, start_slice: Optional[int] = None, split_by_input: bool = False
+        self,
+        n_inputs: Optional[tuple] = None,
+        start_slice: Optional[int] = None,
+        split_by_input: bool = False,
     ) -> Tuple[dict, int]:
         # Set default values for n_inputs and start_slice if not provided
         n_inputs = n_inputs or self._n_basis_input
@@ -1109,15 +1122,21 @@ class Basis(Base, abc.ABC):
         # If the instance is of AdditiveBasis type, handle slicing for the additive components
         if isinstance(self, AdditiveBasis):
             split_dict, start_slice = self._basis1._get_feature_slicing(
-                n_inputs[: len(self._basis1._n_basis_input)], start_slice, split_by_input=split_by_input
+                n_inputs[: len(self._basis1._n_basis_input)],
+                start_slice,
+                split_by_input=split_by_input,
             )
             sp2, start_slice = self._basis2._get_feature_slicing(
-                n_inputs[len(self._basis1._n_basis_input):], start_slice, split_by_input=split_by_input
+                n_inputs[len(self._basis1._n_basis_input) :],
+                start_slice,
+                split_by_input=split_by_input,
             )
             split_dict = self._merge_slicing_dicts(split_dict, sp2)
         else:
             # Handle the default case for other basis types
-            split_dict, start_slice = self._get_default_slicing(split_by_input, start_slice)
+            split_dict, start_slice = self._get_default_slicing(
+                split_by_input, start_slice
+            )
 
         return split_dict, start_slice
 
@@ -1141,24 +1160,33 @@ class Basis(Base, abc.ABC):
             new_key = f"{key}-{extra}"
         return new_key
 
-    def _get_default_slicing(self, split_by_input: bool, start_slice: int) -> Tuple[dict, int]:
+    def _get_default_slicing(
+        self, split_by_input: bool, start_slice: int
+    ) -> Tuple[dict, int]:
         """Handle default slicing logic."""
         if split_by_input:
             if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
-                split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features)}
+                split_dict = {
+                    self.label: slice(
+                        start_slice, start_slice + self._num_output_features
+                    )
+                }
             else:
                 split_dict = {
                     self.label: {
                         f"{i}": slice(
-                            start_slice + i * self.n_basis_funcs, start_slice + (i + 1) * self.n_basis_funcs
-                        ) for i in range(self._n_basis_input[0])
+                            start_slice + i * self.n_basis_funcs,
+                            start_slice + (i + 1) * self.n_basis_funcs,
+                        )
+                        for i in range(self._n_basis_input[0])
                     }
                 }
         else:
-            split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features)}
+            split_dict = {
+                self.label: slice(start_slice, start_slice + self._num_output_features)
+            }
         start_slice += self._num_output_features
         return split_dict, start_slice
-
 
 
 class AdditiveBasis(Basis):
@@ -1187,7 +1215,9 @@ class AdditiveBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
-        self._num_output_features = basis1._num_output_features + basis2._num_output_features
+        self._num_output_features = (
+            basis1._num_output_features + basis2._num_output_features
+        )
         self._label = basis1.label + " + " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
@@ -1301,7 +1331,9 @@ class MultiplicativeBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = (*basis1.n_basis_input, *basis2.n_basis_input)
-        self._num_output_features = basis1._num_output_features * basis2._num_output_features
+        self._num_output_features = (
+            basis1._num_output_features * basis2._num_output_features
+        )
         self._label = basis1.label + " * " + basis2.label
         self._basis1 = basis1
         self._basis2 = basis2
@@ -2247,7 +2279,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             bounds=bounds,
             **kwargs,
             label=label,
-            n_basis_input=n_basis_input
+            n_basis_input=n_basis_input,
         )
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
