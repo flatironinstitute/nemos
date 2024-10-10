@@ -78,12 +78,6 @@ def min_max_rescale_samples(
         Sample bounds. `bounds[0]` and `bounds[1]` are mapped to 0 and 1, respectively.
         Default are `min(sample_pts), max(sample_pts)`.
 
-    Raises
-    ------
-    ValueError
-        If all the samples contain invalid entries (either NaN or Inf).
-        This may happen if `max(sample) < bounds[0]` or `min(sample) >  bounds[1]`.
-
     Warns
     -----
     UserWarning
@@ -92,10 +86,6 @@ def min_max_rescale_samples(
     sample_pts = sample_pts.astype(float)
     vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
     vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
-    if vmin and vmax and vmax <= vmin:
-        raise ValueError(
-            "Invalid value range. `bounds[1]` must be larger then `bounds[0]`!"
-        )
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
     # this passes if `samples_pts` contains a single value

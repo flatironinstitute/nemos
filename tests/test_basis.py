@@ -645,6 +645,37 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size)
 
     @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (
+                2,
+                pytest.raises(
+                    ValueError, match=r"Multiple inputs not supported in `mode=='eval'`"
+                ),
+            ),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_eval(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input)
+
+    @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (2, does_not_raise()),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_conv(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input, mode="conv", window_size=10)
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -1448,6 +1479,37 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size)
 
     @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (
+                2,
+                pytest.raises(
+                    ValueError, match=r"Multiple inputs not supported in `mode=='eval'`"
+                ),
+            ),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_eval(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input)
+
+    @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (2, does_not_raise()),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_conv(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input, mode="conv", window_size=10)
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -2200,6 +2262,37 @@ class TestMSplineBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size)
 
     @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (
+                2,
+                pytest.raises(
+                    ValueError, match=r"Multiple inputs not supported in `mode=='eval'`"
+                ),
+            ),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_eval(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input)
+
+    @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (2, does_not_raise()),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_conv(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input, mode="conv", window_size=10)
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -2267,6 +2360,35 @@ class TestMSplineBasis(BasisFuncsTesting):
                         "mode": mode,
                     }
                     bas.set_params(**par_set)
+
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
+    def test_order_is_positive(self, n_basis_funcs, order):
+        """
+        Verifies that the minimum number of basis functions and order required (i.e., at least 1) and
+        order < #basis are enforced.
+        """
+        raise_exception = order < 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
+                basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+                basis_obj.compute_features(np.linspace(0, 1, 10))
+        else:
+            basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj.compute_features(np.linspace(0, 1, 10))
+
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
+    def test_order_setter(self, n_basis_funcs, order):
+        basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=4)
+        raise_exception = order < 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
+                basis_obj.order = order
+                basis_obj.compute_features(np.linspace(0, 1, 10))
+        else:
+            basis_obj.order = order
+            basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize(
         "mode, expectation",
@@ -3028,6 +3150,43 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size, decay_rates=np.arange(1, 6))
 
     @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (
+                2,
+                pytest.raises(
+                    ValueError, match=r"Multiple inputs not supported in `mode=='eval'`"
+                ),
+            ),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_eval(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input, decay_rates=np.arange(1, 6))
+
+    @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (2, does_not_raise()),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_conv(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(
+                5,
+                n_basis_input=n_basis_input,
+                mode="conv",
+                window_size=10,
+                decay_rates=np.arange(1, 6),
+            )
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -3461,6 +3620,19 @@ class TestBSplineBasis(BasisFuncsTesting):
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
+    def test_order_setter(self, n_basis_funcs, order):
+        basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=4)
+        raise_exception = order < 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
+                basis_obj.order = order
+                basis_obj.compute_features(np.linspace(0, 1, 10))
+        else:
+            basis_obj.order = order
+            basis_obj.compute_features(np.linspace(0, 1, 10))
+
     @pytest.mark.parametrize(
         "sample_range", [(0, 1), (0.1, 0.9), (-0.5, 1), (0, 1.5), (-0.5, 1.5)]
     )
@@ -3726,6 +3898,37 @@ class TestBSplineBasis(BasisFuncsTesting):
         window_size = None if mode == "eval" else 2
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
+
+    @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (
+                2,
+                pytest.raises(
+                    ValueError, match=r"Multiple inputs not supported in `mode=='eval'`"
+                ),
+            ),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_eval(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input)
+
+    @pytest.mark.parametrize(
+        "n_basis_input, expectation",
+        [
+            (1, does_not_raise()),
+            (None, does_not_raise()),
+            (2, does_not_raise()),
+            (-1, pytest.raises(ValueError, match="`n_basis_input must` be positive.")),
+        ],
+    )
+    def test_init_n_basis_input_conv(self, n_basis_input, expectation):
+        with expectation:
+            self.cls(5, n_basis_input=n_basis_input, mode="conv", window_size=10)
 
     @pytest.mark.parametrize(
         "mode, ws, expectation",
@@ -4233,6 +4436,19 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
                 basis_obj.compute_features(np.linspace(0, 1, 10))
         else:
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
+            basis_obj.compute_features(np.linspace(0, 1, 10))
+
+    @pytest.mark.parametrize("n_basis_funcs", [10])
+    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
+    def test_order_setter(self, n_basis_funcs, order):
+        basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=4)
+        raise_exception = order < 1
+        if raise_exception:
+            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
+                basis_obj.order = order
+                basis_obj.compute_features(np.linspace(0, 1, 10))
+        else:
+            basis_obj.order = order
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
     @pytest.mark.parametrize("n_basis_funcs", [10])
@@ -5337,6 +5553,18 @@ class TestAdditiveBasis(CombinedBasis):
         bas_add.identifiability_constraints = True
         bas_add.compute_features(np.arange(10), np.arange(10))
 
+    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
+    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
+    def test_n_basis_input(self, n_basis_input1, n_basis_input2):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10, n_basis_input=n_basis_input1
+        )
+        bas2 = basis.BSplineBasis(
+            10, mode="conv", window_size=10, n_basis_input=n_basis_input2
+        )
+        bas_add = bas1 + bas2
+        assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
+
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = basis.MultiplicativeBasis
@@ -5888,6 +6116,18 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas_prod = bas1 * bas2
         bas_prod.identifiability_constraints = True
         bas_prod.compute_features(np.arange(10), np.arange(10))
+
+    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
+    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
+    def test_n_basis_input(self, n_basis_input1, n_basis_input2):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10, n_basis_input=n_basis_input1
+        )
+        bas2 = basis.BSplineBasis(
+            10, mode="conv", window_size=10, n_basis_input=n_basis_input2
+        )
+        bas_prod = bas1 * bas2
+        assert bas_prod.n_basis_input == (n_basis_input1, n_basis_input2)
 
 
 @pytest.mark.parametrize(
@@ -6808,3 +7048,37 @@ def test__get_splitter_split_by_input(
     splitter_dict, _ = bas12._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance)
     assert exp_slices == splitter_dict
+
+
+@pytest.mark.parametrize(
+    "bas1, bas2, bas3",
+    list(
+        itertools.product(
+            *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 3
+        )
+    ),
+)
+def test_duplicate_keys(bas1, bas2, bas3):
+    # skip nested
+    if any(
+        bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
+        for bas in [bas1, bas2, bas3]
+    ):
+        return
+
+    extra_kwargs = (
+        {"decay_rates": np.arange(1, 5 + 1)},
+        {"decay_rates": np.arange(1, 5 + 1)},
+        {"decay_rates": np.arange(1, 5 + 1)},
+    )
+    for bas, kwrgs in zip((bas1, bas2, bas3), extra_kwargs):
+        if bas != basis.OrthExponentialBasis:
+            kwrgs.pop("decay_rates")
+
+    bas_obj = (
+        bas1(5, **extra_kwargs[0], label="label")
+        + bas2(5, **extra_kwargs[1], label="label")
+        + bas3(5, **extra_kwargs[2], label="label")
+    )
+    slice_dict = bas_obj._get_feature_slicing()[0]
+    assert tuple(slice_dict.keys()) == ("label", "label-1", "label-2")
