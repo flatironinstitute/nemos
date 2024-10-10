@@ -1104,20 +1104,6 @@ class Basis(Base, abc.ABC):
         """
         return TransformerBasis(copy.deepcopy(self))
 
-    def _get_num_features(self) -> int:
-        """Recursively find the number features the basis generates."""
-        if isinstance(self, AdditiveBasis):
-            n_coeff = (
-                self._basis1._get_num_features() + self._basis2._get_num_features()
-            )
-        elif isinstance(self, MultiplicativeBasis):
-            n_coeff = (
-                self._basis1._get_num_features() * self._basis2._get_num_features()
-            )
-        else:
-            n_coeff = self.n_basis_funcs * self._n_basis_input[0]
-        return n_coeff
-
     def _get_feature_slicing(
         self,
         n_inputs: Optional[tuple] = None,
