@@ -1101,33 +1101,66 @@ class Basis(Base, abc.ABC):
             n_coeff = self.n_basis_funcs * self.n_basis_input[0]
         return n_coeff
 
+    def _get_feature_slicing(
+    self, n_inputs: Optional[tuple] = None, start_slice: Optional[int] = None, split_by_input: bool = False
+    ) -> Tuple[dict, int]:
+        # Set default values for n_inputs and start_slice if not provided
+        n_inputs = n_inputs or self._n_basis_input
+        start_slice = start_slice or 0
 
-
-
-    def _get_feature_slicing(self, n_inputs: Optional[tuple]=None, start_slice: Optional[int]=None) -> Tuple[dict, int]:
-
-        if n_inputs is None:
-            n_inputs = self._n_basis_input
-            start_slice = 0
-
+        # If the instance is of AdditiveBasis type, handle slicing for the additive components
         if isinstance(self, AdditiveBasis):
-            split_dict, start_slice = self._basis1._get_feature_slicing(n_inputs[: len(self._basis1._n_basis_input)], start_slice)
-            sp2, start_slice = self._basis2._get_feature_slicing(n_inputs[len(self._basis1._n_basis_input):], start_slice)
-            common = set(sp2.keys()).intersection(split_dict.keys())
-            for key, val in sp2.items():
-                if key in common:
-                    extra = 1
-                    new_key = key + "-" + str(extra)
-                    while new_key in split_dict.keys():
-                        extra += 1
-                        new_key = key + "-" + str(extra)
-                    split_dict.update({new_key: val})
-                else:
-                    split_dict.update({key: val})
+            split_dict, start_slice = self._basis1._get_feature_slicing(
+                n_inputs[: len(self._basis1._n_basis_input)], start_slice, split_by_input=split_by_input
+            )
+            sp2, start_slice = self._basis2._get_feature_slicing(
+                n_inputs[len(self._basis1._n_basis_input):], start_slice, split_by_input=split_by_input
+            )
+            split_dict = self._merge_slicing_dicts(split_dict, sp2)
         else:
-            split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features, None)}
-            start_slice += self._num_output_features
+            # Handle the default case for other basis types
+            split_dict, start_slice = self._get_default_slicing(split_by_input, start_slice)
+
         return split_dict, start_slice
+
+    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
+        """Helper function to merge two slicing dictionaries, handling key conflicts."""
+        for key, val in dict2.items():
+            if key in dict1:
+                new_key = self._generate_unique_key(dict1, key)
+                dict1[new_key] = val
+            else:
+                dict1[key] = val
+        return dict1
+
+    @staticmethod
+    def _generate_unique_key(existing_dict: dict, key: str) -> str:
+        """Helper function to generate a unique key if there is a conflict."""
+        extra = 1
+        new_key = f"{key}-{extra}"
+        while new_key in existing_dict:
+            extra += 1
+            new_key = f"{key}-{extra}"
+        return new_key
+
+    def _get_default_slicing(self, split_by_input: bool, start_slice: int) -> Tuple[dict, int]:
+        """Helper function to handle default slicing logic."""
+        if split_by_input:
+            if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
+                split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features)}
+            else:
+                split_dict = {
+                    self.label: {
+                        f"{i}": slice(
+                            start_slice + i * self.n_basis_funcs, start_slice + (i + 1) * self.n_basis_funcs
+                        ) for i in range(self._n_basis_input[0])
+                    }
+                }
+        else:
+            split_dict = {self.label: slice(start_slice, start_slice + self._num_output_features)}
+        start_slice += self._num_output_features
+        return split_dict, start_slice
+
 
 
 class AdditiveBasis(Basis):
