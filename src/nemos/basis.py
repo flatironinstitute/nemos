@@ -709,8 +709,8 @@ class Basis(Base, abc.ABC):
                 axis = self._conv_kwargs["axis"]
 
             # before calling the convolve, check that the input matches
-            # has the expectation. We can check xi[0] only, since convolution
-            # are applied at the end of the recursion, ensuring len(xi) == 1.
+            # the expectation. We can check xi[0] only, since convolution
+            # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
             n_provided_inputs = np.prod(
                 tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape))
             )
