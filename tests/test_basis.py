@@ -106,11 +106,29 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [
             (10, does_not_raise()),
             (10.5, does_not_raise()),
-            (0.5, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
-            (10.3, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
-            (-10, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
+            (
+                0.5,
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                ),
+            ),
+            (
+                10.3,
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                ),
+            ),
+            (
+                -10,
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                ),
+            ),
             (None, pytest.raises(TypeError, match="'<=' not supported between")),
-        ]
+        ],
     )
     def test_set_width(self, width, expectation):
         basis_obj = self.cls(n_basis_funcs=5)
@@ -125,15 +143,23 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (dict(), (10,), does_not_raise()),
             (dict(axis=0), (10,), does_not_raise()),
             (dict(axis=1), (2, 10), does_not_raise()),
-            (dict(axis=1), (10,), pytest.raises(ValueError, match="The number of convolutional input does not")),
-        ]
+            (
+                dict(axis=1),
+                (10,),
+                pytest.raises(
+                    ValueError, match="The number of convolutional input does not"
+                ),
+            ),
+        ],
     )
     def test_compute_features_axis(self, kwargs, input_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        n_inp = 1 if len(input_shape) == 1 else input_shape[1-kwargs["axis"]]
-        basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs)
+        n_inp = 1 if len(input_shape) == 1 else input_shape[1 - kwargs["axis"]]
+        basis_obj = self.cls(
+            n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs
+        )
         with expectation:
             out = basis_obj.compute_features(np.ones(input_shape))
             assert out.shape[0] == input_shape[kwargs.get("axis", 0)]
@@ -628,9 +654,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
                 pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
             (
-                    "conv",
-                    None,
-                    pytest.raises(ValueError, match="If the basis is in `conv` mode, you must provide a "),
+                "conv",
+                None,
+                pytest.raises(
+                    ValueError,
+                    match="If the basis is in `conv` mode, you must provide a ",
+                ),
             ),
             (
                 "conv",
@@ -780,7 +809,12 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (("a", 3), pytest.raises(TypeError, match="Could not convert")),
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            ((1, 2, 3), pytest.raises(ValueError, match="The provided `bounds` must be of length two")),
+            (
+                (1, 2, 3),
+                pytest.raises(
+                    ValueError, match="The provided `bounds` must be of length two"
+                ),
+            ),
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -917,11 +951,29 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         [
             (10, does_not_raise()),
             (10.5, does_not_raise()),
-            (0.5, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
-            (10.3, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
-            (-10, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
+            (
+                0.5,
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                ),
+            ),
+            (
+                10.3,
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                ),
+            ),
+            (
+                -10,
+                pytest.raises(
+                    ValueError,
+                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                ),
+            ),
             (None, pytest.raises(TypeError, match="'<=' not supported between")),
-        ]
+        ],
     )
     def test_set_width(self, width, expectation):
         basis_obj = self.cls(n_basis_funcs=5)
@@ -936,15 +988,23 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             (dict(), (10,), does_not_raise()),
             (dict(axis=0), (10,), does_not_raise()),
             (dict(axis=1), (2, 10), does_not_raise()),
-            (dict(axis=1), (10,), pytest.raises(ValueError, match="The number of convolutional input does not")),
-        ]
+            (
+                dict(axis=1),
+                (10,),
+                pytest.raises(
+                    ValueError, match="The number of convolutional input does not"
+                ),
+            ),
+        ],
     )
     def test_compute_features_axis(self, kwargs, input_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         n_inp = 1 if len(input_shape) == 1 else input_shape[1 - kwargs["axis"]]
-        basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs)
+        basis_obj = self.cls(
+            n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs
+        )
         with expectation:
             out = basis_obj.compute_features(np.ones(input_shape))
             assert out.shape[0] == input_shape[kwargs.get("axis", 0)]
@@ -1529,7 +1589,12 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             (("a", 3), pytest.raises(TypeError, match="Could not convert")),
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            ((1, 2, 3), pytest.raises(ValueError, match="The provided `bounds` must be of length two")),
+            (
+                (1, 2, 3),
+                pytest.raises(
+                    ValueError, match="The provided `bounds` must be of length two"
+                ),
+            ),
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -1667,15 +1732,23 @@ class TestMSplineBasis(BasisFuncsTesting):
             (dict(), (10,), does_not_raise()),
             (dict(axis=0), (10,), does_not_raise()),
             (dict(axis=1), (2, 10), does_not_raise()),
-            (dict(axis=1), (10,), pytest.raises(ValueError, match="The number of convolutional input does not")),
-        ]
+            (
+                dict(axis=1),
+                (10,),
+                pytest.raises(
+                    ValueError, match="The number of convolutional input does not"
+                ),
+            ),
+        ],
     )
     def test_compute_features_axis(self, kwargs, input_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         n_inp = 1 if len(input_shape) == 1 else input_shape[1 - kwargs["axis"]]
-        basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs)
+        basis_obj = self.cls(
+            n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs
+        )
         with expectation:
             out = basis_obj.compute_features(np.ones(input_shape))
             assert out.shape[0] == input_shape[kwargs.get("axis", 0)]
@@ -2268,7 +2341,12 @@ class TestMSplineBasis(BasisFuncsTesting):
             (("a", 3), pytest.raises(TypeError, match="Could not convert")),
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            ((1, 2, 3), pytest.raises(ValueError, match="The provided `bounds` must be of length two")),
+            (
+                (1, 2, 3),
+                pytest.raises(
+                    ValueError, match="The provided `bounds` must be of length two"
+                ),
+            ),
             (
                 (2, 1),
                 pytest.raises(
@@ -2428,8 +2506,14 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             (dict(), (10,), does_not_raise()),
             (dict(axis=0), (10,), does_not_raise()),
             (dict(axis=1), (2, 10), does_not_raise()),
-            (dict(axis=1), (10,), pytest.raises(ValueError, match="The number of convolutional input does not")),
-        ]
+            (
+                dict(axis=1),
+                (10,),
+                pytest.raises(
+                    ValueError, match="The number of convolutional input does not"
+                ),
+            ),
+        ],
     )
     def test_compute_features_axis(self, kwargs, input_shape, expectation):
         """
@@ -2442,7 +2526,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             mode="conv",
             window_size=5,
             n_basis_input=n_inp,
-            **kwargs
+            **kwargs,
         )
         with expectation:
             out = basis_obj.compute_features(np.ones(input_shape))
@@ -3154,15 +3238,23 @@ class TestBSplineBasis(BasisFuncsTesting):
             (dict(), (10,), does_not_raise()),
             (dict(axis=0), (10,), does_not_raise()),
             (dict(axis=1), (2, 10), does_not_raise()),
-            (dict(axis=1), (10,), pytest.raises(ValueError, match="The number of convolutional input does not")),
-        ]
+            (
+                dict(axis=1),
+                (10,),
+                pytest.raises(
+                    ValueError, match="The number of convolutional input does not"
+                ),
+            ),
+        ],
     )
     def test_compute_features_axis(self, kwargs, input_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         n_inp = 1 if len(input_shape) == 1 else input_shape[1 - kwargs["axis"]]
-        basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs)
+        basis_obj = self.cls(
+            n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs
+        )
         with expectation:
             out = basis_obj.compute_features(np.ones(input_shape))
             assert out.shape[0] == input_shape[kwargs.get("axis", 0)]
@@ -3777,7 +3869,12 @@ class TestBSplineBasis(BasisFuncsTesting):
             (("a", 3), pytest.raises(TypeError, match="Could not convert")),
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            ((1, 2, 3), pytest.raises(ValueError, match="The provided `bounds` must be of length two")),
+            (
+                (1, 2, 3),
+                pytest.raises(
+                    ValueError, match="The provided `bounds` must be of length two"
+                ),
+            ),
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -3915,15 +4012,23 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             (dict(), (10,), does_not_raise()),
             (dict(axis=0), (10,), does_not_raise()),
             (dict(axis=1), (2, 10), does_not_raise()),
-            (dict(axis=1), (10,), pytest.raises(ValueError, match="The number of convolutional input does not")),
-        ]
+            (
+                dict(axis=1),
+                (10,),
+                pytest.raises(
+                    ValueError, match="The number of convolutional input does not"
+                ),
+            ),
+        ],
     )
     def test_compute_features_axis(self, kwargs, input_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         n_inp = 1 if len(input_shape) == 1 else input_shape[1 - kwargs["axis"]]
-        basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs)
+        basis_obj = self.cls(
+            n_basis_funcs=5, mode="conv", window_size=5, n_basis_input=n_inp, **kwargs
+        )
         with expectation:
             out = basis_obj.compute_features(np.ones(input_shape))
             assert out.shape[0] == input_shape[kwargs.get("axis", 0)]
@@ -4538,7 +4643,12 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             (("a", 3), pytest.raises(TypeError, match="Could not convert")),
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            ((1, 2, 3), pytest.raises(ValueError, match="The provided `bounds` must be of length two")),
+            (
+                (1, 2, 3),
+                pytest.raises(
+                    ValueError, match="The provided `bounds` must be of length two"
+                ),
+            ),
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation):
@@ -5206,10 +5316,14 @@ class TestAdditiveBasis(CombinedBasis):
             itertools.product(
                 *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
             )
-        )
+        ),
     )
     def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
-        if any(bas in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis] for bas in (basis_cls1, basis_cls2)):
+        if any(
+            bas
+            in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
+            for bas in (basis_cls1, basis_cls2)
+        ):
             return
         kwargs1, kwargs2 = dict(), dict()
         if basis_cls1 == basis.OrthExponentialBasis:
@@ -5754,10 +5868,14 @@ class TestMultiplicativeBasis(CombinedBasis):
             itertools.product(
                 *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
             )
-        )
+        ),
     )
     def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
-        if any(bas in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis] for bas in (basis_cls1, basis_cls2)):
+        if any(
+            bas
+            in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
+            for bas in (basis_cls1, basis_cls2)
+        ):
             return
         kwargs1, kwargs2 = dict(), dict()
         if basis_cls1 == basis.OrthExponentialBasis:
@@ -6385,7 +6503,6 @@ def test_multi_epoch_pynapple_basis_transformer(
     assert np.all(times_nan_found == np.array(nan_index))
     idx_nan = [np.where(res.t == k)[0][0] for k in nan_index]
     assert np.all(np.isnan(res.d[idx_nan]))
-
 
 
 @pytest.mark.parametrize(
