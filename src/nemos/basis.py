@@ -1498,8 +1498,11 @@ class SplineBasis(Basis, abc.ABC):
     @order.setter
     def order(self, value):
         """Setter for the order parameter."""
+        if value != int(value):
+            raise ValueError(f"Spline order must be an integer! Order {value} provided.")
+        value = int(value)
         if value < 1:
-            raise ValueError("Spline order must be positive!")
+            raise ValueError(f"Spline order must be positive! Order {value} provided.")
 
         # Set to None only the first time the setter is called.
         orig_order = copy.deepcopy(getattr(self, "_order", None))

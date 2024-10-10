@@ -9,6 +9,7 @@ import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
+
 import utils_testing
 from sklearn.base import clone as sk_clone
 
@@ -16,9 +17,8 @@ import nemos.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
 
+
 # automatic define user accessible basis and check the methods
-
-
 def list_all_basis_classes() -> list[type]:
     """
     Return all the classes in nemos.basis which are a subclass of Basis,
@@ -2377,16 +2377,27 @@ class TestMSplineBasis(BasisFuncsTesting):
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
-    @pytest.mark.parametrize("n_basis_funcs", [10])
-    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
-    def test_order_setter(self, n_basis_funcs, order):
+    @pytest.mark.parametrize("n_basis_funcs", [5])
+    @pytest.mark.parametrize(
+        "order, expectation",
+        [
+            (1.5, pytest.raises(ValueError, match=r"Spline order must be an integer")),
+            (-1, pytest.raises(ValueError, match=r"Spline order must be positive")),
+            (0, pytest.raises(ValueError, match=r"Spline order must be positive")),
+            (1, does_not_raise()),
+            (2, does_not_raise()),
+            (
+                10,
+                pytest.raises(
+                    ValueError,
+                    match=r"[a-z]+|[A-Z]+ `order` parameter cannot be larger",
+                ),
+            ),
+        ],
+    )
+    def test_order_setter(self, n_basis_funcs, order, expectation):
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=4)
-        raise_exception = order < 1
-        if raise_exception:
-            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
-                basis_obj.order = order
-                basis_obj.compute_features(np.linspace(0, 1, 10))
-        else:
+        with expectation:
             basis_obj.order = order
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
@@ -3620,16 +3631,27 @@ class TestBSplineBasis(BasisFuncsTesting):
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
-    @pytest.mark.parametrize("n_basis_funcs", [10])
-    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
-    def test_order_setter(self, n_basis_funcs, order):
+    @pytest.mark.parametrize("n_basis_funcs", [5])
+    @pytest.mark.parametrize(
+        "order, expectation",
+        [
+            (1.5, pytest.raises(ValueError, match=r"Spline order must be an integer")),
+            (-1, pytest.raises(ValueError, match=r"Spline order must be positive")),
+            (0, pytest.raises(ValueError, match=r"Spline order must be positive")),
+            (1, does_not_raise()),
+            (2, does_not_raise()),
+            (
+                10,
+                pytest.raises(
+                    ValueError,
+                    match=r"[a-z]+|[A-Z]+ `order` parameter cannot be larger",
+                ),
+            ),
+        ],
+    )
+    def test_order_setter(self, n_basis_funcs, order, expectation):
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=4)
-        raise_exception = order < 1
-        if raise_exception:
-            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
-                basis_obj.order = order
-                basis_obj.compute_features(np.linspace(0, 1, 10))
-        else:
+        with expectation:
             basis_obj.order = order
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
@@ -4438,16 +4460,27 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
             basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=order)
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
-    @pytest.mark.parametrize("n_basis_funcs", [10])
-    @pytest.mark.parametrize("order", [-1, 0, 1, 2])
-    def test_order_setter(self, n_basis_funcs, order):
+    @pytest.mark.parametrize("n_basis_funcs", [5])
+    @pytest.mark.parametrize(
+        "order, expectation",
+        [
+            (1.5, pytest.raises(ValueError, match=r"Spline order must be an integer")),
+            (-1, pytest.raises(ValueError, match=r"Spline order must be positive")),
+            (0, pytest.raises(ValueError, match=r"Spline order must be positive")),
+            (1, does_not_raise()),
+            (2, does_not_raise()),
+            (
+                10,
+                pytest.raises(
+                    ValueError,
+                    match=r"[a-z]+|[A-Z]+ `order` parameter cannot be larger",
+                ),
+            ),
+        ],
+    )
+    def test_order_setter(self, n_basis_funcs, order, expectation):
         basis_obj = self.cls(n_basis_funcs=n_basis_funcs, order=4)
-        raise_exception = order < 1
-        if raise_exception:
-            with pytest.raises(ValueError, match=r"Spline order must be positive!"):
-                basis_obj.order = order
-                basis_obj.compute_features(np.linspace(0, 1, 10))
-        else:
+        with expectation:
             basis_obj.order = order
             basis_obj.compute_features(np.linspace(0, 1, 10))
 
