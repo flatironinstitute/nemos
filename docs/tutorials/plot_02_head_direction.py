@@ -510,6 +510,11 @@ doc_plots.plot_rates_and_smoothed_counts(
 #
 # #### Preparing the features
 
+# define a basis function that expects an input of shape (num_samples, num_neurons).
+basis = nmo.basis.RaisedCosineBasisLog(
+    n_basis_funcs=8, mode="conv", window_size=window_size, n_basis_input=count.shape[1]
+)
+
 # convolve all the neurons
 convolved_count = basis.compute_features(count)
 
