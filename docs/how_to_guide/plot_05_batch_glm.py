@@ -55,8 +55,7 @@ glm = nmo.glm.PopulationGLM(
 # Here we instantiate the basis. `ws` is 40 time bins. It corresponds to a 200 ms windows
 ws = 40
 
-# set the n_basis_input to the number of neuron in the population
-basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=ws, n_basis_input=n_neurons)
+basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=ws)
 
 # %%
 # ## Batch definition

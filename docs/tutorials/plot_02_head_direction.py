@@ -513,7 +513,7 @@ doc_plots.plot_rates_and_smoothed_counts(
 # define a basis function that expects an input of shape (num_samples, num_neurons).
 num_neurons = count.shape[1]
 basis = nmo.basis.RaisedCosineBasisLog(
-    n_basis_funcs=8, mode="conv", window_size=window_size, n_basis_input=num_neurons
+    n_basis_funcs=8, mode="conv", window_size=window_size, label="convolved counts"
 )
 
 # convolve all the neurons
@@ -574,10 +574,19 @@ tuning = nap.compute_1d_tuning_curves_continuous(predicted_firing_rate,
                                                  minmax=(0, 2 * np.pi))
 
 # %%
-# Extract the weights and store it in a (n_neurons, n_neurons, n_basis_funcs) array.
+# Extract the weights and store it in a (n_neurons, n_basis_funcs, n_neurons) array.
+# We can use `basis.split_by_feature` for this. The method will return a dictionary with an array
+# for each feature, and keys the label we provided to the basis.
+# In this case, "convolved counts" is the only feature.
 
-weights = model.coef_.reshape(count.shape[1], basis.n_basis_funcs, count.shape[1])
+# split the coefficients by feature
+weights = basis.split_by_feature(model.coef_)
 
+# the output is a dictionary containing an array of shape (n_neurons, n_basis_funcs, n_neurons)
+print(f"{weights.keys()}: {weights['convolved counts'].shape}")
+
+# get the array
+weights = weights["convolved counts"]
 
 # %%
 # Multiply the weights by the basis, to get the history filters.

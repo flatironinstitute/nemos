@@ -11,7 +11,6 @@ from typing import Callable, Generator, Literal, Optional, Tuple, Union
 import jax
 import numpy as np
 import scipy.linalg
-from numba.core.ir_utils import raise_on_unsupported_feature
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
@@ -492,10 +491,12 @@ class Basis(Base, abc.ABC):
 
         self._mode = mode
 
-        self._n_basis_input = None#(1 if n_basis_input is None else int(n_basis_input),)
+        self._n_basis_input = (
+            None  # (1 if n_basis_input is None else int(n_basis_input),)
+        )
 
         # pre-compute the expected output feature dimensionality
-        self._num_output_features = None#self._n_basis_input[0] * n_basis_funcs
+        self._num_output_features = None  # self._n_basis_input[0] * n_basis_funcs
         self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
@@ -1214,7 +1215,62 @@ class Basis(Base, abc.ABC):
         start_slice += self._num_output_features
         return split_dict, start_slice
 
-    def split_by_feature(self, x: NDArray, axis: int = 1) -> dict:
+    def _split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+        store_input_in: Literal["dict", "tensor"] = "tensor",
+    ):
+        """
+        Split x by feature returning.
+
+        Splits the array by feature; for each feature it returns a tensor, in which the feature dimension
+        is split into (n_basis_funcs, n_basis_input), or a dictionary with keys 1,...,n_basis_input,
+        of arrays of (n_basis_funcs,).
+
+
+
+        """
+        split_by_input = store_input_in == "dict"
+
+        # Get the slice dictionary based on predefined feature slicing
+        slice_dict = self._get_feature_slicing(split_by_input=split_by_input)[0]
+
+        # Helper function to build index tuples for each slice
+        def build_index_tuple(slice_obj, axis: int, ndim: int):
+            """Create an index tuple to apply a slice on the given axis."""
+            index = [slice(None)] * ndim  # Initialize index for all dimensions
+            index[axis] = slice_obj  # Replace the axis with the slice object
+            return tuple(index)
+
+        # Get the dict for slicing the correct axis
+        index_dict = jax.tree_util.tree_map(
+            lambda sl: build_index_tuple(sl, axis, x.ndim), slice_dict
+        )
+
+        # Custom leaf function to identify index tuples as leaves
+        def is_leaf(val):
+            # Check if it's a tuple, length matches ndim, and all elements are slice objects
+            if isinstance(val, tuple) and len(val) == x.ndim:
+                return all(isinstance(v, slice) for v in val)
+            return False
+
+        # Apply the slicing using the custom leaf function
+        out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
+
+        # reshape to array
+        if not split_by_input:
+            reshaped_out = dict()
+            for i, vals in enumerate(out.items()):
+                key, val = vals
+                shape = list(val.shape)
+                reshaped_out[key] = val.reshape(
+                    shape[:axis] + [self._n_basis_input[i], -1] + shape[axis + 1 :]
+                )
+            return reshaped_out
+        return out
+
+    def split_by_feature(self, x: NDArray, axis: int = 0) -> dict:
         r"""
         Decompose a feature matrix along a specified axis into a dictionary of sub-arrays based on basis components.
 
@@ -1317,30 +1373,7 @@ class Basis(Base, abc.ABC):
                 f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
                 f"of features is {self.num_output_features}"
             )
-        # Get the slice dictionary based on predefined feature slicing
-        slice_dict = self._get_feature_slicing()[0]
-
-        # Helper function to build index tuples for each slice
-        def build_index_tuple(slice_obj, axis: int, ndim: int):
-            """Create an index tuple to apply a slice on the given axis."""
-            index = [slice(None)] * ndim  # Initialize index for all dimensions
-            index[axis] = slice_obj  # Replace the axis with the slice object
-            return tuple(index)
-
-        # Get the dict for slicing the correct axis
-        index_dict = jax.tree_util.tree_map(
-            lambda sl: build_index_tuple(sl, axis, x.ndim), slice_dict
-        )
-
-        # Custom leaf function to identify index tuples as leaves
-        def is_leaf(val):
-            # Check if it's a tuple, length matches ndim, and all elements are slice objects
-            if isinstance(val, tuple) and len(val) == x.ndim:
-                return all(isinstance(v, slice) for v in val)
-            return False
-
-        # Apply the slicing and return the result using the custom leaf function
-        return jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
+        return self._split_by_feature(x, axis=axis, store_input_in="tensor")
 
     def _set_num_output_features(self, *xi: NDArray):
         # this is reimplemented in AdditiveBasis and MultiplicativeBasis
@@ -1351,14 +1384,18 @@ class Basis(Base, abc.ABC):
         axis = self._conv_kwargs.get("axis", 0)
 
         # remove time axis & get the total input number
-        n_inputs = (1, ) if xi[0].ndim == 1 else (np.prod(shape[:axis] + shape[axis + 1:]), )
+        n_inputs = (
+            (1,) if xi[0].ndim == 1 else (np.prod(shape[:axis] + shape[axis + 1 :]),)
+        )
 
         if self._n_basis_input is not None and self._n_basis_input != n_inputs:
-            raise ValueError(f"Input dimensionality mismatch. "
-                             f"The basis {self.__class__.__name__} with label {self.label} was expecting "
-                             f"{self._n_basis_input[0]} inputs, {n_inputs[0]} provided. "
-                             "This happens when the basis is used to compute features multiple times, with"
-                             "input of different shapes. If you need to compute features over")
+            raise ValueError(
+                f"Input dimensionality mismatch. "
+                f"The basis {self.__class__.__name__} with label {self.label} was expecting "
+                f"{self._n_basis_input[0]} inputs, {n_inputs[0]} provided. "
+                "This happens when the basis is used to compute features multiple times, with"
+                "input of different shapes. If you need to compute features over"
+            )
 
         self._n_basis_input = n_inputs
         self._num_output_features = self.n_basis_funcs * self._n_basis_input[0]
@@ -1390,7 +1427,7 @@ class AdditiveBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = None # (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._n_basis_input = None  # (*basis1._n_basis_input, *basis2._n_basis_input)
         # self._num_output_features = (
         #     basis1._num_output_features + basis2._num_output_features
         # )
@@ -1402,10 +1439,16 @@ class AdditiveBasis(Basis):
 
     def _set_num_output_features(self, *xi: NDArray) -> tuple:
         self._n_basis_input = (
-            *self._basis1._set_num_output_features(*xi[: self._basis1._n_input_dimensionality])._n_basis_input,
-            *self._basis2._set_num_output_features(*xi[self._basis1._n_input_dimensionality: ])._n_basis_input,
+            *self._basis1._set_num_output_features(
+                *xi[: self._basis1._n_input_dimensionality]
+            )._n_basis_input,
+            *self._basis2._set_num_output_features(
+                *xi[self._basis1._n_input_dimensionality :]
+            )._n_basis_input,
         )
-        self._num_output_features = self._basis1.num_output_features + self._basis2.num_output_features
+        self._num_output_features = (
+            self._basis1.num_output_features + self._basis2.num_output_features
+        )
         return self
 
     def _check_n_basis_min(self) -> None:
@@ -1578,7 +1621,6 @@ class MultiplicativeBasis(Basis):
             X = self._apply_identifiability_constraints(X)
         return X
 
-
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute the features for the multiplied bases, and compute their outer product.
@@ -1607,11 +1649,18 @@ class MultiplicativeBasis(Basis):
 
     def _set_num_output_features(self, *xi: NDArray) -> Basis:
         self._n_basis_input = (
-            *self._basis1._set_num_output_features(*xi[: self._basis1._n_input_dimensionality])._n_basis_input,
-            *self._basis2._set_num_output_features(*xi[self._basis1._n_input_dimensionality: ])._n_basis_input,
+            *self._basis1._set_num_output_features(
+                *xi[: self._basis1._n_input_dimensionality]
+            )._n_basis_input,
+            *self._basis2._set_num_output_features(
+                *xi[self._basis1._n_input_dimensionality :]
+            )._n_basis_input,
         )
-        self._num_output_features = self._basis1.num_output_features * self._basis2.num_output_features
+        self._num_output_features = (
+            self._basis1.num_output_features * self._basis2.num_output_features
+        )
         return self
+
 
 class SplineBasis(Basis, abc.ABC):
     """
