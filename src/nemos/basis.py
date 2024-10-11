@@ -11,6 +11,7 @@ from typing import Callable, Generator, Literal, Optional, Tuple, Union
 import jax
 import numpy as np
 import scipy.linalg
+from numba.core.ir_utils import raise_on_unsupported_feature
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 from scipy.interpolate import splev
@@ -477,7 +478,6 @@ class Basis(Base, abc.ABC):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
@@ -492,10 +492,10 @@ class Basis(Base, abc.ABC):
 
         self._mode = mode
 
-        self._n_basis_input = (1 if n_basis_input is None else int(n_basis_input),)
+        self._n_basis_input = None#(1 if n_basis_input is None else int(n_basis_input),)
 
         # pre-compute the expected output feature dimensionality
-        self._num_output_features = self._n_basis_input[0] * n_basis_funcs
+        self._num_output_features = None#self._n_basis_input[0] * n_basis_funcs
         self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
@@ -504,20 +504,20 @@ class Basis(Base, abc.ABC):
             raise ValueError(
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
             )
-
-        if any(inp <= 0 for inp in self._n_basis_input):
-            raise ValueError(
-                f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!"
-            )
-
-        elif any(inp > 1 for inp in self._n_basis_input) and mode == "eval":
-            raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
+        #
+        # if any(inp <= 0 for inp in self._n_basis_input):
+        #     raise ValueError(
+        #         f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!"
+        #     )
+        #
+        # elif any(inp > 1 for inp in self._n_basis_input) and mode == "eval":
+        #     raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
 
         self.kernel_ = None
         self._identifiability_constraints = False
 
     @property
-    def num_output_features(self) -> int:
+    def num_output_features(self) -> int | None:
         """Read-only property returning the number of features returned by the basis."""
         return self._num_output_features
 
@@ -526,13 +526,15 @@ class Basis(Base, abc.ABC):
         return self._label
 
     @property
-    def n_basis_input(self) -> tuple | int:
+    def n_basis_input(self) -> tuple | int | None:
         # Needed for sklearn to work properly; cloning of sklearn requires that the
         # parameter provided at initialization is returned as is: if an int is provided
         # the same int is expected.
         # Internally, for code consistency, the parameter is stored as a tuple for
         # all basis.
-        if len(self._n_basis_input) == 1:
+        if self._n_basis_input is None:
+            return
+        elif len(self._n_basis_input) == 1:
             return self._n_basis_input[0]
         return self._n_basis_input
 
@@ -655,7 +657,6 @@ class Basis(Base, abc.ABC):
             rank = np.linalg.matrix_rank(add_constant(X))
         return X
 
-    @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         r"""
         Apply the basis transformation to the input data.
@@ -728,6 +729,7 @@ class Basis(Base, abc.ABC):
             # make sure to return a matrix
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
+    @check_transform_input
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute the basis functions and transform input data into model features.
@@ -757,6 +759,7 @@ class Basis(Base, abc.ABC):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
+        self._set_num_output_features(*xi)
         if self.kernel_ is None:
             self._set_kernel(*xi)
         return self._compute_features(*xi)
@@ -1211,7 +1214,7 @@ class Basis(Base, abc.ABC):
         start_slice += self._num_output_features
         return split_dict, start_slice
 
-    def split_feature_axis(self, x: NDArray, axis: int = 1) -> dict:
+    def split_by_feature(self, x: NDArray, axis: int = 1) -> dict:
         r"""
         Decompose a feature matrix along a specified axis into a dictionary of sub-arrays based on basis components.
 
@@ -1281,7 +1284,7 @@ class Basis(Base, abc.ABC):
         >>> X = basis.compute_features(x1, x2)
 
         >>> # Split the feature matrix along axis 1
-        >>> split_features = basis.split_feature_axis(X, axis=1)
+        >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
         feature_1: shape (20, 5)
@@ -1291,7 +1294,7 @@ class Basis(Base, abc.ABC):
         >>> multi_input_basis = BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10,
         ... label="multi_input", n_basis_input=2)
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = multi_input_basis.split_feature_axis(X_multi, axis=1)
+        >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...     for input_num, arr in sub_dict.items():
         ...         print(f"{feature}, input number {int(input_num)}, shape {arr.shape}")
@@ -1301,7 +1304,7 @@ class Basis(Base, abc.ABC):
         >>> # the method can be used to decompose the glm coefficients in the various features
         >>> counts = np.random.poisson(size=20)
         >>> model = GLM().fit(X, counts)
-        >>> split_coef = basis.split_feature_axis(model.coef_, axis=0)
+        >>> split_coef = basis.split_by_feature(model.coef_, axis=0)
         >>> for feature, coef in split_coef.items():
         ...     print(f"{feature}: shape {coef.shape}")
         feature_1: shape (5,)
@@ -1339,6 +1342,28 @@ class Basis(Base, abc.ABC):
         # Apply the slicing and return the result using the custom leaf function
         return jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
 
+    def _set_num_output_features(self, *xi: NDArray):
+        # this is reimplemented in AdditiveBasis and MultiplicativeBasis
+        # so we can assume that len(xi) == 1
+        shape = list(xi[0].shape)
+
+        # this could be non-zero only if mode conv
+        axis = self._conv_kwargs.get("axis", 0)
+
+        # remove time axis & get the total input number
+        n_inputs = (1, ) if xi[0].ndim == 1 else (np.prod(shape[:axis] + shape[axis + 1:]), )
+
+        if self._n_basis_input is not None and self._n_basis_input != n_inputs:
+            raise ValueError(f"Input dimensionality mismatch. "
+                             f"The basis {self.__class__.__name__} with label {self.label} was expecting "
+                             f"{self._n_basis_input[0]} inputs, {n_inputs[0]} provided. "
+                             "This happens when the basis is used to compute features multiple times, with"
+                             "input of different shapes. If you need to compute features over")
+
+        self._n_basis_input = n_inputs
+        self._num_output_features = self.n_basis_funcs * self._n_basis_input[0]
+        return self
+
 
 class AdditiveBasis(Basis):
     """
@@ -1365,14 +1390,23 @@ class AdditiveBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
-        self._num_output_features = (
-            basis1._num_output_features + basis2._num_output_features
-        )
+        self._n_basis_input = None # (*basis1._n_basis_input, *basis2._n_basis_input)
+        # self._num_output_features = (
+        #     basis1._num_output_features + basis2._num_output_features
+        # )
+        self._num_output_features = None
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
         return
+
+    def _set_num_output_features(self, *xi: NDArray) -> tuple:
+        self._n_basis_input = (
+            *self._basis1._set_num_output_features(*xi[: self._basis1._n_input_dimensionality])._n_basis_input,
+            *self._basis2._set_num_output_features(*xi[self._basis1._n_input_dimensionality: ])._n_basis_input,
+        )
+        self._num_output_features = self._basis1.num_output_features + self._basis2.num_output_features
+        return self
 
     def _check_n_basis_min(self) -> None:
         pass
@@ -1406,7 +1440,6 @@ class AdditiveBasis(Basis):
             X = self._apply_identifiability_constraints(X)
         return X
 
-    @check_transform_input
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute features for added bases and concatenate.
@@ -1484,10 +1517,11 @@ class MultiplicativeBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = (*basis1._n_basis_input, *basis2._n_basis_input)
-        self._num_output_features = (
-            basis1._num_output_features * basis2._num_output_features
-        )
+        self._n_basis_input = None  # (*basis1._n_basis_input, *basis2._n_basis_input)
+        # self._num_output_features = (
+        #     basis1._num_output_features * basis2._num_output_features
+        # )
+        self._num_output_features = None
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
@@ -1544,7 +1578,7 @@ class MultiplicativeBasis(Basis):
             X = self._apply_identifiability_constraints(X)
         return X
 
-    @check_transform_input
+
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Compute the features for the multiplied bases, and compute their outer product.
@@ -1571,6 +1605,13 @@ class MultiplicativeBasis(Basis):
             X = self._apply_identifiability_constraints(X)
         return X
 
+    def _set_num_output_features(self, *xi: NDArray) -> Basis:
+        self._n_basis_input = (
+            *self._basis1._set_num_output_features(*xi[: self._basis1._n_input_dimensionality])._n_basis_input,
+            *self._basis2._set_num_output_features(*xi[self._basis1._n_input_dimensionality: ])._n_basis_input,
+        )
+        self._num_output_features = self._basis1.num_output_features * self._basis2.num_output_features
+        return self
 
 class SplineBasis(Basis, abc.ABC):
     """
@@ -1615,7 +1656,6 @@ class SplineBasis(Basis, abc.ABC):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         self.order = order
@@ -1625,7 +1665,6 @@ class SplineBasis(Basis, abc.ABC):
             window_size=window_size,
             bounds=bounds,
             label=label,
-            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1796,7 +1835,6 @@ class MSplineBasis(SplineBasis):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -1806,7 +1844,6 @@ class MSplineBasis(SplineBasis):
             window_size=window_size,
             bounds=bounds,
             label=label,
-            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -1952,7 +1989,6 @@ class BSplineBasis(SplineBasis):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -1962,7 +1998,6 @@ class BSplineBasis(SplineBasis):
             window_size=window_size,
             bounds=bounds,
             label=label,
-            n_basis_input=n_basis_input,
             **kwargs,
         )
 
@@ -2075,7 +2110,6 @@ class CyclicBSplineBasis(SplineBasis):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -2085,7 +2119,6 @@ class CyclicBSplineBasis(SplineBasis):
             window_size=window_size,
             bounds=bounds,
             label=label,
-            n_basis_input=n_basis_input,
             **kwargs,
         )
         if self.order < 2:
@@ -2226,7 +2259,6 @@ class RaisedCosineBasisLinear(Basis):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -2235,7 +2267,6 @@ class RaisedCosineBasisLinear(Basis):
             window_size=window_size,
             bounds=bounds,
             label=label,
-            n_basis_input=n_basis_input,
             **kwargs,
         )
         self._n_input_dimensionality = 1
@@ -2430,7 +2461,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -2441,7 +2471,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
             bounds=bounds,
             **kwargs,
             label=label,
-            n_basis_input=n_basis_input,
         )
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
@@ -2584,7 +2613,6 @@ class OrthExponentialBasis(Basis):
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = None,
-        n_basis_input: Optional[int] = None,
         **kwargs,
     ):
         super().__init__(
@@ -2593,7 +2621,6 @@ class OrthExponentialBasis(Basis):
             window_size=window_size,
             bounds=bounds,
             label=label,
-            n_basis_input=n_basis_input,
             **kwargs,
         )
         self.decay_rates = decay_rates
