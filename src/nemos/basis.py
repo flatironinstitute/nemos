@@ -1293,12 +1293,10 @@ class Basis(Base, abc.ABC):
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = multi_input_basis.split_feature_axis(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
-        ...     print(f"{feature}: ")
         ...     for input_num, arr in sub_dict.items():
-        ...         print(f"    input number {int(input_num)}: shape {arr.shape}")
-        multi_input:
-            input number 0: shape (20, 6)
-            input number 1: shape (20, 6)
+        ...         print(f"{feature}, input number {int(input_num)}, shape {arr.shape}")
+        multi_input, input number 0, shape (20, 6)
+        multi_input, input number 1, shape (20, 6)
 
         >>> # the method can be used to decompose the glm coefficients in the various features
         >>> counts = np.random.poisson(size=20)
