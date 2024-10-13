@@ -12,11 +12,12 @@ to JAX arrays and, where applicable, converts outputs back to pynapple TSD objec
 from functools import wraps
 from typing import Any, Callable, List, Literal, Optional, Type, Union
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pynapple as nap
 from numpy.typing import NDArray
+
+import jax
+import jax.numpy as jnp
 
 from . import tree_utils
 

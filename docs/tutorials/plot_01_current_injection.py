@@ -48,12 +48,12 @@ Linear Model and how to fit it with NeMoS.
 
 
 
-# Import everything
-import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pynapple as nap
 
+# Import everything
+import jax
 import nemos as nmo
 
 # some helper plotting functions

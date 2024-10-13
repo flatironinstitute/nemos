@@ -2,8 +2,9 @@
 
 from typing import Any, Callable, NamedTuple, Tuple, Union
 
-import jax.numpy as jnp
 import jaxopt
+
+import jax.numpy as jnp
 from jax._src.typing import ArrayLike
 
 from .pytrees import FeaturePytree
