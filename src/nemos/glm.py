@@ -7,11 +7,12 @@ import warnings
 from functools import wraps
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
-import jax
-import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike
 from scipy.optimize import root
+
+import jax
+import jax.numpy as jnp
 
 from . import observation_models as obs
 from . import tree_utils, validation
@@ -663,7 +664,7 @@ class GLM(BaseRegressor):
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
         >>> model = model.fit(X, y)
-        
+
         # get model weights
         >>> model_weights = model.coef_
 
@@ -736,50 +737,50 @@ class GLM(BaseRegressor):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
-        Parameters
-        ----------
-        random_key :
-            jax.random.key for seeding the simulation.
-        feedforward_input :
-            External input matrix to the model, representing factors like convolved currents,
-            light intensities, etc. When not provided, the simulation is done with coupling-only.
-            Array of shape (n_time_bins, n_basis_input) or pytree of same.
+         Parameters
+         ----------
+         random_key :
+             jax.random.key for seeding the simulation.
+         feedforward_input :
+             External input matrix to the model, representing factors like convolved currents,
+             light intensities, etc. When not provided, the simulation is done with coupling-only.
+             Array of shape (n_time_bins, n_basis_input) or pytree of same.
 
-        Returns
-        -------
-        simulated_activity :
-            Simulated activity (spike counts for PoissonGLMs) for the neuron over time.
-            Shape: (n_time_bins, ).
-        firing_rates :
-            Simulated rates for the neuron over time. Shape, (n_time_bins, ).
+         Returns
+         -------
+         simulated_activity :
+             Simulated activity (spike counts for PoissonGLMs) for the neuron over time.
+             Shape: (n_time_bins, ).
+         firing_rates :
+             Simulated rates for the neuron over time. Shape, (n_time_bins, ).
 
-        Raises
-        ------
-        NotFittedError
-            If the model hasn't been fitted prior to calling this method.
-        ValueError
-            - If the instance has not been previously fitted.
+         Raises
+         ------
+         NotFittedError
+             If the model hasn't been fitted prior to calling this method.
+         ValueError
+             - If the instance has not been previously fitted.
 
-        Examples
-        --------
-        # example input
-        >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
+         Examples
+         --------
+         # example input
+         >>> import numpy as np
+         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+         >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 
-       # define and fit model
-        >>> import nemos as nmo
-        >>> model = nmo.glm.GLM()
-        >>> model = model.fit(X, y)
+        # define and fit model
+         >>> import nemos as nmo
+         >>> model = nmo.glm.GLM()
+         >>> model = model.fit(X, y)
 
-        # generate spikes and rates
-        >>> random_key = jax.random.key(123)
-        >>> spikes, rates = model.simulate(random_key, Xnew)
+         # generate spikes and rates
+         >>> random_key = jax.random.key(123)
+         >>> spikes, rates = model.simulate(random_key, Xnew)
 
-        See Also
-        --------
-        [predict](./#nemos.glm.GLM.predict) :
-        Method to predict rates based on the model's parameters.
+         See Also
+         --------
+         [predict](./#nemos.glm.GLM.predict) :
+         Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
         self._check_is_fit()

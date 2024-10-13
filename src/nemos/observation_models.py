@@ -3,9 +3,10 @@
 import abc
 from typing import Callable, Literal, Union
 
+from numpy.typing import NDArray
+
 import jax
 import jax.numpy as jnp
-from numpy.typing import NDArray
 
 from . import utils
 from .base_class import Base

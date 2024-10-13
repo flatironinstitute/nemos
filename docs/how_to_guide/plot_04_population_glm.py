@@ -22,10 +22,10 @@ NeMoS has a dedicated `nemos.GLM.PopulationGLM` class for fitting jointly a neur
 Let's generate some synthetic data and fit a population model.
 """
 
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
+import jax.numpy as jnp
 import nemos as nmo
 
 np.random.seed(123)

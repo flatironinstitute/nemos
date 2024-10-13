@@ -3,9 +3,10 @@
 import warnings
 from typing import Any, Optional, Union
 
+from numpy.typing import DTypeLike, NDArray
+
 import jax
 import jax.numpy as jnp
-from numpy.typing import DTypeLike, NDArray
 
 from .pytrees import FeaturePytree
 from .tree_utils import get_valid_multitree, pytree_map_and_reduce

@@ -9,10 +9,11 @@ import warnings
 from copy import deepcopy
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
-import jax
-import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike, NDArray
+
+import jax
+import jax.numpy as jnp
 
 from . import solvers, utils, validation
 from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer

@@ -25,12 +25,12 @@ Before digging into the GLM module, let's first import the packages
 
 """
 
-import jax
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
 from sklearn import model_selection
 
+import jax
 import nemos as nmo
 
 np.random.seed(111)

@@ -12,10 +12,10 @@ separate examine separate types of inputs.
 First, however, let's briefly discuss FeaturePytrees.
 
 """
-import jax
-import jax.numpy as jnp
 import numpy as np
 
+import jax
+import jax.numpy as jnp
 import nemos as nmo
 
 np.random.seed(111)

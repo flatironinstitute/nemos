@@ -3,10 +3,11 @@
 import warnings
 from typing import Any, Callable, List, Literal, Union
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
+
+import jax
+import jax.numpy as jnp
 
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
