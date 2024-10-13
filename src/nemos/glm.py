@@ -106,16 +106,23 @@ class GLM(BaseRegressor):
 
     Examples
     --------
-    >>> from nemos.glm import GLM    
+    >>> import nemos as nmo
+
     # define simple GLM model
     >>> model = nmo.glm.GLM()
-    >>> print("Regularization type: ", type(model.regularizer))
+    >>> print("Regularizer type: ", type(model.regularizer))
+    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
+    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
+
 
     # define GLM model of PoissonObservations model with soft-plus NL
     >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
-    >>> model = nmo.glm.GLM(observation_model=observation_models,   \
-    ...                        solver_name="LBFGS")
+    >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
+    >>> print("Regularizer type: ", type(model.regularizer))
+    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
+    >>> print("Observation model: ", type(model.observation_model))
+    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
     """
 
     def __init__(
@@ -321,12 +328,18 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        # define and fit a GLM 
-        >>> model = nmo.glm.GLM()
-        >>> model.fit(X_train, y)
+        # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 
-        # predict spike data
-        >>> model.predict(X_test)
+        # define and fit a GLM
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+
+        # predict new spike data
+        >>> predicted_spikes = model.predict(Xnew)
 
         See Also
         --------
@@ -430,12 +443,17 @@ class GLM(BaseRegressor):
 
         Examples
         --------
+        # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+
+        >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
-        >>> model.fit(X, y)
+        >>> model = model.fit(X, y)
 
         # get model score
-        >>> print(f"GLM log-likelihood: {model.score(X, y)}")
-        >>> print(f"GLM  pseudo-r2-McFadden: {model.score(X, y, score_type='pseudo-r2-McFadden')}")
+        >>> log_likelihood_score = model.score(X, y)
+        >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
         Notes
         -----
@@ -637,14 +655,17 @@ class GLM(BaseRegressor):
 
         Examples
         -------
+        # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
 
         # fit a ridge regression Poisson GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
-        >>> model.fit(X, y)
-
-        >>> print("Ridge results")
-        >>> print("Recovered weights: ", model.coef_)
+        >>> model = model.fit(X, y)
+        
+        # get model weights
+        >>> model_weights = model.coef_
 
         """
         # validate the inputs & initialize solver
@@ -741,9 +762,19 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        # generate spikes and rates given X
+        # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
+
+       # define and fit model
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+
+        # generate spikes and rates
         >>> random_key = jax.random.key(123)
-        >>> spikes, rates = model.simulate(random_key, X)
+        >>> spikes, rates = model.simulate(random_key, Xnew)
 
         See Also
         --------
