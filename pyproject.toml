@@ -45,6 +45,7 @@ dev = [
     "isort",                        # Import sorter
     "pip-tools",                    # Dependency management
     "pytest",                       # Testing framework
+    "pytest-xdist",                 # Parallelize pytest
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
@@ -112,6 +113,7 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
+addopts = "-n auto"
 
 [tool.coverage.run]
 omit = [
