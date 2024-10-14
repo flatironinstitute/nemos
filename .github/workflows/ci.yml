@@ -18,7 +18,7 @@ on:
        - main
 
 jobs:
-  tests:
+  tox_tests:
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
@@ -48,7 +48,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  check:
+  tox_check:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
@@ -84,9 +84,9 @@ jobs:
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs:
-      - tests
+      - tox_tests
       - prevent_docs_absolute_links
-      - check
+      - tox_check
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
