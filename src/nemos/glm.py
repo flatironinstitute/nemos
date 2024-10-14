@@ -21,6 +21,7 @@ from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
+from .initialize_regressor import initialize_intercept_matching_mean_rate
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -534,21 +535,7 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        # find numerically zeros of the link
-        def func(x):
-            return self.observation_model.inverse_link_function(x) - y.mean(
-                axis=0, keepdims=False
-            )
-
-        # scipy root finding, much more stable than gradient descent
-        func_root = root(func, y.mean(axis=0, keepdims=False), method="hybr")
-        if not jnp.allclose(func_root.fun, 0, atol=10**-4):
-            raise ValueError(
-                "Could not set the initial intercept as the inverse of the firing rate for "
-                "the provided link function. "
-                "Please, provide initial parameters instead!"
-            )
-        initial_intercept = jnp.atleast_1d(func_root.x)
+        initial_intercept= initialize_intercept_matching_mean_rate(self.observation_model.inverse_link_function, y)
 
         # Initialize parameters
         init_params = (
