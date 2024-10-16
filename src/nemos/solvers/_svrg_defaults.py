@@ -180,7 +180,7 @@ def glm_softplus_poisson_l_max_and_l(
 
 
 def _glm_softplus_poisson_l_smooth_multiply(
-    X: jnp.ndarray, y: jnp.ndarray, v: jnp.ndarray
+    X: jnp.ndarray, y: jnp.ndarray, v: jnp.ndarray, batch_size: int
 ):
     """
     Multiply vector `v` with the matrix X.T @ D @ X without forming it explicitly.
@@ -202,12 +202,17 @@ def _glm_softplus_poisson_l_smooth_multiply(
     :
         Result of the multiplication (X.T @ D @ X) @ v.
     """
-    N, _ = X.shape
-    return X.T.dot((0.17 * y + 0.25) * X.dot(v)) / N
+    N, K = X.shape
+    out = jnp.zeros((K,))
+    for i in range(0, N, batch_size):
+        xb, yb = X[i:i + batch_size], y[i:i + batch_size]
+        out = out + xb.T.dot((0.17 * yb + 0.25) * xb.dot(v))
+    out = out / N
+    return out
 
 
 def _glm_softplus_poisson_l_smooth_with_power_iteration(
-    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: int = 20
+    X: jnp.ndarray, y: jnp.ndarray, n_power_iters: int = 20, batch_size: Optional[int] = None
 ):
     """
     Compute the largest eigenvalue of X.T @ D @ X using the power method.
@@ -224,12 +229,18 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
         Output data vector (N,).
     n_power_iters :
         Maximum number of power iterations to use.
+    batch_size :
+        The batch size, if user provides one.
 
     Returns
     -------
     :
         The largest eigenvalue of X.T @ D @ X.
     """
+
+    if batch_size is None:
+        batch_size = X.shape[0]
+
     _, d = X.shape
 
     # Initialize a random d-dimensional vector for power iteration
@@ -238,7 +249,7 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
     # Run power iteration to approximate the largest eigenvalue
     for _ in range(n_power_iters):
         v_prev = v.copy()
-        v = _glm_softplus_poisson_l_smooth_multiply(X, y, v)
+        v = _glm_softplus_poisson_l_smooth_multiply(X, y, v, batch_size)
         v /= v.max()
 
         # Check for convergence

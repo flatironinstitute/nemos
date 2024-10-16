@@ -39,11 +39,12 @@ def test_svrg_optimal_batch_and_stepsize(x_sample, y_sample):
     assert isinstance(result["stepsize"], float)
 
 
-def test_softplus_poisson_l_smooth_multiply(x_sample, y_sample):
+@pytest.mark.parametrize("batch_size", [1, 2, 3])
+def test_softplus_poisson_l_smooth_multiply(x_sample, y_sample, batch_size):
     """Test multiplication with X.T @ D @ X without forming the matrix."""
     v_sample = jnp.array([0.5, 1.0])
     result = _svrg_defaults._glm_softplus_poisson_l_smooth_multiply(
-        x_sample, y_sample, v_sample
+        x_sample, y_sample, v_sample, batch_size
     )
     diag_mat = jnp.diag(y_sample * 0.17 + 0.25)
     expected_result = (
