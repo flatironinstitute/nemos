@@ -56,7 +56,7 @@ def test_softplus_poisson_l_smooth_multiply(x_sample, y_sample, batch_size):
 def test_softplus_poisson_l_smooth_with_power_iteration(x_sample, y_sample):
     """Test the power iteration method for finding the largest eigenvalue."""
     result = _svrg_defaults._glm_softplus_poisson_l_smooth_with_power_iteration(
-        x_sample, y_sample, n_power_iters=20
+        x_sample, y_sample, n_power_iters=20, batch_size=x_sample.shape[0]
     )
     # compute eigvals directly
     diag_mat = jnp.diag(y_sample * 0.17 + 0.25)

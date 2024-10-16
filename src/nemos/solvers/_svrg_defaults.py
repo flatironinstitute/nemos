@@ -97,8 +97,8 @@ def svrg_optimal_batch_and_stepsize(
     >>> batch_size, stepsize = compute_opt_params(glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08)
     """
 
-    # Ensure data is converted to JAX arrays
-    data = jax.tree_util.tree_map(jnp.asarray, data)
+    # # Ensure data is converted to JAX arrays
+    # data = jax.tree_util.tree_map(jnp.asarray, data)
 
     # Get the number of samples, ensuring consistency across all inputs
     num_samples = {dd.shape[0] for dd in jax.tree_util.tree_leaves(data)}
@@ -260,7 +260,7 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
 
     # Final eigenvalue calculation
     v /= jnp.linalg.norm(v)
-    return _glm_softplus_poisson_l_smooth_multiply(X, y, v).dot(v)
+    return _glm_softplus_poisson_l_smooth_multiply(X, y, v, batch_size).dot(v)
 
 
 def _glm_softplus_poisson_l_smooth(
