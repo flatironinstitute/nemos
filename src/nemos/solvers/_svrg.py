@@ -9,8 +9,8 @@ from jaxopt import OptStep
 from jaxopt._src import loop
 from jaxopt.prox import prox_none
 
-from .tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
-from .typing import KeyArrayLike, Pytree
+from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
+from ..typing import KeyArrayLike, Pytree
 
 
 class SVRGState(NamedTuple):
@@ -207,7 +207,7 @@ class ProxSVRG:
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
         minibatch_grad_at_current_params = self.loss_gradient(params, *args)
         # gradient on batch_{i_k} evaluated at the anchor point
-        # gradient of f_{i_k} at x_{x} in the pseudocode of Gower et al. 2020
+        # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
         minibatch_grad_at_reference_point = self.loss_gradient(reference_point, *args)
 
         # SVRG gradient estimate
@@ -595,9 +595,10 @@ class ProxSVRG:
 
 class SVRG(ProxSVRG):
     """
-    SVRG solver
+    SVRG solver.
 
-    Equivalent to ProxSVRG with prox as the identity function and hyperparams_prox=None.
+    This solver implements "Algorithm 3" of [1]. Equivalent to ProxSVRG with prox as the identity
+    function and hyperparams_prox=None.
 
     Attributes
     ----------
