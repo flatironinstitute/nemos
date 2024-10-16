@@ -315,6 +315,8 @@ def _glm_softplus_poisson_l_smooth_max(X: NDArray, y: NDArray, batch_size: int) 
         Input data matrix (N x d).
     y :
         Output data vector (N,).
+    batch_size:
+        The batch size.
 
     Returns
     -------
