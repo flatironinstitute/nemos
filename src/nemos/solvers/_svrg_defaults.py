@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
+from .. import pytrees
+
 
 def _convert_to_float(func):
     """
@@ -94,12 +96,8 @@ def svrg_optimal_batch_and_stepsize(
     >>> np.random.seed(123)
     >>> X = np.random.normal(size=(500, 5))
     >>> y = np.random.poisson(np.exp(X.dot(np.ones(X.shape[1]))))
-    >>> batch_size, stepsize = compute_opt_params(glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08)
+    >>> batch_size, stepsize = compute_opt_params(glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08, batch_size=1)
     """
-
-    # # Ensure data is converted to JAX arrays
-    # data = jax.tree_util.tree_map(jnp.asarray, data)
-
     # Get the number of samples, ensuring consistency across all inputs
     num_samples = {dd.shape[0] for dd in jax.tree_util.tree_leaves(data)}
     if len(num_samples) != 1:
@@ -112,7 +110,7 @@ def svrg_optimal_batch_and_stepsize(
 
     # Compute smoothness constants
     l_smooth_max, l_smooth = compute_smoothness_constants(
-        *data, n_power_iters=n_power_iters
+        *data, n_power_iters=n_power_iters, batch_size=batch_size
     )
 
     # Compute optimal batch size if not provided by the user
@@ -146,7 +144,7 @@ def svrg_optimal_batch_and_stepsize(
 
 
 def glm_softplus_poisson_l_max_and_l(
-    *data: NDArray, n_power_iters: Optional[int] = 20
+    *data: NDArray, n_power_iters: Optional[int] = 20, batch_size: Optional[int] = None
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """
     Calculate smoothness constants for a Poisson GLM with a softplus inverse link function.
@@ -161,6 +159,8 @@ def glm_softplus_poisson_l_max_and_l(
     n_power_iters :
         Number of power iterations to use when finding the largest eigenvalue. If None,
         the eigenvalue is calculated directly.
+    batch_size:
+        The batch size set by the user. If None, it will be n_samples.
 
     Returns
     -------
@@ -169,14 +169,18 @@ def glm_softplus_poisson_l_max_and_l(
     """
     X, y = data
 
+    if batch_size is None:
+        batch_size = y.shape[0]
+
     # takes care of population glm (see bound found on overleaf)
     y = jnp.max(y, axis=tuple(range(1, y.ndim)))
 
     # concatenate all data (if X is FeaturePytree)
-    X = jnp.hstack(jax.tree_util.tree_leaves(X))
+    if isinstance(X, (pytrees.FeaturePytree, dict)):
+        X = jnp.hstack(jax.tree_util.tree_leaves(X))
 
-    l_smooth = _glm_softplus_poisson_l_smooth(X, y, n_power_iters)
-    l_smooth_max = _glm_softplus_poisson_l_smooth_max(X, y)
+    l_smooth = _glm_softplus_poisson_l_smooth(X, y, n_power_iters=n_power_iters, batch_size=batch_size)
+    l_smooth_max = _glm_softplus_poisson_l_smooth_max(X, y, batch_size=batch_size)
     return l_smooth_max, l_smooth
 
 
@@ -264,7 +268,7 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
 
 
 def _glm_softplus_poisson_l_smooth(
-    X: NDArray, y: NDArray, n_power_iters: Optional[int] = None
+    X: NDArray, y: NDArray, batch_size: int, n_power_iters: Optional[int] = None
 ) -> jnp.ndarray:
     """
     Calculate the smoothness constant `L` for a Poisson GLM with softplus inverse link.
@@ -278,6 +282,8 @@ def _glm_softplus_poisson_l_smooth(
         Input data matrix (N x d).
     y :
         Output data vector (N,).
+    batch_size :
+        The batch size, if user provides one.
     n_power_iters :
         Number of power iterations to use when finding the largest eigenvalue. If None,
         the eigenvalue is calculated directly.
@@ -293,10 +299,10 @@ def _glm_softplus_poisson_l_smooth(
         return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
     else:
         # Use power iteration to find the largest eigenvalue
-        return _glm_softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters)
+        return _glm_softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters, batch_size=batch_size)
 
 
-def _glm_softplus_poisson_l_smooth_max(X: NDArray, y: NDArray) -> NDArray:
+def _glm_softplus_poisson_l_smooth_max(X: NDArray, y: NDArray, batch_size: int) -> NDArray:
     """
     Calculate the maximum smoothness constant `L_max` for individual observations.
 
@@ -317,12 +323,10 @@ def _glm_softplus_poisson_l_smooth_max(X: NDArray, y: NDArray) -> NDArray:
     """
     N, _ = X.shape
 
-    def body_fun(i, current_max):
-        return jnp.maximum(
-            current_max, jnp.linalg.norm(X[i, :]) ** 2 * (0.17 * y[i] + 0.25)
-        )
-
-    l_max = jax.lax.fori_loop(0, N, body_fun, jnp.array([-jnp.inf]))
+    l_max = jnp.array([0])
+    for nb in range(0, N, batch_size):
+        xb, yb = X[nb:nb + batch_size], y[nb:nb + batch_size]
+        l_max = jnp.maximum(l_max, jnp.max(jnp.linalg.norm(xb, axis=1) ** 2 * (0.17 * yb + 0.25)))
 
     return l_max[0]
 

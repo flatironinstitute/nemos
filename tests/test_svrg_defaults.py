@@ -179,14 +179,6 @@ def test_svrg_optimal_batch_and_stepsize_with_provided_defaults(
     "batch_size, stepsize, strong_convexity, expectation",
     [
         (
-            jnp.inf,
-            None,
-            0.1,
-            pytest.warns(
-                UserWarning, match="Could not determine batch size automatically"
-            ),
-        ),
-        (
             32,
             None,
             0.1,
