@@ -73,7 +73,7 @@ class TestGLM:
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            glm_class(regularizer=regularizer, solver_name=solver_name)
+            glm_class(regularizer=regularizer, solver_name=solver_name, regularizer_strength=1)
 
     @pytest.mark.parametrize(
         "observation, expectation",
@@ -166,7 +166,7 @@ class TestGLM:
         assert list(model.get_params().values()) == expected_values
 
         # changing regularizer
-        model.regularizer = "Ridge"
+        model.set_params(regularizer="Ridge", regularizer_strength=1.)
 
         expected_values = [
             model.observation_model.inverse_link_function,
@@ -491,6 +491,7 @@ class TestGLM:
         """Test that the group lasso fit goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
+            regularizer_strength=1.,
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
@@ -1176,6 +1177,7 @@ class TestGLM:
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
+            regularizer_strength=1.,
         )
         params = model.initialize_params(X, y)
         model.initialize_state(X, y, params)
@@ -1481,10 +1483,11 @@ class TestGLM:
             n_features = sum(x.shape[1] for x in jax.tree.leaves(X))
             regularizer_kwargs["mask"] = (np.random.randn(n_features) > 0).reshape(1, -1).astype(float)
 
+        reg = regularizer_class(**regularizer_kwargs)
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.
         glm = glm_class(
-            regularizer=regularizer_class(
-                **regularizer_kwargs,
-            ),
+            regularizer=reg,
+            regularizer_strength=strength,
             solver_name=solver_name,
             solver_kwargs={
                 "batch_size": batch_size,
@@ -1495,9 +1498,7 @@ class TestGLM:
             },
         )
         glm2 = glm_class(
-            regularizer=regularizer_class(
-                **regularizer_kwargs,
-            ),
+            regularizer=reg,
             solver_name=solver_name,
             solver_kwargs={
                 "batch_size": batch_size,
@@ -1506,6 +1507,7 @@ class TestGLM:
                 "maxiter": maxiter,
                 "key": key,
             },
+            regularizer_strength=strength,
         )
         glm2.fit(X, y)
 
@@ -1623,7 +1625,8 @@ class TestGLM:
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        model.regularizer = reg
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.
+        model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
@@ -1642,15 +1645,68 @@ class TestGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "UnRegularized"
+        model.set_params(regularizer = "UnRegularized", regularizer_strength=None)
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "UnRegularized"
-        assert model.regularizer_strength is None
+        with pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM"):
+            model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        with pytest.warns(UserWarning, match="Caution: regularizer strength has not been set"):
+            model.regularizer = "Ridge"
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer
+            ({"regularizer": "Ridge"},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+            ({"regularizer": "Lasso"},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+            ({"regularizer": "GroupLasso"},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+            ({"regularizer": "UnRegularized"}, does_not_raise()),
+            # set both None or number
+            ({"regularizer": "Ridge", "regularizer_strength": None},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+            ({"regularizer": "Ridge", "regularizer_strength": 1.}, does_not_raise()),
+            ({"regularizer": "Lasso", "regularizer_strength": None},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+            ({"regularizer": "Lasso", "regularizer_strength": 1.}, does_not_raise()),
+            ({"regularizer": "GroupLasso", "regularizer_strength": None},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+            ({"regularizer": "GroupLasso", "regularizer_strength": 1.}, does_not_raise()),
+            ({"regularizer": "UnRegularized", "regularizer_strength": None}, does_not_raise()),
+            ({"regularizer": "UnRegularized", "regularizer_strength": 1.},
+             pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM")),
+            # set regularizer str only
+            ({"regularizer_strength": 1.},
+             pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM")),
+            ({"regularizer_strength": None}, does_not_raise()),
+        ]
+    )
+    def test_reg_set_params(self, params, warns):
+        model = nmo.glm.GLM()
+        with warns:
+            model.set_params(**params)
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            ({"regularizer_strength": 1.}, does_not_raise()),
+            ({"regularizer_strength": None},
+             pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ]
+    )
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_set_params_reg_str_only(self, params, warns, reg):
+        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1)
+        with warns:
+            model.set_params(**params)
 
 
 class TestPopulationGLM:
@@ -1684,7 +1740,7 @@ class TestPopulationGLM:
         Test that an error is raised if a non-compatible solver is passed.
         """
         with expectation:
-            population_glm_class(regularizer=regularizer)
+            population_glm_class(regularizer=regularizer, regularizer_strength=1.)
 
     def test_get_params(self):
         """
@@ -1732,7 +1788,7 @@ class TestPopulationGLM:
         assert list(model.get_params().values()) == expected_values
 
         # changing regularizer
-        model.regularizer = "Ridge"
+        model.set_params(regularizer="Ridge", regularizer_strength=1.)
 
         expected_values = [
             model.feature_mask,
@@ -1792,7 +1848,7 @@ class TestPopulationGLM:
         """
         with expectation:
             population_glm_class(
-                regularizer=ridge_regularizer, observation_model=observation
+                regularizer=ridge_regularizer, observation_model=observation, regularizer_strength=1.
             )
 
     @pytest.mark.parametrize(
@@ -1857,7 +1913,8 @@ class TestPopulationGLM:
         Test that the dof is an integer.
         """
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
-        model.regularizer = reg
+        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.
+        model.set_params(regularizer=reg, regularizer_strength=strength)
         model.solver_name = model.regularizer.default_solver
         model.fit(X, y)
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
@@ -2123,6 +2180,7 @@ class TestPopulationGLM:
         model.set_params(
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
+            regularizer_strength=1.,
         )
         model.fit(X, y)
 
@@ -2527,6 +2585,7 @@ class TestPopulationGLM:
         """Test that the group lasso initialize_solver goes through"""
         X, y, model, params, rate, mask = group_sparse_poisson_glm_model_instantiation
         model.set_params(
+            regularizer_strength=1.,
             regularizer=nmo.regularizer.GroupLasso(mask=mask),
             solver_name="ProximalGradient",
         )
@@ -3210,13 +3269,13 @@ class TestPopulationGLM:
         [
             (
                 nmo.regularizer.UnRegularized(),
-                0.001,
+                None,
                 "LBFGS",
                 {"stepsize": 0.1, "tol": 10**-14},
             ),
             (
                 nmo.regularizer.UnRegularized(),
-                1.0,
+                None,
                 "GradientDescent",
                 {"tol": 10**-14},
             ),
@@ -3262,7 +3321,7 @@ class TestPopulationGLM:
     ):
         jax.config.update("jax_enable_x64", True)
         if isinstance(mask, dict):
-            X, y, model, true_params, firing_rate = poisson_population_GLM_model_pytree
+            X, y, _, true_params, firing_rate = poisson_population_GLM_model_pytree
 
             def map_neu(k, coef_):
                 key_ind = {"input_1": [0, 1, 2], "input_2": [3, 4]}
@@ -3275,7 +3334,7 @@ class TestPopulationGLM:
                 return ind_array, coef_stack
 
         else:
-            X, y, model, true_params, firing_rate = poisson_population_GLM_model
+            X, y, _, true_params, firing_rate = poisson_population_GLM_model
 
             def map_neu(k, coef_):
                 ind_array = np.where(mask[:, k])[0]
@@ -3284,11 +3343,14 @@ class TestPopulationGLM:
 
         mask_bool = jax.tree_util.tree_map(lambda x: np.asarray(x.T, dtype=bool), mask)
         # fit pop glm
-        model.feature_mask = mask
-        model.regularizer = regularizer
-        model.regularizer_strength = regularizer_strength
-        model.solver_name = solver_name
-        model.solver_kwargs = solver_kwargs
+        kwargs = dict(
+            feature_mask=mask,
+            regularizer=regularizer,
+            regularizer_strength=regularizer_strength,
+            solver_name=solver_name,
+            solver_kwargs=solver_kwargs,
+        )
+        model = nmo.glm.PopulationGLM(**kwargs)
         model.fit(X, y)
         coef_vectorized = np.vstack(jax.tree_util.tree_leaves(model.coef_))
 
@@ -3331,12 +3393,56 @@ class TestPopulationGLM:
             model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
 
         # reset to unregularized
-        model.regularizer = "UnRegularized"
+        model.set_params(regularizer="UnRegularized", regularizer_strength=None)
         with pytest.warns(UserWarning):
             nmo.glm.GLM(regularizer=reg)
 
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_reg_strength_reset(self, reg):
-        model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1.0)
-        model.regularizer = "UnRegularized"
-        assert model.regularizer_strength is None
+        model = nmo.glm.PopulationGLM(regularizer=reg, regularizer_strength=1.0)
+        with pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM"):
+            model.regularizer = "UnRegularized"
+        model.regularizer_strength = None
+        with pytest.warns(UserWarning, match="Caution: regularizer strength has not been set"):
+            model.regularizer = "Ridge"
+
+    @pytest.mark.parametrize(
+        "params, warns",
+    [
+        # set regularizer
+        ({"regularizer": "Ridge"},  pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ({"regularizer": "Lasso"}, pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ({"regularizer": "GroupLasso"}, pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ({"regularizer": "UnRegularized"}, does_not_raise()),
+        # set both None or number
+        ({"regularizer": "Ridge", "regularizer_strength": None}, pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ({"regularizer": "Ridge", "regularizer_strength": 1.}, does_not_raise()),
+        ({"regularizer": "Lasso", "regularizer_strength": None}, pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ({"regularizer": "Lasso", "regularizer_strength": 1.}, does_not_raise()),
+        ({"regularizer": "GroupLasso", "regularizer_strength": None}, pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ({"regularizer": "GroupLasso", "regularizer_strength": 1.}, does_not_raise()),
+        ({"regularizer": "UnRegularized", "regularizer_strength": None}, does_not_raise()),
+        ({"regularizer": "UnRegularized", "regularizer_strength": 1.}, pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM")),
+        # set regularizer str only
+        ({"regularizer_strength": 1.}, pytest.warns(UserWarning, match="Unused parameter `regularizer_strength` for UnRegularized GLM")),
+        ({"regularizer_strength": None},does_not_raise()),
+    ]
+    )
+    def test_reg_set_params(self, params, warns):
+        model = nmo.glm.PopulationGLM()
+        with warns:
+            model.set_params(**params)
+
+    @pytest.mark.parametrize(
+        "params, warns",
+        [
+            # set regularizer str only
+            ({"regularizer_strength": 1.}, does_not_raise()),
+            ({"regularizer_strength": None},pytest.warns(UserWarning, match="Caution: regularizer strength has not been set")),
+        ]
+    )
+    @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
+    def test_reg_set_params_reg_str_only(self, params, warns, reg):
+        model = nmo.glm.PopulationGLM(regularizer=reg, regularizer_strength=1)
+        with warns:
+            model.set_params(**params)

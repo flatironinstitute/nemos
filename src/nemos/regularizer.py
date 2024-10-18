@@ -355,7 +355,7 @@ class GroupLasso(Regularizer):
     >>> # Create the GroupLasso regularizer instance
     >>> group_lasso = GroupLasso(mask=mask)
     >>> # fit a group-lasso glm
-    >>> model = GLM(regularizer=group_lasso).fit(X, y)
+    >>> model = GLM(regularizer=group_lasso, regularizer_strength=0.1).fit(X, y)
     >>> print(f"coeff shape: {model.coef_.shape}")
     coeff shape: (5,)
     """

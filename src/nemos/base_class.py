@@ -25,7 +25,7 @@ class Base:
     Additionally, it has methods for selecting target devices and sending arrays to them.
     """
 
-    def get_params(self, deep=True):
+    def get_params(self, deep=True) -> dict:
         """
         From scikit-learn, get parameters by inspecting init.
 

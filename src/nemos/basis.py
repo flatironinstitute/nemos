@@ -357,7 +357,7 @@ class TransformerBasis:
         return cloned_obj
 
     def set_params(self, **parameters) -> TransformerBasis:
-        r"""
+        """
         Set TransformerBasis parameters.
 
         When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
@@ -497,36 +497,39 @@ class Basis(Base, abc.ABC):
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
-        self._check_n_basis_min()
         self._conv_kwargs = kwargs
-        self.bounds = bounds
 
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(
                 f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!"
             )
-        if mode == "conv":
-            if window_size is None:
-                raise ValueError(
-                    "If the basis is in `conv` mode, you must provide a window_size!"
-                )
-            elif not (isinstance(window_size, int) and window_size > 0):
-                raise ValueError(
-                    f"`window_size` must be a positive integer. {window_size} provided instead!"
-                )
-            if bounds is not None:
-                raise ValueError("`bounds` should only be set when `mode=='eval'`.")
-        else:
-            if kwargs:
-                raise ValueError(
-                    f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
-                )
 
-        self._window_size = window_size
         self._mode = mode
+        self.window_size = window_size
+        self.bounds = bounds
+
+        if mode == "eval" and kwargs:
+            raise ValueError(
+                f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
+            )
+
         self.kernel_ = None
         self._identifiability_constraints = False
+
+    @property
+    def n_basis_funcs(self):
+        return self._n_basis_funcs
+
+    @n_basis_funcs.setter
+    def n_basis_funcs(self, value):
+        orig_n_basis = copy.deepcopy(getattr(self, "_n_basis_funcs", None))
+        self._n_basis_funcs = value
+        try:
+            self._check_n_basis_min()
+        except ValueError as e:
+            self._n_basis_funcs = orig_n_basis
+            raise e
 
     @property
     def bounds(self):
@@ -535,15 +538,25 @@ class Basis(Base, abc.ABC):
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
         """Setter for bounds."""
+
+        if values is not None and self.mode == "conv":
+            raise ValueError("`bounds` should only be set when `mode=='eval'`.")
+
         if values is not None and len(values) != 2:
             raise ValueError(
                 f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
             )
+
         # convert to float and store
         try:
             self._bounds = values if values is None else tuple(map(float, values))
         except (ValueError, TypeError):
             raise TypeError("Could not convert `bounds` to float.")
+
+        if values is not None and values[1] <= values[0]:
+            raise ValueError(
+                f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
+            )
 
     @property
     def mode(self):
@@ -552,6 +565,28 @@ class Basis(Base, abc.ABC):
     @property
     def window_size(self):
         return self._window_size
+
+    @window_size.setter
+    def window_size(self, window_size):
+        """Setter for the window size parameter."""
+        if self.mode == "eval":
+            if window_size:
+                raise ValueError(
+                    "If basis is in `mode=='eval'`, `window_size` should be None."
+                )
+
+        else:
+            if window_size is None:
+                raise ValueError(
+                    "If the basis is in `conv` mode, you must provide a window_size!"
+                )
+
+            elif not (isinstance(window_size, int) and window_size > 0):
+                raise ValueError(
+                    f"`window_size` must be a positive integer. {window_size} provided instead!"
+                )
+
+        self._window_size = window_size
 
     @property
     def identifiability_constraints(self):
@@ -1016,7 +1051,7 @@ class Basis(Base, abc.ABC):
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
         >>> basis = nmo.basis.RaisedCosineBasisLinear(10).to_transformer()
-        >>> glm = nmo.glm.GLM(regularizer="Ridge")
+        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
         ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
@@ -1296,9 +1331,33 @@ class SplineBasis(Basis, abc.ABC):
             bounds=bounds,
             **kwargs,
         )
+
         self._n_input_dimensionality = 1
-        if self.order < 1:
+
+    @property
+    def order(self):
+        return self._order
+
+    @order.setter
+    def order(self, value):
+        """Setter for the order parameter."""
+
+        if value < 1:
             raise ValueError("Spline order must be positive!")
+
+        # Set to None only the first time the setter is called.
+        orig_order = copy.deepcopy(getattr(self, "_order", None))
+
+        # Set the order
+        self._order = value
+
+        # If the order was already initialized, re-check basis
+        if orig_order is not None:
+            try:
+                self._check_n_basis_min()
+            except ValueError as e:
+                self._order = orig_order
+                raise e
 
     def _generate_knots(
         self,
@@ -2041,18 +2100,22 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         # The samples are scaled appropriately in the self._transform_samples which scales
         # and applies the log-stretch, no additional transform is needed.
         self._rescale_samples = False
-
-        self.enforce_decay_to_zero = enforce_decay_to_zero
         if time_scaling is None:
-            self._time_scaling = 50.0
-        else:
-            self._check_time_scaling(time_scaling)
-            self._time_scaling = time_scaling
+            time_scaling = 50.0
+
+        self.time_scaling = time_scaling
+        self.enforce_decay_to_zero = enforce_decay_to_zero
 
     @property
     def time_scaling(self):
         """Getter property for time_scaling."""
         return self._time_scaling
+
+    @time_scaling.setter
+    def time_scaling(self, time_scaling):
+        """Setter property for time_scaling."""
+        self._check_time_scaling(time_scaling)
+        self._time_scaling = time_scaling
 
     @staticmethod
     def _check_time_scaling(time_scaling: float) -> None:
