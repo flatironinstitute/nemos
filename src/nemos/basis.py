@@ -204,6 +204,19 @@ class TransformerBasis:
         -------
         self :
             The transformer object.
+
+        Examples
+        --------
+        # Example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
+
+        # Define and fit tranformation basis
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer = TransformerBasis(basis)
+        >>> transformer = transformer.fit(X)
+
         """
         self._basis._set_kernel(*self._unpack_inputs(X))
         return self
