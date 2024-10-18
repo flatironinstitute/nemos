@@ -10,12 +10,12 @@ The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https:
 
 """
 
+import jax
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pynapple as nap
 from sklearn.linear_model import LinearRegression
 
-import jax
-import jax.numpy as jnp
 import nemos as nmo
 
 # %%

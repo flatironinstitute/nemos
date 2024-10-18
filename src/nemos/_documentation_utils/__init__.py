@@ -19,5 +19,5 @@ from .plotting import (
     plot_rates_and_smoothed_counts,
     plot_weighted_sum_basis,
     run_animation,
-    tuning_curve_plot
+    tuning_curve_plot,
 )
