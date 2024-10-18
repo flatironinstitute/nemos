@@ -18,7 +18,7 @@ on:
        - main
 
 jobs:
-  tox:
+  tox_tests:
     if: ${{ !github.event.pull_request.draft }}
     strategy:
       matrix:
@@ -38,7 +38,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .
           pip install tox
 
       - name: Run tox
@@ -48,6 +47,27 @@ jobs:
         uses: codecov/codecov-action@v4.0.1
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  tox_check:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4 # Use v4 for compatibility with pyproject.toml
+        with:
+          python-version: 3.12
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+
+      - name: Run tox
+        run: tox -e check
 
   prevent_docs_absolute_links:
     runs-on: ubuntu-latest
@@ -63,7 +83,10 @@ jobs:
 
   check:
     if: ${{ !github.event.pull_request.draft }}
-    needs: tox
+    needs:
+      - tox_tests
+      - prevent_docs_absolute_links
+      - tox_check
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
