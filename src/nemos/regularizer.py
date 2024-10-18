@@ -9,11 +9,10 @@ with various optimization methods, and they can be applied depending on the mode
 import abc
 from typing import Callable, Tuple, Union
 
-import jaxopt
-from numpy.typing import NDArray
-
 import jax
 import jax.numpy as jnp
+import jaxopt
+from numpy.typing import NDArray
 
 from . import tree_utils
 from .base_class import Base

@@ -2,12 +2,11 @@
 
 from typing import Callable, Tuple, Union
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import scipy.stats as sts
 from numpy.typing import NDArray
-
-import jax
-import jax.numpy as jnp
 
 from . import convolve, validation
 from .pytrees import FeaturePytree

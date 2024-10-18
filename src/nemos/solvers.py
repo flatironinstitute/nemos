@@ -1,14 +1,13 @@
 from functools import partial
 from typing import Callable, NamedTuple, Optional, Union
 
-from jaxopt import OptStep
-from jaxopt._src import loop
-from jaxopt.prox import prox_none
-
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from jax import grad, jit, lax, random
+from jaxopt import OptStep
+from jaxopt._src import loop
+from jaxopt.prox import prox_none
 
 from .tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
 from .typing import KeyArrayLike, Pytree

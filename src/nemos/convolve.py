@@ -8,10 +8,9 @@ import warnings
 from functools import partial
 from typing import Any, Literal, Optional
 
-from numpy.typing import ArrayLike, NDArray
-
 import jax
 import jax.numpy as jnp
+from numpy.typing import ArrayLike, NDArray
 
 from . import type_casting, utils
 

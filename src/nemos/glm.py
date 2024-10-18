@@ -7,12 +7,11 @@ import warnings
 from functools import wraps
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
+import jax
+import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike
 from scipy.optimize import root
-
-import jax
-import jax.numpy as jnp
 
 from . import observation_models as obs
 from . import tree_utils, validation
