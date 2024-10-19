@@ -215,7 +215,7 @@ class TransformerBasis:
         >>> from nemos.basis import MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
-        >>> transformer = transformer.fit(X)
+        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
 
         """
         self._basis._set_kernel(*self._unpack_inputs(X))
@@ -236,6 +236,21 @@ class TransformerBasis:
         -------
         :
             The data transformed by the basis functions.
+
+        Examples
+        --------
+        # Example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
+
+        # Define and fit tranformation basis
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer = TransformerBasis(basis)
+        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
+
+        # Transform basis
+        >>> feature_transformed = transformer.transform(X[:, 0:1]) # input must be a 2d array, (num_samples, 1)
         """
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
@@ -261,6 +276,20 @@ class TransformerBasis:
         array-like
             The data transformed by the basis functions, after fitting the basis
             functions to the data.
+
+        Examples
+        --------
+        # Example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
+
+        # Define tranformation basis
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer = TransformerBasis(basis)
+
+        # Fit and transform basis
+        >>> feature_transformed = transformer.fit_transform(X[:, 0:1]) # input must be a 2d array, (num_samples, 1)
         """
         return self._basis.compute_features(*self._unpack_inputs(X))
 
@@ -1084,7 +1113,20 @@ class AdditiveBasis(Basis):
     n_basis_funcs : int
         Number of basis functions.
 
+    Examples
+    --------
+    # Generate sample data
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> X, y = np.random.normal(size=(30, 2)), np.random.poisson(size=30)
 
+    # define two basis objects and add them
+    >>> basis_1 = nmo.basis.BSplineBasis(10)
+    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(10)
+    >>> additive_basis = nmo.basis.AdditiveBasis(basis1=basis_1, basis2=basis_2)
+    >>> transformed_X = additive_basis.to_transformer().transform(X)
+    >>> transformed_X.shape
+    (30, 20)
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
