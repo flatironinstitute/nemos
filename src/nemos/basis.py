@@ -2489,7 +2489,7 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     --------
     >>> import numpy as np
     >>> from numpy import linspace
-    >>> from nemos.basis import mspline 
+    >>> from nemos.basis import mspline
 
     >>> sample_points = linspace(0, 1, 100)
     >>> knots = np.concatenate(([0]*3, np.linspace(0, 1, num=8) , [1]*3))
