@@ -924,6 +924,25 @@ class Basis(Base, abc.ABC):
         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
         For the same input, Cartesian indexing would return an output of shape $(M_2, M_1, M_3, ....,M_N)$.
 
+        Examples
+        --------
+        Evaluate and visualize 4 M-spline basis functions of order 3:
+
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import MSplineBasis
+        >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+        >>> for i in range(4):
+        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+        >>> plt.title('M-Spline Basis Functions')
+        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        >>> plt.xlabel('Domain')
+        Text(0.5, 0, 'Domain')
+        >>> plt.ylabel('Basis Function Value')
+        Text(0, 0.5, 'Basis Function Value')
+        >>> l = plt.legend()
+
         """
         self._check_input_dimensionality(n_samples)
 
@@ -1122,11 +1141,19 @@ class AdditiveBasis(Basis):
 
     # define two basis objects and add them
     >>> basis_1 = nmo.basis.BSplineBasis(10)
-    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(10)
+    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
     >>> additive_basis = nmo.basis.AdditiveBasis(basis1=basis_1, basis2=basis_2)
     >>> transformed_X = additive_basis.to_transformer().transform(X)
-    >>> transformed_X.shape
-    (30, 20)
+    >>> print(transformed_X.shape)
+    (30, 25)
+
+    # can add another basis to the AdditiveBasis object
+    >>> X = np.random.normal(size=(30, 3))
+    >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
+    >>> additive_basis_2 = additive_basis + basis_3
+    >>> transformed_X = additive_basis_2.to_transformer().transform(X)
+    >>> print(transformed_X.shape)
+    (30, 125)
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1238,6 +1265,27 @@ class MultiplicativeBasis(Basis):
     n_basis_funcs : int
         Number of basis functions.
 
+    Examples
+    --------
+    # Generate sample data
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> X, y = np.random.normal(size=(30, 3)), np.random.poisson(size=30)
+
+    # define two basis and multiply
+    >>> basis_1 = nmo.basis.BSplineBasis(10)
+    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
+    >>> multiplicative_basis = nmo.basis.MultiplicativeBasis(basis1=basis_1, basis2=basis_2)
+    >>> transformed_X = multiplicative_basis.to_transformer().transform(X[:, 0:2])
+    >>> print(transformed_X.shape)
+    (30, 150)
+
+    # can multiply or add another basis to the AdditiveBasis object
+    >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
+    >>> multiplicative_basis_2 = multiplicative_basis * basis_3
+    >>> transformed_X = multiplicative_basis_2.to_transformer().transform(X)
+    >>> print(transformed_X.shape)
+    (30, 15000)
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1504,9 +1552,10 @@ class MSplineBasis(SplineBasis):
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import MSplineBasis
-    >>> n_basis_funcs = 5
-    >>> order = 3
-    >>> mspline_basis = MSplineBasis(n_basis_funcs, order=order)
+
+    >>> mspline_basis = MSplineBasis(n_basis_funcs=5, order=3)
+    >>> mspline_transformer = mspline_basis.to_transformer()
+
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = mspline_basis(sample_points)
 
@@ -1611,24 +1660,6 @@ class MSplineBasis(SplineBasis):
             A 2D array where each row corresponds to the evaluated M-spline basis
             function values at the points in X. Shape: `(n_samples, n_basis_funcs)`.
 
-        Examples
-        --------
-        Evaluate and visualize 4 M-spline basis functions of order 3:
-
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import MSplineBasis
-        >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -1668,6 +1699,17 @@ class BSplineBasis(SplineBasis):
     ------------
     [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import BSplineBasis
+
+    >>> bspline_basis = BSplineBasis(n_basis_funcs=5, order=3)
+    >>> bspline_transformer = bspline_basis.to_transformer()
+
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = bspline_basis(sample_points)
 
     """
 
@@ -2442,6 +2484,18 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     -------
     spline
         M-spline basis function, shape (n_sample_points, ).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from numpy import linspace
+    >>> from nemos.basis import mspline 
+
+    >>> sample_points = linspace(0, 1, 100)
+    >>> knots = np.concatenate(([0]*3, np.linspace(0, 1, num=8) , [1]*3))
+    >>> mspline_eval = mspline(sample_points, 3, 2, T=knots)
+    >>> mspline_eval.shape
+    (100,)
     """
     # Boundary conditions.
     if (T[i + k] - T[i]) < 1e-6:
@@ -2508,6 +2562,18 @@ def bspline(
     Notes
     -----
     The function uses splev function from scipy.interpolate library for the basis evaluation.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from numpy import linspace
+    >>> from nemos.basis import bspline
+
+    >>> sample_points = linspace(0, 1, 100)
+    >>> knots = knots = BSplineBasis(10)._generate_knots(sample_points)
+    >>> bspline_eval = bspline(sample_points, knots) # define a cubic B-spline
+    >>> bspline_eval.shape
+    (100, 10)
     """
     knots.sort()
     nk = knots.shape[0]
