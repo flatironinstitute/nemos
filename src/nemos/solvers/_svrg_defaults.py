@@ -179,7 +179,9 @@ def glm_softplus_poisson_l_max_and_l(
     if isinstance(X, (pytrees.FeaturePytree, dict)):
         X = jnp.hstack(jax.tree_util.tree_leaves(X))
 
-    l_smooth = _glm_softplus_poisson_l_smooth(X, y, n_power_iters=n_power_iters, batch_size=batch_size)
+    l_smooth = _glm_softplus_poisson_l_smooth(
+        X, y, n_power_iters=n_power_iters, batch_size=batch_size
+    )
     l_smooth_max = _glm_softplus_poisson_l_smooth_max(X, y, batch_size=batch_size)
     return l_smooth_max, l_smooth
 
@@ -211,7 +213,7 @@ def _glm_softplus_poisson_l_smooth_multiply(
     N, K = X.shape
     out = jnp.zeros((K,))
     for i in range(0, N, batch_size):
-        xb, yb = X[i:i + batch_size], y[i:i + batch_size]
+        xb, yb = X[i : i + batch_size], y[i : i + batch_size]
         out = out + xb.T.dot((0.17 * yb + 0.25) * xb.dot(v))
     out = out / N
     return out
@@ -299,10 +301,14 @@ def _glm_softplus_poisson_l_smooth(
         return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
     else:
         # Use power iteration to find the largest eigenvalue
-        return _glm_softplus_poisson_l_smooth_with_power_iteration(X, y, n_power_iters, batch_size=batch_size)
+        return _glm_softplus_poisson_l_smooth_with_power_iteration(
+            X, y, n_power_iters, batch_size=batch_size
+        )
 
 
-def _glm_softplus_poisson_l_smooth_max(X: NDArray, y: NDArray, batch_size: int) -> NDArray:
+def _glm_softplus_poisson_l_smooth_max(
+    X: NDArray, y: NDArray, batch_size: int
+) -> NDArray:
     """
     Calculate the maximum smoothness constant `L_max` for individual observations.
 
@@ -327,8 +333,10 @@ def _glm_softplus_poisson_l_smooth_max(X: NDArray, y: NDArray, batch_size: int) 
 
     l_max = jnp.array([0])
     for nb in range(0, N, batch_size):
-        xb, yb = X[nb:nb + batch_size], y[nb:nb + batch_size]
-        l_max = jnp.maximum(l_max, jnp.max(jnp.linalg.norm(xb, axis=1) ** 2 * (0.17 * yb + 0.25)))
+        xb, yb = X[nb : nb + batch_size], y[nb : nb + batch_size]
+        l_max = jnp.maximum(
+            l_max, jnp.max(jnp.linalg.norm(xb, axis=1) ** 2 * (0.17 * yb + 0.25))
+        )
 
     return l_max[0]
 
