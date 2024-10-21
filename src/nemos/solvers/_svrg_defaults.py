@@ -96,7 +96,9 @@ def svrg_optimal_batch_and_stepsize(
     >>> np.random.seed(123)
     >>> X = np.random.normal(size=(500, 5))
     >>> y = np.random.poisson(np.exp(X.dot(np.ones(X.shape[1]))))
-    >>> batch_size, stepsize = compute_opt_params(glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08, batch_size=1)
+    >>> batch_size, stepsize = compute_opt_params(
+    ...     glm_softplus_poisson_l_max_and_l, X, y, strong_convexity=0.08, batch_size=1
+    ... )
     """
     # Get the number of samples, ensuring consistency across all inputs
     num_samples = {dd.shape[0] for dd in jax.tree_util.tree_leaves(data)}
