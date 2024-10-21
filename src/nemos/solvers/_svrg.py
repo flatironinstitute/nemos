@@ -575,7 +575,7 @@ class ProxSVRG:
     @staticmethod
     def _error(x, x_prev, stepsize):
         """
-        Calculate the magnitude of the update relative to the parameters.
+        Calculate the magnitude of the update relative to the stepsize.
         Used for terminating the algorithm if a certain tolerance is reached.
 
         Params
@@ -589,8 +589,7 @@ class ProxSVRG:
         -------
         Scaled update magnitude.
         """
-        # stepsize is an argument to be consistent with jaxopt
-        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
+        return tree_l2_norm(tree_sub(x, x_prev)) / stepsize
 
 
 class SVRG(ProxSVRG):
