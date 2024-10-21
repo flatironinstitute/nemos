@@ -891,7 +891,7 @@ class TestGLM:
             model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
-        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.sigmoid]
+        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.relu]
     )
     def test_high_firing_rate_initialization(
         self, inv_link, example_X_y_high_firing_rates
@@ -1932,7 +1932,7 @@ class TestPopulationGLM:
             )
 
     @pytest.mark.parametrize(
-        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.sigmoid]
+        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.relu]
     )
     def test_high_firing_rate_initialization(
         self, inv_link, example_X_y_high_firing_rates
