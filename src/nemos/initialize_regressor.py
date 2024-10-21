@@ -1,18 +1,20 @@
-import jax.numpy as jnp
-import jax
-from scipy.optimize import root_scalar
 from typing import Callable
-from numpy.typing import ArrayLike
 
+import jax
+import jax.numpy as jnp
+from numpy.typing import ArrayLike
+from scipy.optimize import root_scalar
 
 # dictionary of known inverse link functions.
 INVERSE_FUNCS = {
     jnp.exp: jnp.log,
-    jax.nn.softplus: lambda x: jnp.log(jnp.exp(x) - 1.),
+    jax.nn.softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
 }
 
 
-def scalar_root_find_elementwise(func: Callable, args: ArrayLike, x0: ArrayLike) -> jnp.ndarray:
+def scalar_root_find_elementwise(
+    func: Callable, args: ArrayLike, x0: ArrayLike
+) -> jnp.ndarray:
     """
     Find roots of a scalar function.
 
@@ -40,17 +42,19 @@ def scalar_root_find_elementwise(func: Callable, args: ArrayLike, x0: ArrayLike)
     """
     opts = [root_scalar(func, arg, x0=x, method="secant") for arg, x in zip(args, x0)]
 
-    if not all(jnp.abs(func(opt.root, args[i])) < 10 ** -4 for i, opt in enumerate(opts)):
+    if not all(jnp.abs(func(opt.root, args[i])) < 10**-4 for i, opt in enumerate(opts)):
         raise ValueError(
-                "Could not set the initial intercept as the inverse of the firing rate for "
-                "the provided link function. "
-                "Please, provide initial parameters instead!"
-            )
+            "Could not set the initial intercept as the inverse of the firing rate for "
+            "the provided link function. "
+            "Please, provide initial parameters instead!"
+        )
 
     return jnp.array([opt.root for opt in opts])
 
 
-def initialize_intercept_matching_mean_rate(inverse_link_function: Callable, y: jnp.ndarray) -> jnp.ndarray:
+def initialize_intercept_matching_mean_rate(
+    inverse_link_function: Callable, y: jnp.ndarray
+) -> jnp.ndarray:
     """
     Compute the initial intercept term for a regression models.
 
@@ -81,8 +85,10 @@ def initialize_intercept_matching_mean_rate(inverse_link_function: Callable, y: 
     if analytical_inv:
         out = analytical_inv(means)
         if jnp.any(jnp.isnan(out)):
-            raise ValueError("Could not set the initial intercept as the inverse of the firing rate for "
-                             "the provided link funciton. The mean firing rate assumes negative values.")
+            raise ValueError(
+                "Could not set the initial intercept as the inverse of the firing rate for "
+                "the provided link funciton. The mean firing rate assumes negative values."
+            )
         return out
 
     def func(x, mean_x):

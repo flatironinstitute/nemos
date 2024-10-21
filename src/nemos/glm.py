@@ -17,11 +17,11 @@ from . import observation_models as obs
 from . import tree_utils, validation
 from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
+from .initialize_regressor import initialize_intercept_matching_mean_rate
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
-from .initialize_regressor import initialize_intercept_matching_mean_rate
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -535,7 +535,9 @@ class GLM(BaseRegressor):
         else:
             data = X
 
-        initial_intercept= initialize_intercept_matching_mean_rate(self.observation_model.inverse_link_function, y)
+        initial_intercept = initialize_intercept_matching_mean_rate(
+            self.observation_model.inverse_link_function, y
+        )
 
         # Initialize parameters
         init_params = (
