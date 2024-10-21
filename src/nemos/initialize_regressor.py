@@ -40,7 +40,7 @@ def scalar_root_find_elementwise(func: Callable, args: ArrayLike, x0: ArrayLike)
     """
     opts = [root_scalar(func, arg, x0=x, method="secant") for arg, x in zip(args, x0)]
 
-    if any(func(opt.root, args[i]) > 10 ** -4 for i, opt in enumerate(opts)):
+    if not all(jnp.abs(func(opt.root, args[i])) < 10 ** -4 for i, opt in enumerate(opts)):
         raise ValueError(
                 "Could not set the initial intercept as the inverse of the firing rate for "
                 "the provided link function. "
@@ -79,7 +79,11 @@ def initialize_intercept_matching_mean_rate(inverse_link_function: Callable, y: 
 
     means = jnp.atleast_1d(jnp.mean(y, axis=0))
     if analytical_inv:
-        return analytical_inv(means)
+        out = analytical_inv(means)
+        if jnp.any(jnp.isnan(out)):
+            raise ValueError("Could not set the initial intercept as the inverse of the firing rate for "
+                             "the provided link funciton. The mean firing rate assumes negative values.")
+        return out
 
     def func(x, mean_x):
         return inverse_link_function(x) - mean_x
