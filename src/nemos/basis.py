@@ -1221,7 +1221,7 @@ class Basis(Base, abc.ABC):
         x: NDArray,
         axis: int = 1,
     ):
-        """
+        r"""
         Decompose the input array along a specified axis into sub-arrays based on the basis components.
 
         This method splits the input array (e.g., a design matrix or model coefficients) along the
