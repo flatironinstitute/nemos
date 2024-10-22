@@ -96,6 +96,19 @@ See below for details on how to [add tests](#adding-tests) and properly [documen
 
 Lastly, you should make sure that the existing tests all run successfully and that the codebase is formatted properly:
 
+> [!TIP]
+> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests and some additional style checks in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not included in our optional dependencies, so if you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
+> ```sh
+> pip install tox
+> tox -e check,py
+> ```
+> This will execute `tox` with a Python version that matches your local environment. If the above passes, then the Github action will pass and your PR is mergeable
+>
+> You can also use `tox` to use `black` and `isort` to try and fix your code if either of those are failing. To do so, run `tox -e fix`
+> 
+> `tox` configurations can be found in the [`tox.ini`](tox.ini) file.
+
+
 ```bash
 # run tests and make sure they all pass
 pytest tests/
@@ -105,7 +118,10 @@ pytest --doctest-modules src/nemos/
 
 # format the code base
 black src/
-isort src
+isort src --profile=black
+isort docs/how_to_guide --profile=black
+isort docs/background --profile=black
+isort docs/tutorials --profile=black
 flake8 --config=tox.ini src
 ```
 
@@ -128,14 +144,6 @@ you will probably need to respond to our comments, making changes as appropriate
 changes. 
 
 Additionally, every PR to `main` or `development` will automatically run linters and tests through a [GitHub action](https://docs.github.com/en/actions). Merges can happen only when all check passes.
-
-> [!NOTE]
-> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not included in our optional dependencies, so if you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
-> ```sh
-> pip install tox
-> tox -e py
-> ```
-> This will execute `tox` with a Python version that matches your local environment. `tox` configurations can be found in the [`tox.ini`](tox.ini) file.
 
 Once your changes are integrated, you will be added as a GitHub contributor and as one of the authors of the package. Thank you for being part of `nemos`!
 
