@@ -108,7 +108,7 @@ class GLM(BaseRegressor):
     --------
     >>> import nemos as nmo
 
-    # define simple GLM model
+    >>> # define simple GLM model
     >>> model = nmo.glm.GLM()
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
@@ -116,7 +116,7 @@ class GLM(BaseRegressor):
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
 
 
-    # define GLM model of PoissonObservations model with soft-plus NL
+    >>> # define GLM model of PoissonObservations model with soft-plus NL
     >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
     >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
     >>> print("Regularizer type: ", type(model.regularizer))
@@ -328,17 +328,17 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        # example input
+        >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
         >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 
-        # define and fit a GLM
+        >>> # define and fit a GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
 
-        # predict new spike data
+        >>> # predict new spike data
         >>> predicted_spikes = model.predict(Xnew)
 
         See Also
@@ -443,7 +443,7 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        # example input
+        >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
 
@@ -451,7 +451,7 @@ class GLM(BaseRegressor):
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
 
-        # get model score
+        >>> # get model score
         >>> log_likelihood_score = model.score(X, y)
         >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
@@ -655,16 +655,16 @@ class GLM(BaseRegressor):
 
         Examples
         -------
-        # example input
+        >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
 
-        # fit a ridge regression Poisson GLM
+        >>> # fit a ridge regression Poisson GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
         >>> model = model.fit(X, y)
 
-        # get model weights
+        >>> # get model weights
         >>> model_weights = model.coef_
 
         """
@@ -736,50 +736,50 @@ class GLM(BaseRegressor):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """Simulate neural activity in response to a feed-forward input.
 
-         Parameters
-         ----------
-         random_key :
-             jax.random.key for seeding the simulation.
-         feedforward_input :
-             External input matrix to the model, representing factors like convolved currents,
-             light intensities, etc. When not provided, the simulation is done with coupling-only.
-             Array of shape (n_time_bins, n_basis_input) or pytree of same.
+        Parameters
+        ----------
+        random_key :
+            jax.random.key for seeding the simulation.
+        feedforward_input :
+            External input matrix to the model, representing factors like convolved currents,
+            light intensities, etc. When not provided, the simulation is done with coupling-only.
+            Array of shape (n_time_bins, n_basis_input) or pytree of same.
 
-         Returns
-         -------
-         simulated_activity :
-             Simulated activity (spike counts for PoissonGLMs) for the neuron over time.
-             Shape: (n_time_bins, ).
-         firing_rates :
-             Simulated rates for the neuron over time. Shape, (n_time_bins, ).
+        Returns
+        -------
+        simulated_activity :
+            Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
+            Shape: (n_time_bins, ).
+        firing_rates :
+            Simulated rates for the neuron over time. Shape, (n_time_bins, ).
 
-         Raises
-         ------
-         NotFittedError
-             If the model hasn't been fitted prior to calling this method.
-         ValueError
-             - If the instance has not been previously fitted.
+        Raises
+        ------
+        NotFittedError
+            If the model hasn't been fitted prior to calling this method.
+        ValueError
+            - If the instance has not been previously fitted.
 
-         Examples
-         --------
-         # example input
-         >>> import numpy as np
-         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-         >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 
-        # define and fit model
-         >>> import nemos as nmo
-         >>> model = nmo.glm.GLM()
-         >>> model = model.fit(X, y)
+        >>> # define and fit model
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
 
-         # generate spikes and rates
-         >>> random_key = jax.random.key(123)
-         >>> spikes, rates = model.simulate(random_key, Xnew)
+        >>> # generate spikes and rates
+        >>> random_key = jax.random.key(123)
+        >>> spikes, rates = model.simulate(random_key, Xnew)
 
-         See Also
-         --------
-         [predict](./#nemos.glm.GLM.predict) :
-         Method to predict rates based on the model's parameters.
+        See Also
+        --------
+        [predict](./#nemos.glm.GLM.predict) :
+        Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
         self._check_is_fit()
@@ -1453,6 +1453,26 @@ class PopulationGLM(GLM):
         - If the mask is a `FeaturePytree`, then `"feature_name"` is a predictor of neuron `j` if
         `feature_mask["feature_name"][j] == 1`.
 
+        Examples
+        --------
+        >>> # Generate sample data
+        >>> import jax.numpy as jnp
+        >>> import numpy as np
+        >>> from nemos.glm import PopulationGLM
+
+        >>> # Define predictors (X), weights, and neural activity (y)
+        >>> num_samples, num_features, num_neurons = 100, 3, 2
+        >>> X = np.random.normal(size=(num_samples, num_features))
+        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+        >>> y = np.random.poisson(np.exp(X.dot(weights)))
+
+        >>> # Define a feature mask, shape (num_features, num_neurons)
+        >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+
+        >>> # Create and fit the model
+        >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+        >>> print(model.coef_.shape)
+        (3, 2)
         """
         return super().fit(X, y, init_params)
 
