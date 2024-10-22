@@ -244,17 +244,17 @@ class TransformerBasis:
 
         >>> # Define and fit tranformation basis
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-        >>> basis = MSplineBasis(10, mode="conv", window_size=200)  
+        >>> basis = MSplineBasis(10, mode="conv", window_size=200)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
-        >>> # Before calling `fit` the convolution kernel is not set  
-        >>> transformer.kernel_  
-        
-        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array  
-        >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)  
-        >>> transformer_fitted.kernel.shape  
-        (200, 10)  
-        
+        >>> # Before calling `fit` the convolution kernel is not set
+        >>> transformer.kernel_
+
+        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
+        >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
+        >>> transformer_fitted.kernel.shape
+        (200, 10)
+
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X[:, 0:1]) # input must be a 2d array, (num_samples, 1)
         """
@@ -287,7 +287,7 @@ class TransformerBasis:
         --------
         >>> # Example input
         >>> import numpy as np
-        >>> X, y = np.random.normal(size=(100, 1)), np.random.uniform(size=100)  
+        >>> X, y = np.random.normal(size=(100, 1)), np.random.uniform(size=100)
 
         >>> # Define tranformation basis
         >>> from nemos.basis import MSplineBasis, TransformerBasis
@@ -295,7 +295,7 @@ class TransformerBasis:
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
-        >>> feature_transformed = transformer.fit_transform(X) # input must be a 2d array, (num_samples, 1)  
+        >>> feature_transformed = transformer.fit_transform(X) # input must be a 2d array, (num_samples, 1)
         """
         return self._basis.compute_features(*self._unpack_inputs(X))
 
@@ -1142,7 +1142,7 @@ class AdditiveBasis(Basis):
     >>> import numpy as np
     >>> import nemos as nmo
     >>> X, y = np.random.normal(size=(30, 2)), np.random.poisson(size=30)
-    >>> # X.shape is (n_samples, n_inputs), where n_inputs is the number required by the basis  
+    >>> # X.shape is (n_samples, n_inputs), where n_inputs is the number required by the basis
 
     >>> # define two basis objects and add them
     >>> basis_1 = nmo.basis.BSplineBasis(10)
@@ -1269,7 +1269,7 @@ class MultiplicativeBasis(Basis):
     ----------
     n_basis_funcs : int
         Number of basis functions.
-    
+
         Examples
     --------
     >>> # Generate sample data
@@ -1722,7 +1722,7 @@ class BSplineBasis(SplineBasis):
     ------------
     [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
-    
+
     Examples
     --------
     >>> from numpy import linspace
