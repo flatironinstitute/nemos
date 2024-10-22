@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import abc
 import copy
+import inspect
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -481,6 +482,7 @@ class Basis(Base, abc.ABC):
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
+
         self._conv_kwargs = kwargs
 
         # check mode
@@ -496,7 +498,8 @@ class Basis(Base, abc.ABC):
         )
 
         # pre-compute the expected output feature dimensionality
-        self._num_output_features = None  # self._n_basis_input[0] * n_basis_funcs
+        self._num_output_features = None
+        self._input_shape = None
         self._label = str(label)
         self.window_size = window_size
         self.bounds = bounds
@@ -505,14 +508,21 @@ class Basis(Base, abc.ABC):
             raise ValueError(
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
             )
-        #
-        # if any(inp <= 0 for inp in self._n_basis_input):
-        #     raise ValueError(
-        #         f"`n_basis_input must` be positive. `n_basis_input = {self.n_basis_input}` provided instead!"
-        #     )
-        #
-        # elif any(inp > 1 for inp in self._n_basis_input) and mode == "eval":
-        #     raise ValueError("Multiple inputs not supported in `mode=='eval'`.")
+
+        # check on convolution kwargs content
+        convolve_params = inspect.signature(create_convolutional_predictor).parameters
+        convolve_configs = {
+            key for key, param in convolve_params.items()
+            if param.default is not inspect.Parameter.empty
+        }
+        # assume that the sample axis must be the first axis
+        convolve_configs = convolve_configs.difference({"axis"})
+        if not set(kwargs.keys()).issubset(convolve_configs):
+            invalid = set(kwargs.keys()).difference(convolve_configs)
+            raise ValueError(
+                f"Unrecognized keyword arguments: {invalid}. "
+                f"Allowed convolution keyword arguments are: {convolve_configs}."
+            )
 
         self.kernel_ = None
         self._identifiability_constraints = False
@@ -701,17 +711,11 @@ class Basis(Base, abc.ABC):
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
         else:  # convolve, called only at the last layer
-            if "axis" not in self._conv_kwargs:
-                axis = 0
-            else:
-                axis = self._conv_kwargs["axis"]
-
+            axis = self._conv_kwargs.get("axis", 0)
             # before calling the convolve, check that the input matches
             # the expectation. We can check xi[0] only, since convolution
             # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
-            n_provided_inputs = np.prod(
-                tuple(dim if i != axis else 1 for i, dim in enumerate(xi[0].shape))
-            )
+            n_provided_inputs = np.prod(xi[0].shape[1:])
             if n_provided_inputs != self._n_basis_input:
                 raise ValueError(
                     "The number of convolutional input does not match expectation. "
@@ -724,9 +728,6 @@ class Basis(Base, abc.ABC):
             conv = create_convolutional_predictor(
                 self.kernel_, *xi, **self._conv_kwargs
             )
-            # move the time axis to the first dimension
-            new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
-            conv = np.transpose(conv, new_axis)
             # make sure to return a matrix
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
@@ -1215,26 +1216,131 @@ class Basis(Base, abc.ABC):
         start_slice += self._num_output_features
         return split_dict, start_slice
 
-    def _split_by_feature(
+    def split_by_feature(
         self,
         x: NDArray,
         axis: int = 1,
-        store_input_in: Literal["dict", "tensor"] = "tensor",
     ):
         """
-        Split x by feature returning.
+        Decompose the input array along a specified axis into sub-arrays based on the basis components.
 
-        Splits the array by feature; for each feature it returns a tensor, in which the feature dimension
-        is split into (n_basis_funcs, n_basis_input), or a dictionary with keys 1,...,n_basis_input,
-        of arrays of (n_basis_funcs,).
+        This method splits the input array (e.g., a design matrix or model coefficients) along the
+        specified axis and maps each additive basis component to its corresponding sub-array.
+        The method preserves all dimensions except the specified axis, which is split based on
+        the number of inputs and basis functions for each component.
 
+        **Reshaping Logic:**
+        Suppose the basis has **m components** (features), each with $b_i$ basis functions and $n_i$ inputs.
+        The total number of features, `N`, is:
 
+        \[
+        N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
+        \]
+
+        Given an input array of shape `(..., N, ...)`, the method slices it into `m` sub-arrays,
+        each of shape:
+
+        \[
+        (..., n_i, b_i, ...)
+        \]
+
+        Here:
+        - $n_i$ is the number of inputs processed by the **i-th basis component**.
+        - $b_i$ is the number of **basis functions** for the **i-th basis component**.
+
+        The specified axis (`axis`) determines where the split occurs, and all other dimensions
+        remain unchanged.
+
+        Parameters
+        ----------
+        x :
+            The input array to be split, representing concatenated features, coefficients,
+            or other data. The shape of `x` along the specified axis must match the total
+            number of features generated by the basis, i.e., `self.num_output_features`.
+
+            **Examples:**
+            - For a design matrix: `(num_samples, total_num_features)`
+            - For model coefficients: `(total_num_features,)` or `(total_num_features, num_neurons)`.
+
+        axis : int, optional
+            The axis along which to split the features. Defaults to 1.
+            Use `axis=1` for design matrices (features along columns) and `axis=0` for
+            coefficient arrays (features along rows). All other dimensions are preserved.
+
+        Raises
+        ------
+        ValueError
+            If the shape of `x` along the specified axis does not match `self.num_output_features`.
+
+        Returns
+        -------
+        dict
+            A dictionary where:
+            - **Keys**: Labels of the additive basis components.
+            - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
+
+              \[
+              (..., n_i, b_i, ...)
+              \]
+
+              - `n_i`: The number of inputs processed by the i-th basis component.
+              - `b_i`: The number of basis functions for the i-th basis component.
+
+            These sub-arrays are reshaped along the specified axis, with all other dimensions
+            remaining the same.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import BSplineBasis
+        >>> from nemos.glm import GLM
+
+        >>> # Define an additive basis
+        >>> basis = (
+        ...     BSplineBasis(n_basis_funcs=5, mode="conv", window_size=10, label="feature_1") +
+        ...     BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10, label="feature_2")
+        ... )
+
+        >>> # Generate a sample input array and compute features
+        >>> x1, x2 = np.random.randn(20), np.random.randn(20)
+        >>> X = basis.compute_features(x1, x2)
+
+        >>> # Split the feature matrix along axis 1
+        >>> split_features = basis.split_by_feature(X, axis=1)
+        >>> for feature, arr in split_features.items():
+        ...     print(f"{feature}: shape {arr.shape}")
+        feature_1: shape (20, 1, 5)
+        feature_2: shape (20, 1, 6)
+
+        >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
+        >>> multi_input_basis = BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10,
+        ... label="multi_input")
+        >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
+        >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {arr.shape}")
+        multi_input shape (20, 2, 6)
+
+        >>> # the method can be used to decompose the glm coefficients in the various features
+        >>> counts = np.random.poisson(size=20)
+        >>> model = GLM().fit(X, counts)
+        >>> split_coef = basis.split_by_feature(model.coef_, axis=0)
+        >>> for feature, coef in split_coef.items():
+        ...     print(f"{feature}: shape {coef.shape}")
+        feature_1: shape (1, 5)
+        feature_2: shape (1, 6)
 
         """
-        split_by_input = store_input_in == "dict"
+
+        if x.shape[axis] != self.num_output_features:
+            raise ValueError(
+                "`x.shape[axis]` does not match the expected number of features."
+                f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
+                f"of features is {self.num_output_features}"
+            )
 
         # Get the slice dictionary based on predefined feature slicing
-        slice_dict = self._get_feature_slicing(split_by_input=split_by_input)[0]
+        slice_dict = self._get_feature_slicing(split_by_input=False)[0]
 
         # Helper function to build index tuples for each slice
         def build_index_tuple(slice_obj, axis: int, ndim: int):
@@ -1258,144 +1364,79 @@ class Basis(Base, abc.ABC):
         # Apply the slicing using the custom leaf function
         out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
 
-        # reshape to array
-        if not split_by_input:
-            reshaped_out = dict()
-            for i, vals in enumerate(out.items()):
-                key, val = vals
-                shape = list(val.shape)
-                reshaped_out[key] = val.reshape(
-                    shape[:axis] + [self._n_basis_input[i], -1] + shape[axis + 1 :]
-                )
-            return reshaped_out
-        return out
+        # reshape the arrays to spilt by n_basis_input
+        reshaped_out = dict()
+        for i, vals in enumerate(out.items()):
+            key, val = vals
+            shape = list(val.shape)
+            reshaped_out[key] = val.reshape(
+                shape[:axis] + [self._n_basis_input[i], -1] + shape[axis + 1 :]
+            )
+        return reshaped_out
 
-    def split_by_feature(self, x: NDArray, axis: int = 0) -> dict:
-        r"""
-        Decompose a feature matrix along a specified axis into a dictionary of sub-arrays based on basis components.
+    def _set_num_output_features(self, *xi: NDArray) -> Basis:
+        """
+        Pre-compute the number of inputs and output features.
 
-        This method takes a concatenated feature matrix—such as a design matrix generated by `Basis.compute_features`
-        or coefficients obtained from a fitted GLM—and decomposes it into separate sub-arrays, making it easier to
-        analyze individual basis components.
-
-        The resulting dictionary maps each basis component to its corresponding sub-array(s). If a basis component has
-        multiple inputs, the dictionary will further split each component's features into sub-arrays indexed by
-        input number.
-
-        ### Behavior
-        - For each additive basis component, the top-level key is the `label` of that basis component.
-        - If a component has a single input, the corresponding value in the dictionary will be the sub-array
-        for that input.
-        - If a component has multiple inputs, the corresponding value will be another dictionary, with keys being the
-          input indices (0, 1, 2, ...) and values being sub-arrays of the features.
-
-        The shape of `x` along the specified axis must match the total number of features that the basis generates,
-        i.e., `x.shape[axis] == self.num_output_features`.
+        This function computes the number of inputs that are provided to the basis and uses
+        that number, and the n_basis_funcs to calculate the number of output features that
+        `self.compute_features` will return. These quantities and the input shape (excluding the sample axis)
+        are stored in `self._n_basis_input` and `self._num_output_features`, and `self._input_shape`
+        respectively.
 
         Parameters
         ----------
-        x : NDArray
-            The input tensor to be split based on the feature slices. This can be a multidimensional array representing
-            concatenated features, model coefficients, or any other data. The shape of `x` along the specified axis
-            should match the total number of features generated by the basis.
-        axis : int, optional
-            The axis of `x` to be split. Defaults to 1. Typically, this is the feature axis of your design matrix or
-            model output.
+        xi:
+            The input arrays.
 
         Returns
         -------
-        dict[str, NDArray]
-            A dictionary where:
-                - Top-level keys are the labels of the basis components.
-                - Values are sub-arrays of `x` that correspond to each component's features.
-            If a basis component has multiple inputs, the value will be another dictionary, with keys being
-            input indices
-            (0, 1, 2, ...) and values being sub-arrays of `x`.
+        :
+            The basis itself, for chaining.
 
         Raises
         ------
-        ValueError
-            If the shape of `x` along the specified axis does not match `self.num_output_features`.
+        ValueError:
+            If the number of inputs do not match `self._n_basis_input`, if  `self._n_basis_input` was
+            not None.
 
         Notes
         -----
-        - This method relies on `self._get_feature_slicing()` to determine the slice dictionary for each component.
-        - It uses `jax.tree_util.tree_map` to apply slicing operations over the feature axis, along with a custom
-          `is_leaf` function to identify index tuples as leaves.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import BSplineBasis
-        >>> from nemos.glm import GLM
-
-        >>> # Define an additive basis
-        >>> basis = (
-        ...     BSplineBasis(n_basis_funcs=5, mode="conv", window_size=10, label="feature_1") +
-        ...     BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10, label="feature_2")
-        ... )
-
-        >>> # Generate a sample input array and compute features
-        >>> x1, x2 = np.random.randn(20), np.random.randn(20)
-        >>> X = basis.compute_features(x1, x2)
-
-        >>> # Split the feature matrix along axis 1
-        >>> split_features = basis.split_by_feature(X, axis=1)
-        >>> for feature, arr in split_features.items():
-        ...     print(f"{feature}: shape {arr.shape}")
-        feature_1: shape (20, 5)
-        feature_2: shape (20, 6)
-
-        >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
-        >>> multi_input_basis = BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10,
-        ... label="multi_input", n_basis_input=2)
-        >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
-        >>> for feature, sub_dict in split_features_multi.items():
-        ...     for input_num, arr in sub_dict.items():
-        ...         print(f"{feature}, input number {int(input_num)}, shape {arr.shape}")
-        multi_input, input number 0, shape (20, 6)
-        multi_input, input number 1, shape (20, 6)
-
-        >>> # the method can be used to decompose the glm coefficients in the various features
-        >>> counts = np.random.poisson(size=20)
-        >>> model = GLM().fit(X, counts)
-        >>> split_coef = basis.split_by_feature(model.coef_, axis=0)
-        >>> for feature, coef in split_coef.items():
-        ...     print(f"{feature}: shape {coef.shape}")
-        feature_1: shape (5,)
-        feature_2: shape (6,)
+        Once a `compute_features` is called, we enforce that for all subsequent calls of the method,
+        the input that the basis receives preserves the shape of all axis, except for the sample axis.
+        This condition guarantees the consistency of the feature axis, and therefore that
+         `self.split_by_feature` behave appropriately.
 
         """
-        if x.shape[axis] != self.num_output_features:
-            raise ValueError(
-                "`x.shape[axis]` does not match the expected number of features."
-                f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
-                f"of features is {self.num_output_features}"
-            )
-        return self._split_by_feature(x, axis=axis, store_input_in="tensor")
+        # Check that the input shape matches expectation:
 
-    def _set_num_output_features(self, *xi: NDArray):
-        # this is reimplemented in AdditiveBasis and MultiplicativeBasis
+        # Note that this method is reimplemented in AdditiveBasis and MultiplicativeBasis
         # so we can assume that len(xi) == 1
-        shape = list(xi[0].shape)
+        shape = xi[0].shape
 
-        # this could be non-zero only if mode conv
-        axis = self._conv_kwargs.get("axis", 0)
+        # remove sample axis (samples are allowed to vary)
+        shape = shape[1:]
+
+        if self._input_shape is not None and self._input_shape != shape:
+            expected_shape_str = "(n_samples, " + f"{self._input_shape}"[1:]
+            expected_shape_str = expected_shape_str.replace(",)", ")")
+            raise ValueError(
+                f"Input shape mismatch detected.\n\n"
+                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
+                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
+                f"  Expected: {expected_shape_str}\n"
+                f"  But got:  {xi[0].shape}.\n\n"
+                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
+                "but all other dimensions must remain the same. If you need to process inputs with a "
+                "different shape, please create a new basis instance."
+            )
+
+        self._input_shape = shape
 
         # remove time axis & get the total input number
         n_inputs = (
-            (1,) if xi[0].ndim == 1 else (np.prod(shape[:axis] + shape[axis + 1 :]),)
+            (1,) if xi[0].ndim == 1 else (np.prod(shape),)
         )
-
-        if self._n_basis_input is not None and self._n_basis_input != n_inputs:
-            raise ValueError(
-                f"Input dimensionality mismatch. "
-                f"The basis {self.__class__.__name__} with label {self.label} was expecting "
-                f"{self._n_basis_input[0]} inputs, {n_inputs[0]} provided. "
-                "This happens when the basis is used to compute features multiple times, with"
-                "input of different shapes. If you need to compute features over"
-            )
 
         self._n_basis_input = n_inputs
         self._num_output_features = self.n_basis_funcs * self._n_basis_input[0]
@@ -1428,9 +1469,6 @@ class AdditiveBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = None  # (*basis1._n_basis_input, *basis2._n_basis_input)
-        # self._num_output_features = (
-        #     basis1._num_output_features + basis2._num_output_features
-        # )
         self._num_output_features = None
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
