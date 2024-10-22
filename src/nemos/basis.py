@@ -204,6 +204,18 @@ class TransformerBasis:
         -------
         self :
             The transformer object.
+
+        Examples
+        --------
+        # Example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
+
+        # Define and fit tranformation basis
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer = TransformerBasis(basis)
+        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
         """
         self._basis._set_kernel(*self._unpack_inputs(X))
         return self
@@ -223,6 +235,28 @@ class TransformerBasis:
         -------
         :
             The data transformed by the basis functions.
+
+        Examples
+        --------
+        >>> # Example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
+
+        >>> # Define and fit tranformation basis
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10, mode="conv", window_size=200)  
+        >>> transformer = TransformerBasis(basis)
+        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
+        >>> # Before calling `fit` the convolution kernel is not set  
+        >>> transformer.kernel_  
+        
+        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array  
+        >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)  
+        >>> transformer_fitted.kernel.shape  
+        (200, 10)  
+        
+        >>> # Transform basis
+        >>> feature_transformed = transformer.transform(X[:, 0:1]) # input must be a 2d array, (num_samples, 1)
         """
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
@@ -248,6 +282,20 @@ class TransformerBasis:
         array-like
             The data transformed by the basis functions, after fitting the basis
             functions to the data.
+
+        Examples
+        --------
+        >>> # Example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(100, 1)), np.random.uniform(size=100)  
+
+        >>> # Define tranformation basis
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        >>> basis = MSplineBasis(10)
+        >>> transformer = TransformerBasis(basis)
+
+        >>> # Fit and transform basis
+        >>> feature_transformed = transformer.fit_transform(X) # input must be a 2d array, (num_samples, 1)  
         """
         return self._basis.compute_features(*self._unpack_inputs(X))
 
@@ -882,6 +930,23 @@ class Basis(Base, abc.ABC):
         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
         For the same input, Cartesian indexing would return an output of shape $(M_2, M_1, M_3, ....,M_N)$.
 
+        Examples
+        --------
+        >>> # Evaluate and visualize 4 M-spline basis functions of order 3:
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import MSplineBasis
+        >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+        >>> for i in range(4):
+        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
+        >>> plt.title('M-Spline Basis Functions')
+        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        >>> plt.xlabel('Domain')
+        Text(0.5, 0, 'Domain')
+        >>> plt.ylabel('Basis Function Value')
+        Text(0, 0.5, 'Basis Function Value')
+        >>> l = plt.legend()
         """
         self._check_input_dimensionality(n_samples)
 
@@ -1071,7 +1136,29 @@ class AdditiveBasis(Basis):
     n_basis_funcs : int
         Number of basis functions.
 
+    Examples
+    --------
+    >>> # Generate sample data
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> X, y = np.random.normal(size=(30, 2)), np.random.poisson(size=30)
+    >>> # X.shape is (n_samples, n_inputs), where n_inputs is the number required by the basis  
 
+    >>> # define two basis objects and add them
+    >>> basis_1 = nmo.basis.BSplineBasis(10)
+    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
+    >>> additive_basis = nmo.basis.AdditiveBasis(basis1=basis_1, basis2=basis_2)
+    >>> transformed_X = additive_basis.to_transformer().transform(X)
+    >>> print(transformed_X.shape)
+    (30, 25)
+
+    >>> # can add another basis to the AdditiveBasis object
+    >>> X = np.random.normal(size=(30, 3))
+    >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
+    >>> additive_basis_2 = additive_basis + basis_3
+    >>> transformed_X = additive_basis_2.to_transformer().transform(X)
+    >>> print(transformed_X.shape)
+    (30, 125)
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1182,7 +1269,29 @@ class MultiplicativeBasis(Basis):
     ----------
     n_basis_funcs : int
         Number of basis functions.
+    
+        Examples
+    --------
+    >>> # Generate sample data
+    >>> import numpy as np
+    >>> import nemos as nmo
+    >>> X, y = np.random.normal(size=(30, 3)), np.random.poisson(size=30)
 
+    >>> # define two basis and multiply
+    >>> basis_1 = nmo.basis.BSplineBasis(10)
+    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
+    >>> multiplicative_basis = nmo.basis.MultiplicativeBasis(basis1=basis_1, basis2=basis_2)
+    >>> transformed_X = multiplicative_basis.to_transformer().transform(X[:, 0:2])
+    >>> print(transformed_X.shape)
+    (30, 150)
+
+    >>> # Can multiply or add another basis to the AdditiveBasis object
+    >>> # This will cause the number of output features of the result basis to grow accordingly
+    >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
+    >>> multiplicative_basis_2 = multiplicative_basis * basis_3
+    >>> transformed_X = multiplicative_basis_2.to_transformer().transform(X)
+    >>> print(transformed_X.shape)
+    (30, 15000)
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1613,7 +1722,17 @@ class BSplineBasis(SplineBasis):
     ------------
     [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+    
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import BSplineBasis
 
+    >>> bspline_basis = BSplineBasis(n_basis_funcs=5, order=3)
+    >>> bspline_transformer = bspline_basis.to_transformer()
+
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = bspline_basis(sample_points)
     """
 
     def __init__(
@@ -2453,6 +2572,18 @@ def bspline(
     Notes
     -----
     The function uses splev function from scipy.interpolate library for the basis evaluation.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from numpy import linspace
+    >>> from nemos.basis import bspline
+
+    >>> sample_points = linspace(0, 1, 100)
+    >>> knots = knots = BSplineBasis(10)._generate_knots(sample_points)
+    >>> bspline_eval = bspline(sample_points, knots) # define a cubic B-spline
+    >>> bspline_eval.shape
+    (100, 10)
     """
     knots.sort()
     nk = knots.shape[0]
