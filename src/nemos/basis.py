@@ -469,6 +469,14 @@ class Basis(Base, abc.ABC):
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
+
+    Raises
+    ------
+    ValueError:
+        - If `mode` is not 'eval' or 'conv'.
+        - If kwargs are not None and `mode =="eval".
+        - If kwargs include `axis`, or any parameter that other than the optional keyword
+        arguments of `nemos.convolve.create_convolutional_predictor`.
     """
 
     def __init__(
@@ -494,7 +502,7 @@ class Basis(Base, abc.ABC):
         self._mode = mode
 
         self._n_basis_input = (
-            None  # (1 if n_basis_input is None else int(n_basis_input),)
+            None
         )
 
         # pre-compute the expected output feature dimensionality
@@ -711,7 +719,6 @@ class Basis(Base, abc.ABC):
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
         else:  # convolve, called only at the last layer
-            axis = self._conv_kwargs.get("axis", 0)
             # before calling the convolve, check that the input matches
             # the expectation. We can check xi[0] only, since convolution
             # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
@@ -1475,7 +1482,7 @@ class AdditiveBasis(Basis):
         self._basis2 = basis2
         return
 
-    def _set_num_output_features(self, *xi: NDArray) -> tuple:
+    def _set_num_output_features(self, *xi: NDArray) -> Basis:
         self._n_basis_input = (
             *self._basis1._set_num_output_features(
                 *xi[: self._basis1._n_input_dimensionality]
@@ -1599,9 +1606,6 @@ class MultiplicativeBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = None  # (*basis1._n_basis_input, *basis2._n_basis_input)
-        # self._num_output_features = (
-        #     basis1._num_output_features * basis2._num_output_features
-        # )
         self._num_output_features = None
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
