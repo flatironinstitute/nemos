@@ -467,16 +467,18 @@ class Basis(Base, abc.ABC):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
 
     Raises
     ------
     ValueError:
         - If `mode` is not 'eval' or 'conv'.
-        - If kwargs are not None and `mode =="eval".
-        - If kwargs include `axis`, or any parameter that other than the optional keyword
-        arguments of `nemos.convolve.create_convolutional_predictor`.
+        - If `kwargs` are not None and `mode =="eval".
+        - If `kwargs` include parameters not recognized or do not have
+        default values in `create_convolutional_predictor`.
+        - If `axis` is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
