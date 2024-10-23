@@ -478,7 +478,7 @@ class Basis(Base, abc.ABC):
         - If `kwargs` are not None and `mode =="eval".
         - If `kwargs` include parameters not recognized or do not have
         default values in `create_convolutional_predictor`.
-        - If `axis` is provided as a keyword argument (samples must always be in the first axis).
+        - If `axis` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
@@ -520,15 +520,26 @@ class Basis(Base, abc.ABC):
             )
 
         # check on convolution kwargs content
+        if "axis" in kwargs and kwargs["axis"] != 0:
+            raise ValueError(
+                f"Invalid `axis={kwargs['axis']}` provided. Basis requires the "
+                f"convolution to be applied along the first axis (`axis=0`).\n"
+                "Please transpose your input so that the desired axis for "
+                "convolution is the first dimension (axis=0)."
+            )
         convolve_params = inspect.signature(create_convolutional_predictor).parameters
         convolve_configs = {
-            key for key, param in convolve_params.items()
+            key
+            for key, param in convolve_params.items()
             if param.default is not inspect.Parameter.empty
         }
-        # assume that the sample axis must be the first axis
+        # do not encourage to set axis.
         convolve_configs = convolve_configs.difference({"axis"})
         if not set(kwargs.keys()).issubset(convolve_configs):
-            invalid = set(kwargs.keys()).difference(convolve_configs)
+            # remove axis in case axis=0, was passed which is allowed.
+            invalid = (
+                set(kwargs.keys()).difference(convolve_configs).difference({"axis"})
+            )
             raise ValueError(
                 f"Unrecognized keyword arguments: {invalid}. "
                 f"Allowed convolution keyword arguments are: {convolve_configs}."
