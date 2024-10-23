@@ -471,8 +471,11 @@ class Basis(Base, abc.ABC):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Raises
     ------
@@ -1471,8 +1474,11 @@ class MSplineBasis(SplineBasis):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs:
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Examples
     --------
@@ -1629,8 +1635,11 @@ class BSplineBasis(SplineBasis):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Attributes
     ----------
@@ -1748,8 +1757,11 @@ class CyclicBSplineBasis(SplineBasis):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Attributes
     ----------
@@ -1890,8 +1902,11 @@ class RaisedCosineBasisLinear(Basis):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     # References
     ------------
@@ -2083,8 +2098,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     # References
     ------------
@@ -2237,8 +2255,11 @@ class OrthExponentialBasis(Basis):
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
     """
 
     def __init__(
