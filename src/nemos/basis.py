@@ -470,7 +470,8 @@ class Basis(Base, abc.ABC):
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
         For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Raises
     ------
