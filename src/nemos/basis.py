@@ -509,15 +509,31 @@ class Basis(Base, abc.ABC):
         self.window_size = window_size
         self.bounds = bounds
 
-        if mode == "eval" and kwargs:
+        self._check_convolution_kwargs()
+
+        self.kernel_ = None
+        self._identifiability_constraints = False
+
+    def _check_convolution_kwargs(self):
+        """Check convolution kwargs settings.
+
+        Raises
+        ------
+        ValueError:
+            - If `self._conv_kwargs` are not None and `mode =="eval".
+            - If `axis` is provided as an argument, and it is different from 0
+            (samples must always be in the first axis).
+            - If `self._conv_kwargs` include parameters not recognized or that do not have
+            default values in `create_convolutional_predictor`.
+        """
+        if self._mode == "eval" and self._conv_kwargs:
             raise ValueError(
-                f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
+                f"kwargs should only be set when mode=='conv', but '{self._mode}' provided instead!"
             )
 
-        # check on convolution kwargs content
-        if "axis" in kwargs and kwargs["axis"] != 0:
+        if "axis" in self._conv_kwargs and self._conv_kwargs["axis"] != 0:
             raise ValueError(
-                f"Invalid `axis={kwargs['axis']}` provided. Basis requires the "
+                f"Invalid `axis={self._conv_kwargs['axis']}` provided. Basis requires the "
                 f"convolution to be applied along the first axis (`axis=0`).\n"
                 "Please transpose your input so that the desired axis for "
                 "convolution is the first dimension (axis=0)."
@@ -526,22 +542,20 @@ class Basis(Base, abc.ABC):
         convolve_configs = {
             key
             for key, param in convolve_params.items()
-            if param.default is not inspect.Parameter.empty
+            if param.default is not inspect.Parameter.empty  # prevent user from passing directly
+                                                             # `basis_matrix` or `time_series` in kwargs.
         }
-        if not set(kwargs.keys()).issubset(convolve_configs):
+        if not set(self._conv_kwargs.keys()).issubset(convolve_configs):
             # do not encourage to set axis.
             convolve_configs = convolve_configs.difference({"axis"})
-            # remove axis in case axis=0, was passed which is allowed.
+            # remove the parameter in case axis=0 was passed, since it is allowed.
             invalid = (
-                set(kwargs.keys()).difference(convolve_configs).difference({"axis"})
+                set(self._conv_kwargs.keys()).difference(convolve_configs).difference({"axis"})
             )
             raise ValueError(
                 f"Unrecognized keyword arguments: {invalid}. "
                 f"Allowed convolution keyword arguments are: {convolve_configs}."
             )
-
-        self.kernel_ = None
-        self._identifiability_constraints = False
 
     @property
     def n_basis_funcs(self):
