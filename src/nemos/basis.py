@@ -473,7 +473,7 @@ class Basis(Base, abc.ABC):
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
-    
+
     Raises
     ------
     ValueError:
@@ -521,7 +521,8 @@ class Basis(Base, abc.ABC):
             )
         convolve_params = inspect.signature(create_convolutional_predictor).parameters
         convolve_configs = {
-            key for key, param in convolve_params.items()
+            key
+            for key, param in convolve_params.items()
             if param.default is not inspect.Parameter.empty
         }
         if not set(kwargs.keys()).issubset(convolve_configs):

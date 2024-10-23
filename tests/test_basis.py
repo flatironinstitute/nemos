@@ -500,13 +500,22 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [
             (dict(), does_not_raise()),
             (dict(axis=0), does_not_raise()),
-            (dict(axis=1), pytest.raises(ValueError, match="Invalid `axis=1` provided")),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
             (dict(shift=True), does_not_raise()),
             (dict(shift=True, axis=0), does_not_raise()),
-            (dict(shifts=True, axis=0), pytest.raises(ValueError, match="Unrecognized keyword arguments")),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
             (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
-            (dict(shift=True, axis=0, time_series=np.arange(10)), pytest.raises(ValueError, match="Unrecognized keyword arguments")),
-        ]
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
     )
     def test_init_conv_kwargs(self, conv_kwargs, expectation):
         with expectation:
@@ -584,7 +593,10 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -1166,14 +1178,22 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         [
             (dict(), does_not_raise()),
             (dict(axis=0), does_not_raise()),
-            (dict(axis=1), pytest.raises(ValueError, match="Invalid `axis=1` provided")),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
             (dict(shift=True), does_not_raise()),
             (dict(shift=True, axis=0), does_not_raise()),
-            (dict(shifts=True, axis=0), pytest.raises(ValueError, match="Unrecognized keyword arguments")),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
             (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
-            (dict(shift=True, axis=0, time_series=np.arange(10)),
-             pytest.raises(ValueError, match="Unrecognized keyword arguments")),
-        ]
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
     )
     def test_init_conv_kwargs(self, conv_kwargs, expectation):
         with expectation:
@@ -1237,7 +1257,10 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -1818,14 +1841,22 @@ class TestMSplineBasis(BasisFuncsTesting):
         [
             (dict(), does_not_raise()),
             (dict(axis=0), does_not_raise()),
-            (dict(axis=1), pytest.raises(ValueError, match="Invalid `axis=1` provided")),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
             (dict(shift=True), does_not_raise()),
             (dict(shift=True, axis=0), does_not_raise()),
-            (dict(shifts=True, axis=0), pytest.raises(ValueError, match="Unrecognized keyword arguments")),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
             (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
-            (dict(shift=True, axis=0, time_series=np.arange(10)),
-             pytest.raises(ValueError, match="Unrecognized keyword arguments")),
-        ]
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
     )
     def test_init_conv_kwargs(self, conv_kwargs, expectation):
         with expectation:
@@ -1889,7 +1920,10 @@ class TestMSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -2548,18 +2582,32 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         [
             (dict(), does_not_raise()),
             (dict(axis=0), does_not_raise()),
-            (dict(axis=1), pytest.raises(ValueError, match="Invalid `axis=1` provided")),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
             (dict(shift=True), does_not_raise()),
             (dict(shift=True, axis=0), does_not_raise()),
-            (dict(shifts=True, axis=0), pytest.raises(ValueError, match="Unrecognized keyword arguments")),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
             (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
-            (dict(shift=True, axis=0, time_series=np.arange(10)),
-             pytest.raises(ValueError, match="Unrecognized keyword arguments")),
-        ]
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
     )
     def test_init_conv_kwargs(self, conv_kwargs, expectation):
         with expectation:
-            self.cls(5, mode="conv", window_size=200, decay_rates=np.arange(1, 6), **conv_kwargs)
+            self.cls(
+                5,
+                mode="conv",
+                window_size=200,
+                decay_rates=np.arange(1, 6),
+                **conv_kwargs,
+            )
 
     @pytest.mark.parametrize(
         "mode, ws, expectation",
@@ -2628,7 +2676,10 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -3154,14 +3205,22 @@ class TestBSplineBasis(BasisFuncsTesting):
         [
             (dict(), does_not_raise()),
             (dict(axis=0), does_not_raise()),
-            (dict(axis=1), pytest.raises(ValueError, match="Invalid `axis=1` provided")),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
             (dict(shift=True), does_not_raise()),
             (dict(shift=True, axis=0), does_not_raise()),
-            (dict(shifts=True, axis=0), pytest.raises(ValueError, match="Unrecognized keyword arguments")),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
             (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
-            (dict(shift=True, axis=0, time_series=np.arange(10)),
-             pytest.raises(ValueError, match="Unrecognized keyword arguments")),
-        ]
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
     )
     def test_init_conv_kwargs(self, conv_kwargs, expectation):
         with expectation:
@@ -3225,7 +3284,10 @@ class TestBSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
@@ -3881,7 +3943,10 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
-                with pytest.raises(AttributeError, match="can't set attribute 'mode'|property 'mode' of "):
+                with pytest.raises(
+                    AttributeError,
+                    match="can't set attribute 'mode'|property 'mode' of ",
+                ):
                     par_set = {
                         keys[i]: pars[keys[i]],
                         keys[j]: pars[keys[j]],
