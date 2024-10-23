@@ -514,7 +514,7 @@ class Basis(Base, abc.ABC):
         # check on convolution kwargs content
         if "axis" in kwargs and kwargs["axis"] != 0:
             raise ValueError(
-                f"Invalid `axis={kwargs['axis']}` provided. This basis requires the "
+                f"Invalid `axis={kwargs['axis']}` provided. Basis requires the "
                 f"convolution to be applied along the first axis (`axis=0`).\n"
                 "Please transpose your input so that the desired axis for "
                 "convolution is the first dimension (axis=0)."
