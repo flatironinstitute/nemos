@@ -331,7 +331,6 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 
         >>> # define and fit a GLM
         >>> import nemos as nmo
@@ -339,6 +338,7 @@ class GLM(BaseRegressor):
         >>> model = model.fit(X, y)
 
         >>> # predict new spike data
+        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
         >>> predicted_spikes = model.predict(Xnew)
 
         See Also
@@ -453,7 +453,6 @@ class GLM(BaseRegressor):
 
         >>> # get model score
         >>> log_likelihood_score = model.score(X, y)
-        >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
         Notes
         -----
@@ -664,8 +663,9 @@ class GLM(BaseRegressor):
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
         >>> model = model.fit(X, y)
 
-        >>> # get model weights
+        >>> # get model weights and intercept
         >>> model_weights = model.coef_
+        >>> model_intercept = model.intercept_
 
         """
         # validate the inputs & initialize solver
@@ -765,7 +765,6 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
-        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
 
         >>> # define and fit model
         >>> import nemos as nmo
@@ -774,6 +773,7 @@ class GLM(BaseRegressor):
 
         >>> # generate spikes and rates
         >>> random_key = jax.random.key(123)
+        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
         >>> spikes, rates = model.simulate(random_key, Xnew)
 
         See Also
@@ -1463,7 +1463,9 @@ class PopulationGLM(GLM):
         >>> # Define predictors (X), weights, and neural activity (y)
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))
-        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+        >>> # Weights is defined by how each feature influences the output, shape (num_features, num_neurons)
+        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]]) 
+        >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
         >>> y = np.random.poisson(np.exp(X.dot(weights)))
 
         >>> # Define a feature mask, shape (num_features, num_neurons)

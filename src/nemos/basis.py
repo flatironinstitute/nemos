@@ -204,7 +204,6 @@ class TransformerBasis:
         -------
         self :
             The transformer object.
-
         """
         self._basis._set_kernel(*self._unpack_inputs(X))
         return self
