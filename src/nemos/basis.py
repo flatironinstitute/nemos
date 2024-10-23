@@ -542,15 +542,18 @@ class Basis(Base, abc.ABC):
         convolve_configs = {
             key
             for key, param in convolve_params.items()
-            if param.default is not inspect.Parameter.empty  # prevent user from passing directly
-                                                             # `basis_matrix` or `time_series` in kwargs.
+            if param.default
+            is not inspect.Parameter.empty  # prevent user from passing directly
+            # `basis_matrix` or `time_series` in kwargs.
         }
         if not set(self._conv_kwargs.keys()).issubset(convolve_configs):
             # do not encourage to set axis.
             convolve_configs = convolve_configs.difference({"axis"})
             # remove the parameter in case axis=0 was passed, since it is allowed.
             invalid = (
-                set(self._conv_kwargs.keys()).difference(convolve_configs).difference({"axis"})
+                set(self._conv_kwargs.keys())
+                .difference(convolve_configs)
+                .difference({"axis"})
             )
             raise ValueError(
                 f"Unrecognized keyword arguments: {invalid}. "
