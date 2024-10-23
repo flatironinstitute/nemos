@@ -1474,7 +1474,7 @@ class PopulationGLM(GLM):
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))
         >>> # Weights is defined by how each feature influences the output, shape (num_features, num_neurons)
-        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]]) 
+        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
         >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
         >>> y = np.random.poisson(np.exp(X.dot(weights)))
 
