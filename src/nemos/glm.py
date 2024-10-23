@@ -948,6 +948,16 @@ class GLM(BaseRegressor):
         -------
         NamedTuple
             The initialized solver state
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> model = nmo.glm.GLM()
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_state(X, y, params)
+        >>> # Now ready to run optimization or update steps
         """
         if isinstance(X, FeaturePytree):
             data = X.data
