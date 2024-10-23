@@ -535,9 +535,9 @@ class Basis(Base, abc.ABC):
             for key, param in convolve_params.items()
             if param.default is not inspect.Parameter.empty
         }
-        # do not encourage to set axis.
-        convolve_configs = convolve_configs.difference({"axis"})
         if not set(kwargs.keys()).issubset(convolve_configs):
+            # do not encourage to set axis.
+            convolve_configs = convolve_configs.difference({"axis"})
             # remove axis in case axis=0, was passed which is allowed.
             invalid = (
                 set(kwargs.keys()).difference(convolve_configs).difference({"axis"})
