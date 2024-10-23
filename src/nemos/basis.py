@@ -529,7 +529,9 @@ class Basis(Base, abc.ABC):
         convolve_configs = convolve_configs.difference({"axis"})
         if not set(kwargs.keys()).issubset(convolve_configs):
             # remove axis in case axis=0, was passed which is allowed.
-            invalid = set(kwargs.keys()).difference(convolve_configs).difference({"axis"})
+            invalid = (
+                set(kwargs.keys()).difference(convolve_configs).difference({"axis"})
+            )
             raise ValueError(
                 f"Unrecognized keyword arguments: {invalid}. "
                 f"Allowed convolution keyword arguments are: {convolve_configs}."
