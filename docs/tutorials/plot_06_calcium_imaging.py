@@ -116,6 +116,9 @@ plt.show()
 # We can combine the two bases.
 
 heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
+
+# define a basis that expect all the other neurons as predictors, i.e. shape (num_samples, num_neurons - 1)
+num_neurons = Y.shape[1]
 coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
 
 # %%
