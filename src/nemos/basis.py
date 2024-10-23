@@ -240,19 +240,18 @@ class TransformerBasis:
         --------
         >>> # Example input
         >>> import numpy as np
-        >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
+        >>> X, y = np.random.normal(size=(10000, 2)), np.random.uniform(size=100)
 
         >>> # Define and fit tranformation basis
         >>> from nemos.basis import MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10, mode="conv", window_size=200)
         >>> transformer = TransformerBasis(basis)
-        >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
 
         >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
         >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
-        >>> transformer_fitted.kernel.shape
+        >>> transformer_fitted.kernel_.shape
         (200, 10)
 
         >>> # Transform basis
