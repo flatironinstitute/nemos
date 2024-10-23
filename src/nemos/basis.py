@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import abc
 import copy
+import inspect
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -468,10 +469,19 @@ class Basis(Base, abc.ABC):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
+    
+    Raises
+    ------
+    ValueError:
+        - If `mode` is not 'eval' or 'conv'.
+        - If `kwargs` are not None and `mode =="eval".
+        - If `kwargs` include parameters not recognized or do not have
+        default values in `create_convolutional_predictor`.
+        - If `axis` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
@@ -499,6 +509,26 @@ class Basis(Base, abc.ABC):
         if mode == "eval" and kwargs:
             raise ValueError(
                 f"kwargs should only be set when mode=='conv', but '{mode}' provided instead!"
+            )
+
+        # check on convolution kwargs content
+        if "axis" in kwargs and kwargs["axis"] != 0:
+            raise ValueError(
+                f"Invalid `axis={kwargs['axis']}` provided. This basis requires the "
+                f"convolution to be applied along the first axis (`axis=0`).\n"
+                "Please transpose your input so that the desired axis for "
+                "convolution is the first dimension (axis=0)."
+            )
+        convolve_params = inspect.signature(create_convolutional_predictor).parameters
+        convolve_configs = {
+            key for key, param in convolve_params.items()
+            if param.default is not inspect.Parameter.empty
+        }
+        if not set(kwargs.keys()).issubset(convolve_configs):
+            invalid = set(kwargs.keys()).difference(convolve_configs)
+            raise ValueError(
+                f"Unrecognized keyword arguments: {invalid}. "
+                f"Allowed convolution keyword arguments are: {convolve_configs}."
             )
 
         self.kernel_ = None
@@ -666,18 +696,11 @@ class Basis(Base, abc.ABC):
         if self.mode == "eval":  # evaluate at the sample
             return self.__call__(*xi)
         else:  # convolve, called only at the last layer
-            if "axis" not in self._conv_kwargs:
-                axis = 0
-            else:
-                axis = self._conv_kwargs["axis"]
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
                 self.kernel_, *xi, **self._conv_kwargs
             )
-            # move the time axis to the first dimension
-            new_axis = (np.arange(conv.ndim) + axis) % conv.ndim
-            conv = np.transpose(conv, new_axis)
             # make sure to return a matrix
             return np.reshape(conv, newshape=(conv.shape[0], -1))
 
@@ -1289,7 +1312,7 @@ class SplineBasis(Basis, abc.ABC):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1440,7 +1463,7 @@ class MSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs:
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1598,7 +1621,7 @@ class BSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1717,7 +1740,7 @@ class CyclicBSplineBasis(SplineBasis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -1859,7 +1882,7 @@ class RaisedCosineBasisLinear(Basis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -2052,7 +2075,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
@@ -2206,7 +2229,7 @@ class OrthExponentialBasis(Basis):
     bounds :
         The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
         minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bonuds, the basis will return NaN.
+        If a sample is outside the bounds, the basis will return NaN.
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
