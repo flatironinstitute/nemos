@@ -1490,7 +1490,7 @@ class AdditiveBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = None  # (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._n_basis_input = None
         self._num_output_features = None
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
@@ -1620,7 +1620,7 @@ class MultiplicativeBasis(Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        self._n_basis_input = None  # (*basis1._n_basis_input, *basis2._n_basis_input)
+        self._n_basis_input = None
         self._num_output_features = None
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
