@@ -598,6 +598,32 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
 
     @pytest.mark.parametrize(
+        "conv_kwargs, expectation",
+        [
+            (dict(), does_not_raise()),
+            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
+            (dict(shift=True), does_not_raise()),
+            (dict(shift=True, axis=0), does_not_raise()),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
+    )
+    def test_init_conv_kwargs(self, conv_kwargs, expectation):
+        with expectation:
+            self.cls(5, mode="conv", window_size=200, **conv_kwargs)
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -1353,6 +1379,32 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size)
 
     @pytest.mark.parametrize(
+        "conv_kwargs, expectation",
+        [
+            (dict(), does_not_raise()),
+            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
+            (dict(shift=True), does_not_raise()),
+            (dict(shift=True, axis=0), does_not_raise()),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
+    )
+    def test_init_conv_kwargs(self, conv_kwargs, expectation):
+        with expectation:
+            self.cls(5, mode="conv", window_size=200, **conv_kwargs)
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -2055,6 +2107,32 @@ class TestMSplineBasis(BasisFuncsTesting):
         window_size = None if mode == "eval" else 2
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
+
+    @pytest.mark.parametrize(
+        "conv_kwargs, expectation",
+        [
+            (dict(), does_not_raise()),
+            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
+            (dict(shift=True), does_not_raise()),
+            (dict(shift=True, axis=0), does_not_raise()),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
+    )
+    def test_init_conv_kwargs(self, conv_kwargs, expectation):
+        with expectation:
+            self.cls(5, mode="conv", window_size=200, **conv_kwargs)
 
     @pytest.mark.parametrize(
         "mode, ws, expectation",
@@ -2872,6 +2950,38 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size, decay_rates=np.arange(1, 6))
 
     @pytest.mark.parametrize(
+        "conv_kwargs, expectation",
+        [
+            (dict(), does_not_raise()),
+            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
+            (dict(shift=True), does_not_raise()),
+            (dict(shift=True, axis=0), does_not_raise()),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
+    )
+    def test_init_conv_kwargs(self, conv_kwargs, expectation):
+        with expectation:
+            self.cls(
+                5,
+                mode="conv",
+                window_size=200,
+                decay_rates=np.arange(1, 6),
+                **conv_kwargs,
+            )
+
+    @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
@@ -3546,6 +3656,32 @@ class TestBSplineBasis(BasisFuncsTesting):
         window_size = None if mode == "eval" else 2
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
+
+    @pytest.mark.parametrize(
+        "conv_kwargs, expectation",
+        [
+            (dict(), does_not_raise()),
+            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=1),
+                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+            ),
+            (dict(shift=True), does_not_raise()),
+            (dict(shift=True, axis=0), does_not_raise()),
+            (
+                dict(shifts=True, axis=0),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (
+                dict(shift=True, axis=0, time_series=np.arange(10)),
+                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+            ),
+        ],
+    )
+    def test_init_conv_kwargs(self, conv_kwargs, expectation):
+        with expectation:
+            self.cls(5, mode="conv", window_size=200, **conv_kwargs)
 
     @pytest.mark.parametrize(
         "mode, ws, expectation",

@@ -471,6 +471,7 @@ class Basis(Base, abc.ABC):
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
         For example, changing the `predictor_causality`, which by default is set to `"causal"`.
 
+
     Raises
     ------
     ValueError:
@@ -1904,8 +1905,11 @@ class MSplineBasis(SplineBasis):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs:
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Examples
     --------
@@ -2069,8 +2073,11 @@ class BSplineBasis(SplineBasis):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Attributes
     ----------
@@ -2195,8 +2202,11 @@ class CyclicBSplineBasis(SplineBasis):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     Attributes
     ----------
@@ -2344,8 +2354,11 @@ class RaisedCosineBasisLinear(Basis):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     # References
     ------------
@@ -2544,8 +2557,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
 
     # References
     ------------
@@ -2705,8 +2721,11 @@ class OrthExponentialBasis(Basis):
     n_basis_input :
         Number of input to be processed by the basis in "conv" mode.
     **kwargs :
-        Only used in "conv" mode. Additional keyword arguments that are passed to
-        `nemos.convolve.create_convolutional_predictor`
+        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
+        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
+        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
+        Note that one cannot change the default value for the `axis` parameter. Basis assumes
+        that the convolution axis is `axis=0`.
     """
 
     def __init__(
