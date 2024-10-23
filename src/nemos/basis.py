@@ -509,7 +509,8 @@ class Basis(Base, abc.ABC):
             None
         )
 
-        # pre-compute the expected output feature dimensionality
+        # these parameters are going to be computed
+        # at the first call of `compute_features`
         self._num_output_features = None
         self._input_shape = None
         self._label = str(label)
@@ -535,9 +536,9 @@ class Basis(Base, abc.ABC):
             for key, param in convolve_params.items()
             if param.default is not inspect.Parameter.empty
         }
+        # do not encourage to set axis.
+        convolve_configs = convolve_configs.difference({"axis"})
         if not set(kwargs.keys()).issubset(convolve_configs):
-            # do not encourage to set axis.
-            convolve_configs = convolve_configs.difference({"axis"})
             # remove axis in case axis=0, was passed which is allowed.
             invalid = (
                 set(kwargs.keys()).difference(convolve_configs).difference({"axis"})
@@ -1215,6 +1216,7 @@ class Basis(Base, abc.ABC):
     ) -> Tuple[dict, int]:
         """Handle default slicing logic."""
         if split_by_input:
+            # should we remove this option?
             if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
                 split_dict = {
                     self.label: slice(
@@ -1396,6 +1398,24 @@ class Basis(Base, abc.ABC):
             )
         return reshaped_out
 
+    def _check_input_shape_consistency(self, x: NDArray):
+        """Check input consistency across calls."""
+        # remove sample axis
+        shape = x.shape[1:]
+        if self._input_shape is not None and self._input_shape != shape:
+            expected_shape_str = "(n_samples, " + f"{self._input_shape}"[1:]
+            expected_shape_str = expected_shape_str.replace(",)", ")")
+            raise ValueError(
+                f"Input shape mismatch detected.\n\n"
+                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
+                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
+                f"  Expected: {expected_shape_str}\n"
+                f"  But got:  {x.shape}.\n\n"
+                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
+                "but all other dimensions must remain the same. If you need to process inputs with a "
+                "different shape, please create a new basis instance."
+            )
+
     def _set_num_output_features(self, *xi: NDArray) -> Basis:
         """
         Pre-compute the number of inputs and output features.
@@ -1430,32 +1450,17 @@ class Basis(Base, abc.ABC):
          `self.split_by_feature` behave appropriately.
 
         """
-        # Check that the input shape matches expectation:
-
+        # Check that the input shape matches expectation
         # Note that this method is reimplemented in AdditiveBasis and MultiplicativeBasis
         # so we can assume that len(xi) == 1
-        shape = xi[0].shape
+        self._check_input_shape_consistency(xi[0])
 
         # remove sample axis (samples are allowed to vary)
-        shape = shape[1:]
-
-        if self._input_shape is not None and self._input_shape != shape:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape}"[1:]
-            expected_shape_str = expected_shape_str.replace(",)", ")")
-            raise ValueError(
-                f"Input shape mismatch detected.\n\n"
-                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
-                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
-                f"  Expected: {expected_shape_str}\n"
-                f"  But got:  {xi[0].shape}.\n\n"
-                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
-                "but all other dimensions must remain the same. If you need to process inputs with a "
-                "different shape, please create a new basis instance."
-            )
+        shape = xi[0].shape[1:]
 
         self._input_shape = shape
 
-        # remove time axis & get the total input number
+        # remove sample axis & get the total input number
         n_inputs = (
             (1,) if xi[0].ndim == 1 else (np.prod(shape),)
         )
