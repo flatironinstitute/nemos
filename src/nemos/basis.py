@@ -207,12 +207,13 @@ class TransformerBasis:
 
         Examples
         --------
-        # Example input
         >>> import numpy as np
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+
+        # Example input
         >>> X, y = np.random.normal(size=(100, 2)), np.random.uniform(size=100)
 
         # Define and fit tranformation basis
-        >>> from nemos.basis import MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X) # input must be a 2d array
@@ -238,12 +239,13 @@ class TransformerBasis:
 
         Examples
         --------
-        >>> # Example input
         >>> import numpy as np
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+
+        >>> # Example input
         >>> X, y = np.random.normal(size=(10000, 2)), np.random.uniform(size=100)
 
         >>> # Define and fit tranformation basis
-        >>> from nemos.basis import MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10, mode="conv", window_size=200)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
@@ -284,12 +286,13 @@ class TransformerBasis:
 
         Examples
         --------
-        >>> # Example input
         >>> import numpy as np
+        >>> from nemos.basis import MSplineBasis, TransformerBasis
+        
+        >>> # Example input
         >>> X, y = np.random.normal(size=(100, 1)), np.random.uniform(size=100)
 
         >>> # Define tranformation basis
-        >>> from nemos.basis import MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
 
