@@ -505,9 +505,7 @@ class Basis(Base, abc.ABC):
 
         self._mode = mode
 
-        self._n_basis_input = (
-            None
-        )
+        self._n_basis_input = None
 
         # these parameters are going to be set at the first call of `compute_features`
         # since we cannot know a-priori how many features may be convolved
@@ -521,7 +519,7 @@ class Basis(Base, abc.ABC):
         self._check_convolution_kwargs()
 
         self.kernel_ = None
-        self._identifiability_constraints = False
+        # self._identifiability_constraints = False
 
     def _check_convolution_kwargs(self):
         """Check convolution kwargs settings.
@@ -660,18 +658,6 @@ class Basis(Base, abc.ABC):
                 )
 
         self._window_size = window_size
-
-    @property
-    def identifiability_constraints(self):
-        return self._identifiability_constraints
-
-    @identifiability_constraints.setter
-    def identifiability_constraints(self, value: bool):
-        if not isinstance(value, bool):
-            raise TypeError(
-                f"`identifiability_constraints` must be a boolean. {type(value)} provided instead!"
-            )
-        self._identifiability_constraints = value
 
     @staticmethod
     def _apply_identifiability_constraints(X: NDArray):
@@ -1479,9 +1465,7 @@ class Basis(Base, abc.ABC):
         self._input_shape = shape
 
         # remove sample axis & get the total input number
-        n_inputs = (
-            (1,) if xi[0].ndim == 1 else (np.prod(shape),)
-        )
+        n_inputs = (1,) if xi[0].ndim == 1 else (np.prod(shape),)
 
         self._n_basis_input = n_inputs
         self._num_output_features = self.n_basis_funcs * self._n_basis_input[0]
@@ -1562,8 +1546,8 @@ class AdditiveBasis(Basis):
                 self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
-        if self.identifiability_constraints:
-            X = self._apply_identifiability_constraints(X)
+        # if self.identifiability_constraints:
+        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -1595,8 +1579,8 @@ class AdditiveBasis(Basis):
                 ),
             ),
         )
-        if self.identifiability_constraints:
-            X = self._apply_identifiability_constraints(X)
+        # if self.identifiability_constraints:
+        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _set_kernel(self, *xi: ArrayLike) -> Basis:
@@ -1697,8 +1681,8 @@ class MultiplicativeBasis(Basis):
                 transpose=False,
             )
         )
-        if self.identifiability_constraints:
-            X = self._apply_identifiability_constraints(X)
+        # if self.identifiability_constraints:
+        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -1723,8 +1707,8 @@ class MultiplicativeBasis(Basis):
             self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality :]),
             transpose=False,
         )
-        if self.identifiability_constraints:
-            X = self._apply_identifiability_constraints(X)
+        # if self.identifiability_constraints:
+        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _set_num_output_features(self, *xi: NDArray) -> Basis:
@@ -2023,8 +2007,8 @@ class MSplineBasis(SplineBasis):
         )
         # re-normalize so that it integrates to 1 over the range.
         X /= scaling
-        if self.identifiability_constraints:
-            X = self._apply_identifiability_constraints(X)
+        # if self.identifiability_constraints:
+        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2174,8 +2158,8 @@ class BSplineBasis(SplineBasis):
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
 
-        if self.identifiability_constraints:
-            basis_eval = self._apply_identifiability_constraints(basis_eval)
+        # if self.identifiability_constraints:
+        #     basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2325,8 +2309,8 @@ class CyclicBSplineBasis(SplineBasis):
             )
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-        if self.identifiability_constraints:
-            basis_eval = self._apply_identifiability_constraints(basis_eval)
+        # if self.identifiability_constraints:
+        #     basis_eval = self._apply_identifiability_constraints(basis_eval)
 
         return basis_eval
 
@@ -2498,8 +2482,8 @@ class RaisedCosineBasisLinear(Basis):
             )
             + 1
         )
-        if self.identifiability_constraints:
-            basis_funcs = self._apply_identifiability_constraints(basis_funcs)
+        # if self.identifiability_constraints:
+        #     basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
 
     def _compute_peaks(self) -> NDArray:
@@ -2889,8 +2873,8 @@ class OrthExponentialBasis(Basis):
         )
         # orthonormalize on valid points
         basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
-        if self.identifiability_constraints:
-            basis_funcs = self._apply_identifiability_constraints(basis_funcs)
+        # if self.identifiability_constraints:
+        #     basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
