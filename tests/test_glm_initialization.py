@@ -29,10 +29,10 @@ def test_invert_non_linearity(non_linearity, output_y):
 @pytest.mark.parametrize(
     "non_linearity, expectation",
     [
-        (jnp.exp, pytest.raises(ValueError, match=".+The mean firing rate assumes")),
+        (jnp.exp, pytest.raises(ValueError, match=".+The mean firing rate has")),
         (
             jax.nn.softplus,
-            pytest.raises(ValueError, match=".+The mean firing rate assumes"),
+            pytest.raises(ValueError, match=".+The mean firing rate has"),
         ),
         (
             lambda x: jnp.exp(x),
