@@ -288,7 +288,7 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-        
+
         >>> # Example input
         >>> X, y = np.random.normal(size=(100, 1)), np.random.uniform(size=100)
 
@@ -754,6 +754,19 @@ class Basis(Base, abc.ABC):
             evaluated at the input samples. In 'conv' mode, it consists of convolved
             input samples with the basis functions. The output shape varies based on
             the subclass and mode.
+
+        Examples
+        -------
+        >>> import numpy as np
+        >>> from nemos.basis import BSplineBasis
+
+        >>> # Generate data
+        >>> num_samples = 10000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = BSplineBasis(10)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (10000, 10)
 
         Notes
         -----
@@ -1409,7 +1422,6 @@ class SplineBasis(Basis, abc.ABC):
     ----------
     order : int
         Spline order.
-
     """
 
     def __init__(
@@ -1849,6 +1861,19 @@ class CyclicBSplineBasis(SplineBasis):
         Number of basis functions.
     order : int
         Order of the splines used in basis functions.
+
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import CyclicBSplineBasis
+    >>> X = np.random.normal(size=(1000, 1))
+
+    >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=5, order=3, mode="conv", window_size=10)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = cyclic_basis(sample_points)
+    >>> X_transformed = cyclic_basis.to_transformer().fit_transform(X)
+    >>> X_transformed.shape
+    (1000, 5)
     """
 
     def __init__(
@@ -1984,6 +2009,19 @@ class RaisedCosineBasisLinear(Basis):
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
+
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import RaisedCosineBasisLinear
+    >>> X = np.random.normal(size=(1000, 1))
+
+    >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = cosine_basis(sample_points)
+    >>> X_transformed = cosine_basis.to_transformer().fit_transform(X)
+    >>> X_transformed.shape
+    (1000, 5)
 
     # References
     ------------
@@ -2178,6 +2216,19 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
 
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import RaisedCosineBasisLog
+    >>> X = np.random.normal(size=(1000, 1))
+
+    >>> cosine_basis = RaisedCosineBasisLog(n_basis_funcs=5, mode="conv", window_size=10)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = cosine_basis(sample_points)
+    >>> X_transformed = cosine_basis.to_transformer().fit_transform(X)
+    >>> X_transformed.shape
+    (1000, 5)
+
     # References
     ------------
     [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
@@ -2331,6 +2382,21 @@ class OrthExponentialBasis(Basis):
     **kwargs :
         Only used in "conv" mode. Additional keyword arguments that are passed to
         `nemos.convolve.create_convolutional_predictor`
+
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import OrthExponentialBasis
+    >>> X = np.random.normal(size=(1000, 1))
+    >>> n_basis_funcs = 5
+    >>> decay_rates = [0.01, 0.02, 0.03, 0.04, 0.05] # sample decay rates
+    >>> window_size=10
+    >>> ortho_basis = OrthExponentialBasis(n_basis_funcs, decay_rates, "conv", window_size)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = ortho_basis(sample_points)
+    >>> X_transformed = ortho_basis.to_transformer().fit_transform(X)
+    >>> X_transformed.shape
+    (1000, 5)
     """
 
     def __init__(
@@ -2508,6 +2574,17 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     -------
     spline
         M-spline basis function, shape (n_sample_points, ).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from numpy import linspace
+    >>> from nemos.basis import mspline
+
+    >>> sample_points = linspace(0, 1, 100)
+    >>> mspline_eval = mspline(x=sample_points, k=3, i=2, T=np.random.rand(7)) # define a cubic M-spline
+    >>> mspline_eval.shape
+    (100,)
     """
     # Boundary conditions.
     if (T[i + k] - T[i]) < 1e-6:
