@@ -1826,6 +1826,14 @@ class BSplineBasis(SplineBasis):
         -----
         The evaluation is performed by looping over each element and using `splev` from
         SciPy to compute the basis values.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import BSplineBasis
+        >>> bspline_basis = BSplineBasis(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -1981,6 +1989,14 @@ class CyclicBSplineBasis(SplineBasis):
         -----
         The evaluation is performed by looping over each element and using `splev` from
         SciPy to compute the basis values.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import CyclicBSplineBasis
+        >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=4, order=3)
+        >>> sample_points, basis_values = cyclic_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -2162,6 +2178,13 @@ class RaisedCosineBasisLinear(Basis):
         basis_funcs :
             Raised cosine basis functions, shape (n_samples, n_basis_funcs)
 
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import RaisedCosineBasisLinear
+        >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
+        >>> sample_points, basis_values = cosine_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -2552,6 +2575,16 @@ class OrthExponentialBasis(Basis):
             Evaluated exponentially decaying basis functions, numerically
             orthogonalized, shape (n_samples, n_basis_funcs)
 
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import OrthExponentialBasis
+        >>> n_basis_funcs = 5
+        >>> decay_rates = [0.01, 0.02, 0.03, 0.04, 0.05] # sample decay rates
+        >>> window_size=10
+        >>> ortho_basis = OrthExponentialBasis(n_basis_funcs, decay_rates, "conv", window_size)
+        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
