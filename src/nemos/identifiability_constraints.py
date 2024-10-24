@@ -49,33 +49,9 @@ def _apply_identifiability_constraints(
     feature_matrix: NDArray, preprocessing_func: Callable = add_constant
 ):
     """
-    Apply identifiability constraints to a design matrix `X`.
+    Apply identifiability constraints to a design matrix `feature_matrix`.
 
-     Removes columns from `X` until it is full rank to ensure the uniqueness
-     of the GLM (Generalized Linear Model) maximum-likelihood solution. This is particularly
-     crucial for models using bases like BSplines and CyclicBspline, which, due to their
-     construction, sum to 1 and can cause rank deficiency when combined with an intercept.
-
-     For GLMs, this rank deficiency means that different sets of coefficients might yield
-     identical predicted rates and log-likelihood, complicating parameter learning, especially
-     in the absence of regularization.
-
-    Parameters
-    ----------
-    feature_matrix:
-        The design matrix before applying the identifiability constraints.
-
-    Returns
-    -------
-    :
-        The adjusted design matrix with redundant columns dropped and columns mean-centered.
-
-    Notes
-    -----
-    Compilation is triggered at every loop. This can be slower than pure python for low number
-    of samples and low dimension for the feature matrix.
-    Usually, the design matrices we work with have a large number of samples.
-    Running the code on GPU will reduce the computation time significantly.
+    Private function that does the actual computation on a single feature_matrix.
     """
     if jnp.issubdtype(feature_matrix.dtype, jnp.float32):
         warnings.warn(
@@ -176,7 +152,7 @@ def apply_identifiability_constraints(
 
 def apply_identifiability_constraints_by_basis_component(
     basis: Basis,
-    X: NDArray,
+    feature_matrix: NDArray,
     add_intercept: bool = True,
 ) -> Tuple[NDArray, NDArray]:
     """Apply identifiability constraint to a design matrix to each component of an additive basis.
@@ -185,18 +161,18 @@ def apply_identifiability_constraints_by_basis_component(
     ----------
     basis:
         The basis that computed X;
-    X:
-        The design matrix before applying the identifiability constraints.
+    feature_matrix:
+        The feature matrix before applying the identifiability constraints.
     add_intercept:
         Set to True if your model will add an intercept term, False otherwise.
 
     Returns
     -------
     constrained_x:
-        The adjusted design matrix after applying the identifiability constraints as numpy array.
+        The adjusted feature matrix after applying the identifiability constraints as numpy array.
     kept_columns:
         Indices of the columns that are kept. This should be used for applying the same transformation
-        to a design matrix generated from different a set of inputs (as for a test set).
+        to a feature matrix generated from different a set of inputs (as for a test set).
 
     Examples
     --------
@@ -226,11 +202,11 @@ def apply_identifiability_constraints_by_basis_component(
     >>> rate = GLM().fit(constrained_x, np.random.poisson(size=100)).predict(test_x)
 
     """
-    # gets a dictionary with feature specific design matrices
+    # gets a dictionary with feature specific feature matrices
     # stored in tensors of shape (n_samples, n_inputs, n_features)
     # n_inputs can be larger than one if basis is used to perform
     # convolutions on multiple signals (as for counts TsdFrames)
-    splits_x = basis.split_by_feature(X)
+    splits_x = basis.split_by_feature(feature_matrix)
 
     # list leaves and unwrap over input dimension. Additive components have shapes:
     # (n_samples, n_inputs, n_basis_funcs)
@@ -252,7 +228,7 @@ def apply_identifiability_constraints_by_basis_component(
     constrained_x = tree_slice(constrained_x_and_indices, idx=0, is_leaf=is_leaf)
     dropped_indices = tree_slice(constrained_x_and_indices, idx=1, is_leaf=is_leaf)
 
-    # stack the arrays back into a design matrox
+    # stack the arrays back into a feature matrix
     constrained_x = np.hstack(constrained_x)
 
     # indices are referenced to the sub-matrices, get the absolute index in the feature matrix
@@ -267,6 +243,8 @@ def apply_identifiability_constraints_by_basis_component(
         )
     )
     dropped_indices += shifts
-    # return kept indices
-    kept_columns = np.delete(np.arange(X.shape[1]), dropped_indices, axis=0)
+    # get kept columns
+    kept_columns = np.delete(
+        np.arange(feature_matrix.shape[1]), dropped_indices, axis=0
+    )
     return constrained_x, kept_columns
