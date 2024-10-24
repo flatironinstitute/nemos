@@ -113,7 +113,6 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
-addopts = "-n auto"
 
 [tool.coverage.run]
 omit = [
