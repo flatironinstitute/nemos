@@ -7,6 +7,7 @@ from . import (
     exceptions,
     fetch,
     glm,
+    identifiability_constraints,
     observation_models,
     pytrees,
     regularizer,
