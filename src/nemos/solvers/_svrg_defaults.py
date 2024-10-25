@@ -36,7 +36,6 @@ def _convert_to_float(func):
     return wrapper
 
 
-# not using the previous one to avoid calculating L and L_max twice
 def svrg_optimal_batch_and_stepsize(
     compute_smoothness_constants: Callable,
     *data: Any,
@@ -298,9 +297,15 @@ def _glm_softplus_poisson_l_smooth(
         Smoothness constant `L`.
     """
     if n_power_iters is None:
-        # Calculate the Hessian directly and find the largest eigenvalue
-        XDX = X.T.dot((0.17 * y.reshape(y.shape[0], 1) + 0.25) * X) / y.shape[0]
-        return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
+        try:
+            # Calculate the Hessian directly and find the largest eigenvalue
+            XDX = X.T.dot((0.17 * y.reshape(y.shape[0], 1) + 0.25) * X) / y.shape[0]
+            return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
+        except RuntimeError as e:
+            raise RuntimeError(
+                f"Failed to calculate the largest eigenvalue: {e}. "
+                "Consider using the power method by setting the `n_power_iters` parameter."
+            )
     else:
         # Use power iteration to find the largest eigenvalue
         return _glm_softplus_poisson_l_smooth_with_power_iteration(

@@ -31,8 +31,7 @@ def glm_compute_optimal_stepsize_configs(
     ----------
     model :
         The generalized linear model object for which the optimal step size and batch
-        configuration need to be computed. The model should have attributes like
-        `solver_name`, `observation_model`, and `regularizer`.
+        configuration need to be computed.
 
     Returns
     -------
