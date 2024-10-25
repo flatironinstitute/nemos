@@ -86,12 +86,19 @@ def initialize_intercept_matching_mean_rate(
         out = analytical_inv(means)
         if jnp.any(jnp.isnan(out)):
             raise ValueError(
-                "Could not set the initial intercept as the inverse of the firing rate for "
-                "the provided link function. The mean firing rate has some negative values."
+                "Failed to initialize the model intercept as the inverse of the firing rate for "
+                "the provided link function. The mean firing rate has some non-positive values."
             )
         return out
 
     def func(x, mean_x):
         return inverse_link_function(x) - mean_x
 
-    return scalar_root_find_elementwise(func, means, means)
+    try:
+        out = scalar_root_find_elementwise(func, means, means)
+    except ValueError:
+        raise ValueError(
+            "Failed to initialize the model intercept as the inverse of the firing rate for the"
+            " provided link function. Please, provide initial parameters instead!"
+        )
+    return out
