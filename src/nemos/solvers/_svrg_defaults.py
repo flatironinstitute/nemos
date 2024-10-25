@@ -384,43 +384,6 @@ def _calculate_stepsize_svrg(
     return numerator / denominator
 
 
-@_convert_to_float
-def _calculate_stepsize_saga(
-    batch_size: int, num_samples: int, l_smooth_max: float, l_smooth: float
-) -> float:
-    """
-    Calculate optimal step size for SAGA according to [1].
-
-    Parameters
-    ----------
-    batch_size :
-        Mini-batch size.
-    num_samples :
-        Overall number of data points.
-    l_smooth_max :
-        Maximum smoothness constant among f_{i}.
-    l_smooth :
-        Smoothness constant.
-
-    Returns
-    -------
-    :
-        Optimal step size for the optimization.
-
-    References
-    ----------
-    [1] Gazagnadou, Nidham, Robert Gower, and Joseph Salmon.
-    "Optimal mini-batch and step sizes for saga."
-    International conference on machine learning. PMLR, 2019.
-    """
-
-    l_b = l_smooth * num_samples / batch_size * (batch_size - 1) / (
-        num_samples - 1
-    ) + l_smooth_max / batch_size * (num_samples - batch_size) / (num_samples - 1)
-
-    return 0.25 / l_b
-
-
 def _calculate_optimal_batch_size_svrg(
     num_samples: int,
     l_smooth_max: float,
