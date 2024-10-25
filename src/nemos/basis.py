@@ -543,8 +543,9 @@ class Basis(Base, abc.ABC):
             key
             for key, param in convolve_params.items()
             if param.default
-            is not inspect.Parameter.empty  # prevent user from passing directly
+            # prevent user from passing
             # `basis_matrix` or `time_series` in kwargs.
+            is not inspect.Parameter.empty  
         }
         if not set(self._conv_kwargs.keys()).issubset(convolve_configs):
             # do not encourage to set axis.
