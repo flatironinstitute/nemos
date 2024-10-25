@@ -533,8 +533,8 @@ class Basis(Base, abc.ABC):
 
         if "axis" in self._conv_kwargs:
             raise ValueError(
-                f"Setting the `axis` parameter is not allowed. Basis requires the "
-                f"convolution to be applied along the first axis (`axis=0`).\n"
+                "Setting the `axis` parameter is not allowed. Basis requires the "
+                "convolution to be applied along the first axis (`axis=0`).\n"
                 "Please transpose your input so that the desired axis for "
                 "convolution is the first dimension (axis=0)."
             )
