@@ -271,7 +271,7 @@ def _glm_softplus_poisson_l_smooth_with_power_iteration(
 
 
 def _glm_softplus_poisson_l_smooth(
-    X: NDArray, y: NDArray, batch_size: int, n_power_iters: Optional[int] = None
+    X: NDArray, y: NDArray, batch_size: int, n_power_iters: Optional[int] = 20
 ) -> jnp.ndarray:
     """
     Calculate the smoothness constant `L` for a Poisson GLM with softplus inverse link.
