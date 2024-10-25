@@ -629,3 +629,25 @@ def ridge_regression_tree(ridge_regression):
         return jnp.power(yy - pred, 2).sum() + norm
 
     return X_tree, y, coef_tree, ridge_tree, loss_tree
+
+
+@pytest.fixture()
+def example_X_y_high_firing_rates():
+    """Example that used failed with NeMoS original initialization."""
+    np.random.seed(123)
+
+    n_features = 18
+    n_neurons = 60
+    n_samples = 500
+
+    # random design array. Shape (n_time_points, n_features).
+    X = 0.5 * np.random.normal(size=(n_samples, n_features))
+
+    # log-rates & weights
+    b_true = np.random.uniform(size=(n_neurons,)) * 3  # baseline rates
+    w_true = np.random.uniform(size=(n_features, n_neurons)) * 0.1  # real weights:
+
+    # generate counts (spikes will be (n_samples, n_features)
+    rate = jnp.exp(jnp.dot(X, w_true) + b_true)
+    spikes = np.random.poisson(rate)
+    return X, spikes

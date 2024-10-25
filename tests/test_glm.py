@@ -892,6 +892,20 @@ class TestGLM:
             model.initialize_state(X, y, params)
 
     @pytest.mark.parametrize(
+        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.relu]
+    )
+    def test_high_firing_rate_initialization(
+        self, inv_link, example_X_y_high_firing_rates
+    ):
+        model = nmo.glm.GLM(
+            observation_model=nmo.observation_models.PoissonObservations(
+                inverse_link_function=inv_link
+            )
+        )
+        X, y = example_X_y_high_firing_rates
+        model.initialize_params(X, y[:, 0])
+
+    @pytest.mark.parametrize(
         "dim_weights, expectation",
         [
             (
@@ -2200,6 +2214,21 @@ class TestPopulationGLM:
                 observation_model=observation,
                 regularizer_strength=1.0,
             )
+
+    @pytest.mark.parametrize(
+        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.relu]
+    )
+    def test_high_firing_rate_initialization(
+        self, inv_link, example_X_y_high_firing_rates
+    ):
+        """Test firing rate regime that would not be initialized correctly in the original implementation."""
+        model = nmo.glm.PopulationGLM(
+            observation_model=nmo.observation_models.PoissonObservations(
+                inverse_link_function=inv_link
+            )
+        )
+        X, y = example_X_y_high_firing_rates
+        model.initialize_params(X, y)
 
     @pytest.mark.parametrize(
         "X, y",
