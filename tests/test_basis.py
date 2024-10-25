@@ -601,20 +601,32 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "conv_kwargs, expectation",
         [
             (dict(), does_not_raise()),
-            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
             (
                 dict(axis=1),
-                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
             ),
             (dict(shift=True), does_not_raise()),
-            (dict(shift=True, axis=0), does_not_raise()),
             (
-                dict(shifts=True, axis=0),
+                dict(shift=True, axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(shifts=True),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
-            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (dict(shift=True, predictor_causality="causal"), does_not_raise()),
             (
-                dict(shift=True, axis=0, time_series=np.arange(10)),
+                dict(shift=True, time_series=np.arange(10)),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
         ],
@@ -1382,20 +1394,32 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         "conv_kwargs, expectation",
         [
             (dict(), does_not_raise()),
-            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
             (
                 dict(axis=1),
-                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
             ),
             (dict(shift=True), does_not_raise()),
-            (dict(shift=True, axis=0), does_not_raise()),
             (
-                dict(shifts=True, axis=0),
+                dict(shift=True, axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(shifts=True),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
-            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (dict(shift=True, predictor_causality="causal"), does_not_raise()),
             (
-                dict(shift=True, axis=0, time_series=np.arange(10)),
+                dict(shift=True, time_series=np.arange(10)),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
         ],
@@ -2112,20 +2136,32 @@ class TestMSplineBasis(BasisFuncsTesting):
         "conv_kwargs, expectation",
         [
             (dict(), does_not_raise()),
-            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
             (
                 dict(axis=1),
-                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
             ),
             (dict(shift=True), does_not_raise()),
-            (dict(shift=True, axis=0), does_not_raise()),
             (
-                dict(shifts=True, axis=0),
+                dict(shift=True, axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(shifts=True),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
-            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (dict(shift=True, predictor_causality="causal"), does_not_raise()),
             (
-                dict(shift=True, axis=0, time_series=np.arange(10)),
+                dict(shift=True, time_series=np.arange(10)),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
         ],
@@ -2953,20 +2989,32 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         "conv_kwargs, expectation",
         [
             (dict(), does_not_raise()),
-            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
             (
                 dict(axis=1),
-                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
             ),
             (dict(shift=True), does_not_raise()),
-            (dict(shift=True, axis=0), does_not_raise()),
             (
-                dict(shifts=True, axis=0),
+                dict(shift=True, axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(shifts=True),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
-            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (dict(shift=True, predictor_causality="causal"), does_not_raise()),
             (
-                dict(shift=True, axis=0, time_series=np.arange(10)),
+                dict(shift=True, time_series=np.arange(10)),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
         ],
@@ -3661,20 +3709,32 @@ class TestBSplineBasis(BasisFuncsTesting):
         "conv_kwargs, expectation",
         [
             (dict(), does_not_raise()),
-            (dict(axis=0), does_not_raise()),
+            (
+                dict(axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
             (
                 dict(axis=1),
-                pytest.raises(ValueError, match="Invalid `axis=1` provided"),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
             ),
             (dict(shift=True), does_not_raise()),
-            (dict(shift=True, axis=0), does_not_raise()),
             (
-                dict(shifts=True, axis=0),
+                dict(shift=True, axis=0),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(shifts=True),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
-            (dict(shift=True, axis=0, predictor_causality="causal"), does_not_raise()),
+            (dict(shift=True, predictor_causality="causal"), does_not_raise()),
             (
-                dict(shift=True, axis=0, time_series=np.arange(10)),
+                dict(shift=True, time_series=np.arange(10)),
                 pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
         ],

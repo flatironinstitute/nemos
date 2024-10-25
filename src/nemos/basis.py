@@ -538,10 +538,10 @@ class Basis(Base, abc.ABC):
                 f"kwargs should only be set when mode=='conv', but '{self._mode}' provided instead!"
             )
 
-        if "axis" in self._conv_kwargs and self._conv_kwargs["axis"] != 0:
+        if "axis" in self._conv_kwargs:
             raise ValueError(
-                f"Invalid `axis={self._conv_kwargs['axis']}` provided. Basis requires the "
-                f"convolution to be applied along the first axis (`axis=0`).\n"
+                "Setting the `axis` parameter is not allowed. Basis requires the "
+                "convolution to be applied along the first axis (`axis=0`).\n"
                 "Please transpose your input so that the desired axis for "
                 "convolution is the first dimension (axis=0)."
             )
@@ -550,8 +550,9 @@ class Basis(Base, abc.ABC):
             key
             for key, param in convolve_params.items()
             if param.default
-            is not inspect.Parameter.empty  # prevent user from passing directly
+            # prevent user from passing
             # `basis_matrix` or `time_series` in kwargs.
+            is not inspect.Parameter.empty
         }
         if not set(self._conv_kwargs.keys()).issubset(convolve_configs):
             # do not encourage to set axis.
