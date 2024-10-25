@@ -80,19 +80,6 @@ def test_calculate_stepsize_svrg(batch_size, num_samples, l_smooth_max, l_smooth
     assert isinstance(stepsize, float)
 
 
-@pytest.mark.parametrize("batch_size", [1, 2, 10])
-@pytest.mark.parametrize("num_samples", [10, 12, 100, 500])
-@pytest.mark.parametrize("l_smooth_max", [0.1, 1.0, 10.0])
-@pytest.mark.parametrize("l_smooth", [0.01, 0.05, 2.0])
-def test_calculate_stepsize_saga(batch_size, num_samples, l_smooth_max, l_smooth):
-    """Test calculation of the optimal step size for SAGA."""
-    stepsize = _svrg_defaults._calculate_stepsize_saga(
-        batch_size, num_samples, l_smooth_max, l_smooth
-    )
-    assert stepsize > 0
-    assert isinstance(stepsize, float)
-
-
 @pytest.mark.parametrize("num_samples", [12, 100, 500])
 @pytest.mark.parametrize("l_smooth_max", [0.1, 1.0, 10.0])
 @pytest.mark.parametrize("l_smooth", [0.01, 0.05])
