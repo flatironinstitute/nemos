@@ -124,6 +124,7 @@ def test_calculate_b_hat(num_samples, l_smooth_max, l_smooth, expected_b_hat):
     "num_samples, l_smooth_max, l_smooth, strong_convexity, expected_b_tilde",
     [
         (100, 10.0, 2.0, 0.1, 3.4146341463414633),
+        (121, 11.0, 1.0, 0.4, 0.6769230769230770),
     ],
 )
 def test_calculate_b_tilde(

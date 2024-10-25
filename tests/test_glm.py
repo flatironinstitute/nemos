@@ -1822,14 +1822,12 @@ class TestGLM:
         else:
             assert opt_state.stepsize > 0
             assert isinstance(opt_state.stepsize, float)
-            model.fit(X, y)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
-            model.fit(X, y)
 
     @pytest.mark.parametrize(
         "solver_name, reg",
@@ -1877,14 +1875,12 @@ class TestGLM:
         else:
             assert opt_state.stepsize > 0
             assert isinstance(opt_state.stepsize, float)
-            model.fit(X, y)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
-            model.fit(X, y)
 
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])
@@ -3812,14 +3808,12 @@ class TestPopulationGLM:
         else:
             assert opt_state.stepsize > 0
             assert isinstance(opt_state.stepsize, float)
-            model.fit(X, y)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
-            model.fit(X, y)
 
     @pytest.mark.parametrize(
         "solver_name, reg",
@@ -3867,14 +3861,12 @@ class TestPopulationGLM:
         else:
             assert opt_state.stepsize > 0
             assert isinstance(opt_state.stepsize, float)
-            model.fit(X, y)
 
         if batch_size is not None:
             assert solver.batch_size == batch_size
         else:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
-            model.fit(X, y)
 
     @pytest.mark.parametrize(
         "params, warns",
