@@ -338,7 +338,7 @@ class GLM(BaseRegressor):
         >>> model = model.fit(X, y)
 
         >>> # predict new spike data
-        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
+        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
         >>> predicted_spikes = model.predict(Xnew)
 
         See Also
