@@ -773,7 +773,7 @@ class GLM(BaseRegressor):
 
         >>> # generate spikes and rates
         >>> random_key = jax.random.key(123)
-        >>> Xnew = np.random.normal(size=(20, ) + X.shape[1:])
+        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
         >>> spikes, rates = model.simulate(random_key, Xnew)
 
         See Also
