@@ -659,7 +659,7 @@ class GLM(BaseRegressor):
         -------
         >>> # example input
         >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
 
         >>> # fit a ridge regression Poisson GLM
         >>> import nemos as nmo
@@ -767,7 +767,7 @@ class GLM(BaseRegressor):
         --------
         >>> # example input
         >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
 
         >>> # define and fit model
         >>> import nemos as nmo
@@ -956,7 +956,7 @@ class GLM(BaseRegressor):
         --------
         >>> import numpy as np
         >>> import nemos as nmo
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
         >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
         >>> opt_state = model.initialize_state(X, y, params)
