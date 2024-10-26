@@ -445,7 +445,7 @@ class GLM(BaseRegressor):
         --------
         >>> # example input
         >>> import numpy as np
-        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)  
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
 
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
@@ -454,7 +454,7 @@ class GLM(BaseRegressor):
         >>> # get model score
         >>> log_likelihood_score = model.score(X, y)
 
-        >>> # get a pseudo-R2 score  
+        >>> # get a pseudo-R2 score
         >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
         Notes
