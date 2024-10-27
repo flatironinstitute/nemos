@@ -953,11 +953,11 @@ class Basis(Base, abc.ABC):
         >>> from nemos.basis import MSplineBasis
         >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
         >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-        >>> p = plt.plot(sample_points, basis_values, label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions');
-        >>> plt.xlabel('Domain');
-        >>> plt.ylabel('Basis Function Value');
-        >>> l = plt.legend()
+        >>> p = plt.plot(sample_points, basis_values)
+        >>> _ = plt.title('M-Spline Basis Functions')
+        >>> _ = plt.xlabel('Domain')
+        >>> _ = plt.ylabel('Basis Function Value')
+        >>> _ = plt.legend([f'Function {i+1}' for i in range(4)]);
         """
         self._check_input_dimensionality(n_samples)
 
