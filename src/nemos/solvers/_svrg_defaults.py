@@ -296,7 +296,19 @@ def _glm_softplus_poisson_l_smooth(
     -------
     :
         Smoothness constant `L`.
+
+    Raises
+    ------
+    TypeError:
+        If `n_power_iters` is not an integer or None.
+    RuntimeError:
+        If the eigienvalue computation does not converge.
+    ValueError:
+        If a negative integer is provided.
     """
+    if n_power_iters and not isinstance(n_power_iters, int):
+        raise TypeError("`n_power_iters` must be an integer or None.")
+
     if n_power_iters is None:
         try:
             warnings.warn(
@@ -314,6 +326,8 @@ def _glm_softplus_poisson_l_smooth(
                 "Consider using the power method by setting the `n_power_iters` parameter."
             )
     else:
+        if n_power_iters <= 0:
+            raise ValueError("`n_power_iters` must be positive.")
         # Use power iteration to find the largest eigenvalue
         return _glm_softplus_poisson_l_smooth_with_power_iteration(
             X, y, n_power_iters, batch_size=batch_size

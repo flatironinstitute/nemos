@@ -199,7 +199,10 @@ def test_warnigns_svrg_optimal_batch_and_stepsize(
     [
         (None, pytest.warns(UserWarning, match="Direct computation of the eigenvalues")),
         (1, does_not_raise()),
-        (10, does_not_raise())
+        (10, does_not_raise()),
+        ("a", pytest.raises(TypeError, match="`n_power_iters` must be an integer or None")),
+        (0.5, pytest.raises(TypeError, match="`n_power_iters` must be an integer or None")),
+        (-1, pytest.raises(ValueError, match="`n_power_iters` must be positive"))
     ]
 )
 def test_glm_softplus_poisson_l_smooth_power_iter(x_sample, y_sample, n_power_iter, expectation):
