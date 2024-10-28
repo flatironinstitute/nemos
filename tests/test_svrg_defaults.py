@@ -1,5 +1,6 @@
 import pytest
 import jax.numpy as jnp
+
 from nemos.solvers import _svrg_defaults
 from contextlib import nullcontext as does_not_raise
 
@@ -193,9 +194,17 @@ def test_warnigns_svrg_optimal_batch_and_stepsize(
         )
 
 
-@pytest.mark.parametrize("n_power_iter", [None, 1, 10])
-def test_glm_softplus_poisson_l_smooth_power_iter(x_sample, y_sample, n_power_iter):
-    _svrg_defaults._glm_softplus_poisson_l_smooth(x_sample, y_sample, n_power_iter)
+@pytest.mark.parametrize(
+    "n_power_iter, expectation",
+    [
+        (None, pytest.warns(UserWarning, match="Direct computation of the eigenvalues")),
+        (1, does_not_raise()),
+        (10, does_not_raise())
+    ]
+)
+def test_glm_softplus_poisson_l_smooth_power_iter(x_sample, y_sample, n_power_iter, expectation):
+    with expectation:
+        _svrg_defaults._glm_softplus_poisson_l_smooth(x_sample, y_sample, batch_size=1, n_power_iters=n_power_iter)
 
 
 @pytest.mark.parametrize(

@@ -42,7 +42,7 @@ def svrg_optimal_batch_and_stepsize(
     batch_size: Optional[int] = None,
     stepsize: Optional[float] = None,
     strong_convexity: Optional[float] = None,
-    n_power_iters: Optional[int] = None,
+    n_power_iters: Optional[int] = 20,
     default_batch_size: int = 1,
     default_stepsize: float = 1e-3,
 ):
@@ -66,7 +66,8 @@ def svrg_optimal_batch_and_stepsize(
     strong_convexity :
         The strong convexity constant. For L2-regularized losses, this should be the regularization strength.
     n_power_iters :
-        Maximum number of iterations for the power method when finding the largest eigenvalue.
+        Maximum number of iterations for the power method when finding the largest eigenvalue. If set to `None`,
+        the lead eigenvalue is computed directly (no power method).
     default_batch_size :
         Default batch size to use if the optimal calculation fails.
     default_stepsize :
