@@ -99,6 +99,7 @@ def test_calculate_optimal_batch_size_svrg(
     "num_samples, l_smooth_max, l_smooth, expected_b_hat",
     [
         (100, 10.0, 2.0, 2.8697202),
+        (121, 11.0, 1.0, 4.690416),
     ],
 )
 def test_calculate_b_hat(num_samples, l_smooth_max, l_smooth, expected_b_hat):
