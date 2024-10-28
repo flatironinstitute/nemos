@@ -1157,7 +1157,7 @@ class AdditiveBasis(Basis):
     >>> # define two basis objects and add them
     >>> basis_1 = nmo.basis.BSplineBasis(10)
     >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
-    >>> additive_basis = nmo.basis.AdditiveBasis(basis1=basis_1, basis2=basis_2)
+    >>> additive_basis = basis_1 + basis_2
 
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
@@ -1284,7 +1284,7 @@ class MultiplicativeBasis(Basis):
     >>> # define two basis and multiply
     >>> basis_1 = nmo.basis.BSplineBasis(10)
     >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
-    >>> multiplicative_basis = nmo.basis.MultiplicativeBasis(basis1=basis_1, basis2=basis_2)
+    >>> multiplicative_basis = basis_1 * basis_2
 
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
