@@ -298,6 +298,9 @@ def _glm_softplus_poisson_l_smooth(
     """
     if n_power_iters is None:
         try:
+            warnings.warn("Direct computation of the eigenvalues requires a substantial amount of resources. "
+                          "Please, consider using the power method by setting the `n_power_iters` parameter "
+                          "(default behavior).", UserWarning)
             # Calculate the Hessian directly and find the largest eigenvalue
             XDX = X.T.dot((0.17 * y.reshape(y.shape[0], 1) + 0.25) * X) / y.shape[0]
             return jnp.sort(jnp.linalg.eigvalsh(XDX))[-1]
