@@ -59,7 +59,7 @@ class GLM(BaseRegressor):
     | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
     | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
     | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG                                           |
-    | GroupLasso    | ProximalGradient | ProximalGradient, , ProxSVRG                                         |
+    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG                                         |
 
 
     **Fitting Large Models**
@@ -67,7 +67,8 @@ class GLM(BaseRegressor):
     For very large models, you may consider using the Stochastic Variance Reduced Gradient
     ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
     ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
-    which take advantage of batched computation, passing the solver name at model initialization.
+    which take advantage of batched computation. You can change the solver by passing
+    `"SVRG"` as `solver_name` at model initialization.
 
     The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
     hyperparameters. These parameters control the size of the mini-batches used for gradient computations
@@ -1034,14 +1035,15 @@ class PopulationGLM(GLM):
     For very large models, you may consider using the Stochastic Variance Reduced Gradient
     ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
     ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
-    which take advantage of batched computation.
+    which take advantage of batched computation. You can change the solver by passing
+    `"SVRG"` or `"ProxSVRG"` as `solver_name` at model initialization.
 
     The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
     hyperparameters. These parameters control the size of the mini-batches used for gradient computations
     and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
     convergence or even divergence of the optimization process.
 
-    To assist with this, for certain GLM configurations, we provide recommended `batch_size` and `stepsize`
+    To assist with this, for certain GLM configurations, we provide `batch_size` and `stepsize` default
     values that are theoretically guaranteed to ensure fast convergence.
 
     Below is a list of the configurations for which we can provide guaranteed hyperparameters:
