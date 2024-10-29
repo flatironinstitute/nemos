@@ -14,12 +14,12 @@ from .basis import Basis
 from .tree_utils import get_valid_multitree, tree_slice, pytree_map_and_reduce
 
 
-def _warn_if_float32(feature_matrix: Any):
+def _warn_if_not_float64(feature_matrix: Any):
     """Warn if the feature matrix uses float32 precision."""
-    any_float32 = pytree_map_and_reduce(lambda x: jnp.issubdtype(x, jnp.float32), any, feature_matrix)
-    if any_float32:
+    all_float64 = pytree_map_and_reduce(lambda x: jnp.issubdtype(x.dtype, jnp.float64), all, feature_matrix)
+    if not all_float64:
         warnings.warn(
-            "The feature matrix is of dtype `float32`. Consider converting it to `float64` "
+            "The feature matrix is not of dtype `float64`. Consider converting it to `float64` "
             "for increased numerical precision when computing the matrix rank. "
             "You can enable float64 precision globally by adding:\n\n"
             "    jax.config.update('jax_enable_x64', True)\n",
@@ -29,7 +29,7 @@ def _warn_if_float32(feature_matrix: Any):
 
 def add_constant(x):
     """Add intercept term."""
-    return jnp.hstack((jnp.ones((x.shape[0], 1)), x))
+    return jnp.hstack((jnp.ones((x.shape[0], 1), dtype=x.dtype), x))
 
 
 @partial(jax.jit, static_argnums=(3,))
@@ -70,7 +70,8 @@ def _apply_identifiability_constraints(
     Private function that does the actual computation on a single feature_matrix.
     """
     if warn_if_float32:
-        _warn_if_float32(feature_matrix)
+        _warn_if_not_float64(feature_matrix)
+
     shape_sample_axis = feature_matrix.shape[0]
     is_valid = get_valid_multitree(feature_matrix)
 
@@ -91,7 +92,7 @@ def _apply_identifiability_constraints(
 
     # full rank, no extra computation needed
     if rank == feature_matrix_with_intercept.shape[1]:
-        return feature_matrix, jnp.arange(feature_matrix.shape[1])
+        return feature_matrix, jnp.zeros((feature_matrix.shape[1]), dtype=bool)
 
     # initialize the drop col vector to True, and the output matrix to feature_matrix
     is_column_drop_found = jnp.array(True)  # for consistency with the output of jnp.any
@@ -110,8 +111,8 @@ def _apply_identifiability_constraints(
     )
 
     # return the output matrix and the dropped indices
-    feature_matrix = jnp.zeros(
-        (shape_sample_axis, feature_matrix.shape[1] - drop_cols.sum()),
+    feature_matrix = jnp.full(
+        (shape_sample_axis, feature_matrix.shape[1] - drop_cols.sum()), jnp.nan,
         dtype=feature_matrix.dtype).at[is_valid].set(feature_matrix[:, ~drop_cols])
     return feature_matrix, drop_cols
 
@@ -273,7 +274,7 @@ def apply_identifiability_constraints_by_basis_component(
         apply_identifiability_constraints, add_intercept=add_intercept, warn_if_float32=False
     )
 
-    _warn_if_float32(split_by_input_x)
+    _warn_if_not_float64(split_by_input_x)
 
     constrained_x_and_columns = jax.tree_util.tree_map(
         apply_identifiability, split_by_input_x

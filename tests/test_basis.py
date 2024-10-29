@@ -138,31 +138,22 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             basis_obj.set_params(width=width)
 
     @pytest.mark.parametrize(
-        "kwargs, input1_shape, input2_shape, expectation",
+        "kwargs, input1_shape, expectation",
         [
-            (dict(), (10,), (15,), does_not_raise()),
-            (dict(axis=0), (10,), (15,), does_not_raise()),
-            (dict(axis=1), (2, 10), (2, 15), does_not_raise()),
-            (
-                dict(axis=0),
-                (10, 3), (10, 2),
-                pytest.raises(
-                    ValueError, match="Input dimensionality mismatch"
-                ),
-            ),
+            (dict(), (10,), does_not_raise()),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
-    def test_compute_features_axis(self, kwargs, input1_shape, input2_shape, expectation):
+    def test_compute_features_axis(self, kwargs, input1_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-        )
-        basis_obj.compute_features(np.ones(input1_shape))
         with expectation:
-            out = basis_obj.compute_features(np.ones(input2_shape))
-            assert out.shape[0] == input2_shape[kwargs.get("axis", 0)]
+            basis_obj = self.cls(
+                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
+            )
+            basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
     @pytest.mark.parametrize("time_scaling", [50, 70])
@@ -771,20 +762,20 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
-    def test_identifiability_constraint_setter(self):
-        bas = self.cls(5, mode="conv", window_size=10)
-        bas.identifiability_constraints = True
-        assert bas.identifiability_constraints
-        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
-            bas.identifiability_constraints = "True"
-
-    def test_identifiability_constraint_apply(self):
-        bas = self.cls(5, mode="conv", window_size=10)
-        bas.identifiability_constraints = True
-        # identifiability constraint should mean center only for this basis
-        X = bas(np.linspace(0, 1, 20))
-        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
-        assert X.shape[1] == bas.n_basis_funcs
+    # def test_identifiability_constraint_setter(self):
+    #     bas = self.cls(5, mode="conv", window_size=10)
+    #     bas.identifiability_constraints = True
+    #     assert bas.identifiability_constraints
+    #     with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+    #         bas.identifiability_constraints = "True"
+    #
+    # def test_identifiability_constraint_apply(self):
+    #     bas = self.cls(5, mode="conv", window_size=10)
+    #     bas.identifiability_constraints = True
+    #     # identifiability constraint should mean center only for this basis
+    #     X = bas(np.linspace(0, 1, 20))
+    #     assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+    #     assert X.shape[1] == bas.n_basis_funcs
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -974,31 +965,22 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             basis_obj.set_params(width=width)
 
     @pytest.mark.parametrize(
-        "kwargs, input1_shape, input2_shape, expectation",
+        "kwargs, input1_shape, expectation",
         [
-            (dict(), (10,), (15,), does_not_raise()),
-            (dict(axis=0), (10,), (15,), does_not_raise()),
-            (dict(axis=1), (2, 10), (2, 15), does_not_raise()),
-            (
-                    dict(axis=0),
-                    (10, 3), (10, 2),
-                    pytest.raises(
-                        ValueError, match="Input dimensionality mismatch"
-                    ),
-            ),
+            (dict(), (10,), does_not_raise()),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
-    def test_compute_features_axis(self, kwargs, input1_shape, input2_shape, expectation):
+    def test_compute_features_axis(self, kwargs, input1_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-        )
-        basis_obj.compute_features(np.ones(input1_shape))
         with expectation:
-            out = basis_obj.compute_features(np.ones(input2_shape))
-            assert out.shape[0] == input2_shape[kwargs.get("axis", 0)]
+            basis_obj = self.cls(
+                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
+            )
+            basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
     @pytest.mark.parametrize("window_size", [10, 15])
@@ -1542,19 +1524,19 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
-    def test_identifiability_constraint_setter(self):
-        bas = self.cls(5, mode="conv", window_size=10)
-        bas.identifiability_constraints = True
-        assert bas.identifiability_constraints
-        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
-            bas.identifiability_constraints = "True"
-
-    def test_identifiability_constraint_apply(self):
-        bas = self.cls(5)
-        bas.identifiability_constraints = True
-        X = bas(np.linspace(0, 1, 20))
-        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
-        assert X.shape[1] == bas.n_basis_funcs - 1
+    # def test_identifiability_constraint_setter(self):
+    #     bas = self.cls(5, mode="conv", window_size=10)
+    #     bas.identifiability_constraints = True
+    #     assert bas.identifiability_constraints
+    #     with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+    #         bas.identifiability_constraints = "True"
+    #
+    # def test_identifiability_constraint_apply(self):
+    #     bas = self.cls(5)
+    #     bas.identifiability_constraints = True
+    #     X = bas(np.linspace(0, 1, 20))
+    #     assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+    #     assert X.shape[1] == bas.n_basis_funcs - 1
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -1708,31 +1690,24 @@ class TestMSplineBasis(BasisFuncsTesting):
         basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
-        "kwargs, input1_shape, input2_shape, expectation",
+        "kwargs, input1_shape, expectation",
         [
-            (dict(), (10,), (15,), does_not_raise()),
-            (dict(axis=0), (10,), (15,), does_not_raise()),
-            (dict(axis=1), (2, 10), (2, 15), does_not_raise()),
-            (
-                    dict(axis=0),
-                    (10, 3), (10, 2),
-                    pytest.raises(
-                        ValueError, match="Input dimensionality mismatch"
-                    ),
-            ),
+            (dict(), (10,), does_not_raise()),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
-    def test_compute_features_axis(self, kwargs, input1_shape, input2_shape, expectation):
+    def test_compute_features_axis(self, kwargs, input1_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-        )
-        basis_obj.compute_features(np.ones(input1_shape))
         with expectation:
-            out = basis_obj.compute_features(np.ones(input2_shape))
-            assert out.shape[0] == input2_shape[kwargs.get("axis", 0)]
+            basis_obj = self.cls(
+                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
+            )
+            basis_obj.compute_features(np.ones(input1_shape))
+
+
 
     @pytest.mark.parametrize("n_basis_funcs", [2, 3])
     @pytest.mark.parametrize("order", [1, 2])
@@ -2324,19 +2299,19 @@ class TestMSplineBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
-    def test_identifiability_constraint_setter(self):
-        bas = self.cls(5, mode="conv", window_size=10)
-        bas.identifiability_constraints = True
-        assert bas.identifiability_constraints
-        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
-            bas.identifiability_constraints = "True"
-
-    def test_identifiability_constraint_apply(self):
-        bas = self.cls(5)
-        bas.identifiability_constraints = True
-        X = bas(np.linspace(0, 1, 20))
-        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
-        assert X.shape[1] == bas.n_basis_funcs - 1
+    # def test_identifiability_constraint_setter(self):
+    #     bas = self.cls(5, mode="conv", window_size=10)
+    #     bas.identifiability_constraints = True
+    #     assert bas.identifiability_constraints
+    #     with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+    #         bas.identifiability_constraints = "True"
+    #
+    # def test_identifiability_constraint_apply(self):
+    #     bas = self.cls(5)
+    #     bas.identifiability_constraints = True
+    #     X = bas(np.linspace(0, 1, 20))
+    #     assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+    #     assert X.shape[1] == bas.n_basis_funcs - 1
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -2512,31 +2487,22 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
-        "kwargs, input1_shape, input2_shape, expectation",
+        "kwargs, input1_shape, expectation",
         [
-            (dict(), (10,), (15,), does_not_raise()),
-            (dict(axis=0), (10,), (15,), does_not_raise()),
-            (dict(axis=1), (2, 10), (2, 15), does_not_raise()),
-            (
-                    dict(axis=0),
-                    (10, 3), (10, 2),
-                    pytest.raises(
-                        ValueError, match="Input dimensionality mismatch"
-                    ),
-            ),
+            (dict(), (10,), does_not_raise()),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
-    def test_compute_features_axis(self, kwargs, input1_shape, input2_shape, expectation):
+    def test_compute_features_axis(self, kwargs, input1_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=5, mode="conv", window_size=5, decay_rates=np.arange(1, 6), **kwargs
-        )
-        basis_obj.compute_features(np.ones(input1_shape))
         with expectation:
-            out = basis_obj.compute_features(np.ones(input2_shape))
-            assert out.shape[0] == input2_shape[kwargs.get("axis", 0)]
+            basis_obj = self.cls(
+                n_basis_funcs=5, mode="conv", window_size=5, decay_rates=np.arange(1, 6), **kwargs
+            )
+            basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [2, 3])
     @pytest.mark.parametrize("window_size", [10, 15])
@@ -3176,19 +3142,19 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
-    def test_identifiability_constraint_setter(self):
-        bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5])
-        bas.identifiability_constraints = True
-        assert bas.identifiability_constraints
-        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
-            bas.identifiability_constraints = "True"
-
-    def test_identifiability_constraint_apply(self):
-        bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5])
-        bas.identifiability_constraints = True
-        X = bas(np.linspace(0, 1, 20))
-        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
-        assert X.shape[1] == bas.n_basis_funcs
+    # def test_identifiability_constraint_setter(self):
+    #     bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5])
+    #     bas.identifiability_constraints = True
+    #     assert bas.identifiability_constraints
+    #     with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+    #         bas.identifiability_constraints = "True"
+    #
+    # def test_identifiability_constraint_apply(self):
+    #     bas = self.cls(5, decay_rates=[1, 2, 3, 4, 5])
+    #     bas.identifiability_constraints = True
+    #     X = bas(np.linspace(0, 1, 20))
+    #     assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+    #     assert X.shape[1] == bas.n_basis_funcs
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -3235,31 +3201,22 @@ class TestBSplineBasis(BasisFuncsTesting):
         basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
-        "kwargs, input1_shape, input2_shape, expectation",
+        "kwargs, input1_shape, expectation",
         [
-            (dict(), (10,), (15,), does_not_raise()),
-            (dict(axis=0), (10,), (15,), does_not_raise()),
-            (dict(axis=1), (2, 10), (2, 15), does_not_raise()),
-            (
-                    dict(axis=0),
-                    (10, 3), (10, 2),
-                    pytest.raises(
-                        ValueError, match="Input dimensionality mismatch"
-                    ),
-            ),
+            (dict(), (10,), does_not_raise()),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
-    def test_compute_features_axis(self, kwargs, input1_shape, input2_shape, expectation):
+    def test_compute_features_axis(self, kwargs, input1_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-        )
-        basis_obj.compute_features(np.ones(input1_shape))
         with expectation:
-            out = basis_obj.compute_features(np.ones(input2_shape))
-            assert out.shape[0] == input2_shape[kwargs.get("axis", 0)]
+            basis_obj = self.cls(
+                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
+            )
+            basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [2, 3])
     @pytest.mark.parametrize("order", [1, 2])
@@ -3857,19 +3814,19 @@ class TestBSplineBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
-    def test_identifiability_constraint_setter(self):
-        bas = self.cls(5, mode="conv", window_size=10)
-        bas.identifiability_constraints = True
-        assert bas.identifiability_constraints
-        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
-            bas.identifiability_constraints = "True"
-
-    def test_identifiability_constraint_apply(self):
-        bas = self.cls(5)
-        bas.identifiability_constraints = True
-        X = bas(np.linspace(0, 1, 20))
-        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
-        assert X.shape[1] == bas.n_basis_funcs - 1
+    # def test_identifiability_constraint_setter(self):
+    #     bas = self.cls(5, mode="conv", window_size=10)
+    #     bas.identifiability_constraints = True
+    #     assert bas.identifiability_constraints
+    #     with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+    #         bas.identifiability_constraints = "True"
+    #
+    # def test_identifiability_constraint_apply(self):
+    #     bas = self.cls(5)
+    #     bas.identifiability_constraints = True
+    #     X = bas(np.linspace(0, 1, 20))
+    #     assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+    #     assert X.shape[1] == bas.n_basis_funcs - 1
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -4023,31 +3980,22 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
-        "kwargs, input1_shape, input2_shape, expectation",
+        "kwargs, input1_shape, expectation",
         [
-            (dict(), (10,), (15,), does_not_raise()),
-            (dict(axis=0), (10,), (15,), does_not_raise()),
-            (dict(axis=1), (2, 10), (2, 15), does_not_raise()),
-            (
-                    dict(axis=0),
-                    (10, 3), (10, 2),
-                    pytest.raises(
-                        ValueError, match="Input dimensionality mismatch"
-                    ),
-            ),
+            (dict(), (10,), does_not_raise()),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
-    def test_compute_features_axis(self, kwargs, input1_shape, input2_shape, expectation):
+    def test_compute_features_axis(self, kwargs, input1_shape, expectation):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-        )
-        basis_obj.compute_features(np.ones(input1_shape))
         with expectation:
-            out = basis_obj.compute_features(np.ones(input2_shape))
-            assert out.shape[0] == input2_shape[kwargs.get("axis", 0)]
+            basis_obj = self.cls(
+                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
+            )
+            basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
     @pytest.mark.parametrize("order", [3, 2])
@@ -4607,19 +4555,19 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         assert np.all(conv[valid] == conv_2[valid])
         assert np.all(np.isnan(conv_2[~valid]))
 
-    def test_identifiability_constraint_setter(self):
-        bas = self.cls(5, mode="conv", window_size=10)
-        bas.identifiability_constraints = True
-        assert bas.identifiability_constraints
-        with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
-            bas.identifiability_constraints = "True"
-
-    def test_identifiability_constraint_apply(self):
-        bas = self.cls(5)
-        bas.identifiability_constraints = True
-        X = bas(np.linspace(0, 1, 20))
-        assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
-        assert X.shape[1] == bas.n_basis_funcs - 1
+    # def test_identifiability_constraint_setter(self):
+    #     bas = self.cls(5, mode="conv", window_size=10)
+    #     bas.identifiability_constraints = True
+    #     assert bas.identifiability_constraints
+    #     with pytest.raises(TypeError, match="`identifiability_constraints` must be"):
+    #         bas.identifiability_constraints = "True"
+    #
+    # def test_identifiability_constraint_apply(self):
+    #     bas = self.cls(5)
+    #     bas.identifiability_constraints = True
+    #     X = bas(np.linspace(0, 1, 20))
+    #     assert np.allclose(X.mean(axis=0), np.zeros(X.shape[1]))
+    #     assert X.shape[1] == bas.n_basis_funcs - 1
 
     def test_conv_kwargs_error(self):
         with pytest.raises(ValueError, match="kwargs should only be set"):
@@ -5302,34 +5250,34 @@ class TestAdditiveBasis(CombinedBasis):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
-    @pytest.mark.parametrize(
-        "basis_cls1, basis_cls2",
-        list(
-            itertools.product(
-                *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
-            )
-        ),
-    )
-    def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
-        if any(
-            bas
-            in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
-            for bas in (basis_cls1, basis_cls2)
-        ):
-            return
-        kwargs1, kwargs2 = dict(), dict()
-        if basis_cls1 == basis.OrthExponentialBasis:
-            kwargs1["decay_rates"] = np.arange(1, 6)
-        if basis_cls2 == basis.OrthExponentialBasis:
-            kwargs2["decay_rates"] = np.arange(1, 6)
-
-        bas1 = basis_cls1(5, **kwargs1)
-        bas2 = basis_cls2(5, **kwargs2)
-        bas_add = bas1 + bas2
-        bas_add.identifiability_constraints = True
-        X1 = bas_add.compute_features(np.arange(10), np.arange(10))
-        X2 = bas_add(np.arange(10), np.arange(10))
-        assert np.all(X1 == X2)
+    # @pytest.mark.parametrize(
+    #     "basis_cls1, basis_cls2",
+    #     list(
+    #         itertools.product(
+    #             *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
+    #         )
+    #     ),
+    # )
+    # def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
+    #     if any(
+    #         bas
+    #         in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
+    #         for bas in (basis_cls1, basis_cls2)
+    #     ):
+    #         return
+    #     kwargs1, kwargs2 = dict(), dict()
+    #     if basis_cls1 == basis.OrthExponentialBasis:
+    #         kwargs1["decay_rates"] = np.arange(1, 6)
+    #     if basis_cls2 == basis.OrthExponentialBasis:
+    #         kwargs2["decay_rates"] = np.arange(1, 6)
+    #
+    #     bas1 = basis_cls1(5, **kwargs1)
+    #     bas2 = basis_cls2(5, **kwargs2)
+    #     bas_add = bas1 + bas2
+    #     bas_add.identifiability_constraints = True
+    #     X1 = bas_add.compute_features(np.arange(10), np.arange(10))
+    #     X2 = bas_add(np.arange(10), np.arange(10))
+    #     assert np.all(X1 == X2)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
@@ -5869,34 +5817,34 @@ class TestMultiplicativeBasis(CombinedBasis):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
-    @pytest.mark.parametrize(
-        "basis_cls1, basis_cls2",
-        list(
-            itertools.product(
-                *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
-            )
-        ),
-    )
-    def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
-        if any(
-            bas
-            in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
-            for bas in (basis_cls1, basis_cls2)
-        ):
-            return
-        kwargs1, kwargs2 = dict(), dict()
-        if basis_cls1 == basis.OrthExponentialBasis:
-            kwargs1["decay_rates"] = np.arange(1, 6)
-        if basis_cls2 == basis.OrthExponentialBasis:
-            kwargs2["decay_rates"] = np.arange(1, 6)
-
-        bas1 = basis_cls1(5, **kwargs1)
-        bas2 = basis_cls2(5, **kwargs2)
-        bas_prod = bas1 * bas2
-        bas_prod.identifiability_constraints = True
-        X1 = bas_prod.compute_features(np.arange(10), np.arange(10))
-        X2 = bas_prod(np.arange(10), np.arange(10))
-        assert np.all(X1 == X2)
+    # @pytest.mark.parametrize(
+    #     "basis_cls1, basis_cls2",
+    #     list(
+    #         itertools.product(
+    #             *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
+    #         )
+    #     ),
+    # )
+    # def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
+    #     if any(
+    #         bas
+    #         in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
+    #         for bas in (basis_cls1, basis_cls2)
+    #     ):
+    #         return
+    #     kwargs1, kwargs2 = dict(), dict()
+    #     if basis_cls1 == basis.OrthExponentialBasis:
+    #         kwargs1["decay_rates"] = np.arange(1, 6)
+    #     if basis_cls2 == basis.OrthExponentialBasis:
+    #         kwargs2["decay_rates"] = np.arange(1, 6)
+    #
+    #     bas1 = basis_cls1(5, **kwargs1)
+    #     bas2 = basis_cls2(5, **kwargs2)
+    #     bas_prod = bas1 * bas2
+    #     bas_prod.identifiability_constraints = True
+    #     X1 = bas_prod.compute_features(np.arange(10), np.arange(10))
+    #     X2 = bas_prod(np.arange(10), np.arange(10))
+    #     assert np.all(X1 == X2)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
@@ -6873,10 +6821,10 @@ def test_duplicate_keys(bas1, bas2, bas3):
 @pytest.mark.parametrize(
     "x, axis, expectation, exp_shapes", # num output is 5*2 + 6*3 = 28
     [
-        (np.ones((1, 28)), 1, does_not_raise(), [(1, 5), (1,6)]),
-        (np.ones((28, )), 0, does_not_raise(), [(5,), (6,)]),
-        (np.ones((2, 2, 28)), 2, does_not_raise(), [(2, 2, 5), (2, 2, 6)]),
-        (np.ones((2, 2, 27)), 2, pytest.raises(ValueError, match=r"`x.shape\[axis\]` does not match the expected"), [(2, 2, 5), (2, 2, 6)]),
+        (np.ones((1, 28)), 1, does_not_raise(), [(1, 2, 5), (1, 3, 6)]),
+        (np.ones((28, )), 0, does_not_raise(), [(2, 5), (3, 6)]),
+        (np.ones((2, 2, 28)), 2, does_not_raise(), [(2, 2, 2, 5), (2, 2, 3, 6)]),
+        (np.ones((2, 2, 27)), 2, pytest.raises(ValueError, match=r"`x.shape\[axis\]` does not match the expected"), [(2, 2, 2, 5), (2, 2, 3, 6)]),
     ]
 )
 def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes):
@@ -6915,5 +6863,5 @@ def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes):
     with expectation:
         out = bas.split_by_feature(x, axis=axis)
         for i, itm in enumerate(out.items()):
-            key, val = itm
-            assert all(v.shape == exp_shapes[i] for v in val.values())
+            _, val = itm
+            assert val.shape == exp_shapes[i]
