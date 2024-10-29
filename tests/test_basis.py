@@ -588,6 +588,62 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             self.cls(5, mode=mode, window_size=window_size)
 
 
+    @pytest.mark.parametrize("label", [None, "label"])
+    def test_init_label(self, label):
+        bas = self.cls(5, label=label)
+        assert bas.label == str(label)
+
+    @pytest.mark.parametrize(
+        "attribute, value",
+        [
+            ("label", None),
+            ("label", "label"),
+            ("n_basis_input", 1),
+            ("num_output_features", 5),
+        ]
+    )
+    def test_attr_setter(self, attribute, value):
+        bas = self.cls(5)
+        with pytest.raises(AttributeError, match="can't set attribute"):
+            setattr(bas, attribute, value)
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_output_features(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.num_output_features is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.num_output_features == n_input * bas.n_basis_funcs
+
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_basis_input(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.n_basis_input is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.n_basis_input == n_input
+        assert bas._n_basis_input == (n_input,)
+
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (2, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas = self.cls(5, mode="conv", window_size=10)
+        x = np.random.randn(20, 2)
+        bas.compute_features(x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, n_input))
+
     @pytest.mark.parametrize(
         "conv_kwargs, expectation",
         [
@@ -1372,6 +1428,60 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
 
+    @pytest.mark.parametrize("label", [None, "label"])
+    def test_init_label(self, label):
+        bas = self.cls(5, label=label)
+        assert bas.label == str(label)
+
+    @pytest.mark.parametrize(
+        "attribute, value",
+        [
+            ("label", None),
+            ("label", "label"),
+            ("n_basis_input", 1),
+            ("num_output_features", 5),
+        ]
+    )
+    def test_attr_setter(self, attribute, value):
+        bas = self.cls(5)
+        with pytest.raises(AttributeError, match="can't set attribute"):
+            setattr(bas, attribute, value)
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_output_features(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.num_output_features is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.num_output_features == n_input * bas.n_basis_funcs
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_basis_input(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.n_basis_input is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.n_basis_input == n_input
+        assert bas._n_basis_input == (n_input,)
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (2, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas = self.cls(5, mode="conv", window_size=10)
+        x = np.random.randn(20, 2)
+        bas.compute_features(x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, n_input))
+
     @pytest.mark.parametrize(
         "conv_kwargs, expectation",
         [
@@ -2106,6 +2216,60 @@ class TestMSplineBasis(BasisFuncsTesting):
         window_size = None if mode == "eval" else 2
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
+
+    @pytest.mark.parametrize("label", [None, "label"])
+    def test_init_label(self, label):
+        bas = self.cls(5, label=label)
+        assert bas.label == str(label)
+
+    @pytest.mark.parametrize(
+        "attribute, value",
+        [
+            ("label", None),
+            ("label", "label"),
+            ("n_basis_input", 1),
+            ("num_output_features", 5),
+        ]
+    )
+    def test_attr_setter(self, attribute, value):
+        bas = self.cls(5)
+        with pytest.raises(AttributeError, match="can't set attribute"):
+            setattr(bas, attribute, value)
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_output_features(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.num_output_features is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.num_output_features == n_input * bas.n_basis_funcs
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_basis_input(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.n_basis_input is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.n_basis_input == n_input
+        assert bas._n_basis_input == (n_input,)
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (2, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas = self.cls(5, mode="conv", window_size=10)
+        x = np.random.randn(20, 2)
+        bas.compute_features(x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, n_input))
 
     @pytest.mark.parametrize(
         "conv_kwargs, expectation",
@@ -2951,6 +3115,60 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         with expectation:
             self.cls(5, mode=mode, window_size=window_size, decay_rates=np.arange(1, 6))
 
+    @pytest.mark.parametrize("label", [None, "label"])
+    def test_init_label(self, label):
+        bas = self.cls(5, label=label, decay_rates=np.arange(1, 6))
+        assert bas.label == str(label)
+
+    @pytest.mark.parametrize(
+        "attribute, value",
+        [
+            ("label", None),
+            ("label", "label"),
+            ("n_basis_input", 1),
+            ("num_output_features", 5),
+        ]
+    )
+    def test_attr_setter(self, attribute, value):
+        bas = self.cls(5, decay_rates=np.arange(1, 6))
+        with pytest.raises(AttributeError, match="can't set attribute"):
+            setattr(bas, attribute, value)
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_output_features(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
+        assert bas.num_output_features is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.num_output_features == n_input * bas.n_basis_funcs
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_basis_input(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
+        assert bas.n_basis_input is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.n_basis_input == n_input
+        assert bas._n_basis_input == (n_input,)
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (2, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
+        x = np.random.randn(20, 2)
+        bas.compute_features(x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, n_input))
+
     @pytest.mark.parametrize(
         "conv_kwargs, expectation",
         [
@@ -3661,6 +3879,60 @@ class TestBSplineBasis(BasisFuncsTesting):
         window_size = None if mode == "eval" else 2
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
+
+    @pytest.mark.parametrize("label", [None, "label"])
+    def test_init_label(self, label):
+        bas = self.cls(5, label=label)
+        assert bas.label == str(label)
+
+    @pytest.mark.parametrize(
+        "attribute, value",
+        [
+            ("label", None),
+            ("label", "label"),
+            ("n_basis_input", 1),
+            ("num_output_features", 5),
+        ]
+    )
+    def test_attr_setter(self, attribute, value):
+        bas = self.cls(5)
+        with pytest.raises(AttributeError, match="can't set attribute"):
+            setattr(bas, attribute, value)
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_output_features(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.num_output_features is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.num_output_features == n_input * bas.n_basis_funcs
+
+    @pytest.mark.parametrize(
+        "n_input", [1, 2, 3]
+    )
+    def test_set_num_basis_input(self, n_input):
+        bas = self.cls(5, mode="conv", window_size=10)
+        assert bas.n_basis_input is None
+        bas.compute_features(np.random.randn(20, n_input))
+        assert bas.n_basis_input == n_input
+        assert bas._n_basis_input == (n_input,)
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (2, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas = self.cls(5, mode="conv", window_size=10)
+        x = np.random.randn(20, 2)
+        bas.compute_features(x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, n_input))
 
     @pytest.mark.parametrize(
         "conv_kwargs, expectation",

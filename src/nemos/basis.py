@@ -743,12 +743,6 @@ class Basis(Base, abc.ABC):
             # the expectation. We can check xi[0] only, since convolution
             # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
             n_provided_inputs = np.prod(xi[0].shape[1:])
-            if n_provided_inputs != self._n_basis_input:
-                raise ValueError(
-                    "The number of convolutional input does not match expectation. "
-                    f"Expected number of inputs {self.n_basis_input}, actual {n_provided_inputs}. "
-                    f"Set `n_basis_input` to {n_provided_inputs} at basis initialization."
-                )
 
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
