@@ -9,14 +9,37 @@ For the example dataset, we will be working with a recording of a freely-moving 
 The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https://www.peyrachelab.com/).
 
 """
+from warnings import catch_warnings
 
+import numpy as np
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import pynapple as nap
+import warnings
 from sklearn.linear_model import LinearRegression
 
+
 import nemos as nmo
+from nemos.identifiability_constraints import apply_identifiability_constraints_by_basis_component
+
+# ignore dtype warnings
+nap.nap_config.suppress_conversion_warnings = True
+warnings.filterwarnings("ignore", category=UserWarning, message="The feature matrix is of dtype")
+
+def add_intercept(X):
+    """Add an intercept term to design matrix.
+
+    Convert matrix to float64, drops nans and add intercept term.
+    """
+    # convert to float64 for rank computation precision
+    X = np.asarray(X, dtype=np.float64)
+    # drop nans
+    X = X[nmo.tree_utils.get_valid_multitree(X)]
+    return np.hstack([np.ones((X.shape[0], 1)), X])
+
+
+
 
 # %%
 # configure plots
@@ -119,12 +142,11 @@ heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
 
 # define a basis that expect all the other neurons as predictors, i.e. shape (num_samples, num_neurons - 1)
 num_neurons = Y.shape[1]
-coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
+ws = 10
+coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=ws)
 
 # %%
-# We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an `AdditiveBasis` object).
-
-heading_basis.identifiability_constraints = True
+# We need to combine the bases (the returned object will be an `AdditiveBasis` object).
 basis = heading_basis + coupling_basis
 
 
@@ -169,8 +191,23 @@ print(Y.shape)
 # ## Design matrix
 #
 # We can now create the design matrix by combining the head-direction of the animal and the activity of all other neurons.
-#
 X = basis.compute_features(head_direction, Y[:, selected_neurons])
+
+# %%
+# A design matrix including a CyclicBSpline and an intercept term is rank deficient.
+
+print(f"Number of features: {X.shape[1] + 1}")  # num coefficients + intercept
+print(f"Matrix rank: {np.linalg.matrix_rank(add_intercept(X))}")
+
+# This implies that there will be infinite different parameters that results in the same firing rate,
+# or equivalently there will be infinite many equivalent solutions to an un-regularized GLM.
+# We can avoid this issue by dropping linearly dependent columns in the design matrix.
+
+X, idx = apply_identifiability_constraints_by_basis_component(basis, X)
+
+print(f"Number of features: {X.shape[1] + 1}")  # drops one column
+print(f"Matrix rank: {np.linalg.matrix_rank(add_intercept(X))}")
+
 
 # %%
 # ## Train & test set

@@ -267,7 +267,9 @@ def cast_to_pynapple(
     """
     # keep time on CPU, pynapple numba operations on time are more efficient
     time = np.asarray(time)
-    if array.ndim == 1:
+    if time.shape[0] != array.shape[0]:
+        return array
+    elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
         return nap.TsdFrame(t=time, d=array, time_support=time_support)
