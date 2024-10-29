@@ -109,8 +109,11 @@ class TestPadding:
                 utils.nan_pad(iterable, 3, predictor_causality)
         else:
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning,
-                                        message="With acausal filter, pad_size should probably be even")
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="With acausal filter, pad_size should probably be even",
+                )
                 utils.nan_pad(iterable, 3, predictor_causality)
 
     @pytest.mark.parametrize("iterable", [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]])
@@ -175,8 +178,11 @@ class TestPadding:
         else:
             init_nan, end_nan = pad_size // 2, pad_size - pad_size // 2
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning,
-                                        message="With acausal filter, pad_size should probably be even")
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="With acausal filter, pad_size should probably be even",
+                )
                 padded = utils.nan_pad(iterable, pad_size, "acausal")
             for trial in padded:
                 print(trial.shape, pad_size)
@@ -260,8 +266,11 @@ class TestPadding:
     )
     def test_axis_compatibility(self, pad_size, array, causality, axis, expectation):
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning,
-                                    message="With acausal filter, pad_size should probably be even")
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message="With acausal filter, pad_size should probably be even",
+            )
             with expectation:
                 utils.nan_pad(array, pad_size, causality, axis=axis)
 
@@ -284,8 +293,11 @@ class TestPadding:
     @pytest.mark.parametrize("array", [jnp.zeros((10,)), np.zeros((10, 11))])
     def test_pad_size_type(self, pad_size, array, causality, expectation):
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning,
-                                    message="With acausal filter, pad_size should probably be even")
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message="With acausal filter, pad_size should probably be even",
+            )
             with expectation:
                 utils.nan_pad(array, pad_size, causality, axis=0)
 
