@@ -13,12 +13,12 @@ from .tree_utils import get_valid_multitree, tree_slice
 from .type_casting import support_pynapple
 from .validation import _warn_if_not_float64
 
-
 _WARN_FLOAT32_MESSAGE = (
     "The feature matrix is not of dtype `float64`. Consider converting it to `float64` "
     "for increased numerical precision when computing the matrix rank. You can enable "
     "float64 precision globally by adding:\n\n    jax.config.update('jax_enable_x64', True)\n"
 )
+
 
 def add_constant(x):
     """Add intercept term."""
