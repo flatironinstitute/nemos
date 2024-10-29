@@ -1,8 +1,7 @@
 """Utility functions for applying identifiability constraints to rank deficient feature matrices."""
 
-import warnings
 from functools import partial
-from typing import Any, Callable, Tuple
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -10,24 +9,16 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .basis import Basis
-from .tree_utils import get_valid_multitree, pytree_map_and_reduce, tree_slice
+from .tree_utils import get_valid_multitree, tree_slice
 from .type_casting import support_pynapple
+from .validation import _warn_if_not_float64
 
 
-def _warn_if_not_float64(feature_matrix: Any):
-    """Warn if the feature matrix uses float32 precision."""
-    all_float64 = pytree_map_and_reduce(
-        lambda x: jnp.issubdtype(x.dtype, jnp.float64), all, feature_matrix
-    )
-    if not all_float64:
-        warnings.warn(
-            "The feature matrix is not of dtype `float64`. Consider converting it to `float64` "
-            "for increased numerical precision when computing the matrix rank. "
-            "You can enable float64 precision globally by adding:\n\n"
-            "    jax.config.update('jax_enable_x64', True)\n",
-            UserWarning,
-        )
-
+_WARN_FLOAT32_MESSAGE = (
+    "The feature matrix is not of dtype `float64`. Consider converting it to `float64` "
+    "for increased numerical precision when computing the matrix rank. You can enable "
+    "float64 precision globally by adding:\n\n    jax.config.update('jax_enable_x64', True)\n"
+)
 
 def add_constant(x):
     """Add intercept term."""
@@ -72,7 +63,7 @@ def _apply_identifiability_constraints(
     Private function that does the actual computation on a single feature_matrix.
     """
     if warn_if_float32:
-        _warn_if_not_float64(feature_matrix)
+        _warn_if_not_float64(feature_matrix, _WARN_FLOAT32_MESSAGE)
 
     shape_sample_axis = feature_matrix.shape[0]
     is_valid = get_valid_multitree(feature_matrix)
@@ -297,7 +288,7 @@ def apply_identifiability_constraints_by_basis_component(
         warn_if_float32=False,
     )
 
-    _warn_if_not_float64(split_by_input_x)
+    _warn_if_not_float64(split_by_input_x, _WARN_FLOAT32_MESSAGE)
 
     constrained_x_and_columns = jax.tree_util.tree_map(
         apply_identifiability, split_by_input_x
