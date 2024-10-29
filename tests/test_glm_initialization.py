@@ -1,10 +1,12 @@
+import warnings
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 import nemos as nmo
-import warnings
+
 
 @pytest.mark.parametrize(
     "non_linearity",
@@ -56,14 +58,19 @@ def test_initialization_error_nan_input(non_linearity, expectation):
             inverse_link_function=non_linearity, y=output_y
         )
 
+
 def test_initialization_error_non_invertible():
     """Initialize invalid."""
     output_y = np.random.uniform(size=100)
     inv_link = lambda x: jax.nn.softplus(x) + 10
-    with pytest.raises(ValueError, match="Failed to initialize the model intercept.+Please, provide"):
+    with pytest.raises(
+        ValueError, match="Failed to initialize the model intercept.+Please, provide"
+    ):
         with warnings.catch_warnings():
             # ignore the warning raised by the root-finder (there is no root)
-            warnings.filterwarnings("ignore", category=RuntimeWarning, message="Tolerance of")
+            warnings.filterwarnings(
+                "ignore", category=RuntimeWarning, message="Tolerance of"
+            )
             nmo.initialize_regressor.initialize_intercept_matching_mean_rate(
                 inverse_link_function=inv_link, y=output_y
             )

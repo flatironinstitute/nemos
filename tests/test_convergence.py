@@ -76,12 +76,14 @@ def test_ridge_convergence(solver_names):
     y = np.random.poisson(rate)
 
     # instantiate and fit ridge GLM with GradientDescent
-    model_GD = nmo.glm.GLM(regularizer_strength=1., regularizer="Ridge", solver_kwargs=dict(tol=10**-12))
+    model_GD = nmo.glm.GLM(
+        regularizer_strength=1.0, regularizer="Ridge", solver_kwargs=dict(tol=10**-12)
+    )
     model_GD.fit(X, y)
 
     # instantiate and fit ridge GLM with ProximalGradient
     model_PG = nmo.glm.GLM(
-        regularizer_strength=1.,
+        regularizer_strength=1.0,
         regularizer="Ridge",
         solver_name="ProximalGradient",
         solver_kwargs=dict(tol=10**-12),
@@ -109,7 +111,7 @@ def test_lasso_convergence(solver_name):
     # instantiate and fit GLM with ProximalGradient
     model_PG = nmo.glm.GLM(
         regularizer="Lasso",
-        regularizer_strength=1.,
+        regularizer_strength=1.0,
         solver_name="ProximalGradient",
         solver_kwargs=dict(tol=10**-12),
     )
