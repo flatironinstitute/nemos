@@ -5522,38 +5522,23 @@ class TestAdditiveBasis(CombinedBasis):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
-    # @pytest.mark.parametrize(
-    #     "basis_cls1, basis_cls2",
-    #     list(
-    #         itertools.product(
-    #             *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
-    #         )
-    #     ),
-    # )
-    # def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
-    #     if any(
-    #         bas
-    #         in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
-    #         for bas in (basis_cls1, basis_cls2)
-    #     ):
-    #         return
-    #     kwargs1, kwargs2 = dict(), dict()
-    #     if basis_cls1 == basis.OrthExponentialBasis:
-    #         kwargs1["decay_rates"] = np.arange(1, 6)
-    #     if basis_cls2 == basis.OrthExponentialBasis:
-    #         kwargs2["decay_rates"] = np.arange(1, 6)
-    #
-    #     bas1 = basis_cls1(5, **kwargs1)
-    #     bas2 = basis_cls2(5, **kwargs2)
-    #     bas_add = bas1 + bas2
-    #     bas_add.identifiability_constraints = True
-    #     X1 = bas_add.compute_features(np.arange(10), np.arange(10))
-    #     X2 = bas_add(np.arange(10), np.arange(10))
-    #     assert np.all(X1 == X2)
+    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
+    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
+    def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10
+        )
+        bas2 = basis.BSplineBasis(
+            11, mode="conv", window_size=10
+        )
+        bas_add = bas1 + bas2
+        assert bas_add.num_output_features is None
+        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
+        assert bas_add.num_output_features == (n_basis_input1 * 10 + n_basis_input2 * 11)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
-    def test_n_basis_input(self, n_basis_input1, n_basis_input2):
+    def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
         bas1 = basis.RaisedCosineBasisLinear(
             10, mode="conv", window_size=10
         )
@@ -5561,8 +5546,31 @@ class TestAdditiveBasis(CombinedBasis):
             10, mode="conv", window_size=10
         )
         bas_add = bas1 + bas2
+        assert bas_add.n_basis_input is None
         bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
         assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (3, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (4, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10
+        )
+        bas2 = basis.BSplineBasis(
+            10, mode="conv", window_size=10
+        )
+        bas = bas1 + bas2
+        x = np.random.randn(20, 2), np.random.randn(20, 3)
+        bas.compute_features(*x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, 2), np.random.randn(30, n_input))
 
 
 class TestMultiplicativeBasis(CombinedBasis):
@@ -6089,34 +6097,55 @@ class TestMultiplicativeBasis(CombinedBasis):
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
-    # @pytest.mark.parametrize(
-    #     "basis_cls1, basis_cls2",
-    #     list(
-    #         itertools.product(
-    #             *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
-    #         )
-    #     ),
-    # )
-    # def test_identifiability_constraints_apply(self, basis_cls1, basis_cls2):
-    #     if any(
-    #         bas
-    #         in [basis.TransformerBasis, basis.MultiplicativeBasis, basis.AdditiveBasis]
-    #         for bas in (basis_cls1, basis_cls2)
-    #     ):
-    #         return
-    #     kwargs1, kwargs2 = dict(), dict()
-    #     if basis_cls1 == basis.OrthExponentialBasis:
-    #         kwargs1["decay_rates"] = np.arange(1, 6)
-    #     if basis_cls2 == basis.OrthExponentialBasis:
-    #         kwargs2["decay_rates"] = np.arange(1, 6)
-    #
-    #     bas1 = basis_cls1(5, **kwargs1)
-    #     bas2 = basis_cls2(5, **kwargs2)
-    #     bas_prod = bas1 * bas2
-    #     bas_prod.identifiability_constraints = True
-    #     X1 = bas_prod.compute_features(np.arange(10), np.arange(10))
-    #     X2 = bas_prod(np.arange(10), np.arange(10))
-    #     assert np.all(X1 == X2)
+    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
+    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
+    def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10
+        )
+        bas2 = basis.BSplineBasis(
+            11, mode="conv", window_size=10
+        )
+        bas_add = bas1 * bas2
+        assert bas_add.num_output_features is None
+        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
+        assert bas_add.num_output_features == (n_basis_input1 * 10 * n_basis_input2 * 11)
+
+    @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
+    @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
+    def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10
+        )
+        bas2 = basis.BSplineBasis(
+            10, mode="conv", window_size=10
+        )
+        bas_add = bas1 * bas2
+        assert bas_add.n_basis_input is None
+        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
+        assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
+
+    @pytest.mark.parametrize(
+        "n_input, expectation",
+        [
+            (3, does_not_raise()),
+            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (4, pytest.raises(ValueError, match="Input shape mismatch detected"))
+        ]
+    )
+    def test_expected_input_number(self, n_input, expectation):
+        bas1 = basis.RaisedCosineBasisLinear(
+            10, mode="conv", window_size=10
+        )
+        bas2 = basis.BSplineBasis(
+            10, mode="conv", window_size=10
+        )
+        bas = bas1 * bas2
+        x = np.random.randn(20, 2), np.random.randn(20, 3)
+        bas.compute_features(*x)
+        with expectation:
+            bas.compute_features(np.random.randn(30, 2), np.random.randn(30, n_input))
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
