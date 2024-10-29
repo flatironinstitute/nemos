@@ -519,7 +519,6 @@ class Basis(Base, abc.ABC):
         self._check_convolution_kwargs()
 
         self.kernel_ = None
-        # self._identifiability_constraints = False
 
     def _check_convolution_kwargs(self):
         """Check convolution kwargs settings.
@@ -1547,8 +1546,6 @@ class AdditiveBasis(Basis):
                 self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
-        # if self.identifiability_constraints:
-        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -1580,8 +1577,6 @@ class AdditiveBasis(Basis):
                 ),
             ),
         )
-        # if self.identifiability_constraints:
-        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _set_kernel(self, *xi: ArrayLike) -> Basis:
@@ -1682,8 +1677,6 @@ class MultiplicativeBasis(Basis):
                 transpose=False,
             )
         )
-        # if self.identifiability_constraints:
-        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -1708,8 +1701,6 @@ class MultiplicativeBasis(Basis):
             self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality :]),
             transpose=False,
         )
-        # if self.identifiability_constraints:
-        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def _set_num_output_features(self, *xi: NDArray) -> Basis:
@@ -2008,8 +1999,6 @@ class MSplineBasis(SplineBasis):
         )
         # re-normalize so that it integrates to 1 over the range.
         X /= scaling
-        # if self.identifiability_constraints:
-        #     X = self._apply_identifiability_constraints(X)
         return X
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2158,9 +2147,6 @@ class BSplineBasis(SplineBasis):
         basis_eval = bspline(
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
-
-        # if self.identifiability_constraints:
-        #     basis_eval = self._apply_identifiability_constraints(basis_eval)
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2310,9 +2296,6 @@ class CyclicBSplineBasis(SplineBasis):
             )
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
-        # if self.identifiability_constraints:
-        #     basis_eval = self._apply_identifiability_constraints(basis_eval)
-
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -2483,8 +2466,6 @@ class RaisedCosineBasisLinear(Basis):
             )
             + 1
         )
-        # if self.identifiability_constraints:
-        #     basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
 
     def _compute_peaks(self) -> NDArray:
@@ -2874,8 +2855,6 @@ class OrthExponentialBasis(Basis):
         )
         # orthonormalize on valid points
         basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
-        # if self.identifiability_constraints:
-        #     basis_funcs = self._apply_identifiability_constraints(basis_funcs)
         return basis_funcs
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
