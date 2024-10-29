@@ -1,8 +1,9 @@
-import pytest
+from contextlib import nullcontext as does_not_raise
+
 import jax.numpy as jnp
+import pytest
 
 from nemos.solvers import _svrg_defaults
-from contextlib import nullcontext as does_not_raise
 
 
 @pytest.fixture
@@ -197,27 +198,51 @@ def test_warnigns_svrg_optimal_batch_and_stepsize(
 @pytest.mark.parametrize(
     "n_power_iter, expectation",
     [
-        (None, pytest.warns(UserWarning, match="Direct computation of the eigenvalues")),
+        (
+            None,
+            pytest.warns(UserWarning, match="Direct computation of the eigenvalues"),
+        ),
         (1, does_not_raise()),
         (10, does_not_raise()),
-        ("a", pytest.raises(TypeError, match="`n_power_iters` must be an integer or None")),
-        (0.5, pytest.raises(TypeError, match="`n_power_iters` must be an integer or None")),
-        (-1, pytest.raises(ValueError, match="`n_power_iters` must be positive"))
-    ]
+        (
+            "a",
+            pytest.raises(
+                TypeError, match="`n_power_iters` must be an integer or None"
+            ),
+        ),
+        (
+            0.5,
+            pytest.raises(
+                TypeError, match="`n_power_iters` must be an integer or None"
+            ),
+        ),
+        (-1, pytest.raises(ValueError, match="`n_power_iters` must be positive")),
+    ],
 )
-def test_glm_softplus_poisson_l_smooth_power_iter(x_sample, y_sample, n_power_iter, expectation):
+def test_glm_softplus_poisson_l_smooth_power_iter(
+    x_sample, y_sample, n_power_iter, expectation
+):
     with expectation:
-        _svrg_defaults._glm_softplus_poisson_l_smooth(x_sample, y_sample, batch_size=1, n_power_iters=n_power_iter)
+        _svrg_defaults._glm_softplus_poisson_l_smooth(
+            x_sample, y_sample, batch_size=1, n_power_iters=n_power_iter
+        )
 
 
 @pytest.mark.parametrize(
     "delta_num_sample, expectation",
     [
         (0, does_not_raise()),
-        (1, pytest.raises(ValueError, match="Each array in data must have the same number"))
-    ]
-                         )
-def test_svrg_optimal_batch_and_stepsize_num_samples(x_sample, y_sample, delta_num_sample, expectation):
+        (
+            1,
+            pytest.raises(
+                ValueError, match="Each array in data must have the same number"
+            ),
+        ),
+    ],
+)
+def test_svrg_optimal_batch_and_stepsize_num_samples(
+    x_sample, y_sample, delta_num_sample, expectation
+):
     y_sample = y_sample[delta_num_sample:]
     with expectation:
         _svrg_defaults.svrg_optimal_batch_and_stepsize(
@@ -229,30 +254,71 @@ def test_svrg_optimal_batch_and_stepsize_num_samples(x_sample, y_sample, delta_n
             strong_convexity=0.1,
         )
 
+
 @pytest.mark.parametrize(
     "num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size",
     [
         # Case 1: strong_convexity is None
-        (100, 10.0, 2.0, None, 1),  # strong_convexity is None, should return batch_size = 1
+        (
+            100,
+            10.0,
+            2.0,
+            None,
+            1,
+        ),  # strong_convexity is None, should return batch_size = 1
         # Case 2: num_samples >= 3 * l_smooth_max / strong_convexity
-        (100, 10.0, 2.0, 0.8, 1),  # num_samples >= 3 * l_smooth_max / strong_convexity, should return batch_size = 1
+        (
+            100,
+            10.0,
+            2.0,
+            0.8,
+            1,
+        ),  # num_samples >= 3 * l_smooth_max / strong_convexity, should return batch_size = 1
         # Case 3: num_samples > l_smooth / strong_convexity
-        (100, 10.0, 2.0, 0.1, 2),  # num_samples > l_smooth / strong_convexity, and b_tilde is the minimum
+        (
+            100,
+            10.0,
+            2.0,
+            0.1,
+            2,
+        ),  # num_samples > l_smooth / strong_convexity, and b_tilde is the minimum
         # Case 4: l_smooth_max < num_samples * l_smooth / 3 and b_hat < b_tilde
-        (100, 5.0, 0.2, 0.1, 1),  # l_smooth_max < num_samples * l_smooth / 3, use minimum(b_hat, b_tilde)
+        (
+            100,
+            5.0,
+            0.2,
+            0.1,
+            1,
+        ),  # l_smooth_max < num_samples * l_smooth / 3, use minimum(b_hat, b_tilde)
         # Case 5: l_smooth_max >= num_samples * l_smooth / 3
-        (100, 10.0, 0.2, 0.01, 27),  # l_smooth_max >= num_samples * l_smooth / 3, batch_size = num_samples
+        (
+            100,
+            10.0,
+            0.2,
+            0.01,
+            27,
+        ),  # l_smooth_max >= num_samples * l_smooth / 3, batch_size = num_samples
         # Case 6: l_smooth_max >= num_samples * l_smooth / 3, but falls back to b_tilde
-        (100, 5.0, 0.05, 0.1, 1),  # l_smooth_max >= num_samples * l_smooth / 3, but falls back to b_tilde
+        (
+            100,
+            5.0,
+            0.05,
+            0.1,
+            1,
+        ),  # l_smooth_max >= num_samples * l_smooth / 3, but falls back to b_tilde
         # Case 7: l_smooth_max < num_samples * l_smooth / 3
         (100, 5.0, 0.5, 0.005, 4),
         # Case 8:  l_smooth_max > num_samples * l_smooth / 3
         (100, 18.0, 0.5, 0.005, 100),
-    ]
+    ],
 )
-def test_calculate_optimal_batch_size_svrg_all_config(num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size):
+def test_calculate_optimal_batch_size_svrg_all_config(
+    num_samples, l_smooth_max, l_smooth, strong_convexity, expected_batch_size
+):
     """Test the calculation of the optimal batch size for SVRG."""
     batch_size = _svrg_defaults._calculate_optimal_batch_size_svrg(
         num_samples, l_smooth_max, l_smooth, strong_convexity
     )
-    assert batch_size == expected_batch_size, f"Expected batch_size {expected_batch_size}, got {batch_size}"
+    assert (
+        batch_size == expected_batch_size
+    ), f"Expected batch_size {expected_batch_size}, got {batch_size}"

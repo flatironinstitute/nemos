@@ -329,7 +329,9 @@ class TestCreateConvolutionalPredictor:
         conv = convolve.create_convolutional_predictor(
             basis_matrix, trial_counts, axis=axis
         )
-        assert jax.tree_util.tree_structure(trial_counts) == jax.tree_util.tree_structure(conv)
+        assert jax.tree_util.tree_structure(
+            trial_counts
+        ) == jax.tree_util.tree_structure(conv)
 
     @pytest.mark.parametrize("axis", [0, 1, 2])
     @pytest.mark.parametrize(
