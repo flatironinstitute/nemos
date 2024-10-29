@@ -1,25 +1,38 @@
-import jax
-import pytest
-import numpy as np
-import jax.numpy as jnp
+import warnings
+from contextlib import nullcontext as does_not_raise
 
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from nemos.basis import BSplineBasis, RaisedCosineBasisLinear
 from nemos.identifiability_constraints import (
+    _find_drop_column,
     _warn_if_not_float64,
     add_constant,
     apply_identifiability_constraints,
     apply_identifiability_constraints_by_basis_component,
-    _find_drop_column,
 )
-from nemos.basis import BSplineBasis, RaisedCosineBasisLinear
-from contextlib import nullcontext as does_not_raise
-import warnings
 
 
 @pytest.mark.parametrize(
     "dtype, expected_context, filter_type",
     [
-        (jnp.int64, pytest.warns(UserWarning, match="The feature matrix is not of dtype `float64`"), "default"),
-        (jnp.float32, pytest.warns(UserWarning, match="The feature matrix is not of dtype `float64`"), "default"),
+        (
+            jnp.int64,
+            pytest.warns(
+                UserWarning, match="The feature matrix is not of dtype `float64`"
+            ),
+            "default",
+        ),
+        (
+            jnp.float32,
+            pytest.warns(
+                UserWarning, match="The feature matrix is not of dtype `float64`"
+            ),
+            "default",
+        ),
         (jnp.float64, does_not_raise(), "error"),
     ],
 )
@@ -66,15 +79,26 @@ def test_apply_identifiability_constraints(matrix, expected_shape, expected_colu
 @pytest.mark.parametrize(
     "basis, input_shape, output_shape, expected_columns",
     [
-        (RaisedCosineBasisLinear(10, width=4), (50, ), (50, 10), jnp.arange(10)),
-        (BSplineBasis(5) + BSplineBasis(6), (20, ), (20, 9), jnp.array([ 1,  2,  3,  4,  6,  7,  8,  9, 10])),
-        (BSplineBasis(5), (10, ), (10, 4), jnp.arange(1, 5)),
+        (RaisedCosineBasisLinear(10, width=4), (50,), (50, 10), jnp.arange(10)),
+        (
+            BSplineBasis(5) + BSplineBasis(6),
+            (20,),
+            (20, 9),
+            jnp.array([1, 2, 3, 4, 6, 7, 8, 9, 10]),
+        ),
+        (BSplineBasis(5), (10,), (10, 4), jnp.arange(1, 5)),
     ],
 )
-def test_apply_identifiability_constraints_by_basis_component(basis, input_shape, output_shape, expected_columns):
+def test_apply_identifiability_constraints_by_basis_component(
+    basis, input_shape, output_shape, expected_columns
+):
     """Test constraints applied by basis component."""
-    x = basis.compute_features(*([np.random.randn(*input_shape)] * basis._n_input_dimensionality))
-    constrained_x, kept_columns = apply_identifiability_constraints_by_basis_component(basis, x)
+    x = basis.compute_features(
+        *([np.random.randn(*input_shape)] * basis._n_input_dimensionality)
+    )
+    constrained_x, kept_columns = apply_identifiability_constraints_by_basis_component(
+        basis, x
+    )
     assert constrained_x.shape == output_shape
     assert jnp.array_equal(expected_columns, kept_columns)
 
@@ -112,12 +136,7 @@ def test_feature_matrix_dtype(dtype, expected_dtype):
 
 @pytest.mark.parametrize(
     "invalid_entries",
-    [
-        [np.nan, np.nan],
-        [np.nan, np.inf],
-        [np.inf, np.inf],
-        [np.inf, np.inf]
-    ]
+    [[np.nan, np.nan], [np.nan, np.inf], [np.inf, np.inf], [np.inf, np.inf]],
 )
 def test_apply_constraint_with_invalid(invalid_entries):
     """Test if the matrix retains its dtype after applying constraints."""
@@ -134,17 +153,16 @@ def test_apply_constraint_with_invalid(invalid_entries):
 
 @pytest.mark.parametrize(
     "invalid_entries",
-    [
-        [np.nan, np.nan],
-        [np.nan, np.inf],
-        [np.inf, np.inf],
-        [np.inf, np.inf]
-    ]
+    [[np.nan, np.nan], [np.nan, np.inf], [np.inf, np.inf], [np.inf, np.inf]],
 )
 def test_apply_constraint_by_basis_with_invalid(invalid_entries):
     """Test if the matrix retains its dtype after applying constraints."""
     basis = BSplineBasis(5)
-    x = basis.compute_features(np.random.randn(10, ))
+    x = basis.compute_features(
+        np.random.randn(
+            10,
+        )
+    )
     # add invalid
     x[:2, 2] = invalid_entries
     constrained_x, kept_cols = apply_identifiability_constraints(x)

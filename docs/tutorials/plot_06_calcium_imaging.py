@@ -9,19 +9,20 @@ For the example dataset, we will be working with a recording of a freely-moving 
 The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https://www.peyrachelab.com/).
 
 """
+import warnings
 from warnings import catch_warnings
 
-import numpy as np
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 import pynapple as nap
-import warnings
 from sklearn.linear_model import LinearRegression
 
-
 import nemos as nmo
-from nemos.identifiability_constraints import apply_identifiability_constraints_by_basis_component
+from nemos.identifiability_constraints import (
+    apply_identifiability_constraints_by_basis_component,
+)
 
 # ignore dtype warnings
 nap.nap_config.suppress_conversion_warnings = True

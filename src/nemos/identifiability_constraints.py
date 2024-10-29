@@ -9,14 +9,16 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from .type_casting import support_pynapple
 from .basis import Basis
-from .tree_utils import get_valid_multitree, tree_slice, pytree_map_and_reduce
+from .tree_utils import get_valid_multitree, pytree_map_and_reduce, tree_slice
+from .type_casting import support_pynapple
 
 
 def _warn_if_not_float64(feature_matrix: Any):
     """Warn if the feature matrix uses float32 precision."""
-    all_float64 = pytree_map_and_reduce(lambda x: jnp.issubdtype(x.dtype, jnp.float64), all, feature_matrix)
+    all_float64 = pytree_map_and_reduce(
+        lambda x: jnp.issubdtype(x.dtype, jnp.float64), all, feature_matrix
+    )
     if not all_float64:
         warnings.warn(
             "The feature matrix is not of dtype `float64`. Consider converting it to `float64` "
@@ -36,9 +38,7 @@ def add_constant(x):
 def _find_drop_column(feature_matrix, idx, rank, preprocessing_func=add_constant):
     """Check if the column idx is linearly dependent from the other columns."""
     rank_after_drop_column = jnp.linalg.matrix_rank(
-        preprocessing_func(
-            feature_matrix.at[:, idx].set(0.0)
-        )
+        preprocessing_func(feature_matrix.at[:, idx].set(0.0))
     )
     return rank == rank_after_drop_column
 
@@ -62,7 +62,9 @@ def _search_and_drop_columns(state, find_drop_columns):
 
 
 def _apply_identifiability_constraints(
-    feature_matrix: NDArray, preprocessing_func: Callable = add_constant, warn_if_float32=True
+    feature_matrix: NDArray,
+    preprocessing_func: Callable = add_constant,
+    warn_if_float32=True,
 ):
     """
     Apply identifiability constraints to a design matrix `feature_matrix`.
@@ -87,7 +89,9 @@ def _apply_identifiability_constraints(
     )
 
     # compute initial rank if needed
-    feature_matrix_with_intercept = preprocessing_func(tree_slice(feature_matrix, is_valid))
+    feature_matrix_with_intercept = preprocessing_func(
+        tree_slice(feature_matrix, is_valid)
+    )
     rank = jnp.linalg.matrix_rank(feature_matrix_with_intercept)
 
     # full rank, no extra computation needed
@@ -97,7 +101,13 @@ def _apply_identifiability_constraints(
     # initialize the drop col vector to True, and the output matrix to feature_matrix
     is_column_drop_found = jnp.array(True)  # for consistency with the output of jnp.any
     drop_cols = jnp.zeros((feature_matrix.shape[1]), dtype=bool)
-    state = (is_column_drop_found, drop_cols, tree_slice(feature_matrix, is_valid), rank, jnp.array(0))
+    state = (
+        is_column_drop_found,
+        drop_cols,
+        tree_slice(feature_matrix, is_valid),
+        rank,
+        jnp.array(0),
+    )
 
     def cond_function(state):
         return state[0]
@@ -107,18 +117,25 @@ def _apply_identifiability_constraints(
         cond_function,
         body_fun=search_and_drop,
         init_val=state,
-        max_iter=feature_matrix_with_intercept.shape[1] - rank
+        max_iter=feature_matrix_with_intercept.shape[1] - rank,
     )
 
     # return the output matrix and the dropped indices
-    feature_matrix = jnp.full(
-        (shape_sample_axis, feature_matrix.shape[1] - drop_cols.sum()), jnp.nan,
-        dtype=feature_matrix.dtype).at[is_valid].set(feature_matrix[:, ~drop_cols])
+    feature_matrix = (
+        jnp.full(
+            (shape_sample_axis, feature_matrix.shape[1] - drop_cols.sum()),
+            jnp.nan,
+            dtype=feature_matrix.dtype,
+        )
+        .at[is_valid]
+        .set(feature_matrix[:, ~drop_cols])
+    )
     return feature_matrix, drop_cols
 
 
 def _while_loop_scan(cond_fun, body_fun, init_val, max_iter):
     """Scan-based implementation (jit ok, reverse-mode autodiff ok)."""
+
     def _iter(val):
         next_val = body_fun(val)
         next_cond = cond_fun(next_val)
@@ -131,6 +148,7 @@ def _while_loop_scan(cond_fun, body_fun, init_val, max_iter):
 
     init = (init_val, cond_fun(init_val))
     return jax.lax.scan(_fun, init, None, length=max_iter)[0][0]
+
 
 @support_pynapple(conv_type="jax")
 def apply_identifiability_constraints(
@@ -201,10 +219,13 @@ def apply_identifiability_constraints(
 
     # return the output matrix and the dropped indices
     constrained_x, discarded_columns = _apply_identifiability_constraints(
-        feature_matrix, preprocessing_func=preproc_design, warn_if_float32=warn_if_float32
+        feature_matrix,
+        preprocessing_func=preproc_design,
+        warn_if_float32=warn_if_float32,
     )
     kept_columns = np.arange(feature_matrix.shape[1])[~discarded_columns]
     return constrained_x, kept_columns
+
 
 @support_pynapple(conv_type="jax")
 def apply_identifiability_constraints_by_basis_component(
@@ -271,7 +292,9 @@ def apply_identifiability_constraints_by_basis_component(
     ]
 
     apply_identifiability = partial(
-        apply_identifiability_constraints, add_intercept=add_intercept, warn_if_float32=False
+        apply_identifiability_constraints,
+        add_intercept=add_intercept,
+        warn_if_float32=False,
     )
 
     _warn_if_not_float64(split_by_input_x)
@@ -294,7 +317,11 @@ def apply_identifiability_constraints_by_basis_component(
     # calculate the shifts for each component
     shifts = list(
         np.cumsum(
-            [0] + [sub_x.shape[1] for sub_x in jax.tree_util.tree_leaves(split_by_input_x)[:-1]]
+            [0]
+            + [
+                sub_x.shape[1]
+                for sub_x in jax.tree_util.tree_leaves(split_by_input_x)[:-1]
+            ]
         )
     )
     kept_columns = jax.tree_util.tree_map(lambda x, y: x + y, kept_columns, shifts)

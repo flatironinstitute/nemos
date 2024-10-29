@@ -9,7 +9,6 @@ import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
-
 import utils_testing
 from sklearn.base import clone as sk_clone
 
@@ -141,8 +140,20 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
-            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (
+                dict(axis=0),
+                (10,),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(axis=1),
+                (2, 10),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -150,9 +161,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         with expectation:
-            basis_obj = self.cls(
-                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-            )
+            basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, **kwargs)
             basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
@@ -587,7 +596,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         with expectation:
             self.cls(5, mode=mode, window_size=window_size)
 
-
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
         bas = self.cls(5, label=label)
@@ -600,26 +608,21 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             ("label", "label"),
             ("n_basis_input", 1),
             ("num_output_features", 5),
-        ]
+        ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
         with pytest.raises(AttributeError, match="can't set attribute"):
             setattr(bas, attribute, value)
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.num_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.num_output_features == n_input * bas.n_basis_funcs
 
-
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
@@ -627,15 +630,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert bas.n_basis_input == n_input
         assert bas._n_basis_input == (n_input,)
 
-
     @pytest.mark.parametrize(
         "n_input, expectation",
         [
             (2, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
         bas = self.cls(5, mode="conv", window_size=10)
@@ -1024,8 +1026,20 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
-            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (
+                dict(axis=0),
+                (10,),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(axis=1),
+                (2, 10),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -1033,9 +1047,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         with expectation:
-            basis_obj = self.cls(
-                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-            )
+            basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, **kwargs)
             basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
@@ -1440,25 +1452,21 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             ("label", "label"),
             ("n_basis_input", 1),
             ("num_output_features", 5),
-        ]
+        ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
         with pytest.raises(AttributeError, match="can't set attribute"):
             setattr(bas, attribute, value)
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.num_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.num_output_features == n_input * bas.n_basis_funcs
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
@@ -1472,8 +1480,8 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             (2, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
         bas = self.cls(5, mode="conv", window_size=10)
@@ -1803,8 +1811,20 @@ class TestMSplineBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
-            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (
+                dict(axis=0),
+                (10,),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(axis=1),
+                (2, 10),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -1812,12 +1832,8 @@ class TestMSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         with expectation:
-            basis_obj = self.cls(
-                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-            )
+            basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, **kwargs)
             basis_obj.compute_features(np.ones(input1_shape))
-
-
 
     @pytest.mark.parametrize("n_basis_funcs", [2, 3])
     @pytest.mark.parametrize("order", [1, 2])
@@ -2229,25 +2245,21 @@ class TestMSplineBasis(BasisFuncsTesting):
             ("label", "label"),
             ("n_basis_input", 1),
             ("num_output_features", 5),
-        ]
+        ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
         with pytest.raises(AttributeError, match="can't set attribute"):
             setattr(bas, attribute, value)
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.num_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.num_output_features == n_input * bas.n_basis_funcs
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
@@ -2261,8 +2273,8 @@ class TestMSplineBasis(BasisFuncsTesting):
             (2, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
         bas = self.cls(5, mode="conv", window_size=10)
@@ -2654,8 +2666,20 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
-            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (
+                dict(axis=0),
+                (10,),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(axis=1),
+                (2, 10),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -2664,7 +2688,11 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         """
         with expectation:
             basis_obj = self.cls(
-                n_basis_funcs=5, mode="conv", window_size=5, decay_rates=np.arange(1, 6), **kwargs
+                n_basis_funcs=5,
+                mode="conv",
+                window_size=5,
+                decay_rates=np.arange(1, 6),
+                **kwargs,
             )
             basis_obj.compute_features(np.ones(input1_shape))
 
@@ -3127,25 +3155,21 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             ("label", "label"),
             ("n_basis_input", 1),
             ("num_output_features", 5),
-        ]
+        ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5, decay_rates=np.arange(1, 6))
         with pytest.raises(AttributeError, match="can't set attribute"):
             setattr(bas, attribute, value)
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         assert bas.num_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.num_output_features == n_input * bas.n_basis_funcs
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         assert bas.n_basis_input is None
@@ -3159,8 +3183,8 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             (2, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
@@ -3422,8 +3446,20 @@ class TestBSplineBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
-            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (
+                dict(axis=0),
+                (10,),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(axis=1),
+                (2, 10),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -3431,9 +3467,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         with expectation:
-            basis_obj = self.cls(
-                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-            )
+            basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, **kwargs)
             basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [2, 3])
@@ -3892,25 +3926,21 @@ class TestBSplineBasis(BasisFuncsTesting):
             ("label", "label"),
             ("n_basis_input", 1),
             ("num_output_features", 5),
-        ]
+        ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
         with pytest.raises(AttributeError, match="can't set attribute"):
             setattr(bas, attribute, value)
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.num_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.num_output_features == n_input * bas.n_basis_funcs
 
-    @pytest.mark.parametrize(
-        "n_input", [1, 2, 3]
-    )
+    @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
@@ -3924,8 +3954,8 @@ class TestBSplineBasis(BasisFuncsTesting):
             (2, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (3, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (3, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
         bas = self.cls(5, mode="conv", window_size=10)
@@ -4255,8 +4285,20 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
-            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (
+                dict(axis=0),
+                (10,),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
+            (
+                dict(axis=1),
+                (2, 10),
+                pytest.raises(
+                    ValueError, match="Setting the `axis` parameter is not allowed"
+                ),
+            ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -4264,9 +4306,7 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
         with expectation:
-            basis_obj = self.cls(
-                n_basis_funcs=5, mode="conv", window_size=5, **kwargs
-            )
+            basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, **kwargs)
             basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
@@ -5525,29 +5565,27 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(
-            10, mode="conv", window_size=10
-        )
-        bas2 = basis.BSplineBasis(
-            11, mode="conv", window_size=10
-        )
+        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
+        bas2 = basis.BSplineBasis(11, mode="conv", window_size=10)
         bas_add = bas1 + bas2
         assert bas_add.num_output_features is None
-        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
-        assert bas_add.num_output_features == (n_basis_input1 * 10 + n_basis_input2 * 11)
+        bas_add.compute_features(
+            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        )
+        assert bas_add.num_output_features == (
+            n_basis_input1 * 10 + n_basis_input2 * 11
+        )
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(
-            10, mode="conv", window_size=10
-        )
-        bas2 = basis.BSplineBasis(
-            10, mode="conv", window_size=10
-        )
+        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
+        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
         bas_add = bas1 + bas2
         assert bas_add.n_basis_input is None
-        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
+        bas_add.compute_features(
+            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        )
         assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
@@ -5556,16 +5594,12 @@ class TestAdditiveBasis(CombinedBasis):
             (3, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (4, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (4, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
-        bas1 = basis.RaisedCosineBasisLinear(
-            10, mode="conv", window_size=10
-        )
-        bas2 = basis.BSplineBasis(
-            10, mode="conv", window_size=10
-        )
+        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
+        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
         bas = bas1 + bas2
         x = np.random.randn(20, 2), np.random.randn(20, 3)
         bas.compute_features(*x)
@@ -6100,29 +6134,27 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(
-            10, mode="conv", window_size=10
-        )
-        bas2 = basis.BSplineBasis(
-            11, mode="conv", window_size=10
-        )
+        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
+        bas2 = basis.BSplineBasis(11, mode="conv", window_size=10)
         bas_add = bas1 * bas2
         assert bas_add.num_output_features is None
-        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
-        assert bas_add.num_output_features == (n_basis_input1 * 10 * n_basis_input2 * 11)
+        bas_add.compute_features(
+            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        )
+        assert bas_add.num_output_features == (
+            n_basis_input1 * 10 * n_basis_input2 * 11
+        )
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(
-            10, mode="conv", window_size=10
-        )
-        bas2 = basis.BSplineBasis(
-            10, mode="conv", window_size=10
-        )
+        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
+        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
         bas_add = bas1 * bas2
         assert bas_add.n_basis_input is None
-        bas_add.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
+        bas_add.compute_features(
+            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        )
         assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
@@ -6131,16 +6163,12 @@ class TestMultiplicativeBasis(CombinedBasis):
             (3, does_not_raise()),
             (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
             (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (4, pytest.raises(ValueError, match="Input shape mismatch detected"))
-        ]
+            (4, pytest.raises(ValueError, match="Input shape mismatch detected")),
+        ],
     )
     def test_expected_input_number(self, n_input, expectation):
-        bas1 = basis.RaisedCosineBasisLinear(
-            10, mode="conv", window_size=10
-        )
-        bas2 = basis.BSplineBasis(
-            10, mode="conv", window_size=10
-        )
+        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
+        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
         bas = bas1 * bas2
         x = np.random.randn(20, 2), np.random.randn(20, 3)
         bas.compute_features(*x)
@@ -6153,7 +6181,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
         bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
         bas_prod = bas1 * bas2
-        bas_prod.compute_features(np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2)))
+        bas_prod.compute_features(
+            np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
+        )
         assert bas_prod.n_basis_input == (n_basis_input1, n_basis_input2)
 
 
@@ -7068,7 +7098,10 @@ def test__get_splitter_split_by_input(
     func1 = getattr(bas1_instance, operator)
     bas12 = func1(bas2_instance)
 
-    inps = [np.zeros((1, n)) if n > 1 else np.zeros((1,)) for n in (n_input_basis_1, n_input_basis_2)]
+    inps = [
+        np.zeros((1, n)) if n > 1 else np.zeros((1,))
+        for n in (n_input_basis_1, n_input_basis_2)
+    ]
     bas12._set_num_output_features(*inps)
     splitter_dict, _ = bas12._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance)
@@ -7105,7 +7138,7 @@ def test_duplicate_keys(bas1, bas2, bas3):
         + bas2(5, **extra_kwargs[1], label="label")
         + bas3(5, **extra_kwargs[2], label="label")
     )
-    inps = [np.zeros((1, )) for n in range(3)]
+    inps = [np.zeros((1,)) for n in range(3)]
     bas_obj._set_num_output_features(*inps)
     slice_dict = bas_obj._get_feature_slicing()[0]
     assert tuple(slice_dict.keys()) == ("label", "label-1", "label-2")
@@ -7120,19 +7153,26 @@ def test_duplicate_keys(bas1, bas2, bas3):
     ),
 )
 @pytest.mark.parametrize(
-    "x, axis, expectation, exp_shapes", # num output is 5*2 + 6*3 = 28
+    "x, axis, expectation, exp_shapes",  # num output is 5*2 + 6*3 = 28
     [
         (np.ones((1, 28)), 1, does_not_raise(), [(1, 2, 5), (1, 3, 6)]),
-        (np.ones((28, )), 0, does_not_raise(), [(2, 5), (3, 6)]),
+        (np.ones((28,)), 0, does_not_raise(), [(2, 5), (3, 6)]),
         (np.ones((2, 2, 28)), 2, does_not_raise(), [(2, 2, 2, 5), (2, 2, 3, 6)]),
-        (np.ones((2, 2, 27)), 2, pytest.raises(ValueError, match=r"`x.shape\[axis\]` does not match the expected"), [(2, 2, 2, 5), (2, 2, 3, 6)]),
-    ]
+        (
+            np.ones((2, 2, 27)),
+            2,
+            pytest.raises(
+                ValueError, match=r"`x.shape\[axis\]` does not match the expected"
+            ),
+            [(2, 2, 2, 5), (2, 2, 3, 6)],
+        ),
+    ],
 )
 def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes):
     # skip nested
     if any(
-            bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
-            for bas in [bas1, bas2]
+        bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
+        for bas in [bas1, bas2]
     ):
         return
     # define the basis
