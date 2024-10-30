@@ -1,6 +1,5 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
-from functools import partial
 
 import jax
 import jax.numpy as jnp
