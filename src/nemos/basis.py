@@ -1506,7 +1506,7 @@ class AdditiveBasis(Basis):
             )._n_basis_input,
         )
         self._n_output_features = (
-                self._basis1.n_output_features + self._basis2.n_output_features
+            self._basis1.n_output_features + self._basis2.n_output_features
         )
         return self
 
@@ -1705,7 +1705,7 @@ class MultiplicativeBasis(Basis):
             )._n_basis_input,
         )
         self._n_output_features = (
-                self._basis1.n_output_features * self._basis2.n_output_features
+            self._basis1.n_output_features * self._basis2.n_output_features
         )
         return self
 

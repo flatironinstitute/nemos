@@ -612,7 +612,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
+        with pytest.raises(
+            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
+        ):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
@@ -1456,7 +1458,9 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
+        with pytest.raises(
+            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
+        ):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
@@ -2249,7 +2253,9 @@ class TestMSplineBasis(BasisFuncsTesting):
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
+        with pytest.raises(
+            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
+        ):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
@@ -3159,7 +3165,9 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5, decay_rates=np.arange(1, 6))
-        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
+        with pytest.raises(
+            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
+        ):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
@@ -3930,7 +3938,9 @@ class TestBSplineBasis(BasisFuncsTesting):
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
+        with pytest.raises(
+            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
+        ):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
@@ -5572,9 +5582,7 @@ class TestAdditiveBasis(CombinedBasis):
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_output_features == (
-            n_basis_input1 * 10 + n_basis_input2 * 11
-        )
+        assert bas_add.n_output_features == (n_basis_input1 * 10 + n_basis_input2 * 11)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
@@ -6141,9 +6149,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_output_features == (
-            n_basis_input1 * 10 * n_basis_input2 * 11
-        )
+        assert bas_add.n_output_features == (n_basis_input1 * 10 * n_basis_input2 * 11)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
