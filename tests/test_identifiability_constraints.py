@@ -72,7 +72,9 @@ def test_add_constant(input_matrix, expected_output):
 )
 def test_apply_identifiability_constraints(matrix, expected_shape, expected_columns):
     """Test apply_identifiability_constraints for both full-rank and rank-deficient cases."""
-    constrained_x, kept_columns = apply_identifiability_constraints(matrix.astype(float), warn_if_float32=False)
+    constrained_x, kept_columns = apply_identifiability_constraints(
+        matrix.astype(float), warn_if_float32=False
+    )
     assert constrained_x.shape == expected_shape
     assert jnp.array_equal(kept_columns, expected_columns)
 

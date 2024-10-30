@@ -742,8 +742,6 @@ class Basis(Base, abc.ABC):
             # before calling the convolve, check that the input matches
             # the expectation. We can check xi[0] only, since convolution
             # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
-            n_provided_inputs = np.prod(xi[0].shape[1:])
-
             # convolve called at the end of any recursive call
             # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
