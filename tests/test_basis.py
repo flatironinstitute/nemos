@@ -607,20 +607,20 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             ("label", None),
             ("label", "label"),
             ("n_basis_input", 1),
-            ("num_output_features", 5),
+            ("n_output_features", 5),
         ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match="can't set attribute"):
+        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
-        assert bas.num_output_features is None
+        assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.num_output_features == n_input * bas.n_basis_funcs
+        assert bas.n_output_features == n_input * bas.n_basis_funcs
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
@@ -1451,20 +1451,20 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
             ("label", None),
             ("label", "label"),
             ("n_basis_input", 1),
-            ("num_output_features", 5),
+            ("n_output_features", 5),
         ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match="can't set attribute"):
+        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
-        assert bas.num_output_features is None
+        assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.num_output_features == n_input * bas.n_basis_funcs
+        assert bas.n_output_features == n_input * bas.n_basis_funcs
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
@@ -2244,20 +2244,20 @@ class TestMSplineBasis(BasisFuncsTesting):
             ("label", None),
             ("label", "label"),
             ("n_basis_input", 1),
-            ("num_output_features", 5),
+            ("n_output_features", 5),
         ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match="can't set attribute"):
+        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
-        assert bas.num_output_features is None
+        assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.num_output_features == n_input * bas.n_basis_funcs
+        assert bas.n_output_features == n_input * bas.n_basis_funcs
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
@@ -3154,20 +3154,20 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
             ("label", None),
             ("label", "label"),
             ("n_basis_input", 1),
-            ("num_output_features", 5),
+            ("n_output_features", 5),
         ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5, decay_rates=np.arange(1, 6))
-        with pytest.raises(AttributeError, match="can't set attribute"):
+        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
-        assert bas.num_output_features is None
+        assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.num_output_features == n_input * bas.n_basis_funcs
+        assert bas.n_output_features == n_input * bas.n_basis_funcs
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
@@ -3925,20 +3925,20 @@ class TestBSplineBasis(BasisFuncsTesting):
             ("label", None),
             ("label", "label"),
             ("n_basis_input", 1),
-            ("num_output_features", 5),
+            ("n_output_features", 5),
         ],
     )
     def test_attr_setter(self, attribute, value):
         bas = self.cls(5)
-        with pytest.raises(AttributeError, match="can't set attribute"):
+        with pytest.raises(AttributeError, match=fr"can't set attribute|property '{attribute}' of"):
             setattr(bas, attribute, value)
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
         bas = self.cls(5, mode="conv", window_size=10)
-        assert bas.num_output_features is None
+        assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.num_output_features == n_input * bas.n_basis_funcs
+        assert bas.n_output_features == n_input * bas.n_basis_funcs
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
@@ -5568,11 +5568,11 @@ class TestAdditiveBasis(CombinedBasis):
         bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
         bas2 = basis.BSplineBasis(11, mode="conv", window_size=10)
         bas_add = bas1 + bas2
-        assert bas_add.num_output_features is None
+        assert bas_add.n_output_features is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.num_output_features == (
+        assert bas_add.n_output_features == (
             n_basis_input1 * 10 + n_basis_input2 * 11
         )
 
@@ -6137,11 +6137,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
         bas2 = basis.BSplineBasis(11, mode="conv", window_size=10)
         bas_add = bas1 * bas2
-        assert bas_add.num_output_features is None
+        assert bas_add.n_output_features is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.num_output_features == (
+        assert bas_add.n_output_features == (
             n_basis_input1 * 10 * n_basis_input2 * 11
         )
 

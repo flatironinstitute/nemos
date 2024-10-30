@@ -509,7 +509,7 @@ class Basis(Base, abc.ABC):
 
         # these parameters are going to be set at the first call of `compute_features`
         # since we cannot know a-priori how many features may be convolved
-        self._num_output_features = None
+        self._n_output_features = None
         self._input_shape = None
 
         self._label = str(label)
@@ -568,9 +568,9 @@ class Basis(Base, abc.ABC):
             )
 
     @property
-    def num_output_features(self) -> int | None:
+    def n_output_features(self) -> int | None:
         """Read-only property returning the number of features returned by the basis."""
-        return self._num_output_features
+        return self._n_output_features
 
     @property
     def label(self) -> str:
@@ -1216,7 +1216,7 @@ class Basis(Base, abc.ABC):
             if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
                 split_dict = {
                     self.label: slice(
-                        start_slice, start_slice + self._num_output_features
+                        start_slice, start_slice + self._n_output_features
                     )
                 }
             else:
@@ -1231,9 +1231,9 @@ class Basis(Base, abc.ABC):
                 }
         else:
             split_dict = {
-                self.label: slice(start_slice, start_slice + self._num_output_features)
+                self.label: slice(start_slice, start_slice + self._n_output_features)
             }
-        start_slice += self._num_output_features
+        start_slice += self._n_output_features
         return split_dict, start_slice
 
     def split_by_feature(
@@ -1352,11 +1352,11 @@ class Basis(Base, abc.ABC):
 
         """
 
-        if x.shape[axis] != self.num_output_features:
+        if x.shape[axis] != self.n_output_features:
             raise ValueError(
                 "`x.shape[axis]` does not match the expected number of features."
                 f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
-                f"of features is {self.num_output_features}"
+                f"of features is {self.n_output_features}"
             )
 
         # Get the slice dictionary based on predefined feature slicing
@@ -1419,7 +1419,7 @@ class Basis(Base, abc.ABC):
         This function computes the number of inputs that are provided to the basis and uses
         that number, and the n_basis_funcs to calculate the number of output features that
         `self.compute_features` will return. These quantities and the input shape (excluding the sample axis)
-        are stored in `self._n_basis_input` and `self._num_output_features`, and `self._input_shape`
+        are stored in `self._n_basis_input` and `self._n_output_features`, and `self._input_shape`
         respectively.
 
         Parameters
@@ -1460,7 +1460,7 @@ class Basis(Base, abc.ABC):
         n_inputs = (1,) if xi[0].ndim == 1 else (np.prod(shape),)
 
         self._n_basis_input = n_inputs
-        self._num_output_features = self.n_basis_funcs * self._n_basis_input[0]
+        self._n_output_features = self.n_basis_funcs * self._n_basis_input[0]
         return self
 
 
@@ -1490,7 +1490,7 @@ class AdditiveBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = None
-        self._num_output_features = None
+        self._n_output_features = None
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
@@ -1505,8 +1505,8 @@ class AdditiveBasis(Basis):
                 *xi[self._basis1._n_input_dimensionality :]
             )._n_basis_input,
         )
-        self._num_output_features = (
-            self._basis1.num_output_features + self._basis2.num_output_features
+        self._n_output_features = (
+                self._basis1.n_output_features + self._basis2.n_output_features
         )
         return self
 
@@ -1616,7 +1616,7 @@ class MultiplicativeBasis(Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = None
-        self._num_output_features = None
+        self._n_output_features = None
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
@@ -1704,8 +1704,8 @@ class MultiplicativeBasis(Basis):
                 *xi[self._basis1._n_input_dimensionality :]
             )._n_basis_input,
         )
-        self._num_output_features = (
-            self._basis1.num_output_features * self._basis2.num_output_features
+        self._n_output_features = (
+                self._basis1.n_output_features * self._basis2.n_output_features
         )
         return self
 
