@@ -26,7 +26,7 @@ from nemos.identifiability_constraints import (
 
 # ignore dtype warnings
 nap.nap_config.suppress_conversion_warnings = True
-warnings.filterwarnings("ignore", category=UserWarning, message="The feature matrix is of dtype")
+warnings.filterwarnings("ignore", category=UserWarning, message="The feature matrix is not of dtype")
 
 def add_intercept(X):
     """Add an intercept term to design matrix.
