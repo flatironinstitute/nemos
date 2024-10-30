@@ -34,7 +34,7 @@ def _drop_and_compute_rank(feature_matrix, idx, preprocessing_func=add_constant)
     return feature_dropped, rank_after_drop_column
 
 
-@partial(jax.jit, static_argnums=(2, 3))
+@partial(jax.jit, static_argnums=(1, 2, 3))
 def _find_drop_column(
     feature_matrix: JaxArray,
     rank: int,
@@ -142,8 +142,8 @@ def _apply_identifiability_constraints(
     # run the search
     drop_cols = _find_drop_column(
         feature_matrix,
-        rank=rank,
-        max_drop=max_drop,
+        rank=int(rank),
+        max_drop=int(max_drop),
         preprocessing_func=preprocessing_func,
     )
 
@@ -307,6 +307,7 @@ def apply_identifiability_constraints_by_basis_component(
     (20, 9)
     >>> # fit on train and predict on test set
     >>> rate = GLM().fit(constrained_x, np.random.poisson(size=100)).predict(test_x)
+
     """
     # gets a dictionary with feature specific feature matrices
     # stored in tensors of shape (n_samples, n_inputs, n_features)

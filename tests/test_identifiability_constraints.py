@@ -143,7 +143,7 @@ def test_apply_identifiability_constraints_by_basis_component(
 )
 def test_find_drop_column(matrix, max_drop, expected_result, preproc):
     """Test if a column is linearly dependent."""
-    rank = jnp.linalg.matrix_rank(preproc(matrix))
+    rank = int(jnp.linalg.matrix_rank(preproc(matrix)))
     result = _find_drop_column(
         matrix, rank=rank, max_drop=max_drop, preprocessing_func=preproc
     )
