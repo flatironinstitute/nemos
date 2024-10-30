@@ -112,6 +112,20 @@ def _find_drop_column(
     return final_state[3]
 
 
+def _add_invalid_entries(feature_matrix, shape_first_axis, is_valid):
+    """Add invalid entries to match original shape."""
+    feature_matrix = (
+        jnp.full(
+            (shape_first_axis, *feature_matrix.shape[1:]),
+            jnp.nan,
+            dtype=feature_matrix.dtype,
+        )
+        .at[is_valid]
+        .set(feature_matrix)
+    )
+    return feature_matrix
+
+
 def _apply_identifiability_constraints(
     feature_matrix: JaxArray,
     preprocessing_func: Callable = add_constant,
@@ -135,6 +149,9 @@ def _apply_identifiability_constraints(
 
     # full rank, no extra computation needed
     if rank == feature_matrix_with_intercept.shape[1]:
+        feature_matrix = _add_invalid_entries(
+            feature_matrix, shape_sample_axis, is_valid
+        )
         return feature_matrix, jnp.zeros((feature_matrix.shape[1]), dtype=bool)
 
     max_drop = feature_matrix_with_intercept.shape[1] - rank
@@ -148,14 +165,10 @@ def _apply_identifiability_constraints(
     )
 
     # return the output matrix and the dropped indices
-    feature_matrix = (
-        jnp.full(
-            (shape_sample_axis, feature_matrix.shape[1] - drop_cols.sum()),
-            jnp.nan,
-            dtype=feature_matrix.dtype,
-        )
-        .at[is_valid]
-        .set(feature_matrix[:, ~drop_cols])
+    feature_matrix = _add_invalid_entries(
+        feature_matrix[:, ~drop_cols],
+        shape_sample_axis,
+        is_valid,
     )
     return feature_matrix, drop_cols
 
