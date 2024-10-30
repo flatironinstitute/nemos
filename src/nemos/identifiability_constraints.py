@@ -34,13 +34,13 @@ def _drop_and_compute_rank(feature_matrix, idx, preprocessing_func=add_constant)
     return feature_dropped, rank_after_drop_column
 
 
-@partial(jax.jit, static_argnums=(1, 2, 3))
+@partial(jax.jit, static_argnums=(2, 3))
 def _find_drop_column(
     feature_matrix: JaxArray,
     rank: int,
     max_drop: int,
     preprocessing_func: Callable = add_constant,
-) -> JaxArray[bool]:
+) -> JaxArray:
     """
     Find a minimal subset linearly dependent columns that should be dropped.
 
@@ -116,7 +116,7 @@ def _apply_identifiability_constraints(
     feature_matrix: JaxArray,
     preprocessing_func: Callable = add_constant,
     warn_if_float32=True,
-) -> Tuple[JaxArray, JaxArray[bool]]:
+) -> Tuple[JaxArray, JaxArray]:
     """
     Apply identifiability constraints to a design matrix `feature_matrix`.
 

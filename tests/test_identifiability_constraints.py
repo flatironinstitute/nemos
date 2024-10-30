@@ -1,5 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -104,19 +105,49 @@ def test_apply_identifiability_constraints_by_basis_component(
 
 
 @pytest.mark.parametrize(
-    "matrix, idx, expected_result",
+    "matrix, max_drop, preproc, expected_result",
     [
-        (jnp.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), 2, True),
-        (jnp.array([[1, 0], [0, 0]]), 1, True),
-        (jnp.array([[1, 0], [0, 0]]), 0, False),
-        (np.eye(3, 2), 1, False),
+        (
+            jnp.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+            2,
+            add_constant,
+            jnp.array([True, True, False]),
+        ),
+        (
+            jnp.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+            1,
+            add_constant,
+            jnp.array([True, False, False]),
+        ),
+        (jnp.array([[1, 0], [0, 0]]), 1, add_constant, jnp.array([False, True])),
+        (jnp.array([[1, 0], [0, 0]]), 0, add_constant, jnp.array([False, False])),
+        (np.eye(3, 2), 1, add_constant, jnp.array([False, False])),
+        (np.eye(3), 3, add_constant, jnp.array([True, False, False])),
+        (
+            jnp.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+            2,
+            lambda x: x,
+            jnp.array([True, False, False]),
+        ),
+        (
+            jnp.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+            1,
+            lambda x: x,
+            jnp.array([True, False, False]),
+        ),
+        (jnp.array([[1, 0], [0, 0]]), 1, lambda x: x, jnp.array([False, True])),
+        (jnp.array([[1, 0], [0, 0]]), 0, lambda x: x, jnp.array([False, False])),
+        (np.eye(3, 2), 1, lambda x: x, jnp.array([False, False])),
+        (np.eye(3), 3, lambda x: x, jnp.array([False, False, False])),
     ],
 )
-def test_find_drop_column(matrix, idx, expected_result):
+def test_find_drop_column(matrix, max_drop, expected_result, preproc):
     """Test if a column is linearly dependent."""
-    rank = jnp.linalg.matrix_rank(add_constant(matrix))
-    result = _find_drop_column(matrix, idx, rank)
-    assert result == expected_result
+    rank = jnp.linalg.matrix_rank(preproc(matrix))
+    result = _find_drop_column(
+        matrix, rank=rank, max_drop=max_drop, preprocessing_func=preproc
+    )
+    assert jnp.array_equal(result, expected_result)
 
 
 @pytest.mark.parametrize(
