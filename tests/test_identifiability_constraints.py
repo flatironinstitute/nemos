@@ -89,6 +89,12 @@ def test_apply_identifiability_constraints(matrix, expected_shape, expected_colu
             (20, 9),
             jnp.array([1, 2, 3, 4, 6, 7, 8, 9, 10]),
         ),
+        (
+            BSplineBasis(5, mode="conv", window_size=10) + BSplineBasis(6),
+            (20,),
+            (20, 10),
+            jnp.array([0, 1, 2, 3, 4, 6, 7, 8, 9, 10]),
+        ),
         (BSplineBasis(5), (10,), (10, 4), jnp.arange(1, 5)),
     ],
 )
