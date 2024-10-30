@@ -134,10 +134,10 @@ def _apply_identifiability_constraints(
     rank = jnp.linalg.matrix_rank(feature_matrix_with_intercept)
 
     # full rank, no extra computation needed
-    if rank == min(feature_matrix_with_intercept.shape):
+    if rank == feature_matrix_with_intercept.shape[1]:
         return feature_matrix, jnp.zeros((feature_matrix.shape[1]), dtype=bool)
 
-    max_drop = min(feature_matrix_with_intercept.shape) - rank
+    max_drop = feature_matrix_with_intercept.shape[1] - rank
 
     # run the search
     drop_cols = _find_drop_column(

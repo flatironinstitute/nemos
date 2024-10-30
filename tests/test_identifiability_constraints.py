@@ -9,6 +9,7 @@ import pytest
 
 from nemos.basis import BSplineBasis, RaisedCosineBasisLinear
 from nemos.identifiability_constraints import (
+    _WARN_FLOAT32_MESSAGE,
     _find_drop_column,
     _warn_if_not_float64,
     add_constant,
@@ -44,7 +45,7 @@ def test_warn_if_not_float64(dtype, expected_context, filter_type):
     with expected_context:
         with warnings.catch_warnings():
             warnings.filterwarnings(action=filter_type)
-            _warn_if_not_float64(matrix)
+            _warn_if_not_float64(matrix, _WARN_FLOAT32_MESSAGE)
 
 
 @pytest.mark.parametrize(
