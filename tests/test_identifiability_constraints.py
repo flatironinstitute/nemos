@@ -73,7 +73,7 @@ def test_add_constant(input_matrix, expected_output):
 )
 def test_apply_identifiability_constraints(matrix, expected_shape, expected_columns):
     """Test apply_identifiability_constraints for both full-rank and rank-deficient cases."""
-    constrained_x, kept_columns = apply_identifiability_constraints(matrix)
+    constrained_x, kept_columns = apply_identifiability_constraints(matrix.astype(float), warn_if_float32=False)
     assert constrained_x.shape == expected_shape
     assert jnp.array_equal(kept_columns, expected_columns)
 
@@ -144,9 +144,10 @@ def test_apply_identifiability_constraints_by_basis_component(
 )
 def test_find_drop_column(matrix, max_drop, expected_result, preproc):
     """Test if a column is linearly dependent."""
+    jax.config.update("jax_enable_x64", True)
     rank = int(jnp.linalg.matrix_rank(preproc(matrix)))
     result = _find_drop_column(
-        matrix, rank=rank, max_drop=max_drop, preprocessing_func=preproc
+        matrix.astype(float), rank=rank, max_drop=max_drop, preprocessing_func=preproc
     )
     assert jnp.array_equal(result, expected_result)
 
@@ -162,7 +163,7 @@ def test_feature_matrix_dtype(dtype, expected_dtype):
     """Test if the matrix retains its dtype after applying constraints."""
     jax.config.update("jax_enable_x64", True)
     x = np.random.randn(10, 5).astype(dtype)
-    constrained_x, _ = apply_identifiability_constraints(x)
+    constrained_x, _ = apply_identifiability_constraints(x, warn_if_float32=False)
     assert constrained_x.dtype == expected_dtype
 
 
