@@ -580,7 +580,7 @@ tuning = nap.compute_1d_tuning_curves_continuous(predicted_firing_rate,
 # In this case, "convolved counts" is the only feature.
 
 # split the coefficients by feature
-weights = basis.split_by_feature(model.coef_)
+weights = basis.split_by_feature(model.coef_, axis=0)
 
 # the output is a dictionary containing an array of shape (n_neurons, n_basis_funcs, n_neurons)
 print(f"{weights.keys()}: {weights['convolved counts'].shape}")

@@ -464,8 +464,6 @@ class Basis(Base, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -1351,7 +1349,6 @@ class Basis(Base, abc.ABC):
         feature_2: shape (1, 6)
 
         """
-
         if x.shape[axis] != self.n_output_features:
             raise ValueError(
                 "`x.shape[axis]` does not match the expected number of features."
@@ -1732,8 +1729,6 @@ class SplineBasis(Basis, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -1897,8 +1892,6 @@ class MSplineBasis(SplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs:
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -2063,8 +2056,6 @@ class BSplineBasis(SplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -2189,8 +2180,6 @@ class CyclicBSplineBasis(SplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -2338,8 +2327,6 @@ class RaisedCosineBasisLinear(Basis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -2539,8 +2526,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
@@ -2703,8 +2688,6 @@ class OrthExponentialBasis(Basis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    n_basis_input :
-        Number of input to be processed by the basis in "conv" mode.
     **kwargs :
         Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
         `mode='conv'`; These arguments are used to change the default behavior of the convolution.
