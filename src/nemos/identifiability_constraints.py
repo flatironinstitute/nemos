@@ -42,7 +42,7 @@ def _find_drop_column(
     preprocessing_func: Callable = add_constant,
 ) -> JaxArray[bool]:
     """
-    Find all linearly dependent columns.
+    Find a minimal subset linearly dependent columns that should be dropped.
 
     This function loops over the columns of a matrix and check if each column is linearly dependent from the others.
     If the i-th column is linearly dependent, the drop_cols[i] is set True, and feature_matrix[:, i] is set to 0.
@@ -63,7 +63,7 @@ def _find_drop_column(
     Returns
     -------
     drop_cols:
-        A boolean vector
+        A boolean vector, True if the column should be dropped, False otherwise.
 
     """
 
@@ -76,15 +76,18 @@ def _find_drop_column(
         return features, drop_cols
 
     def check_column(iter_num, state):
+        """Drop a column if rank is not affected."""
         matrix, _, original_rank, drop_cols, mx_drop = state
+        # drop the column (by set to zero) and compute rank
         col_dropped_matrix, mat_rank = _drop_and_compute_rank(
             matrix, iter_num, preprocessing_func
         )
+        # apply the change if rank stays constant, do nothing otherwise.
         matrix, drop_cols = jax.lax.cond(
-            mat_rank == original_rank,
-            drop_col_and_update,
-            do_not_drop,
-            matrix,
+            mat_rank == original_rank,  # condition
+            drop_col_and_update,  # true function
+            do_not_drop,  # false function
+            matrix,  # parameters
             col_dropped_matrix,
             drop_cols,
             iter_num,
