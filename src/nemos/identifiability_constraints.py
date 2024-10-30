@@ -5,6 +5,7 @@ from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
+from jax.typing import ArrayLike as JaxArray
 import numpy as np
 from numpy.typing import NDArray
 
@@ -25,38 +26,74 @@ def add_constant(x):
     return jnp.hstack((jnp.ones((x.shape[0], 1), dtype=x.dtype), x))
 
 
-@partial(jax.jit, static_argnums=(3,))
-def _find_drop_column(feature_matrix, idx, rank, preprocessing_func=add_constant):
+@partial(jax.jit, static_argnums=(2,))
+def _drop_and_compute_rank(feature_matrix, idx, preprocessing_func=add_constant):
     """Check if the column idx is linearly dependent from the other columns."""
+    feature_dropped = feature_matrix.at[:, idx].set(0.0)
     rank_after_drop_column = jnp.linalg.matrix_rank(
-        preprocessing_func(feature_matrix.at[:, idx].set(0.0))
+        preprocessing_func(feature_dropped)
     )
-    return rank == rank_after_drop_column
+    return feature_dropped, rank_after_drop_column
 
 
-@partial(jax.jit, static_argnums=(1,))
-def _search_and_drop_columns(state, find_drop_columns):
-    """Search & drop columns."""
-    _, drop_cols, feature_matrix, rank, _ = state
-    new_drop_cols = find_drop_columns(
-        feature_matrix, jnp.arange(feature_matrix.shape[1]), rank
-    )
-    # get the first newly found linearly dependent column
-    idx = jnp.arange(drop_cols.shape[0])[jnp.argmax(new_drop_cols & (~drop_cols))]
-    # drop
-    feature_matrix = feature_matrix.at[:, idx].set(0.0)
-    # stopping condition
-    found_cols = drop_cols.sum() < new_drop_cols.sum()
-    # update
-    drop_cols = drop_cols.at[idx].set(True)
-    return found_cols, drop_cols, feature_matrix, rank, idx
+@partial(jax.jit, static_argnums=(1, 2, 3))
+def _find_drop_column(feature_matrix: JaxArray, rank: int, max_drop: int, preprocessing_func: Callable = add_constant) -> JaxArray[bool]:
+    """
+    Find all linearly dependent columns.
+
+    This function loops over the columns of a matrix and check if each column is linearly dependent from the others.
+    If the i-th column is linearly dependent, the drop_cols[i] is set True, and feature_matrix[:, i] is set to 0.
+    The loop is stopped when max_drop linearly dependent columns are found.
+
+    Parameters
+    ----------
+    feature_matrix:
+        The rank deficient feature matrix.
+    rank:
+        The rank of the matrix.
+    max_drop:
+        Number of columns to be dropped.
+    preprocessing_func:
+        Additional processing of the feature matrix. Usually, add or not the intercept. Other processing could
+        entail mean-centering the columns or similar.
+
+    Returns
+    -------
+    drop_cols:
+        A boolean vector
+
+    """
+
+    def drop_col_and_update(features, dropped_features, drop_cols, iter_num):
+        """Drop feature and update drop column boolean."""
+        return dropped_features, drop_cols.at[iter_num].set(True)
+
+    def do_not_drop(features, dropped_features, drop_cols, iter_num):
+        """Do not drop."""
+        return features, drop_cols
+
+    def check_column(iter_num, state):
+        matrix, _, original_rank, drop_cols, mx_drop = state
+        col_dropped_matrix, mat_rank = _drop_and_compute_rank(matrix, iter_num, preprocessing_func)
+        matrix, drop_cols = jax.lax.cond(mat_rank == original_rank, drop_col_and_update, do_not_drop, matrix, col_dropped_matrix, drop_cols, iter_num)
+        return matrix, mat_rank, original_rank, drop_cols, mx_drop
+
+    def body_func(iter_num, state):
+        drop_cols, max_drop = state[-2:]
+        return jax.lax.cond(drop_cols.sum() < max_drop, check_column, lambda it, x: x, iter_num, state)
+
+
+    init_state = feature_matrix, jnp.array(0), jnp.array(rank), jnp.zeros(feature_matrix.shape[1], dtype=bool), max_drop
+    final_state = jax.lax.fori_loop(0, feature_matrix.shape[1], body_func, init_state)
+
+    return final_state[3]
 
 
 def _apply_identifiability_constraints(
-    feature_matrix: NDArray,
+    feature_matrix: JaxArray,
     preprocessing_func: Callable = add_constant,
     warn_if_float32=True,
-):
+) -> Tuple[JaxArray, JaxArray[bool]]:
     """
     Apply identifiability constraints to a design matrix `feature_matrix`.
 
@@ -68,48 +105,27 @@ def _apply_identifiability_constraints(
     shape_sample_axis = feature_matrix.shape[0]
     is_valid = get_valid_multitree(feature_matrix)
 
-    # feature_matrix = tree_slice(feature_matrix, is_valid)
-    # vectorize the search and drop column (efficient on GPU)
-    vec_find_drop_col = jax.vmap(
-        partial(_find_drop_column, preprocessing_func=preprocessing_func),
-        in_axes=(None, 0, None),
-        out_axes=0,
-    )
-    search_and_drop = partial(
-        _search_and_drop_columns, find_drop_columns=vec_find_drop_col
-    )
-
     # compute initial rank if needed
+    feature_matrix = tree_slice(feature_matrix, is_valid)
     feature_matrix_with_intercept = preprocessing_func(
-        tree_slice(feature_matrix, is_valid)
+        feature_matrix
     )
     rank = jnp.linalg.matrix_rank(feature_matrix_with_intercept)
 
     # full rank, no extra computation needed
-    if rank == feature_matrix_with_intercept.shape[1]:
+    if rank == min(feature_matrix_with_intercept.shape):
         return feature_matrix, jnp.zeros((feature_matrix.shape[1]), dtype=bool)
 
-    # initialize the drop col vector to True, and the output matrix to feature_matrix
-    is_column_drop_found = jnp.array(True)  # for consistency with the output of jnp.any
-    drop_cols = jnp.zeros((feature_matrix.shape[1]), dtype=bool)
-    state = (
-        is_column_drop_found,
-        drop_cols,
-        tree_slice(feature_matrix, is_valid),
-        rank,
-        jnp.array(0),
+    max_drop = min(feature_matrix_with_intercept.shape) - rank
+
+    # run the search
+    drop_cols = _find_drop_column(
+        feature_matrix,
+        rank=rank,
+        max_drop=max_drop,
+        preprocessing_func=preprocessing_func
     )
 
-    def cond_function(state):
-        return state[0]
-
-    # run the while loop
-    is_column_drop_found, drop_cols, feature_matrix, _, _ = _while_loop_scan(
-        cond_function,
-        body_fun=search_and_drop,
-        init_val=state,
-        max_iter=feature_matrix_with_intercept.shape[1] - rank,
-    )
 
     # return the output matrix and the dropped indices
     feature_matrix = (
@@ -143,8 +159,8 @@ def _while_loop_scan(cond_fun, body_fun, init_val, max_iter):
 
 @support_pynapple(conv_type="jax")
 def apply_identifiability_constraints(
-    feature_matrix: NDArray, add_intercept: bool = True, warn_if_float32: bool = True
-):
+    feature_matrix: NDArray | JaxArray, add_intercept: bool = True, warn_if_float32: bool = True
+) -> Tuple[NDArray, NDArray[int]]:
     """
     Apply identifiability constraints to a design matrix `X`.
 
@@ -210,12 +226,12 @@ def apply_identifiability_constraints(
 
     # return the output matrix and the dropped indices
     constrained_x, discarded_columns = _apply_identifiability_constraints(
-        feature_matrix,
+        jnp.asarray(feature_matrix),
         preprocessing_func=preproc_design,
         warn_if_float32=warn_if_float32,
     )
     kept_columns = np.arange(feature_matrix.shape[1])[~discarded_columns]
-    return constrained_x, kept_columns
+    return np.asarray(constrained_x), kept_columns
 
 
 @support_pynapple(conv_type="jax")
