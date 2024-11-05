@@ -2338,7 +2338,7 @@ class CyclicBSplineBasis(SplineBasis):
         order: int = 4,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
-        label: Optional[str] = None,
+        label: Optional[str] = "CyclicBSplineBasis",
         **kwargs,
     ):
         super().__init__(
