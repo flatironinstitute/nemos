@@ -2886,7 +2886,7 @@ class OrthExponentialBasis(Basis):
         mode="eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
-        label: Optional[str] = None,
+        label: Optional[str] = "OrthExponentialBasis",
         **kwargs,
     ):
         super().__init__(
