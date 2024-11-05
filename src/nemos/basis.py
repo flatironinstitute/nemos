@@ -2721,7 +2721,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         enforce_decay_to_zero: bool = True,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
-        label: Optional[str] = None,
+        label: Optional[str] = "RaisedCosineBasisLog",
         **kwargs,
     ) -> None:
         super().__init__(
