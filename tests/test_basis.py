@@ -627,7 +627,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input == (n_input, )
+        assert bas.n_basis_input == (n_input,)
         assert bas._n_basis_input == (n_input,)
 
     @pytest.mark.parametrize(
@@ -1457,7 +1457,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input == (n_input, )
+        assert bas.n_basis_input == (n_input,)
         assert bas._n_basis_input == (n_input,)
 
     @pytest.mark.parametrize(
@@ -2236,7 +2236,7 @@ class TestMSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input == (n_input, )
+        assert bas.n_basis_input == (n_input,)
         assert bas._n_basis_input == (n_input,)
 
     @pytest.mark.parametrize(
@@ -2668,7 +2668,11 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         ],
     )
     def test_compute_features_conv_input(
-        self, n_basis_funcs, window_size, input_shape, expected_n_input,
+        self,
+        n_basis_funcs,
+        window_size,
+        input_shape,
+        expected_n_input,
     ):
         x = np.ones(input_shape)
         bas = self.cls(
@@ -3133,7 +3137,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10, decay_rates=np.arange(1, 6))
         assert bas.n_basis_input is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input == (n_input, )
+        assert bas.n_basis_input == (n_input,)
         assert bas._n_basis_input == (n_input,)
 
     @pytest.mark.parametrize(
@@ -3890,7 +3894,7 @@ class TestBSplineBasis(BasisFuncsTesting):
         bas = self.cls(5, mode="conv", window_size=10)
         assert bas.n_basis_input is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input == (n_input, )
+        assert bas.n_basis_input == (n_input,)
         assert bas._n_basis_input == (n_input,)
 
     @pytest.mark.parametrize(
