@@ -621,7 +621,15 @@ class Basis(Base, abc.ABC):
 
     @property
     def n_output_features(self) -> int | None:
-        """Read-only property returning the number of features returned by the basis."""
+        """
+        Read-only property indicating the number of features returned by the basis, when available.
+
+        Notes
+        -----
+        The number of output features can be determined only when the number of inputs
+        provided to the basis is known. Therefore, before the first call to `compute_features`,
+        this property will return `None`. After that call, `n_output_features` will be available.
+        """
         return self._n_output_features
 
     @property
@@ -629,16 +637,9 @@ class Basis(Base, abc.ABC):
         return self._label
 
     @property
-    def n_basis_input(self) -> tuple | int | None:
-        # Needed for sklearn to work properly; cloning of sklearn requires that the
-        # parameter provided at initialization is returned as is: if an int is provided
-        # the same int is expected.
-        # Internally, for code consistency, the parameter is stored as a tuple for
-        # all basis.
+    def n_basis_input(self) -> tuple | None:
         if self._n_basis_input is None:
             return
-        elif len(self._n_basis_input) == 1:
-            return self._n_basis_input[0]
         return self._n_basis_input
 
     @property
@@ -794,8 +795,6 @@ class Basis(Base, abc.ABC):
             # before calling the convolve, check that the input matches
             # the expectation. We can check xi[0] only, since convolution
             # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
-            # convolve called at the end of any recursive call
-            # this ensures that len(xi) == 1.
             conv = create_convolutional_predictor(
                 self.kernel_, *xi, **self._conv_kwargs
             )
@@ -828,7 +827,7 @@ class Basis(Base, abc.ABC):
             the subclass and mode.
 
         Examples
-        -------
+        --------
         >>> import numpy as np
         >>> from nemos.basis import BSplineBasis
 
@@ -1331,16 +1330,16 @@ class Basis(Base, abc.ABC):
         Suppose the basis has **m components** (features), each with $b_i$ basis functions and $n_i$ inputs.
         The total number of features, `N`, is:
 
-        \[
+        $$
         N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
-        \]
+        $$
 
         Given an input array of shape `(..., N, ...)`, the method slices it into `m` sub-arrays,
         each of shape:
 
-        \[
+        $$
         (..., n_i, b_i, ...)
-        \]
+        $$
 
         Here:
         - $n_i$ is the number of inputs processed by the **i-th basis component**.
@@ -1377,9 +1376,9 @@ class Basis(Base, abc.ABC):
             - **Keys**: Labels of the additive basis components.
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 
-              \[
+              $$
               (..., n_i, b_i, ...)
-              \]
+             $$
 
               - `n_i`: The number of inputs processed by the i-th basis component.
               - `b_i`: The number of basis functions for the i-th basis component.
@@ -1526,15 +1525,16 @@ class Basis(Base, abc.ABC):
         # Check that the input shape matches expectation
         # Note that this method is reimplemented in AdditiveBasis and MultiplicativeBasis
         # so we can assume that len(xi) == 1
-        self._check_input_shape_consistency(xi[0])
+        xi = xi[0]
+        self._check_input_shape_consistency(xi)
 
         # remove sample axis (samples are allowed to vary)
-        shape = xi[0].shape[1:]
+        shape = xi.shape[1:]
 
         self._input_shape = shape
 
         # remove sample axis & get the total input number
-        n_inputs = (1,) if xi[0].ndim == 1 else (np.prod(shape),)
+        n_inputs = (1,) if xi.ndim == 1 else (np.prod(shape),)
 
         self._n_basis_input = n_inputs
         self._n_output_features = self.n_basis_funcs * self._n_basis_input[0]
@@ -1699,7 +1699,7 @@ class MultiplicativeBasis(Basis):
     n_basis_funcs : int
         Number of basis functions.
 
-        Examples
+    Examples
     --------
     >>> # Generate sample data
     >>> import numpy as np
