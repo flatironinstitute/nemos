@@ -280,7 +280,7 @@ def apply_identifiability_constraints_by_basis_component(
     Parameters
     ----------
     basis:
-        The basis that computed X;
+        The basis that computed X.
     feature_matrix:
         The feature matrix before applying the identifiability constraints.
     add_intercept:
