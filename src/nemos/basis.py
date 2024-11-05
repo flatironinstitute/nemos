@@ -1514,7 +1514,7 @@ class Basis(Base, abc.ABC):
         Notes
         -----
         Once a `compute_features` is called, we enforce that for all subsequent calls of the method,
-        the input that the basis receives preserves the shape of all axis, except for the sample axis.
+        the input that the basis receives preserves the shape of all axes, except for the sample axis.
         This condition guarantees the consistency of the feature axis, and therefore that
          `self.split_by_feature` behave appropriately.
 
