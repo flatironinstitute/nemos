@@ -129,7 +129,7 @@ def _add_invalid_entries(feature_matrix, shape_first_axis, is_valid):
 def _apply_identifiability_constraints(
     feature_matrix: JaxArray,
     preprocessing_func: Callable = add_constant,
-    warn_if_float32=True,
+    warn_if_float32: bool = True,
 ) -> Tuple[JaxArray, JaxArray]:
     """
     Apply identifiability constraints to a design matrix `feature_matrix`.
