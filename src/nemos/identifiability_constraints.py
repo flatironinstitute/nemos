@@ -44,7 +44,7 @@ def _find_drop_column(
     """
     Find a minimal subset linearly dependent columns that should be dropped.
 
-    This function loops over the columns of a matrix and check if each column is linearly dependent from the others.
+    This function loops over the columns of a matrix and checks if each column is linearly dependent from the others.
     If the i-th column is linearly dependent, then drop_cols[i] is set to True, and feature_matrix[:, i] is set to 0.
     The loop is stopped when max_drop linearly dependent columns are found.
 
