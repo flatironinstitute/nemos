@@ -1391,24 +1391,20 @@ class Basis(Base, abc.ABC):
         >>> import numpy as np
         >>> from nemos.basis import BSplineBasis
         >>> from nemos.glm import GLM
-
         >>> # Define an additive basis
         >>> basis = (
         ...     BSplineBasis(n_basis_funcs=5, mode="conv", window_size=10, label="feature_1") +
         ...     BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10, label="feature_2")
         ... )
-
         >>> # Generate a sample input array and compute features
         >>> x1, x2 = np.random.randn(20), np.random.randn(20)
         >>> X = basis.compute_features(x1, x2)
-
         >>> # Split the feature matrix along axis 1
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
         feature_1: shape (20, 1, 5)
         feature_2: shape (20, 1, 6)
-
         >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
         >>> multi_input_basis = BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10,
         ... label="multi_input")
@@ -1417,7 +1413,6 @@ class Basis(Base, abc.ABC):
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
         multi_input, shape (20, 2, 6)
-
         >>> # the method can be used to decompose the glm coefficients in the various features
         >>> counts = np.random.poisson(size=20)
         >>> model = GLM().fit(X, counts)
