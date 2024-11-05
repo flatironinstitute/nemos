@@ -153,7 +153,7 @@ ws = 10
 coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=ws)
 
 # %%
-# We need to combine the bases (the returned object will be an `AdditiveBasis` object).
+# We need to combine the bases.
 basis = heading_basis + coupling_basis
 
 
