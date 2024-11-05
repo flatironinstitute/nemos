@@ -560,7 +560,11 @@ class Basis(Base, abc.ABC):
         self._n_output_features = None
         self._input_shape = None
 
-        self._label = str(label)
+        if label is None:
+            self._label = self.__class__.__name__
+        else:
+            self._label = str(label)
+
         self.window_size = window_size
         self.bounds = bounds
 

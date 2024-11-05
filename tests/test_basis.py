@@ -599,7 +599,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
         bas = self.cls(5, label=label)
-        assert bas.label == str(label)
+        assert bas.label == (str(label) if label is not None else self.cls.__name__)
 
     @pytest.mark.parametrize(
         "attribute, value",
@@ -1445,7 +1445,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
         bas = self.cls(5, label=label)
-        assert bas.label == str(label)
+        assert bas.label == (str(label) if label is not None else self.cls.__name__)
 
     @pytest.mark.parametrize(
         "attribute, value",
@@ -2240,7 +2240,7 @@ class TestMSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
         bas = self.cls(5, label=label)
-        assert bas.label == str(label)
+        assert bas.label == (str(label) if label is not None else self.cls.__name__)
 
     @pytest.mark.parametrize(
         "attribute, value",
@@ -3152,7 +3152,7 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
         bas = self.cls(5, label=label, decay_rates=np.arange(1, 6))
-        assert bas.label == str(label)
+        assert bas.label == (str(label) if label is not None else self.cls.__name__)
 
     @pytest.mark.parametrize(
         "attribute, value",
@@ -3925,7 +3925,7 @@ class TestBSplineBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
         bas = self.cls(5, label=label)
-        assert bas.label == str(label)
+        assert bas.label == (str(label) if label is not None else self.cls.__name__)
 
     @pytest.mark.parametrize(
         "attribute, value",
