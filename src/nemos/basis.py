@@ -2040,7 +2040,7 @@ class MSplineBasis(SplineBasis):
         order: int = 2,
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
-        label: Optional[str] = None,
+        label: Optional[str] = "MSplineBasis",
         **kwargs,
     ) -> None:
         super().__init__(
