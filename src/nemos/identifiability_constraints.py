@@ -57,7 +57,7 @@ def _find_drop_column(
     max_drop:
         Number of columns to be dropped.
     preprocessing_func:
-        Additional processing of the feature matrix. Usually, add or not the intercept. Other processing could
+        Additional processing of the feature matrix. By default, add an intercept term. Other processing could
         entail mean-centering the columns or similar.
 
     Returns
