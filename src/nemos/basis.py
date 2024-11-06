@@ -1100,21 +1100,44 @@ class Basis(Base, abc.ABC):
         """
         return AdditiveBasis(self, other)
 
-    def __mul__(self, other: Basis) -> MultiplicativeBasis:
+    def __len__(self) -> int:
         """
-        Multiply two Basis objects together.
+
+        Returns
+        -------
+        : int
+            Number of basis functions.
+        """
+        return self.n_basis_funcs
+
+    def __mul__(self, other: (Basis, int)) -> MultiplicativeBasis:
+        """
+        Multiply two Basis objects together or replicate the basis
+        by multiplying it with an integer.
 
         Parameters
         ----------
         other
-            The other Basis object to multiply.
+            The other Basis object to multiply or integer
 
         Returns
         -------
         :
             The resulting Basis object.
         """
-        return MultiplicativeBasis(self, other)
+        if isinstance(other, Basis):
+            return MultiplicativeBasis(self, other)
+        elif isinstance(other, int):
+            if other <= 0:
+                raise ValueError("Multiplier should be a non-negative integer!")
+            result = self
+            for _ in range(other - 1):
+                result = result + self
+            return result
+        else:
+            raise TypeError(
+                "Basis can only be multiplied with another basis or an integer!"
+            )
 
     def __pow__(self, exponent: int) -> MultiplicativeBasis:
         """Exponentiation of a Basis object.
@@ -1224,6 +1247,14 @@ class AdditiveBasis(Basis):
         self._basis1 = basis1
         self._basis2 = basis2
         return
+
+    @property
+    def basis1(self):
+        return self._basis1
+
+    @property
+    def basis2(self):
+        return self._basis2
 
     def _check_n_basis_min(self) -> None:
         pass
