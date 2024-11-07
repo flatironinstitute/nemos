@@ -80,6 +80,16 @@ def test_apply_identifiability_constraints(matrix, expected_shape, expected_colu
 
 
 @pytest.mark.parametrize(
+    "add_intercept, expected_shape", [(True, (2, 0)), (False, (2, 1))]
+)
+def test_apply_identifiability_constraints_add_constant(add_intercept, expected_shape):
+    out, _ = apply_identifiability_constraints(
+        np.ones((2, 1)), warn_if_float32=False, add_intercept=add_intercept
+    )
+    assert out.shape == expected_shape
+
+
+@pytest.mark.parametrize(
     "basis, input_shape, output_shape, expected_columns",
     [
         (RaisedCosineBasisLinear(10, width=4), (50,), (50, 10), jnp.arange(10)),
