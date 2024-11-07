@@ -306,3 +306,15 @@ def check_fraction_valid_samples(*tree: Any, err_msg: str, warn_msg: str) -> Non
         raise ValueError(err_msg)
     elif valid.mean() <= 0.1:
         warnings.warn(warn_msg, UserWarning)
+
+
+def _warn_if_not_float64(feature_matrix: Any, message: str):
+    """Warn if the feature matrix uses float32 precision."""
+    all_float64 = pytree_map_and_reduce(
+        lambda x: jnp.issubdtype(x.dtype, jnp.float64), all, feature_matrix
+    )
+    if not all_float64:
+        warnings.warn(
+            message,
+            UserWarning,
+        )

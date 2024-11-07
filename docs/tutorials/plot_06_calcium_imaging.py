@@ -9,14 +9,26 @@ For the example dataset, we will be working with a recording of a freely-moving 
 The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https://www.peyrachelab.com/).
 
 """
+import warnings
+from warnings import catch_warnings
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+import numpy as np
 import pynapple as nap
 from sklearn.linear_model import LinearRegression
 
 import nemos as nmo
+from nemos.identifiability_constraints import (
+    apply_identifiability_constraints_by_basis_component,
+)
+
+# ignore dtype warnings
+nap.nap_config.suppress_conversion_warnings = True
+warnings.filterwarnings("ignore", category=UserWarning, message="The feature matrix is not of dtype")
+
+
 
 # %%
 # configure plots
@@ -116,12 +128,14 @@ plt.show()
 # We can combine the two bases.
 
 heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
+
+# define a basis that expect all the other neurons as predictors, i.e. shape (num_samples, num_neurons - 1)
+num_neurons = Y.shape[1]
+ws = 10
+coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=ws)
 
 # %%
-# We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an `AdditiveBasis` object).
-
-heading_basis.identifiability_constraints = True
+# We need to combine the bases.
 basis = heading_basis + coupling_basis
 
 
@@ -166,8 +180,44 @@ print(Y.shape)
 # ## Design matrix
 #
 # We can now create the design matrix by combining the head-direction of the animal and the activity of all other neurons.
-#
 X = basis.compute_features(head_direction, Y[:, selected_neurons])
+
+# %%
+#
+# Before we use this design matrix to fit the population, we need to take a brief detour
+# into linear algebra. Depending on your design matrix is constructed, it is likely to
+# be rank-deficient, in which case it has a null space. Practically, that means that
+# there are infinitely many different sets of parameters that predict the same firing
+# rate. If you want to interpret your parameters, this is bad!
+#
+# While this multiplicity of solutions is always a potential issue when fitting models,
+# it is particularly relevant when using basis objects in nemos, as many of our basis
+# sets completely tile the input space (i.e., summing across all $n$ basis functions
+# returns 1 everywhere), which, when combined with the intercept term always present in
+# the GLM (i.e., the base firing rate), will give you a rank-deficient matrix.
+#
+# We thus recommend that you always check the rank of your design matrix and provide
+# some tools to drop the linearly-dependent columns, if necessary, which will guarantee
+# that your design matrix is full rank and thus that there is one unique solution.
+#
+# !!! tip "Linear Algebra"
+#
+#     To read more about matrix rank, see
+#     [Wikipedia](https://en.wikipedia.org/wiki/Rank_(linear_algebra)#Main_definitions).
+#     Gil Strang's Linear Algebra course, [available for free
+#     online](https://web.mit.edu/18.06/www/), and [NeuroMatch
+#     Academy](https://compneuro.neuromatch.io/tutorials/W0D3_LinearAlgebra/student/W0D3_Tutorial2.html)
+#     are also great resources.
+#
+# In this case, we are using the CyclicBSpline basis functions, which uniformly tile and
+# thus will result in a rank-deficient matrix. Therefore, we will use a utility function
+# to drop a column from the matrix and make it full-rank:
+
+# The number of features is the number of columns plus one (for the intercept)
+print(f"Number of features in the rank-deficient design matrix: {X.shape[1] + 1}")
+X, _ = apply_identifiability_constraints_by_basis_component(basis, X)
+# We have dropped one column
+print(f"Number of features in the full-rank design matrix: {X.shape[1] + 1}")
 
 # %%
 # ## Train & test set

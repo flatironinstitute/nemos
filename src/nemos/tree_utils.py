@@ -143,7 +143,7 @@ def pytree_map_and_reduce(
     return reduce_fn(jax.tree_util.tree_leaves(cond_tree))
 
 
-def tree_slice(data: Any, idx):
+def tree_slice(data: Any, idx, is_leaf: Optional[Callable] = None):
     """
     Apply an indexing operation to each array in a nested structure.
 
@@ -154,13 +154,15 @@ def tree_slice(data: Any, idx):
     idx :
         The indexing operation to apply. This can be an integer, slice,
         NumPy array (boolean or integer), tuple of indexing operations, ellipsis, or None.
+    is_leaf :
+        Callable, returns true if sub-tree is a leaf.
 
     Returns
     -------
     Any
         A nested structure with the same format as `data`, where each array has been sliced according to `idx`.
     """
-    return jax.tree_util.tree_map(lambda x: x[idx], data)
+    return jax.tree_util.tree_map(lambda x: x[idx], data, is_leaf=is_leaf)
 
 
 # The following functions are adapted from jaxopt.tree_utils
