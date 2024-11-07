@@ -1325,10 +1325,11 @@ class Basis(Base, abc.ABC):
         a designated axis.
 
         **How it works:**
+
         - If the basis expects an input shape `(n_samples, n_inputs)`, then the feature axis length will
         be `total_n_features = n_inputs * n_basis_funcs`. This axis is reshaped into dimensions
         `(n_inputs, n_basis_funcs)`.
-        - If the absis expects an input of shape `(n_samples,)`, then the feature axis length will
+        - If the basis expects an input of shape `(n_samples,)`, then the feature axis length will
         be `total_n_features = n_basis_funcs`. This axis is reshaped into `(1, n_basis_funcs)`.
 
         For example, if the input array `x` has shape `(1, 2, total_n_features, 4, 5)`,
@@ -1664,6 +1665,7 @@ class AdditiveBasis(Basis):
         preserving all dimensions except the specified axis.
 
         **How It Works:**
+
         Suppose the basis is made up of **m components**, each with $b_i$ basis functions and $n_i$ inputs.
         The total number of features, $N$, is calculated as:
 
@@ -1672,7 +1674,8 @@ class AdditiveBasis(Basis):
         $$
 
         This method splits any axis of length $N$ into sub-arrays, one for each basis component.
-        Each sub-array for the i-th basis component is reshaped to split this axis further into dimensions
+
+        The sub-array for the i-th basis component is reshaped into dimensions
         $(n_i, b_i)$.
 
         For example, if the array shape is $(1, 2, N, 4, 5)$, then each split sub-array will have shape:
@@ -1682,6 +1685,7 @@ class AdditiveBasis(Basis):
         $$
 
         where:
+
         - $n_i$ represents the number of inputs associated with the i-th component,
         - $b_i$ represents the number of basis functions in that component.
 
