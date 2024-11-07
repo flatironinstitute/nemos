@@ -173,23 +173,6 @@ def _apply_identifiability_constraints(
     return feature_matrix, drop_cols
 
 
-def _while_loop_scan(cond_fun, body_fun, init_val, max_iter):
-    """Scan-based implementation (jit ok, reverse-mode autodiff ok)."""
-
-    def _iter(val):
-        next_val = body_fun(val)
-        next_cond = cond_fun(next_val)
-        return next_val, next_cond
-
-    def _fun(tup, it):
-        val, cond = tup
-        # When cond is met, we start doing no-ops.
-        return jax.lax.cond(cond, _iter, lambda x: (x, False), val), it
-
-    init = (init_val, cond_fun(init_val))
-    return jax.lax.scan(_fun, init, None, length=max_iter)[0][0]
-
-
 @support_pynapple(conv_type="jax")
 def apply_identifiability_constraints(
     feature_matrix: NDArray | JaxArray,
