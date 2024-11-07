@@ -28,7 +28,7 @@ def add_constant(x):
 
 @partial(jax.jit, static_argnums=(2,))
 def _drop_and_compute_rank(feature_matrix, idx, preprocessing_func=add_constant):
-    """Check if the column idx is linearly dependent from the other columns."""
+    """Drop column idx and compute rank."""
     feature_dropped = feature_matrix.at[:, idx].set(0.0)
     rank_after_drop_column = jnp.linalg.matrix_rank(preprocessing_func(feature_dropped))
     return feature_dropped, rank_after_drop_column
@@ -42,7 +42,7 @@ def _find_drop_column(
     preprocessing_func: Callable = add_constant,
 ) -> JaxArray:
     """
-    Find a minimal subset linearly dependent columns that should be dropped.
+    Find a minimal subset linearly dependent columns that can be dropped.
 
     This function loops over the columns of a matrix and checks if each column is linearly dependent from the others.
     If the i-th column is linearly dependent, then drop_cols[i] is set to True, and feature_matrix[:, i] is set to 0.
