@@ -52,14 +52,19 @@ dev = [
     "scikit-learn",                 # Testing compatibility with CV & pipelines
 ]
 docs = [
-    "mkdocs",                       # Documentation generator
-    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
-    "mkdocs-section-index",         # Plugin for generating a section index in mkdocs
-    "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
-    "mkdocs-literate-nav>=0.6.1",   # Plugin for literate-style navigation in mkdocs
-    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "mkdocs-material",              # Material theme for mkdocs
-    "mkdocs-autorefs>=0.5",
+    "numpydoc",
+    "sphinx",
+    "pydata-sphinx-theme",
+    "sphinx-autodoc-typehints",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-issues",
+    "sphinxcontrib-apidoc",
+    "myst-parser",
+    "myst-nb",
+    "dandi",
+    "sphinx-autobuild",
+    "sphinx-contributors",
     "scikit-learn",
     "dandi",
     "ipython",

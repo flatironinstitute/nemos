@@ -44,90 +44,196 @@ focusing on the Generalized Linear Model (GLM).
 We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
 
 
-::::{grid} 1 1 2 3
+"""{grid} 2
+:gutter: 2
+:class-container: cards
 
-:::{card}
-:header: Text content ✏️
-Structure books with text files and Jupyter Notebooks with minimal configuration.
-:::
+"""{card}
+:material-clock-fast: lg middle
+__Getting Started__
 
-:::{card}
-:header: MyST Markdown ✨
-Write MyST Markdown to create enriched documents with publication-quality features.
-:::
+---
 
-:::{card}
-:header: Executable content 🔁
-Execute notebook cells, store results, and insert outputs across pages.
-:::
-::::
+New to NeMoS? Get the ball rolling with our quickstart.
 
-<div class="grid cards" markdown>
+[:octicons-arrow-right-24: Quickstart](quickstart.md)
+"""
+   
+"""{card}
+:material-book-open-variant-outline: lg middle
+__Background__
 
--   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__
+---
 
-      ---
+Refresh your theoretical knowledge before diving into data analysis with our notes.
 
-      New to NeMoS? Get the ball rolling with our quickstart.
+[:octicons-arrow-right-24: Background](generated/background)
+"""
 
-      [:octicons-arrow-right-24: Quickstart](quickstart.md)
+"""{card}
+:material-lightbulb-on-10: lg middle
+__How-To Guide__
 
--   :material-book-open-variant-outline:{ .lg .middle } &nbsp; __Background__
+---
 
-    ---
+Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
 
-    Refresh your theoretical knowledge before diving into data analysis with our notes.
+*Requires familiarity with the theory.*  
+[:octicons-arrow-right-24: How-To Guide](generated/how_to_guide)
+"""
 
-    [:octicons-arrow-right-24: Background](generated/background)
+"""{card}
+:material-brain: lg middle
+__Neural Modeling__
 
--   :material-lightbulb-on-10:{ .lg .middle } &nbsp; __How-To Guide__
+---
 
-    ---
+Explore fully worked examples to learn how to analyze neural recordings from scratch.
 
-    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
+*Requires familiarity with the theory.*  
+[:octicons-arrow-right-24: Tutorials](generated/tutorials)
+"""
 
-    *Requires familiarity with the theory.*<br>
-    [:octicons-arrow-right-24: How-To Guide](generated/how_to_guide)
+"""{card}
+:material-cog: lg middle
+__API Guide__
 
--   :material-brain:{ .lg .middle} &nbsp;  __Neural Modeling__
+---
 
-    ---
+Access a detailed description of each module and function, including parameters and functionality.
 
-    Explore fully worked examples to learn how to analyze neural recordings from scratch.
+*Requires familiarity with the theory.*  
+[:octicons-arrow-right-24: API Guide](reference/SUMMARY.md)
+"""
 
-    *Requires familiarity with the theory.*<br>
-    [:octicons-arrow-right-24: Tutorials](generated/tutorials)
+"""{card}
+:material-hammer-wrench: lg middle
+__Installation Instructions__
 
--   :material-cog:{ .lg .middle } &nbsp; __API Guide__
+---
 
-    ---
+Run the following `pip` command in your virtual environment.
 
-    Access a detailed description of each module and function, including parameters and functionality. 
+=== "macOS/Linux"
+   
+    ```bash
+    pip install nemos
+    ```
 
-    *Requires familiarity with the theory.*<br>
-    [:octicons-arrow-right-24: API Guide](reference/SUMMARY.md)
+=== "Windows"
+   
+    ```bash
+    python -m pip install nemos
+    ```
 
--   :material-hammer-wrench:{ .lg .middle } &nbsp; __Installation Instructions__ 
+*For more information see:*  
+[:octicons-arrow-right-24: Install](installation.md)
+"""
+```
 
-    ---
-    
-    Run the following `pip` command in your virtual environment.
-    === "macOS/Linux"
+**[//]: # (<div class="grid cards" markdown>)
 
-        ```bash
-        pip install nemos
-        ```
+[//]: # ()
+[//]: # (-   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__)
 
-    === "Windows"
-    
-        ```
-        python -m pip install nemos
-        ```
-    
-    *For more information see:*<br>
-    [:octicons-arrow-right-24: Install](installation.md)
+[//]: # ()
+[//]: # (      ---)
 
-</div>
+[//]: # ()
+[//]: # (      New to NeMoS? Get the ball rolling with our quickstart.)
+
+[//]: # ()
+[//]: # (      [:octicons-arrow-right-24: Quickstart]&#40;quickstart.md&#41;)
+
+[//]: # ()
+[//]: # (-   :material-book-open-variant-outline:{ .lg .middle } &nbsp; __Background__)
+
+[//]: # ()
+[//]: # (    ---)
+
+[//]: # ()
+[//]: # (    Refresh your theoretical knowledge before diving into data analysis with our notes.)
+
+[//]: # ()
+[//]: # (    [:octicons-arrow-right-24: Background]&#40;generated/background&#41;)
+
+[//]: # ()
+[//]: # (-   :material-lightbulb-on-10:{ .lg .middle } &nbsp; __How-To Guide__)
+
+[//]: # ()
+[//]: # (    ---)
+
+[//]: # ()
+[//]: # (    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.)
+
+[//]: # ()
+[//]: # (    *Requires familiarity with the theory.*<br>)
+
+[//]: # (    [:octicons-arrow-right-24: How-To Guide]&#40;generated/how_to_guide&#41;)
+
+[//]: # ()
+[//]: # (-   :material-brain:{ .lg .middle} &nbsp;  __Neural Modeling__)
+
+[//]: # ()
+[//]: # (    ---)
+
+[//]: # ()
+[//]: # (    Explore fully worked examples to learn how to analyze neural recordings from scratch.)
+
+[//]: # ()
+[//]: # (    *Requires familiarity with the theory.*<br>)
+
+[//]: # (    [:octicons-arrow-right-24: Tutorials]&#40;generated/tutorials&#41;)
+
+[//]: # ()
+[//]: # (-   :material-cog:{ .lg .middle } &nbsp; __API Guide__)
+
+[//]: # ()
+[//]: # (    ---)
+
+[//]: # ()
+[//]: # (    Access a detailed description of each module and function, including parameters and functionality. )
+
+[//]: # ()
+[//]: # (    *Requires familiarity with the theory.*<br>)
+
+[//]: # (    [:octicons-arrow-right-24: API Guide]&#40;reference/SUMMARY.md&#41;)
+
+[//]: # ()
+[//]: # (-   :material-hammer-wrench:{ .lg .middle } &nbsp; __Installation Instructions__ )
+
+[//]: # ()
+[//]: # (    ---)
+
+[//]: # (    )
+[//]: # (    Run the following `pip` command in your virtual environment.)
+
+[//]: # (    === "macOS/Linux")
+
+[//]: # ()
+[//]: # (        ```bash)
+
+[//]: # (        pip install nemos)
+
+[//]: # (        ```)
+
+[//]: # ()
+[//]: # (    === "Windows")
+
+[//]: # (    )
+[//]: # (        ```)
+
+[//]: # (        python -m pip install nemos)
+
+[//]: # (        ```)
+
+[//]: # (    )
+[//]: # (    *For more information see:*<br>)
+
+[//]: # (    [:octicons-arrow-right-24: Install]&#40;installation.md&#41;)
+
+[//]: # ()
+[//]: # (</div>)**
 
 
 ## :material-scale-balance:{ .lg } License
