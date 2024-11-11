@@ -8,8 +8,9 @@
 
 import nemos
 import sys, os
+from pathlib import Path
 
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, str(Path('..', 'src').resolve()))
 sys.path.insert(0, os.path.abspath('sphinxext'))
 
 
@@ -27,14 +28,16 @@ root_doc = "index"
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
-    'sphinx.ext.autosummary',
+    'numpydoc',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',  # Links to source code
     'sphinx.ext.doctest',
     'sphinx_copybutton',  # Adds copy button to code blocks
     'sphinx_design',  # For layout components
     'myst_nb',
-    'sphinx_contributors'
+    'sphinx_contributors',
+    'sphinx_code_tabs',
+    'sphinx.ext.mathjax',
 ]
 
 myst_enable_extensions = [
@@ -54,25 +57,42 @@ myst_enable_extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', 'nextgen', '.DS_Store']
+exclude_patterns = ['_build', "docstrings", 'Thumbs.db', 'nextgen', '.DS_Store']
 
 
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_material'
-html_static_path = ['_static']
 
 # Generate the API documentation when building
 autosummary_generate = True
 numpydoc_show_class_members = True
 autodoc_default_options = {
     'members': True,
-    'inherited-members': True,
+    'undoc-members': True,
     'show-inheritance': True,
-    }
+}
 
+# napolean configs
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+
+autodoc_typehints = "description"  # Use "description" to place hints in the description, or "signature" for inline hints
+autodoc_type_aliases = {
+    "ArrayLike": "ArrayLike",
+}
+
+numfig = True
 
 html_theme = 'pydata_sphinx_theme'
 
@@ -103,24 +123,29 @@ html_context = {
     "default_mode": "light",
 }
 
+
+html_sidebars = {
+    "index": [],
+    "installation":[],
+    "quickstart": [],
+    "background/README": [],
+    "how_to_guide/README": [],
+    "tutorials/README": [],
+    "**": ["search-field.html", "sidebar-nav-bs.html"],
+}
+
+
 # Path for static files (custom stylesheets or JavaScript)
 html_static_path = ['assets/stylesheets']
 html_css_files = ['custom.css']
+
+html_js_files = [
+    "https://code.iconify.design/2/2.2.1/iconify.min.js"
+]
 
 # Copybutton settings (to hide prompt)
 copybutton_prompt_text = r">>> |\$ |# "
 copybutton_prompt_is_regexp = True
 
-# Enable markdown and notebook support
-myst_enable_extensions = ["colon_fence"]  # For improved markdown
-
-# # ----------------------------------------------------------------------------
-# # -- Autodoc and Napoleon Options -------------------------------------------------
-autodoc_default_options = {
-    'members': True,
-    'undoc-members': True,
-    'show-inheritance': True,
-}
-napoleon_numpy_docstring = True
 
 nitpicky = True

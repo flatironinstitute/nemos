@@ -19,3 +19,60 @@ html[data-theme=light]{
   --pst-font-size-h5: 18px;
   --pst-font-size-h6: 15px;
 }
+
+.iconify {
+    display: inline-block;
+    width: 2em;
+    height: 2em;
+    vertical-align: middle;
+}
+
+.cards {
+    display: grid;
+    gap: 2rem; /* Adjust as needed */
+}
+
+@media (min-width: 1024px) {
+    .cards {
+        grid-template-columns: repeat(3, 1fr); /* 3 columns on large screens */
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .cards {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns on medium screens */
+    }
+}
+
+@media (max-width: 767px) {
+    .cards {
+        grid-template-columns: 1fr; /* 1 column on small screens */
+    }
+}
+
+.sd-card-title {
+    height: 2.5rem; /* Adjust to a height that fits your content */
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem; /* Spacing between title and separator */
+}
+
+
+.sd-card-body hr {
+    width: 100%;
+    border: 0;
+    border-top: 2px solid #ddd; /* Light gray for a subtle line */
+    margin: 5%; /* Remove any default margin around the <hr> */
+}
+
+.sd-card-body {
+    padding-top: .5rem; /* Adjust padding for consistent layout */
+}
+
+.card-footer-content {
+    margin-top: auto; /* Pushes the footer content to the bottom */
+}
+
+.sphinxsidebar .globaltoc {
+    display: none;
+}

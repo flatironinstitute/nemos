@@ -1,39 +1,25 @@
----
-hide:
-  - navigation
-  - toc
----
+(id:_home)=
 
-# <div style="text-align: center;"> <img src="assets/NeMoS_Logo_CMYK_Full.svg" width="50%"> </div>
-
-
-<div style="text-align: center;" markdown>
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/flatironinstitute/nemos/blob/main/LICENSE)
-![Python version](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-blue.svg)
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
-![PyPI - Version](https://img.shields.io/pypi/v/nemos)
-[![codecov](https://codecov.io/gh/flatironinstitute/nemos/graph/badge.svg?token=vvtrcTFNeu)](https://codecov.io/gh/flatironinstitute/nemos)
-[![Documentation Status](https://readthedocs.org/projects/nemos/badge/?version=latest)](https://nemos.readthedocs.io/en/latest/?badge=latest)
-[![nemos CI](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml/badge.svg)](https://github.com/flatironinstitute/nemos/actions/workflows/ci.yml)
-
-</div>
-
-
-__Learning Resources:__ [:material-book-open-variant-outline: Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [:material-youtube: Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br> 
-__Useful Links:__ [:material-chat-question: Getting Help](getting_help.md) | [:material-alert-circle-outline: Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [:material-order-bool-ascending-variant: Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
-
-
-
-
-```{card} Card title
-:header: The _Header_
-:footer: Footer
-
-Card content
+```{eval-rst}
+:html_theme.sidebar_secondary.remove:
 ```
 
-## __Overview__
+```{toctree}
+:maxdepth: 1
+:hidden:
+
+Install <installation>
+Quickstart <quickstart>
+Background <background/README>
+How-To Guide <how_to_guide/README>
+Tutorials <tutorials/README>
+Getting Help <getting_help>
+API Guide <api_guide>
+For Developers <developers_notes/README>
+```
+
+
+## __Neural ModelS__
 
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
@@ -44,198 +30,111 @@ focusing on the Generalized Linear Model (GLM).
 We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
 
 
-"""{grid} 2
-:gutter: 2
-:class-container: cards
 
-"""{card}
-:material-clock-fast: lg middle
-__Getting Started__
+
+::::{grid} 1 2 3 3
+
+:::{grid-item-card} <span class="iconify" data-icon="mdi:hammer-wrench"></span> &nbsp; **Installation Instructions**
+:link: installation.html
+:link-alt: Install
+---
+
+Run the following `pip` command in your virtual environment.
+
+```{code-block}
+
+pip install nemos
+
+```
+
+:::
+
+:::{grid-item-card} <span class="iconify" data-icon="mdi:clock-fast"></span> &nbsp; **Getting Started**
+:link: quickstart.html
+:link-alt: Quickstart
 
 ---
 
 New to NeMoS? Get the ball rolling with our quickstart.
 
-[:octicons-arrow-right-24: Quickstart](quickstart.md)
-"""
-   
-"""{card}
-:material-book-open-variant-outline: lg middle
-__Background__
+:::
+
+:::{grid-item-card} <span class="iconify" data-icon="mdi:book-open-variant-outline"></span> &nbsp; **Background**
+:link: background/README.html
+:link-alt: Background
 
 ---
 
 Refresh your theoretical knowledge before diving into data analysis with our notes.
 
-[:octicons-arrow-right-24: Background](generated/background)
-"""
+:::
 
-"""{card}
-:material-lightbulb-on-10: lg middle
-__How-To Guide__
+:::{grid-item-card} <span class="iconify" data-icon="mdi:lightbulb-on-10"></span> &nbsp; **How-to Guide**
+:link: how_to_guide/README.html
+:link-alt: How-to-Guide
 
 ---
 
 Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.
 
-*Requires familiarity with the theory.*  
-[:octicons-arrow-right-24: How-To Guide](generated/how_to_guide)
-"""
 
-"""{card}
-:material-brain: lg middle
-__Neural Modeling__
+<div class="card-footer-content">
+
+*Requires familiarity with the theory.*  
+
+</div>
+
+:::
+
+:::{grid-item-card} <span class="iconify" data-icon="mdi:brain"></span> &nbsp; **Neural Modeling**
+:link: tutorials/README.html
+:link-alt: Tutorials
 
 ---
 
 Explore fully worked examples to learn how to analyze neural recordings from scratch.
 
-*Requires familiarity with the theory.*  
-[:octicons-arrow-right-24: Tutorials](generated/tutorials)
-"""
+<div class="card-footer-content">
 
-"""{card}
-:material-cog: lg middle
-__API Guide__
+*Requires familiarity with the theory.*
+
+</div>
+
+:::
+
+:::{grid-item-card} <span class="iconify" data-icon="mdi:cog"></span> &nbsp; **API Guide**
+:link: api_guide.html
+:link-alt: API Guide
 
 ---
 
 Access a detailed description of each module and function, including parameters and functionality.
 
-*Requires familiarity with the theory.*  
-[:octicons-arrow-right-24: API Guide](reference/SUMMARY.md)
-"""
+<div class="card-footer-content">
 
-"""{card}
-:material-hammer-wrench: lg middle
-__Installation Instructions__
+*Requires familiarity with the theory.*
 
----
+</div>
 
-Run the following `pip` command in your virtual environment.
+:::
 
-=== "macOS/Linux"
-   
-    ```bash
-    pip install nemos
-    ```
-
-=== "Windows"
-   
-    ```bash
-    python -m pip install nemos
-    ```
-
-*For more information see:*  
-[:octicons-arrow-right-24: Install](installation.md)
-"""
-```
-
-**[//]: # (<div class="grid cards" markdown>)
-
-[//]: # ()
-[//]: # (-   :material-clock-fast:{ .lg .middle } &nbsp; __Getting Started__)
-
-[//]: # ()
-[//]: # (      ---)
-
-[//]: # ()
-[//]: # (      New to NeMoS? Get the ball rolling with our quickstart.)
-
-[//]: # ()
-[//]: # (      [:octicons-arrow-right-24: Quickstart]&#40;quickstart.md&#41;)
-
-[//]: # ()
-[//]: # (-   :material-book-open-variant-outline:{ .lg .middle } &nbsp; __Background__)
-
-[//]: # ()
-[//]: # (    ---)
-
-[//]: # ()
-[//]: # (    Refresh your theoretical knowledge before diving into data analysis with our notes.)
-
-[//]: # ()
-[//]: # (    [:octicons-arrow-right-24: Background]&#40;generated/background&#41;)
-
-[//]: # ()
-[//]: # (-   :material-lightbulb-on-10:{ .lg .middle } &nbsp; __How-To Guide__)
-
-[//]: # ()
-[//]: # (    ---)
-
-[//]: # ()
-[//]: # (    Already familiar with the concepts? Learn how you to process and analyze your data with NeMoS.)
-
-[//]: # ()
-[//]: # (    *Requires familiarity with the theory.*<br>)
-
-[//]: # (    [:octicons-arrow-right-24: How-To Guide]&#40;generated/how_to_guide&#41;)
-
-[//]: # ()
-[//]: # (-   :material-brain:{ .lg .middle} &nbsp;  __Neural Modeling__)
-
-[//]: # ()
-[//]: # (    ---)
-
-[//]: # ()
-[//]: # (    Explore fully worked examples to learn how to analyze neural recordings from scratch.)
-
-[//]: # ()
-[//]: # (    *Requires familiarity with the theory.*<br>)
-
-[//]: # (    [:octicons-arrow-right-24: Tutorials]&#40;generated/tutorials&#41;)
-
-[//]: # ()
-[//]: # (-   :material-cog:{ .lg .middle } &nbsp; __API Guide__)
-
-[//]: # ()
-[//]: # (    ---)
-
-[//]: # ()
-[//]: # (    Access a detailed description of each module and function, including parameters and functionality. )
-
-[//]: # ()
-[//]: # (    *Requires familiarity with the theory.*<br>)
-
-[//]: # (    [:octicons-arrow-right-24: API Guide]&#40;reference/SUMMARY.md&#41;)
-
-[//]: # ()
-[//]: # (-   :material-hammer-wrench:{ .lg .middle } &nbsp; __Installation Instructions__ )
-
-[//]: # ()
-[//]: # (    ---)
-
-[//]: # (    )
-[//]: # (    Run the following `pip` command in your virtual environment.)
-
-[//]: # (    === "macOS/Linux")
-
-[//]: # ()
-[//]: # (        ```bash)
-
-[//]: # (        pip install nemos)
-
-[//]: # (        ```)
-
-[//]: # ()
-[//]: # (    === "Windows")
-
-[//]: # (    )
-[//]: # (        ```)
-
-[//]: # (        python -m pip install nemos)
-
-[//]: # (        ```)
-
-[//]: # (    )
-[//]: # (    *For more information see:*<br>)
-
-[//]: # (    [:octicons-arrow-right-24: Install]&#40;installation.md&#41;)
-
-[//]: # ()
-[//]: # (</div>)**
+::::
 
 
-## :material-scale-balance:{ .lg } License
+<div style="text-align: center;">
+
+__Learning Resources:__ [<span class="iconify" data-icon="mdi:book-open-variant-outline"></span> Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [<span class="iconify" data-icon="mdi:youtube"></span> Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br> 
+__Useful Links:__ [<span class="iconify" data-icon="mdi:chat-question"></span> Getting Help](getting_help.md) | [<span class="iconify" data-icon="mdi:alert-circle-outline"></span> Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [<span class="iconify" data-icon="mdi:order-bool-ascending-variant"></span> Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
+
+</div>
+
+
+## <span class="iconify" data-icon="mdi:scale-balance" style="width: 1em"></span>  __License__
 
 Open source, [licensed under MIT](https://github.com/flatironinstitute/nemos/blob/main/LICENSE).
+
+## Support
+
+This package is supported by the Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation.  
+
+<img src="assets/CCN-logo-wText.png" width="20%" alt="Flatiron Center for Computational Neuroscience logo."> 

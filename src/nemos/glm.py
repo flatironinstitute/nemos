@@ -53,12 +53,17 @@ class GLM(BaseRegressor):
     don't follow a normal distribution.
     Below is a table listing the default and available solvers for each regularizer.
 
+    +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
+    +===============+==================+=============================================================+
     | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
     | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
 
     Parameters
     ----------
@@ -92,9 +97,9 @@ class GLM(BaseRegressor):
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
     scale_:
-        Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
-        $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
-        of the mean $\mu$ fully specifies the distribution of the activity $y$.
+        Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which
+        :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate
+        of the mean :math:`\mu` fully specifies the distribution of the activity :math:`y`.
     dof_resid_:
         Degrees of freedom for the residuals.
 
@@ -214,7 +219,10 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
+
             - If param and X have different structures.
+
+
             - if the number of features is inconsistent between params[1] and X
               (when provided).
 
@@ -300,22 +308,32 @@ class GLM(BaseRegressor):
         Raises
         ------
         NotFittedError
-            If ``fit`` has not been called first with this instance.
+
+            - If ``fit`` has not been called first with this instance.
         ValueError
+
             - If `params` is not a JAX pytree of size two.
+
+
             - If weights and bias terms in `params` don't have the expected dimensions.
+
+
             - If `X` is not three-dimensional.
+
+
             - If there's an inconsistent number of features between spike basis coefficients and `X`.
 
         See Also
         --------
-        - [score](./#nemos.glm.GLM.score)
+        :meth:`nemos.glm.GLM.score`
             Score predicted rates against target spike counts.
-        - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
-            Simulate neural activity in response to a feed-forward input .
-        - [simulate_recurrent (feed-forward + coupling)](../simulation/#nemos.simulation.simulate_recurrent)
+
+        :meth:`nemos.glm.GLM.simulate`
+            Simulate neural activity in response to a feed-forward input (feed-forward only).
+
+        :meth:`nemos.simulation.simulate_recurrent`
             Simulate neural activity in response to a feed-forward input
-            using the GLM as a recurrent network.
+            using the GLM as a recurrent network (feed-forward + coupling).
         """
         # check that the model is fitted
         self._check_is_fit()
@@ -397,13 +415,15 @@ class GLM(BaseRegressor):
         Returns
         -------
         score :
-            The log-likelihood or the pseudo-$R^2$ of the current model.
+            The log-likelihood or the pseudo-:math:`R^2` of the current model.
 
         Raises
         ------
         NotFittedError
+
             If ``fit`` has not been called first with this instance.
         ValueError
+
             If X structure doesn't match the params, and if X and y have different
             number of samples.
 
@@ -413,25 +433,25 @@ class GLM(BaseRegressor):
         among which the number of model parameters. The log-likelihood can assume both positive
         and negative values.
 
-        The Pseudo-$ R^2 $ is not equivalent to the $ R^2 $ value in linear regression. While both
+        The Pseudo-:math:`R^2` is not equivalent to the :math:`R^2` value in linear regression. While both
         provide a measure of model fit, and assume values in the [0,1] range, the methods and
-        interpretations can differ. The Pseudo-$ R^2 $ is particularly useful for generalized linear
-        models when the interpretation of the $ R^2 $ as explained variance does not apply
+        interpretations can differ. The Pseudo-:math:`R^2` is particularly useful for generalized linear
+        models when the interpretation of the :math:`R^2` as explained variance does not apply
         (i.e., when the observations are not Gaussian distributed).
 
-        Why does the traditional $R^2$ is usually a poor measure of performance in GLMs?
+        Why does the traditional :math:`R^2` is usually a poor measure of performance in GLMs?
 
         1.  In the context of GLMs the variance and the mean of the observations are related.
         Ignoring the relation between them can result in underestimating the model
         performance; for instance, when we model a Poisson variable with large mean we expect an
         equally large variance. In this scenario, even if our model perfectly captures the mean,
-        the high-variance  will result in large residuals and low $R^2$.
+        the high-variance  will result in large residuals and low :math:`R^2`.
         Additionally, when the mean of the observations varies, the variance will vary too. This
-        violates the "homoschedasticity" assumption, necessary  for interpreting the $R^2$ as
+        violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as
         variance explained.
-        2. The $R^2$ capture the variance explained when the relationship between the observations and
+        2. The :math:`R^2` capture the variance explained when the relationship between the observations and
         the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
-        and the mean of the observations, compromising the interpretation of the $R^2$.
+        and the mean of the observations, compromising the interpretation of the :math:`R^2`.
 
         Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
         to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
@@ -440,7 +460,7 @@ class GLM(BaseRegressor):
         for GLM modeling counting data.
 
         Refer to the `nmo.observation_models.Observations` concrete subclasses for the likelihood and
-        pseudo-$R^2$ equations.
+        pseudo-:math:`R^2` equations.
 
         """
         self._check_is_fit()
@@ -495,7 +515,7 @@ class GLM(BaseRegressor):
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
         required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
-        If X is a FeaturePytree, the coefficients retain the pytree structure with arrays of zeros shaped
+        If X is a :class:`nemos.pytrees.FeaturePytree`, the coefficients retain the pytree structure with arrays of zeros shaped
         according to the features in X. If X is a simple ndarray, the coefficients are initialized as a 2D
         array. The intercepts are initialized based on the log mean of the target data y across the first
         axis, corresponding to the average log activity of the neuron.
@@ -503,7 +523,7 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            The input data which can be a FeaturePytree with n_features arrays of shape (n_timebins,
+            The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape (n_timebins,
             n_features), or a simple ndarray of shape (n_timebins, n_features).
         y :
             The target data array of shape (n_timebins, ), representing
@@ -595,14 +615,27 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
+
             - If `init_params` is not of length two.
+
+
             - If dimensionality of `init_params` are not correct.
+
+
             - If `X` is not two-dimensional.
+
+
             - If `y` is not one-dimensional.
+
+
             - If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
+
         TypeError
+
             - If `init_params` are not array-like
+
+
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
         """
@@ -694,15 +727,15 @@ class GLM(BaseRegressor):
         Raises
         ------
         NotFittedError
-            If the model hasn't been fitted prior to calling this method.
+            - If the model hasn't been fitted prior to calling this method.
         ValueError
             - If the instance has not been previously fitted.
 
 
         See Also
         --------
-        [predict](./#nemos.glm.GLM.predict) :
-        Method to predict rates based on the model's parameters.
+        :meth:`nemos.glm.GLM.predict`
+            Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
         self._check_is_fit()
@@ -923,7 +956,7 @@ class GLM(BaseRegressor):
             step sizes, and other optimizer-specific metrics.
         X :
             The predictors used in the model fitting process, which may include feature matrices
-            or FeaturePytree objects.
+            or :class:`nemos.pytrees.FeaturePytree` objects.
         y :
             The response variable or output data corresponding to the predictors, used in the model
             fitting process.
@@ -992,15 +1025,20 @@ class PopulationGLM(GLM):
     combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
-    stored in tabular format, shape (n_timebins, num_features) or as [FeaturePytree](../pytrees).
+    stored in tabular format, shape (n_timebins, num_features) or as :class:`nemos.pytrees.FeaturePytree`.
     Below is a table listing the default and available solvers for each regularizer.
 
+    +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
+    +===============+==================+=============================================================+
     | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
     | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
     | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
 
     Parameters
     ----------
@@ -1024,7 +1062,7 @@ class PopulationGLM(GLM):
         E.g. stepsize, acceleration, value_and_grad, etc.
          See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
+        Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
         `feature_mask[feature_name]` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
@@ -1041,7 +1079,10 @@ class PopulationGLM(GLM):
     Raises
     ------
     TypeError
+
         - If provided `regularizer` or `observation_model` are not valid.
+
+
         - If provided `feature_mask` is not an array-like of dimension two.
 
     Examples
@@ -1065,7 +1106,6 @@ class PopulationGLM(GLM):
     >>> # Check the fitted coefficients and intercepts
     >>> print("Model coefficients:")
     >>> print(model.coef_)
-
     >>> # Example with a FeaturePytree mask
     >>> from nemos.pytrees import FeaturePytree
     >>> # Define two features
@@ -1352,7 +1392,7 @@ class PopulationGLM(GLM):
             - If `y` is not two-dimensional.
             - If the `feature_mask` is not of the right shape.
             - If solver returns at least one NaN parameter, which means it found
-              an invalid solution. Try tuning optimization hyperparameters.
+            an invalid solution. Try tuning optimization hyperparameters.
         TypeError
             - If `init_params` are not array-like
             - If `init_params[i]` cannot be converted to jnp.ndarray for all i
@@ -1360,11 +1400,12 @@ class PopulationGLM(GLM):
         Notes
         -----
         The `feature_mask` is used to select features for each neuron, and it is
-        an NDArray or a `FeaturePytree` of 0s and 1s. In particular,
+        an NDArray or a :class:`nemos.pytrees.FeaturePytree` of 0s and 1s. In particular,
 
         - If the mask is in array format, feature `i` is a predictor for neuron `j` if
         `feature_mask[i, j] == 1`.
-        - If the mask is a `FeaturePytree`, then `"feature_name"` is a predictor of neuron `j` if
+
+        - If the mask is a :class:`nemos.pytrees.FeaturePytree`, then `"feature_name"` is a predictor of neuron `j` if
         `feature_mask["feature_name"][j] == 1`.
 
         """
