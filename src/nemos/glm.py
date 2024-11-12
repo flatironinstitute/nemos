@@ -184,7 +184,7 @@ class GLM(BaseRegressor):
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
-        """Getter for the observation_model attribute."""
+        """Getter for the ``observation_model`` attribute."""
         return self._observation_model
 
     @observation_model.setter
@@ -342,12 +342,12 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of same.
 
         Returns
         -------
         :
-            The predicted rates with shape (n_time_bins, ).
+            The predicted rates with shape ``(n_time_bins, )``.
 
         Raises
         ------
@@ -446,7 +446,7 @@ class GLM(BaseRegressor):
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
         This method computes the goodness-of-fit score, which can either be the mean
-        log-likelihood or of two versions of the pseudo-R^2.
+        log-likelihood or of two versions of the pseudo-:math:`R^2`.
         The scoring process includes validation of input compatibility with the model's
         parameters, ensuring that the model has been previously fitted and the input data
         are appropriate for scoring. A higher score indicates a better fit of the model
@@ -456,11 +456,11 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            The exogenous variables. Shape (n_time_bins, n_features)
+            The exogenous variables. Shape ``(n_time_bins, n_features)``.
         y :
-            Neural activity. Shape (n_time_bins, ).
+            Neural activity. Shape ``(n_time_bins, )``.
         score_type :
-            Type of scoring: either log-likelihood or pseudo-r2.
+            Type of scoring: either log-likelihood or pseudo-:math:`R^2`.
         aggregate_sample_scores :
             Function that aggregates the score of all samples.
 
@@ -507,16 +507,17 @@ class GLM(BaseRegressor):
         Why does the traditional :math:`R^2` is usually a poor measure of performance in GLMs?
 
         1.  In the context of GLMs the variance and the mean of the observations are related.
-        Ignoring the relation between them can result in underestimating the model
-        performance; for instance, when we model a Poisson variable with large mean we expect an
-        equally large variance. In this scenario, even if our model perfectly captures the mean,
-        the high-variance  will result in large residuals and low :math:`R^2`.
-        Additionally, when the mean of the observations varies, the variance will vary too. This
-        violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as
-        variance explained.
-        2. The :math:`R^2` capture the variance explained when the relationship between the observations and
-        the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
-        and the mean of the observations, compromising the interpretation of the :math:`R^2`.
+            Ignoring the relation between them can result in underestimating the model
+            performance; for instance, when we model a Poisson variable with large mean we expect an
+            equally large variance. In this scenario, even if our model perfectly captures the mean,
+            the high-variance  will result in large residuals and low :math:`R^2`.
+            Additionally, when the mean of the observations varies, the variance will vary too. This
+            violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as
+            variance explained.
+
+        2.  The :math:`R^2` capture the variance explained when the relationship between the observations and
+            the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
+            and the mean of the observations, compromising the interpretation of the :math:`R^2`.
 
         Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
         to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
@@ -778,9 +779,9 @@ class GLM(BaseRegressor):
         -------
         simulated_activity :
             Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
-            Shape: (n_time_bins, ).
+            Shape: ``(n_time_bins, )``.
         firing_rates :
-            Simulated rates for the neuron over time. Shape, (n_time_bins, ).
+            Simulated rates for the neuron over time. Shape, ``(n_time_bins, )``.
 
         Raises
         ------
@@ -916,14 +917,18 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
-            - If ``params`` is not of length two.
-            - If dimensionality of ``init_params`` are not correct.
-            - If ``X`` is not two-dimensional.
-            - If ``y`` is not correct (1D for GLM, 2D for populationGLM).
+            If ``params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not correct (1D for GLM, 2D for populationGLM).
 
         TypeError
-            - If ``params`` are not array-like when provided.
-            - If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
+            If ``params`` are not array-like when provided.
+        TypeError
+            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
 
         Examples
         --------
@@ -1004,7 +1009,7 @@ class GLM(BaseRegressor):
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
-        opt_solver_kwargs = self.optimize_solver_params(data, y)
+        opt_solver_kwargs = self._optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
         self.instantiate_solver(solver_kwargs=opt_solver_kwargs)
@@ -1105,7 +1110,7 @@ class GLM(BaseRegressor):
 
         return opt_step
 
-    def get_optimal_solver_params_config(self):
+    def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
 
@@ -1137,8 +1142,8 @@ class PopulationGLM(GLM):
     **Fitting Large Models**
 
     For very large models, you may consider using the Stochastic Variance Reduced Gradient
-    ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
-    ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
+    :class:`nemos.solvers._svrg.SVRG` or its proximal variant
+    (:class:`nemos.solvers._svrg.ProxSVRG`) solver,
     which take advantage of batched computation. You can change the solver by passing
     ``"SVRG"`` or ``"ProxSVRG"`` as ``solver_name`` at model initialization.
 
@@ -1274,7 +1279,7 @@ class PopulationGLM(GLM):
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:
-        """Define a feature mask of shape (n_features, n_neurons)."""
+        """Define a feature mask of shape ``(n_features, n_neurons)``."""
         return self._feature_mask
 
     @feature_mask.setter
