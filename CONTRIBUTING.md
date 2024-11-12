@@ -96,12 +96,32 @@ See below for details on how to [add tests](#adding-tests) and properly [documen
 
 Lastly, you should make sure that the existing tests all run successfully and that the codebase is formatted properly:
 
+> [!TIP]
+> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests and some additional style checks in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not included in our optional dependencies, so if you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
+> ```sh
+> pip install tox
+> tox -e check,py
+> ```
+> This will execute `tox` with a Python version that matches your local environment. If the above passes, then the Github action will pass and your PR is mergeable
+>
+> You can also use `tox` to use `black` and `isort` to try and fix your code if either of those are failing. To do so, run `tox -e fix`
+> 
+> `tox` configurations can be found in the [`tox.ini`](tox.ini) file.
+
+
 ```bash
 # run tests and make sure they all pass
 pytest tests/
+
+# run doctest (run all examples in docstrings and match output)
+pytest --doctest-modules src/nemos/ 
+
 # format the code base
 black src/
-isort src
+isort src --profile=black
+isort docs/how_to_guide --profile=black
+isort docs/background --profile=black
+isort docs/tutorials --profile=black
 flake8 --config=tox.ini src
 ```
 
@@ -124,14 +144,6 @@ you will probably need to respond to our comments, making changes as appropriate
 changes. 
 
 Additionally, every PR to `main` or `development` will automatically run linters and tests through a [GitHub action](https://docs.github.com/en/actions). Merges can happen only when all check passes.
-
-> [!NOTE]
-> The [NeMoS GitHub action](.github/workflows/ci.yml) runs tests in an isolated environment using [`tox`](https://tox.wiki/en/). `tox` is not included in our optional dependencies, so if you want to replicate the action workflow locally, you need to install `tox` via pip and then run it. From the package directory:
-> ```sh
-> pip install tox
-> tox -e py
-> ```
-> This will execute `tox` with a Python version that matches your local environment. `tox` configurations can be found in the [`tox.ini`](tox.ini) file.
 
 Once your changes are integrated, you will be added as a GitHub contributor and as one of the authors of the package. Thank you for being part of `nemos`!
 
@@ -184,38 +196,89 @@ properly documented as outlined below.
 
 #### Adding documentation
 
-1) **Docstrings**
+1. **Docstrings**
 
-All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, 
-a medium-length description of the function / class and what it does, and a complete description of all arguments and return values. 
-Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature 
-should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary 
-for a user to use the code.
+    All public-facing functions and classes should have complete docstrings, which start with a one-line short summary of the function, a medium-length description of the function/class and what it does, a complete description of all arguments and return values, and an example to illustrate usage. Math should be included in a `Notes` section when necessary to explain what the function is doing, and references to primary literature should be included in a `References` section when appropriate. Docstrings should be relatively short, providing the information necessary for a user to use the code.
+    
+    Private functions and classes should have sufficient explanation that other developers know what the function/class does and how to use it, but do not need to be as extensive.
+    
+    We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
 
-Private functions and classes should have sufficient explanation that other developers know what the function / class does and how to use it, 
-but do not need to be as extensive.
+2. **Examples/Tutorials**
 
-We follow the [numpydoc](https://numpydoc.readthedocs.io/en/latest/) conventions for docstring structure.
+    If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or a new example may need to be added.
+    
+    All examples live within the `docs/` subfolder of `nemos`. These are written as `.py` files but are converted to notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
+    
+    We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control.
+    
+    To see if changes you have made break the current documentation, you can build the documentation locally.
+    
+    ```
+    # Clear the cached documentation pages
+    # This step is only necessary if your changes affected the src/ directory
+    rm -r docs/generated
+    # build the docs within the nemos repo
+    mkdocs build
+    ```
+    
+    If the build fails, you will see line-specific errors that prompted the failure.
 
-2) **Examples/Tutorials**
+3. **Doctest: Test the example code in your docs**
 
-If your changes are significant (add a new functionality or drastically change the current codebase), then the current examples may need to be updated or 
-a new example may need to be added.
+    Doctests are a great way to ensure that code examples in your documentation remain accurate as the codebase evolves. With doctests, we will test any docstrings, Markdown files, or any other text-based documentation that contains code formatted as interactive Python sessions.
+    
+    - **Docstrings:**
+        To include doctests in your function and class docstrings you must add an `Examples` section. The examples should be formatted as if you were typing them into a Python interactive session, with `>>>` used to indicate commands and expected outputs listed immediately below.
+        
+        ```python
+        def add(a, b):
+            """
+            The sum of two numbers.
+                
+            ...Other docstrings sections (Parameters, Returns...)
+                
+            Examples
+            --------
+            An expected output is required.
+            >>> add(1, 2)
+            3
+            
+            Unless the output is captured.
+            >>> out = add(1, 2)
+            
+            """
+            return a + b
+        ```
+      
+        To validate all your docstrings examples, run pytest `--doctest-module` flag,
+        
+        ```
+        pytest --doctest-modules src/nemos/
+        ```
+      
+        This test is part of the Continuous Integration, every example must pass before we can merge a PR.
+    
+    - **Documentation Pages:**
+        Doctests can also be included in Markdown files by using code blocks with the `python` language identifier and interactive Python examples. To enable this functionality, ensure that code blocks follow the standard Python doctest format:
+        
+        ```markdown
+           ```python
+           >>> # Add any code
+           >>> x = 3 ** 2
+           >>> x + 1
+           10
+      
+           ```
+        ```
+      
+        To run doctests on a text file, use the following command:
+        
+        ```
+        python -m doctest -v path-to-your-text-file/file_name.md
+        ```
+        
+        All MarkDown files will be tested as part of the Continuous Integration.
 
-All examples live within the `docs/` subfolder of `nemos`.  These are written as `.py` files but are converted to 
-notebooks by [`mkdocs-gallery`](https://smarie.github.io/mkdocs-gallery/), and have a special syntax, as demonstrated in this [example 
-gallery](https://smarie.github.io/mkdocs-gallery/generated/gallery/).
-
-We avoid using `.ipynb` notebooks directly because their JSON-based format makes them difficult to read, interpret, and resolve merge conflicts in version control. 
-
-To see if changes you have made break the current documentation, you can build the documentation locally. 
-
-```bash
-# Clear the cached documentation pages
-# This step is only necessary if your changes affected the src/ directory
-rm -r docs/generated
-# build the docs within the nemos repo
-mkdocs build
-```
-
-If the build fails, you will see line-specific errors that prompted the failure.
+> [!NOTE]
+> All internal links to NeMoS documentation pages **must be relative**. Using absolute links can lead to broken references whenever the documentation structure is altered. Any presence of absolute links to documentation pages will cause the continuous integration checks to fail. Please ensure all links follow the relative format before submitting your PR.

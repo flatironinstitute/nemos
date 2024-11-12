@@ -77,7 +77,7 @@ plt.style.use(nmo.styles.plot_style)
 # !!! tip
 #
 #     Pynapple can stream any NWB-formatted dataset! See [their
-#     documentation](https://pynapple-org.github.io/pynapple/generated/gallery/tutorial_pynapple_dandi/)
+#     documentation](https://pynapple.org/examples/tutorial_pynapple_dandi.html)
 #     for more details, and see the [DANDI Archive](https://dandiarchive.org/)
 #     for a repository of compliant datasets.
 #
@@ -135,7 +135,7 @@ trial_interval_set.keys()
 # %%
 #
 # `trial_interval_set` is a dictionary with strings for keys and
-# [`IntervalSets`](https://pynapple-org.github.io/pynapple/reference/core/interval_set/)
+# [`IntervalSets`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html)
 # for values. Each key defines the stimulus protocol, with the value defining
 # the beginning and end of that stimulation protocol.
 
@@ -161,7 +161,7 @@ current
 # %%
 #
 # `current` is a `Tsd`
-# ([TimeSeriesData](https://pynapple-org.github.io/pynapple/reference/core/time_series/))
+# ([TimeSeriesData](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html))
 # object with 2 columns. Like all `Tsd` objects, the first column contains the
 # time index and the second column contains the data; in this case, the current
 # in Ampere (A).
@@ -183,7 +183,7 @@ current
 # Notice that the timestamps have changed and our shape is much smaller.
 #
 # Finally, let's examine the spike times. `spikes` is a
-# [`TsGroup`](https://pynapple-org.github.io/pynapple/reference/core/ts_group/),
+# [`TsGroup`](https://pynapple.org/generated/pynapple.core.ts_group.TsGroup.html#pynapple.core.ts_group.TsGroup),
 # a dictionary-like object that holds multiple `Ts` (timeseries) objects with
 # potentially different time indices:
 
@@ -292,7 +292,7 @@ firing_rate = firing_rate / bin_size
 
 # %%
 #
-# Note that firing_rate is a [`TsdFrame`](https://pynapple-org.github.io/pynapple/reference/core/time_series/)!
+# Note that firing_rate is a [`TsdFrame`](https://pynapple.org/generated/pynapple.core.time_series.TsdFrame.html)!
 #
 
 print(type(firing_rate))
@@ -306,7 +306,7 @@ print(type(firing_rate))
 #
 #     We're hiding the details of the plotting function for the purposes of this
 #     tutorial, but you can find it in [the source
-#     code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documetation_utils/plotting.py)
+#     code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documentation_utils/plotting.py)
 #     if you are interested.
 
 doc_plots.current_injection_plot(current, spikes, firing_rate)
@@ -341,7 +341,7 @@ doc_plots.current_injection_plot(current, spikes, firing_rate)
 # firing rate within those bins:
 #
 # !!! note "Tuning curve in `pynapple`"
-#     [`compute_1d_tuning_curves`](https://pynapple-org.github.io/pynapple/reference/process/tuning_curves/#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+#     [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
 
 tuning_curve = nap.compute_1d_tuning_curves(spikes, current, nb_bins=15)
 tuning_curve
@@ -402,7 +402,7 @@ doc_plots.tuning_curve_plot(tuning_curve)
 # First, we require that our predictors and our spike counts have the same
 # number of time bins. We can achieve this by down-sampling our current to the
 # spike counts to the proper resolution using the
-# [`bin_average`](https://pynapple-org.github.io/pynapple/reference/core/time_series/#pynapple.core.time_series.BaseTsd.bin_average)
+# [`bin_average`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.bin_average.html#pynapple.core.time_series.Tsd.bin_average)
 # method from pynapple:
 
 binned_current = current.bin_average(bin_size)

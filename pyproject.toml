@@ -45,11 +45,16 @@ dev = [
     "isort",                        # Import sorter
     "pip-tools",                    # Dependency management
     "pytest",                       # Testing framework
+    "pytest-xdist",                 # Parallelize pytest
     "flake8",                       # Code linter
     "coverage",                     # Test coverage measurement
     "pytest-cov",                   # Test coverage plugin for pytest
     "statsmodels",                  # Used to compare model pseudo-r2 in testing
     "scikit-learn",                 # Testing compatibility with CV & pipelines
+    "matplotlib>=3.7",              # Needed by doctest to run docstrings examples
+    "pooch",                        # Required by doctest for fetch module
+    "dandi",                        # Required by doctest for fetch module
+    "seaborn",                      # Required by doctest for _documentation_utils module
 ]
 docs = [
     "numpydoc",
@@ -67,7 +72,6 @@ docs = [
     "sphinx-contributors",
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
@@ -75,7 +79,6 @@ docs = [
 examples = [
     "scikit-learn",
     "dandi",
-    "ipython",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
@@ -118,7 +121,7 @@ testpaths = ["tests"]             # Specify the directory where test files are l
 [tool.coverage.run]
 omit = [
     "src/nemos/fetch/*",
-    "src/nemos/_documentation_utils/*"
+    "src/nemos/_documentation_utils/*",
 ]
 
 [tool.coverage.report]

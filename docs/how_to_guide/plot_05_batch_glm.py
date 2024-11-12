@@ -6,10 +6,11 @@ by batching and using the `update` method of the model class.
 
 """
 
-import pynapple as nap
-import nemos as nmo
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pynapple as nap
+
+import nemos as nmo
 
 nap.nap_config.suppress_conversion_warnings = True
 
@@ -51,9 +52,9 @@ glm = nmo.glm.PopulationGLM(
 # %%
 # ## Basis instantiation
 #
-# Here we instantiate the basis. `ws` is 40 time bins. It corresponds to a 200 ms windows
-ws = 40
-basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=ws)
+# Here we instantiate the basis with a window size of 40 time bins. It corresponds to a 200ms windows
+# for a 5ms bin size.
+basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=40)
 
 # %%
 # ## Batch definition

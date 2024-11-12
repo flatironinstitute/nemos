@@ -27,8 +27,9 @@ root_doc = "index"
 
 extensions = [
     'sphinx.ext.autodoc',
+    #'numpydoc',
     'sphinx.ext.napoleon',
-    'numpydoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',  # Links to source code
     'sphinx.ext.doctest',
@@ -38,6 +39,7 @@ extensions = [
     'sphinx_contributors',
     'sphinx_code_tabs',
     'sphinx.ext.mathjax',
+    'sphinx_autodoc_typehints'
 ]
 
 myst_enable_extensions = [
@@ -74,7 +76,7 @@ autodoc_default_options = {
     'show-inheritance': True,
 }
 
-# napolean configs
+# # napolean configs
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -87,7 +89,7 @@ napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
 
-autodoc_typehints = "description"  # Use "description" to place hints in the description, or "signature" for inline hints
+autodoc_typehints = "none"  # Use "description" to place hints in the description, or "signature" for inline hints
 autodoc_type_aliases = {
     "ArrayLike": "ArrayLike",
 }

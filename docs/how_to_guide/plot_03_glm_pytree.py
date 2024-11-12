@@ -128,7 +128,7 @@ import pynapple as nap
 #
 # First, let's get our dataset and do some initial exploration of it. To do so,
 # we'll use pynapple to [stream
-# data](https://pynapple-org.github.io/pynapple/generated/gallery/tutorial_pynapple_dandi/)
+# data](https://pynapple.org/examples/tutorial_pynapple_dandi.html)
 # from the DANDI archive.
 #
 # !!! attention

@@ -4,6 +4,7 @@
 :html_theme.sidebar_secondary.remove:
 ```
 
+
 ```{toctree}
 :maxdepth: 1
 :hidden:
@@ -21,6 +22,7 @@ For Developers <developers_notes/README>
 
 ## __Neural ModelS__
 
+
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
@@ -28,8 +30,6 @@ The core of NeMoS includes GPU-accelerated, well-tested implementations of stand
 focusing on the Generalized Linear Model (GLM). 
 
 We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
-
-
 
 
 ::::{grid} 1 2 3 3
@@ -80,7 +80,7 @@ Already familiar with the concepts? Learn how you to process and analyze your da
 
 <div class="card-footer-content">
 
-*Requires familiarity with the theory.*  
+*Requires familiarity with the theory.*
 
 </div>
 
@@ -132,6 +132,7 @@ __Useful Links:__ [<span class="iconify" data-icon="mdi:chat-question"></span> G
 ## <span class="iconify" data-icon="mdi:scale-balance" style="width: 1em"></span>  __License__
 
 Open source, [licensed under MIT](https://github.com/flatironinstitute/nemos/blob/main/LICENSE).
+
 
 ## Support
 

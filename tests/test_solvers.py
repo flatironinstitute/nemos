@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
-from nemos.solvers import SVRG, ProxSVRG, SVRGState
+from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
@@ -128,7 +128,11 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
     if mask is not None:
         kwargs["mask"] = mask
 
-    glm = nmo.glm.GLM(regularizer=regularizer_name, solver_name=solver_name)
+    glm = nmo.glm.GLM(
+        regularizer=regularizer_name,
+        solver_name=solver_name,
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
+    )
     glm.instantiate_solver()
 
     solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
@@ -161,6 +165,7 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         regularizer=regularizer_name,
         solver_name=solver_name,
         solver_kwargs=solver_kwargs,
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
     glm.instantiate_solver()
@@ -177,9 +182,9 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0], [0], [1]]),
+            np.array([[0.0], [0.0], [1.0]]),
         ),
-        ("GroupLasso", ProxSVRG, None),
+        ("GroupLasso", ProxSVRG, np.array([[1.0], [0.0], [0.0]])),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
     ],
@@ -196,15 +201,22 @@ def test_svrg_glm_initialize_state(
     if glm_class == nmo.glm.PopulationGLM:
         y = np.expand_dims(y, 1)
 
+    reg_cls = getattr(nmo.regularizer, regularizer_name)
+    if regularizer_name == "GroupLasso":
+        reg = reg_cls(mask=mask)
+    else:
+        reg = reg_cls()
+
     # only pass mask if it's not None
     kwargs = {}
     if mask is not None and glm_class == nmo.glm.PopulationGLM:
         kwargs["feature_mask"] = mask
 
     glm = glm_class(
-        regularizer=regularizer_name,
+        regularizer=reg,
         solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
 
@@ -225,7 +237,7 @@ def test_svrg_glm_initialize_state(
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0], [0], [1]]),
+            np.array([[0.0], [0.0], [1.0]]),
         ),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
@@ -244,13 +256,20 @@ def test_svrg_glm_update(
 
     # only pass mask if it's not None
     kwargs = {}
-    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+    if glm_class == nmo.glm.PopulationGLM:
         kwargs["feature_mask"] = mask
 
+    reg_cls = getattr(nmo.regularizer, regularizer_name)
+    if regularizer_name == "GroupLasso":
+        reg = reg_cls(mask=mask)
+    else:
+        reg = reg_cls()
+
     glm = glm_class(
-        regularizer=regularizer_name,
+        regularizer=reg,
         solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
         **kwargs,
     )
 
@@ -276,15 +295,15 @@ def test_svrg_glm_update(
         (
             "GroupLasso",
             "ProxSVRG",
-            np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
+            np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
         ),
-        ("GroupLasso", "ProxSVRG", None),
+        ("GroupLasso", "ProxSVRG", np.array([[1, 1, 1, 1, 1]]).astype(float)),
         (
             "GroupLasso",
             "ProximalGradient",
-            np.array([[0, 1, 0], [0, 0, 1]]).reshape(2, -1).astype(float),
+            np.array([[0, 1, 0, 1, 1], [1, 0, 1, 0, 0]]).astype(float),
         ),
-        ("GroupLasso", "ProximalGradient", None),
+        ("GroupLasso", "ProximalGradient", np.array([[1, 1, 1, 1, 1]]).astype(float)),
         ("Ridge", "SVRG", None),
         ("UnRegularized", "SVRG", None),
     ],
@@ -314,15 +333,23 @@ def test_svrg_glm_fit(
     }
 
     # only pass mask if it's not None
+    reg_cls = getattr(nmo.regularizer, regularizer_name)
+    if regularizer_name == "GroupLasso":
+        reg = reg_cls(mask=mask)
+    else:
+        reg = reg_cls()
+
     kwargs = {}
-    if mask is not None:
-        kwargs["feature_mask"] = mask
+    if glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = np.ones((X.shape[1], 1))
 
     glm = glm_class(
-        regularizer=regularizer_name,
+        regularizer=reg,
         solver_name=solver_name,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
         solver_kwargs=solver_kwargs,
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
+        **kwargs,
     )
 
     if isinstance(glm, nmo.glm.PopulationGLM):
@@ -339,7 +366,7 @@ def test_svrg_glm_fit(
     "regularizer_name, solver_class, mask",
     [
         ("Lasso", ProxSVRG, None),
-        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(1, -1).astype(float)),
+        ("GroupLasso", ProxSVRG, np.array([0, 1, 0]).reshape(-1, 1).astype(float)),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
     ],
@@ -356,15 +383,22 @@ def test_svrg_glm_update_needs_full_grad_at_reference_point(
         y = np.expand_dims(y, 1)
 
     # only pass mask if it's not None
-    kwargs = {}
-    if mask is not None and glm_class == nmo.glm.PopulationGLM:
-        kwargs["feature_mask"] = mask
-
-    glm = glm_class(
-        regularizer=regularizer_name,
+    reg_cls = getattr(nmo.regularizer, regularizer_name)
+    if regularizer_name == "GroupLasso":
+        reg = reg_cls(mask=mask)
+    else:
+        reg = reg_cls()
+    kwargs = dict(
+        regularizer=reg,
         solver_name=solver_class.__name__,
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 0.1,
     )
+
+    if mask is not None and glm_class == nmo.glm.PopulationGLM:
+        kwargs["feature_mask"] = np.array([0, 1, 0]).reshape(-1, 1).astype(float)
+
+    glm = glm_class(**kwargs)
 
     with pytest.raises(
         ValueError,

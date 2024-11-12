@@ -11,14 +11,15 @@ import jax
 import jax.numpy as jnp
 import jaxopt
 from numpy.typing import ArrayLike
-from scipy.optimize import root
 
 from . import observation_models as obs
 from . import tree_utils, validation
 from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
+from .initialize_regressor import initialize_intercept_matching_mean_rate
 from .pytrees import FeaturePytree
 from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
+from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
 
@@ -65,6 +66,36 @@ class GLM(BaseRegressor):
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
 
+    **Fitting Large Models**
+
+    For very large models, you may consider using the Stochastic Variance Reduced Gradient
+    :class:`nemos.solvers._svrg.SVRG` or its proximal variant
+    :class:`nemos.solvers._svrg.ProxSVRG` solver,
+    which take advantage of batched computation. You can change the solver by passing
+    `"SVRG"` as `solver_name` at model initialization.
+
+    The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
+    hyperparameters. These parameters control the size of the mini-batches used for gradient computations
+    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
+    convergence or even divergence of the optimization process.
+
+    To assist with this, for certain GLM configurations, we provide `batch_size` and `stepsize` default
+    values that are theoretically guaranteed to ensure fast convergence.
+
+    Below is a list of the configurations for which we can provide guaranteed default hyperparameters:
+
+    +---------------------------------------+-----------+-------------+
+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |
+    +=======================================+===========+=============+
+    | Poisson + soft-plus + UnRegularized   | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Ridge           | ✅        | ✅          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Lasso           | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + GroupLasso      | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+
     Parameters
     ----------
     observation_model :
@@ -109,6 +140,25 @@ class GLM(BaseRegressor):
     TypeError
         If provided `regularizer` or `observation_model` are not valid.
 
+    Examples
+    --------
+    >>> import nemos as nmo
+
+    >>> # define single neuron GLM model
+    >>> model = nmo.glm.GLM()
+    >>> print("Regularizer type: ", type(model.regularizer))
+    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
+    >>> print("Observation model: ", type(model.observation_model))
+    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
+
+
+    >>> # define GLM model of PoissonObservations model with soft-plus NL
+    >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
+    >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
+    >>> print("Regularizer type: ", type(model.regularizer))
+    Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
+    >>> print("Observation model: ", type(model.observation_model))
+    Observation model:  <class 'nemos.observation_models.PoissonObservations'>
     """
 
     def __init__(
@@ -219,12 +269,9 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
-
-            - If param and X have different structures.
-
-
-            - if the number of features is inconsistent between params[1] and X
-              (when provided).
+            If param and X have different structures.
+        ValueError
+            if the number of features is inconsistent between params[1] and X (when provided).
 
         """
         if X is not None:
@@ -308,20 +355,30 @@ class GLM(BaseRegressor):
         Raises
         ------
         NotFittedError
-
-            - If ``fit`` has not been called first with this instance.
+            If ``fit`` has not been called first with this instance.
         ValueError
+            If `params` is not a JAX pytree of size two.
+        ValueError
+            If weights and bias terms in `params` don't have the expected dimensions.
+        ValueError
+            If `X` is not three-dimensional.
+        ValueError
+            If there's an inconsistent number of features between spike basis coefficients and `X`.
 
-            - If `params` is not a JAX pytree of size two.
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
 
+        >>> # define and fit a GLM
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
 
-            - If weights and bias terms in `params` don't have the expected dimensions.
-
-
-            - If `X` is not three-dimensional.
-
-
-            - If there's an inconsistent number of features between spike basis coefficients and `X`.
+        >>> # predict new spike data
+        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
+        >>> predicted_spikes = model.predict(Xnew)
 
         See Also
         --------
@@ -426,6 +483,22 @@ class GLM(BaseRegressor):
 
             If X structure doesn't match the params, and if X and y have different
             number of samples.
+
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+
+        >>> # get model score
+        >>> log_likelihood_score = model.score(X, y)
+
+        >>> # get a pseudo-R2 score
+        >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
         Notes
         -----
@@ -543,32 +616,20 @@ class GLM(BaseRegressor):
         >>> import numpy as np
         >>> X = np.zeros((100, 5))  # Example input
         >>> y = np.exp(np.random.normal(size=(100, )))  # Simulated firing rates
-        >>> coeff, intercept = nmo.glm.GLM._initialize_parameters(X, y)
+        >>> coeff, intercept = nmo.glm.GLM()._initialize_parameters(X, y)
         >>> coeff.shape
-        (5, )
+        (5,)
         >>> intercept.shape
-        (1, )
+        (1,)
         """
         if isinstance(X, FeaturePytree):
             data = X.data
         else:
             data = X
 
-        # find numerically zeros of the link
-        def func(x):
-            return self.observation_model.inverse_link_function(x) - y.mean(
-                axis=0, keepdims=False
-            )
-
-        # scipy root finding, much more stable than gradient descent
-        func_root = root(func, y.mean(axis=0, keepdims=False), method="hybr")
-        if not jnp.allclose(func_root.fun, 0, atol=10**-4):
-            raise ValueError(
-                "Could not set the initial intercept as the inverse of the firing rate for "
-                "the provided link function. "
-                "Please, provide initial parameters instead!"
-            )
-        initial_intercept = jnp.atleast_1d(func_root.x)
+        initial_intercept = initialize_intercept_matching_mean_rate(
+            self.observation_model.inverse_link_function, y
+        )
 
         # Initialize parameters
         init_params = (
@@ -615,28 +676,35 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
-
-            - If `init_params` is not of length two.
-
-
-            - If dimensionality of `init_params` are not correct.
-
-
-            - If `X` is not two-dimensional.
-
-
-            - If `y` is not one-dimensional.
-
-
-            - If solver returns at least one NaN parameter, which means it found
+            If `init_params` is not of length two.
+        ValueError
+            If dimensionality of `init_params` are not correct.
+        ValueError
+            If `X` is not two-dimensional.
+        ValueError
+            If `y` is not one-dimensional.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
-
         TypeError
+            If `init_params` are not array-like
+        TypeError
+            If `init_params[i]` cannot be converted to jnp.ndarray for all i
 
-            - If `init_params` are not array-like
+        Examples
+        -------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
 
+        >>> # fit a ridge regression Poisson GLM
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+        >>> model = model.fit(X, y)
 
-            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+        >>> # get model weights and intercept
+        >>> model_weights = model.coef_
+        >>> model_intercept = model.intercept_
 
         """
         # validate the inputs & initialize solver
@@ -719,7 +787,7 @@ class GLM(BaseRegressor):
         Returns
         -------
         simulated_activity :
-            Simulated activity (spike counts for PoissonGLMs) for the neuron over time.
+            Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
             Shape: (n_time_bins, ).
         firing_rates :
             Simulated rates for the neuron over time. Shape, (n_time_bins, ).
@@ -731,6 +799,21 @@ class GLM(BaseRegressor):
         ValueError
             - If the instance has not been previously fitted.
 
+        Examples
+        --------
+        >>> # example input
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+
+        >>> # define and fit model
+        >>> import nemos as nmo
+        >>> model = nmo.glm.GLM()
+        >>> model = model.fit(X, y)
+
+        >>> # generate spikes and rates
+        >>> random_key = jax.random.key(123)
+        >>> Xnew = np.random.normal(size=(20, X.shape[1]))
+        >>> spikes, rates = model.simulate(random_key, Xnew)
 
         See Also
         --------
@@ -856,9 +939,12 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        >>> X, y = load_data()  # Hypothetical function to load data
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> model = nmo.glm.GLM()
         >>> params = model.initialize_params(X, y)
-        >>> opt_state = model.initialize_state(X, y)
+        >>> opt_state = model.initialize_state(X, y, params)
         >>> # Now ready to run optimization or update steps
         """
         if init_params is None:
@@ -901,6 +987,16 @@ class GLM(BaseRegressor):
         -------
         NamedTuple
             The initialized solver state
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
+        >>> model = nmo.glm.GLM()
+        >>> params = model.initialize_params(X, y)
+        >>> opt_state = model.initialize_state(X, y, params)
+        >>> # Now ready to run optimization or update steps
         """
         if isinstance(X, FeaturePytree):
             data = X.data
@@ -920,8 +1016,10 @@ class GLM(BaseRegressor):
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
+        opt_solver_kwargs = self.optimize_solver_params(data, y)
+
         #  set up the solver init/run/update attrs
-        self.instantiate_solver()
+        self.instantiate_solver(solver_kwargs=opt_solver_kwargs)
 
         opt_state = self.solver_init_state(init_params, data, y)
         return opt_state
@@ -983,7 +1081,10 @@ class GLM(BaseRegressor):
 
         Examples
         --------
-        >>> # Assume glm_instance is an instance of GLM that has been previously fitted.
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> X, y = np.random.normal(size=(10, 2)), np.random.uniform(size=10)
+        >>> glm_instance = nmo.glm.GLM().fit(X, y)
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
@@ -1015,6 +1116,10 @@ class GLM(BaseRegressor):
 
         return opt_step
 
+    def get_optimal_solver_params_config(self):
+        """Return the functions for computing default step and batch size for the solver."""
+        return glm_compute_optimal_stepsize_configs(self)
+
 
 class PopulationGLM(GLM):
     """
@@ -1039,6 +1144,36 @@ class PopulationGLM(GLM):
     +---------------+------------------+-------------------------------------------------------------+
     | GroupLasso    | ProximalGradient | ProximalGradient                                            |
     +---------------+------------------+-------------------------------------------------------------+
+
+    **Fitting Large Models**
+
+    For very large models, you may consider using the Stochastic Variance Reduced Gradient
+    ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
+    ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
+    which take advantage of batched computation. You can change the solver by passing
+    `"SVRG"` or `"ProxSVRG"` as `solver_name` at model initialization.
+
+    The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
+    hyperparameters. These parameters control the size of the mini-batches used for gradient computations
+    and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
+    convergence or even divergence of the optimization process.
+
+    To assist with this, for certain GLM configurations, we provide `batch_size` and `stepsize` default
+    values that are theoretically guaranteed to ensure fast convergence.
+
+    Below is a list of the configurations for which we can provide guaranteed hyperparameters:
+
+    +---------------------------------------+-----------+-------------+
+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |
+    +=======================================+===========+=============+
+    | Poisson + soft-plus + UnRegularized   | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Ridge           | ✅         | ✅         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Lasso           | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + GroupLasso      | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
 
     Parameters
     ----------
@@ -1079,11 +1214,8 @@ class PopulationGLM(GLM):
     Raises
     ------
     TypeError
-
-        - If provided `regularizer` or `observation_model` are not valid.
-
-
-        - If provided `feature_mask` is not an array-like of dimension two.
+        - If provided `regularizer` or `observation_model` are not valid.:raw-html:`<br>`
+        - If provided `feature_mask` is not an array-like of dimension two.:raw-html:`<br>`
 
     Examples
     --------
@@ -1098,14 +1230,15 @@ class PopulationGLM(GLM):
     >>> y = np.random.poisson(np.exp(X.dot(weights)))
     >>> # Define a feature mask, shape (num_features, num_neurons)
     >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
-    >>> print("Feature mask:")
-    >>> print(feature_mask)
+    >>> feature_mask
+    Array([[1, 0],
+           [1, 1],
+           [0, 1]], dtype=int32)
     >>> # Create and fit the model
-    >>> model = PopulationGLM(feature_mask=feature_mask)
-    >>> model.fit(X, y)
-    >>> # Check the fitted coefficients and intercepts
-    >>> print("Model coefficients:")
-    >>> print(model.coef_)
+    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> # Check the fitted coefficients
+    >>> print(model.coef_.shape)
+    (3, 2)
     >>> # Example with a FeaturePytree mask
     >>> from nemos.pytrees import FeaturePytree
     >>> # Define two features
@@ -1118,14 +1251,17 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
+
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
-    >>> print("Feature mask:")
     >>> print(feature_mask)
+    feature_1: shape (2,), dtype int32
+    feature_2: shape (2,), dtype int32
+
     >>> # Fit a PopulationGLM
-    >>> model = PopulationGLM(feature_mask=feature_mask)
-    >>> model.fit(X, y)
-    >>> print("Model coefficients:")
-    >>> print(model.coef_)
+    >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> # Coefficients are stored in a dictionary with keys the feature labels
+    >>> print(model.coef_.keys())
+    dict_keys(['feature_1', 'feature_2'])
     """
 
     def __init__(
@@ -1408,6 +1544,28 @@ class PopulationGLM(GLM):
         - If the mask is a :class:`nemos.pytrees.FeaturePytree`, then `"feature_name"` is a predictor of neuron `j` if
         `feature_mask["feature_name"][j] == 1`.
 
+        Examples
+        --------
+        >>> # Generate sample data
+        >>> import jax.numpy as jnp
+        >>> import numpy as np
+        >>> from nemos.glm import PopulationGLM
+
+        >>> # Define predictors (X), weights, and neural activity (y)
+        >>> num_samples, num_features, num_neurons = 100, 3, 2
+        >>> X = np.random.normal(size=(num_samples, num_features))
+        >>> # Weights is defined by how each feature influences the output, shape (num_features, num_neurons)
+        >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
+        >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
+        >>> y = np.random.poisson(np.exp(X.dot(weights)))
+
+        >>> # Define a feature mask, shape (num_features, num_neurons)
+        >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
+
+        >>> # Create and fit the model
+        >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+        >>> print(model.coef_.shape)
+        (3, 2)
         """
         return super().fit(X, y, init_params)
 

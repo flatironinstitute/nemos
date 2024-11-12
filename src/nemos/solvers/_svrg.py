@@ -9,8 +9,8 @@ from jaxopt import OptStep
 from jaxopt._src import loop
 from jaxopt.prox import prox_none
 
-from .tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
-from .typing import KeyArrayLike, Pytree
+from ..tree_utils import tree_add_scalar_mul, tree_l2_norm, tree_slice, tree_sub
+from ..typing import KeyArrayLike, Pytree
 
 
 class SVRGState(NamedTuple):
@@ -80,11 +80,13 @@ class ProxSVRG:
 
     Examples
     --------
-    >>> def loss_fn(params, X, y):
-    >>>    ...
-    >>>
-    >>> svrg = ProxSVRG(loss_fn, prox_fun)
-    >>> params, state = svrg.run(init_params, hyperparams_prox, X, y)
+    >>> import numpy as np
+    >>> from jaxopt.prox import prox_lasso
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
+    >>> svrg = ProxSVRG(loss_fn, prox_lasso)
+    >>> hyperparams_prox = 0.1
+    >>> params, state = svrg.run(np.zeros(2), hyperparams_prox, np.ones((10, 2)), np.zeros(10))
+
 
     References
     ----------
@@ -205,7 +207,7 @@ class ProxSVRG:
         # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
         minibatch_grad_at_current_params = self.loss_gradient(params, *args)
         # gradient on batch_{i_k} evaluated at the anchor point
-        # gradient of f_{i_k} at x_{x} in the pseudocode of Gower et al. 2020
+        # gradient of f_{i_k} at x_{k} in the pseudocode of Gower et al. 2020
         minibatch_grad_at_reference_point = self.loss_gradient(reference_point, *args)
 
         # SVRG gradient estimate
@@ -573,7 +575,7 @@ class ProxSVRG:
     @staticmethod
     def _error(x, x_prev, stepsize):
         """
-        Calculate the magnitude of the update relative to the parameters.
+        Calculate the magnitude of the update relative to the stepsize.
         Used for terminating the algorithm if a certain tolerance is reached.
 
         Params
@@ -587,15 +589,15 @@ class ProxSVRG:
         -------
         Scaled update magnitude.
         """
-        # stepsize is an argument to be consistent with jaxopt
-        return tree_l2_norm(tree_sub(x, x_prev)) / tree_l2_norm(x_prev)
+        return tree_l2_norm(tree_sub(x, x_prev)) / stepsize
 
 
 class SVRG(ProxSVRG):
     """
-    SVRG solver
+    SVRG solver.
 
-    Equivalent to ProxSVRG with prox as the identity function and hyperparams_prox=None.
+    This solver implements "Algorithm 3" of [1]. Equivalent to ProxSVRG with prox as the identity
+    function and hyperparams_prox=None.
 
     Attributes
     ----------
@@ -615,11 +617,10 @@ class SVRG(ProxSVRG):
 
     Examples
     --------
-    >>> def loss_fn(params, X, y):
-    >>>    ...
-    >>>
+    >>> import numpy as np
+    >>> loss_fn = lambda params, X, y: ((X.dot(params) - y)**2).sum()
     >>> svrg = SVRG(loss_fn)
-    >>> params, state = svrg.run(init_params, X, y)
+    >>> params, state = svrg.run(np.zeros(2), np.ones((10, 2)), np.zeros(10))
 
     References
     ----------

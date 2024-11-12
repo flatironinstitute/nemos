@@ -17,7 +17,7 @@ Abstract Class Base
 │   │
 │   └─ Concrete Subclass GLM
 │       │
-│       └─ Concrete Subclass RecurrentGLM
+│       └─ Concrete Subclass PopulationGLM
 │
 ├─ Abstract Subclass BaseManifold *(not implemented yet)
 │   │

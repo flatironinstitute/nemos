@@ -1,5 +1,5 @@
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from nemos import tree_utils
@@ -107,18 +107,23 @@ def test_get_valid_multitree(trees, expected):
     assert jnp.array_equal(tree_utils.get_valid_multitree(*trees), expected)
 
 
-@pytest.mark.parametrize("idx", [
-    slice(2, 5),  # Slice indexing
-    np.array([1, 3, 5]),  # Integer list indexing
-    np.array([True, False, True, False, True, False, True, False, True, False]),  # Boolean array indexing
-    (slice(1, 3), slice(0, 2))  # Mixed indexing (simple example with slices)
-])
+@pytest.mark.parametrize(
+    "idx",
+    [
+        slice(2, 5),  # Slice indexing
+        np.array([1, 3, 5]),  # Integer list indexing
+        np.array(
+            [True, False, True, False, True, False, True, False, True, False]
+        ),  # Boolean array indexing
+        (slice(1, 3), slice(0, 2)),  # Mixed indexing (simple example with slices)
+    ],
+)
 def test_tree_slice(idx):
     mydict = {
-        'array1': np.random.rand(10, 3),
-        'array2': np.random.rand(10, 2),
-        'array3': np.random.rand(10, 4),
-        'array4': jnp.arange(30).reshape(10, 3)
+        "array1": np.random.rand(10, 3),
+        "array2": np.random.rand(10, 2),
+        "array3": np.random.rand(10, 4),
+        "array4": jnp.arange(30).reshape(10, 3),
     }
     result = tree_utils.tree_slice(mydict, idx)
     for key in mydict:

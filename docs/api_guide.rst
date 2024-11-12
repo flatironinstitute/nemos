@@ -29,8 +29,8 @@ API Guide
     CyclicBSplineBasis
     MSplineBasis
     OrthExponentialBasis
-    RaisedCosineLinearBasis
-    RaisedCosineLogBasis
+    RaisedCosineBasisLinear
+    RaisedCosineBasisLog
     AdditiveBasis
     MultiplicativeBasis
     TransformerBasis
