@@ -3,7 +3,7 @@
 API Guide
 ---------
 
-.. rubric:: The GLM module
+.. rubric:: The `nemos.glm` module
 
 
 .. currentmodule:: nemos.glm
