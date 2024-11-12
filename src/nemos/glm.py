@@ -143,15 +143,12 @@ class GLM(BaseRegressor):
     Examples
     --------
     >>> import nemos as nmo
-
     >>> # define single neuron GLM model
     >>> model = nmo.glm.GLM()
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
-
-
     >>> # define GLM model of PoissonObservations model with soft-plus NL
     >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
     >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
@@ -370,12 +367,10 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> # define and fit a GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-
         >>> # predict new spike data
         >>> Xnew = np.random.normal(size=(20, X.shape[1]))
         >>> predicted_spikes = model.predict(Xnew)
@@ -489,14 +484,11 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-
         >>> # get model score
         >>> log_likelihood_score = model.score(X, y)
-
         >>> # get a pseudo-R2 score
         >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
@@ -1084,6 +1076,7 @@ class GLM(BaseRegressor):
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
+
         """
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -1248,12 +1241,10 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
-
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
     >>> print(feature_mask)
     feature_1: shape (2,), dtype int32
     feature_2: shape (2,), dtype int32
-
     >>> # Fit a PopulationGLM
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> # Coefficients are stored in a dictionary with keys the feature labels
