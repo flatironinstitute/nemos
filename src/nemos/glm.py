@@ -388,7 +388,7 @@ class GLM(BaseRegressor):
         :meth:`nemos.glm.GLM.simulate`
             Simulate neural activity in response to a feed-forward input (feed-forward only).
 
-        :meth:`nemos.simulation.simulate_recurrent`
+        :func:`nemos.simulation.simulate_recurrent`
             Simulate neural activity in response to a feed-forward input
             using the GLM as a recurrent network (feed-forward + coupling).
         """
@@ -689,19 +689,17 @@ class GLM(BaseRegressor):
         TypeError
             If ``init_params`` are not array-like
         TypeError
-            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
+            If ``init_params[i]`` cannot be converted to ``jnp.ndarray`` for all ``i``
 
         Examples
         -------
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> # fit a ridge regression Poisson GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
         >>> model = model.fit(X, y)
-
         >>> # get model weights and intercept
         >>> model_weights = model.coef_
         >>> model_intercept = model.intercept_
@@ -804,12 +802,10 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> # define and fit model
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-
         >>> # generate spikes and rates
         >>> random_key = jax.random.key(123)
         >>> Xnew = np.random.normal(size=(20, X.shape[1]))
@@ -1552,7 +1548,6 @@ class PopulationGLM(GLM):
         >>> import jax.numpy as jnp
         >>> import numpy as np
         >>> from nemos.glm import PopulationGLM
-
         >>> # Define predictors (X), weights, and neural activity (y)
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))
@@ -1560,10 +1555,8 @@ class PopulationGLM(GLM):
         >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
         >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
         >>> y = np.random.poisson(np.exp(X.dot(weights)))
-
         >>> # Define a feature mask, shape (num_features, num_neurons)
         >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
-
         >>> # Create and fit the model
         >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
         >>> print(model.coef_.shape)
