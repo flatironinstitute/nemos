@@ -132,7 +132,6 @@ class TransformerBasis:
     >>> from sklearn.model_selection import GridSearchCV
     >>> import numpy as np
     >>> np.random.seed(123)
-
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
     >>> x = np.random.normal(size=(num_samples, ))  # raw time series
@@ -140,7 +139,6 @@ class TransformerBasis:
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
     >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
-
     >>> # transformer can be used in pipelines
     >>> transformer = TransformerBasis(basis)
     >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
@@ -201,10 +199,8 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-
         >>> # Example input
         >>> X = np.random.normal(size=(100, 2))
-
         >>> # Define and fit tranformation basis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
@@ -233,21 +229,17 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
-
         >>> # Define and fit tranformation basis
         >>> basis = MSplineBasis(10, mode="conv", window_size=200)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
-
         >>> transformer_fitted = transformer.fit(X)
         >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
         >>> transformer_fitted.kernel_.shape
         (200, 10)
-
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X[:, 0:1])
         """
@@ -280,14 +272,11 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-
         >>> # Example input
         >>> X = np.random.normal(size=(100, 1))
-
         >>> # Define tranformation basis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
-
         >>> # Fit and transform basis
         >>> feature_transformed = transformer.fit_transform(X)
         """
@@ -397,7 +386,6 @@ class TransformerBasis:
         >>> from nemos.basis import BSplineBasis, MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10)
         >>> transformer_basis = TransformerBasis(basis=basis)
-
         >>> # setting parameters of _basis is allowed
         >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
         8
@@ -768,8 +756,8 @@ class Basis(Base, abc.ABC):
         -------
         :
             A matrix with the transformed features. The shape of the output depends on the operation mode:
-                - If ``mode == 'eval'``, the basis evaluated at the samples, or $b_i(*xi)$, where $b_i$ is a
-                basis element. xi[k] must be a one-dimensional array or a pynapple Tsd.
+                - If ``mode == 'eval'``, the basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i`
+                is a basis element. ``xi[k]`` must be a one-dimensional array or a pynapple Tsd.
 
                 - If ``mode == 'conv'``, a bank of basis filters (created by calling fit) is convolved with the
                 samples. Samples can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
@@ -830,7 +818,6 @@ class Basis(Base, abc.ABC):
         --------
         >>> import numpy as np
         >>> from nemos.basis import BSplineBasis
-
         >>> # Generate data
         >>> num_samples = 10000
         >>> X = np.random.normal(size=(num_samples, ))  # raw time series
@@ -983,7 +970,7 @@ class Basis(Base, abc.ABC):
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
-        The i-th axis of the grid will be sampled with n_samples[i] equi-spaced points.
+        The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
         The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
         instead of the default cartesian indexing, see Notes.
 
@@ -998,10 +985,10 @@ class Basis(Base, abc.ABC):
         *Xs :
             A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
             where n equals to the number of inputs.
-            The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
+            The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
         Y :
             The basis function evaluated at the samples,
-            shape (n_samples[0], ... , n_samples[n], number of basis).
+            shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
 
         Raises
         ------
@@ -1012,10 +999,10 @@ class Basis(Base, abc.ABC):
 
         Notes
         -----
-        Setting "indexing = 'ij'" returns a meshgrid with matrix indexing. In the N-D case with inputs of size
-        $M_1,...,M_N$, outputs are of shape $(M_1, M_2, M_3, ....,M_N)$.
+        Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+        :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
-        For the same input, Cartesian indexing would return an output of shape $(M_2, M_1, M_3, ....,M_N)$.
+        For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
 
         Examples
         --------
@@ -1524,7 +1511,7 @@ class AdditiveBasis(Basis):
 
     Attributes
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
 
     Examples
@@ -1533,16 +1520,15 @@ class AdditiveBasis(Basis):
     >>> import numpy as np
     >>> import nemos as nmo
     >>> X = np.random.normal(size=(30, 2))
-
     >>> # define two basis objects and add them
     >>> basis_1 = nmo.basis.BSplineBasis(10)
     >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
     >>> additive_basis = basis_1 + basis_2
-
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
     >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
     >>> additive_basis_2 = additive_basis + basis_3
+
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1666,28 +1652,26 @@ class AdditiveBasis(Basis):
 
         **How It Works:**
 
-        Suppose the basis is made up of **m components**, each with $b_i$ basis functions and $n_i$ inputs.
-        The total number of features, $N$, is calculated as:
+        Suppose the basis is made up of **m components**, each with :math:`b_i` basis functions and :math:`n_i` inputs.
+        The total number of features, :math:`N`, is calculated as:
 
-        $$
-        N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
-        $$
+        .. math::
+            N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
 
-        This method splits any axis of length $N$ into sub-arrays, one for each basis component.
+        This method splits any axis of length :math:`N` into sub-arrays, one for each basis component.
 
         The sub-array for the i-th basis component is reshaped into dimensions
-        $(n_i, b_i)$.
+        :math:`(n_i, b_i)`.
 
-        For example, if the array shape is $(1, 2, N, 4, 5)$, then each split sub-array will have shape:
+        For example, if the array shape is :math:`(1, 2, N, 4, 5)`, then each split sub-array will have shape:
 
-        $$
-        (1, 2, n_i, b_i, 4, 5)
-        $$
+        .. math::
+            (1, 2, n_i, b_i, 4, 5)
 
         where:
 
-        - $n_i$ represents the number of inputs associated with the i-th component,
-        - $b_i$ represents the number of basis functions in that component.
+        - :math:`n_i` represents the number of inputs associated with the i-th component,
+        - :math:`b_i` represents the number of basis functions in that component.
 
         The specified axis (``axis``) determines where the split occurs, and all other dimensions
         remain unchanged. See the example section below for the most common use cases.
@@ -1720,12 +1704,11 @@ class AdditiveBasis(Basis):
             - **Keys**: Labels of the additive basis components.
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 
-              $$
-              (..., n_i, b_i, ...)
-             $$
+            .. math::
+                (..., n_i, b_i, ...)
 
-              - ``n_i``: The number of inputs processed by the i-th basis component.
-              - ``b_i``: The number of basis functions for the i-th basis component.
+            - ``n_i``: The number of inputs processed by the i-th basis component.
+            - ``b_i``: The number of basis functions for the i-th basis component.
 
             These sub-arrays are reshaped along the specified axis, with all other dimensions
             remaining the same.
@@ -1783,7 +1766,7 @@ class MultiplicativeBasis(Basis):
 
     Attributes
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
 
     Examples
@@ -1792,12 +1775,10 @@ class MultiplicativeBasis(Basis):
     >>> import numpy as np
     >>> import nemos as nmo
     >>> X = np.random.normal(size=(30, 3))
-
     >>> # define two basis and multiply
     >>> basis_1 = nmo.basis.BSplineBasis(10)
     >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
     >>> multiplicative_basis = basis_1 * basis_2
-
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
     >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
@@ -2056,7 +2037,7 @@ class SplineBasis(Basis, abc.ABC):
 
 class MSplineBasis(SplineBasis):
     r"""
-    M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
+    M-spline [1]_ basis functions for modeling and data transformation.
 
     M-splines are a type of spline basis function used for smooth curve fitting
     and data representation. They are positive and integrate to one, making them
@@ -2106,16 +2087,16 @@ class MSplineBasis(SplineBasis):
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = mspline_basis(sample_points)
 
-    # References
-    ------------
-    [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    References
+    ----------
+    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
     -----
-    MSplines must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
-    (x-axis) of an MSpline basis is expanded by a factor of $\alpha$, the values on the co-domain (y-axis) values
-    will shrink by a factor of $1/\alpha$.
+    ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+    (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain (y-axis) values
+    will shrink by a factor of :math:`1/\alpha`.
     For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
     If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
     """
@@ -2277,7 +2258,6 @@ class BSplineBasis(SplineBasis):
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import BSplineBasis
-
     >>> bspline_basis = BSplineBasis(n_basis_funcs=5, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = bspline_basis(sample_points)
@@ -2350,10 +2330,10 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Notes
         -----
@@ -2404,17 +2384,16 @@ class CyclicBSplineBasis(SplineBasis):
 
     Attributes
     ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    order : int
-        Order of the splines used in basis functions.
+    n_basis_funcs :
+        Number of basis functions, int.
+    order :
+        Order of the splines used in basis functions, int.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import CyclicBSplineBasis
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=5, order=3, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cyclic_basis(sample_points)
@@ -2515,10 +2494,10 @@ class CyclicBSplineBasis(SplineBasis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Notes
         -----
@@ -2539,7 +2518,7 @@ class CyclicBSplineBasis(SplineBasis):
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -2572,14 +2551,13 @@ class RaisedCosineBasisLinear(Basis):
     >>> from numpy import linspace
     >>> from nemos.basis import RaisedCosineBasisLinear
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cosine_basis(sample_points)
 
-    # References
-    ------------
-    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
@@ -2711,10 +2689,10 @@ class RaisedCosineBasisLinear(Basis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Examples
         --------
@@ -2747,7 +2725,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     """Represent log-spaced raised cosine basis functions.
 
     Similar to ``RaisedCosineBasisLinear`` but the basis functions are log-spaced.
-    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -2788,14 +2766,13 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     >>> from numpy import linspace
     >>> from nemos.basis import RaisedCosineBasisLog
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cosine_basis = RaisedCosineBasisLog(n_basis_funcs=5, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cosine_basis(sample_points)
 
-    # References
-    ------------
-    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
@@ -2935,12 +2912,12 @@ class OrthExponentialBasis(Basis):
     n_basis_funcs
             Number of basis functions.
     decay_rates :
-            Decay rates of the exponentials, shape (n_basis_funcs,).
+            Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
     mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
+        The mode of operation. ``'eval'`` for evaluation at sample points,
+        ``'conv'`` for convolutional operation.
     window_size :
-        The window size for convolution. Required if mode is 'conv'.
+        The window size for convolution. Required if mode is ``'conv'``.
     bounds :
         The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
@@ -2971,8 +2948,8 @@ class OrthExponentialBasis(Basis):
     def __init__(
         self,
         n_basis_funcs: int,
-        decay_rates: NDArray[np.floating],
-        mode="eval",
+        decay_rates: NDArray,
+        mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "OrthExponentialBasis",
@@ -3074,14 +3051,14 @@ class OrthExponentialBasis(Basis):
         Parameters
         ----------
         sample_pts
-            Spacing for basis functions, holding elements on the interval [0,
-            inf), shape (n_samples,).
+            Spacing for basis functions, holding elements on the interval :math:`[0,inf)`,
+            shape ``(n_samples,)``.
 
         Returns
         -------
         basis_funcs
             Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``.
 
         """
         self._check_sample_size(sample_pts)
@@ -3115,11 +3092,11 @@ class OrthExponentialBasis(Basis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
             Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``
 
         Examples
         --------
@@ -3159,7 +3136,6 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     >>> import numpy as np
     >>> from numpy import linspace
     >>> from nemos.basis import mspline
-
     >>> sample_points = linspace(0, 1, 100)
     >>> mspline_eval = mspline(x=sample_points, k=3, i=2, T=np.random.rand(7)) # define a cubic M-spline
     >>> mspline_eval.shape
@@ -3236,7 +3212,6 @@ def bspline(
     >>> import numpy as np
     >>> from numpy import linspace
     >>> from nemos.basis import bspline
-
     >>> sample_points = linspace(0, 1, 100)
     >>> knots = np.array([0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1, 1, 1, 1])
     >>> bspline_eval = bspline(sample_points, knots) # define a cubic B-spline

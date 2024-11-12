@@ -1,27 +1,28 @@
 .. _api_ref:
 
 API Guide
----------
+=========
 
-.. rubric:: The nemos.glm module
-
+The ``nemos.glm`` module
+------------------------
 
 .. currentmodule:: nemos.glm
 
 .. autosummary::
-    :toctree: stubs
+    :toctree: generated/glm
     :recursive:
     :nosignatures:
 
     GLM
     PopulationGLM
 
-.. rubric:: The nemos.basis module
+The ``nemos.basis`` module
+--------------------------
 
 .. currentmodule:: nemos.basis
 
 .. autosummary::
-    :toctree: stubs
+    :toctree: generated/basis
     :recursive:
     :nosignatures:
 

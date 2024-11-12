@@ -71,9 +71,11 @@ html[data-theme=light]{
     margin-top: auto; /* Pushes the footer content to the bottom */
 }
 
+
 .sphinxsidebar .globaltoc {
     display: none;
 }
+
 
 /* Add vertical spacing between cards */
 .sd-col {

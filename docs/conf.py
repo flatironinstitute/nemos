@@ -10,6 +10,21 @@ import nemos
 import sys, os
 from pathlib import Path
 
+# conf.py
+# def strip_class_name_from_methods(app, what, name, obj, options, signature, return_annotation):
+#     # Check if it’s a method in a class and remove the class prefix
+#     if what == "method" and "." in name:
+#         # Only use the method part of the full name
+#         method_name = name.split(".")[-1]
+#
+#         # Emit the updated signature and return annotation without class name
+#         return method_name + signature, return_annotation
+#     return signature, return_annotation
+#
+# def setup(app):
+#     app.connect("autodoc-process-signature", strip_class_name_from_methods)
+
+
 sys.path.insert(0, str(Path('..', 'src').resolve()))
 sys.path.insert(0, os.path.abspath('sphinxext'))
 
@@ -72,6 +87,7 @@ autosummary_generate = True
 numpydoc_show_class_members = True
 autodoc_default_options = {
     'members': True,
+    'inherited-members': True,
     'undoc-members': True,
     'show-inheritance': True,
 }
@@ -89,9 +105,10 @@ napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
 
-autodoc_typehints = "none"  # Use "description" to place hints in the description, or "signature" for inline hints
+autodoc_typehints = "description"  # Use "description" to place hints in the description
 autodoc_type_aliases = {
     "ArrayLike": "ArrayLike",
+    "NDArray": "NDArray"
 }
 
 numfig = True
@@ -119,6 +136,7 @@ html_theme_options = {
     ],
     "show_prev_next": True,
     "header_links_before_dropdown": 5,
+    "navigation_depth": 2,
 }
 
 html_context = {
