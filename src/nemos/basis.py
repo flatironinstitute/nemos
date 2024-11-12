@@ -1514,7 +1514,9 @@ class MSplineBasis(SplineBasis):
 
 class BSplineBasis(SplineBasis):
     """
-    B-spline[$^{[1]}$](#references) 1-dimensional basis functions.
+    B-spline 1-dimensional basis functions.
+
+    Implementation of the one-dimensional BSpline basis [1]_.
 
     Parameters
     ----------
@@ -1543,9 +1545,9 @@ class BSplineBasis(SplineBasis):
         Spline order.
 
 
-    # References
-    ------------
-    [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    References
+    ----------
+    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     """
