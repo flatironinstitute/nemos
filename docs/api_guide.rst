@@ -35,3 +35,16 @@ The ``nemos.basis`` module
     AdditiveBasis
     MultiplicativeBasis
     TransformerBasis
+
+The ``nemos.observation_models`` module
+--------------------------------------
+
+.. currentmodule:: nemos.observation_models
+
+.. autosummary::
+    :toctree: generated/observation_models
+    :recursive:
+    :nosignatures:
+
+    PoissonObservations
+    GammaObservations
