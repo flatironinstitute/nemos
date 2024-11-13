@@ -48,3 +48,12 @@ The ``nemos.observation_models`` module
 
     PoissonObservations
     GammaObservations
+
+The ``nemos.regularizer`` module
+--------------------------------
+
+The ``nemos.simulation`` module
+--------------------------------
+
+The ``nemos.identifiability_constraints`` module
+------------------------------------------------
