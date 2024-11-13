@@ -610,7 +610,7 @@ class Basis(Base, abc.ABC):
     @property
     def n_output_features(self) -> int | None:
         """
-        Read-only property indicating the number of features returned by the basis, when available.
+        Number of features returned by the basis.
 
         Notes
         -----
@@ -622,16 +622,22 @@ class Basis(Base, abc.ABC):
 
     @property
     def label(self) -> str:
+        """Label for the basis."""
         return self._label
 
     @property
     def n_basis_input(self) -> tuple | None:
+        """Number of expected inputs.
+
+        The number of inputs `compute_feature expects.
+        """
         if self._n_basis_input is None:
             return
         return self._n_basis_input
 
     @property
     def n_basis_funcs(self):
+        """Number of basis functions."""
         return self._n_basis_funcs
 
     @n_basis_funcs.setter
@@ -646,6 +652,7 @@ class Basis(Base, abc.ABC):
 
     @property
     def bounds(self):
+        """Range of values covered by the basis."""
         return self._bounds
 
     @bounds.setter
@@ -672,10 +679,15 @@ class Basis(Base, abc.ABC):
 
     @property
     def mode(self):
+        """Mode of operation, either ``"conv"`` or ``"eval"``."""
         return self._mode
 
     @property
     def window_size(self):
+        """Window size as number of samples.
+
+        Duration of the convolutional kernel in number of samples.
+        """
         return self._window_size
 
     @window_size.setter
@@ -1945,6 +1957,10 @@ class SplineBasis(Basis, abc.ABC):
 
     @property
     def order(self):
+        """Spline order.
+
+        Spline order, i.e. the polynomial degree of the spline plus one.
+        """
         return self._order
 
     @order.setter
@@ -2969,7 +2985,11 @@ class OrthExponentialBasis(Basis):
 
     @property
     def decay_rates(self):
-        """Decay rate getter."""
+        """Decay rate.
+
+        The rate of decay of the exponential functions. If :math:`f_i(t) = \exp{-\alpha_i t}` is the i-th decay
+        exponential before orthogonalization, :math:`\alpha_i` is the i-th element of the ``decay_rate`` vector.
+        """
         return self._decay_rates
 
     @decay_rates.setter
