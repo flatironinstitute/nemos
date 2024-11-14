@@ -5,15 +5,14 @@ from __future__ import annotations
 from typing import Optional, Tuple
 
 import numpy as np
-import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
 
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis_mixin import EvalBasisMixin, ConvBasisMixin
 
-from ._basis import Basis, check_transform_input, check_one_dimensional
+
+from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples
 import abc
 
 
@@ -71,16 +70,12 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         n_basis_funcs: int,
         mode="eval",
         width: float = 2.0,
-        window_size: Optional[int] = None,
-        bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "RaisedCosineBasisLinear",
         **kwargs,
     ) -> None:
         super().__init__(
             n_basis_funcs,
             mode=mode,
-            window_size=window_size,
-            bounds=bounds,
             label=label,
             **kwargs,
         )
@@ -289,8 +284,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         width: float = 2.0,
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
-        window_size: Optional[int] = None,
-        bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "RaisedCosineBasisLog",
         **kwargs,
     ) -> None:
@@ -298,8 +291,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
             n_basis_funcs,
             mode=mode,
             width=width,
-            window_size=window_size,
-            bounds=bounds,
             **kwargs,
             label=label,
         )

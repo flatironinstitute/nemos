@@ -16,6 +16,7 @@ from ._basis_mixin import EvalBasisMixin, ConvBasisMixin
 
 from ._basis import Basis, check_transform_input, check_one_dimensional
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
+from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 
 __all__ = [
     "EvalMSpline",
@@ -24,8 +25,8 @@ __all__ = [
     "ConvBSpline",
     "EvalCyclicBSpline",
     "ConvCyclicBSpline",
-    "RaisedCosineBasisLinear",
-    "RaisedCosineBasisLog",
+    "EvalRaisedCosineLinear",
+    "ConvRaisedCosineLinear",
     "OrthExponentialBasis",
 ]
 
@@ -48,7 +49,6 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
             n_basis_funcs,
             mode="eval",
             order=order,
-            bounds=bounds,
             label=label,
         )
 
@@ -68,7 +68,6 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
             n_basis_funcs,
             mode="conv",
             order=order,
-            window_size=window_size,
             label=label,
         )
 
@@ -87,7 +86,6 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
             n_basis_funcs,
             mode="eval",
             order=order,
-            bounds=bounds,
             label=label,
         )
 
@@ -106,7 +104,6 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
             n_basis_funcs,
             mode="conv",
             order=order,
-            window_size=window_size,
             label=label,
         )
 
@@ -125,7 +122,6 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
             n_basis_funcs,
             mode="eval",
             order=order,
-            bounds=bounds,
             label=label,
         )
 
@@ -138,15 +134,132 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
             order: int = 4,
             label: Optional[str] = "ConvMSpline",
     ):
+        ConvBasisMixin.__init__(self, window_size=window_size)
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
             mode="conv",
             order=order,
-            window_size=window_size,
             label=label,
         )
+
+class EvalMSpline(EvalBasisMixin, MSplineBasis):
+    def __init__(
+            self,
+            n_basis_funcs: int,
+            order: int = 4,
+            bounds: Optional[Tuple[float, float]] = None,
+            label: Optional[str] = "EvalMSpline",
+    ):
+        EvalBasisMixin.__init__(self, bounds=bounds)
+        MSplineBasis.__init__(
+            self,
+            n_basis_funcs,
+            mode="eval",
+            order=order,
+            label=label,
+        )
+
+
+class ConvMSpline(ConvBasisMixin, MSplineBasis):
+    def __init__(
+            self,
+            n_basis_funcs: int,
+            window_size: int,
+            order: int = 4,
+            label: Optional[str] = "ConvMSpline",
+    ):
         ConvBasisMixin.__init__(self, window_size=window_size)
+        MSplineBasis.__init__(
+            self,
+            n_basis_funcs,
+            mode="conv",
+            order=order,
+            label=label,
+        )
+
+
+class EvalRaisedCosineLinear(EvalBasisMixin, RaisedCosineBasisLinear):
+    def __init__(
+            self,
+            n_basis_funcs: int,
+            width: float = 2.0,
+            bounds: Optional[Tuple[float, float]] = None,
+            label: Optional[str] = "EvalMSpline",
+    ):
+        EvalBasisMixin.__init__(self, bounds=bounds)
+        RaisedCosineBasisLinear.__init__(
+            self,
+            n_basis_funcs,
+            width=width,
+            mode="eval",
+            label=label,
+        )
+
+
+class ConvRaisedCosineLinear(ConvBasisMixin, RaisedCosineBasisLinear):
+    def __init__(
+            self,
+            n_basis_funcs: int,
+            window_size: int,
+            width: float = 2.0,
+            label: Optional[str] = "ConvMSpline",
+            **conv_kwargs,
+    ):
+        ConvBasisMixin.__init__(self, window_size=window_size)
+        RaisedCosineBasisLinear.__init__(
+            self,
+            n_basis_funcs,
+            mode="conv",
+            width=width,
+            label=label,
+            **conv_kwargs,
+        )
+
+class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
+    def __init__(
+            self,
+            n_basis_funcs: int,
+            width: float = 2.0,
+            time_scaling: float = None,
+            enforce_decay_to_zero: bool = True,
+            bounds: Optional[Tuple[float, float]] = None,
+            label: Optional[str] = "EvalMSpline",
+    ):
+        EvalBasisMixin.__init__(self, bounds=bounds)
+        RaisedCosineBasisLog.__init__(
+            self,
+            n_basis_funcs,
+            width=width,
+            time_scaling=time_scaling,
+            enforce_decay_to_zero=enforce_decay_to_zero,
+            mode="eval",
+            label=label,
+        )
+
+
+class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
+    def __init__(
+            self,
+            n_basis_funcs: int,
+            window_size: int,
+            width: float = 2.0,
+            time_scaling: float = None,
+            enforce_decay_to_zero: bool = True,
+            label: Optional[str] = "ConvMSpline",
+            **conv_kwargs,
+    ):
+        ConvBasisMixin.__init__(self, window_size=window_size)
+        RaisedCosineBasisLog.__init__(
+            self,
+            n_basis_funcs,
+            mode="conv",
+            width=width,
+            time_scaling=time_scaling,
+            enforce_decay_to_zero=enforce_decay_to_zero,
+            label=label,
+            **conv_kwargs,
+        )
 
 
 

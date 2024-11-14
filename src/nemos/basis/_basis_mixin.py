@@ -3,13 +3,13 @@
 from numpy.typing import ArrayLike
 from ..convolve import create_convolutional_predictor
 import numpy as np
-from typing import Union, Tuple
-
+from typing import Union, Tuple, Optional
+import inspect
 
 class EvalBasisMixin:
 
-    def __init__(self, *args, **kwargs):
-        self._bounds = kwargs.pop("bounds", None)
+    def __init__(self, bounds: Optional[Tuple[float, float]] = None):
+        self.bounds = bounds
 
     def _compute_features(self, *xi: ArrayLike):
         """
@@ -56,9 +56,6 @@ class EvalBasisMixin:
     @bounds.setter
     def bounds(self, values: Union[None, Tuple[float, float]]):
         """Setter for bounds."""
-        if values is not None and self.mode == "conv":
-            raise ValueError("`bounds` should only be set when `mode=='eval'`.")
-
         if values is not None and len(values) != 2:
             raise ValueError(
                 f"The provided `bounds` must be of length two. Length {len(values)} provided instead!"
@@ -75,11 +72,26 @@ class EvalBasisMixin:
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
 
+    def _check_convolution_kwargs(self):
+        """Check convolution kwargs settings.
+
+        Raises
+        ------
+        ValueError:
+            If `self._conv_kwargs` are not None.
+        """
+        # this should not be hit since **kwargs are not allowed at EvalBasis init.
+        # still keep it for compliance with Abstract class Basis.
+        if self._conv_kwargs:
+            raise ValueError(
+                f"kwargs should only be set when mode=='conv', but '{self._mode}' provided instead!"
+            )
+
 
 class ConvBasisMixin:
 
-    def __init__(self, *args, **kwargs):
-        self._window_size = kwargs.pop("window_size")
+    def __init__(self, window_size: int):
+        self.window_size = window_size
 
     def _compute_features(self, *xi: ArrayLike):
         """
@@ -154,3 +166,44 @@ class ConvBasisMixin:
             )
 
         self._window_size = window_size
+
+    def _check_convolution_kwargs(self):
+        """Check convolution kwargs settings.
+
+        Raises
+        ------
+        ValueError:
+            - If `axis` is provided as an argument, and it is different from 0
+            (samples must always be in the first axis).
+            - If `self._conv_kwargs` include parameters not recognized or that do not have
+            default values in `create_convolutional_predictor`.
+        """
+        if "axis" in self._conv_kwargs:
+            raise ValueError(
+                "Setting the `axis` parameter is not allowed. Basis requires the "
+                "convolution to be applied along the first axis (`axis=0`).\n"
+                "Please transpose your input so that the desired axis for "
+                "convolution is the first dimension (axis=0)."
+            )
+        convolve_params = inspect.signature(create_convolutional_predictor).parameters
+        convolve_configs = {
+            key
+            for key, param in convolve_params.items()
+            if param.default
+            # prevent user from passing
+            # `basis_matrix` or `time_series` in kwargs.
+            is not inspect.Parameter.empty
+        }
+        if not set(self._conv_kwargs.keys()).issubset(convolve_configs):
+            # do not encourage to set axis.
+            convolve_configs = convolve_configs.difference({"axis"})
+            # remove the parameter in case axis=0 was passed, since it is allowed.
+            invalid = (
+                set(self._conv_kwargs.keys())
+                .difference(convolve_configs)
+                .difference({"axis"})
+            )
+            raise ValueError(
+                f"Unrecognized keyword arguments: {invalid}. "
+                f"Allowed convolution keyword arguments are: {convolve_configs}."
+            )
