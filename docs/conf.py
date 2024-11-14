@@ -158,7 +158,7 @@ html_sidebars = {
 
 
 # Path for static files (custom stylesheets or JavaScript)
-html_static_path = ['assets/stylesheets']
+html_static_path = ['assets/stylesheets', "assets"]
 html_css_files = ['custom.css']
 
 html_js_files = [

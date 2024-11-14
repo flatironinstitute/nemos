@@ -14,7 +14,7 @@ kernelspec:
 ```{code-cell} ipython3
 %matplotlib inline
 ```
-
+(glm_intro_background)=
 # Generalized Linear Models: An Introduction
 
 Before we dive into using NeMoS, you might wonder: why model at all? Why not
@@ -31,17 +31,16 @@ Before we dive into using NeMoS, you might wonder: why model at all? Why not
   only instantaneous current matters for firing rate) and makes specific
   quantitative predictions that can be used to compare among hypotheses.
 
-!!! warning
-
-    We are not claiming that the GLM will allow you to uniquely determine
-    causation! Like any statistical model or method, the GLM will not solve
-    causation for you (causation being a notoriously difficult problem in
-    science), but it will allow you to see the effect of adding and removing
-    different inputs on the predicted firing rate, which can facilitate
-    causal inferences. For more reading on causation and explanation in
-    neuroscience, the work of [Carl
-    Craver](https://philosophy.wustl.edu/people/carl-f-craver) is a good
-    place to start.
+:::{attention}
+We are not claiming that the GLM will allow you to uniquely determine
+causation! Like any statistical model or method, the GLM will not solve
+causation for you (causation being a notoriously difficult problem in
+science), but it will allow you to see the effect of adding and removing
+different inputs on the predicted firing rate, which can facilitate
+causal inferences. For more reading on causation and explanation in
+neuroscience, the work of [CarlCraver](https://philosophy.wustl.edu/people/carl-f-craver) 
+is a good place to start.
+:::
 
 Now that we've convinced you that modeling is worthwhile, let's get started!
 How should we begin?
@@ -71,7 +70,7 @@ model: a linear-nonlinear-Poisson model.
 
 <figure markdown>
 <!-- note that the src here has an extra ../ compared to other images, necessary when specifying path directly in html -->
-<img src="../../../assets/lnp_model.svg" style="width: 100%", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/lnp_model.svg" style="width: 100%", alt="Linear-Non Linear-Poisson illustration."/>
 <figcaption>LNP model schematic. Modified from Pillow et al., 2008.</figcaption>
 </figure>
 
@@ -88,16 +87,16 @@ rescales and shifts the input: $\bm{WX}+\bm{c}$. In the one-dimensional case, as
 in this example, this is equivalent to scaling it by a constant and adding an
 intercept.
 
-!!! note
+:::{note}
+In geometry, this is more correctly referred to as an [affine
+transformation](https://en.wikipedia.org/wiki/Affine_transformation),
+which includes translations, scaling, and rotations. *Linear*
+transformations are the subset of affine transformations that do not
+include translations.
 
-    In geometry, this is more correctly referred to as an [affine
-    transformation](https://en.wikipedia.org/wiki/Affine_transformation),
-    which includes translations, scaling, and rotations. *Linear*
-    transformations are the subset of affine transformations that do not
-    include translations.
-
-    In neuroscience, "linear" is the more common term, and we will use it
-    throughout.
+In neuroscience, "linear" is the more common term, and we will use it
+throughout.
+:::
 
 This means that, in the 1d case, we have two knobs to transform the input: we
 can make it bigger or smaller, or we can shift it up or down. That is, we
@@ -160,14 +159,14 @@ fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
                               plot_nonlinear=True)
 ```
 
-!!! info
-
-    In NeMoS, the non-linearity is kept fixed. We default to the exponential,
-    but a small number of other choices, such as soft-plus, are allowed. The
-    allowed choices guarantee both the non-negativity constraint described
-    above, as well as convexity, i.e. a single optimal solution. In
-    principle, one could choose a more complex non-linearity, but convexity
-    is not guaranteed in general.
+:::{info}
+In NeMoS, the non-linearity is kept fixed. We default to the exponential,
+but a small number of other choices, such as soft-plus, are allowed. The
+allowed choices guarantee both the non-negativity constraint described
+above, as well as convexity, i.e. a single optimal solution. In
+principle, one could choose a more complex non-linearity, but convexity
+is not guaranteed in general.
+:::
 
 Specifically, our firing rate is:
 $$ \lambda (t) = \exp (L(x(t)) = \exp (w x(t) + c) \tag{2}$$
@@ -210,13 +209,14 @@ $$ \sum\_t \log P(y(t) | \lambda(t)) \propto \sum\_t y(t) \log(\lambda(t)) -
 This is the objective function of the GLM model: we are trying to find the
 firing rate that maximizes the likelihood of the observed spike train.
 
-!!! info
+:::{info}
 
-    In NeMoS, the log-likelihood can be computed directly by calling the
-    `score` method, passing the predictors and the counts. The method first
-    computes the rate $\lambda(t)$ using (2) and then the likelihood using
-    (4). This method is used under the hood during optimization.
+**In NeMoS, the log-likelihood can be computed directly by calling the
+`score` method, passing the predictors and the counts. The method first
+computes the rate $\lambda(t)$ using (2) and then the likelihood using
+(4).** This method is used under the hood during optimization.
 
+:::
 
 +++
 
