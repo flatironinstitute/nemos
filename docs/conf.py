@@ -105,11 +105,12 @@ napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
 
-autodoc_typehints = "none"  # Use "description" to place hints in the description
+autodoc_typehints = "description"  # Use "description" to place hints in the description
 autodoc_type_aliases = {
     "ArrayLike": "ArrayLike",
     "NDArray": "NDArray",
     "TsdFrame": "pynapple.TsdFrame",
+    "JaxArray": "JaxArray",
 }
 
 numfig = True

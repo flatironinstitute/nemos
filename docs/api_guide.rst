@@ -5,6 +5,7 @@ API Guide
 
 The ``nemos.glm`` module
 ------------------------
+Classes for creating Generalized Linear Models (GLMs) for both single neurons and neural populations.
 
 .. currentmodule:: nemos.glm
 
@@ -18,6 +19,7 @@ The ``nemos.glm`` module
 
 The ``nemos.basis`` module
 --------------------------
+Provides basis function classes to construct and transform features for model inputs.
 
 .. currentmodule:: nemos.basis
 
@@ -38,6 +40,7 @@ The ``nemos.basis`` module
 
 The ``nemos.observation_models`` module
 --------------------------------------
+Statistical models to describe the distribution of neural responses or other predicted variables, given inputs.
 
 .. currentmodule:: nemos.observation_models
 
@@ -51,6 +54,7 @@ The ``nemos.observation_models`` module
 
 The ``nemos.regularizer`` module
 --------------------------------
+Implements various regularization techniques to constrain model parameters, which helps prevent overfitting.
 
 .. currentmodule:: nemos.regularizer
 
@@ -65,7 +69,8 @@ The ``nemos.regularizer`` module
     GroupLasso
 
 The ``nemos.simulation`` module
---------------------------------
+-------------------------------
+Utility functions for simulating spiking activity in recurrently connected neural populations.
 
 .. currentmodule:: nemos.simulation
 
@@ -80,3 +85,15 @@ The ``nemos.simulation`` module
 
 The ``nemos.identifiability_constraints`` module
 ------------------------------------------------
+Functions to apply identifiability constraints to rank-deficient feature matrices, ensuring the uniqueness of model
+solutions.
+
+.. currentmodule:: nemos.identifiability_constraints
+
+.. autosummary::
+    :toctree: generated/identifiability_constraints
+    :recursive:
+    :nosignatures:
+
+    apply_identifiability_constraints
+    apply_identifiability_constraints_by_basis_component

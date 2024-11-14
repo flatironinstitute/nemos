@@ -228,8 +228,8 @@ class Lasso(Regularizer):
     """
     Regularizer class for Lasso (L1 regularization).
 
-    This class equips models with the lasso proximal operator and the
-    lasso penalized loss function.
+    This class equips models with the Lasso proximal operator and the
+    Lasso penalized loss function.
     """
 
 
