@@ -52,8 +52,31 @@ The ``nemos.observation_models`` module
 The ``nemos.regularizer`` module
 --------------------------------
 
+.. currentmodule:: nemos.regularizer
+
+.. autosummary::
+    :toctree: generated/regularizer
+    :recursive:
+    :nosignatures:
+
+    UnRegularized
+    Ridge
+    Lasso
+    GroupLasso
+
 The ``nemos.simulation`` module
 --------------------------------
+
+.. currentmodule:: nemos.simulation
+
+.. autosummary::
+    :toctree: generated/regularizer
+    :recursive:
+    :nosignatures:
+
+    simulate_recurrent
+    difference_of_gammas
+    regress_filter
 
 The ``nemos.identifiability_constraints`` module
 ------------------------------------------------

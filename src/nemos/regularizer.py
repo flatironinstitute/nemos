@@ -96,24 +96,11 @@ class Regularizer(Base, abc.ABC):
 
 class UnRegularized(Regularizer):
     """
-    Solver class for optimizing unregularized models.
+    Regularizer class for unregularized models.
 
-    This class provides an interface to various optimization methods for models that
-    do not involve regularization. The optimization methods that are allowed for this
-    class are defined in the `allowed_solvers` attribute.
-
-    Attributes
-    ----------
-    allowed_solvers : list of str
-        List of solver names that are allowed for this regularizer class.
-    default_solver :
-        Default solver for this regularizer is GradientDescent.
-
-    See Also
-    --------
-    [Regularizer](./#nemos.regularizer.Regularizer) : Base solver class from which this class inherits.
+    This class equips models with the identity proximal operator (no shrinkage) and the
+    unpenalized loss function.
     """
-
     _allowed_solvers = (
         "GradientDescent",
         "BFGS",
@@ -133,32 +120,31 @@ class UnRegularized(Regularizer):
 
     def penalized_loss(self, loss: Callable, regularizer_strength: float):
         """
-        Returns the original loss function unpenalized. Unregularized regularization method does not add any
-        penalty.
+        Returns the original loss function unpenalized.
+
+        Unregularized regularization method does not add any penalty.
         """
         return loss
 
     def get_proximal_operator(
         self,
     ) -> ProximalOperator:
-        """Unregularized method has no proximal operator."""
+        """
+        Returns the identity operator.
+
+        Unregularized method corresponds to an identity proximal operator, since no
+        shrinkage factor is applied.
+        """
 
         return jaxopt.prox.prox_none
 
 
 class Ridge(Regularizer):
     """
-    Solver for Ridge regularization using various optimization algorithms.
+    Regularizer class for Ridge (L2 regularization).
 
-    This class uses `jaxopt` optimizers to perform Ridge regularization. It extends
-    the base Solver class, with the added feature of Ridge penalization.
-
-    Attributes
-    ----------
-    allowed_solvers : List[..., str]
-        A list of solver names that are allowed to be used with this regularizer.
-    default_solver :
-        Default solver for this regularizer is GradientDescent.
+    This class equips models with the Ridge proximal operator and the
+    Ridge penalized loss function.
     """
 
     _allowed_solvers = (
@@ -240,11 +226,12 @@ class Ridge(Regularizer):
 
 class Lasso(Regularizer):
     """
-    Optimization solver using the Lasso (L1 regularization) method with Proximal Gradient.
+    Regularizer class for Lasso (L1 regularization).
 
-    This class is a specialized version of the ProxGradientSolver with the proximal operator
-    set for L1 regularization (Lasso). It utilizes the `jaxopt` library's proximal gradient optimizer.
+    This class equips models with the lasso proximal operator and the
+    lasso penalized loss function.
     """
+
 
     _allowed_solvers = (
         "ProximalGradient",
@@ -318,33 +305,30 @@ class Lasso(Regularizer):
 
 class GroupLasso(Regularizer):
     """
-    Optimization solver using the Group Lasso regularization method with Proximal Gradient.
+    Regularizer class for Group Lasso (group-L1) regularized models.
 
-    This class is a specialized version of the ProxGradientSolver with the proximal operator
-    set for Group Lasso regularization. The Group Lasso regularization induces sparsity on groups
-    of features rather than individual features.
+    This class equips models with the group-lasso proximal operator and the
+    group-lasso penalized loss function.
 
     Attributes
     ----------
     mask :
-        A 2d mask array indicating groups of features for regularization, shape (num_groups, num_features).
+        A 2d mask array indicating groups of features for regularization, shape ``(num_groups, num_features)``.
         Each row represents a group of features.
         Each column corresponds to a feature, where a value of 1 indicates that the feature belongs
         to the group, and a value of 0 indicates it doesn't.
-        Default is `mask = np.ones((1, num_features))`, grouping all features in a single group.
+        Default is ``mask = np.ones((1, num_features))``, grouping all features in a single group.
 
     Examples
     --------
     >>> import numpy as np
     >>> from nemos.regularizer import GroupLasso  # Assuming the module is named group_lasso
     >>> from nemos.glm import GLM
-
     >>> # simulate some counts
     >>> num_samples, num_features, num_groups = 1000, 5, 3
     >>> X = np.random.normal(size=(num_samples, num_features)) # design matrix
     >>> w = [0, 0.5, 1, 0, -0.5] # define some weights
     >>> y = np.random.poisson(np.exp(X.dot(w))) # observed counts
-
     >>> # Define a mask for 3 groups and 5 features
     >>> mask = np.zeros((num_groups, num_features))
     >>> mask[0] = [1, 0, 0, 1, 0]  # Group 0 includes features 0 and 3
@@ -439,12 +423,14 @@ class GroupLasso(Regularizer):
 
         Note: the penalty is being calculated according to the following formula:
 
-        $$\\text{loss}(\beta_1,...,\beta_g) + \alpha \cdot \sum _{j=1...,g} \sqrt{\dim(\beta_j)} || \beta_j||_2$$
+        .. math::
 
-        where $g$ is the number of groups, $\dim(\cdot)$ is the dimension of the vector,
-        i.e. the number of coefficient in each $\beta_j$, and $||\cdot||_2$ is the euclidean norm.
+            \\text{loss}(\beta_1,...,\beta_g) + \alpha \cdot \sum _{j=1...,g} \sqrt{\dim(\beta_j)} || \beta_j||_2
 
+        where :math:`g` is the number of groups, :math:`\dim(\cdot)` is the dimension of the vector,
+        i.e. the number of coefficient in each :math:`\beta_j`, and :math:`||\cdot||_2` is the euclidean norm.
         """
+
         # conform to shape (1, n_features) if param is (n_features,) or (n_neurons, n_features) if
         # param is (n_features, n_neurons)
         param_with_extra_axis = jnp.atleast_2d(params[0].T)
