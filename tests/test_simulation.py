@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import nemos.basis as basis
+from nemos import basis
 import nemos.simulation as simulation
 
 

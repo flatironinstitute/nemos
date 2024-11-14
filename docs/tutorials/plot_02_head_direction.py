@@ -349,7 +349,7 @@ doc_plots.plot_basis()
 # the cost of adding additional parameters.
 
 # a basis object can be instantiated in "conv" mode for convolving  the input.
-basis = nmo.basis.RaisedCosineBasisLog(
+basis = nemos.basis.basis.RaisedCosineBasisLog(
     n_basis_funcs=8, mode="conv", window_size=window_size
 )
 
@@ -512,7 +512,7 @@ doc_plots.plot_rates_and_smoothed_counts(
 
 # define a basis function that expects an input of shape (num_samples, num_neurons).
 num_neurons = count.shape[1]
-basis = nmo.basis.RaisedCosineBasisLog(
+basis = nemos.basis.basis.RaisedCosineBasisLog(
     n_basis_funcs=8, mode="conv", window_size=window_size, label="convolved counts"
 )
 

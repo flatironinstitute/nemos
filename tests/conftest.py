@@ -286,7 +286,7 @@ def coupled_model_simulate():
             )
     # shrink the filters for simulation stability
     coupling_filter_bank *= 0.8
-    basis = nmo.basis.RaisedCosineBasisLog(20)
+    basis = nemos.basis.basis.RaisedCosineBasisLog(20)
 
     # approximate the coupling filters in terms of the basis function
     _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])

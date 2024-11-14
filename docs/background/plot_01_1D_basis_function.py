@@ -16,14 +16,12 @@ import matplotlib.pylab as plt
 import numpy as np
 import pynapple as nap
 
-import nemos as nmo
-
 # Initialize hyperparameters
 order = 4
 n_basis = 10
 
 # Define the 1D basis function object
-bspline = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order)
+bspline = nemos.basis.basis.BSplineBasis(n_basis_funcs=n_basis, order=order)
 
 # %%
 # ## Evaluating a Basis
@@ -52,7 +50,7 @@ plt.plot(eval_basis)
 # You can specify a range for the support of your basis by setting the `bounds`
 # parameter at initialization. Evaluating the basis at any sample outside the bounds will result in a NaN.
 
-bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
+bspline_range = nemos.basis.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
 
 print("Evaluated basis:")
 # 0.5  is within the support, 0.1 is outside the support
@@ -82,8 +80,8 @@ plt.tight_layout()
 #
 # Let's see how this two modalities operate.
 
-eval_mode = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, mode="eval")
-conv_mode = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, mode="conv", window_size=100)
+eval_mode = nemos.basis.basis.EvalMSpline(n_basis_funcs=n_basis, mode="eval")
+conv_mode = nemos.basis.basis.EvalMSpline(n_basis_funcs=n_basis, mode="conv", window_size=100)
 
 # define an input
 angles = np.linspace(0, np.pi*4, 201)
@@ -153,7 +151,7 @@ plt.show()
 # evaluate a log-spaced cosine raised function basis.
 
 # Instantiate the basis noting that the `RaisedCosineBasisLog` does not require an `order` parameter
-raised_cosine_log = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=10, width=1.5, time_scaling=50)
+raised_cosine_log = nemos.basis.basis.RaisedCosineBasisLog(n_basis_funcs=10, width=1.5, time_scaling=50)
 
 # Evaluate the raised cosine basis at the equi-spaced sample points
 # (same method in all Basis elements)

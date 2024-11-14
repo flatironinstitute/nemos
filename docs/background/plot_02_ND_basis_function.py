@@ -66,11 +66,9 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 import matplotlib.pyplot as plt
 import numpy as np
 
-import nemos as nmo
-
 # Define 1D basis objects
-a_basis = nmo.basis.MSplineBasis(n_basis_funcs=15, order=3)
-b_basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=14)
+a_basis = nemos.basis.basis.EvalMSpline(n_basis_funcs=15, order=3)
+b_basis = nemos.basis.basis.RaisedCosineBasisLog(n_basis_funcs=14)
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
@@ -239,9 +237,9 @@ plt.tight_layout()
 T = 10
 n_basis = 8
 
-a_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
-b_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
-c_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+a_basis = nemos.basis.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+b_basis = nemos.basis.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+c_basis = nemos.basis.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
 
 prod_basis_3 = a_basis * b_basis * c_basis
 samples = np.linspace(0, 1, T)

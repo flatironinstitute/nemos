@@ -33,7 +33,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Rectangle
 from numpy.typing import NDArray
 
-from ..basis import RaisedCosineBasisLog
+from nemos.basis.basis import RaisedCosineBasisLog
 
 warnings.warn(
     "plotting functions contained within `_documentation_utils` are intended for nemos's documentation. "

@@ -263,7 +263,7 @@ coupling_filter_bank *= 0.8
 
 # define a basis function
 n_basis_funcs = 20
-basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs)
+basis = nemos.basis.basis.RaisedCosineBasisLog(n_basis_funcs)
 
 # approximate the coupling filters in terms of the basis function
 _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])

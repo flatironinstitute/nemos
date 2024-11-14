@@ -236,9 +236,9 @@ print(count.shape)
 #   -   theta phase : `nmo.basis.CyclicBSplineBasis`
 #   -   speed : `nmo.basis.MSplineBasis`
 
-position_basis = nmo.basis.MSplineBasis(n_basis_funcs=10)
-phase_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-speed_basis = nmo.basis.MSplineBasis(n_basis_funcs=15)
+position_basis = nemos.basis.basis.EvalMSpline(n_basis_funcs=10)
+phase_basis = nemos.basis.basis.CyclicBSplineBasis(n_basis_funcs=12)
+speed_basis = nemos.basis.basis.EvalMSpline(n_basis_funcs=15)
 
 # %%
 # In addition, we will consider position and phase to be a joint variable. In NeMoS, we can combine basis by multiplying them and adding them. In this case the final basis object for our model can be made in one line :

@@ -12,7 +12,7 @@ import pytest
 import utils_testing
 from sklearn.base import clone as sk_clone
 
-import nemos.basis as basis
+import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
 
@@ -1752,7 +1752,7 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
 
 
 class TestMSplineBasis(BasisFuncsTesting):
-    cls = basis.MSplineBasis
+    cls = basis.EvalMSpline
 
     @pytest.mark.parametrize("samples", [[], [0], [0, 0]])
     @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
@@ -4940,7 +4940,7 @@ class CombinedBasis(BasisFuncsTesting):
         if mode == "eval":
             window_size = None
 
-        if basis_class == basis.MSplineBasis:
+        if basis_class == basis.EvalMSpline:
             basis_obj = basis_class(
                 n_basis_funcs=n_basis, order=4, mode=mode, window_size=window_size
             )
@@ -4964,13 +4964,13 @@ class CombinedBasis(BasisFuncsTesting):
                 n_basis_funcs=n_basis, order=3, mode=mode, window_size=window_size
             )
         elif basis_class == basis.AdditiveBasis:
-            b1 = basis.MSplineBasis(
+            b1 = basis.EvalMSpline(
                 n_basis_funcs=n_basis, order=2, mode=mode, window_size=window_size
             )
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
             basis_obj = b1 + b2
         elif basis_class == basis.MultiplicativeBasis:
-            b1 = basis.MSplineBasis(
+            b1 = basis.EvalMSpline(
                 n_basis_funcs=n_basis, order=2, mode=mode, window_size=window_size
             )
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
@@ -4992,9 +4992,9 @@ class TestAdditiveBasis(CombinedBasis):
     def test_non_empty_samples(self, samples, mode, ws):
         if mode == "conv" and len(samples[0]) < 2:
             return
-        basis_obj = basis.MSplineBasis(
+        basis_obj = basis.EvalMSpline(
             5, mode=mode, window_size=ws
-        ) + basis.MSplineBasis(5, mode=mode, window_size=ws)
+        ) + basis.EvalMSpline(5, mode=mode, window_size=ws)
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
@@ -5017,7 +5017,7 @@ class TestAdditiveBasis(CombinedBasis):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = basis.MSplineBasis(5) + basis.MSplineBasis(5)
+        basis_obj = basis.EvalMSpline(5) + basis.EvalMSpline(5)
         basis_obj.compute_features(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
@@ -5534,9 +5534,9 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_non_empty_samples(self, samples, mode, ws):
         if mode == "conv" and len(samples[0]) < 2:
             return
-        basis_obj = basis.MSplineBasis(
+        basis_obj = basis.EvalMSpline(
             5, mode=mode, window_size=ws
-        ) * basis.MSplineBasis(5, mode=mode, window_size=ws)
+        ) * basis.EvalMSpline(5, mode=mode, window_size=ws)
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
@@ -5559,7 +5559,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = basis.MSplineBasis(5) * basis.MSplineBasis(5)
+        basis_obj = basis.EvalMSpline(5) * basis.EvalMSpline(5)
         basis_obj.compute_features(*eval_input)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
@@ -5725,7 +5725,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         with expectation:
             basis_obj.evaluate_on_grid(*inputs)
 
-    @pytest.mark.parametrize("basis_a", [basis.MSplineBasis])
+    @pytest.mark.parametrize("basis_a", [basis.EvalMSpline])
     @pytest.mark.parametrize("basis_b", [basis.OrthExponentialBasis])
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
@@ -6146,7 +6146,7 @@ def test_power_of_basis(exponent, basis_class):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6169,7 +6169,7 @@ def test_basis_to_transformer(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6197,7 +6197,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6224,7 +6224,7 @@ def test_to_transformer_and_constructor_are_equivalent(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6249,7 +6249,7 @@ def test_basis_to_transformer_makes_a_copy(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6265,7 +6265,7 @@ def test_transformerbasis_getattr(basis_cls, n_basis_funcs):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6285,7 +6285,7 @@ def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_func
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6305,7 +6305,7 @@ def test_transformerbasis_setattr_basis(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6326,7 +6326,7 @@ def test_transformerbasis_setattr_basis_attribute(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6349,7 +6349,7 @@ def test_transformerbasis_copy_basis_on_contsruct(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6371,7 +6371,7 @@ def test_transformerbasis_setattr_illegal_attribute(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6401,7 +6401,7 @@ def test_transformerbasis_addition(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6431,7 +6431,7 @@ def test_transformerbasis_multiplication(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6462,7 +6462,7 @@ def test_transformerbasis_exponentiation(
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6485,7 +6485,7 @@ def test_transformerbasis_dir(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6512,7 +6512,7 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6563,7 +6563,7 @@ def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6599,7 +6599,7 @@ def test_multi_epoch_pynapple_basis(
             predictor_causality=predictor_causality,
             shift=shift,
         )
-        bas = basis.MSplineBasis(3) * bas
+        bas = basis.EvalMSpline(3) * bas
     else:
         bas = basis_cls(
             5,
@@ -6651,7 +6651,7 @@ def test_multi_epoch_pynapple_basis(
 @pytest.mark.parametrize(
     "basis_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -6687,7 +6687,7 @@ def test_multi_epoch_pynapple_basis_transformer(
             predictor_causality=predictor_causality,
             shift=shift,
         )
-        bas = basis.MSplineBasis(3) * bas
+        bas = basis.EvalMSpline(3) * bas
     else:
         bas = basis_cls(
             5,

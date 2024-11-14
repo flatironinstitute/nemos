@@ -110,9 +110,9 @@ sns.despine(ax=ax)
 # Instantiating a `TransformerBasis` can be done either using the constructor directly or with `Basis.to_transformer()`:
 
 # %%
-bas = nmo.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
+bas = nemos.basis.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
 # these two ways of creating the TransformerBasis are equivalent
-trans_bas_a = nmo.basis.TransformerBasis(bas)
+trans_bas_a = nemos.basis.basis.TransformerBasis(bas)
 trans_bas_b = bas.to_transformer()
 
 # %%
@@ -141,7 +141,7 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.TransformerBasis(nmo.basis.RaisedCosineBasisLinear(6)),
+            nemos.basis.basis.TransformerBasis(nemos.basis.basis.RaisedCosineBasisLinear(6)),
         ),
         (
             "glm",
@@ -364,12 +364,12 @@ sns.despine(ax=ax)
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineBasisLinear(5),
-        nmo.basis.RaisedCosineBasisLinear(10),
-        nmo.basis.RaisedCosineBasisLog(5),
-        nmo.basis.RaisedCosineBasisLog(10),
-        nmo.basis.MSplineBasis(5),
-        nmo.basis.MSplineBasis(10),
+        nemos.basis.basis.RaisedCosineBasisLinear(5),
+        nemos.basis.basis.RaisedCosineBasisLinear(10),
+        nemos.basis.basis.RaisedCosineBasisLog(5),
+        nemos.basis.basis.RaisedCosineBasisLog(10),
+        nemos.basis.basis.EvalMSpline(5),
+        nemos.basis.basis.EvalMSpline(10),
     ),
 )
 

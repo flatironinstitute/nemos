@@ -95,9 +95,9 @@ position = position.interpolate(counts)
 # We can define a two-dimensional basis for position by multiplying two one-dimensional bases,
 # see [here](../../background/plot_02_ND_basis_function) for more details.
 
-basis_2d = nmo.basis.RaisedCosineBasisLinear(
+basis_2d = nemos.basis.basis.RaisedCosineBasisLinear(
     n_basis_funcs=10
-) * nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=10)
+) * nemos.basis.basis.RaisedCosineBasisLinear(n_basis_funcs=10)
 
 # %%
 # Let's see what a few basis look like. Here we evaluate it on a 100 x 100 grid.

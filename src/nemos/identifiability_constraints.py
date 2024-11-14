@@ -9,7 +9,7 @@ import numpy as np
 from jax.typing import ArrayLike as JaxArray
 from numpy.typing import NDArray
 
-from .basis import Basis
+from nemos.basis.basis import Basis
 from .tree_utils import get_valid_multitree, tree_slice
 from .type_casting import support_pynapple
 from .validation import _warn_if_not_float64

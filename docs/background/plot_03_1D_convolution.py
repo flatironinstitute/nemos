@@ -39,7 +39,7 @@ spk[-4] = 1
 
 
 # create three filters
-basis_obj = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=3)
+basis_obj = nemos.basis.basis.RaisedCosineBasisLinear(n_basis_funcs=3)
 _, w = basis_obj.evaluate_on_grid(ws)
 
 plt.plot(w)
@@ -124,17 +124,17 @@ plt.tight_layout()
 # with `Basis.compute_features`. Let's see how we can get the same results through `Basis`.
 
 # define basis with different predictor causality
-causal_basis = nmo.basis.RaisedCosineBasisLinear(
+causal_basis = nemos.basis.basis.RaisedCosineBasisLinear(
         n_basis_funcs=3, mode="conv", window_size=ws,
         predictor_causality="causal"
 )
 
-acausal_basis = nmo.basis.RaisedCosineBasisLinear(
+acausal_basis = nemos.basis.basis.RaisedCosineBasisLinear(
         n_basis_funcs=3, mode="conv", window_size=ws,
         predictor_causality="acausal"
 )
 
-anticausal_basis = nmo.basis.RaisedCosineBasisLinear(
+anticausal_basis = nemos.basis.basis.RaisedCosineBasisLinear(
         n_basis_funcs=3, mode="conv", window_size=ws,
         predictor_causality="anti-causal"
 )

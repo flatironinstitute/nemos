@@ -11,7 +11,7 @@ from nemos import basis
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
+        basis.EvalMSpline(5),
         basis.BSplineBasis(5),
         basis.CyclicBSplineBasis(5),
         basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)),
@@ -29,7 +29,7 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
+        basis.EvalMSpline(5),
         basis.BSplineBasis(5),
         basis.CyclicBSplineBasis(5),
         basis.RaisedCosineBasisLinear(5),
@@ -48,7 +48,7 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
+        basis.EvalMSpline(5),
         basis.BSplineBasis(5),
         basis.CyclicBSplineBasis(5),
         basis.RaisedCosineBasisLinear(5),
@@ -73,7 +73,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
 @pytest.mark.parametrize(
     "bas_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -94,7 +94,7 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
 @pytest.mark.parametrize(
     "bas_cls",
     [
-        basis.MSplineBasis,
+        basis.EvalMSpline,
         basis.BSplineBasis,
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
@@ -122,14 +122,14 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
-        (basis.MSplineBasis(5), 0),
+        (basis.EvalMSpline(5), 0),
         (basis.BSplineBasis(5), 0),
         (basis.CyclicBSplineBasis(5), 0),
         (basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)), 0),
         (basis.RaisedCosineBasisLinear(5), 0),
         (basis.RaisedCosineBasisLog(5), 0),
-        (basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5), 0),
-        (basis.MSplineBasis(5, mode="conv", window_size=3), 6),
+        (basis.RaisedCosineBasisLog(5) + basis.EvalMSpline(5), 0),
+        (basis.EvalMSpline(5, mode="conv", window_size=3), 6),
         (basis.BSplineBasis(5, mode="conv", window_size=3), 6),
         (
             basis.CyclicBSplineBasis(
@@ -147,12 +147,12 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         (basis.RaisedCosineBasisLog(5, mode="conv", window_size=3), 6),
         (
             basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
-            + basis.MSplineBasis(5),
+            + basis.EvalMSpline(5),
             6,
         ),
         (
             basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
-            * basis.MSplineBasis(5),
+            * basis.EvalMSpline(5),
             6,
         ),
     ],

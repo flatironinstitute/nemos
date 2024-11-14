@@ -160,10 +160,10 @@ you need to specify the number of basis functions. For some `basis` objects, add
 
 ```python
 
->>> import nemos as nmo
+>> > import nemos as nmo
 
->>> n_basis_funcs = 10
->>> basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs)
+>> > n_basis_funcs = 10
+>> > basis = nemos.basis.basis.RaisedCosineBasisLinear(n_basis_funcs)
 
 ```
 
@@ -199,11 +199,11 @@ number of sample points.
 
 ```python
 
->>> import nemos as nmo
+>> > import nemos as nmo
 
->>> n_basis_funcs = 10
->>> # define a filter bank of 10 basis function, 200 samples long.
->>> basis = nmo.basis.BSplineBasis(n_basis_funcs, mode="conv", window_size=200)
+>> > n_basis_funcs = 10
+>> >  # define a filter bank of 10 basis function, 200 samples long.
+>> > basis = nemos.basis.basis.BSplineBasis(n_basis_funcs, mode="conv", window_size=200)
 
 ```
 
@@ -324,30 +324,29 @@ Let's see how you can greatly streamline your analysis pipeline by integrating `
 !!! note
     You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
 
-
 ```python
 
->>> import nemos as nmo
->>> import pynapple as nap
+>> > import nemos as nmo
+>> > import pynapple as nap
 
->>> path = nmo.fetch.fetch_data("A2929-200711.nwb")
->>> data = nap.load_file(path)
+>> > path = nmo.fetch.fetch_data("A2929-200711.nwb")
+>> > data = nap.load_file(path)
 
->>> # load spikes and head direction
->>> spikes = data["units"]
->>> head_dir = data["ry"]
+>> >  # load spikes and head direction
+>> > spikes = data["units"]
+>> > head_dir = data["ry"]
 
->>> # restrict and bin
->>> counts = spikes[6].count(0.01, ep=head_dir.time_support)
+>> >  # restrict and bin
+>> > counts = spikes[6].count(0.01, ep=head_dir.time_support)
 
->>> # down-sample head direction
->>> upsampled_head_dir = head_dir.bin_average(0.01)  
+>> >  # down-sample head direction
+>> > upsampled_head_dir = head_dir.bin_average(0.01)
 
->>> # create your features
->>> X = nmo.basis.CyclicBSplineBasis(10).compute_features(upsampled_head_dir)
+>> >  # create your features
+>> > X = nemos.basis.basis.CyclicBSplineBasis(10).compute_features(upsampled_head_dir)
 
->>> # add a neuron axis and fit model
->>> model = nmo.glm.GLM().fit(X, counts) 
+>> >  # add a neuron axis and fit model
+>> > model = nmo.glm.GLM().fit(X, counts)
 
 ```
 

@@ -10,12 +10,10 @@ The data were collected by Sofia Skromne Carrasco from the [Peyrache Lab](https:
 
 """
 import warnings
-from warnings import catch_warnings
 
 import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-import numpy as np
 import pynapple as nap
 from sklearn.linear_model import LinearRegression
 
@@ -127,12 +125,12 @@ plt.show()
 #
 # We can combine the two bases.
 
-heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
+heading_basis = nemos.basis.basis.CyclicBSplineBasis(n_basis_funcs=12)
 
 # define a basis that expect all the other neurons as predictors, i.e. shape (num_samples, num_neurons - 1)
 num_neurons = Y.shape[1]
 ws = 10
-coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=ws)
+coupling_basis = nemos.basis.basis.RaisedCosineBasisLog(3, mode="conv", window_size=ws)
 
 # %%
 # We need to combine the bases.

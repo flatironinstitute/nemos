@@ -186,7 +186,7 @@ axes[-1,-1].remove()
 unit_no = 7
 spikes = nwb['units'][unit_no]
 
-basis = nmo.basis.CyclicBSplineBasis(10, order=5)
+basis = nemos.basis.basis.CyclicBSplineBasis(10, order=5)
 x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
 plt.plot(x, basis(x))
@@ -251,7 +251,7 @@ model.coef_
 # feature, we need a 2d basis. Let's use some raised cosine bumps and organize
 # our data similarly.
 
-pos_basis = nmo.basis.RaisedCosineBasisLinear(10) * nmo.basis.RaisedCosineBasisLinear(10)
+pos_basis = nemos.basis.basis.RaisedCosineBasisLinear(10) * nemos.basis.basis.RaisedCosineBasisLinear(10)
 spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data)
 
 X['spatial_position'] = pos_basis(*spatial_pos.values.T)
