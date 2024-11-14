@@ -256,7 +256,7 @@ def apply_identifiability_constraints_by_basis_component(
     feature_matrix: NDArray,
     add_intercept: bool = True,
 ) -> Tuple[NDArray, NDArray]:
-    """Apply identifiability constraint to a design matrix to each component of an additive basis.
+    """Apply identifiability constraint to a design matrix for each component of an additive basis.
 
     Parameters
     ----------

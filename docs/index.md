@@ -110,12 +110,6 @@ Explore fully worked examples to learn how to analyze neural recordings from scr
 
 Access a detailed description of each module and function, including parameters and functionality.
 
-<div class="card-footer-content">
-
-*Requires familiarity with the theory.*
-
-</div>
-
 :::
 
 ::::

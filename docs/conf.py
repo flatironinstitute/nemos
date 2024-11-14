@@ -169,5 +169,4 @@ html_js_files = [
 copybutton_prompt_text = r">>> |\$ |# "
 copybutton_prompt_is_regexp = True
 
-
 nitpicky = True
