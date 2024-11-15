@@ -381,7 +381,7 @@ def simulate_recurrent(
         # 1. The first dimension is time, and 1 is by construction since we are simulating 1
         #    sample
         # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-        conv_act = convolve.reshape_convolve(activity, coupling_basis_matrix).reshape(
+        conv_act = convolve.tensor_convolve(activity, coupling_basis_matrix).reshape(
             -1,
         )
 

@@ -143,3 +143,13 @@ docs/generated/
 
 # nwb cahce
 nwb-cache/
+
+# scripting folder
+_scripts/
+
+# env variable for nwbs
+docs/data/
+
+# rst generated files
+docs/stubs
+

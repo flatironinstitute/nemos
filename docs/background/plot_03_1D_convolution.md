@@ -45,6 +45,7 @@ spk[-4] = 1
 
 ## Convolution in `"valid"` mode
 Generate and plot a filter, then execute a convolution in "valid" mode for all trials and neurons.
+In nemos, you can use the [`tensor_convolve`](nemos.convolve.tensor_convolve) function for this.
 
 :::{info}
 The `"valid"` mode of convolution only calculates the product when the two input vectors overlap completely,
@@ -61,7 +62,7 @@ _, w = basis_obj.evaluate_on_grid(ws)
 
 plt.plot(w)
 
-spk_conv = nmo.convolve.reshape_convolve(spk, w)
+spk_conv = nmo.convolve.tensor_convolve(spk, w)
 
 # valid convolution should be of shape n_samples - ws + 1
 print(f"Shape of the convolution output: {spk_conv.shape}")
@@ -80,7 +81,7 @@ before a movement is initiated (here the event is. "movement onset").
 
 Finally, if one wants to capture both causal
 and anti-causal effects one should use the acausal filters.
-Below we provide a function that runs the convolution in "valid" mode and pads the convolution output
+Below we provide the function [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) that runs the convolution in "valid" mode and pads the convolution output
 for the different filter types.
 
 
@@ -137,10 +138,10 @@ plt.ylabel('acausal')
 plt.tight_layout()
 ```
 
-## Convolve using `Basis.compute_features`
-All the parameters of `create_convolutional_predictor` can be passed to a `Basis` directly
+## Convolve using [`Basis.compute_features`](nemos.basis.Basis.compute_features)
+All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to a [`Basis`](nemos.basis.Basis) directly
 at initialization. Note that you must set `mode == "conv"` to actually perform convolution
-with `Basis.compute_features`. Let's see how we can get the same results through `Basis`.
+with [`Basis.compute_features`](nemos.basis.Basis.compute_features). Let's see how we can get the same results through [`Basis`](nemos.basis.Basis).
 
 
 ```{code-cell} ipython3

@@ -65,6 +65,7 @@ docs = [
     "sphinx-design",
     "sphinx-issues",
     "sphinxcontrib-apidoc",
+    "sphinx-togglebutton",
     "myst-parser",
     "myst-nb",
     "dandi",

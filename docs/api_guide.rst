@@ -17,6 +17,7 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
     GLM
     PopulationGLM
 
+.. _nemos_basis:
 The ``nemos.basis`` module
 --------------------------
 Provides basis function classes to construct and transform features for model inputs.
@@ -28,6 +29,7 @@ Provides basis function classes to construct and transform features for model in
     :recursive:
     :nosignatures:
 
+    Basis
     BSplineBasis
     CyclicBSplineBasis
     MSplineBasis
@@ -82,6 +84,22 @@ Utility functions for simulating spiking activity in recurrently connected neura
     simulate_recurrent
     difference_of_gammas
     regress_filter
+
+
+The ``nemos.convolve`` module
+-----------------------------
+Utility functions for running convolution over the sample axis.
+
+.. currentmodule:: nemos.convolve
+
+.. autosummary::
+    :toctree: generated/regularizer
+    :recursive:
+    :nosignatures:
+
+    create_convolutional_predictor
+    tensor_convolve
+
 
 The ``nemos.identifiability_constraints`` module
 ------------------------------------------------

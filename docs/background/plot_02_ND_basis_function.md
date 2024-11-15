@@ -133,6 +133,7 @@ print(f"Sum of two 1D splines with {eval_basis.shape[1]} "
       f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
 ```
 
+(plotting-2d-additive-basis-elements)=
 #### Plotting 2D Additive Basis Elements
 Let's select and plot a basis element from each of the basis we added.
 

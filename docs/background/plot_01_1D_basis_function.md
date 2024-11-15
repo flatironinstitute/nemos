@@ -20,7 +20,7 @@ kernelspec:
 
 ## Defining a 1D Basis Object
 
-We'll start by defining a 1D basis function object of the type `MSplineBasis`.
+We'll start by defining a 1D basis function object of the type [`MSplineBasis`](nemos.basis.MSplineBasis).
 The hyperparameters required to initialize this class are:
 
 - The number of basis functions, which should be a positive integer.
@@ -43,8 +43,8 @@ bspline = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order)
 
 ## Evaluating a Basis
 
-The `Basis` object is callable, and can be evaluated as a function. By default, the support of the basis
-is defined by the samples that we input to the `__call__` method, and covers from the smallest to the largest value.
+The [`Basis`](nemos.basis.Basis) object is callable, and can be evaluated as a function. By default, the support of the basis
+is defined by the samples that we input to the [`__call__`](nemos.basis.Basis.__call__) method, and covers from the smallest to the largest value.
 
 
 ```{code-cell} ipython3
@@ -93,11 +93,11 @@ plt.tight_layout()
 ```
 
 ## Basis `mode`
-In constructing features, `Basis` objects can be used in two modalities: `"eval"` for evaluate or `"conv"`
-for convolve. These two modalities change the behavior of the `construct_features` method of `Basis`, in particular,
+In constructing features, [`Basis`](nemos.basis.basis) objects can be used in two modalities: `"eval"` for evaluate or `"conv"`
+for convolve. These two modalities change the behavior of the [`compute_features`](nemos.basis.Basis.compute_features) method of [`Basis`](nemos.basis.Basis), in particular,
 
-- If a basis is in mode `"eval"`, then `construct_features` simply returns the evaluated basis.
-- If a basis is in mode `"conv"`, then `construct_features` will convolve the input with a kernel of basis
+- If a basis is in mode `"eval"`, then [`compute_features`](nemos.basis.Basis.compute_features) simply returns the evaluated basis.
+- If a basis is in mode `"conv"`, then [`compute_features`](nemos.basis.Basis.compute_features) will convolve the input with a kernel of basis
   with `window_size` specified by the user.
 
 Let's see how this two modalities operate.
@@ -144,7 +144,7 @@ Convolution is performed in "valid" mode, and then NaN-padded. The default behav
 is padding left, which makes the output feature causal.
 This is why the first half of the `conv_feature` is full of NaNs and appears as white.
 If you want to learn more about convolutions, as well as how and when to change defaults
-check out the tutorial on [1D convolutions](../plot_03_1D_convolution).
+check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 :::
 
 +++
@@ -152,11 +152,11 @@ check out the tutorial on [1D convolutions](../plot_03_1D_convolution).
 Plotting the Basis Function Elements:
 --------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
-and then plotting the result. The method `Basis.evaluate_on_grid` is designed for this, as it generates and returns
+and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
 the equi-spaced samples along with the evaluated basis functions. The benefits of using Basis.evaluate_on_grid become
 particularly evident when working with multidimensional basis functions. You can find more details and visual
 background in the
-[2D basis elements plotting section](../plot_02_ND_basis_function/#plotting-2d-additive-basis-elements).
+[2D basis elements plotting section](plotting-2d-additive-basis-elements).
 
 
 ```{code-cell} ipython3
@@ -174,7 +174,7 @@ plt.show()
 Other Basis Types
 -----------------
 Each basis type may necessitate specific hyperparameters for instantiation. For a comprehensive description,
-please refer to the  [API Guide](../../../reference/nemos/basis). After instantiation, all classes
+please refer to the  [API Guide](nemos_basis). After instantiation, all classes
 share the same syntax for basis evaluation. The following is an example of how to instantiate and
 evaluate a log-spaced cosine raised function basis.
 
