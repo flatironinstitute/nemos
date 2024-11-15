@@ -81,3 +81,15 @@ html[data-theme=light]{
 .sd-col {
     margin-bottom: 20px; /* Adjust this value as needed for desired spacing */
 }
+
+/* Style level-1 ToC entries */
+.toctree-l1 {
+    font-weight: bold;
+}
+
+/* Keep level-2 and deeper ToC entries unbolded */
+.toctree-l2,
+.toctree-l3,
+.toctree-l4 {
+    font-weight: normal;
+}

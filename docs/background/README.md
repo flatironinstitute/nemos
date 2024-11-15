@@ -12,9 +12,12 @@ pip install nemos[examples]
 
 :::
 
-## Index
+```{toctree}
+:maxdepth: 2
+:caption: Contents
 
-- [**Generalized Linear Models: An Introduction**](#glm_intro_background)
-- [**Simple Basis Function**](#simple_basis_function)
-- [**Composing Basis Function**](#composing_basis_function)
-- [**Convolution**](#convolution_background)
+plot_00_conceptual_intro.md
+plot_01_1D_basis_function.md
+plot_02_ND_basis_function.md
+plot_03_1D_convolution.md
+```

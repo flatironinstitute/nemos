@@ -138,7 +138,7 @@ html_theme_options = {
     ],
     "show_prev_next": True,
     "header_links_before_dropdown": 5,
-    "navigation_depth": 2,
+    "navigation_depth": 3,
 }
 
 html_context = {
