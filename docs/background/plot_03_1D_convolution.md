@@ -15,10 +15,8 @@ kernelspec:
 %matplotlib inline
 ```
 
-
-One-dimensional convolutions
-
-+++
+(convolution_background)=
+# Convolution
 
 ## Generate synthetic data
 Generate some simulated spike counts.
@@ -48,13 +46,13 @@ spk[-4] = 1
 ## Convolution in `"valid"` mode
 Generate and plot a filter, then execute a convolution in "valid" mode for all trials and neurons.
 
-!!! info
-    The `"valid"` mode of convolution only calculates the product when the two input vectors overlap completely,
-    avoiding border artifacts. The outcome of such a convolution will
-    be an array of `max(M,N) - min(M,N) + 1` elements in length, where `M` and `N` represent the number
-    of elements in the arrays being convolved. For more detailed information on this,
-    see [jax.numpy.convolve](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.convolve.html).
-
+:::{info}
+The `"valid"` mode of convolution only calculates the product when the two input vectors overlap completely,
+avoiding border artifacts. The outcome of such a convolution will
+be an array of `max(M,N) - min(M,N) + 1` elements in length, where `M` and `N` represent the number
+of elements in the arrays being convolved. For more detailed information on this,
+see [jax.numpy.convolve](https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.convolve.html).
+:::
 
 ```{code-cell} ipython3
 # create three filters

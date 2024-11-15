@@ -15,8 +15,8 @@ kernelspec:
 %matplotlib inline
 ```
 
-
-# One-Dimensional Basis
+(simple_basis_function)=
+# Simple Basis Function
 
 ## Defining a 1D Basis Object
 
@@ -138,13 +138,14 @@ axs[2].set_ylabel("basis", fontsize=12)
 plt.tight_layout()
 ```
 
-!!! note "NaN-Padding"
-    Convolution is performed in "valid" mode, and then NaN-padded. The default behavior
-    is padding left, which makes the output feature causal.
-    This is why the first half of the `conv_feature` is full of NaNs and appears as white.
-    If you want to learn more about convolutions, as well as how and when to change defaults
-    check out the tutorial on [1D convolutions](../plot_03_1D_convolution).
-
+:::{admonition} NaN-Padding
+:class: note
+Convolution is performed in "valid" mode, and then NaN-padded. The default behavior
+is padding left, which makes the output feature causal.
+This is why the first half of the `conv_feature` is full of NaNs and appears as white.
+If you want to learn more about convolutions, as well as how and when to change defaults
+check out the tutorial on [1D convolutions](../plot_03_1D_convolution).
+:::
 
 +++
 

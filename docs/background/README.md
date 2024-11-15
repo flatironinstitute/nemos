@@ -14,4 +14,7 @@ pip install nemos[examples]
 
 ## Index
 
-[Generalized Linear Models: An Introduction](#glm_intro_background)
+- [**Generalized Linear Models: An Introduction**](#glm_intro_background)
+- [**Simple Basis Function**](#simple_basis_function)
+- [**Composing Basis Function**](#composing_basis_function)
+- [**Convolution**](#convolution_background)

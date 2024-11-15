@@ -15,8 +15,8 @@ kernelspec:
 %matplotlib inline
 ```
 
-
-# Multidimensional Basis
+(composing_basis_function)=
+# Composing Basis Functions
 
 ## Background
 
@@ -33,28 +33,47 @@ Consider we have two inputs $\mathbf{x} \in \mathbb{R}^N,\; \mathbf{y}\in \mathb
 Let's say we've defined two basis functions for these inputs:
 
 - $ [ a_0 (\mathbf{x}), ..., a_{k-1} (\mathbf{x}) ] $ for $\mathbf{x}$
-- $[b_0 (\mathbf{y}), ..., b_{h-1} (\mathbf{y}) ]$ for $\mathbf{y}$.
+- $ [b_0 (\mathbf{y}), ..., b_{h-1} (\mathbf{y}) ] $ for $\mathbf{y}$.
 
 These basis functions can be combined in the following ways:
 
 1. **Addition:** If we assume that there is no interaction between the stimuli, the response function can be adequately described by the sum of the individual components. The function is defined as:
+   
+   $$ 
+   f(\mathbf{x}, \mathbf{y}) \approx \sum_{i=0}^{k-1} \alpha_{i} \, a_i (\mathbf{x})  + \sum_{j=0}^{h-1} \beta_j b_j(\mathbf{y}). 
    $$
-   f(\mathbf{x}, \mathbf{y}) \\approx \sum_{i=0}^{k-1} \\alpha_{i} \, a_i (\mathbf{x})  + \sum_{j=0}^{h-1} \\beta_j b_j(\mathbf{y}).
+   
+   The resulting additive basis simply consists of the concatenation of the two basis sets: 
+
+   $$ 
+   [A_0 (\mathbf{x}, \mathbf{y}), ..., A_{k+h-1} (\mathbf{x}, \mathbf{y})],
    $$
-   The resulting additive basis simply consists of the concatenation of the two basis sets: $$[A_0 (\mathbf{x}, \mathbf{y}), ..., A_{k+h-1} (\mathbf{x}, \mathbf{y})],$$ where
+
+   where
+   
    $$
-   A_j(\mathbf{x}, \mathbf{y}) = \\begin{cases} a_j(\mathbf{x}) & \\text{if }\; j \leq k-1 \\\\\ b_{j-k+1}(\mathbf{y}) & \\text{otherwise.} \end{cases}
+   A_j(\mathbf{x}, \mathbf{y}) = \begin{cases} a_j(\mathbf{x}) &\text{if }\; j \leq k-1 \\ 
+   b_{j-k+1}(\mathbf{y}) &\text{otherwise.} \end{cases}
    $$
+
    Note that we have a total of $k+h$ basis elements, and that each element is constant in one of the axis.
 
 2. **Multiplication:** If we expect the response function to capture arbitrary interactions between the inputs, we can approximate it as the external product of the two bases:
+   
    $$
-   f(\mathbf{x}, \mathbf{y}) \\approx \sum_{i=0}^{k-1}\sum_{j=0}^{h-1} \\alpha_{ij} \, a_i (\mathbf{x}) b_j(\mathbf{y}).
+   f(\mathbf{x}, \mathbf{y}) \approx \sum_{i=0}^{k-1}\sum_{j=0}^{h-1} \alpha_{ij} \, a_i (\mathbf{x}) b_j(\mathbf{y}).
    $$
-   In this case, the resulting basis consists of the $h \cdot k$ products of the individual bases: $$[A_0(\mathbf{x}, \mathbf{y}),..., A_{k \cdot h-1}(\mathbf{x}, \mathbf{y})],$$
+
+   In this case, the resulting basis consists of the $h \cdot k$ products of the individual bases:
+
+   $$
+   [A_0(\mathbf{x}, \mathbf{y}),..., A_{k \cdot h-1}(\mathbf{x}, \mathbf{y})],
+   $$
+
    where,
+
    $$
-   A_{i \cdot h + j}(\mathbf{x}, \mathbf{y}) = a_i(\mathbf{x})b_{j}(\mathbf{y}), \; \\text{for} \; i=0,\dots, k-1 \; \\text{ and } \; j=0,\dots,h-1.
+   A_{i \cdot h + j}(\mathbf{x}, \mathbf{y}) = a_i(\mathbf{x})b_{j}(\mathbf{y}), \; \text{for} \; i=0,\dots, k-1 \; \text{ and } \; j=0,\dots,h-1.
    $$
 
 In the subsequent sections, we will:
@@ -72,9 +91,11 @@ In this scenario, the stimuli are the 2D coordinates (x, y) that represent the a
 ### Additive Basis Object
 One way to model the response to our 2D stimuli is to hypothesize that it decomposes into two factors:
 one due to the x-coordinate and another due to the y-coordinate. We can express this relationship as:
+
 $$
-f(x,y) \\approx \sum_i \alpha_i \cdot a_i(x) + \sum_j \beta_j \cdot b_j(y).
+f(x,y) \approx \sum_i \alpha_i \cdot a_i(x) + \sum_j \beta_j \cdot b_j(y).
 $$
+
 Here, we simply add two basis objects, `a_basis` and `b_basis`, together to define the additive basis.
 
 
@@ -178,7 +199,7 @@ If the aim is to capture interactions between the coordinates, the response func
 product of two 1D basis functions. The approximation of the response function in this scenario would be:
 
 $$
-f(x, y) \\approx \sum_{ij} \\alpha_{ij} \, a_i (x) b_j(y).
+f(x, y) \approx \sum_{ij} \alpha_{ij} \, a_i (x) b_j(y).
 $$
 
 In this model, we define the 2D basis function as the product of two 1D basis objects.
@@ -248,12 +269,12 @@ axs[2, 1].set_xlabel('y-coord')
 plt.tight_layout()
 ```
 
-!!! info
-    Basis objects of different types can be combined through multiplication or addition.
-    This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.
-    A practical example would be characterizing the responses to position
-    in a linear maze and the LFP phase angle.
-
+:::{info}
+Basis objects of different types can be combined through multiplication or addition.
+This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.
+A practical example would be characterizing the responses to position
+in a linear maze and the LFP phase angle.
+:::
 
 +++
 
@@ -263,12 +284,12 @@ Sometimes it may be useful to model even higher dimensional interactions, for ex
 an animal and its spatial position. In order to model an N-dimensional response function, you can combine
 N 1D basis objects using additions and multiplications.
 
-!!! warning
-    If you multiply basis together, the dimension of the evaluated basis function
-    will increase exponentially with the number of dimensions potentially causing memory errors.
-    For example, evaluating a product of $N$ 1D bases with $T$ samples and $K$ basis element,
-    will output a $K^N \times T$ matrix.
-
+:::{warning}
+If you multiply basis together, the dimension of the evaluated basis function
+will increase exponentially with the number of dimensions potentially causing memory errors.
+For example, evaluating a product of $N$ 1D bases with $T$ samples and $K$ basis element,
+will output a $K^N \times T$ matrix.
+:::
 
 ```{code-cell} ipython3
 T = 10
@@ -316,10 +337,10 @@ plt.show()
 print(f"Sparsity check: {(Z == 0).sum() / Z.size * 100: .2f}% of the evaluated basis is null.")
 ```
 
-!!! info
-    The evaluated basis is going to be **sparse** if the basis elements support do not cover the
-    full domain of the basis.
-
+:::{info}
+The evaluated basis is going to be **sparse** if the basis elements support do not cover the
+full domain of the basis.
+:::
 
 +++
 
