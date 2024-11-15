@@ -211,8 +211,11 @@ Once the basis is initialized, you can call `compute_features` on an input of sh
 `(n_samples, n_signals)` to perform the convolution. The output will be a 2-dimensional array of shape 
 `(n_samples, n_basis_funcs)` or `(n_samples, n_basis_funcs * n_signals)` respectively.
 
-!!! warning "Signal length and window size"
-    The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+:::{admonition} Signal length and window size
+:class: warning
+
+The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+:::
 
 ```python
 
@@ -279,11 +282,11 @@ You can specify the regularization scheme and its strength when initializing the
 ## **Pre-processing with `pynapple`**
 
 
-!!! warning
+:::{info}
 
-    This section assumes some familiarity with the `pynapple` package for time series manipulation and data
-    exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
-
+This section assumes some familiarity with the `pynapple` package for time series manipulation and data
+exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
+:::
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such
 as restricting your time series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common
@@ -321,9 +324,10 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and NeMoS.
 
 
-!!! note
-    You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+:::{note}
 
+You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+:::
 
 ```python
 
@@ -426,9 +430,11 @@ Fit a 5-fold cross-validation scheme for comparing two different regularizer str
 ```
 
 
-!!! info "Cross-Validation in NeMoS"
+:::{admonition} Cross-Validation in NeMoS
+:class: info
 
-    For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
+For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
+:::
 
 Finally, we can print the regularizer strength with the best cross-validated performance:
 

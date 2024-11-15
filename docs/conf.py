@@ -30,8 +30,8 @@ sys.path.insert(0, os.path.abspath('sphinxext'))
 
 
 project = 'nemos'
-copyright = '2024, SJ Venditto'
-author = 'SJ Venditto'
+copyright = '2024'
+author = 'E Balzani'
 version = release = nemos.__version__
 
 # -- General configuration ---------------------------------------------------

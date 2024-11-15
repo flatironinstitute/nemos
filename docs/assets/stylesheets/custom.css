@@ -93,3 +93,45 @@ html[data-theme=light]{
 .toctree-l4 {
     font-weight: normal;
 }
+
+/* Add a line separator above the entire footnote list */
+aside.footnote-list {
+    border-top: 1px solid #ccc; /* Add a horizontal line */
+    margin-top: 2em; /* Space above the separator */
+    padding-top: 1em; /* Space below the separator */
+}
+
+/* Style each individual footnote */
+aside.footnote {
+    margin-bottom: 1em; /* Add space between footnotes */
+    font-size: 0.9em; /* Adjust font size */
+    color: #333; /* Text color */
+}
+
+/* Style the label (the bracketed number) */
+aside.footnote .label {
+    font-weight: bold; /* Make it stand out */
+    margin-right: 0.5em; /* Add space after the label */
+}
+
+/* Style the brackets */
+span.fn-bracket {
+    color: #666; /* Dim the brackets */
+}
+
+/* Style the links within the footnotes */
+aside.footnote a {
+    color: #007BFF; /* Blue link color */
+    text-decoration: none; /* Remove underline */
+}
+
+aside.footnote a:hover {
+    text-decoration: underline; /* Add underline on hover */
+}
+
+/* Adjust spacing for the paragraph inside the footnote */
+aside.footnote p {
+    margin: 0.5em 0;
+    line-height: 1.5; /* Improve readability */
+}
+
