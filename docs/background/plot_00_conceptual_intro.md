@@ -83,7 +83,7 @@ The model receives some input and then:
 Let's step through each of those in turn.
 
 Our input feature(s) are first passed through a linear transformation, which
-rescales and shifts the input: $\bm{WX}+\bm{c}$. In the one-dimensional case, as
+rescales and shifts the input: $ \boldsymbol{W X} + \boldsymbol{c} $. In the one-dimensional case, as
 in this example, this is equivalent to scaling it by a constant and adding an
 intercept.
 
@@ -102,7 +102,9 @@ This means that, in the 1d case, we have two knobs to transform the input: we
 can make it bigger or smaller, or we can shift it up or down. That is, we
 compute:
 
-$$L(x(t)) = w x(t) + c \tag{1}$$
+$$
+L(x(t)) = w x(t) + c \tag{1}
+$$
 
 for some value of $w$ and $c$. Let's visualize some possible transformations
 that our model can make with three cartoon neurons:

@@ -151,7 +151,7 @@ The `basis` module includes objects that perform two types of transformations on
 ### **Non-linear Mapping**
 
 <figure class="custom-figure">
-    <img src="../assets/glm_features_scheme.svg" width="100%">
+    <img src="_static/glm_features_scheme.svg" width="100%">
     <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
 </figure>
 
@@ -188,7 +188,7 @@ shape `(n_samples, n_basis_funcs)`, where each column represents a feature gener
 ### **Convolution**
 
 <figure class="custom-figure">
-    <img src="../assets/glm_population_scheme.svg" alt="GLM Population Scheme">
+    <img src="_static/glm_population_scheme.svg" alt="GLM Population Scheme">
     <figcaption><strong>Figure 2:</strong> Basis as a bank of convolutional filters. The figure shows a population GLM for functional connectivity analysis, a classical use-case for basis functions in convolutional mode.</figcaption>
 
 </figure>
@@ -381,7 +381,7 @@ Finally, let's compare the tuning curves
 ```
 
 
-<img src="../head_dir_tuning.jpg" width="40%">
+<img src="_static/head_dir_tuning.jpg" width="40%">
 
 
 ## **Compatibility with `scikit-learn`**
