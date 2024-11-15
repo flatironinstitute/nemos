@@ -6,6 +6,7 @@ The `observation_models` module provides objects representing the observations o
 
 The abstract class `Observations` defines the structure of the subclasses which specify observation types, such as Poisson, Gamma, etc. These objects serve as attributes of the [`nemos.glm.GLM`](../03-glm/#the-concrete-class-glm) class, equipping the GLM with a negative log-likelihood. This is used to define the optimization objective, the deviance which measures model fit quality, and the emission of new observations, for simulating new data.
 
+(the-abstract-class-observations)=
 ## The Abstract class `Observations`
 
 The abstract class `Observations` is the backbone of any observation model. Any class inheriting `Observations` must reimplement the `_negative_log_likelihood`, `log_likelihood`, `sample_generator`, `deviance`, and `estimate_scale` methods.
