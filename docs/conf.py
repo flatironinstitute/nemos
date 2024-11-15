@@ -131,7 +131,7 @@ html_theme_options = {
         },
     ],
     "show_prev_next": True,
-    "header_links_before_dropdown": 5,
+    "header_links_before_dropdown": 6,
     "navigation_depth": 3,
 }
 

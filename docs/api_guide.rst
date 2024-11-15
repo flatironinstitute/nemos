@@ -1,7 +1,5 @@
-.. _api_ref:
-
-API Guide
-=========
+API Reference
+=============
 
 The ``nemos.glm`` module
 ------------------------

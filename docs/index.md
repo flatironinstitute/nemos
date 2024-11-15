@@ -14,8 +14,8 @@ Quickstart <quickstart>
 Background <background/README>
 How-To Guide <how_to_guide/README>
 Tutorials <tutorials/README>
+API Reference <api_reference>
 Getting Help <getting_help>
-API Guide <api_guide>
 For Developers <developers_notes/README>
 ```
 

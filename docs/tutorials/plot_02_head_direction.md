@@ -21,8 +21,8 @@ kernelspec:
 ## Learning objectives
 
 - Learn how to add history-related predictors to NeMoS GLM
-- Learn about NeMoS `Basis` objects
-- Learn how to use `Basis` objects with convolution
+- Learn about NeMoS [`Basis`](nemos_basis) objects
+- Learn how to use [`Basis`](nemos_basis) objects with convolution
 
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
@@ -164,7 +164,7 @@ count = nap.TsdFrame(
 )
 ```
 
-## NeMoS {.strip-code}
+## NeMoS 
 It's time to use NeMoS. Our goal is to estimate the pairwise interaction between neurons.
 This can be quantified with a GLM if we use the recent population spike history to predict the current time step.
 ### Self-Connected Single Neuron
@@ -200,7 +200,7 @@ Let's fix the spike history window size that we will use as predictor.
 # set the size of the spike history window in seconds
 window_size_sec = 0.8
 
-doc_plots.plot_history_window(neuron_count, epoch_one_spk, window_size_sec)
+doc_plots.plot_history_window(neuron_count, epoch_one_spk, window_size_sec);
 ```
 
 For each time point, we shift our window one bin at the time and vertically stack the spike count history in a matrix.
@@ -219,7 +219,7 @@ time-points;
 
 A fast way to compute this feature matrix is convolving the counts with the identity matrix.
 We can apply the convolution and NaN-padding in a single step using the
-[`nemos.convolve.create_convolutional_predictor`](../../../reference/nemos/convolve/#nemos.convolve.create_convolutional_predictor)
+[`nemos.convolve.create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor)
 function.
 
 
@@ -253,7 +253,7 @@ We can visualize the output for a few time bins
 ```{code-cell} ipython3
 suptitle = "Input feature: Count History"
 neuron_id = 0
-doc_plots.plot_features(input_feature, count.rate, suptitle)
+doc_plots.plot_features(input_feature, count.rate, suptitle);
 ```
 
 As you may see, the time axis is backward, this happens because convolution flips the time axis.
@@ -371,7 +371,7 @@ whereas whether an input happened 51 or 55 msec ago is less important.
 
 
 ```{code-cell} ipython3
-doc_plots.plot_basis()
+doc_plots.plot_basis();
 ```
 
 !!! info
@@ -381,7 +381,7 @@ doc_plots.plot_basis()
     analytical step. We will eventually provide guidance on this choice, but
     for now we'll give you a decent choice.
 
-NeMoS includes `Basis` objects to handle the construction and use of these
+NeMoS includes [`Basis`](nemos_basis) objects to handle the construction and use of these
 basis functions.
 
 When we instantiate this object, the only arguments we need to specify is the
@@ -454,7 +454,7 @@ print(f"Compressed count history as feature: {conv_spk.shape}")
 epoch_one_spk = nap.IntervalSet(8917.5, 8918.5)
 epoch_multi_spk = nap.IntervalSet(8979.2, 8980.2)
 
-doc_plots.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_multi_spk)
+doc_plots.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_multi_spk);
 
 # find interval with two spikes to show the accumulation, in a second row
 ```
@@ -561,7 +561,7 @@ ep = nap.IntervalSet(start=8819.4, end=8821)
 doc_plots.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection raw history":rate_history, "Self-connection bsais": rate_basis}
-)
+);
 ```
 
 ### All-to-all Connectivity
@@ -572,8 +572,12 @@ to get an array of predictors of shape, `(num_time_points, num_neurons * num_bas
 
 #### Preparing the features
 
-
 ```{code-cell} ipython3
+# re-initialize basis
+basis = nmo.basis.RaisedCosineBasisLog(
+    n_basis_funcs=8, mode="conv", window_size=window_size
+)
+
 # convolve all the neurons
 convolved_count = basis.compute_features(count)
 ```
@@ -588,13 +592,14 @@ print(f"Convolved count shape: {convolved_count.shape}")
 
 #### Fitting the Model
 This is an all-to-all neurons model.
-We are using the class `PopulationGLM` to fit the whole population at once.
+We are using the class [`PopulationGLM`](nemos.glm.PopulationGLM) to fit the whole population at once.
 
-!!! note
-    Once we condition on past activity, log-likelihood of the population is the sum of the log-likelihood
-    of individual neurons. Maximizing the sum (i.e. the population log-likelihood) is equivalent to
-    maximizing each individual term separately (i.e. fitting one neuron at the time).
+:::{note}
 
+Once we condition on past activity, log-likelihood of the population is the sum of the log-likelihood
+of individual neurons. Maximizing the sum (i.e. the population log-likelihood) is equivalent to
+maximizing each individual term separately (i.e. fitting one neuron at the time).
+:::
 
 
 ```{code-cell} ipython3
@@ -619,7 +624,7 @@ Plot fit predictions over a short window not used for training.
 ```{code-cell} ipython3
 # use pynapple for time axis for all variables plotted for tick labels in imshow
 doc_plots.plot_head_direction_tuning_model(tuning_curves, predicted_firing_rate, spikes, angle, threshold_hz=1,
-                                          start=8910, end=8960, cmap_label="hsv")
+                                          start=8910, end=8960, cmap_label="hsv");
 ```
 
 Let's see if our firing rate predictions improved and in what sense.
@@ -632,7 +637,7 @@ doc_plots.plot_rates_and_smoothed_counts(
     {"Self-connection: raw history": rate_history,
      "Self-connection: bsais": rate_basis,
      "All-to-all: basis": predicted_firing_rate[:, 0]}
-)
+);
 ```
 
 #### Visualizing the connectivity
@@ -646,7 +651,7 @@ tuning = nap.compute_1d_tuning_curves_continuous(predicted_firing_rate,
                                                  minmax=(0, 2 * np.pi))
 ```
 
-Extract the weights and store it in a (n_neurons, n_neurons, n_basis_funcs) array.
+Extract the weights and store it in a `(n_neurons, n_neurons, n_basis_funcs)` array.
 
 
 ```{code-cell} ipython3
@@ -667,5 +672,5 @@ all the coupling filters.
 
 
 ```{code-cell} ipython3
-doc_plots.plot_coupling(responses, tuning)
+doc_plots.plot_coupling(responses, tuning);
 ```
