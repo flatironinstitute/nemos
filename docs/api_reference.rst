@@ -3,6 +3,7 @@
 API Reference
 =============
 
+.. _nemos_glm:
 The ``nemos.glm`` module
 ------------------------
 Classes for creating Generalized Linear Models (GLMs) for both single neurons and neural populations.
