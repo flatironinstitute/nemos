@@ -111,7 +111,6 @@ numfig = True
 
 html_theme = 'pydata_sphinx_theme'
 
-html_logo = "assets/NeMoS_Logo_CMYK_Full.svg"
 html_favicon = "assets/NeMoS_favicon.ico"
 
 # Additional theme options
@@ -133,6 +132,10 @@ html_theme_options = {
     "show_prev_next": True,
     "header_links_before_dropdown": 6,
     "navigation_depth": 3,
+    "logo": {
+      "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
+      "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
+   }
 }
 
 html_context = {

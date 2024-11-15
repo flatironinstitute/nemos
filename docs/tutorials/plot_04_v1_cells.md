@@ -166,7 +166,7 @@ sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
                                         windowsize=(-0.15, 0.0))
 ```
 
-sta is a `TsdTensor`, which gives us the 2d receptive field at each of the
+sta is a [`TsdTensor`](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html), which gives us the 2d receptive field at each of the
 time points.
 
 
@@ -291,7 +291,7 @@ filtered_stimulus
 We can see that the time points are now aligned, and we've filled forward the
 values the way we'd like.
 
-Now, similar to the [head direction tutorial](../plot_02_head_direction), we'll
+Now, similar to the [head direction tutorial](plot_02_head_direction), we'll
 use the log-stretched raised cosine basis to create the predictor for our
 GLM:
 

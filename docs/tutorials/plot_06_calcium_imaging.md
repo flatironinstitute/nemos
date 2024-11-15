@@ -69,7 +69,7 @@ transients = data['RoiResponseSeries']
 print(transients)
 ```
 
-`transients` is a `TsdFrame`. Each column contains the activity of one neuron.
+`transients` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html). Each column contains the activity of one neuron.
 
 The mouse was recorded for a 20 minute recording epoch as we can see from the `time_support` property of the `transients` object.
 
@@ -99,8 +99,8 @@ You can see that the calcium signals are both nonnegative, and noisy. One (neuro
 
 +++
 
-We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function `compute_1d_tuning_curves_continuous`.
-Here `data['ry']` is a `Tsd` that contains the angular head-direction of the animal between 0 and 2$\pi$.
+We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous).
+Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
 
 
 ```{code-cell} ipython3
@@ -159,7 +159,7 @@ heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
 coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
 ```
 
-We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an `AdditiveBasis` object).
+We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis.AdditiveBasis) object).
 
 
 ```{code-cell} ipython3
@@ -170,8 +170,11 @@ basis = heading_basis + coupling_basis
 ## Gamma GLM
 
 Until now, we have been modeling spike trains, and have used a Poisson distribution for the observation model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson assumption is no longer appropriate. A Gaussian model is also not ideal since the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from NeMoS with a soft-plus non linearity.
-!!! note "Non-linearity"
-    Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
+:::{admonirion} Non-linearity
+:class: note
+
+Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
+:::
 
 
 ```{code-cell} ipython3
@@ -196,7 +199,7 @@ print(selected_neurons)
 ```
 
 We need to bring the head-direction of the animal to the same size as the transients matrix.
-We can use the function `bin_average` of pynapple. Notice how we pass the parameter `ep`
+We can use the function [`bin_average`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.bin_average.html#pynapple.core.time_series.Tsd.bin_average) of pynapple. Notice how we pass the parameter `ep`
 that is the `time_support` of the transients.
 
 
@@ -224,7 +227,7 @@ X = basis.compute_features(head_direction, Y[:, selected_neurons])
 
 ## Train & test set
 
-Let's create a train epoch and a test epoch to fit and test the models. Since `X` is a pynapple time series, we can create `IntervalSet` objects to restrict them into a train set and test set.
+Let's create a train epoch and a test epoch to fit and test the models. Since `X` is a pynapple time series, we can create [`IntervalSet`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html) objects to restrict them into a train set and test set.
 
 
 ```{code-cell} ipython3
@@ -305,7 +308,7 @@ plt.show()
 While there is some variability in the fit for both models, one advantage of the gamma distribution is clear: the nonnegativity constraint is followed with the data.
  This is required for using GLMs to predict the firing rate, which must be positive, in response to simulated inputs. See Peyrache et al. 2018[$^{[1]}$](#ref-1) for an example of simulating activity with a GLM.
 
-Another way to compare models is to compute tuning curves. Here we use the function `compute_1d_tuning_curves_continuous` from pynapple.
+Another way to compare models is to compute tuning curves. Here we use the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous) from pynapple.
 
 
 ```{code-cell} ipython3
@@ -328,11 +331,14 @@ plt.xlabel("Head-direction (rad)")
 plt.show()
 ```
 
-!!! note "Gamma-GLM for Calcium Imaging Analysis"
-    Using Gamma-GLMs for fitting calcium imaging data is still in early stages, and hasn't been through
-    the levels of review and validation that they have for fitting spike data. Users should consider
-    this a relatively unexplored territory, and we hope that we hope that NeMoS will help researchers
-    explore this new space of models.
+:::{admonition} Gamma-GLM for Calcium Imaging Analysis
+:class: note
+
+Using Gamma-GLMs for fitting calcium imaging data is still in early stages, and hasn't been through
+the levels of review and validation that they have for fitting spike data. Users should consider
+this a relatively unexplored territory, and we hope that we hope that NeMoS will help researchers
+explore this new space of models.
+:::
 
 ## References
 

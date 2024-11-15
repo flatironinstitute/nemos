@@ -34,6 +34,9 @@ from nemos import _documentation_utils as doc_plots
 
 # configure plots some
 plt.style.use(nmo.styles.plot_style)
+
+# shut down jax to numpy conversion warning
+nap.nap_config.suppress_conversion_warnings = True
 ```
 
 ## Data Streaming
@@ -118,7 +121,7 @@ for i, n in enumerate(order):
 
 ## Phase precession
 
-In addition to place modulation, place cells are also modulated by the theta oscillation. The phase at which neurons fire is dependant of the position. This phenomen is called "phase precession" (see [J. O’Keefe, M. L. Recce, "Phase relationship between hippocampal place units and the EEG theta rhythm." Hippocampus 3, 317–330 (1993).](https://doi.org/10.1002/hipo.450030307)
+In addition to place modulation, place cells are also modulated by the theta oscillation. The phase at which neurons fire is dependant of the position. This phenomen is called "phase precession" (see [J. O’Keefe, M. L. Recce, "Phase relationship between hippocampal place units and the EEG theta rhythm." Hippocampus 3, 317–330 (1993).](https://doi.org/10.1002/hipo.450030307)).
 
 Let's compute the response of the neuron as a function of both theta and position. The phase of theta has already been computed but we have to bring it to the same dimension as the position feature. While the position has been sampled at 40Hz, the theta phase has been computed at 1250Hz.
 Later on during the analysis, we will use a bin size of 5 ms for counting the spikes. Since this corresponds to an intermediate frequency between 40 and 1250 Hz, we will bring all the features to 200Hz already.
@@ -142,7 +145,7 @@ data = nap.TsdFrame(
 print(data)
 ```
 
-`data` is a `TsdFrame` that contains the position and phase. Before calling `compute_2d_tuning_curves` from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
+`data` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html) that contains the position and phase. Before calling [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
 
 There are a lot of neurons but for this analysis, we will focus on one neuron only.
 
@@ -163,7 +166,7 @@ This neurons place field is between 0 and 60 cm within the linear track. Here we
 within_ep = position.threshold(60.0, method="below").time_support
 ```
 
-`within_ep` is an `IntervalSet`. We can now give it to `compute_2d_tuning_curves` along with the spiking activity and the position-phase features.
+`within_ep` is an [`IntervalSet`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html). We can now give it to [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) along with the spiking activity and the position-phase features.
 
 
 ```{code-cell} ipython3
@@ -219,14 +222,14 @@ for s, e in data.time_support.values: # Time support contains the epochs
 speed = nap.Tsd(t=data.t, d=np.hstack(speed), time_support=data.time_support)
 ```
 
-Now that we have the speed of the animal, we can compute the tuning curves for speed modulation. Here we call pynapple `compute_1d_tuning_curves`:
+Now that we have the speed of the animal, we can compute the tuning curves for speed modulation. Here we call pynapple [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves):
 
 
 ```{code-cell} ipython3
 tc_speed = nap.compute_1d_tuning_curves(spikes, speed, 20)
 ```
 
-To assess the variabilty in speed when the animal is travering the linear track, we can compute the average speed and estimate the standard deviation. Here we use numpy only and put the results in a pandas `DataFrame`:
+To assess the variabilty in speed when the animal is travering the linear track, we can compute the average speed and estimate the standard deviation. Here we use numpy only and put the results in a pandas [`DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html):
 
 
 ```{code-cell} ipython3
@@ -285,9 +288,9 @@ print(count.shape)
 
 For each feature, we will use a different set of basis :
 
-  -   position : `nmo.basis.MSplineBasis`
-  -   theta phase : `nmo.basis.CyclicBSplineBasis`
-  -   speed : `nmo.basis.MSplineBasis`
+  -   position : [`MSplineBasis`](nemos.basis.MSplineBasis)
+  -   theta phase : [`CyclicBSplineBasis`](nemos.basis.CyclicBSplineBasis)
+  -   speed : [`MSplineBasis`](nemos.basis.MSplineBasis)
 
 
 ```{code-cell} ipython3
@@ -335,7 +338,7 @@ glm.fit(X, count)
 
 ## Prediction
 
-Let's check first if our model can accurately predict the different tuning curves we displayed above. We can use the `predict` function of NeMoS and then compute new tuning curves
+Let's check first if our model can accurately predict the different tuning curves we displayed above. We can use the [`predict`](nemos.glm.GLM.predict) function of NeMoS and then compute new tuning curves
 
 
 ```{code-cell} ipython3
@@ -367,9 +370,10 @@ fig = doc_plots.plot_position_phase_speed_tuning(
 
 While this model captures nicely the features-rate relationship, it is not necessarily the simplest model. Let's construct several models and evaluate their score to determine the best model.
 
-!!! note
-    To shorten this notebook, only a few combinations are tested. Feel free to expand this list.
+:::{note}
 
+To shorten this notebook, only a few combinations are tested. Feel free to expand this list.
+:::
 
 
 ```{code-cell} ipython3
@@ -440,8 +444,9 @@ plt.tight_layout()
 
 Some models are doing better than others.
 
-!!! warning
-    A proper model comparison should be done by scoring models repetitively on various train and test set. Here we are only doing partial models comparison for the sake of conciseness.
+:::{warning}
+A proper model comparison should be done by scoring models repetitively on various train and test set. Here we are only doing partial models comparison for the sake of conciseness.
+:::
 
 Alternatively, we can plot some tuning curves to compare each models visually.
 

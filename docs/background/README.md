@@ -14,12 +14,38 @@ pip install nemos[examples]
 
 :::
 
+::::{grid} 1 2 3 3
+
+:::{grid-item-card}
 ```{toctree}
 :maxdepth: 2
-:caption: Contents
 
 plot_00_conceptual_intro.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_01_1D_basis_function.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_02_ND_basis_function.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_03_1D_convolution.md
 ```
+:::
+
+::::

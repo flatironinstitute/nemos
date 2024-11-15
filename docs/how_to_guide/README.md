@@ -14,13 +14,46 @@ pip install nemos[examples]
 :::
 
 
+::::{grid} 1 2 3 3
+
+:::{grid-item-card}
 ```{toctree}
 :maxdepth: 2
-:caption: Contents
 
 plot_02_glm_demo.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_03_population_glm.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_04_batch_glm.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_05_sklearn_pipeline_cv_demo.md
+```
+:::
+
+:::{grid-item-card}
+```{toctree}
+:maxdepth: 2
+
 plot_06_glm_pytree.md
 ```
+:::
+
+::::
