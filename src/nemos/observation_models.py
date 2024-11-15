@@ -23,8 +23,8 @@ class Observations(Base, abc.ABC):
 
     This is an abstract base class used to implement observation models for neural data.
     Specific observation models that inherit from this class should define their versions
-    of the abstract methods: _negative_log_likelihood, emission_probability, and
-    residual_deviance.
+    of the abstract methods such as :meth:`~nemos.observation_models.Observations.log_likelihood`, :meth`~nemos.observation_models.Observations.sample_generator`, and
+    :meth:`~nemos.observation_models.Observations.deviance`.
 
     Attributes
     ----------
@@ -33,8 +33,10 @@ class Observations(Base, abc.ABC):
 
     See Also
     --------
-    [PoissonObservations](./#nemos.observation_models.PoissonObservations) : A specific implementation of a
-    observation model using the Poisson distribution.
+    :class:`~nemos.observation_models.PoissonObservations` 
+        A specific implementation of a observation model using the Poisson distribution.
+    :class:`~nemos.observation_models.GammaObservations`
+        A specific implementation of a observation model using the Gamma distribution.
     """
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
@@ -239,8 +241,9 @@ class Observations(Base, abc.ABC):
         :math:`f(x; \theta, \phi) \propto \exp \left(a(\phi)\left(  y\theta - \mathcal{k}(\theta) \right)\right)`.
 
         The relationship between variance and the scale parameter is given by:
+        
         .. math::
-            \text{var}(Y) = \frac{V(\mu)}{a(\phi)}.
+           \text{var}(Y) = \frac{V(\mu)}{a(\phi)}.
 
         The scale parameter, :math:`\phi`, is necessary for capturing the variance of the data accurately.
 

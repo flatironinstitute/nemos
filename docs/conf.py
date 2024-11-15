@@ -42,9 +42,9 @@ root_doc = "index"
 
 extensions = [
     'sphinx.ext.autodoc',
-    #'numpydoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
+    'sphinxemoji.sphinxemoji',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',  # Links to source code
     'sphinx.ext.doctest',
@@ -162,5 +162,7 @@ html_js_files = [
 # Copybutton settings (to hide prompt)
 copybutton_prompt_text = r">>> |\$ |# "
 copybutton_prompt_is_regexp = True
+
+sphinxemoji_style = 'twemoji'
 
 nitpicky = True

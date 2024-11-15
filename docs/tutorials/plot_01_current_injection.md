@@ -51,7 +51,7 @@ data (we will explain the essentials of pynapple as they are used, but see the
 if you are interested in learning more). After we've explored the data some, we'll introduce the Generalized
 Linear Model and how to fit it with NeMoS.
 
-## Learning objectives {.keep-text}
+## Learning objectives 
 
 - Learn how to explore spiking data and do basic analyses using pynapple
 - Learn how to structure data for NeMoS
@@ -86,12 +86,13 @@ this single dataset to NWB and uploaded it to the [Open Science
 Framework](https://osf.io/5crqj/). This allows us to easily load the data
 using pynapple, and it will immediately be in a format that pynapple understands!
 
-!!! tip
+:::{tip}
 
-    Pynapple can stream any NWB-formatted dataset! See [their
-    documentation](https://pynapple.org/examples/tutorial_pynapple_dandi.html)
-    for more details, and see the [DANDI Archive](https://dandiarchive.org/)
-    for a repository of compliant datasets.
+  Pynapple can stream any NWB-formatted dataset! See [their
+  documentation](https://pynapple.org/examples/tutorial_pynapple_dandi.html)
+  for more details, and see the [DANDI Archive](https://dandiarchive.org/)
+  for a repository of compliant datasets.
+:::
 
 The first time the following cell is run, it will take a little bit of time
 to download the data, and a progress bar will show the download's progress.
@@ -268,19 +269,20 @@ plotted together.
 One common way to visualize a rough estimate of firing rate is to smooth
 the spikes by convolving them with a Gaussian filter.
 
-!!! info
+:::{info}
 
-    This is a heuristic for getting the firing rate, and shouldn't be taken
-    as the literal truth (to see why, pass a firing rate through a Poisson
-    process to generate spikes and then smooth the output to approximate the
-    generating firing rate). A model should not be expected to match this
-    approximate firing rate exactly, but visualizing the two firing rates
-    together can help you reason about which phenomena in your data the model
-    is able to adequately capture, and which it is missing.
+This is a heuristic for getting the firing rate, and shouldn't be taken
+as the literal truth (to see why, pass a firing rate through a Poisson
+process to generate spikes and then smooth the output to approximate the
+generating firing rate). A model should not be expected to match this
+approximate firing rate exactly, but visualizing the two firing rates
+together can help you reason about which phenomena in your data the model
+is able to adequately capture, and which it is missing.
 
-    For more information, see section 1.2 of [*Theoretical
-    Neuroscience*](https://boulderschool.yale.edu/sites/default/files/files/DayanAbbott.pdf),
-    by Dayan and Abbott.
+For more information, see section 1.2 of [*Theoretical
+Neuroscience*](https://boulderschool.yale.edu/sites/default/files/files/DayanAbbott.pdf),
+by Dayan and Abbott.
+:::
 
 Pynapple can easily compute this approximate firing rate, and plotting this
 information will help us pull out some phenomena that we think are
@@ -391,7 +393,7 @@ current remains on.
 
 +++
 
-## NeMoS {.strip-code}
+## NeMoS 
 
 ### Preparing data
 
@@ -415,14 +417,16 @@ following properties:
   [`jax.numpy`](https://jax.readthedocs.io/en/latest/jax-101/01-jax-basics.html)
   arrays, `numpy` arrays or `pynapple` `TsdFrame`/`Tsd`.
 
-!!! info "What is jax?"
+:::{admonition} What is jax?
+:class: info
 
-    [jax](https://github.com/google/jax) is a Google-supported python library
-    for automatic differentiation. It has all sorts of neat features, but the
-    most relevant of which for NeMoS is its GPU-compatibility and
-    just-in-time compilation (both of which make code faster with little
-    overhead!), as well as the collection of optimizers present in
-    [jaxopt](https://jaxopt.github.io/stable/).
+  [jax](https://github.com/google/jax) is a Google-supported python library
+  for automatic differentiation. It has all sorts of neat features, but the
+  most relevant of which for NeMoS is its GPU-compatibility and
+  just-in-time compilation (both of which make code faster with little
+  overhead!), as well as the collection of optimizers present in
+  [jaxopt](https://jaxopt.github.io/stable/).
+:::
 
 First, we require that our predictors and our spike counts have the same
 number of time bins. We can achieve this by down-sampling our current to the
@@ -460,18 +464,20 @@ print(f"predictor shape: {predictor.shape}")
 print(f"count shape: {count.shape}")
 ```
 
-!!! info "What if I have more than one neuron?"
+:::{admonition} What if I have more than one neuron?
+:class: info
 
-    In this example, we're only fitting data for a single neuron, but you
-    might wonder how the data should be shaped if you have more than one
-    neuron -- do you add an extra dimension? or concatenate neurons along one
-    of the existing dimensions?
+In this example, we're only fitting data for a single neuron, but you
+might wonder how the data should be shaped if you have more than one
+neuron -- do you add an extra dimension? or concatenate neurons along one
+of the existing dimensions?
 
-    In NeMoS, we always fit Generalized Linear Models to a single neuron at a
-    time. We'll discuss this more in the [following
-    tutorial](../plot_02_head_direction/), but briefly: you get the same answer
-    whether you fit the neurons separately or simultaneously, and fitting
-    them separately can make your life easier.
+In NeMoS, we always fit Generalized Linear Models to a single neuron at a
+time. We'll discuss this more in the [following
+tutorial](../plot_02_head_direction/), but briefly: you get the same answer
+whether you fit the neurons separately or simultaneously, and fitting
+them separately can make your life easier.
+:::
 
 ### Fitting the model
 
@@ -495,15 +501,16 @@ model objects, both of which should be one of our custom objects:
   Regularization modifies the objective function to reflect your prior
   beliefs about the parameters, such as sparsity. Regularization becomes more
   important as the number of input features, and thus model parameters,
-  grows. They can be found within `nemos.regularizer`.
+  grows. They can be found within [`nemos.regularizer`](regularizers).
 
-!!! warning
+:::{warning}
 
-    With a convex problem like the GLM, in theory it does not matter which
-    solver algorithm you use. In practice, due to numerical issues, it
-    generally does. Thus, it's worth trying a couple to see how their
-    solutions compare. (Different regularization schemes will always give
-    different results.)
+With a convex problem like the GLM, in theory it does not matter which
+solver algorithm you use. In practice, due to numerical issues, it
+generally does. Thus, it's worth trying a couple to see how their
+solutions compare. (Different regularization schemes will always give
+different results.)
+:::
 
 - Observation model: this object links the firing rate and the observed
   data (in this case spikes), describing the distribution of neural activity (and thus changing
@@ -514,15 +521,16 @@ model objects, both of which should be one of our custom objects:
 For this example, we'll use an un-regularized LBFGS solver. We'll discuss
 regularization in a later tutorial.
 
-!!! info "Why LBFGS?"
+:::{admonition} Why LBFGS?
+:class: info
 
-    [LBFGS](https://en.wikipedia.org/wiki/Limited-memory_BFGS) is a
-    quasi-Netwon method, that is, it uses the first derivative (the gradient)
-    and approximates the second derivative (the Hessian) in order to solve
-    the problem. This means that LBFGS tends to find a solution faster and is
-    often less sensitive to step-size. Try other solvers to see how they
-    behave!
-
+[LBFGS](https://en.wikipedia.org/wiki/Limited-memory_BFGS) is a
+quasi-Netwon method, that is, it uses the first derivative (the gradient)
+and approximates the second derivative (the Hessian) in order to solve
+the problem. This means that LBFGS tends to find a solution faster and is
+often less sensitive to step-size. Try other solvers to see how they
+behave!
+:::
 
 
 ```{code-cell} ipython3
@@ -562,7 +570,7 @@ It's nice to get the parameters above, but we can't tell how well our model
 is doing by looking at them. So how should we evaluate our model?
 
 First, we can use the model to predict the firing rates and compare that to
-the smoothed spike train. By calling `predict()` we can get the model's
+the smoothed spike train. By calling [`predict()`](nemos.glm.GLM.predict) we can get the model's
 predicted firing rate for this data. Note that this is just the output of the
 model's linear-nonlinear step, as described earlier!
 
@@ -589,18 +597,18 @@ doc_plots.current_injection_plot(current, spikes, firing_rate,
 What do we see above? Note that the y-axes in the final row are different for
 each subplot!
 
-- Predicted firing rate increases as injected current goes up &mdash; Success! :tada:
+- Predicted firing rate increases as injected current goes up &mdash; Success! &#x1F389;
 
 - The amplitude of the predicted firing rate only matches the observed
   amplitude in the third interval: it's too high in the first and too low in
-  the second &mdash; Failure! :x:
+  the second &mdash; Failure! &#x274C;
 
 - Our predicted firing rate has the periodicity we see in the smoothed spike
-  train &mdash; Success! :tada:
+  train &mdash; Success! &#x1F389;
 
 - The predicted firing rate does not decay as the input remains on: the
   amplitudes are identical for each of the bumps within a given interval &mdash;
-  Failure! :x:
+  Failure! &#x274C;
 
 The failure described in the second point may seem particularly confusing &mdash;
 approximate amplitude feels like it should be very easy to capture, so what's
@@ -665,7 +673,7 @@ poorly because of runaway excitation [$^{[1, 2]}$](#ref-1).
 
 Finally, you may want a number with which to evaluate your model's
 performance. As discussed earlier, the model optimizes log-likelihood to find
-the best-fitting weights, and we can calculate this number using its `score`
+the best-fitting weights, and we can calculate this number using its [`score`](nemos.glm.GLM.score)
 method:
 
 
@@ -680,11 +688,12 @@ the same dataset, whether that's models using different regularizers and
 solvers or those using different predictors, comparing log-likelihoods is a
 reasonable thing to do.
 
-!!! info
+:::{info}
 
-    Under the hood, NeMoS is minimizing the negative log-likelihood, as is
-    typical in many optimization contexts. `score` returns the real
-    log-likelihood, however, and thus higher is better.
+Under the hood, NeMoS is minimizing the negative log-likelihood, as is
+typical in many optimization contexts. [`score`](nemos.glm.GLM.score) returns the real
+log-likelihood, however, and thus higher is better.
+:::
 
 Because it's un-normalized, however, the log-likelihood should not be
 compared across datasets (because e.g., it won't account for difference in

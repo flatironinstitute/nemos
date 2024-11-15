@@ -19,8 +19,8 @@ pip install nemos[examples]
 :caption: Contents
 
 plot_02_glm_demo.md
-plot_04_population_glm.md
-plot_05_batch_glm.md
-plot_06_sklearn_pipeline_cv_demo.md
-plot_03_glm_pytree.md
+plot_03_population_glm.md
+plot_04_batch_glm.md
+plot_05_sklearn_pipeline_cv_demo.md
+plot_06_glm_pytree.md
 ```

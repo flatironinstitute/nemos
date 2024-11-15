@@ -18,11 +18,12 @@ kernelspec:
 
 # GLM Demo: Toy Model Examples
 
-!!! warning
-    This demonstration is currently in its alpha stage. It presents various regularization techniques on
-    GLMs trained on a Gaussian noise stimuli, and a minimal example of fitting and simulating a pair of coupled
-    neurons. More work needs to be done to properly compare the performance of the regularization strategies on
-    realistic simulations and real neural recordings.
+:::{warning}
+This demonstration is currently in its alpha stage. It presents various regularization techniques on
+GLMs trained on a Gaussian noise stimuli, and a minimal example of fitting and simulating a pair of coupled
+neurons. More work needs to be done to properly compare the performance of the regularization strategies on
+realistic simulations and real neural recordings.
+:::
 
 ## Introduction
 
@@ -68,16 +69,16 @@ spikes = np.random.poisson(rate)
 ## The Feed-Forward GLM
 
 ### Model Definition
-The class implementing the  feed-forward GLM is `nemos.glm.GLM`.
+The class implementing the  feed-forward GLM is [`nemos.glm.GLM`](nemos.glm.GLM).
 In order to define the class, one **must** provide:
 
 - **Observation Model**: The observation model for the GLM, e.g. an object of the class of type
-`nemos.observation_models.Observations`. So far, only the `PoissonObservations`
+[`nemos.observation_models.Observations`](nemos.observation_models.Observations). So far, only the [`PoissonObservations`](nemos.observation_models.PoissonObservations)
 model has been implemented.
-- **Regularizer**: The desired regularizer, e.g. an object of the `nemos.regularizer.Regularizer` class.
+- **Regularizer**: The desired regularizer, e.g. an object of the [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) class.
 Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso regularization.
 
-The default for the GLM class is the `PoissonObservations` with log-link function with a Ridge regularization.
+The default for the GLM class is the [`PoissonObservations`](nemos.observation_models.PoissonObservations) with log-link function with a Ridge regularization.
 Here is how to define the model.
 
 
@@ -90,7 +91,7 @@ print("Observation model:", type(model.observation_model))
 ```
 
 ### Model Configuration
-One could visualize the model hyperparameters by calling `get_params` method.
+One could visualize the model hyperparameters by calling [`get_params`](nemos.glm.GLM.get_params) method.
 
 
 ```{code-cell} ipython3
@@ -128,7 +129,7 @@ print("Regularizer type:      ", type(model.regularizer))
 print("Observation model:", type(model.observation_model))
 ```
 
-Hyperparameters can be set at any moment via the `set_params` method.
+Hyperparameters can be set at any moment via the [`set_params`](nemos.glm.GLM.set_params) method.
 
 
 ```{code-cell} ipython3
@@ -141,14 +142,14 @@ print("Updated regularizer: ", model.regularizer)
 print("Updated NL: ", model.observation_model.inverse_link_function)
 ```
 
-!!! warning
-    Each `Regularizer` has an associated attribute `Regularizer.allowed_solvers`
-    which lists the optimizers that are suited for each optimization problem.
-    For example, a `Ridge` is differentiable and can be fit with `GradientDescent`
-    , `BFGS`, etc., while a `Lasso` should use the `ProximalGradient` method instead.
-    If the provided `solver_name` is not listed in the `allowed_solvers` this will raise an
-    exception.
-
+:::{warning}
+Each [`Regularizer`](regularizers) has an associated attribute [`Regularizer.allowed_solvers`](nemos.regularizer.Regularizer.allowed_solvers)
+which lists the optimizers that are suited for each optimization problem.
+For example, a [`Ridge`](nemos.regularizer.Ridge) is differentiable and can be fit with `GradientDescent`
+, `BFGS`, etc., while a [`Lasso`](nemos.regularizer.Lasso) should use the `ProximalGradient` method instead.
+If the provided `solver_name` is not listed in the `allowed_solvers` this will raise an
+exception.
+:::
 
 +++
 

@@ -40,6 +40,7 @@ Provides basis function classes to construct and transform features for model in
     MultiplicativeBasis
     TransformerBasis
 
+.. _observation_models:
 The ``nemos.observation_models`` module
 --------------------------------------
 Statistical models to describe the distribution of neural responses or other predicted variables, given inputs.
@@ -51,9 +52,11 @@ Statistical models to describe the distribution of neural responses or other pre
     :recursive:
     :nosignatures:
 
+    Observations
     PoissonObservations
     GammaObservations
 
+.. _regularizers:
 The ``nemos.regularizer`` module
 --------------------------------
 Implements various regularization techniques to constrain model parameters, which helps prevent overfitting.
@@ -65,6 +68,7 @@ Implements various regularization techniques to constrain model parameters, whic
     :recursive:
     :nosignatures:
 
+    Regularizer
     UnRegularized
     Ridge
     Lasso
@@ -115,3 +119,17 @@ solutions.
 
     apply_identifiability_constraints
     apply_identifiability_constraints_by_basis_component
+
+The ``nemos.pytrees.FeaturePytree`` class
+-----------------------------------------
+Class for storing the input arrays in a dictionary. Keys are usually variable names. 
+These objects can be provided as input to nemos GLM methods.
+
+.. currentmodule:: nemos.pytrees
+
+.. autosummary::
+    :toctree: generated/identifiability_constraints
+    :recursive:
+    :nosignatures:
+
+    FeaturePytree

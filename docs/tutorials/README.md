@@ -2,9 +2,24 @@
 
 A gallery of fully worked out tutorials analyzing neural recordings from different brain regions and recording modalities.
 
-??? attention "Additional requirements"
-    To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
-    You can install all of the required packages with the following command:
-    ```
-    pip install nemos[examples]
-    ```
+:::{dropdown} "Additional requirements"
+:color: warning
+:icon: alert
+To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
+You can install all of the required packages with the following command:
+```
+pip install nemos[examples]
+```
+:::
+
+```{toctree}
+:maxdepth: 2
+:caption: Contents
+
+plot_01_current_injection.md
+plot_02_head_direction.md
+plot_03_grid_cells.md
+plot_04_v1_cells.md
+plot_05_place_cells.md
+plot_06_calcium_imaging.md
+```
