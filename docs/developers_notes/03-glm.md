@@ -24,7 +24,7 @@ Instantiating a specific GLM simply requires providing an observation model (Gam
 </figure>
 
 
-
+(the-concrete-class-glm)=
 ## The Concrete Class `GLM`
 
 The [`GLM`](nemos.glm.GLM) class provides a direct implementation of the GLM model and is designed with `scikit-learn` compatibility in mind.
