@@ -536,7 +536,7 @@ class Basis(Base, abc.ABC):
         # check mode
         if mode not in ["conv", "eval"]:
             raise ValueError(
-                f"``mode`` should be either 'conv' or 'eval'. '{mode}' provided instead!"
+                f"`mode` should be either 'conv' or 'eval'. '{mode}' provided instead!"
             )
 
         self._mode = mode
@@ -976,7 +976,7 @@ class Basis(Base, abc.ABC):
         """Check that the kernel is pre-computed."""
         if self.mode == "conv" and self.kernel_ is None:
             raise ValueError(
-                "You must call ``_set_kernel`` before ``_compute_features`` when mode =``conv``."
+                "You must call `_set_kernel` before `_compute_features` when mode =`conv`."
             )
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:

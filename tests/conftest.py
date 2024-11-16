@@ -82,7 +82,7 @@ class MockRegressor(nmo.base_regressor.BaseRegressor):
     def _predict_and_compute_loss(self, params, X, y):
         pass
 
-    def get_optimal_solver_params_config(self):
+    def _get_optimal_solver_params_config(self):
         return None, None, None
 
 
