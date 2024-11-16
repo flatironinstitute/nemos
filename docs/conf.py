@@ -44,7 +44,6 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
-    'sphinxemoji.sphinxemoji',
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',  # Links to source code
     'sphinx.ext.doctest',
