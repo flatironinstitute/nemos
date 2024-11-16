@@ -410,4 +410,4 @@ plt.legend()
 ```
 
 ## References
-[1] <span id="ref-1"><a href="https://proceedings.neurips.cc/paper/2020/hash/186b690e29892f137b4c34cfa40a3a4d-Abstract.html">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>
+[1] <span id="ref-1"><a href="https://arxiv.org/abs/2010.12362">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>
