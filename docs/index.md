@@ -132,4 +132,14 @@ Open source, [licensed under MIT](https://github.com/flatironinstitute/nemos/blo
 
 This package is supported by the Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation.  
 
-<img src="assets/CCN-logo-wText.png" width="20%" alt="Flatiron Center for Computational Neuroscience logo."> 
+```{image} assets/logo_flatiron_white.svg
+:alt: Flatiron Center for Computational Neuroscience logo White.
+:class: only-dark
+:width: 20%
+```
+
+```{image} assets/CCN-logo-wText.png
+:alt: Flatiron Center for Computational Neuroscience logo.
+:class: only-light
+:width: 20%
+```
