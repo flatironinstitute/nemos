@@ -26,10 +26,11 @@ Abstract Class Basis
 └─ Concrete Subclass OrthExponentialBasis
 ```
 
-The super-class [`Basis`](nemos.basis.Basis) provides two public methods, [`compute_features`](#the-public-method-compute_features) and [`evaluate_on_grid`](#the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the abstract method [`__call__`](nemos.basis.Basis.__call__) that is specific for each concrete class. See below for more details.
+The super-class [`Basis`](nemos.basis.Basis) provides two public methods, [`compute_features`](the-public-method-compute_features) and [`evaluate_on_grid`](the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the abstract method [`__call__`](nemos.basis.Basis.__call__) that is specific for each concrete class. See below for more details.
 
 ## The Class `nemos.basis.Basis`
 
+(the-public-method-compute_features)=
 ### The Public Method `compute_features`
 
 The [`compute_features`](nemos.basis.Basis.compute_features) method checks input consistency and applies the basis function to the inputs. 
@@ -51,9 +52,10 @@ Note that the convolution works gracefully with multiple disjoint epochs, when a
 input.
 :::
 
+(the-public-method-evaluate_on_grid)=
 ### The Public Method `evaluate_on_grid`
 
-The [`compute_features`](nemos.basis.Basis.evaluate_on_grid) method evaluates the basis set on a grid of equidistant sample points. The user specifies the input as a series of integers, one for each dimension of the basis function, that indicate the number of sample points in each coordinate of the grid.
+The [`compute_features`](nemos.basis.Basis.compute_features) method evaluates the basis set on a grid of equidistant sample points. The user specifies the input as a series of integers, one for each dimension of the basis function, that indicate the number of sample points in each coordinate of the grid.
 
 This method performs the following steps:
 
@@ -75,7 +77,7 @@ The [`nemos.basis.Basis`](nemos.basis.Basis) class has the following abstract me
 To write a usable (i.e., concrete, non-abstract) basis object, you
 
 - **Must** inherit the abstract superclass [`Basis`](nemos.basis.Basis)
-- **Must** define the [`__call__`](nemos.basis.Basis.__call__) and `_check_n_basis_min` methods with the expected input/output format, see [API Reference](basis_nemos) for the specifics.
+- **Must** define the [`__call__`](nemos.basis.Basis.__call__) and `_check_n_basis_min` methods with the expected input/output format, see [API Reference](nemos_basis) for the specifics.
 - **Should not** overwrite the [`compute_features`](nemos.basis.Basis.compute_features) and [`compute_features`](nemos.basis.Basis.evaluate_on_grid) methods inherited from [`Basis`](nemos.basis.Basis).
 - **May** inherit any number of abstract intermediate classes (e.g., [`SplineBasis`](nemos.basis.SplineBasis)). 
 

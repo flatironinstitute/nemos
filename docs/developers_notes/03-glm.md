@@ -15,7 +15,7 @@ Our design aligns with the `scikit-learn` API, facilitating seamless integration
 
 The classes provided here are modular by design offering a standard foundation for any GLM variant. 
 
-Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](the-abstract-class-observations), [`nemos.regularizer.Regularizer`](the-abstract-class-regularizer) objects as well as the compatible `jaxopt` solvers, respectively.
+Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](nemos.observation_models.Observations), [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) objects as well as the compatible `jaxopt` solvers, respectively.
 
 
 <figure markdown>
@@ -31,12 +31,12 @@ The [`GLM`](nemos.glm.GLM) class provides a direct implementation of the GLM mod
 
 ### Inheritance
 
-[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](../02-base_regressor/#the-abstract-class-baseregressor). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`(nemos.glm.GLM.[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](../02-base_regressor/#the-abstract-class-baseregressor). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`](nemos.glm.GLM.simulate), plus a number of validation methods.
+[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](02-base_regressor.md). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`(nemos.glm.GLM.[`GLM`](nemos.glm.GLM) inherits from [`BaseRegressor`](02-base_regressor.md). This inheritance mandates the direct implementation of methods like [`predict`](nemos.glm.GLM.predict), [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`update`](nemos.glm.GLM.update), and [`simulate`](nemos.glm.GLM.simulate), plus a number of validation methods.
 ), plus a number of validation methods.
 
 ### Attributes
 
-- **`observation_model`**: Property that represents the GLM observation model, which is an object of the [`nemos.observation_models.Observations`](the-abstract-class-observations) type. This model determines the log-likelihood and the emission probability mechanism for the [`GLM`](nemos.glm.GLM).
+- **`observation_model`**: Property that represents the GLM observation model, which is an object of the [`nemos.observation_models.Observations`](nemos.observation_models.Observations) type. This model determines the log-likelihood and the emission probability mechanism for the [`GLM`](nemos.glm.GLM).
 - **`coef_`**: Stores the solution for spike basis coefficients as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`intercept_`**: Stores the bias terms' solutions as `jax.ndarray` after the fitting process. It is initialized as `None` during class instantiation.
 - **`dof_resid_`**: The degrees of freedom of the model's residual. this quantity is used to estimate the scale parameter, see below, and compute frequentist confidence intervals.

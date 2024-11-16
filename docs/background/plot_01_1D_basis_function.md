@@ -93,7 +93,7 @@ plt.tight_layout()
 ```
 
 ## Basis `mode`
-In constructing features, [`Basis`](nemos.basis.basis) objects can be used in two modalities: `"eval"` for evaluate or `"conv"`
+In constructing features, [`Basis`](nemos.basis.Basis) objects can be used in two modalities: `"eval"` for evaluate or `"conv"`
 for convolve. These two modalities change the behavior of the [`compute_features`](nemos.basis.Basis.compute_features) method of [`Basis`](nemos.basis.Basis), in particular,
 
 - If a basis is in mode `"eval"`, then [`compute_features`](nemos.basis.Basis.compute_features) simply returns the evaluated basis.

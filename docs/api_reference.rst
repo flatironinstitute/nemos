@@ -31,6 +31,7 @@ Provides basis function classes to construct and transform features for model in
     :nosignatures:
 
     Basis
+    SplineBasis
     BSplineBasis
     CyclicBSplineBasis
     MSplineBasis

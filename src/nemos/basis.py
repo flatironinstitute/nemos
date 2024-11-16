@@ -2053,9 +2053,9 @@ class SplineBasis(Basis, abc.ABC):
 
 class MSplineBasis(SplineBasis):
     r"""
-    M-spline [1]_ basis functions for modeling and data transformation.
+    M-spline basis functions for modeling and data transformation.
 
-    M-splines are a type of spline basis function used for smooth curve fitting
+    M-splines [1]_ are a type of spline basis function used for smooth curve fitting
     and data representation. They are positive and integrate to one, making them
     suitable for probabilistic models and density estimation. The order of an
     M-spline defines its smoothness, with higher orders resulting in smoother
@@ -2576,7 +2576,7 @@ class RaisedCosineBasisLinear(Basis):
     .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+        11003–11013.
     """
 
     def __init__(
@@ -2791,7 +2791,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+       11003–11013.
     """
 
     def __init__(
