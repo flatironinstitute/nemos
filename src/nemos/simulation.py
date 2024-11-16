@@ -63,7 +63,8 @@ def difference_of_gammas(
 
     References
     ----------
-    .. [1] SciPy Docs - :meth:`scipy.stats.gamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html>`
+    .. [1] SciPy Docs -
+       :meth:`scipy.stats.gamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html>`
 
     Examples
     --------

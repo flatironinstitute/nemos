@@ -101,6 +101,7 @@ class UnRegularized(Regularizer):
     This class equips models with the identity proximal operator (no shrinkage) and the
     unpenalized loss function.
     """
+
     _allowed_solvers = (
         "GradientDescent",
         "BFGS",
@@ -231,7 +232,6 @@ class Lasso(Regularizer):
     This class equips models with the Lasso proximal operator and the
     Lasso penalized loss function.
     """
-
 
     _allowed_solvers = (
         "ProximalGradient",

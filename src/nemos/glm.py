@@ -581,18 +581,19 @@ class GLM(BaseRegressor):
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
         required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
-        If X is a :class:`nemos.pytrees.FeaturePytree`, the coefficients retain the pytree structure with arrays of zeros shaped
-        according to the features in X. If X is a simple ndarray, the coefficients are initialized as a 2D
-        array. The intercepts are initialized based on the log mean of the target data y across the first
-        axis, corresponding to the average log activity of the neuron.
+        If X is a :class:`nemos.pytrees.FeaturePytree`, the coefficients retain the pytree structure with
+        arrays of zeros shaped according to the features in X.
+        If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized
+        based on the log mean of the target data y across the first axis, corresponding to the average log activity
+        of the neuron.
 
         Parameters
         ----------
         X :
-            The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape (n_timebins,
-            n_features), or a simple ndarray of shape (n_timebins, n_features).
+            The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape
+            ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.
         y :
-            The target data array of shape (n_timebins, ), representing
+            The target data array of shape ``(n_timebins, )``, representing
             the neuron firing rates or similar metrics.
 
         Returns
@@ -1535,8 +1536,8 @@ class PopulationGLM(GLM):
         - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if
         ``feature_mask[i, j] == 1``.
 
-        - If the mask is a :class:``nemos.pytrees.FeaturePytree``, then ``"feature_name"`` is a predictor of neuron ``j`` if
-        ``feature_mask["feature_name"][j] == 1``.
+        - If the mask is a :class:``nemos.pytrees.FeaturePytree``, then
+        ``"feature_name"`` is a predictor of neuron ``j`` if ``feature_mask["feature_name"][j] == 1``.
 
         Examples
         --------

@@ -23,7 +23,8 @@ class Observations(Base, abc.ABC):
 
     This is an abstract base class used to implement observation models for neural data.
     Specific observation models that inherit from this class should define their versions
-    of the abstract methods such as :meth:`~nemos.observation_models.Observations.log_likelihood`, :meth`~nemos.observation_models.Observations.sample_generator`, and
+    of the abstract methods such as :meth:`~nemos.observation_models.Observations.log_likelihood`,
+    :meth`~nemos.observation_models.Observations.sample_generator`, and
     :meth:`~nemos.observation_models.Observations.deviance`.
 
     Attributes
@@ -33,7 +34,7 @@ class Observations(Base, abc.ABC):
 
     See Also
     --------
-    :class:`~nemos.observation_models.PoissonObservations` 
+    :class:`~nemos.observation_models.PoissonObservations`
         A specific implementation of a observation model using the Poisson distribution.
     :class:`~nemos.observation_models.GammaObservations`
         A specific implementation of a observation model using the Gamma distribution.
@@ -241,7 +242,7 @@ class Observations(Base, abc.ABC):
         :math:`f(x; \theta, \phi) \propto \exp \left(a(\phi)\left(  y\theta - \mathcal{k}(\theta) \right)\right)`.
 
         The relationship between variance and the scale parameter is given by:
-        
+
         .. math::
            \text{var}(Y) = \frac{V(\mu)}{a(\phi)}.
 
@@ -274,8 +275,8 @@ class Observations(Base, abc.ABC):
         or by Cohen et al. [2]_.
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
-        constant mean for the observations. While the pseudo-:math:`R^2` is bounded between 0 and 1 for the training set,
-        it can yield negative values on out-of-sample data, indicating potential over-fitting.
+        constant mean for the observations. While the pseudo-:math:`R^2` is bounded between 0 and 1 for the
+        training set, it can yield negative values on out-of-sample data, indicating potential over-fitting.
 
         Parameters
         ----------
@@ -302,7 +303,8 @@ class Observations(Base, abc.ABC):
                 R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}.
 
           *Equivalent to statsmodels*
-          `GLMResults.pseudo_rsquared(kind='mcf') <https://www.statsmodels.org/dev/generated/statsmodels.genmod.generalized_linear_model.GLMResults.pseudo_rsquared.html>`_ .
+          `GLMResults.pseudo_rsquared(kind='mcf') <https://www.statsmodels.org/dev/generated/statsmodels.genmod.
+          generalized_linear_model.GLMResults.pseudo_rsquared.html>`_ .
 
         - The Cohen pseudo-:math:`R^2` is given by:
 
