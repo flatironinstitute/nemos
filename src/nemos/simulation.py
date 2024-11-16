@@ -155,6 +155,7 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     >>> _, basis = RaisedCosineBasisLog(10).evaluate_on_grid(filter_duration)
     >>> weights = regress_filter(filter_bank, basis)[0, 0]
     >>> print("Weights shape:", weights.shape)
+    Weights shape: (10,)
     >>> _ = plt.plot(filter_bank[:, 0, 0], label=f"True filter")
     >>> _ = plt.plot(basis.dot(weights), "--", label=f"Approx. filter")
     >>> _ = plt.legend()
