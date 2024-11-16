@@ -10,21 +10,6 @@ import nemos
 import sys, os
 from pathlib import Path
 
-# conf.py
-# def strip_class_name_from_methods(app, what, name, obj, options, signature, return_annotation):
-#     # Check if it’s a method in a class and remove the class prefix
-#     if what == "method" and "." in name:
-#         # Only use the method part of the full name
-#         method_name = name.split(".")[-1]
-#
-#         # Emit the updated signature and return annotation without class name
-#         return method_name + signature, return_annotation
-#     return signature, return_annotation
-#
-# def setup(app):
-#     app.connect("autodoc-process-signature", strip_class_name_from_methods)
-
-
 sys.path.insert(0, str(Path('..', 'src').resolve()))
 sys.path.insert(0, os.path.abspath('sphinxext'))
 
