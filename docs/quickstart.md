@@ -2,6 +2,8 @@
 hide:
   - navigation
 ---
+# Quickstart
+
 ## **Overview**
 
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
