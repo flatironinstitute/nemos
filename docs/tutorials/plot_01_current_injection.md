@@ -474,7 +474,7 @@ of the existing dimensions?
 
 In NeMoS, we always fit Generalized Linear Models to a single neuron at a
 time. We'll discuss this more in the [following
-tutorial](../plot_02_head_direction/), but briefly: you get the same answer
+tutorial](plot_02_head_direction.md), but briefly: you get the same answer
 whether you fit the neurons separately or simultaneously, and fitting
 them separately can make your life easier.
 :::
@@ -516,7 +516,7 @@ different results.)
   data (in this case spikes), describing the distribution of neural activity (and thus changing
   the log-likelihood). For spiking data, we use the Poisson observation model, but
   we discuss other options for continuous data
-  in [the calcium imaging analysis demo](../plot_06_calcium_imaging/).
+  in [the calcium imaging analysis demo](plot_06_calcium_imaging.md).
 
 For this example, we'll use an un-regularized LBFGS solver. We'll discuss
 regularization in a later tutorial.

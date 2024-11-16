@@ -15,7 +15,7 @@ kernelspec:
 %matplotlib inline
 ```
 
-
+(sklearn-how-to)=
 # Selecting basis by cross-validation with scikit-learn
 
 In this demo, we will demonstrate how to select an appropriate basis and its hyperparameters using cross-validation.

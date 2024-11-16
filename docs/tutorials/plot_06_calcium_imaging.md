@@ -15,7 +15,7 @@ kernelspec:
 %matplotlib inline
 ```
 
-
+(tutorial-calcium-imaging)=
 Fit Calcium Imaging
 ============
 

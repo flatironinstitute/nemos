@@ -156,7 +156,7 @@ The `basis` module includes objects that perform two types of transformations on
 </figure>
 
 Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping, 
-you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
+you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Reference](nemos_basis) for detailed information).
 
 ```python
 
@@ -237,12 +237,12 @@ The `window_size` must be shorter than the number of samples in the signal(s) be
 
 ```
 
-For additional information on one-dimensional convolutions, see [here](../generated/background/plot_03_1D_convolution).
+For additional information on one-dimensional convolutions, see [here](convolution_background).
 
 ## **Continuous Observations**
 
 
-By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
+By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
 To change the default observation model, set the `observation_model` argument during initialization:
 
@@ -257,13 +257,13 @@ To change the default observation model, set the `observation_model` argument du
 ```
 
 
-Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) for a detailed example.
+Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
 
 ## **Regularization**
 
 
-NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
+NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model:
 
@@ -433,7 +433,7 @@ Fit a 5-fold cross-validation scheme for comparing two different regularizer str
 :::{admonition} Cross-Validation in NeMoS
 :class: info
 
-For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
+For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](sklearn-how-to).
 :::
 
 Finally, we can print the regularizer strength with the best cross-validated performance:

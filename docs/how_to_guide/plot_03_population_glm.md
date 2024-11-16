@@ -33,7 +33,7 @@ memory efficient, the latter is computationally more efficient (it takes less ti
 NeMoS has a dedicated [`nemos.GLM.PopulationGLM`](nemos.glm.PopulationGLM) class for fitting jointly a neural population. The API
  is very similar to that the regular [`GLM`](nemos.glm.GLM), but with a few differences:
 
- 1. The `y` input to the methods [`fit`](nemos.glm.PopulationGLM.fit) and [`score`](nemos.GLM.PopulationGLM.score) must be a two-dimensional array of shape `(n_samples, n_neurons)`.
+ 1. The `y` input to the methods [`fit`](nemos.glm.PopulationGLM.fit) and [`score`](nemos.glm.PopulationGLM.score) must be a two-dimensional array of shape `(n_samples, n_neurons)`.
  2. You can optionally pass a `feature_mask` in the form of an array of 0s and 1s with shape `(n_features, n_neurons)`
  that specifies which features are used as predictors for each neuron. More on this [later](#neuron-specific-features).
 

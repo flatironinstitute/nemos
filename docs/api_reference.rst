@@ -82,7 +82,7 @@ Utility functions for simulating spiking activity in recurrently connected neura
 .. currentmodule:: nemos.simulation
 
 .. autosummary::
-    :toctree: generated/regularizer
+    :toctree: generated/simulation
     :recursive:
     :nosignatures:
 

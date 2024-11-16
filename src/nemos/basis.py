@@ -629,7 +629,7 @@ class Basis(Base, abc.ABC):
     def n_basis_input(self) -> tuple | None:
         """Number of expected inputs.
 
-        The number of inputs `compute_feature expects.
+        The number of inputs ``compute_feature`` expects.
         """
         if self._n_basis_input is None:
             return

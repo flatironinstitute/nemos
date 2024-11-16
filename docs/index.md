@@ -102,9 +102,9 @@ Explore fully worked examples to learn how to analyze neural recordings from scr
 
 :::
 
-:::{grid-item-card} <span class="iconify" data-icon="mdi:cog"></span> &nbsp; **API Guide**
-:link: api_guide.html
-:link-alt: API Guide
+:::{grid-item-card} <span class="iconify" data-icon="mdi:cog"></span> &nbsp; **API Reference**
+:link: api_reference.html
+:link-alt: API Reference
 
 ---
 

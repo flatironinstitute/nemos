@@ -48,7 +48,7 @@ def difference_of_gammas(
 
         p(x;\; a, b) = \frac{b^a x^{a-1} e^{-x}}{\Gamma(a)},
 
-    where :math:`\Gamma(a)` refers to the gamma function, see [[1]](#references).
+    where :math:`\Gamma(a)` refers to the gamma function, see [1]_.
 
     Returns
     -------
@@ -63,7 +63,7 @@ def difference_of_gammas(
 
     References
     ----------
-    SciPy Docs - :meth:`scipy.stats.gamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html>`
+    .. [1] SciPy Docs - :meth:`scipy.stats.gamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html>`
 
     Examples
     --------
