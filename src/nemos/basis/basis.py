@@ -275,6 +275,37 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
             label=label,
         )
 
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Generate basis functions with given spacing.
+
+        Parameters
+        ----------
+        n_samples:
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Evaluated exponentially decaying basis functions, numerically
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import EvalOrthExponential
+        >>> n_basis_funcs = 5
+        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+        >>> window_size=10
+        >>> ortho_basis = EvalOrthExponential(n_basis_funcs, decay_rates=decay_rates)
+        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+
+        """
+        return super().evaluate_on_grid(n_samples=n_samples)
+
 
 class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -327,3 +358,35 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
             decay_rates=decay_rates,
             label=label,
         )
+
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """Generate basis functions with given spacing.
+
+        Parameters
+        ----------
+        n_samples:
+            The number of samples.
+
+        Returns
+        -------
+        X :
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            Evaluated exponentially decaying basis functions, numerically
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import ConvOrthExponential
+        >>> n_basis_funcs = 5
+        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+        >>> window_size=10
+        >>> ortho_basis = ConvOrthExponential(n_basis_funcs, window_size, decay_rates=decay_rates)
+        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+
+        """
+        return super().evaluate_on_grid(n_samples=n_samples)
+

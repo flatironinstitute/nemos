@@ -16,12 +16,6 @@ from ..typing import FeatureMatrix
 
 from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples
 
-_ORTHEXPONENTIAL_EVAL_IMPORT = ">>> from nemos.basis import EvalOrthExponential"
-_ORTHEXPONENTIAL_CONV_IMPORT = ">>> from nemos.basis import ConvOrthExponential"
-
-_ORTHEXPONENTIAL_EVAL_INIT = '>>> ortho_basis = OrthExponentialBasis(n_basis_funcs, decay_rates)'
-_ORTHEXPONENTIAL_CONV_INIT = '>>> ortho_basis = OrthExponentialBasis(n_basis_funcs, window_size, decay_rates)'
-
 
 class OrthExponentialBasis(Basis, abc.ABC):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -205,16 +199,5 @@ class OrthExponentialBasis(Basis, abc.ABC):
         basis_funcs :
             Evaluated exponentially decaying basis functions, numerically
             orthogonalized, shape (n_samples, n_basis_funcs)
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import OrthExponentialBasis
-        >>> n_basis_funcs = 5
-        >>> decay_rates = [0.01, 0.02, 0.03, 0.04, 0.05] # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = OrthExponentialBasis(n_basis_funcs, decay_rates, "conv", window_size)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
