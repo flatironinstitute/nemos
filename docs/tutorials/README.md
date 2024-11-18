@@ -2,7 +2,7 @@
 
 A gallery of fully worked out tutorials analyzing neural recordings from different brain regions and recording modalities.
 
-:::{dropdown} "Additional requirements"
+:::{dropdown} Additional requirements
 :color: warning
 :icon: alert
 To run the tutorials, you may need to install some additional packages used for plotting and data fetching.
