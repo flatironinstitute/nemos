@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 
 
 from ._basis_mixin import EvalBasisMixin, ConvBasisMixin
@@ -13,6 +13,7 @@ from ._basis_mixin import EvalBasisMixin, ConvBasisMixin
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._decaying_exponential import OrthExponentialBasis
+from ..typing import FeatureMatrix
 
 __all__ = [
     "EvalMSpline",
@@ -306,6 +307,40 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         """
         return super().evaluate_on_grid(n_samples=n_samples)
 
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        """
+        Compute the basis functions and transform input data into model features.
+
+        This method is designed to be a high-level interface for transforming input
+        data using the basis functions defined by the subclass. It evaluates the basis functions at the sample
+        points.
+
+        Parameters
+        ----------
+        *xi :
+            Input data arrays to be transformed.
+
+        Returns
+        -------
+        :
+            Transformed features, consisting of the basis functions evaluated at the input samples.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import ConvOrthExponential
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = ConvOrthExponential(10, window_size=100, decay_rates=np.arange(1, 11))
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 10)
+
+        """
+        return super().compute_features(*xi)
+
 
 class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -390,3 +425,36 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
         """
         return super().evaluate_on_grid(n_samples=n_samples)
 
+    def compute_features(*xi: ArrayLike) -> FeatureMatrix:
+        """
+        Compute the basis functions and transform input data into model features.
+
+        This method is designed to be a high-level interface for transforming input
+        data using the basis functions defined by the subclass. Performs a convolution operation between
+        the input data and the basis functions.
+
+        Parameters
+        ----------
+        *xi :
+            Input data arrays to be transformed.
+
+        Returns
+        -------
+        :
+            Transformed features, consisting of convolved input samples with the basis functions.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import ConvOrthExponential
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = ConvOrthExponential(10, window_size=100, decay_rates=np.arange(1, 11))
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 10)
+
+        """
+        return super().compute_features(*xi)
