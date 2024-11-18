@@ -91,8 +91,10 @@ class EvalBasisMixin:
 
 class ConvBasisMixin:
 
-    def __init__(self, window_size: int):
+    def __init__(self, window_size: int, conv_kwargs: Optional[dict] = None):
         self.window_size = window_size
+        self._conv_kwargs = {} if conv_kwargs is None else conv_kwargs
+        self._check_convolution_kwargs()
 
     def _compute_features(self, *xi: ArrayLike):
         """
@@ -171,6 +173,14 @@ class ConvBasisMixin:
             )
 
         self._window_size = window_size
+
+    @property
+    def conv_kwargs(self):
+        """The convolutional kwargs.
+
+        Keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`.
+        """
+        return self._conv_kwargs
 
     def _check_convolution_kwargs(self):
         """Check convolution kwargs settings.

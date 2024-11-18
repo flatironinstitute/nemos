@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
-import inspect
+
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -13,7 +13,6 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame
 
 from ..base_class import Base
-from ..convolve import create_convolutional_predictor
 from ..type_casting import support_pynapple
 
 from ..utils import row_wise_kron
@@ -103,12 +102,6 @@ class Basis(Base, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     """
 
@@ -117,12 +110,9 @@ class Basis(Base, abc.ABC):
         n_basis_funcs: int,
         mode: Literal["eval", "conv"] = "eval",
         label: Optional[str] = None,
-        **kwargs,
     ) -> None:
         self.n_basis_funcs = n_basis_funcs
         self._n_input_dimensionality = 0
-
-        self._conv_kwargs = kwargs
 
         self._mode = mode
 
@@ -137,9 +127,6 @@ class Basis(Base, abc.ABC):
             self._label = self.__class__.__name__
         else:
             self._label = str(label)
-
-        # the rest should be convolutional kwargs
-        self._check_convolution_kwargs()
 
         self.kernel_ = None
 
@@ -258,12 +245,12 @@ class Basis(Base, abc.ABC):
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import BSplineBasis
+        >>> from nemos.basis import EvalBSpline
 
         >>> # Generate data
         >>> num_samples = 10000
         >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = BSplineBasis(10)
+        >>> basis = EvalBSpline(10)
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
         (10000, 10)
@@ -425,8 +412,8 @@ class Basis(Base, abc.ABC):
          >>> # Evaluate and visualize 4 M-spline basis functions of order 3:
          >>> import numpy as np
          >>> import matplotlib.pyplot as plt
-         >>> from nemos.basis import MSplineBasis
-         >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
+         >>> from nemos.basis import EvalMSpline
+         >>> mspline_basis = EvalMSpline(n_basis_funcs=4, order=3)
          >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
          >>> p = plt.plot(sample_points, basis_values)
          >>> _ = plt.title('M-Spline Basis Functions')
@@ -588,7 +575,7 @@ class Basis(Base, abc.ABC):
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineBasisLinear(10).to_transformer()
+        >>> basis = nmo.basis.EvalRaisedCosineLinear(10).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
@@ -772,10 +759,10 @@ class Basis(Base, abc.ABC):
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import BSplineBasis
+        >>> from nemos.basis import ConvBSpline
         >>> from nemos.glm import GLM
         >>> # Define an additive basis
-        >>> basis = BSplineBasis(n_basis_funcs=5, mode="conv", window_size=10, label="feature")
+        >>> basis = ConvBSpline(n_basis_funcs=5, window_size=10, label="feature")
         >>> # Generate a sample input array and compute features
         >>> x = np.random.randn(20)
         >>> X = basis.compute_features(x)
@@ -785,7 +772,7 @@ class Basis(Base, abc.ABC):
         ...     print(f"{feature}: shape {arr.shape}")
         feature: shape (20, 1, 5)
         >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
-        >>> multi_input_basis = BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10,
+        >>> multi_input_basis = ConvBSpline(n_basis_funcs=6, window_size=10,
         ... label="multi_input")
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
@@ -934,7 +921,7 @@ class TransformerBasis:
 
     Examples
     --------
-    >>> from nemos.basis import BSplineBasis, TransformerBasis
+    >>> from nemos.basis import EvalBSpline, TransformerBasis
     >>> from nemos.glm import GLM
     >>> from sklearn.pipeline import Pipeline
     >>> from sklearn.model_selection import GridSearchCV
@@ -944,7 +931,7 @@ class TransformerBasis:
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
     >>> x = np.random.normal(size=(num_samples, ))  # raw time series
-    >>> basis = BSplineBasis(10)
+    >>> basis = EvalBSpline(10)
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
     >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
@@ -1129,7 +1116,7 @@ class TransformerBasis:
         Examples
         --------
         >>> from nemos import basis
-        >>> bas = basis.RaisedCosineBasisLinear(5)
+        >>> bas = basis.EvalRaisedCosineLinear(5)
         >>> trans_bas = basis.TransformerBasis(bas)
         >>> bas.n_basis_funcs
         5
@@ -1158,7 +1145,7 @@ class TransformerBasis:
         >>> import nemos as nmo
         >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.EvalMSpline(10))
         >>> # allowed
-        >>> trans_bas._basis = nmo.basis.BSplineBasis(10)
+        >>> trans_bas._basis = nmo.basis.EvalBSpline(10)
         >>> # allowed
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
@@ -1202,7 +1189,7 @@ class TransformerBasis:
 
         Examples
         --------
-        >>> from nemos.basis import BSplineBasis, EvalMSpline, TransformerBasis
+        >>> from nemos.basis import EvalBSpline, EvalMSpline, TransformerBasis
         >>> basis = EvalMSpline(10)
         >>> transformer_basis = TransformerBasis(basis=basis)
 
@@ -1210,11 +1197,11 @@ class TransformerBasis:
         >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
         8
         >>> # setting _basis directly is allowed
-        >>> print(type(transformer_basis.set_params(_basis=BSplineBasis(10))._basis))
+        >>> print(type(transformer_basis.set_params(_basis=EvalBSpline(10))._basis))
         <class 'nemos.basis.BSplineBasis'>
         >>> # mixing is not allowed, this will raise an exception
         >>> try:
-        ...     transformer_basis.set_params(_basis=BSplineBasis(10), n_basis_funcs=2)
+        ...     transformer_basis.set_params(_basis=EvalBSpline(10), n_basis_funcs=2)
         ... except ValueError as e:
         ...     print(repr(e))
         ValueError('Set either new _basis object or parameters for existing _basis, not both.')
@@ -1322,13 +1309,13 @@ class AdditiveBasis(Basis):
     >>> X = np.random.normal(size=(30, 2))
 
     >>> # define two basis objects and add them
-    >>> basis_1 = nmo.basis.BSplineBasis(10)
-    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
+    >>> basis_1 = nmo.basis.EvalBSpline(10)
+    >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
     >>> additive_basis = basis_1 + basis_2
 
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
-    >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
+    >>> basis_3 = nmo.basis.EvalRaisedCosineLog(100)
     >>> additive_basis_2 = additive_basis + basis_3
     """
 
@@ -1520,12 +1507,12 @@ class AdditiveBasis(Basis):
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import BSplineBasis
+        >>> from nemos.basis import ConvBSpline
         >>> from nemos.glm import GLM
         >>> # Define an additive basis
         >>> basis = (
-        ...     BSplineBasis(n_basis_funcs=5, mode="conv", window_size=10, label="feature_1") +
-        ...     BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10, label="feature_2")
+        ...     ConvBSpline(n_basis_funcs=5, window_size=10, label="feature_1") +
+        ...     ConvBSpline(n_basis_funcs=6, window_size=10, label="feature_2")
         ... )
         >>> # Generate a sample input array and compute features
         >>> x1, x2 = np.random.randn(20), np.random.randn(20)
@@ -1537,7 +1524,7 @@ class AdditiveBasis(Basis):
         feature_1: shape (20, 1, 5)
         feature_2: shape (20, 1, 6)
         >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
-        >>> multi_input_basis = BSplineBasis(n_basis_funcs=6, mode="conv", window_size=10,
+        >>> multi_input_basis = ConvBSpline(n_basis_funcs=6, window_size=10,
         ... label="multi_input")
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
@@ -1581,13 +1568,13 @@ class MultiplicativeBasis(Basis):
     >>> X = np.random.normal(size=(30, 3))
 
     >>> # define two basis and multiply
-    >>> basis_1 = nmo.basis.BSplineBasis(10)
-    >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
+    >>> basis_1 = nmo.basis.EvalBSpline(10)
+    >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
     >>> multiplicative_basis = basis_1 * basis_2
 
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
-    >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
+    >>> basis_3 = nmo.basis.EvalRaisedCosineLog(100)
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     """
 

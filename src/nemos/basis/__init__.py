@@ -3,4 +3,5 @@ from .basis import (EvalMSpline, ConvMSpline,
                     EvalBSpline, ConvBSpline,
                     EvalRaisedCosineLinear, ConvRaisedCosineLinear,
                     EvalRaisedCosineLog, ConvRaisedCosineLog,
-                    OrthExponentialBasis)
+                    EvalOrthExponential, ConvOrthExponential)
+from ._basis import TransformerBasis
