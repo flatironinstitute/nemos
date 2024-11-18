@@ -271,25 +271,25 @@ class OrthExponentialBasis(Basis):
     n_basis_funcs
             Number of basis functions.
     decay_rates :
-            Decay rates of the exponentials, shape (n_basis_funcs,).
+            Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
     mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
+        The mode of operation. ``'eval'`` for evaluation at sample points,
+        ``'conv'`` for convolutional operation.
     window_size :
-        The window size for convolution. Required if mode is 'conv'.
+        The window size for convolution. Required if mode is ``'conv'``.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
@@ -328,7 +328,11 @@ class OrthExponentialBasis(Basis):
 
     @property
     def decay_rates(self):
-        """Decay rate getter."""
+        """Decay rate.
+
+        The rate of decay of the exponential functions. If :math:`f_i(t) = \exp{-\alpha_i t}` is the i-th decay
+        exponential before orthogonalization, :math:`\alpha_i` is the i-th element of the ``decay_rate`` vector.
+        """
         return self._decay_rates
 
     @decay_rates.setter

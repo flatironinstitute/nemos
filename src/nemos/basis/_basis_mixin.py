@@ -51,6 +51,7 @@ class EvalBasisMixin:
 
     @property
     def bounds(self):
+        """Range of values covered by the basis."""
         return self._bounds
 
     @bounds.setter
@@ -149,6 +150,10 @@ class ConvBasisMixin:
 
     @property
     def window_size(self):
+        """Window size as number of samples.
+
+        Duration of the convolutional kernel in number of samples.
+        """
         return self._window_size
 
     @window_size.setter

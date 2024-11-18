@@ -1,8 +1,5 @@
----
-hide:
-  - navigation
-  - toc
----
+
+# Getting Help
 
 We communicate via several channels on Github:
 

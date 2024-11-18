@@ -608,7 +608,7 @@ class BaseRegressor(Base, abc.ABC):
 
         return solver_class
 
-    def optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
+    def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
         """
         Compute and update solver parameters with optimal defaults if available.
 
@@ -635,7 +635,7 @@ class BaseRegressor(Base, abc.ABC):
 
         # get the model specific configs
         compute_defaults, compute_l_smooth, strong_convexity = (
-            self.get_optimal_solver_params_config()
+            self._get_optimal_solver_params_config()
         )
         if compute_defaults and compute_l_smooth:
             # Check if the user has provided batch size or stepsize, or else use None
@@ -658,6 +658,6 @@ class BaseRegressor(Base, abc.ABC):
         return new_solver_kwargs
 
     @abstractmethod
-    def get_optimal_solver_params_config(self):
+    def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         pass

@@ -24,7 +24,7 @@ class MockBaseRegressorInvalid(BaseRegressor):
     def score(self, X, y, score_type="pseudo-r2-McFadden"):
         pass
 
-    def get_optimal_solver_params_config(self):
+    def _get_optimal_solver_params_config(self):
         return None, None, None
 
 

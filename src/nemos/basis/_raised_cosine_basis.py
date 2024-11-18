@@ -19,7 +19,7 @@ import abc
 class RaisedCosineBasisLinear(Basis, abc.ABC):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -34,35 +34,34 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import RaisedCosineBasisLinear
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cosine_basis(sample_points)
 
-    # References
-    ------------
-    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+        11003–11013.
     """
 
     def __init__(
@@ -222,8 +221,8 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     """Represent log-spaced raised cosine basis functions.
 
-    Similar to `RaisedCosineBasisLinear` but the basis functions are log-spaced.
-    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
+    Similar to ``RaisedCosineBasisLinear`` but the basis functions are log-spaced.
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -240,41 +239,40 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         larger values resulting in more stretching. As this approaches 0, the
         transformation becomes linear.
     enforce_decay_to_zero:
-        If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
+        If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import RaisedCosineBasisLog
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cosine_basis = RaisedCosineBasisLog(n_basis_funcs=5, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cosine_basis(sample_points)
 
-    # References
-    ------------
-    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+       11003–11013.
     """
 
     def __init__(
@@ -305,7 +303,10 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
 
     @property
     def time_scaling(self):
-        """Getter property for time_scaling."""
+        """Time scaling.
+
+        Time scaling parameter regulating the logarithmic stretch of the basis.
+        """
         return self._time_scaling
 
     @time_scaling.setter

@@ -32,18 +32,18 @@ class SplineBasis(Basis, abc.ABC):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -69,6 +69,11 @@ class SplineBasis(Basis, abc.ABC):
 
     @property
     def order(self):
+        """
+        Spline order.
+
+        Spline order, i.e. the polynomial degree of the spline plus one.
+        """
         return self._order
 
     @order.setter
@@ -152,16 +157,16 @@ class SplineBasis(Basis, abc.ABC):
 
 class MSplineBasis(SplineBasis, abc.ABC):
     r"""
-    M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
+    M-spline basis functions for modeling and data transformation.
 
-    M-splines are a type of spline basis function used for smooth curve fitting
+    M-splines [1]_ are a type of spline basis function used for smooth curve fitting
     and data representation. They are positive and integrate to one, making them
     suitable for probabilistic models and density estimation. The order of an
     M-spline defines its smoothness, with higher orders resulting in smoother
     splines.
 
     This class provides functionality to create M-spline basis functions, allowing
-    for flexible and smooth modeling of data. It inherits from the `SplineBasis`
+    for flexible and smooth modeling of data. It inherits from the ``SplineBasis``
     abstract class, providing specific implementations for M-splines.
 
     Parameters
@@ -179,39 +184,39 @@ class MSplineBasis(SplineBasis, abc.ABC):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs:
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
     >>> from numpy import linspace
-    >>> from nemos.basis import EvalMSpline
+    >>> from nemos.basis import MSplineBasis
     >>> n_basis_funcs = 5
     >>> order = 3
-    >>> mspline_basis = EvalMSpline(n_basis_funcs, order=order)
+    >>> mspline_basis = MSplineBasis(n_basis_funcs, order=order)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = mspline_basis(sample_points)
 
-    # References
-    ------------
-    [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    References
+    ----------
+    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
     -----
-    MSplines must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
-    (x-axis) of an MSpline basis is expanded by a factor of $\alpha$, the values on the co-domain (y-axis) values
-    will shrink by a factor of $1/\alpha$.
+    ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+    (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain (y-axis) values
+    will shrink by a factor of :math:`1/\alpha`.
     For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
     If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
     """
@@ -321,34 +326,36 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
 class BSplineBasis(SplineBasis, abc.ABC):
     """
-    B-spline[$^{[1]}$](#references) 1-dimensional basis functions.
+    B-spline 1-dimensional basis functions.
+
+    Implementation of the one-dimensional BSpline basis [1]_.
 
     Parameters
     ----------
     n_basis_funcs :
         Number of basis functions.
     mode :
-        The mode of operation. 'eval' for evaluation at sample points,
+        The mode of operation. ``'eval'`` for evaluation at sample points,
         'conv' for convolutional operation.
     order :
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+        Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -356,16 +363,15 @@ class BSplineBasis(SplineBasis, abc.ABC):
         Spline order.
 
 
-    # References
-    ------------
-    [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    References
+    ----------
+    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import BSplineBasis
-
     >>> bspline_basis = BSplineBasis(n_basis_funcs=5, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = bspline_basis(sample_points)
@@ -477,32 +483,31 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    order : int
-        Order of the splines used in basis functions.
+    n_basis_funcs :
+        Number of basis functions, int.
+    order :
+        Order of the splines used in basis functions, int.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import CyclicBSplineBasis
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=5, order=3, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cyclic_basis(sample_points)

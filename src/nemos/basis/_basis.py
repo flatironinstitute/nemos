@@ -100,30 +100,16 @@ class Basis(Base, abc.ABC):
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
-    Raises
-    ------
-    ValueError:
-        - If `mode` is not 'eval' or 'conv'.
-        - If `kwargs` are not None and `mode =="eval".
-        - If `kwargs` include parameters not recognized or do not have
-        default values in `create_convolutional_predictor`.
-        - If `axis` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
@@ -165,28 +151,31 @@ class Basis(Base, abc.ABC):
     @property
     def n_output_features(self) -> int | None:
         """
-        Read-only property indicating the number of features returned by the basis, when available.
+        Number of features returned by the basis.
 
         Notes
         -----
         The number of output features can be determined only when the number of inputs
-        provided to the basis is known. Therefore, before the first call to `compute_features`,
-        this property will return `None`. After that call, `n_output_features` will be available.
+        provided to the basis is known. Therefore, before the first call to ``compute_features``,
+        this property will return ``None``. After that call, ``n_output_features`` will be available.
         """
         return self._n_output_features
 
     @property
     def label(self) -> str:
+        """Label for the basis."""
         return self._label
 
     @property
     def n_basis_input(self) -> tuple | None:
+        """Number of expected inputs."""
         if self._n_basis_input is None:
             return
         return self._n_basis_input
 
     @property
     def n_basis_funcs(self):
+        """Number of basis functions."""
         return self._n_basis_funcs
 
     @n_basis_funcs.setter
@@ -201,6 +190,7 @@ class Basis(Base, abc.ABC):
 
     @property
     def mode(self):
+        """Mode of operation, either ``"conv"`` or ``"eval"``."""
         return self._mode
 
     @staticmethod
@@ -396,54 +386,54 @@ class Basis(Base, abc.ABC):
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
-        The i-th axis of the grid will be sampled with n_samples[i] equi-spaced points.
-        The method uses numpy.meshgrid with `indexing="ij"`, returning matrix indexing
-        instead of the default cartesian indexing, see Notes.
+         The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
+         The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
+         instead of the default cartesian indexing, see Notes.
 
-        Parameters
-        ----------
-        n_samples[0],...,n_samples[n]
-            The number of samples in each axis of the grid. The length of
-            n_samples must equal the number of combined bases.
+         Parameters
+         ----------
+         n_samples[0],...,n_samples[n]
+             The number of samples in each axis of the grid. The length of
+             n_samples must equal the number of combined bases.
 
-        Returns
-        -------
-        *Xs :
-            A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
-            where n equals to the number of inputs.
-            The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
-        Y :
-            The basis function evaluated at the samples,
-            shape (n_samples[0], ... , n_samples[n], number of basis).
+         Returns
+         -------
+         *Xs :
+             A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
+             where n equals to the number of inputs.
+             The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
+         Y :
+             The basis function evaluated at the samples,
+             shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
 
-        Raises
-        ------
-        ValueError
-            - If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
-            the Basis object requires.
-            - If one of the n_samples is <= 0.
+         Raises
+         ------
+         ValueError
+             - If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+             the Basis object requires.
+             - If one of the n_samples is <= 0.
 
-        Notes
-        -----
-        Setting "indexing = 'ij'" returns a meshgrid with matrix indexing. In the N-D case with inputs of size
-        $M_1,...,M_N$, outputs are of shape $(M_1, M_2, M_3, ....,M_N)$.
-        This differs from the numpy.meshgrid default, which uses Cartesian indexing.
-        For the same input, Cartesian indexing would return an output of shape $(M_2, M_1, M_3, ....,M_N)$.
+         Notes
+         -----
+         Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+         :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
+         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
+         For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
 
-        Examples
-        --------
-        >>> # Evaluate and visualize 4 M-spline basis functions of order 3:
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import EvalMSpline
-        >>> mspline_basis = EvalMSpline(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-        >>> p = plt.plot(sample_points, basis_values)
-        >>> _ = plt.title('M-Spline Basis Functions')
-        >>> _ = plt.xlabel('Domain')
-        >>> _ = plt.ylabel('Basis Function Value')
-        >>> _ = plt.legend([f'Function {i+1}' for i in range(4)]);
-        """
+         Examples
+         --------
+         >>> # Evaluate and visualize 4 M-spline basis functions of order 3:
+         >>> import numpy as np
+         >>> import matplotlib.pyplot as plt
+         >>> from nemos.basis import MSplineBasis
+         >>> mspline_basis = MSplineBasis(n_basis_funcs=4, order=3)
+         >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
+         >>> p = plt.plot(sample_points, basis_values)
+         >>> _ = plt.title('M-Spline Basis Functions')
+         >>> _ = plt.xlabel('Domain')
+         >>> _ = plt.ylabel('Basis Function Value')
+         >>> _ = plt.legend([f'Function {i+1}' for i in range(4)]);
+         """
         self._check_input_dimensionality(n_samples)
 
         if self._has_zero_samples(n_samples):
@@ -739,45 +729,45 @@ class Basis(Base, abc.ABC):
 
         **How it works:**
 
-        - If the basis expects an input shape `(n_samples, n_inputs)`, then the feature axis length will
-        be `total_n_features = n_inputs * n_basis_funcs`. This axis is reshaped into dimensions
-        `(n_inputs, n_basis_funcs)`.
-        - If the basis expects an input of shape `(n_samples,)`, then the feature axis length will
-        be `total_n_features = n_basis_funcs`. This axis is reshaped into `(1, n_basis_funcs)`.
+        - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
+        be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
+        ``(n_inputs, n_basis_funcs)``.
+        - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
+        be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
 
-        For example, if the input array `x` has shape `(1, 2, total_n_features, 4, 5)`,
-        then after applying this method, it will be reshaped into `(1, 2, n_inputs, n_basis_funcs, 4, 5)`.
+        For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
+        then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
 
-        The specified axis (`axis`) determines where the split occurs, and all other dimensions
+        The specified axis (``axis``) determines where the split occurs, and all other dimensions
         remain unchanged. See the example section below for the most common use cases.
 
         Parameters
         ----------
         x :
             The input array to be split, representing concatenated features, coefficients,
-            or other data. The shape of `x` along the specified axis must match the total
-            number of features generated by the basis, i.e., `self.n_output_features`.
+            or other data. The shape of ``x`` along the specified axis must match the total
+            number of features generated by the basis, i.e., ``self.n_output_features``.
 
             **Examples:**
-            - For a design matrix: `(n_samples, total_n_features)`
-            - For model coefficients: `(total_n_features,)` or `(total_n_features, n_neurons)`.
+            - For a design matrix: ``(n_samples, total_n_features)``
+            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
 
         axis : int, optional
             The axis along which to split the features. Defaults to 1.
-            Use `axis=1` for design matrices (features along columns) and `axis=0` for
+            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
             coefficient arrays (features along rows). All other dimensions are preserved.
 
         Raises
         ------
         ValueError
-            If the shape of `x` along the specified axis does not match `self.n_output_features`.
+            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
 
         Returns
         -------
         dict
             A dictionary where:
             - **Key**: Label of the basis.
-            - **Value**: the array reshaped to: `(..., n_inputs, n_basis_funcs, ...)
+            - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
 
         Examples
         --------

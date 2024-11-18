@@ -1,4 +1,18 @@
-# Introduction
+
+## Contents
+
+```{toctree}
+:maxdepth: 1
+
+01-base_class.md
+02-base_regressor.md
+03-glm.md
+04-basis_module.md
+05-observation_models.md
+06-regularizer.md
+```
+
+## Introduction
 
 
 Welcome to the Developer Notes of the NeMoS project. These notes aim to provide detailed technical information about the various modules, classes, and functions that make up this library, as well as guidelines on how to write code that integrates nicely with our package. They are intended to help current and future developers understand the design decisions, structure, and functioning of the library, and to provide guidance on how to modify, extend, and maintain the codebase.
