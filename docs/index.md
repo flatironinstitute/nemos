@@ -135,13 +135,13 @@ This package is supported by the Center for Computational Neuroscience, in the F
 ```{image} assets/logo_flatiron_white.svg
 :alt: Flatiron Center for Computational Neuroscience logo White.
 :class: only-dark
-:width: 20%
+:width: 200px
 :target: https://www.simonsfoundation.org/flatiron/center-for-computational-neuroscience/
 ```
 
 ```{image} assets/CCN-logo-wText.png
 :alt: Flatiron Center for Computational Neuroscience logo.
 :class: only-light
-:width: 20%
+:width: 200px
 :target: https://www.simonsfoundation.org/flatiron/center-for-computational-neuroscience/
 ```
