@@ -31,16 +31,8 @@ Provides basis function classes to construct and transform features for model in
     :nosignatures:
 
     Basis
-    SplineBasis
-    BSplineBasis
-    CyclicBSplineBasis
-    MSplineBasis
-    OrthExponentialBasis
-    RaisedCosineBasisLinear
-    RaisedCosineBasisLog
-    AdditiveBasis
-    MultiplicativeBasis
-    TransformerBasis
+    EvalOrthExponential
+    ConvOrthExponential
 
 .. _observation_models:
 The ``nemos.observation_models`` module
