@@ -419,7 +419,7 @@ One way to do so is by minimizing the least-squares.
 lsq_coef, _, _, _ = np.linalg.lstsq(basis_kernels, np.squeeze(model.coef_), rcond=-1)
 
 # plot the basis and the approximation
-doc_plots.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
+doc_plots.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef);
 ```
 
 The first plot is the response of each of the 8 basis functions to a single
