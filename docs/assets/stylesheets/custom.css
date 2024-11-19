@@ -128,10 +128,3 @@ aside.footnote a {
 aside.footnote a:hover {
     text-decoration: underline; /* Add underline on hover */
 }
-
-/* Adjust spacing for the paragraph inside the footnote */
-aside.footnote p {
-    margin: 0.5em 0;
-    line-height: 1.5; /* Improve readability */
-}
-
