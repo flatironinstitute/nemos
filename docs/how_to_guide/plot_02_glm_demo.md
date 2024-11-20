@@ -151,7 +151,7 @@ If the provided `solver_name` is not listed in the `allowed_solvers` this will r
 exception.
 :::
 
-+++
+
 
 ### Model Fit
 Fitting the model is as straight forward as calling the `model.fit`

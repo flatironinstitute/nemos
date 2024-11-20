@@ -115,7 +115,7 @@ a useful function for performing computations on arbitrary pytrees,
 preserving their structure.
 
 
-+++
+
 
 We can map lambda functions:
 

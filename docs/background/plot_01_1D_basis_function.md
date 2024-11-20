@@ -147,7 +147,7 @@ If you want to learn more about convolutions, as well as how and when to change 
 check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 :::
 
-+++
+
 
 Plotting the Basis Function Elements:
 --------------------------------------

@@ -86,7 +86,7 @@ In the subsequent sections, we will:
 Consider an instance where we want to capture a neuron's response to an animal's position within a given arena.
 In this scenario, the stimuli are the 2D coordinates (x, y) that represent the animal's position at each time point.
 
-+++
+
 
 ### Additive Basis Object
 One way to model the response to our 2D stimuli is to hypothesize that it decomposes into two factors:
@@ -277,7 +277,7 @@ A practical example would be characterizing the responses to position
 in a linear maze and the LFP phase angle.
 :::
 
-+++
+
 
 N-Dimensional Basis
 -------------------
@@ -343,7 +343,7 @@ The evaluated basis is going to be **sparse** if the basis elements support do n
 full domain of the basis.
 :::
 
-+++
+
 
 Here we demonstrate a shortcut syntax for multiplying bases of the same class.
 This is achieved using the power operator with an integer exponent.

@@ -263,7 +263,7 @@ instead the feature dimension is 80, because our bin size was 0.01 sec and the w
 We can learn these weights by maximum likelihood by fitting a GLM.
 
 
-+++
+
 
 #### Fitting the Model
 
@@ -462,7 +462,7 @@ doc_plots.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_mul
 Now that we have our "compressed" history feature matrix, we can fit the ML parameters for a GLM.
 
 
-+++
+
 
 #### Fit and compare the models
 

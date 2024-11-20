@@ -97,7 +97,7 @@ plt.tight_layout()
 You can see that the calcium signals are both nonnegative, and noisy. One (neuron 4) has much higher SNR than the other. We cannot typically resolve individual action potentials, but instead see slow calcium fluctuations that result from an unknown underlying electrical signal (estimating the spikes from calcium traces is known as _deconvolution_ and is beyond the scope of this demo).
 
 
-+++
+
 
 We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous).
 Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
@@ -145,7 +145,7 @@ plt.show()
 The downsampling did not destroy the fast transient dynamics, so seems fine to use. We can now move on to using NeMoS to fit a model.
 
 
-+++
+
 
 ## Basis instantiation
 
@@ -261,7 +261,7 @@ model.fit(Xtrain, Ytrain[:, neu])
 ## Model comparison
 
 
-+++
+
 
 We can compare this to scikit-learn [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 

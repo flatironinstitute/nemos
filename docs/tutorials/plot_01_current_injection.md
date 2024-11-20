@@ -391,7 +391,7 @@ rate's periodicity, and the gradual reduction in firing rate while the
 current remains on.
 
 
-+++
+
 
 ## NeMoS 
 

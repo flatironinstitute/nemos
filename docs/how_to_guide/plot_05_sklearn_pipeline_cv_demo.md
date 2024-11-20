@@ -27,7 +27,7 @@ In particular, we will learn:
 4. How to select the number of bases and the basis type through cross-validation (or any other hyperparameter in the pipeline).
 5. How to use a custom scoring metric to quantify the performance of each configuration.
 
-+++
+
 
 ## What is a scikit-learn pipeline
 
@@ -212,12 +212,12 @@ sns.despine(ax=ax)
 The current model captures the bimodal distribution of responses, appropriately picking out the peaks. However, it doesn't do a good job capturing the actual firing rate: the peaks are too low and the valleys are not low enough. This might be because of our choice of basis and/or regularizer strength, so let's see if tuning those parameters results in a better fit! We could do this manually, but doing this with the sklearn pipeline will make everything much easier!
 
 
-+++
+
 
 ### Select the number of basis by cross-validation
 
 
-+++
+
 
 :::{warning}
 Please keep in mind that while [`GLM.score`](nemos.glm.GLM.score) supports different ways of evaluating goodness-of-fit through the `score_type` argument, `pipeline.score(X, y, score_type="...")` does not propagate this, and uses the default value of `log-likelihood`.
@@ -248,7 +248,7 @@ In order to define a parameter grid dictionary for a pipeline, you must structur
 The values in the dictionary are the parameters to be tested.
 :::
 
-+++
+
 
 #### Run the grid search
 Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn [`model_selection.GridsearchCV`](https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection.GridSearchCV.html#sklearn.model_selection.GridSearchCV) class.
@@ -341,7 +341,7 @@ best_n_basis = n_basis_funcs[i_best % len(n_basis_funcs)]
 ```
 :::
 
-+++
+
 
 #### Visualize the scores
 
@@ -481,7 +481,7 @@ sns.despine(ax=ax)
 The plot confirms that the firing rate distribution is accurately captured by our model predictions.
 
 
-+++
+
 
 !!! warning
     Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
@@ -502,7 +502,7 @@ The plot confirms that the firing rate distribution is accurately captured by ou
     ```
 
 
-+++
+
 
 ## Create a custom scorer
 By default, the GLM score method returns the model log-likelihood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer and pass it to the cross-validation object:
@@ -534,7 +534,7 @@ gridsearch.fit(X, y)
 And finally, we can plot each model's score.
 
 
-+++
+
 
 Plot the pseudo-R2 scores
 
