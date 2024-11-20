@@ -15,7 +15,7 @@ build:
       - gem install html-proofer -v ">= 5.0.9"  # Ensure version >= 5.0.9
     post_build:
       # Check everything but the reference (because mkdocstrings do not set href=)
-      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts --ignore-urls "https://fonts.gstatic.com,https://www.jneurosci.org/content/25/47/11003" --assume-extension --check-external-hash --ignore-status-codes 403 --ignore-files "/.+\/_static\/.+/","/.+\/stubs\/.+/"
+      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts,Images --ignore-urls "https://fonts.gstatic.com,https://www.jneurosci.org/content/25/47/11003" --assume-extension --check-external-hash --ignore-status-codes 403 --ignore-files "/.+\/_static\/.+/","/.+\/stubs\/.+/"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
