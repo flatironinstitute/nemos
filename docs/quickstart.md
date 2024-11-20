@@ -153,7 +153,7 @@ The `basis` module includes objects that perform two types of transformations on
 ### **Non-linear Mapping**
 
 <figure class="custom-figure">
-    <img src="_static/glm_features_scheme.svg" width="100%">
+    <img src="_static/glm_features_scheme.svg" alt="GLM Feature Scheme" width="100%">
     <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
 </figure>
 
