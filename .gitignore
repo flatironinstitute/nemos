@@ -154,5 +154,5 @@ docs/data/
 docs/stubs
 
 # ignore the auto-generated svgs
-docs/assets/thumbnails:wq
+docs/assets/thumbnails
 
