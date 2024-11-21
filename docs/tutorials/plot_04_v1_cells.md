@@ -207,6 +207,17 @@ fig, ax = plt.subplots(1, 1, figsize=(4,4))
 ax.imshow(receptive_field, cmap='Greys_r')
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/tutorials")
+if path.exists():
+  plt.savefig(path / "plot_04_v1_cells.svg")
+```
+
 This receptive field gives us the spatial part of the linear response: it
 gives a map of weights that we use for a weighted sum on an image. There are
 multiple ways of performing this operation:

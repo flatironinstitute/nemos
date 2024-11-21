@@ -331,6 +331,18 @@ plt.xlabel("Head-direction (rad)")
 plt.show()
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/tutorials")
+if path.exists():
+  plt.savefig(path / "plot_06_calcium_imaging.svg")
+```
+
+
 :::{admonition} Gamma-GLM for Calcium Imaging Analysis
 :class: note
 

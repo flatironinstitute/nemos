@@ -20,7 +20,7 @@ pip install nemos[examples]
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/lnp_model.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_00_conceptual_intro.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
 </figure>
 
 
@@ -34,7 +34,7 @@ plot_00_conceptual_intro.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/one_dim_bspline_basis.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_01_1D_basis_function.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
 </figure>
 
 ```{toctree}
@@ -47,7 +47,7 @@ plot_01_1D_basis_function.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/multiplicative_basis.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_02_ND_basis_function.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
 </figure>
 
 ```{toctree}
@@ -60,7 +60,7 @@ plot_02_ND_basis_function.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/convolutions_valid_mode.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_03_1D_convolution.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
 </figure>
 
 ```{toctree}

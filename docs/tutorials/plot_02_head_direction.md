@@ -648,7 +648,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  plt.savefig(path / "rates_and_smoothed_counts.svg")
+  plt.savefig(path / "plot_02_head_direction.svg")
 ```
 
 #### Visualizing the connectivity

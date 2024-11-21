@@ -303,3 +303,14 @@ axs[2].set_title(f"Ridge - strength: {best_model.regularizer_strength}")
 axs[2].imshow(smooth_best_model, vmin=vmin, vmax=vmax)
 plt.tight_layout()
 ```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/tutorials")
+if path.exists():
+  plt.savefig(path / "plot_03_grid_cells.svg")
+```
