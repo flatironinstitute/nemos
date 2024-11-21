@@ -594,6 +594,17 @@ doc_plots.current_injection_plot(current, spikes, firing_rate,
                                  predicted_firing_rate=smooth_predicted_fr)
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/tutorials")
+if path.exists():
+  plt.savefig(path / "current_injection.svg")
+```
+
 What do we see above? Note that the y-axes in the final row are different for
 each subplot!
 

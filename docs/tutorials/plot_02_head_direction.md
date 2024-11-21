@@ -640,6 +640,17 @@ doc_plots.plot_rates_and_smoothed_counts(
 );
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/tutorials")
+if path.exists():
+  plt.savefig(path / "rates_and_smoothed_counts.svg")
+```
+
 #### Visualizing the connectivity
 Compute the tuning curve form the predicted rates.
 
