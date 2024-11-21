@@ -201,7 +201,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/how_to_guide")
 if path.exists():
-  fig.savefig(path / "plot_04_batch_glm.svg")
+  fig.savefig(path / "plot_04_batch_glm.svg", metadata={"Date":""})
 ```
 
 We can see that the log-likelihood is increasing but did not reach plateau yet.

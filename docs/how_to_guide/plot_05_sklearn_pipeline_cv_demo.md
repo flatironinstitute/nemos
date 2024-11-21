@@ -424,7 +424,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/how_to_guide")
 if path.exists():
-  fig.savefig(path / "plot_05_sklearn_pipeline_cv_demo.svg")
+  fig.savefig(path / "plot_05_sklearn_pipeline_cv_demo.svg", metadata={"Date":""})
 ```
 
 :rocket::rocket::rocket: **Success!** :rocket::rocket::rocket:

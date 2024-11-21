@@ -254,7 +254,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/how_to_guide")
 if path.exists():
-  fig.savefig(path / "plot_06_glm_pytree.svg")
+  fig.savefig(path / "plot_06_glm_pytree.svg", metadata={"Date":""})
 ```
 
 

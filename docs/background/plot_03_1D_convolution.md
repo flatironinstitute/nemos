@@ -172,7 +172,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/background")
 if path.exists():
-  fig.savefig(path / "plot_03_1D_convolution.svg")
+  fig.savefig(path / "plot_03_1D_convolution.svg", metadata={"Date":""})
 ```
 
 ## Convolve using [`Basis.compute_features`](nemos.basis.Basis.compute_features)

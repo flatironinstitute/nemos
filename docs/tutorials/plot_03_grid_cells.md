@@ -337,5 +337,5 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  fig.savefig(path / "plot_03_grid_cells.svg")
+  fig.savefig(path / "plot_03_grid_cells.svg", metadata={"Date":""})
 ```

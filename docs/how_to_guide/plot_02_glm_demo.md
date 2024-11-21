@@ -437,14 +437,12 @@ plt.legend()
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-plt.rcParams['svg.hashsalt'] = None
-
 # save image for thumbnail
 from pathlib import Path
 
 path = Path("../assets/thumbnails/how_to_guide")
 if path.exists():
-  fig.savefig(path / "plot_02_glm_demo.svg")
+  fig.savefig(path / "plot_02_glm_demo.svg", metadata={"Date":""})
 ```
 
 
