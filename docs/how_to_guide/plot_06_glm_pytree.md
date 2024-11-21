@@ -15,6 +15,29 @@ kernelspec:
 :tags: [hide-input]
 
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 # FeaturePytree example
@@ -164,6 +187,8 @@ print(jax.tree_util.tree_map(jnp.mean, example_pytree))
 print(jax.tree_util.tree_map(lambda x: x.shape, example_pytree))
 import matplotlib.pyplot as plt
 import pynapple as nap
+
+nap.nap_config.suppress_conversion_warnings = True
 ```
 
 ## FeaturePytrees and GLM
