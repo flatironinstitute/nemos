@@ -153,3 +153,6 @@ docs/data/
 # rst generated files
 docs/stubs
 
+# ignore the auto-generated svgs
+docs/assets/thumbnails:wq
+

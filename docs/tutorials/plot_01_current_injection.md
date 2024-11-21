@@ -627,7 +627,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  fig.savefig(path / "plot_01_current_injection.svg", metadata={"Date":""})
+  fig.savefig(path / "plot_01_current_injection.svg")
 ```
 
 What do we see above? Note that the y-axes in the final row are different for

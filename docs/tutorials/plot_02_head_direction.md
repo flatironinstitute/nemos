@@ -708,5 +708,5 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  fig.savefig(path / "plot_02_head_direction.svg", metadata={"Date":""})
+  fig.savefig(path / "plot_02_head_direction.svg")
 ```

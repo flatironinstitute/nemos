@@ -223,7 +223,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/how_to_guide")
 if path.exists():
-  fig.savefig(path / "plot_03_population_glm.svg", metadata={"Date":""})
+  fig.savefig(path / "plot_03_population_glm.svg")
 ```
 
 ## FeaturePytree

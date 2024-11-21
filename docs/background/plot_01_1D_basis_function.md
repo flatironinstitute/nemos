@@ -97,7 +97,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/background")
 if path.exists():
-  fig.savefig(path / "plot_01_1D_basis_function.svg", metadata={"Date":""})
+  fig.savefig(path / "plot_01_1D_basis_function.svg")
 ```
 
 ## Setting the basis support

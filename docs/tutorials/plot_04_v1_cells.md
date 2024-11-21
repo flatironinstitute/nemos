@@ -240,7 +240,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  fig.savefig(path / "plot_04_v1_cells.svg", metadata={"Date":""})
+  fig.savefig(path / "plot_04_v1_cells.svg")
 ```
 
 This receptive field gives us the spatial part of the linear response: it
