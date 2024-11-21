@@ -74,7 +74,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/background")
 if path.exists():
-  fig.savefig(path / "one_dim_bspline_basis.svg")
+  fig.savefig(path / "plot_01_1D_basis_function.svg")
 ```
 
 ## Setting the basis support

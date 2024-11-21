@@ -323,7 +323,7 @@ Let's plot them.
 
 
 ```{code-cell} ipython3
-plt.figure()
+fig = plt.figure()
 plt.plot(real_tcurves[neu], "r", label="true", linewidth=2)
 plt.plot(gamma_tcurves, "k", label="gamma-nemos", alpha=1)
 plt.plot(linreg_tcurves, "g", label="linreg-sklearn", alpha=0.5)
@@ -341,7 +341,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  plt.savefig(path / "plot_06_calcium_imaging.svg")
+  fig.savefig(path / "plot_06_calcium_imaging.svg")
 ```
 
 

@@ -163,11 +163,22 @@ First let's plot the log-likelihood to see if the model is converging.
 
 
 ```{code-cell} ipython3
-plt.figure()
+fig = plt.figure()
 plt.plot(logl)
 plt.xlabel("Iteration")
 plt.ylabel("Log-likelihood")
 plt.show()
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/how_to_guide")
+if path.exists():
+  fig.savefig(path / "plot_04_batch_glm.svg")
 ```
 
 We can see that the log-likelihood is increasing but did not reach plateau yet.

@@ -217,7 +217,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  plt.savefig(path / "plot_04_v1_cells.svg")
+  fig.savefig(path / "plot_04_v1_cells.svg")
 ```
 
 This receptive field gives us the spatial part of the linear response: it

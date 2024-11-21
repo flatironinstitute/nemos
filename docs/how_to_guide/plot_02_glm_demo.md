@@ -391,7 +391,7 @@ And finally plot the results for both neurons.
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 4
-plt.figure()
+fig = plt.figure()
 ax = plt.subplot(111)
 
 ax.spines['top'].set_visible(False)
@@ -410,6 +410,18 @@ plt.ylim(-0.011, .13)
 plt.ylabel("count/bin")
 plt.legend()
 ```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/how_to_guide")
+if path.exists():
+  fig.savefig(path / "plot_02_glm_demo.svg")
+```
+
 
 ## References
 [1] <span id="ref-1"><a href="https://arxiv.org/abs/2010.12362">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>

@@ -221,6 +221,18 @@ for i, ax in zip(tune_head.columns, axes.flatten()):
 axes[-1,-1].remove()
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/how_to_guide")
+if path.exists():
+  fig.savefig(path / "plot_06_glm_pytree.svg")
+```
+
+
 Okay, let's use unit number 7.
 
 Now let's set up our design matrix. First, let's fit the head direction by

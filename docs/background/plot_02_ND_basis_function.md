@@ -278,7 +278,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/background")
 if path.exists():
-  fig.savefig(path / "multiplicative_basis.svg")
+  fig.savefig(path / "plot_02_ND_basis_function.svg")
 ```
 
 :::{info}

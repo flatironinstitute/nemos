@@ -393,6 +393,17 @@ ax.legend()
 sns.despine(ax=ax)
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/how_to_guide")
+if path.exists():
+  fig.savefig(path / "plot_05_sklearn_pipeline_cv_demo.svg")
+```
+
 :rocket::rocket::rocket: **Success!** :rocket::rocket::rocket:
 We are now able to capture the distribution of the firing rate appropriately: both peaks and valleys in the spiking activity are matched by our model predicitons.
 

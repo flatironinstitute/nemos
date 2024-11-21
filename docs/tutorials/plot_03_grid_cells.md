@@ -314,5 +314,5 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  plt.savefig(path / "plot_03_grid_cells.svg")
+  fig.savefig(path / "plot_03_grid_cells.svg")
 ```

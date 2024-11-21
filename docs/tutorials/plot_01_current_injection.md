@@ -589,7 +589,7 @@ predicted_fr = predicted_fr / bin_size
 smooth_predicted_fr = predicted_fr.smooth(0.05, size_factor=20)
 
 # and plot!
-doc_plots.current_injection_plot(current, spikes, firing_rate,
+fig = doc_plots.current_injection_plot(current, spikes, firing_rate,
                                  # plot the predicted firing rate that has
                                  # been smoothed the same way as the
                                  # smoothed spike train
@@ -604,7 +604,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  plt.savefig(path / "plot_01_current_injection.svg")
+  fig.savefig(path / "plot_01_current_injection.svg")
 ```
 
 What do we see above? Note that the y-axes in the final row are different for

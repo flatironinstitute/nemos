@@ -192,6 +192,17 @@ for neuron in range(2):
 plt.tight_layout()
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/how_to_guide")
+if path.exists():
+  fig.savefig(path / "plot_03_population_glm.svg")
+```
+
 ## FeaturePytree
 [`PopulationGLM`](nemos.glm.PopulationGLM) is compatible with [`FeaturePytree`](nemos.pytrees.FeaturePytree). If you structured your predictors
 in a [`FeaturePytree`](nemos.pytrees.FeaturePytree), the `feature_mask` needs to be a dictionary of the same structure, containing arrays

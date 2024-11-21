@@ -34,7 +34,7 @@ plot_00_conceptual_intro.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/plot_01_1D_basis_function.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_01_1D_basis_function.svg" style="height: 100px", alt="One-Dimensional Basis."/>
 </figure>
 
 ```{toctree}
@@ -47,7 +47,7 @@ plot_01_1D_basis_function.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/plot_02_ND_basis_function.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_02_ND_basis_function.svg" style="height: 100px", alt="N-Dimensional Basis."/>
 </figure>
 
 ```{toctree}
@@ -60,7 +60,7 @@ plot_02_ND_basis_function.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/plot_03_1D_convolution.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/thumbnails/background/plot_03_1D_convolution.svg" style="height: 100px", alt="One-Dimensional Convolutions."/>
 </figure>
 
 ```{toctree}

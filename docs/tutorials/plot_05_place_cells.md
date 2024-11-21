@@ -109,7 +109,7 @@ Here each row is one neuron
 
 
 ```{code-cell} ipython3
-plt.figure(figsize=(12, 10))
+fig = plt.figure(figsize=(12, 10))
 gs = plt.GridSpec(len(spikes), 1)
 for i, n in enumerate(order):
     plt.subplot(gs[i, 0])
@@ -129,7 +129,7 @@ from pathlib import Path
 
 path = Path("../assets/thumbnails/tutorials")
 if path.exists():
-  plt.savefig(path / "plot_05_place_cells.svg")
+  fig.savefig(path / "plot_05_place_cells.svg")
 ```
 
 ## Phase precession

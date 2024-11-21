@@ -634,23 +634,12 @@ Let's see if our firing rate predictions improved and in what sense.
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 2
-doc_plots.plot_rates_and_smoothed_counts(
+fig = doc_plots.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection: raw history": rate_history,
      "Self-connection: bsais": rate_basis,
      "All-to-all: basis": predicted_firing_rate[:, 0]}
-);
-```
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-# save image for thumbnail
-from pathlib import Path
-
-path = Path("../assets/thumbnails/tutorials")
-if path.exists():
-  plt.savefig(path / "plot_02_head_direction.svg")
+)
 ```
 
 #### Visualizing the connectivity
@@ -685,5 +674,16 @@ all the coupling filters.
 
 
 ```{code-cell} ipython3
-doc_plots.plot_coupling(responses, tuning);
+fig = doc_plots.plot_coupling(responses, tuning)
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/tutorials")
+if path.exists():
+  fig.savefig(path / "plot_02_head_direction.svg")
 ```
