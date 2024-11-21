@@ -361,8 +361,19 @@ plt.show()
 
 # save image for thumbnail
 from pathlib import Path
+import os
 
-path = Path("../assets/thumbnails/tutorials")
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/tutorials"
+# if local store in assets
+else:
+   path = Path("../assets/thumbnails/tutorials")
+ 
+# make sure the folder exists if run from build
+if root or Path("../assets").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
 if path.exists():
   fig.savefig(path / "plot_06_calcium_imaging.svg")
 ```
