@@ -255,7 +255,7 @@ import os
 
 root = os.environ.get("READTHEDOCS_OUTPUT")
 if root:
-   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+   path = Path("docs/assets/thumbnails/how_to_guide")
 # if local store in assets
 else:
    path = Path("../assets/thumbnails/how_to_guide")
