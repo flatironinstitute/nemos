@@ -48,6 +48,7 @@ is defined by the samples that we input to the [`__call__`](nemos.basis.Basis.__
 
 
 ```{code-cell} ipython3
+
 # Generate a time series of sample points
 samples = nap.Tsd(t=np.arange(1001), d=np.linspace(0, 1,1001))
 
@@ -58,9 +59,20 @@ eval_basis = bspline(samples)
 print(f"Evaluated B-spline of order {order} with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples.")
 
-plt.figure()
+fig = plt.figure()
 plt.title("B-spline basis")
-plt.plot(eval_basis)
+_ = plt.plot(eval_basis)
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/background")
+if path.exists():
+  fig.savefig(path / "one_dim_bspline_basis.svg")
 ```
 
 ## Setting the basis support

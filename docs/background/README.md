@@ -14,9 +14,16 @@ pip install nemos[examples]
 
 :::
 
+
 ::::{grid} 1 2 3 3
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/lnp_model.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+</figure>
+
+
 ```{toctree}
 :maxdepth: 2
 
@@ -25,6 +32,11 @@ plot_00_conceptual_intro.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/background/one_dim_bspline_basis.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 
@@ -33,6 +45,11 @@ plot_01_1D_basis_function.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/background/multiplicative_basis.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 
@@ -41,6 +58,11 @@ plot_02_ND_basis_function.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/background/convolutions_valid_mode.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 

@@ -12,6 +12,8 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
 ```
 (glm_intro_background)=

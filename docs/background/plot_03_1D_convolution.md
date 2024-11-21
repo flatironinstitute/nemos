@@ -12,6 +12,8 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
 ```
 
@@ -112,7 +114,7 @@ rect_acausal_right = patches.Rectangle((len(spk) - (ws-1)//2, -2.5), (ws-1)//2, 
 # Set this figure as the thumbnail
 # mkdocs_gallery_thumbnail_number = 2
 
-plt.figure(figsize=(6, 4))
+fig = plt.figure(figsize=(6, 4))
 
 shift_spk = - spk - 0.1
 ax = plt.subplot(311)
@@ -136,6 +138,18 @@ plt.vlines(np.arange(spk.shape[0]), 0, shift_spk, color='k')
 plt.plot(np.arange(spk.shape[0]), spk_acausal_conv)
 plt.ylabel('acausal')
 plt.tight_layout()
+
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/background")
+if path.exists():
+  fig.savefig(path / "convolutions_valid_mode.svg")
 ```
 
 ## Convolve using [`Basis.compute_features`](nemos.basis.Basis.compute_features)

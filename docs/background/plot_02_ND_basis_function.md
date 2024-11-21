@@ -233,8 +233,6 @@ and we visualize the corresponding product.
 
 
 ```{code-cell} ipython3
-# Set this figure as the thumbnail
-# mkdocs_gallery_thumbnail_number = 3
 
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
 
@@ -268,6 +266,17 @@ axs[2, 0].set_xlabel('x-coord')
 axs[2, 1].set_xlabel('y-coord')
 
 plt.tight_layout()
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+
+path = Path("../assets/thumbnails/background")
+if path.exists():
+  fig.savefig(path / "multiplicative_basis.svg")
 ```
 
 :::{info}
