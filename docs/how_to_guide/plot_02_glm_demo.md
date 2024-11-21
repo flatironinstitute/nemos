@@ -437,6 +437,8 @@ plt.legend()
 ```{code-cell} ipython3
 :tags: [hide-input]
 
+plt.rcParams['svg.hashsalt'] = None
+
 # save image for thumbnail
 from pathlib import Path
 
