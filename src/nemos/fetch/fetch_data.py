@@ -11,6 +11,7 @@ import os
 import pathlib
 from typing import Optional, Union
 
+
 try:
     import pooch
     from pooch import Pooch
@@ -18,6 +19,7 @@ try:
 except ImportError:
     pooch = None
     Pooch = None
+    tqdm = None
 
 try:
     import dandi

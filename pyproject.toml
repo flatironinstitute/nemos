@@ -79,6 +79,7 @@ docs = [
     "seaborn",
     "pooch",
     "ipywidgets",
+    "ipykernel",
 ]
 examples = [
     "scikit-learn",
