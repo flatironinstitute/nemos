@@ -147,4 +147,6 @@ copybutton_prompt_is_regexp = True
 
 sphinxemoji_style = 'twemoji'
 
+nb_execution_timeout = 60 * 15  # Set timeout in seconds (e.g., 15 minutes)
+
 nitpicky = True
