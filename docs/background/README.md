@@ -20,7 +20,7 @@ pip install nemos[examples]
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/plot_00_conceptual_intro.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
+<img src="../_static/lnp_model.svg" style="height: 100px", alt="Linear-Non Linear-Poisson illustration."/>
 </figure>
 
 
