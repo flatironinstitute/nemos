@@ -15,7 +15,7 @@ from typing import Optional, Union
 try:
     import pooch
     from pooch import Pooch
-    from tqdm.auto import tqdm
+    from tqdm.autonotebook import tqdm
 except ImportError:
     pooch = None
     Pooch = None
@@ -127,7 +127,7 @@ def fetch_data(
         )
     retriever = _create_retriever(path)
     # Fetch the dataset using pooch.
-    return retriever.fetch(dataset_name, progressbar=tqdm)
+    return retriever.fetch(dataset_name)
 
 
 def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:

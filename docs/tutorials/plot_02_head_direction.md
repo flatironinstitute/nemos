@@ -712,10 +712,10 @@ if root:
    path = Path(root) / "html/_static/thumbnails/tutorials"
 # if local store in assets
 else:
-   path = Path("../assets/thumbnails/tutorials")
+   path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../assets").exists():
+if root or Path("../_build/html/_static/thumbnails").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
