@@ -63,7 +63,7 @@ causation for you (causation being a notoriously difficult problem in
 science), but it will allow you to see the effect of adding and removing
 different inputs on the predicted firing rate, which can facilitate
 causal inferences. For more reading on causation and explanation in
-neuroscience, the work of [CarlCraver](https://philosophy.wustl.edu/people/carl-f-craver) 
+neuroscience, the work of [Carl Craver](https://philosophy.wustl.edu/people/carl-f-craver) 
 is a good place to start.
 :::
 
