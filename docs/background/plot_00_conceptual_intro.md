@@ -241,10 +241,10 @@ firing rate that maximizes the likelihood of the observed spike train.
 
 :::{note}
 
-**In NeMoS, the log-likelihood can be computed directly by calling the
+In NeMoS, the log-likelihood can be computed directly by calling the
 `score` method, passing the predictors and the counts. The method first
 computes the rate $\lambda(t)$ using (2) and then the likelihood using
-(4).** This method is used under the hood during optimization.
+(4). This method is used under the hood during optimization.
 
 :::
 
