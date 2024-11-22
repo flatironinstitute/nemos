@@ -11,7 +11,6 @@ import os
 import pathlib
 from typing import Optional, Union
 
-
 try:
     import pooch
     from pooch import Pooch
