@@ -399,12 +399,13 @@ whereas whether an input happened 51 or 55 msec ago is less important.
 doc_plots.plot_basis();
 ```
 
-!!! info
+:::{note}
 
-    We provide a handful of different choices for basis functions, and
-    selecting the proper basis function for your input is an important
-    analytical step. We will eventually provide guidance on this choice, but
-    for now we'll give you a decent choice.
+We provide a handful of different choices for basis functions, and
+selecting the proper basis function for your input is an important
+analytical step. We will eventually provide guidance on this choice, but
+for now we'll give you a decent choice.
+:::
 
 NeMoS includes [`Basis`](nemos_basis) objects to handle the construction and use of these
 basis functions.

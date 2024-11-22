@@ -349,13 +349,12 @@ print(type(firing_rate))
 Now that we've done all this preparation, let's make a plot to more easily
 visualize the data.
 
-!!! note
+:::{note}
 
-    We're hiding the details of the plotting function for the purposes of this
-    tutorial, but you can find it in [the source
-    code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documentation_utils/plotting.py)
-    if you are interested.
-
+We're hiding the details of the plotting function for the purposes of this tutorial, but you can find it in [the source
+code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documentation_utils/plotting.py)
+if you are interested.
+:::
 
 ```{code-cell} ipython3
 doc_plots.current_injection_plot(current, spikes, firing_rate)
@@ -388,9 +387,11 @@ Pynapple can compute a tuning curve to help us answer this question, by
 binning our spikes based on the instantaneous input current and computing the
 firing rate within those bins:
 
-!!! note "Tuning curve in `pynapple`"
-    [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+:::{admonition} Tuning curve in `pynapple`
+:class: note 
 
+[`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+:::
 
 ```{code-cell} ipython3
 tuning_curve = nap.compute_1d_tuning_curves(spikes, current, nb_bins=15)

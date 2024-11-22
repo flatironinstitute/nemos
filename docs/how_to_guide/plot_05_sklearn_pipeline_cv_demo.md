@@ -530,24 +530,24 @@ The plot confirms that the firing rate distribution is accurately captured by ou
 
 
 
-!!! warning
-    Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
+:::{warning}
+Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
 
-    ```python
-    param_grid = dict(
-        glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
-        transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
-        transformerbasis___basis=(
-            nmo.basis.RaisedCosineBasisLinear(5),
-            nmo.basis.RaisedCosineBasisLinear(10),
-            nmo.basis.RaisedCosineBasisLog(5),
-            nmo.basis.RaisedCosineBasisLog(10),
-            nmo.basis.MSplineBasis(5),
-            nmo.basis.MSplineBasis(10),
-        ),
-    )
-    ```
-
+```python
+param_grid = dict(
+    glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+    transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
+    transformerbasis___basis=(
+        nmo.basis.RaisedCosineBasisLinear(5),
+        nmo.basis.RaisedCosineBasisLinear(10),
+        nmo.basis.RaisedCosineBasisLog(5),
+        nmo.basis.RaisedCosineBasisLog(10),
+        nmo.basis.MSplineBasis(5),
+        nmo.basis.MSplineBasis(10),
+    ),
+)
+```
+:::
 
 
 
