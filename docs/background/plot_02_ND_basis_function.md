@@ -308,7 +308,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/background")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static/thumbnails").exists():
+if root or Path("../_build/html/_static").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():

@@ -19,7 +19,7 @@ pip install nemos[examples]
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_02_glm_demo.svg" style="height: 100px", alt="Place cells."/>
+<img src="../_static/thumbnails/how_to_guide/plot_02_glm_demo.svg" style="height: 100px", alt="GLM demo."/>
 </figure>
 
 ```{toctree}
@@ -32,7 +32,7 @@ plot_02_glm_demo.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_03_population_glm.svg" style="height: 100px", alt="Place cells."/>
+<img src="../_static/thumbnails/how_to_guide/plot_03_population_glm.svg" style="height: 100px", alt="Population GLM."/>
 </figure>
 
 ```{toctree}
@@ -45,7 +45,7 @@ plot_03_population_glm.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_04_batch_glm.svg" style="height: 100px", alt="Place cells."/>
+<img src="../_static/thumbnails/how_to_guide/plot_04_batch_glm.svg" style="height: 100px", alt="Batched GLM."/>
 </figure>
 
 ```{toctree}
@@ -58,7 +58,7 @@ plot_04_batch_glm.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_05_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="Place cells."/>
+<img src="../_static/thumbnails/how_to_guide/plot_05_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="Pipelining and cross-validation."/>
 </figure>
 
 ```{toctree}
@@ -71,7 +71,7 @@ plot_05_sklearn_pipeline_cv_demo.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_06_glm_pytree.svg" style="height: 100px", alt="Place cells."/>
+<img src="../_static/thumbnails/how_to_guide/plot_06_glm_pytree.svg" style="height: 100px", alt="PyTrees."/>
 </figure>
 
 ```{toctree}
