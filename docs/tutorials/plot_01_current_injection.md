@@ -625,6 +625,7 @@ fig = doc_plots.current_injection_plot(current, spikes, firing_rate,
 
 # save image for thumbnail
 import os
+from pathlib import Path
 
 root = os.environ.get("READTHEDOCS_OUTPUT")
 if root:

@@ -15,7 +15,7 @@ from typing import Optional, Union
 try:
     import pooch
     from pooch import Pooch
-    from tqdm.autonotebook import tqdm
+    from tqdm.auto import tqdm
 except ImportError:
     pooch = None
     Pooch = None
