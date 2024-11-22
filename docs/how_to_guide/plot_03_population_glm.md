@@ -103,6 +103,7 @@ model.fit(X, spikes)
 print(f"population GLM log-likelihood: {model.score(X, spikes)}")
 ```
 
+(neuron-specific-features)=
 ## Neuron-specific features
 If you want to model neurons with different input features, the way to do so is to specify a `feature_mask`.
 Let's assume that we have two neurons, share one shared input, and have an extra private one, for a total of

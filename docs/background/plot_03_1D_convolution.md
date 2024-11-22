@@ -72,7 +72,7 @@ spk[-4] = 1
 Generate and plot a filter, then execute a convolution in "valid" mode for all trials and neurons.
 In nemos, you can use the [`tensor_convolve`](nemos.convolve.tensor_convolve) function for this.
 
-:::{info}
+:::{note}
 The `"valid"` mode of convolution only calculates the product when the two input vectors overlap completely,
 avoiding border artifacts. The outcome of such a convolution will
 be an array of `max(M,N) - min(M,N) + 1` elements in length, where `M` and `N` represent the number

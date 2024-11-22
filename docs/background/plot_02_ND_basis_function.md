@@ -315,7 +315,7 @@ if path.exists():
   fig.savefig(path / "plot_02_ND_basis_function.svg")
 ```
 
-:::{info}
+:::{note}
 Basis objects of different types can be combined through multiplication or addition.
 This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.
 A practical example would be characterizing the responses to position
@@ -383,7 +383,7 @@ plt.show()
 print(f"Sparsity check: {(Z == 0).sum() / Z.size * 100: .2f}% of the evaluated basis is null.")
 ```
 
-:::{info}
+:::{note}
 The evaluated basis is going to be **sparse** if the basis elements support do not cover the
 full domain of the basis.
 :::

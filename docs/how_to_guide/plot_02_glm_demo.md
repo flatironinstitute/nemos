@@ -278,12 +278,13 @@ plt.eventplot(np.where(spikes)[0])
 In this section, we will show you how to generate spikes from a population; We assume that the coupling
 filters are known or inferred.
 
-!!! warning
-    Making sure that the dynamics of your recurrent neural network are stable is non-trivial[$^{[1]}$](#ref-1). In particular,
-    coupling weights obtained by fitting a GLM by maximum-likelihood can generate unstable dynamics. If the
-    dynamics of your recurrently coupled model are unstable, you can try a `soft-plus` non-linearity
-    instead of an exponential, and you can "shrink" your weights until stability is reached.
+:::{warning}
 
+Making sure that the dynamics of your recurrent neural network are stable is non-trivial[$^{[1]}$](#ref-1). In particular,
+coupling weights obtained by fitting a GLM by maximum-likelihood can generate unstable dynamics. If the
+dynamics of your recurrently coupled model are unstable, you can try a `soft-plus` non-linearity
+instead of an exponential, and you can "shrink" your weights until stability is reached.
+:::
 
 
 ```{code-cell} ipython3
@@ -458,4 +459,5 @@ if path.exists():
 
 
 ## References
-[1] <span id="ref-1"><a href="https://arxiv.org/abs/2010.12362">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>
+(ref-1)=
+[1] [Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.](https://arxiv.org/abs/2010.12362)

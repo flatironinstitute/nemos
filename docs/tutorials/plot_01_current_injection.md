@@ -294,7 +294,7 @@ plotted together.
 One common way to visualize a rough estimate of firing rate is to smooth
 the spikes by convolving them with a Gaussian filter.
 
-:::{info}
+:::{note}
 
 This is a heuristic for getting the firing rate, and shouldn't be taken
 as the literal truth (to see why, pass a firing rate through a Poisson
@@ -734,7 +734,7 @@ the same dataset, whether that's models using different regularizers and
 solvers or those using different predictors, comparing log-likelihoods is a
 reasonable thing to do.
 
-:::{info}
+:::{note}
 
 Under the hood, NeMoS is minimizing the negative log-likelihood, as is
 typical in many optimization contexts. [`score`](nemos.glm.GLM.score) returns the real

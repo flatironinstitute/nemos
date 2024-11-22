@@ -284,7 +284,7 @@ You can specify the regularization scheme and its strength when initializing the
 ## **Pre-processing with `pynapple`**
 
 
-:::{info}
+:::{note}
 
 This section assumes some familiarity with the `pynapple` package for time series manipulation and data
 exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
@@ -301,7 +301,7 @@ also be a `pynapple` time series.
 A canonical example of this behavior is the `predict` method of `GLM`.
 
 
-```python
+```ipython
 
 >>> import numpy as np
 >>> import pynapple as nap
@@ -331,7 +331,7 @@ Let's see how you can greatly streamline your analysis pipeline by integrating `
 You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
 :::
 
-```python
+```ipython
 
 >>> import nemos as nmo
 >>> import pynapple as nap
@@ -361,7 +361,7 @@ You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oa
 Finally, let's compare the tuning curves
 
 
-```python
+```ipython
 
 >>> import numpy as np
 >>> import matplotlib.pyplot as plt
@@ -400,7 +400,7 @@ For example, if we would like to tune the critical hyper-parameter `regularizer_
 
 [^1]: For a detailed explanation and practical examples, refer to the [cross-validation page](https://scikit-learn.org/stable/modules/cross_validation.html) in the `scikit-learn` documentation.
 
-```python
+```ipython
 
 >>> # set up the model
 >>> import nemos as nmo
@@ -416,7 +416,7 @@ For example, if we would like to tune the critical hyper-parameter `regularizer_
 
 Fit a 5-fold cross-validation scheme for comparing two different regularizer strengths:
 
-```python
+```ipython
 
 >>> from sklearn.model_selection import GridSearchCV
 
@@ -440,7 +440,7 @@ For more information and a practical example on how to construct a parameter gri
 
 Finally, we can print the regularizer strength with the best cross-validated performance:
 
-```python
+```ipython
 
 >>> # print best regularizer strength
 >>> print(cls.best_params_)
