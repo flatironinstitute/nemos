@@ -1,5 +1,7 @@
 """Utility functions for coupling filter definition."""
 
+from __future__ import annotations
+
 from typing import Callable, Tuple, Union
 
 import jax
