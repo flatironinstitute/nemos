@@ -117,8 +117,8 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
+# sphinx build documentation
+/docs/_build
 
 # mypy
 .mypy_cache/
@@ -153,6 +153,4 @@ docs/data/
 # rst generated files
 docs/stubs
 
-# ignore the auto-generated svgs
-docs/assets/thumbnails
 
