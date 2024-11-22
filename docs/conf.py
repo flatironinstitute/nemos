@@ -68,6 +68,7 @@ autodoc_default_options = {
     'inherited-members': True,
     'undoc-members': True,
     'show-inheritance': True,
+    'special-members': '__call__, __add__, __mul__, __pow__'
 }
 
 # # napolean configs
@@ -90,6 +91,7 @@ autodoc_type_aliases = {
     "TsdFrame": "pynapple.TsdFrame",
     "JaxArray": "JaxArray",
 }
+autodoc_typehints_format = "short"
 
 numfig = True
 
@@ -150,3 +152,9 @@ sphinxemoji_style = 'twemoji'
 nb_execution_timeout = 60 * 15  # Set timeout in seconds (e.g., 15 minutes)
 
 nitpicky = True
+
+# Get exclusion patterns from an environment variable
+exclude_tutorials = os.environ.get("EXCLUDE_TUTORIALS", "false").lower() == "true"
+
+if exclude_tutorials:
+    nb_execution_excludepatterns = ["tutorials/**", "how_to_guide/**", "background/**"]

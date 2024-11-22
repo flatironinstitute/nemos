@@ -503,7 +503,7 @@ class Basis(Base, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -512,11 +512,14 @@ class Basis(Base, abc.ABC):
     Raises
     ------
     ValueError:
-        - If ``mode`` is not 'eval' or 'conv'.
-        - If ``kwargs`` are not None and ``mode =="eval"``.
-        - If ``kwargs`` include parameters not recognized or do not have
+        If ``mode`` is not 'eval' or 'conv'.
+    ValueError:
+        If ``kwargs`` are not None and ``mode =="eval"``.
+    ValueError:
+        If ``kwargs`` include parameters not recognized or do not have
         default values in ``create_convolutional_predictor``.
-        - If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
+    ValueError:
+        If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
@@ -1151,7 +1154,7 @@ class Basis(Base, abc.ABC):
         Returns
         -------
         :
-            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
+            The product of the basis with itself "exponent" times. Equivalent to ``self * self * ... * self``.
 
         Raises
         ------
@@ -1326,11 +1329,11 @@ class Basis(Base, abc.ABC):
         **How it works:**
 
         - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
-        be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
-        ``(n_inputs, n_basis_funcs)``.
+          be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
+          ``(n_inputs, n_basis_funcs)``.
 
         - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
-        be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
+          be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
 
         For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
         then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
@@ -1924,7 +1927,7 @@ class SplineBasis(Basis, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2090,7 +2093,7 @@ class MSplineBasis(SplineBasis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs:
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2256,7 +2259,7 @@ class BSplineBasis(SplineBasis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2395,7 +2398,7 @@ class CyclicBSplineBasis(SplineBasis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2559,7 +2562,7 @@ class RaisedCosineBasisLinear(Basis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2774,7 +2777,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2945,7 +2948,7 @@ class OrthExponentialBasis(Basis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -2988,9 +2991,9 @@ class OrthExponentialBasis(Basis):
 
     @property
     def decay_rates(self):
-        """Decay rate.
+        r"""Decay rate.
 
-        The rate of decay of the exponential functions. If :math:`f_i(t) = \exp{-\alpha_i t}` is the i-th decay
+        The rate of decay of the exponential functions. If :math:`f_i(t) = e^{-\alpha_i t}` is the i-th decay
         exponential before orthogonalization, :math:`\alpha_i` is the i-th element of the ``decay_rate`` vector.
         """
         return self._decay_rates

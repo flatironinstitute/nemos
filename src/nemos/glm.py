@@ -1534,10 +1534,10 @@ class PopulationGLM(GLM):
         an NDArray or a :class:`nemos.pytrees.FeaturePytree` of 0s and 1s. In particular,
 
         - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if
-        ``feature_mask[i, j] == 1``.
+          ``feature_mask[i, j] == 1``.
 
         - If the mask is a :class:``nemos.pytrees.FeaturePytree``, then
-        ``"feature_name"`` is a predictor of neuron ``j`` if ``feature_mask["feature_name"][j] == 1``.
+          ``"feature_name"`` is a predictor of neuron ``j`` if ``feature_mask["feature_name"][j] == 1``.
 
         Examples
         --------

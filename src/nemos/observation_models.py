@@ -24,7 +24,7 @@ class Observations(Base, abc.ABC):
     This is an abstract base class used to implement observation models for neural data.
     Specific observation models that inherit from this class should define their versions
     of the abstract methods such as :meth:`~nemos.observation_models.Observations.log_likelihood`,
-    :meth`~nemos.observation_models.Observations.sample_generator`, and
+    :meth:`~nemos.observation_models.Observations.sample_generator`, and
     :meth:`~nemos.observation_models.Observations.deviance`.
 
     Attributes
