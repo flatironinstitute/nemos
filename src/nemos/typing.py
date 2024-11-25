@@ -6,6 +6,9 @@ import jax.numpy as jnp
 import jaxopt
 from jax.typing import ArrayLike
 
+import pynapple as nap
+from statsmodels.tools.typing import NDArray
+
 from .pytrees import FeaturePytree
 
 DESIGN_INPUT_TYPE = Union[jnp.ndarray, FeaturePytree]
@@ -51,3 +54,5 @@ ProximalOperator = Callable[
     ],  # Step-size for optimization (must be a float)
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
+
+FeatureMatrix = nap.TsdFrame | NDArray
