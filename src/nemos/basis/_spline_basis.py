@@ -191,7 +191,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs:
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -297,10 +297,10 @@ class MSplineBasis(SplineBasis, abc.ABC):
         -------
         X : NDArray
             A 1D array of uniformly spaced sample points within the domain [0, 1].
-            Shape: `(n_samples,)`.
+            Shape: ``(n_samples,)``.
         Y : NDArray
             A 2D array where each row corresponds to the evaluated M-spline basis
-            function values at the points in X. Shape: `(n_samples, n_basis_funcs)`.
+            function values at the points in X. Shape: ``(n_samples, n_basis_funcs)``.
 
         Examples
         --------
@@ -351,7 +351,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -421,7 +421,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev`
+        The evaluation is performed by looping over each element and using ``splev``
         from SciPy to compute the basis values.
         """
         sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
@@ -444,14 +444,14 @@ class BSplineBasis(SplineBasis, abc.ABC):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev` from
+        The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
 
         Examples
@@ -490,7 +490,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -560,7 +560,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev` from
+        The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
 
         """
@@ -608,14 +608,14 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev` from
+        The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
 
         Examples
