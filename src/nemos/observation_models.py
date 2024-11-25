@@ -868,9 +868,11 @@ def check_observation_model(observation_model):
         If the `observation_model` does not have one of the required attributes.
 
     TypeError
-        - If an attribute is not a callable function.
-        - If a function does not return a jax.numpy.ndarray.
-        - If 'inverse_link_function' is not differentiable.
+        If an attribute is not a callable function.
+    TypeError
+        If a function does not return a jax.numpy.ndarray.
+    TypeError
+        If 'inverse_link_function' is not differentiable.
 
     Examples
     --------

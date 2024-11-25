@@ -60,8 +60,9 @@ def difference_of_gammas(
     Raises
     ------
     ValueError:
-        - If any of the Gamma parameters is lesser or equal to 0.
-        - If the upper_percentile is not in [0, 1).
+        If any of the Gamma parameters is lesser or equal to 0.
+    ValueError:
+        If the upper_percentile is not in [0, 1).
 
     References
     ----------
@@ -247,7 +248,6 @@ def simulate_recurrent(
     inverse_link_function :
         The inverse link function for the observation model.
 
-
     Returns
     -------
     simulated_activity :
@@ -294,7 +294,6 @@ def simulate_recurrent(
     >>> _ = plt.title("Simulated firing rates")
     >>> _ = plt.show()
     """
-
     if isinstance(feedforward_input, FeaturePytree):
         raise ValueError(
             "simulate_recurrent works only with arrays. "

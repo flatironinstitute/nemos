@@ -1008,9 +1008,10 @@ class Basis(Base, abc.ABC):
         Raises
         ------
         ValueError
-            - If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
             the Basis object requires.
-            - If one of the n_samples is <= 0.
+        ValueError
+            If one of the n_samples is <= 0.
 
         Notes
         -----

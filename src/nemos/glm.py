@@ -686,7 +686,7 @@ class GLM(BaseRegressor):
             If ``init_params[i]`` cannot be converted to ``jnp.ndarray`` for all ``i``
 
         Examples
-        -------
+        --------
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
@@ -1516,12 +1516,17 @@ class PopulationGLM(GLM):
         Raises
         ------
         ValueError
-            - If ``init_params`` is not of length two.
-            - If dimensionality of ``init_params`` are not correct.
-            - If ``X`` is not two-dimensional.
-            - If ``y`` is not two-dimensional.
-            - If the ``feature_mask`` is not of the right shape.
-            - If solver returns at least one NaN parameter, which means it found
+            If ``init_params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not two-dimensional.
+        ValueError
+            If the ``feature_mask`` is not of the right shape.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
             an invalid solution. Try tuning optimization hyperparameters.
         TypeError
             If ``init_params`` are not array-like
