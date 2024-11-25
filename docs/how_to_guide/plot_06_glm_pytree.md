@@ -283,7 +283,7 @@ Let's create our basis and then arrange our data properly.
 unit_no = 7
 spikes = nwb['units'][unit_no]
 
-basis = nemos.basis.basis.CyclicBSplineBasis(10, order=5)
+basis = nmo.basis.CyclicBSplineBasis(10, order=5)
 x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
 plt.plot(x, basis(x))
