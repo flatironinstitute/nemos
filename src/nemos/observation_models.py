@@ -466,16 +466,16 @@ class PoissonObservations(Observations):
         .. math::
         \begin{aligned}
         \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
-        [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})] \\\
-        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
-        \hat{\lambda}\_{tn} - \Gamma({y\_{tn}+1})] \\\
-        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
-        \hat{\lambda}\_{tn}] + \\text{const}
+        [y_{tn} \log(\hat{\lambda}_{tn}) - \hat{\lambda}_{tn} - \log({y_{tn}!})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y_{tn} \log(\hat{\lambda}_{tn}) -
+        \hat{\lambda}_{tn} - \Gamma({y_{tn}+1})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y_{tn} \log(\hat{\lambda}_{tn}) -
+        \hat{\lambda}_{tn}] + \\text{const}
         \end{aligned}
 
         Because :math:`\Gamma(k+1)=k!`, see `wikipedia <https://en.wikipedia.org/wiki/Gamma_function>` for explanation.
 
-        The :math:`\log({y\_{tn}!})` term is not a function of the parameters and can be disregarded
+        The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
         predicted_rate = jnp.clip(

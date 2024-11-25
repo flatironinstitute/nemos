@@ -422,7 +422,7 @@ def _calculate_optimal_batch_size_svrg(
     num_samples:
         The number of samples.
     l_smooth_max:
-        The $L\_{\text{max}}$ smoothness constant.
+        The $L_{\text{max}}$ smoothness constant.
     l_smooth:
         The $L$ smoothness constant.
     strong_convexity:
@@ -480,7 +480,7 @@ def _calculate_b_hat(num_samples: int, l_smooth_max: float, l_smooth: float):
     num_samples :
         Total number of data points.
     l_smooth_max :
-        Maximum smoothness constant $L\_{\text{max}}$.
+        Maximum smoothness constant $L_{\text{max}}$.
     l_smooth :
         Smoothness constant $L$.
 

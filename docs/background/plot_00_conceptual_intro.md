@@ -227,13 +227,13 @@ likely it is to observe the given spike train for the computed firing rate:
 if $y(t)$ is the spike counts and $\lambda(t)$ the firing rate, the equation
 for the log-likelihood is
 
-$$ \sum\_t \log P(y(t) | \lambda(t)) = \sum\_t y(t) \log(\lambda(t)) -
+$$ \sum_t \log P(y(t) | \lambda(t)) = \sum_t y(t) \log(\lambda(t)) -
 \lambda(t) - \log (y(t)!)\tag{3}$$
 
 Note that this last $\log(y(t)!)$ term does not depend on $\lambda(t)$ and
 thus is independent of the model, so it is normally ignored.
 
-$$ \sum\_t \log P(y(t) | \lambda(t)) \propto \sum\_t y(t) \log(\lambda(t)) -
+$$ \sum_t \log P(y(t) | \lambda(t)) \propto \sum_t y(t) \log(\lambda(t)) -
 \lambda(t))\tag{4}$$
 
 This is the objective function of the GLM model: we are trying to find the
