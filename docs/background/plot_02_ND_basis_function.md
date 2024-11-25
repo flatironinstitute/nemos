@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 (composing_basis_function)=
@@ -86,7 +111,7 @@ In the subsequent sections, we will:
 Consider an instance where we want to capture a neuron's response to an animal's position within a given arena.
 In this scenario, the stimuli are the 2D coordinates (x, y) that represent the animal's position at each time point.
 
-+++
+
 
 ### Additive Basis Object
 One way to model the response to our 2D stimuli is to hypothesize that it decomposes into two factors:
@@ -231,8 +256,6 @@ and we visualize the corresponding product.
 
 
 ```{code-cell} ipython3
-# Set this figure as the thumbnail
-# mkdocs_gallery_thumbnail_number = 3
 
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
 
@@ -268,14 +291,36 @@ axs[2, 1].set_xlabel('y-coord')
 plt.tight_layout()
 ```
 
-:::{info}
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/background"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/background")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_02_ND_basis_function.svg")
+```
+
+:::{note}
 Basis objects of different types can be combined through multiplication or addition.
 This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.
 A practical example would be characterizing the responses to position
 in a linear maze and the LFP phase angle.
 :::
 
-+++
+
 
 N-Dimensional Basis
 -------------------
@@ -336,12 +381,12 @@ plt.show()
 print(f"Sparsity check: {(Z == 0).sum() / Z.size * 100: .2f}% of the evaluated basis is null.")
 ```
 
-:::{info}
+:::{note}
 The evaluated basis is going to be **sparse** if the basis elements support do not cover the
 full domain of the basis.
 :::
 
-+++
+
 
 Here we demonstrate a shortcut syntax for multiplying bases of the same class.
 This is achieved using the power operator with an integer exponent.

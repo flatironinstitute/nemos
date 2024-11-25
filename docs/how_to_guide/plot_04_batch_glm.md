@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 
@@ -161,11 +186,33 @@ First let's plot the log-likelihood to see if the model is converging.
 
 
 ```{code-cell} ipython3
-plt.figure()
+fig = plt.figure()
 plt.plot(logl)
 plt.xlabel("Iteration")
 plt.ylabel("Log-likelihood")
 plt.show()
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/how_to_guide")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_04_batch_glm.svg")
 ```
 
 We can see that the log-likelihood is increasing but did not reach plateau yet.

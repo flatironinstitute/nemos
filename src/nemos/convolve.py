@@ -248,14 +248,18 @@ def create_convolutional_predictor(
 
     Raises
     ------
-    ValueError
-        - If `basis_matrix` is not a 2-dimensional array or has a singleton first dimension.
-        - If `time_series` does not contain arrays of at least one dimension or contains
-          arrays with a dimensionality less than `axis`.
-        - If any array within `time_series` or `basis_matrix` is empty.
-        - If the number of elements along the convolution axis in any array within `time_series`
-          is less than the window size of the `basis_matrix`.
-        - If shifting is attempted with 'acausal' causality.
+    ValueError:
+        If `basis_matrix` is not a 2-dimensional array or has a singleton first dimension.
+    ValueError:
+        If `time_series` does not contain arrays of at least one dimension or contains
+        arrays with a dimensionality less than `axis`.
+    ValueError:
+        If any array within `time_series` or `basis_matrix` is empty.
+    ValueError:
+        If the number of elements along the convolution axis in any array within `time_series`
+        is less than the window size of the `basis_matrix`.
+    ValueError:
+        If shifting is attempted with 'acausal' causality.
     """
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)

@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 (convolution_background)=
@@ -47,7 +72,7 @@ spk[-4] = 1
 Generate and plot a filter, then execute a convolution in "valid" mode for all trials and neurons.
 In nemos, you can use the [`tensor_convolve`](nemos.convolve.tensor_convolve) function for this.
 
-:::{info}
+:::{note}
 The `"valid"` mode of convolution only calculates the product when the two input vectors overlap completely,
 avoiding border artifacts. The outcome of such a convolution will
 be an array of `max(M,N) - min(M,N) + 1` elements in length, where `M` and `N` represent the number
@@ -112,7 +137,7 @@ rect_acausal_right = patches.Rectangle((len(spk) - (ws-1)//2, -2.5), (ws-1)//2, 
 # Set this figure as the thumbnail
 # mkdocs_gallery_thumbnail_number = 2
 
-plt.figure(figsize=(6, 4))
+fig = plt.figure(figsize=(6, 4))
 
 shift_spk = - spk - 0.1
 ax = plt.subplot(311)
@@ -136,6 +161,29 @@ plt.vlines(np.arange(spk.shape[0]), 0, shift_spk, color='k')
 plt.plot(np.arange(spk.shape[0]), spk_acausal_conv)
 plt.ylabel('acausal')
 plt.tight_layout()
+
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/background"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/background")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_03_1D_convolution.svg")
 ```
 
 ## Convolve using [`Basis.compute_features`](nemos.basis.Basis.compute_features)

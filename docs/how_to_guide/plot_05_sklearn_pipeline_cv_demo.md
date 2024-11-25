@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 (sklearn-how-to)=
@@ -27,7 +52,7 @@ In particular, we will learn:
 4. How to select the number of bases and the basis type through cross-validation (or any other hyperparameter in the pipeline).
 5. How to use a custom scoring metric to quantify the performance of each configuration.
 
-+++
+
 
 ## What is a scikit-learn pipeline
 
@@ -212,12 +237,12 @@ sns.despine(ax=ax)
 The current model captures the bimodal distribution of responses, appropriately picking out the peaks. However, it doesn't do a good job capturing the actual firing rate: the peaks are too low and the valleys are not low enough. This might be because of our choice of basis and/or regularizer strength, so let's see if tuning those parameters results in a better fit! We could do this manually, but doing this with the sklearn pipeline will make everything much easier!
 
 
-+++
+
 
 ### Select the number of basis by cross-validation
 
 
-+++
+
 
 :::{warning}
 Please keep in mind that while [`GLM.score`](nemos.glm.GLM.score) supports different ways of evaluating goodness-of-fit through the `score_type` argument, `pipeline.score(X, y, score_type="...")` does not propagate this, and uses the default value of `log-likelihood`.
@@ -248,7 +273,7 @@ In order to define a parameter grid dictionary for a pipeline, you must structur
 The values in the dictionary are the parameters to be tested.
 :::
 
-+++
+
 
 #### Run the grid search
 Let's run a 5-fold cross-validation of the hyperparameters with the scikit-learn [`model_selection.GridsearchCV`](https://scikit-learn.org/1.5/modules/generated/sklearn.model_selection.GridSearchCV.html#sklearn.model_selection.GridSearchCV) class.
@@ -341,7 +366,7 @@ best_n_basis = n_basis_funcs[i_best % len(n_basis_funcs)]
 ```
 :::
 
-+++
+
 
 #### Visualize the scores
 
@@ -391,7 +416,30 @@ ax.legend()
 sns.despine(ax=ax)
 ```
 
-:rocket::rocket::rocket: **Success!** :rocket::rocket::rocket:
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/how_to_guide")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_05_sklearn_pipeline_cv_demo.svg")
+```
+
+&#x1F680;&#x1F680;&#x1F680; **Success!** &#x1F680;&#x1F680;&#x1F680;
+
 We are now able to capture the distribution of the firing rate appropriately: both peaks and valleys in the spiking activity are matched by our model predicitons.
 
 ### Evaluating different bases directly
@@ -481,28 +529,28 @@ sns.despine(ax=ax)
 The plot confirms that the firing rate distribution is accurately captured by our model predictions.
 
 
-+++
-
-!!! warning
-    Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
-
-    ```python
-    param_grid = dict(
-        glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
-        transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
-        transformerbasis___basis=(
-            nmo.basis.RaisedCosineBasisLinear(5),
-            nmo.basis.RaisedCosineBasisLinear(10),
-            nmo.basis.RaisedCosineBasisLog(5),
-            nmo.basis.RaisedCosineBasisLog(10),
-            nmo.basis.MSplineBasis(5),
-            nmo.basis.MSplineBasis(10),
-        ),
-    )
-    ```
 
 
-+++
+:::{warning}
+Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
+
+```python
+param_grid = dict(
+    glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+    transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
+    transformerbasis___basis=(
+        nmo.basis.RaisedCosineBasisLinear(5),
+        nmo.basis.RaisedCosineBasisLinear(10),
+        nmo.basis.RaisedCosineBasisLog(5),
+        nmo.basis.RaisedCosineBasisLog(10),
+        nmo.basis.MSplineBasis(5),
+        nmo.basis.MSplineBasis(10),
+    ),
+)
+```
+:::
+
+
 
 ## Create a custom scorer
 By default, the GLM score method returns the model log-likelihood. If you want to try a different metric, such as the pseudo-R2, you can create a custom scorer and pass it to the cross-validation object:
@@ -534,7 +582,7 @@ gridsearch.fit(X, y)
 And finally, we can plot each model's score.
 
 
-+++
+
 
 Plot the pseudo-R2 scores
 

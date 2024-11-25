@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 (glm_intro_background)=
 # Generalized Linear Models: An Introduction
@@ -38,7 +63,7 @@ causation for you (causation being a notoriously difficult problem in
 science), but it will allow you to see the effect of adding and removing
 different inputs on the predicted firing rate, which can facilitate
 causal inferences. For more reading on causation and explanation in
-neuroscience, the work of [CarlCraver](https://philosophy.wustl.edu/people/carl-f-craver) 
+neuroscience, the work of [Carl Craver](https://philosophy.wustl.edu/people/carl-f-craver) 
 is a good place to start.
 :::
 
@@ -161,7 +186,7 @@ fig = doc_plots.lnp_schematic(input_feature, weights, intercepts,
                               plot_nonlinear=True)
 ```
 
-:::{info}
+:::{note}
 In NeMoS, the non-linearity is kept fixed. We default to the exponential,
 but a small number of other choices, such as soft-plus, are allowed. The
 allowed choices guarantee both the non-negativity constraint described
@@ -171,7 +196,10 @@ is not guaranteed in general.
 :::
 
 Specifically, our firing rate is:
-$$ \lambda (t) = \exp (L(x(t)) = \exp (w x(t) + c) \tag{2}$$
+
+$$
+\lambda (t) = \exp (L(x(t)) = \exp (w x(t) + c) \tag{2}
+$$
 
 We can see that the output of the nonlinear transformation is always
 positive, though note that the y-values have changed drastically.
@@ -199,32 +227,32 @@ likely it is to observe the given spike train for the computed firing rate:
 if $y(t)$ is the spike counts and $\lambda(t)$ the firing rate, the equation
 for the log-likelihood is
 
-$$ \sum\_t \log P(y(t) | \lambda(t)) = \sum\_t y(t) \log(\lambda(t)) -
+$$ \sum_t \log P(y(t) | \lambda(t)) = \sum_t y(t) \log(\lambda(t)) -
 \lambda(t) - \log (y(t)!)\tag{3}$$
 
 Note that this last $\log(y(t)!)$ term does not depend on $\lambda(t)$ and
 thus is independent of the model, so it is normally ignored.
 
-$$ \sum\_t \log P(y(t) | \lambda(t)) \propto \sum\_t y(t) \log(\lambda(t)) -
+$$ \sum_t \log P(y(t) | \lambda(t)) \propto \sum_t y(t) \log(\lambda(t)) -
 \lambda(t))\tag{4}$$
 
 This is the objective function of the GLM model: we are trying to find the
 firing rate that maximizes the likelihood of the observed spike train.
 
-:::{info}
+:::{note}
 
-**In NeMoS, the log-likelihood can be computed directly by calling the
+In NeMoS, the log-likelihood can be computed directly by calling the
 `score` method, passing the predictors and the counts. The method first
 computes the rate $\lambda(t)$ using (2) and then the likelihood using
-(4).** This method is used under the hood during optimization.
+(4). This method is used under the hood during optimization.
 
 :::
 
-+++
+
 
 ## More general GLMs
 So far, we have focused on the relatively simple LNP model of spike generation, which is a special case of a GLM. The LNP model has some known shortcomings[$^{[1]}$](#ref-1). For instance, LNP ignores things like refactory periods and other history-dependent features of spiking in a neuron. As we will show in other demos, such _spike history filters_ can be built into GLMs to give more accurate results. We will also show how, if you have recordings from a large _population_ of neurons simultaneously, you can build connections between the neurons into the GLM in the form of _coupling filters_. This can help answer the degree to which activity is driven primarily by the input X, or by network influences in the population.
 
 ## References
-
-[1] <span id="ref-1"><a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2684455/">Pillow, JW, Shlens, J, Paninski, L, Sher, A,  Litke, AM, Chichilnisky, EJ, Simoncelli, EP (2008),  "Spatio-temporal correlations and visual signalling in a complete neuronal population." Nature 454: 995-9.</a></span>
+(ref-1)=
+[1] [Pillow, JW, Shlens, J, Paninski, L, Sher, A,  Litke, AM, Chichilnisky, EJ, Simoncelli, EP (2008),  "Spatio-temporal correlations and visual signalling in a complete neuronal population." Nature 454: 995-9.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2684455/)

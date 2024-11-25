@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 # FeaturePytree example
@@ -115,7 +140,7 @@ a useful function for performing computations on arbitrary pytrees,
 preserving their structure.
 
 
-+++
+
 
 We can map lambda functions:
 
@@ -162,6 +187,8 @@ print(jax.tree_util.tree_map(jnp.mean, example_pytree))
 print(jax.tree_util.tree_map(lambda x: x.shape, example_pytree))
 import matplotlib.pyplot as plt
 import pynapple as nap
+
+nap.nap_config.suppress_conversion_warnings = True
 ```
 
 ## FeaturePytrees and GLM
@@ -218,6 +245,29 @@ for i, ax in zip(tune_head.columns, axes.flatten()):
     ax.set_title("Unit {}".format(i))
 axes[-1,-1].remove()
 ```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/how_to_guide")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_06_glm_pytree.svg")
+```
+
 
 Okay, let's use unit number 7.
 

@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 
@@ -151,7 +176,7 @@ If the provided `solver_name` is not listed in the `allowed_solvers` this will r
 exception.
 :::
 
-+++
+
 
 ### Model Fit
 Fitting the model is as straight forward as calling the `model.fit`
@@ -253,12 +278,13 @@ plt.eventplot(np.where(spikes)[0])
 In this section, we will show you how to generate spikes from a population; We assume that the coupling
 filters are known or inferred.
 
-!!! warning
-    Making sure that the dynamics of your recurrent neural network are stable is non-trivial[$^{[1]}$](#ref-1). In particular,
-    coupling weights obtained by fitting a GLM by maximum-likelihood can generate unstable dynamics. If the
-    dynamics of your recurrently coupled model are unstable, you can try a `soft-plus` non-linearity
-    instead of an exponential, and you can "shrink" your weights until stability is reached.
+:::{warning}
 
+Making sure that the dynamics of your recurrent neural network are stable is non-trivial[$^{[1]}$](#ref-1). In particular,
+coupling weights obtained by fitting a GLM by maximum-likelihood can generate unstable dynamics. If the
+dynamics of your recurrently coupled model are unstable, you can try a `soft-plus` non-linearity
+instead of an exponential, and you can "shrink" your weights until stability is reached.
+:::
 
 
 ```{code-cell} ipython3
@@ -389,7 +415,7 @@ And finally plot the results for both neurons.
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 4
-plt.figure()
+fig = plt.figure()
 ax = plt.subplot(111)
 
 ax.spines['top'].set_visible(False)
@@ -409,5 +435,29 @@ plt.ylabel("count/bin")
 plt.legend()
 ```
 
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/how_to_guide"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/how_to_guide")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_02_glm_demo.svg")
+```
+
+
 ## References
-[1] <span id="ref-1"><a href="https://arxiv.org/abs/2010.12362">Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.</a></span>
+(ref-1)=
+[1] [Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.](https://arxiv.org/abs/2010.12362)

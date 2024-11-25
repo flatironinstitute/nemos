@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 # Fit injected current
@@ -31,7 +56,7 @@ the experimentalists injected three pulses of current. The current is a square
 pulse multiplied by a sinusoid of a fixed frequency, with some random noise
 riding on top.
 
-![Allen Brain Atlas view of the data we will analyze.](../../assets/allen_data.png)
+![Allen Brain Atlas view of the data we will analyze.](../assets/allen_data.png)
 
 In the figure above (from the Allen Brain Atlas website), we see the
 approximately 22 second sweep, with the input current plotted in the first row,
@@ -121,7 +146,7 @@ The dataset contains several different pynapple objects, which we will
 explore throughout this demo. The following illustrates how these fields relate to the data
 we visualized above:
 
-![Annotated view of the data we will analyze.](../../assets/allen_data_annotated.gif)
+![Annotated view of the data we will analyze.](../assets/allen_data_annotated.gif)
 <!-- this gif created with the following imagemagick command: convert -layers OptimizePlus -delay 100 allen_data_annotated-units.svg allen_data_annotated-epochs.svg allen_data_annotated-stimulus.svg allen_data_annotated-response.svg -loop 0 allen_data_annotated.gif -->
 
 - `units`: dictionary of neurons, holding each neuron's spike timestamps.
@@ -269,7 +294,7 @@ plotted together.
 One common way to visualize a rough estimate of firing rate is to smooth
 the spikes by convolving them with a Gaussian filter.
 
-:::{info}
+:::{note}
 
 This is a heuristic for getting the firing rate, and shouldn't be taken
 as the literal truth (to see why, pass a firing rate through a Poisson
@@ -324,13 +349,12 @@ print(type(firing_rate))
 Now that we've done all this preparation, let's make a plot to more easily
 visualize the data.
 
-!!! note
+:::{note}
 
-    We're hiding the details of the plotting function for the purposes of this
-    tutorial, but you can find it in [the source
-    code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documentation_utils/plotting.py)
-    if you are interested.
-
+We're hiding the details of the plotting function for the purposes of this tutorial, but you can find it in [the source
+code](https://github.com/flatironinstitute/nemos/blob/development/src/nemos/_documentation_utils/plotting.py)
+if you are interested.
+:::
 
 ```{code-cell} ipython3
 doc_plots.current_injection_plot(current, spikes, firing_rate)
@@ -363,9 +387,11 @@ Pynapple can compute a tuning curve to help us answer this question, by
 binning our spikes based on the instantaneous input current and computing the
 firing rate within those bins:
 
-!!! note "Tuning curve in `pynapple`"
-    [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+:::{admonition} Tuning curve in `pynapple`
+:class: note 
 
+[`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
+:::
 
 ```{code-cell} ipython3
 tuning_curve = nap.compute_1d_tuning_curves(spikes, current, nb_bins=15)
@@ -378,7 +404,7 @@ current). We can easily plot the tuning curve of the neuron:
 
 
 ```{code-cell} ipython3
-doc_plots.tuning_curve_plot(tuning_curve)
+doc_plots.tuning_curve_plot(tuning_curve);
 ```
 
 We can see that, while the firing rate mostly increases with the current,
@@ -391,7 +417,7 @@ rate's periodicity, and the gradual reduction in firing rate while the
 current remains on.
 
 
-+++
+
 
 ## NeMoS 
 
@@ -418,14 +444,14 @@ following properties:
   arrays, `numpy` arrays or `pynapple` `TsdFrame`/`Tsd`.
 
 :::{admonition} What is jax?
-:class: info
+:class: note
 
-  [jax](https://github.com/google/jax) is a Google-supported python library
-  for automatic differentiation. It has all sorts of neat features, but the
-  most relevant of which for NeMoS is its GPU-compatibility and
-  just-in-time compilation (both of which make code faster with little
-  overhead!), as well as the collection of optimizers present in
-  [jaxopt](https://jaxopt.github.io/stable/).
+[jax](https://github.com/google/jax) is a Google-supported python library
+for automatic differentiation. It has all sorts of neat features, but the
+most relevant of which for NeMoS is its GPU-compatibility and
+just-in-time compilation (both of which make code faster with little
+overhead!), as well as the collection of optimizers present in
+[jaxopt](https://jaxopt.github.io/stable/).
 :::
 
 First, we require that our predictors and our spike counts have the same
@@ -587,11 +613,33 @@ predicted_fr = predicted_fr / bin_size
 smooth_predicted_fr = predicted_fr.smooth(0.05, size_factor=20)
 
 # and plot!
-doc_plots.current_injection_plot(current, spikes, firing_rate,
+fig = doc_plots.current_injection_plot(current, spikes, firing_rate,
                                  # plot the predicted firing rate that has
                                  # been smoothed the same way as the
                                  # smoothed spike train
                                  predicted_firing_rate=smooth_predicted_fr)
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+import os
+from pathlib import Path
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/tutorials"
+# if local store in assets
+else:
+   path = Path("../_build/html/_static/thumbnails/tutorials")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_01_current_injection.svg")
 ```
 
 What do we see above? Note that the y-axes in the final row are different for
@@ -688,7 +736,7 @@ the same dataset, whether that's models using different regularizers and
 solvers or those using different predictors, comparing log-likelihoods is a
 reasonable thing to do.
 
-:::{info}
+:::{note}
 
 Under the hood, NeMoS is minimizing the negative log-likelihood, as is
 typical in many optimization contexts. [`score`](nemos.glm.GLM.score) returns the real

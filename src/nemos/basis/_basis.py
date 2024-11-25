@@ -99,10 +99,30 @@ class Basis(Base, abc.ABC):
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
+    window_size :
+        The window size for convolution. Required if mode is 'conv'.
+    bounds :
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    **kwargs :
+        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
+    Raises
+    ------
+    ValueError:
+        - If ``mode`` is not 'eval' or 'conv'.
+        - If ``kwargs`` are not None and ``mode =="eval"``.
+        - If ``kwargs`` include parameters not recognized or do not have
+        default values in ``create_convolutional_predictor``.
+        - If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
@@ -902,7 +922,7 @@ class Basis(Base, abc.ABC):
 
 
 class TransformerBasis:
-    """Basis as `scikit-learn` transformers.
+    """Basis as ``scikit-learn`` transformers.
 
     This class abstracts the underlying basis function details, offering methods
     similar to scikit-learn's transformers but specifically designed for basis
@@ -910,14 +930,14 @@ class TransformerBasis:
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
 
-    `TransformerBasis`, unlike `Basis`, is compatible with scikit-learn pipelining and
+    ``TransformerBasis``, unlike ``Basis``, is compatible with scikit-learn pipelining and
     model selection, enabling the cross-validation of the basis type and parameters,
-    for example `n_basis_funcs`. See the example section below.
+    for example ``n_basis_funcs``. See the example section below.
 
     Parameters
     ----------
     basis :
-        A concrete subclass of `Basis`.
+        A concrete subclass of ``Basis``.
 
     Examples
     --------
@@ -957,9 +977,9 @@ class TransformerBasis:
     def _unpack_inputs(X: FeatureMatrix):
         """Unpack impute without using transpose.
 
-        Unpack horizontally stacked inputs using slicing. This works gracefully with `pynapple`,
-        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a `pynapple`
-        exception since `pynapple` assumes that the time axis is the first axis.
+        Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
+        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``
+        exception since ``pynapple`` assumes that the time axis is the first axis.
 
         Parameters
         ----------
@@ -1138,7 +1158,7 @@ class TransformerBasis:
         Raises
         ------
         ValueError
-            If the attribute being set is not `_basis` or an attribute of `_basis`.
+            If the attribute being set is not ``_basis`` or an attribute of ``_basis``.
 
         Examples
         --------
@@ -1184,7 +1204,7 @@ class TransformerBasis:
         """
         Set TransformerBasis parameters.
 
-        When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
+        When used with ``sklearn.model_selection``, users can set either the ``_basis`` attribute directly
         or the parameters of the underlying Basis, but not both.
 
         Examples

@@ -19,7 +19,7 @@ Instantiating a specific GLM simply requires providing an observation model (Gam
 
 
 <figure markdown>
-    <img src="../_static/classes_nemos.png"/>
+    <img src="../_static/classes_nemos.png" alt="NeMoS classes."/>
     <figcaption>Schematic of the module interactions.</figcaption>
 </figure>
 

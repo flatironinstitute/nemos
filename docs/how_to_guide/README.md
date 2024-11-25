@@ -17,6 +17,11 @@ pip install nemos[examples]
 ::::{grid} 1 2 3 3
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/how_to_guide/plot_02_glm_demo.svg" style="height: 100px", alt="GLM demo."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 
@@ -25,6 +30,11 @@ plot_02_glm_demo.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/how_to_guide/plot_03_population_glm.svg" style="height: 100px", alt="Population GLM."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 
@@ -33,6 +43,11 @@ plot_03_population_glm.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/how_to_guide/plot_04_batch_glm.svg" style="height: 100px", alt="Batched GLM."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 
@@ -41,6 +56,11 @@ plot_04_batch_glm.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/how_to_guide/plot_05_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="Pipelining and cross-validation."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 
@@ -49,6 +69,11 @@ plot_05_sklearn_pipeline_cv_demo.md
 :::
 
 :::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/how_to_guide/plot_06_glm_pytree.svg" style="height: 100px", alt="PyTrees."/>
+</figure>
+
 ```{toctree}
 :maxdepth: 2
 

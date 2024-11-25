@@ -14,9 +14,11 @@ from typing import Optional, Union
 try:
     import pooch
     from pooch import Pooch
+    from tqdm.auto import tqdm
 except ImportError:
     pooch = None
     Pooch = None
+    tqdm = None
 
 try:
     import dandi
@@ -124,7 +126,7 @@ def fetch_data(
         )
     retriever = _create_retriever(path)
     # Fetch the dataset using pooch.
-    return retriever.fetch(dataset_name, progressbar=True)
+    return retriever.fetch(dataset_name)
 
 
 def download_dandi_data(dandiset_id: str, filepath: str) -> NWBHDF5IO:

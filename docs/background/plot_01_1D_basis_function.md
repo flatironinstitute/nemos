@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 (simple_basis_function)=
@@ -48,6 +73,7 @@ is defined by the samples that we input to the [`__call__`](nemos.basis.Basis.__
 
 
 ```{code-cell} ipython3
+
 # Generate a time series of sample points
 samples = nap.Tsd(t=np.arange(1001), d=np.linspace(0, 1,1001))
 
@@ -58,9 +84,31 @@ eval_basis = bspline(samples)
 print(f"Evaluated B-spline of order {order} with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples.")
 
-plt.figure()
+fig = plt.figure()
 plt.title("B-spline basis")
-plt.plot(eval_basis)
+plt.plot(samples, eval_basis);
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/background"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/background")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_01_1D_basis_function.svg")
 ```
 
 ## Setting the basis support
@@ -85,9 +133,9 @@ the fixed range basis.
 ```{code-cell} ipython3
 fig, axs = plt.subplots(2,1, sharex=True)
 plt.suptitle("B-spline basis ")
-axs[0].plot(bspline(samples), color="k")
+axs[0].plot(samples, bspline(samples), color="k")
 axs[0].set_title("default")
-axs[1].plot(bspline_range(samples), color="tomato")
+axs[1].plot(samples, bspline_range(samples), color="tomato")
 axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 ```
@@ -147,7 +195,7 @@ If you want to learn more about convolutions, as well as how and when to change 
 check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 :::
 
-+++
+
 
 Plotting the Basis Function Elements:
 --------------------------------------

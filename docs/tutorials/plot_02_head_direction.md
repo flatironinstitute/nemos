@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 
@@ -263,7 +288,7 @@ instead the feature dimension is 80, because our bin size was 0.01 sec and the w
 We can learn these weights by maximum likelihood by fitting a GLM.
 
 
-+++
+
 
 #### Fitting the Model
 
@@ -374,12 +399,13 @@ whereas whether an input happened 51 or 55 msec ago is less important.
 doc_plots.plot_basis();
 ```
 
-!!! info
+:::{note}
 
-    We provide a handful of different choices for basis functions, and
-    selecting the proper basis function for your input is an important
-    analytical step. We will eventually provide guidance on this choice, but
-    for now we'll give you a decent choice.
+We provide a handful of different choices for basis functions, and
+selecting the proper basis function for your input is an important
+analytical step. We will eventually provide guidance on this choice, but
+for now we'll give you a decent choice.
+:::
 
 NeMoS includes [`Basis`](nemos_basis) objects to handle the construction and use of these
 basis functions.
@@ -419,7 +445,7 @@ One way to do so is by minimizing the least-squares.
 lsq_coef, _, _, _ = np.linalg.lstsq(basis_kernels, np.squeeze(model.coef_), rcond=-1)
 
 # plot the basis and the approximation
-doc_plots.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef)
+doc_plots.plot_weighted_sum_basis(time, model.coef_, basis_kernels, lsq_coef);
 ```
 
 The first plot is the response of each of the 8 basis functions to a single
@@ -462,7 +488,7 @@ doc_plots.plot_convolved_counts(neuron_count, conv_spk, epoch_one_spk, epoch_mul
 Now that we have our "compressed" history feature matrix, we can fit the ML parameters for a GLM.
 
 
-+++
+
 
 #### Fit and compare the models
 
@@ -632,12 +658,12 @@ Let's see if our firing rate predictions improved and in what sense.
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 2
-doc_plots.plot_rates_and_smoothed_counts(
+fig = doc_plots.plot_rates_and_smoothed_counts(
     neuron_count,
     {"Self-connection: raw history": rate_history,
      "Self-connection: bsais": rate_basis,
      "All-to-all: basis": predicted_firing_rate[:, 0]}
-);
+)
 ```
 
 #### Visualizing the connectivity
@@ -672,5 +698,27 @@ all the coupling filters.
 
 
 ```{code-cell} ipython3
-doc_plots.plot_coupling(responses, tuning);
+fig = doc_plots.plot_coupling(responses, tuning)
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/tutorials"
+# if local store in assets
+else:
+   path = Path("../_build/html/_static/thumbnails/tutorials")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_02_head_direction.svg")
 ```

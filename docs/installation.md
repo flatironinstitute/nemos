@@ -57,8 +57,11 @@ To install NeMoS on a system without a GPU, run this command from within your ac
 
 ### GPU Installation
 
-!!! warning
-    JAX does not guarantee GPU support for Windows, see [here](https://jax.readthedocs.io/en/latest/installation.html#supported-platforms) for updates.
+:::{warning}
+
+JAX does not guarantee GPU support for Windows, see [here](https://jax.readthedocs.io/en/latest/installation.html#supported-platforms) for updates.
+
+:::
 
 For systems equipped with a GPU, you need to specifically install the GPU-enabled versions of `jax` and `jaxlib` before installing NeMoS.
 

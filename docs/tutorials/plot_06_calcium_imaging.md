@@ -12,7 +12,32 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+:tags: [hide-input]
+
 %matplotlib inline
+import warnings
+
+# Ignore the first specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="plotting functions contained within `_documentation_utils` are intended for nemos's documentation.",
+    category=UserWarning,
+)
+
+# Ignore the second specific warning
+warnings.filterwarnings(
+    "ignore",
+    message="Ignoring cached namespace 'core'",
+    category=UserWarning,
+)
+
+warnings.filterwarnings(
+    "ignore",
+    message=(
+        "invalid value encountered in div "
+    ),
+    category=RuntimeWarning,
+)
 ```
 
 (tutorial-calcium-imaging)=
@@ -97,7 +122,7 @@ plt.tight_layout()
 You can see that the calcium signals are both nonnegative, and noisy. One (neuron 4) has much higher SNR than the other. We cannot typically resolve individual action potentials, but instead see slow calcium fluctuations that result from an unknown underlying electrical signal (estimating the spikes from calcium traces is known as _deconvolution_ and is beyond the scope of this demo).
 
 
-+++
+
 
 We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous).
 Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
@@ -145,7 +170,7 @@ plt.show()
 The downsampling did not destroy the fast transient dynamics, so seems fine to use. We can now move on to using NeMoS to fit a model.
 
 
-+++
+
 
 ## Basis instantiation
 
@@ -170,7 +195,7 @@ basis = heading_basis + coupling_basis
 ## Gamma GLM
 
 Until now, we have been modeling spike trains, and have used a Poisson distribution for the observation model. With calcium traces, things are quite different: we no longer have counts but continuous signals, so the Poisson assumption is no longer appropriate. A Gaussian model is also not ideal since the calcium traces are non-negative. To satisfy these constraints, we will use a Gamma distribution from NeMoS with a soft-plus non linearity.
-:::{admonirion} Non-linearity
+:::{admonition} Non-linearity
 :class: note
 
 Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
@@ -261,7 +286,7 @@ model.fit(Xtrain, Ytrain[:, neu])
 ## Model comparison
 
 
-+++
+
 
 We can compare this to scikit-learn [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 
@@ -321,7 +346,7 @@ Let's plot them.
 
 
 ```{code-cell} ipython3
-plt.figure()
+fig = plt.figure()
 plt.plot(real_tcurves[neu], "r", label="true", linewidth=2)
 plt.plot(gamma_tcurves, "k", label="gamma-nemos", alpha=1)
 plt.plot(linreg_tcurves, "g", label="linreg-sklearn", alpha=0.5)
@@ -330,6 +355,29 @@ plt.ylabel("Fluorescence")
 plt.xlabel("Head-direction (rad)")
 plt.show()
 ```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/tutorials"
+# if local store in assets
+else:
+   path = Path("../_build/html/_static/thumbnails/tutorials")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_06_calcium_imaging.svg")
+```
+
 
 :::{admonition} Gamma-GLM for Calcium Imaging Analysis
 :class: note

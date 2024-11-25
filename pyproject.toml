@@ -78,6 +78,8 @@ docs = [
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
+    "ipywidgets",
+    "ipykernel",
 ]
 examples = [
     "scikit-learn",

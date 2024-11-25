@@ -6,6 +6,18 @@
    :members:
    :inherited-members:
 
+{% block attributes %}
+   {% if attributes %}
+   .. rubric:: Attributes
+
+   .. autosummary::
+      :toctree: ./
+   {% for item in attributes %}
+      ~{{ objname }}.{{ item }}
+   {%- endfor %}
+   {% endif %}
+{% endblock %}
+
 {% block methods %}
    .. automethod:: __init__
 
@@ -20,14 +32,3 @@
    {% endif %}
 {% endblock %}
 
-{% block attributes %}
-   {% if attributes %}
-   .. rubric:: Attributes
-
-   .. autosummary::
-      :toctree: ./
-   {% for item in attributes %}
-      ~{{ objname }}.{{ item }}
-   {%- endfor %}
-   {% endif %}
-{% endblock %}
