@@ -15,7 +15,7 @@ class EvalBasisMixin:
         """
         Apply the basis transformation to the input data.
 
-        The basis evaluated at the samples, or $b_i(*xi)$, where $b_i$ is a
+        The basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i` is a
         basis element. xi[k] must be a one-dimensional array or a pynapple Tsd.
 
         Parameters
@@ -27,8 +27,8 @@ class EvalBasisMixin:
         Returns
         -------
         :
-            A matrix with the transformed features. Faturehe basis evaluated at the samples,
-            or $b_i(*xi)$, where $b_i$ is a basis element. xi[k] must be a one-dimensional array
+            A matrix with the transformed features. The basis evaluated at the samples,
+            or :math:`b_i(*xi)`, where :math:`b_i` is a basis element. xi[k] must be a one-dimensional array
             or a pynapple Tsd.
 
         """
@@ -79,7 +79,7 @@ class EvalBasisMixin:
         Raises
         ------
         ValueError:
-            If `self._conv_kwargs` are not None.
+            If ``self._conv_kwargs`` are not None.
         """
         # this should not be hit since **kwargs are not allowed at EvalBasis init.
         # still keep it for compliance with Abstract class Basis.
@@ -105,8 +105,8 @@ class ConvBasisMixin:
         except for the sample-axis are flattened, so that the method always returns a matrix.
         For example, if samples are of shape (num_samples, 2, 3), the output will be
         (num_samples, num_basis_funcs * 2 * 3).
-        The time-axis can be specified at basis initialization by setting the keyword argument `axis`.
-        For example, if `axis == 1` your samples should be (N1, num_samples N3, ...), the output of
+        The time-axis can be specified at basis initialization by setting the keyword argument ``axis``.
+        For example, if ``axis == 1`` your samples should be (N1, num_samples N3, ...), the output of
         transform will be (num_samples, num_basis_funcs * N1 * N3 *...).
 
         Parameters
@@ -188,10 +188,11 @@ class ConvBasisMixin:
         Raises
         ------
         ValueError:
-            - If `axis` is provided as an argument, and it is different from 0
+            If ``axis`` is provided as an argument, and it is different from 0
             (samples must always be in the first axis).
-            - If `self._conv_kwargs` include parameters not recognized or that do not have
-            default values in `create_convolutional_predictor`.
+        ValueError:
+            If ``self._conv_kwargs`` include parameters not recognized or that do not have
+            default values in ``create_convolutional_predictor``.
         """
         if "axis" in self._conv_kwargs:
             raise ValueError(
