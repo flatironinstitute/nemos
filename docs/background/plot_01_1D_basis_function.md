@@ -86,7 +86,7 @@ print(f"Evaluated B-spline of order {order} with {eval_basis.shape[1]} "
 
 fig = plt.figure()
 plt.title("B-spline basis")
-_ = plt.plot(eval_basis)
+plt.plot(samples, eval_basis);
 ```
 
 ```{code-cell} ipython3
@@ -133,9 +133,9 @@ the fixed range basis.
 ```{code-cell} ipython3
 fig, axs = plt.subplots(2,1, sharex=True)
 plt.suptitle("B-spline basis ")
-axs[0].plot(bspline(samples), color="k")
+axs[0].plot(samples, bspline(samples), color="k")
 axs[0].set_title("default")
-axs[1].plot(bspline_range(samples), color="tomato")
+axs[1].plot(samples, bspline_range(samples), color="tomato")
 axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 ```

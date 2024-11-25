@@ -404,7 +404,7 @@ current). We can easily plot the tuning curve of the neuron:
 
 
 ```{code-cell} ipython3
-doc_plots.tuning_curve_plot(tuning_curve)
+doc_plots.tuning_curve_plot(tuning_curve);
 ```
 
 We can see that, while the firing rate mostly increases with the current,

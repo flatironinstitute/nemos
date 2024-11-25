@@ -438,7 +438,7 @@ if path.exists():
   fig.savefig(path / "plot_05_sklearn_pipeline_cv_demo.svg")
 ```
 
-:rocket::rocket::rocket: **Success!** :rocket::rocket::rocket:
+_U+1F680 _U+1F680 _U+1F680 **Success!** _U+1F680 _U+1F680 _U+1F680
 We are now able to capture the distribution of the firing rate appropriately: both peaks and valleys in the spiking activity are matched by our model predicitons.
 
 ### Evaluating different bases directly
