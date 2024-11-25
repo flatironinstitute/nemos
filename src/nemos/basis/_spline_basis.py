@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import abc
 import copy
+from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
@@ -13,7 +14,7 @@ from scipy.interpolate import splev
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples
+from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples, add_docstring
 
 
 class SplineBasis(Basis, abc.ABC):
@@ -183,10 +184,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
         derivatives at each interior knot, resulting in smoother basis functions.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -196,16 +193,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
         that the convolution axis is ``axis=0``.
-
-    Examples
-    --------
-    >>> from numpy import linspace
-    >>> from nemos.basis import MSplineBasis
-    >>> n_basis_funcs = 5
-    >>> order = 3
-    >>> mspline_basis = MSplineBasis(n_basis_funcs, order=order)
-    >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = mspline_basis(sample_points)
 
     References
     ----------
@@ -219,13 +206,22 @@ class MSplineBasis(SplineBasis, abc.ABC):
     will shrink by a factor of :math:`1/\alpha`.
     For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
     If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
+
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import EvalMSpline
+    >>> n_basis_funcs = 5
+    >>> order = 3
+    >>> mspline_basis = EvalMSpline(n_basis_funcs, order=order)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = mspline_basis(sample_points)
     """
 
     def __init__(
         self,
         n_basis_funcs: int,
         order: int = 2,
-        bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "EvalMSpline",
         **kwargs,
     ) -> None:
@@ -233,7 +229,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
             n_basis_funcs,
             mode="eval",
             order=order,
-            bounds=bounds,
             label=label,
         )
 
@@ -301,25 +296,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
         Y : NDArray
             A 2D array where each row corresponds to the evaluated M-spline basis
             function values at the points in X. Shape: ``(n_samples, n_basis_funcs)``.
-
-        Examples
-        --------
-        Evaluate and visualize 4 M-spline basis functions of order 3:
-
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import EvalMSpline
-        >>> mspline_basis = EvalMSpline(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-        >>> for i in range(4):
-        ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
-        >>> plt.title('M-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
-        >>> plt.xlabel('Domain')
-        Text(0.5, 0, 'Domain')
-        >>> plt.ylabel('Basis Function Value')
-        Text(0, 0.5, 'Basis Function Value')
-        >>> l = plt.legend()
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -429,7 +405,8 @@ class BSplineBasis(SplineBasis, abc.ABC):
         Parameters
         ----------
         n_samples :
-            The number of samples.
+            The number of points in the uniformly spaced grid. A higher number of
+            samples will result in a more detailed visualization of the basis functions.
 
         Returns
         -------
@@ -443,14 +420,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
         -----
         The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import BSplineBasis
-        >>> bspline_basis = BSplineBasis(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = bspline_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -470,12 +439,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -496,9 +459,9 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     Examples
     --------
     >>> from numpy import linspace
-    >>> from nemos.basis import CyclicBSplineBasis
+    >>> from nemos.basis import EvalCyclicBSpline
     >>> X = np.random.normal(size=(1000, 1))
-    >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=5, order=3, mode="conv", window_size=10)
+    >>> cyclic_basis = EvalCyclicBSpline(n_basis_funcs=5, order=3, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cyclic_basis(sample_points)
     """
@@ -517,8 +480,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
             n_basis_funcs,
             mode=mode,
             order=order,
-            window_size=window_size,
-            bounds=bounds,
             label=label,
             **kwargs,
         )
@@ -593,7 +554,8 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         Parameters
         ----------
         n_samples :
-            The number of samples.
+            The number of points in the uniformly spaced grid. A higher number of
+            samples will result in a more detailed visualization of the basis functions.
 
         Returns
         -------
@@ -607,14 +569,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         -----
         The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import CyclicBSplineBasis
-        >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=4, order=3)
-        >>> sample_points, basis_values = cyclic_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -761,3 +715,7 @@ def bspline(
         )
 
     return basis_eval.T
+
+add_docstrings_mspline = partial(add_docstring, cls=MSplineBasis)
+add_docstrings_bspline = partial(add_docstring, cls=BSplineBasis)
+add_docstrings_cyclic_bspline = partial(add_docstring, cls=CyclicBSplineBasis)

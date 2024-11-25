@@ -183,5 +183,24 @@ class OrthExponentialBasis(Basis, abc.ABC):
         basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
         return basis_funcs
 
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
+        """Evaluate the basis set on a grid of equi-spaced sample points.
+
+        Parameters
+        ----------
+        n_samples :
+            The number of points in the uniformly spaced grid. A higher number of
+            samples will result in a more detailed visualization of the basis functions.
+
+        Returns
+        -------
+        X :
+            Array of shape (n_samples,) containing the equi-spaced sample
+            points where we've evaluated the basis.
+        basis_funcs :
+            OrthExponential basis functions, shape (n_samples, n_basis_funcs).
+        """
+        return super().evaluate_on_grid(n_samples)
+
 
 add_orth_exp_decay_docstring = partial(add_docstring, cls=OrthExponentialBasis)

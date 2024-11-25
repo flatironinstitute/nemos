@@ -5,7 +5,7 @@ from functools import partial
 import pickle
 from contextlib import nullcontext as does_not_raise
 from typing import Literal
-
+import re
 import jax.numpy
 import numpy as np
 import pynapple as nap
@@ -63,6 +63,14 @@ def test_all_basis_are_tested() -> None:
 @pytest.mark.parametrize(
     "basis_instance",
     [
+        basis.EvalBSpline(10),
+        basis.ConvBSpline(10, window_size=11),
+        basis.EvalCyclicBSpline(10),
+        basis.ConvCyclicBSpline(10, window_size=11),
+        basis.EvalMSpline(10),
+        basis.ConvMSpline(10, window_size=11),
+        basis.EvalRaisedCosineLinear(10),
+        basis.ConvRaisedCosineLinear(10, window_size=11),
         basis.EvalRaisedCosineLog(10),
         basis.ConvRaisedCosineLog(10, window_size=11),
         basis.EvalOrthExponential(10, np.arange(1, 11)),
@@ -70,9 +78,14 @@ def test_all_basis_are_tested() -> None:
     ]
 )
 @pytest.mark.parametrize(
-    "method_name", ["evaluate_on_grid", "compute_features", "split_by_feature"]
+    "method_name, descr_match",
+    [
+        ("evaluate_on_grid", ".+The number of points in the uniformly spaced grid"),
+        ("compute_features", "Compute the basis functions and transform input data into model features"),
+        ("split_by_feature", "Decompose an array along a specified axis into sub-arrays")
+     ]
 )
-def test_example_docstrings_add(basis_instance, method_name):
+def test_example_docstrings_add(basis_instance, method_name, descr_match):
     method = getattr(basis_instance, method_name)
     doc = method.__doc__
     examp_delim = "\n        Examples\n        --------"
@@ -80,6 +93,7 @@ def test_example_docstrings_add(basis_instance, method_name):
     doc_components = doc.split(examp_delim)
     assert len(doc_components) == 2
     assert len(doc_components[0].strip()) > 0
+    assert re.search(descr_match, doc_components[0])
     assert basis_instance.__class__.__name__ in doc_components[1]
 
 
