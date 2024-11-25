@@ -39,12 +39,23 @@ class OrthExponentialBasis(Basis, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
         that the convolution axis is ``axis=0``.
 
+    Examples
+    --------
+    >>> from numpy import linspace
+    >>> from nemos.basis import OrthExponentialBasis
+    >>> X = np.random.normal(size=(1000, 1))
+    >>> n_basis_funcs = 5
+    >>> decay_rates = [0.01, 0.02, 0.03, 0.04, 0.05]  # sample decay rates
+    >>> window_size=10
+    >>> ortho_basis = OrthExponentialBasis(n_basis_funcs, decay_rates, "conv", window_size)
+    >>> sample_points = linspace(0, 1, 100)
+    >>> basis_functions = ortho_basis(sample_points)
     """
 
     def __init__(
@@ -69,7 +80,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
     def decay_rates(self):
         r"""Decay rate.
 
-        The rate of decay of the exponential functions. If :math:`f_i(t) = \exp{-\alpha_i t}` is the i-th decay
+        The rate of decay of the exponential functions. If :math:`f_i(t) = e^{-\alpha_i t}` is the i-th decay
         exponential before orthogonalization, :math:`\alpha_i` is the i-th element of the ``decay_rate`` vector.
         """
         return self._decay_rates
@@ -153,14 +164,14 @@ class OrthExponentialBasis(Basis, abc.ABC):
         Parameters
         ----------
         sample_pts
-            Spacing for basis functions, holding elements on the interval [0,
-            inf), shape (n_samples,).
+            Spacing for basis functions, holding elements on the interval :math:`[0,inf)`,
+            shape ``(n_samples,)``.
 
         Returns
         -------
         basis_funcs
             Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``.
 
         """
         self._check_sample_size(sample_pts)
