@@ -341,12 +341,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
         Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -382,8 +376,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
         n_basis_funcs: int,
         mode="eval",
         order: int = 4,
-        window_size: Optional[int] = None,
-        bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "BSplineBasis",
         **kwargs,
     ):
@@ -391,8 +383,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
             n_basis_funcs,
             mode=mode,
             order=order,
-            window_size=window_size,
-            bounds=bounds,
             label=label,
             **kwargs,
         )

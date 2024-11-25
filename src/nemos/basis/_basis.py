@@ -152,11 +152,6 @@ class Basis(Base, abc.ABC):
 
         self.kernel_ = None
 
-    @abc.abstractmethod
-    def _check_convolution_kwargs(self):
-        """Check convolution kwargs settings."""
-        pass
-
     @property
     def n_output_features(self) -> int | None:
         """
@@ -267,19 +262,6 @@ class Basis(Base, abc.ABC):
             input samples with the basis functions. The output shape varies based on
             the subclass and mode.
 
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import EvalBSpline
-
-        >>> # Generate data
-        >>> num_samples = 10000
-        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = EvalBSpline(10)
-        >>> features = basis.compute_features(X)  # basis transformed time series
-        >>> features.shape
-        (10000, 10)
-
         Notes
         -----
         Subclasses should implement how to handle the transformation specific to their
@@ -343,10 +325,11 @@ class Basis(Base, abc.ABC):
         """
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
-        if self.bounds is None:
+        bounds = getattr(self, "bounds", None)
+        if bounds is None:
             mn, mx = 0, 1
         else:
-            mn, mx = self.bounds
+            mn, mx = bounds
         return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
 
     @support_pynapple(conv_type="numpy")
@@ -398,55 +381,20 @@ class Basis(Base, abc.ABC):
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
-        The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
-        The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
-        instead of the default cartesian indexing, see Notes.
-
         Parameters
         ----------
-        n_samples[0],...,n_samples[n]
-            The number of samples in each axis of the grid. The length of
-            n_samples must equal the number of combined bases.
+        n_samples :
+           The number of samples.
 
         Returns
         -------
-        *Xs :
-            A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
-            where n equals to the number of inputs.
-            The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
-        Y :
-            The basis function evaluated at the samples,
-            shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
-
-        Raises
-        ------
-        ValueError
-            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
-            the Basis object requires.
-        ValueError
-            If one of the n_samples is <= 0.
-
-        Notes
-        -----
-        Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
-        :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
-        This differs from the numpy.meshgrid default, which uses Cartesian indexing.
-        For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
-
-        Examples
-        --------
-         >>> # Evaluate and visualize 4 M-spline basis functions of order 3:
-         >>> import numpy as np
-         >>> import matplotlib.pyplot as plt
-         >>> from nemos.basis import EvalMSpline
-         >>> mspline_basis = EvalMSpline(n_basis_funcs=4, order=3)
-         >>> sample_points, basis_values = mspline_basis.evaluate_on_grid(100)
-         >>> p = plt.plot(sample_points, basis_values)
-         >>> _ = plt.title('M-Spline Basis Functions')
-         >>> _ = plt.xlabel('Domain')
-         >>> _ = plt.ylabel('Basis Function Value')
-         >>> _ = plt.legend([f'Function {i+1}' for i in range(4)]);
-         """
+        X :
+           Array of shape (n_samples,) containing the equi-spaced sample
+           points where we've evaluated the basis.
+        basis_funcs :
+           Evaluated exponentially decaying basis functions, numerically
+           orthogonalized, shape (n_samples, n_basis_funcs)
+        """
         self._check_input_dimensionality(n_samples)
 
         if self._has_zero_samples(n_samples):
@@ -784,38 +732,6 @@ class Basis(Base, abc.ABC):
             A dictionary where:
             - **Key**: Label of the basis.
             - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import ConvBSpline
-        >>> from nemos.glm import GLM
-        >>> # Define an additive basis
-        >>> basis = ConvBSpline(n_basis_funcs=5, window_size=10, label="feature")
-        >>> # Generate a sample input array and compute features
-        >>> x = np.random.randn(20)
-        >>> X = basis.compute_features(x)
-        >>> # Split the feature matrix along axis 1
-        >>> split_features = basis.split_by_feature(X, axis=1)
-        >>> for feature, arr in split_features.items():
-        ...     print(f"{feature}: shape {arr.shape}")
-        feature: shape (20, 1, 5)
-        >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
-        >>> multi_input_basis = ConvBSpline(n_basis_funcs=6, window_size=10,
-        ... label="multi_input")
-        >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
-        >>> for feature, sub_dict in split_features_multi.items():
-        ...        print(f"{feature}, shape {sub_dict.shape}")
-        multi_input, shape (20, 2, 6)
-        >>> # the method can be used to decompose the glm coefficients in the various features
-        >>> counts = np.random.poisson(size=20)
-        >>> model = GLM().fit(X, counts)
-        >>> split_coef = basis.split_by_feature(model.coef_, axis=0)
-        >>> for feature, coef in split_coef.items():
-        ...     print(f"{feature}: shape {coef.shape}")
-        feature: shape (1, 5)
-
         """
         if x.shape[axis] != self.n_output_features:
             raise ValueError(
@@ -1569,6 +1485,46 @@ class AdditiveBasis(Basis):
         """
         return super().split_by_feature(x, axis=axis)
 
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
+        """Evaluate the basis set on a grid of equi-spaced sample points.
+
+        The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
+        The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
+        instead of the default cartesian indexing, see Notes.
+
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n]
+            The number of samples in each axis of the grid. The length of
+            n_samples must equal the number of combined bases.
+
+        Returns
+        -------
+        *Xs :
+            A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
+            where n equals to the number of inputs.
+            The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
+        Y :
+            The basis function evaluated at the samples,
+            shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
+
+        Raises
+        ------
+        ValueError
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            the Basis object requires.
+        ValueError
+            If one of the n_samples is <= 0.
+
+        Notes
+        -----
+        Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+        :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
+        This differs from the numpy.meshgrid default, which uses Cartesian indexing.
+        For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
+        """
+        return super().evaluate_on_grid(*n_samples)
+
 
 class MultiplicativeBasis(Basis):
     """
@@ -1656,6 +1612,14 @@ class MultiplicativeBasis(Basis):
         -------
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> mult_basis = nmo.basis.EvalBSpline(5) * nmo.basis.EvalRaisedCosineLinear(6)
+        >>> x, y = np.random.randn(2, 30)
+        >>> X = mult_basis(x, y)
         """
         X = np.asarray(
             row_wise_kron(
@@ -1681,6 +1645,13 @@ class MultiplicativeBasis(Basis):
         :
             The  features, shape (n_samples, n_basis_funcs)
 
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> mult_basis = nmo.basis.EvalBSpline(5) * nmo.basis.EvalRaisedCosineLinear(6)
+        >>> x, y = np.random.randn(2, 30)
+        >>> X = mult_basis.compute_features(x, y)
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
         X = kron(
@@ -1703,3 +1674,50 @@ class MultiplicativeBasis(Basis):
             self._basis1.n_output_features * self._basis2.n_output_features
         )
         return self
+
+    def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
+        """Evaluate the basis set on a grid of equi-spaced sample points.
+
+        The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
+        The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
+        instead of the default cartesian indexing, see Notes.
+
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n]
+            The number of samples in each axis of the grid. The length of
+            n_samples must equal the number of combined bases.
+
+        Returns
+        -------
+        *Xs :
+            A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
+            where n equals to the number of inputs.
+            The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
+        Y :
+            The basis function evaluated at the samples,
+            shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
+
+        Raises
+        ------
+        ValueError
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            the Basis object requires.
+        ValueError
+            If one of the n_samples is <= 0.
+
+        Notes
+        -----
+        Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+        :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
+        This differs from the numpy.meshgrid default, which uses Cartesian indexing.
+        For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> mult_basis = nmo.basis.EvalBSpline(4) * nmo.basis.EvalRaisedCosineLinear(5)
+        >>> X, Y, Z = mult_basis.evaluate_on_grid(10, 10)
+        """
+        return super().evaluate_on_grid(*n_samples)

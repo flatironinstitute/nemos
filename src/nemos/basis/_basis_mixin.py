@@ -73,21 +73,6 @@ class EvalBasisMixin:
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
 
-    def _check_convolution_kwargs(self):
-        """Check convolution kwargs settings.
-
-        Raises
-        ------
-        ValueError:
-            If ``self._conv_kwargs`` are not None.
-        """
-        # this should not be hit since **kwargs are not allowed at EvalBasis init.
-        # still keep it for compliance with Abstract class Basis.
-        if self._conv_kwargs:
-            raise ValueError(
-                f"kwargs should only be set when mode=='conv', but '{self._mode}' provided instead!"
-            )
-
 
 class ConvBasisMixin:
 

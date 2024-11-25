@@ -16,6 +16,32 @@ from ._basis import Basis, check_transform_input, check_one_dimensional, min_max
 import abc
 
 
+def add_raised_cosine_linear_docstring(method_name):
+    attr = getattr(RaisedCosineBasisLinear, method_name, None)
+    if attr is None:
+        raise AttributeError(f"RaisedCosineBasisLinear has no attribute {method_name}!")
+    doc = attr.__doc__
+    # Decorator to add the docstring
+    def wrapper(func):
+        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
+        return func
+
+    return wrapper
+
+
+def add_raised_cosine_log_docstring(method_name):
+    attr = getattr(RaisedCosineBasisLog, method_name, None)
+    if attr is None:
+        raise AttributeError(f"RaisedCosineBasisLog has no attribute {method_name}!")
+    doc = attr.__doc__
+    # Decorator to add the docstring
+    def wrapper(func):
+        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
+        return func
+
+    return wrapper
+
+
 class RaisedCosineBasisLinear(Basis, abc.ABC):
     """Represent linearly-spaced raised cosine basis functions.
 

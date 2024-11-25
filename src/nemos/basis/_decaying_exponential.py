@@ -17,6 +17,22 @@ from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples
 
 
+import inspect
+
+
+def add_orth_exp_decay_docstring(method_name):
+    attr = getattr(OrthExponentialBasis, method_name, None)
+    if attr is None:
+        raise AttributeError(f"OrthExponentialBasis has no attribute {method_name}!")
+    doc = attr.__doc__
+    # Decorator to add the docstring
+    def wrapper(func):
+        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
+        return func
+
+    return wrapper
+
+
 class OrthExponentialBasis(Basis, abc.ABC):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
 
@@ -44,18 +60,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
         that the convolution axis is ``axis=0``.
-
-    Examples
-    --------
-    >>> from numpy import linspace
-    >>> from nemos.basis import OrthExponentialBasis
-    >>> X = np.random.normal(size=(1000, 1))
-    >>> n_basis_funcs = 5
-    >>> decay_rates = [0.01, 0.02, 0.03, 0.04, 0.05]  # sample decay rates
-    >>> window_size=10
-    >>> ortho_basis = OrthExponentialBasis(n_basis_funcs, decay_rates, "conv", window_size)
-    >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = ortho_basis(sample_points)
     """
 
     def __init__(
@@ -175,7 +179,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
         """
         self._check_sample_size(sample_pts)
-        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
         valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
