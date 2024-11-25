@@ -444,14 +444,14 @@ following properties:
   arrays, `numpy` arrays or `pynapple` `TsdFrame`/`Tsd`.
 
 :::{admonition} What is jax?
-:class: info
+:class: note
 
-  [jax](https://github.com/google/jax) is a Google-supported python library
-  for automatic differentiation. It has all sorts of neat features, but the
-  most relevant of which for NeMoS is its GPU-compatibility and
-  just-in-time compilation (both of which make code faster with little
-  overhead!), as well as the collection of optimizers present in
-  [jaxopt](https://jaxopt.github.io/stable/).
+[jax](https://github.com/google/jax) is a Google-supported python library
+for automatic differentiation. It has all sorts of neat features, but the
+most relevant of which for NeMoS is its GPU-compatibility and
+just-in-time compilation (both of which make code faster with little
+overhead!), as well as the collection of optimizers present in
+[jaxopt](https://jaxopt.github.io/stable/).
 :::
 
 First, we require that our predictors and our spike counts have the same
