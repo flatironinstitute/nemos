@@ -109,7 +109,7 @@ class Basis(Base, abc.ABC):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
         ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
@@ -118,13 +118,15 @@ class Basis(Base, abc.ABC):
     Raises
     ------
     ValueError:
-        - If ``mode`` is not 'eval' or 'conv'.
-        - If ``kwargs`` are not None and ``mode =="eval"``.
-        - If ``kwargs`` include parameters not recognized or do not have
+        If ``mode`` is not 'eval' or 'conv'.
+    ValueError:
+        If ``kwargs`` are not None and ``mode =="eval"``.
+    ValueError:
+        If ``kwargs`` include parameters not recognized or do not have
         default values in ``create_convolutional_predictor``.
-        - If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
+    ValueError:
+        If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
-
     def __init__(
         self,
         n_basis_funcs: int,
@@ -175,7 +177,10 @@ class Basis(Base, abc.ABC):
 
     @property
     def n_basis_input(self) -> tuple | None:
-        """Number of expected inputs."""
+        """Number of expected inputs.
+
+        The number of inputs ``compute_feature`` expects.
+        """
         if self._n_basis_input is None:
             return
         return self._n_basis_input
@@ -334,7 +339,7 @@ class Basis(Base, abc.ABC):
         Returns
         -------
         :
-            A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by `n_samples`.
+            A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
         """
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
@@ -393,42 +398,43 @@ class Basis(Base, abc.ABC):
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
-         The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
-         The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
-         instead of the default cartesian indexing, see Notes.
+        The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
+        The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
+        instead of the default cartesian indexing, see Notes.
 
-         Parameters
-         ----------
-         n_samples[0],...,n_samples[n]
-             The number of samples in each axis of the grid. The length of
-             n_samples must equal the number of combined bases.
+        Parameters
+        ----------
+        n_samples[0],...,n_samples[n]
+            The number of samples in each axis of the grid. The length of
+            n_samples must equal the number of combined bases.
 
-         Returns
-         -------
-         *Xs :
-             A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
-             where n equals to the number of inputs.
-             The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
-         Y :
-             The basis function evaluated at the samples,
-             shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
+        Returns
+        -------
+        *Xs :
+            A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
+            where n equals to the number of inputs.
+            The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
+        Y :
+            The basis function evaluated at the samples,
+            shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
 
-         Raises
-         ------
-         ValueError
-             - If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
-             the Basis object requires.
-             - If one of the n_samples is <= 0.
+        Raises
+        ------
+        ValueError
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            the Basis object requires.
+        ValueError
+            If one of the n_samples is <= 0.
 
-         Notes
-         -----
-         Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
-         :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
-         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
-         For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
+        Notes
+        -----
+        Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+        :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
+        This differs from the numpy.meshgrid default, which uses Cartesian indexing.
+        For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
 
-         Examples
-         --------
+        Examples
+        --------
          >>> # Evaluate and visualize 4 M-spline basis functions of order 3:
          >>> import numpy as np
          >>> import matplotlib.pyplot as plt
@@ -562,7 +568,7 @@ class Basis(Base, abc.ABC):
         Returns
         -------
         :
-            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
+            The product of the basis with itself "exponent" times. Equivalent to ``self * self * ... * self``.
 
         Raises
         ------
@@ -621,19 +627,19 @@ class Basis(Base, abc.ABC):
         Calculate and return the slicing for features based on the input structure.
 
         This method determines how to slice the features for different basis types.
-        If the instance is of `AdditiveBasis` type, the slicing is calculated recursively
+        If the instance is of ``AdditiveBasis`` type, the slicing is calculated recursively
         for each component basis. Otherwise, it determines the slicing based on
-        the number of basis functions and `split_by_input` flag.
+        the number of basis functions and ``split_by_input`` flag.
 
         Parameters
         ----------
         n_inputs :
-            The number of input basis for each component, by default it uses `self._n_basis_input`.
+            The number of input basis for each component, by default it uses ``self._n_basis_input``.
         start_slice :
             The starting index for slicing, by default it starts from 0.
         split_by_input :
             Flag indicating whether to split the slicing by individual inputs or not.
-            If `False`, a single slice is generated for all inputs.
+            If ``False``, a single slice is generated for all inputs.
 
         Returns
         -------
@@ -737,10 +743,11 @@ class Basis(Base, abc.ABC):
         **How it works:**
 
         - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
-        be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
-        ``(n_inputs, n_basis_funcs)``.
+          be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
+          ``(n_inputs, n_basis_funcs)``.
+
         - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
-        be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
+          be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
 
         For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
         then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
@@ -756,7 +763,9 @@ class Basis(Base, abc.ABC):
             number of features generated by the basis, i.e., ``self.n_output_features``.
 
             **Examples:**
+
             - For a design matrix: ``(n_samples, total_n_features)``
+
             - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
 
         axis : int, optional
@@ -874,8 +883,8 @@ class Basis(Base, abc.ABC):
 
         This function computes the number of inputs that are provided to the basis and uses
         that number, and the n_basis_funcs to calculate the number of output features that
-        `self.compute_features` will return. These quantities and the input shape (excluding the sample axis)
-        are stored in `self._n_basis_input` and `self._n_output_features`, and `self._input_shape`
+        ``self.compute_features`` will return. These quantities and the input shape (excluding the sample axis)
+        are stored in ``self._n_basis_input`` and ``self._n_output_features``, and ``self._input_shape``
         respectively.
 
         Parameters
@@ -891,15 +900,15 @@ class Basis(Base, abc.ABC):
         Raises
         ------
         ValueError:
-            If the number of inputs do not match `self._n_basis_input`, if  `self._n_basis_input` was
+            If the number of inputs do not match ``self._n_basis_input``, if  ``self._n_basis_input`` was
             not None.
 
         Notes
         -----
-        Once a `compute_features` is called, we enforce that for all subsequent calls of the method,
+        Once a ``compute_features`` is called, we enforce that for all subsequent calls of the method,
         the input that the basis receives preserves the shape of all axes, except for the sample axis.
         This condition guarantees the consistency of the feature axis, and therefore that
-         `self.split_by_feature` behaves appropriately.
+         ``self.split_by_feature`` behaves appropriately.
 
         """
         # Check that the input shape matches expectation
@@ -1435,7 +1444,7 @@ class AdditiveBasis(Basis):
         Parameters
         ----------
         *xi:
-            The sample inputs. Unused, necessary to conform to `scikit-learn` API.
+            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
 
         Returns
         -------
@@ -1460,52 +1469,50 @@ class AdditiveBasis(Basis):
 
         **How It Works:**
 
-        Suppose the basis is made up of **m components**, each with $b_i$ basis functions and $n_i$ inputs.
-        The total number of features, $N$, is calculated as:
+        Suppose the basis is made up of **m components**, each with :math:`b_i` basis functions and :math:`n_i` inputs.
+        The total number of features, :math:`N`, is calculated as:
 
-        $$
-        N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
-        $$
+        .. math::
+            N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
 
-        This method splits any axis of length $N$ into sub-arrays, one for each basis component.
+        This method splits any axis of length :math:`N` into sub-arrays, one for each basis component.
 
         The sub-array for the i-th basis component is reshaped into dimensions
-        $(n_i, b_i)$.
+        :math:`(n_i, b_i)`.
 
-        For example, if the array shape is $(1, 2, N, 4, 5)$, then each split sub-array will have shape:
+        For example, if the array shape is :math:`(1, 2, N, 4, 5)`, then each split sub-array will have shape:
 
-        $$
-        (1, 2, n_i, b_i, 4, 5)
-        $$
+        .. math::
+            (1, 2, n_i, b_i, 4, 5)
 
         where:
 
-        - $n_i$ represents the number of inputs associated with the i-th component,
-        - $b_i$ represents the number of basis functions in that component.
+        - :math:`n_i` represents the number of inputs associated with the i-th component,
+        - :math:`b_i` represents the number of basis functions in that component.
 
-        The specified axis (`axis`) determines where the split occurs, and all other dimensions
+        The specified axis (``axis``) determines where the split occurs, and all other dimensions
         remain unchanged. See the example section below for the most common use cases.
 
         Parameters
         ----------
         x :
             The input array to be split, representing concatenated features, coefficients,
-            or other data. The shape of `x` along the specified axis must match the total
-            number of features generated by the basis, i.e., `self.n_output_features`.
+            or other data. The shape of ``x`` along the specified axis must match the total
+            number of features generated by the basis, i.e., ``self.n_output_features``.
 
             **Examples:**
-            - For a design matrix: `(n_samples, total_n_features)`
-            - For model coefficients: `(total_n_features,)` or `(total_n_features, n_neurons)`.
+            - For a design matrix: ``(n_samples, total_n_features)``
+            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
 
         axis : int, optional
             The axis along which to split the features. Defaults to 1.
-            Use `axis=1` for design matrices (features along columns) and `axis=0` for
+            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
             coefficient arrays (features along rows). All other dimensions are preserved.
 
         Raises
         ------
         ValueError
-            If the shape of `x` along the specified axis does not match `self.n_output_features`.
+            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
 
         Returns
         -------
@@ -1514,12 +1521,11 @@ class AdditiveBasis(Basis):
             - **Keys**: Labels of the additive basis components.
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 
-              $$
-              (..., n_i, b_i, ...)
-             $$
+            .. math::
+                (..., n_i, b_i, ...)
 
-              - `n_i`: The number of inputs processed by the i-th basis component.
-              - `b_i`: The number of basis functions for the i-th basis component.
+            - ``n_i``: The number of inputs processed by the i-th basis component.
+            - ``b_i``: The number of basis functions for the i-th basis component.
 
             These sub-arrays are reshaped along the specified axis, with all other dimensions
             remaining the same.
@@ -1577,7 +1583,7 @@ class MultiplicativeBasis(Basis):
 
     Attributes
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
 
     Examples
@@ -1622,7 +1628,7 @@ class MultiplicativeBasis(Basis):
         Parameters
         ----------
         *xi:
-            The sample inputs. Unused, necessary to conform to `scikit-learn` API.
+            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
 
         Returns
         -------
