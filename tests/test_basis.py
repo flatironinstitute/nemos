@@ -1,6 +1,7 @@
 import abc
 import inspect
 import itertools
+from functools import partial
 import pickle
 from contextlib import nullcontext as does_not_raise
 from typing import Literal
@@ -15,7 +16,7 @@ from sklearn.base import clone as sk_clone
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.utils import pynapple_concatenate_numpy
-
+from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
 
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes() -> list[type]:
@@ -26,9 +27,8 @@ def list_all_basis_classes() -> list[type]:
     return [
         class_obj
         for _, class_obj in utils_testing.get_non_abstract_classes(basis)
-        if issubclass(class_obj, basis.Basis)
+        if issubclass(class_obj, Basis)
     ]
-
 
 def test_all_basis_are_tested() -> None:
     """Meta-test.
@@ -58,6 +58,48 @@ def test_all_basis_are_tested() -> None:
             "Test should be implemented for each of the concrete classes in the basis module.\n"
             f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
         )
+
+
+@pytest.mark.parametrize(
+    "basis_instance",
+    [
+        basis.EvalRaisedCosineLog(10),
+        basis.ConvRaisedCosineLog(10, window_size=11),
+        basis.EvalOrthExponential(10, np.arange(1, 11)),
+        basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12),
+    ]
+)
+@pytest.mark.parametrize(
+    "method_name", ["evaluate_on_grid", "compute_features", "split_by_feature"]
+)
+def test_example_docstrings_add(basis_instance, method_name):
+    method = getattr(basis_instance, method_name)
+    doc = method.__doc__
+    examp_delim = "\n        Examples\n        --------"
+    assert examp_delim in doc
+    doc_components = doc.split(examp_delim)
+    assert len(doc_components) == 2
+    assert len(doc_components[0].strip()) > 0
+    assert basis_instance.__class__.__name__ in doc_components[1]
+
+
+def test_add_docstring():
+
+    class CustomClass:
+        def method(self):
+            """My extra text."""
+            pass
+
+    custom_add_docstring = partial(add_docstring, cls=CustomClass)
+
+    class CustomSubClass(CustomClass):
+        @custom_add_docstring("method")
+        def method(self):
+            """My custom method."""
+            pass
+
+    assert CustomSubClass().method.__doc__ == "My extra text.\nMy custom method."
+
 
 
 class BasisFuncsTesting(abc.ABC):
@@ -4963,13 +5005,13 @@ class CombinedBasis(BasisFuncsTesting):
             basis_obj = basis_class(
                 n_basis_funcs=n_basis, order=3, mode=mode, window_size=window_size
             )
-        elif basis_class == basis.AdditiveBasis:
+        elif basis_class == AdditiveBasis:
             b1 = basis.EvalMSpline(
                 n_basis_funcs=n_basis, order=2, mode=mode, window_size=window_size
             )
             b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
             basis_obj = b1 + b2
-        elif basis_class == basis.MultiplicativeBasis:
+        elif basis_class == MultiplicativeBasis:
             b1 = basis.EvalMSpline(
                 n_basis_funcs=n_basis, order=2, mode=mode, window_size=window_size
             )
@@ -4983,7 +5025,7 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 class TestAdditiveBasis(CombinedBasis):
-    cls = basis.AdditiveBasis
+    cls = AdditiveBasis
 
     @pytest.mark.parametrize(
         "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
@@ -5525,7 +5567,7 @@ class TestAdditiveBasis(CombinedBasis):
 
 
 class TestMultiplicativeBasis(CombinedBasis):
-    cls = basis.MultiplicativeBasis
+    cls = MultiplicativeBasis
 
     @pytest.mark.parametrize(
         "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
@@ -6103,7 +6145,7 @@ class TestMultiplicativeBasis(CombinedBasis):
 
 
 @pytest.mark.parametrize(
-    "exponent", [-1, 0, 0.5, basis.RaisedCosineBasisLog(4), 1, 2, 3]
+    "exponent", [-1, 0, 0.5, basis.EvalRaisedCosineLog(4), 1, 2, 3]
 )
 @pytest.mark.parametrize("basis_class", list_all_basis_classes())
 def test_power_of_basis(exponent, basis_class):
@@ -6385,7 +6427,7 @@ def test_transformerbasis_addition(basis_cls):
     trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
     trans_bas_sum = trans_bas_a + trans_bas_b
     assert isinstance(trans_bas_sum, basis.TransformerBasis)
-    assert isinstance(trans_bas_sum._basis, basis.AdditiveBasis)
+    assert isinstance(trans_bas_sum._basis, AdditiveBasis)
     assert (
         trans_bas_sum.n_basis_funcs
         == trans_bas_a.n_basis_funcs + trans_bas_b.n_basis_funcs
@@ -6415,7 +6457,7 @@ def test_transformerbasis_multiplication(basis_cls):
     trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
     trans_bas_prod = trans_bas_a * trans_bas_b
     assert isinstance(trans_bas_prod, basis.TransformerBasis)
-    assert isinstance(trans_bas_prod._basis, basis.MultiplicativeBasis)
+    assert isinstance(trans_bas_prod._basis, MultiplicativeBasis)
     assert (
         trans_bas_prod.n_basis_funcs
         == trans_bas_a.n_basis_funcs * trans_bas_b.n_basis_funcs
@@ -6456,7 +6498,7 @@ def test_transformerbasis_exponentiation(
         with pytest.raises(error_type, match=error_message):
             trans_bas_exp = trans_bas**exponent
             assert isinstance(trans_bas_exp, basis.TransformerBasis)
-            assert isinstance(trans_bas_exp._basis, basis.MultiplicativeBasis)
+            assert isinstance(trans_bas_exp._basis, MultiplicativeBasis)
 
 
 @pytest.mark.parametrize(
@@ -6568,15 +6610,15 @@ def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
         basis.RaisedCosineBasisLog,
-        basis.AdditiveBasis,
-        basis.MultiplicativeBasis,
+        AdditiveBasis,
+        MultiplicativeBasis,
     ],
 )
 def test_multi_epoch_pynapple_basis(
     basis_cls, tsd, window_size, shift, predictor_causality, nan_index
 ):
     """Test nan location in multi-epoch pynapple tsd."""
-    if basis_cls == basis.AdditiveBasis:
+    if basis_cls == AdditiveBasis:
         bas = basis.BSplineBasis(
             5,
             mode="conv",
@@ -6591,7 +6633,7 @@ def test_multi_epoch_pynapple_basis(
             predictor_causality=predictor_causality,
             shift=shift,
         )
-    elif basis_cls == basis.MultiplicativeBasis:
+    elif basis_cls == MultiplicativeBasis:
         bas = basis.RaisedCosineBasisLog(
             5,
             mode="conv",
@@ -6656,15 +6698,15 @@ def test_multi_epoch_pynapple_basis(
         basis.CyclicBSplineBasis,
         basis.RaisedCosineBasisLinear,
         basis.RaisedCosineBasisLog,
-        basis.AdditiveBasis,
-        basis.MultiplicativeBasis,
+        AdditiveBasis,
+        MultiplicativeBasis,
     ],
 )
 def test_multi_epoch_pynapple_basis_transformer(
     basis_cls, tsd, window_size, shift, predictor_causality, nan_index
 ):
     """Test nan location in multi-epoch pynapple tsd."""
-    if basis_cls == basis.AdditiveBasis:
+    if basis_cls == AdditiveBasis:
         bas = basis.BSplineBasis(
             5,
             mode="conv",
@@ -6679,7 +6721,7 @@ def test_multi_epoch_pynapple_basis_transformer(
             predictor_causality=predictor_causality,
             shift=shift,
         )
-    elif basis_cls == basis.MultiplicativeBasis:
+    elif basis_cls == MultiplicativeBasis:
         bas = basis.RaisedCosineBasisLog(
             5,
             mode="conv",
@@ -6804,7 +6846,7 @@ def test__get_splitter(
 ):
     # skip nested
     if any(
-        bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
@@ -6981,7 +7023,7 @@ def test__get_splitter_split_by_input(
 ):
     # skip nested
     if any(
-        bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return
@@ -7034,7 +7076,7 @@ def test__get_splitter_split_by_input(
 def test_duplicate_keys(bas1, bas2, bas3):
     # skip nested
     if any(
-        bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
@@ -7086,7 +7128,7 @@ def test_duplicate_keys(bas1, bas2, bas3):
 def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes):
     # skip nested
     if any(
-        bas in (basis.AdditiveBasis, basis.MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return

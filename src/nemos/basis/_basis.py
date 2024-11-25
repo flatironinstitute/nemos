@@ -19,6 +19,21 @@ from ..utils import row_wise_kron
 from ..typing import FeatureMatrix
 from ..validation import check_fraction_valid_samples
 
+
+
+def add_docstring(method_name, cls=None):
+    attr = getattr(cls, method_name, None)
+    if attr is None:
+        raise AttributeError(f"{cls.__name__} has no attribute {method_name}!")
+    doc = attr.__doc__
+    # Decorator to add the docstring
+    def wrapper(func):
+        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
+        return func
+
+    return wrapper
+
+
 def check_transform_input(func: Callable) -> Callable:
     """Check input before calling basis.
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import abc
+from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
@@ -14,23 +15,7 @@ from numpy.typing import NDArray
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 
-from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples
-
-
-import inspect
-
-
-def add_orth_exp_decay_docstring(method_name):
-    attr = getattr(OrthExponentialBasis, method_name, None)
-    if attr is None:
-        raise AttributeError(f"OrthExponentialBasis has no attribute {method_name}!")
-    doc = attr.__doc__
-    # Decorator to add the docstring
-    def wrapper(func):
-        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
-        return func
-
-    return wrapper
+from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples, add_docstring
 
 
 class OrthExponentialBasis(Basis, abc.ABC):
@@ -198,21 +183,5 @@ class OrthExponentialBasis(Basis, abc.ABC):
         basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
         return basis_funcs
 
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
-        """Evaluate the basis set on a grid of equi-spaced sample points.
 
-        Parameters
-        ----------
-        n_samples :
-            The number of samples.
-
-        Returns
-        -------
-        X :
-            Array of shape (n_samples,) containing the equi-spaced sample
-            points where we've evaluated the basis.
-        basis_funcs :
-            Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
-        """
-        return super().evaluate_on_grid(n_samples)
+add_orth_exp_decay_docstring = partial(add_docstring, cls=OrthExponentialBasis)

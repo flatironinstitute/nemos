@@ -7,39 +7,14 @@ from typing import Optional, Tuple
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 
 
-from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples
+from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples, add_docstring
 import abc
 
-
-def add_raised_cosine_linear_docstring(method_name):
-    attr = getattr(RaisedCosineBasisLinear, method_name, None)
-    if attr is None:
-        raise AttributeError(f"RaisedCosineBasisLinear has no attribute {method_name}!")
-    doc = attr.__doc__
-    # Decorator to add the docstring
-    def wrapper(func):
-        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
-        return func
-
-    return wrapper
-
-
-def add_raised_cosine_log_docstring(method_name):
-    attr = getattr(RaisedCosineBasisLog, method_name, None)
-    if attr is None:
-        raise AttributeError(f"RaisedCosineBasisLog has no attribute {method_name}!")
-    doc = attr.__doc__
-    # Decorator to add the docstring
-    def wrapper(func):
-        func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
-        return func
-
-    return wrapper
+from functools import partial
 
 
 class RaisedCosineBasisLinear(Basis, abc.ABC):
@@ -216,14 +191,6 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
             points where we've evaluated the basis.
         basis_funcs :
             Raised cosine basis functions, shape (n_samples, n_basis_funcs)
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> import matplotlib.pyplot as plt
-        >>> from nemos.basis import RaisedCosineBasisLinear
-        >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
-        >>> sample_points, basis_values = cosine_basis.evaluate_on_grid(100)
         """
         return super().evaluate_on_grid(n_samples)
 
@@ -368,7 +335,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         """
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
-        sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), self.bounds)
+        sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), getattr(self, "bounds", None))
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and
@@ -424,3 +391,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
             If the sample provided do not lie in [0,1].
         """
         return super().__call__(self._transform_samples(sample_pts))
+
+
+add_raised_cosine_linear_docstring = partial(add_docstring, cls=RaisedCosineBasisLinear)
+
+add_raised_cosine_log_docstring = partial(add_docstring, cls=RaisedCosineBasisLog)

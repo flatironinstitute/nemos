@@ -11,7 +11,7 @@ from numpy.typing import NDArray, ArrayLike
 from ._basis_mixin import EvalBasisMixin, ConvBasisMixin
 
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
-from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
+from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog, add_raised_cosine_linear_docstring, add_raised_cosine_log_docstring
 from ._decaying_exponential import OrthExponentialBasis, add_orth_exp_decay_docstring
 from ..typing import FeatureMatrix
 
@@ -205,6 +205,64 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
             label=label,
         )
 
+    @add_raised_cosine_log_docstring("evaluate_on_grid")
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import EvalRaisedCosineLog
+        >>> n_basis_funcs = 5
+        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+        >>> window_size=10
+        >>> ortho_basis = EvalRaisedCosineLog(n_basis_funcs)
+        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+
+        """
+        return RaisedCosineBasisLog.evaluate_on_grid(self, n_samples)
+
+    @add_raised_cosine_log_docstring("compute_features")
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalRaisedCosineLog
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = EvalRaisedCosineLog(10)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 10)
+
+        """
+        return RaisedCosineBasisLog.compute_features(self, *xi)
+
+    @add_raised_cosine_log_docstring("split_by_feature")
+    def split_by_feature(
+            self,
+            x: NDArray,
+            axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalRaisedCosineLog
+        >>> from nemos.glm import GLM
+        >>> basis = EvalRaisedCosineLog(n_basis_funcs=6, label="two_inputs")
+        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
+        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {sub_dict.shape}")
+        two_inputs, shape (20, 2, 6)
+
+        """
+        return RaisedCosineBasisLog.split_by_feature(self, x, axis=axis)
+
 
 class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
     def __init__(
@@ -227,6 +285,64 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
+
+    @add_raised_cosine_log_docstring("evaluate_on_grid")
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import ConvRaisedCosineLog
+        >>> n_basis_funcs = 5
+        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
+        >>> window_size=10
+        >>> ortho_basis = ConvRaisedCosineLog(n_basis_funcs, window_size)
+        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+
+        """
+        return RaisedCosineBasisLog.evaluate_on_grid(self, n_samples)
+
+    @add_raised_cosine_log_docstring("compute_features")
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import ConvRaisedCosineLog
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = ConvRaisedCosineLog(10, window_size=100)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 10)
+
+        """
+        return RaisedCosineBasisLog.compute_features(self, *xi)
+
+    @add_raised_cosine_log_docstring("split_by_feature")
+    def split_by_feature(
+            self,
+            x: NDArray,
+            axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import ConvRaisedCosineLog
+        >>> from nemos.glm import GLM
+        >>> basis = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
+        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {sub_dict.shape}")
+        two_inputs, shape (20, 2, 6)
+
+        """
+        return RaisedCosineBasisLog.split_by_feature(self, x, axis=axis)
 
 
 class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
@@ -277,23 +393,9 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
             label=label,
         )
 
+    @add_orth_exp_decay_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
-        """Generate basis functions with given spacing.
-
-        Parameters
-        ----------
-        n_samples:
-            The number of samples.
-
-        Returns
-        -------
-        X :
-            Array of shape ``(n_samples,)`` containing the equi-spaced sample
-            points where we've evaluated the basis.
-        basis_funcs :
-            Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape ``(n_samples, n_basis_funcs)``
-
+        """
         Examples
         --------
         >>> import numpy as np
@@ -308,33 +410,18 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         """
         return super().evaluate_on_grid(n_samples=n_samples)
 
+    @add_orth_exp_decay_docstring("compute_features")
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
-        Compute the basis functions and transform input data into model features.
-
-        This method is designed to be a high-level interface for transforming input
-        data using the basis functions defined by the subclass. It evaluates the basis functions at the sample
-        points.
-
-        Parameters
-        ----------
-        *xi :
-            Input data arrays to be transformed.
-
-        Returns
-        -------
-        :
-            Transformed features, consisting of the basis functions evaluated at the input samples.
-
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import ConvOrthExponential
+        >>> from nemos.basis import EvalOrthExponential
 
         >>> # Generate data
         >>> num_samples = 1000
         >>> X = np.random.normal(size=(num_samples, ))  # raw time series
-        >>> basis = ConvOrthExponential(10, window_size=100, decay_rates=np.arange(1, 11))
+        >>> basis = EvalOrthExponential(10, decay_rates=np.arange(1, 11))
         >>> features = basis.compute_features(X)  # basis transformed time series
         >>> features.shape
         (1000, 10)
@@ -342,62 +429,13 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         """
         return super().compute_features(*xi)
 
+    @add_orth_exp_decay_docstring("split_by_feature")
     def split_by_feature(
         self,
         x: NDArray,
         axis: int = 1,
     ):
-        r"""
-        Decompose an array along a specified axis into sub-arrays based on the number of expected inputs.
-
-        This function takes an array (e.g., a design matrix or model coefficients) and splits it along
-        a designated axis.
-
-        **How it works:**
-
-        - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
-        be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
-        ``(n_inputs, n_basis_funcs)``.
-
-        - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
-        be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
-
-        For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
-        then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
-
-        The specified axis (``axis``) determines where the split occurs, and all other dimensions
-        remain unchanged. See the example section below for the most common use cases.
-
-        Parameters
-        ----------
-        x :
-          The input array to be split, representing concatenated features, coefficients,
-          or other data. The shape of ``x`` along the specified axis must match the total
-          number of features generated by the basis, i.e., ``self.n_output_features``.
-
-          **Examples:**
-
-          - For a design matrix: ``(n_samples, total_n_features)``
-
-          - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
-
-        axis : int, optional
-          The axis along which to split the features. Defaults to 1.
-          Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
-          coefficient arrays (features along rows). All other dimensions are preserved.
-
-        Raises
-        ------
-        ValueError
-          If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
-
-        Returns
-        -------
-        dict
-          A dictionary where:
-          - **Key**: Label of the basis.
-          - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
-
+        """
         Examples
         --------
         >>> import numpy as np
