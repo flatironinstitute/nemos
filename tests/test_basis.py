@@ -89,12 +89,21 @@ def test_example_docstrings_add(basis_instance, method_name, descr_match):
     method = getattr(basis_instance, method_name)
     doc = method.__doc__
     examp_delim = "\n        Examples\n        --------"
+
     assert examp_delim in doc
     doc_components = doc.split(examp_delim)
     assert len(doc_components) == 2
     assert len(doc_components[0].strip()) > 0
     assert re.search(descr_match, doc_components[0])
+
+    # check that the basis name is in the example
     assert basis_instance.__class__.__name__ in doc_components[1]
+
+    # check that no other basis name is in the example
+    for basis_name in basis.__dir__():
+        if basis_name == basis_instance.__class__.__name__:
+            continue
+        assert basis_name not in doc_components[1]
 
 
 def test_add_docstring():
