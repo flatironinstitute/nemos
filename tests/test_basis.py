@@ -80,7 +80,7 @@ def test_all_basis_are_tested() -> None:
 @pytest.mark.parametrize(
     "method_name, descr_match",
     [
-        ("evaluate_on_grid", ".+The number of points in the uniformly spaced grid"),
+        ("evaluate_on_grid", "The number of points in the uniformly spaced grid"),
         ("compute_features", "Compute the basis functions and transform input data into model features"),
         ("split_by_feature", "Decompose an array along a specified axis into sub-arrays")
      ]
