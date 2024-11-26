@@ -321,27 +321,24 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [
             (dict(), (10,), does_not_raise()),
             (
-                dict(axis=0),
-                (10,),
-                pytest.raises(
-                    ValueError, match="Setting the `axis` parameter is not allowed"
-                ),
+                    dict(axis=0),
+                    (10,),
+                    pytest.raises(
+                        ValueError, match="Setting the `axis` parameter is not allowed"
+                    ),
             ),
             (
-                dict(axis=1),
-                (2, 10),
-                pytest.raises(
-                    ValueError, match="Setting the `axis` parameter is not allowed"
-                ),
+                    dict(axis=1),
+                    (2, 10),
+                    pytest.raises(
+                        ValueError, match="Setting the `axis` parameter is not allowed"
+                    ),
             ),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
-        """
-        Checks that the sample size of the output from the compute_features() method matches the input sample size.
-        """
         with expectation:
-            basis_obj = self.cls(n_basis_funcs=5, mode="conv", window_size=5, **kwargs)
+            basis_obj = self.cls["conv"](n_basis_funcs=5, window_size=5, conv_kwargs=kwargs)
             basis_obj.compute_features(np.ones(input1_shape))
 
     @pytest.mark.parametrize("n_basis_funcs", [4, 5])
