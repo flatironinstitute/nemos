@@ -659,14 +659,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_output_features(self, n_input):
-        bas = self.cls(5, mode="conv", window_size=10)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=10)
         assert bas.n_output_features is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.n_output_features == n_input * bas.n_basis_funcs
 
     @pytest.mark.parametrize("n_input", [1, 2, 3])
     def test_set_num_basis_input(self, n_input):
-        bas = self.cls(5, mode="conv", window_size=10)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=10)
         assert bas.n_basis_input is None
         bas.compute_features(np.random.randn(20, n_input))
         assert bas.n_basis_input == (n_input,)
@@ -682,7 +682,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ],
     )
     def test_expected_input_number(self, n_input, expectation):
-        bas = self.cls(5, mode="conv", window_size=10)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=10)
         x = np.random.randn(20, 2)
         bas.compute_features(x)
         with expectation:
@@ -693,75 +693,72 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [
             (dict(), does_not_raise()),
             (
-                dict(axis=0),
-                pytest.raises(
-                    ValueError, match="Setting the `axis` parameter is not allowed"
-                ),
+                    dict(axis=0),
+                    pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed"),
             ),
             (
-                dict(axis=1),
-                pytest.raises(
-                    ValueError, match="Setting the `axis` parameter is not allowed"
-                ),
+                    dict(axis=1),
+                    pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed"),
             ),
             (dict(shift=True), does_not_raise()),
             (
-                dict(shift=True, axis=0),
-                pytest.raises(
-                    ValueError, match="Setting the `axis` parameter is not allowed"
-                ),
+                    dict(shift=True, axis=0),
+                    pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed"),
             ),
             (
-                dict(shifts=True),
-                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+                    dict(shifts=True),
+                    pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
             (dict(shift=True, predictor_causality="causal"), does_not_raise()),
             (
-                dict(shift=True, time_series=np.arange(10)),
-                pytest.raises(ValueError, match="Unrecognized keyword arguments"),
+                    dict(shift=True, time_series=np.arange(10)),
+                    pytest.raises(ValueError, match="Unrecognized keyword arguments"),
             ),
         ],
     )
     def test_init_conv_kwargs(self, conv_kwargs, expectation):
         with expectation:
-            self.cls(5, mode="conv", window_size=200, **conv_kwargs)
+            self.cls["conv"](n_basis_funcs=5, window_size=200, conv_kwargs=conv_kwargs)
 
     @pytest.mark.parametrize(
         "mode, ws, expectation",
         [
             ("conv", 2, does_not_raise()),
             (
-                "conv",
-                -1,
-                pytest.raises(ValueError, match="`window_size` must be a positive "),
+                    "conv",
+                    -1,
+                    pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
             (
-                "conv",
-                None,
-                pytest.raises(
-                    ValueError,
-                    match="If the basis is in `conv` mode, you must provide a ",
-                ),
+                    "conv",
+                    None,
+                    pytest.raises(
+                        ValueError,
+                        match="If the basis is in `conv` mode, you must provide a ",
+                    ),
             ),
             (
-                "conv",
-                1.5,
-                pytest.raises(ValueError, match="`window_size` must be a positive "),
+                    "conv",
+                    1.5,
+                    pytest.raises(ValueError, match="`window_size` must be a positive "),
             ),
-            ("eval", None, does_not_raise()),
+            ("eval", None, pytest.raises(
+                        TypeError,
+                        match=r"got an unexpected keyword argument 'window_size'",
+                    )),
             (
-                "eval",
-                10,
-                pytest.raises(
-                    ValueError,
-                    match=r"If basis is in `mode=='eval'`, `window_size` should be None",
-                ),
+                    "eval",
+                    10,
+                    pytest.raises(
+                        TypeError,
+                        match=r"got an unexpected keyword argument 'window_size'",
+                    ),
             ),
         ],
     )
     def test_init_window_size(self, mode, ws, expectation):
         with expectation:
-            self.cls(5, mode=mode, window_size=ws)
+            self.cls[mode](n_basis_funcs=5, window_size=ws)
 
     @pytest.mark.parametrize(
         "enforce_decay_to_zero, time_scaling, width, window_size, n_basis_funcs, bounds, mode",
@@ -771,14 +768,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ],
     )
     def test_set_params(
-        self,
-        enforce_decay_to_zero,
-        time_scaling,
-        width,
-        window_size,
-        n_basis_funcs,
-        bounds,
-        mode: Literal["eval", "conv"],
+            self,
+            enforce_decay_to_zero,
+            time_scaling,
+            width,
+            window_size,
+            n_basis_funcs,
+            bounds,
+            mode: Literal["eval", "conv"],
     ):
         """Test the read-only and read/write property of the parameters."""
         pars = dict(
@@ -789,72 +786,62 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             n_basis_funcs=n_basis_funcs,
             bounds=bounds,
         )
+        if window_size is None:
+            pars.pop("window_size")
+        if bounds is None:
+            pars.pop("bounds")
+
         keys = list(pars.keys())
-        bas = self.cls(
-            enforce_decay_to_zero=enforce_decay_to_zero,
-            time_scaling=time_scaling,
-            width=width,
-            window_size=window_size,
-            n_basis_funcs=n_basis_funcs,
-            mode=mode,
+        bas = self.cls[mode](
+            **pars
         )
         for i in range(len(pars)):
             for j in range(i + 1, len(pars)):
                 par_set = {keys[i]: pars[keys[i]], keys[j]: pars[keys[j]]}
                 bas = bas.set_params(**par_set)
-                assert isinstance(bas, self.cls)
-
-        for i in range(len(pars)):
-            for j in range(i + 1, len(pars)):
-                with pytest.raises(
-                    AttributeError,
-                    match="can't set attribute 'mode'|property 'mode' of ",
-                ):
-                    par_set = {
-                        keys[i]: pars[keys[i]],
-                        keys[j]: pars[keys[j]],
-                        "mode": mode,
-                    }
-                    bas.set_params(**par_set)
+                assert isinstance(bas, self.cls[mode])
 
     @pytest.mark.parametrize(
         "mode, expectation",
         [
             ("eval", does_not_raise()),
-            ("conv", pytest.raises(ValueError, match="`bounds` should only be set")),
+            ("conv", pytest.raises(TypeError, match="got an unexpected keyword argument 'bounds'")),
         ],
     )
     def test_set_bounds(self, mode, expectation):
-        ws = dict(eval=None, conv=10)
+        kwargs = {"bounds": (1, 2)}
         with expectation:
-            self.cls(window_size=ws[mode], n_basis_funcs=10, mode=mode, bounds=(1, 2))
+            self.cls[mode](n_basis_funcs=10, **kwargs)
 
-        bas = self.cls(window_size=10, n_basis_funcs=10, mode="conv", bounds=None)
-        with pytest.raises(ValueError, match="`bounds` should only be set"):
-            bas.set_params(bounds=(1, 2))
+        if mode == "conv":
+            bas = self.cls["conv"](n_basis_funcs=10, window_size=10)
+            with pytest.raises(ValueError, match="Invalid parameter 'bounds' for estimator"):
+                bas.set_params(bounds=(1, 2))
 
     @pytest.mark.parametrize(
         "mode, expectation",
         [
             ("conv", does_not_raise()),
-            ("eval", pytest.raises(ValueError, match="If basis is in `mode=='eval'`")),
+            ("eval", pytest.raises(TypeError, match="got an unexpected keyword argument 'window_size'")),
         ],
     )
     def test_set_window_size(self, mode, expectation):
-        """Test window size set behavior."""
+        kwargs = {"window_size": 10}
         with expectation:
-            self.cls(window_size=10, n_basis_funcs=10, mode=mode)
+            self.cls[mode](n_basis_funcs=10, **kwargs)
 
-        bas = self.cls(window_size=10, n_basis_funcs=10, mode="conv")
-        with pytest.raises(ValueError, match="If the basis is in `conv` mode"):
-            bas.set_params(window_size=None)
+        if mode == "conv":
+            bas = self.cls["conv"](n_basis_funcs=10, window_size=10)
+            with pytest.raises(ValueError, match="If the basis is in `conv` mode"):
+                bas.set_params(window_size=None)
 
-        bas = self.cls(window_size=None, n_basis_funcs=10, mode="eval")
-        with pytest.raises(ValueError, match="If basis is in `mode=='eval'`"):
-            bas.set_params(window_size=10)
+        if mode == "eval":
+            bas = self.cls["eval"](n_basis_funcs=10)
+            with pytest.raises(ValueError, match="Invalid parameter 'window_size' for estimator"):
+                bas.set_params(window_size=10)
 
     def test_convolution_is_performed(self):
-        bas = self.cls(5, mode="conv", window_size=10)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=10)
         x = np.random.normal(size=100)
         conv = bas.compute_features(x)
         conv_2 = convolve.create_convolutional_predictor(bas.kernel_, x)
@@ -863,8 +850,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert np.all(np.isnan(conv_2[~valid]))
 
     def test_conv_kwargs_error(self):
-        with pytest.raises(ValueError, match="kwargs should only be set"):
-            self.cls(5, mode="eval", test="hi")
+        with pytest.raises(TypeError, match="got an unexpected keyword argument 'test'"):
+            self.cls["eval"](n_basis_funcs=5, test="hi")
 
     @pytest.mark.parametrize(
         "bounds, expectation",
@@ -877,16 +864,16 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
             (
-                (1, 2, 3),
-                pytest.raises(
-                    ValueError, match="The provided `bounds` must be of length two"
-                ),
+                    (1, 2, 3),
+                    pytest.raises(
+                        ValueError, match="The provided `bounds` must be of length two"
+                    ),
             ),
         ],
     )
     def test_vmin_vmax_init(self, bounds, expectation):
         with expectation:
-            bas = self.cls(3, bounds=bounds)
+            bas = self.cls["eval"](n_basis_funcs=3, bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
@@ -900,15 +887,15 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
             (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
             (
-                (2, 1),
-                pytest.raises(
-                    ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater"
-                ),
+                    (2, 1),
+                    pytest.raises(
+                        ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater"
+                    ),
             ),
         ],
     )
     def test_vmin_vmax_setter(self, bounds, expectation):
-        bas = self.cls(3, bounds=(1, 3))
+        bas = self.cls["eval"](n_basis_funcs=3, bounds=(1, 3))
         with expectation:
             bas.set_params(bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
@@ -924,7 +911,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     )
     def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx):
         bounds = None if vmin is None else (vmin, vmax)
-        bas = self.cls(3, mode="eval", bounds=bounds)
+        bas = self.cls["eval"](n_basis_funcs=3, bounds=bounds)
         out = bas.compute_features(samples)
         assert np.all(np.isnan(out[nan_idx]))
         valid_idx = list(set(samples).difference(nan_idx))
@@ -938,11 +925,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (1, 3, np.arange(5), [0, 4]),
         ],
     )
-    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
-        self, vmin, vmax, samples, nan_idx
-    ):
-        bas_no_range = self.cls(3, mode="eval", bounds=None)
-        bas = self.cls(3, mode="eval", bounds=(vmin, vmax))
+    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(self, vmin, vmax, samples, nan_idx):
+        bas_no_range = self.cls["eval"](n_basis_funcs=3, bounds=None)
+        bas = self.cls["eval"](n_basis_funcs=3, bounds=(vmin, vmax))
         _, out1 = bas.evaluate_on_grid(10)
         _, out2 = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(out1, out2)
@@ -957,8 +942,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ],
     )
     def test_vmin_vmax_eval_on_grid_affects_x(self, bounds, samples, nan_idx, mn, mx):
-        bas_no_range = self.cls(3, mode="eval", bounds=None)
-        bas = self.cls(3, mode="eval", bounds=bounds)
+        bas_no_range = self.cls["eval"](n_basis_funcs=3, bounds=None)
+        bas = self.cls["eval"](n_basis_funcs=3, bounds=bounds)
         x1, _ = bas.evaluate_on_grid(10)
         x2, _ = bas_no_range.evaluate_on_grid(10)
         assert np.allclose(x1, x2 * (mx - mn) + mn)
@@ -966,18 +951,18 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize(
         "bounds, samples, exception",
         [
-            (None, np.arange(5), does_not_raise()),
-            ((0, 3), np.arange(5), pytest.raises(ValueError, match="`bounds` should")),
-            ((1, 4), np.arange(5), pytest.raises(ValueError, match="`bounds` should")),
-            ((1, 3), np.arange(5), pytest.raises(ValueError, match="`bounds` should")),
+            (None, np.arange(5), pytest.raises(TypeError, match="got an unexpected keyword argument 'bounds'")),
+            ((0, 3), np.arange(5), pytest.raises(TypeError, match="got an unexpected keyword argument 'bounds'")),
+            ((1, 4), np.arange(5), pytest.raises(TypeError, match="got an unexpected keyword argument 'bounds'")),
+            ((1, 3), np.arange(5), pytest.raises(TypeError, match="got an unexpected keyword argument 'bounds'")),
         ],
     )
     def test_vmin_vmax_mode_conv(self, bounds, samples, exception):
         with exception:
-            self.cls(3, mode="conv", window_size=10, bounds=bounds)
+            self.cls["conv"](n_basis_funcs=3, window_size=10, bounds=bounds)
 
     def test_transformer_get_params(self):
-        bas = self.cls(5)
+        bas = self.cls["eval"](n_basis_funcs=5)
         bas_transformer = bas.to_transformer()
         params_transf = bas_transformer.get_params()
         params_transf.pop("_basis")
