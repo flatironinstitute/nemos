@@ -571,7 +571,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             basis_obj.evaluate_on_grid(*inputs)
 
     @pytest.mark.parametrize(
-        "width ,expectation",
+        "width, expectation",
         [
             (-1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
             (0, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
@@ -582,17 +582,24 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (2.1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
         ],
     )
-    def test_width_values(self, width, expectation):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
+    def test_width_values(self, width, expectation, cls, kwargs):
         """Test allowable widths: integer multiple of 1/2, greater than 1."""
         with expectation:
-            self.cls(n_basis_funcs=5, width=width)
+            cls(n_basis_funcs=5, width=width, **kwargs)
 
     @pytest.mark.parametrize("width", [1.5, 2, 2.5])
     def test_decay_to_zero_basis_number_match(self, width):
         """Test that the number of basis is preserved."""
         n_basis_funcs = 10
-        _, ev = self.cls(
-            n_basis_funcs=n_basis_funcs, width=width, enforce_decay_to_zero=True
+        _, ev = self.cls["conv"](
+            n_basis_funcs=n_basis_funcs, width=width, enforce_decay_to_zero=True, window_size=5
         ).evaluate_on_grid(2)
         assert ev.shape[1] == n_basis_funcs, (
             "Basis function number mismatch. "
@@ -600,28 +607,25 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         )
 
     @pytest.mark.parametrize(
-        "time_scaling ,expectation",
+        "time_scaling, expectation",
         [
-            (
-                -1,
-                pytest.raises(
-                    ValueError, match="Only strictly positive time_scaling are allowed"
-                ),
-            ),
-            (
-                0,
-                pytest.raises(
-                    ValueError, match="Only strictly positive time_scaling are allowed"
-                ),
-            ),
+            (-1, pytest.raises(ValueError, match="Only strictly positive time_scaling are allowed")),
+            (0, pytest.raises(ValueError, match="Only strictly positive time_scaling are allowed")),
             (0.1, does_not_raise()),
             (10, does_not_raise()),
         ],
     )
-    def test_time_scaling_values(self, time_scaling, expectation):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 5}),
+        ],
+    )
+    def test_time_scaling_values(self, time_scaling, expectation, cls, kwargs):
         """Test that only positive time_scaling are allowed."""
         with expectation:
-            self.cls(n_basis_funcs=5, time_scaling=time_scaling)
+            cls(n_basis_funcs=5, time_scaling=time_scaling, **kwargs)
 
     def test_time_scaling_property(self):
         """Test that larger time_scaling results in larger departures from linearity."""
