@@ -5,8 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nemos import basis
 import nemos.simulation as simulation
+from nemos import basis
 
 
 @pytest.mark.parametrize(

@@ -11,11 +11,15 @@ import numpy as np
 import scipy.linalg
 from numpy.typing import NDArray
 
-
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-
-from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples, add_docstring
+from ._basis import (
+    Basis,
+    add_docstring,
+    check_one_dimensional,
+    check_transform_input,
+    min_max_rescale_samples,
+)
 
 
 class OrthExponentialBasis(Basis, abc.ABC):
@@ -164,7 +168,9 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
         """
         self._check_sample_size(sample_pts)
-        sample_pts, _ = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
+        sample_pts, _ = min_max_rescale_samples(
+            sample_pts, getattr(self, "bounds", None)
+        )
         valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than

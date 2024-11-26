@@ -1,9 +1,17 @@
-from .basis import (EvalMSpline, ConvMSpline,
-                    EvalCyclicBSpline, ConvCyclicBSpline,
-                    EvalBSpline, ConvBSpline,
-                    EvalRaisedCosineLinear, ConvRaisedCosineLinear,
-                    EvalRaisedCosineLog, ConvRaisedCosineLog,
-                    EvalOrthExponential, ConvOrthExponential)
-from ._basis import AdditiveBasis, MultiplicativeBasis, Basis
-from ._spline_basis import BSplineBasis
+from ._basis import AdditiveBasis, Basis, MultiplicativeBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
+from ._spline_basis import BSplineBasis
+from .basis import (
+    ConvBSpline,
+    ConvCyclicBSpline,
+    ConvMSpline,
+    ConvOrthExponential,
+    ConvRaisedCosineLinear,
+    ConvRaisedCosineLog,
+    EvalBSpline,
+    EvalCyclicBSpline,
+    EvalMSpline,
+    EvalOrthExponential,
+    EvalRaisedCosineLinear,
+    EvalRaisedCosineLog,
+)

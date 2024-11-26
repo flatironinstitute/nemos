@@ -1,4 +1,3 @@
-
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
@@ -11,10 +10,15 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import splev
 
-
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples, add_docstring
+from ._basis import (
+    Basis,
+    add_docstring,
+    check_one_dimensional,
+    check_transform_input,
+    min_max_rescale_samples,
+)
 
 
 class SplineBasis(Basis, abc.ABC):
@@ -258,7 +262,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
-        sample_pts, scaling = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
+        sample_pts, scaling = min_max_rescale_samples(
+            sample_pts, getattr(self, "bounds", None)
+        )
         # add knots if not passed
         knot_locs = self._generate_knots(is_cyclic=False)
 
@@ -390,7 +396,9 @@ class BSplineBasis(SplineBasis, abc.ABC):
         The evaluation is performed by looping over each element and using ``splev``
         from SciPy to compute the basis values.
         """
-        sample_pts, _ = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
+        sample_pts, _ = min_max_rescale_samples(
+            sample_pts, getattr(self, "bounds", None)
+        )
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
 
@@ -515,7 +523,9 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         SciPy to compute the basis values.
 
         """
-        sample_pts, _ = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
+        sample_pts, _ = min_max_rescale_samples(
+            sample_pts, getattr(self, "bounds", None)
+        )
         knot_locs = self._generate_knots(is_cyclic=True)
 
         # for cyclic, do not repeat knots
@@ -571,7 +581,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         SciPy to compute the basis values.
         """
         return super().evaluate_on_grid(n_samples)
-
 
 
 def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
@@ -715,6 +724,7 @@ def bspline(
         )
 
     return basis_eval.T
+
 
 add_docstrings_mspline = partial(add_docstring, cls=MSplineBasis)
 add_docstrings_bspline = partial(add_docstring, cls=BSplineBasis)

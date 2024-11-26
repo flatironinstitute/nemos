@@ -1,11 +1,12 @@
 import abc
 import inspect
 import itertools
-from functools import partial
 import pickle
-from contextlib import nullcontext as does_not_raise
-from typing import Literal
 import re
+from contextlib import nullcontext as does_not_raise
+from functools import partial
+from typing import Literal
+
 import jax.numpy
 import numpy as np
 import pynapple as nap
@@ -16,12 +17,15 @@ from sklearn.base import clone as sk_clone
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import EvalMSpline
-from nemos.basis._spline_basis import BSplineBasis, MSplineBasis, CyclicBSplineBasis
-from nemos.basis._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
-from nemos.basis._decaying_exponential import OrthExponentialBasis
-
-from nemos.utils import pynapple_concatenate_numpy
 from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
+from nemos.basis._decaying_exponential import OrthExponentialBasis
+from nemos.basis._raised_cosine_basis import (
+    RaisedCosineBasisLinear,
+    RaisedCosineBasisLog,
+)
+from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
+from nemos.utils import pynapple_concatenate_numpy
+
 
 # automatic define user accessible basis and check the methods
 def list_all_basis_classes() -> list[type]:
@@ -34,6 +38,7 @@ def list_all_basis_classes() -> list[type]:
         for _, class_obj in utils_testing.get_non_abstract_classes(basis)
         if issubclass(class_obj, Basis)
     ]
+
 
 def test_all_basis_are_tested() -> None:
     """Meta-test.
@@ -80,15 +85,21 @@ def test_all_basis_are_tested() -> None:
         basis.ConvRaisedCosineLog(10, window_size=11),
         basis.EvalOrthExponential(10, np.arange(1, 11)),
         basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12),
-    ]
+    ],
 )
 @pytest.mark.parametrize(
     "method_name, descr_match",
     [
         ("evaluate_on_grid", "The number of points in the uniformly spaced grid"),
-        ("compute_features", "Compute the basis functions and transform input data into model features"),
-        ("split_by_feature", "Decompose an array along a specified axis into sub-arrays")
-     ]
+        (
+            "compute_features",
+            "Compute the basis functions and transform input data into model features",
+        ),
+        (
+            "split_by_feature",
+            "Decompose an array along a specified axis into sub-arrays",
+        ),
+    ],
 )
 def test_example_docstrings_add(basis_instance, method_name, descr_match):
     method = getattr(basis_instance, method_name)
@@ -139,12 +150,15 @@ def test_add_docstring():
         (basis.EvalMSpline(10), MSplineBasis),
         (basis.ConvMSpline(10, window_size=11), MSplineBasis),
         (basis.EvalRaisedCosineLinear(10), RaisedCosineBasisLinear),
-        (basis.ConvRaisedCosineLinear(10, window_size=11),RaisedCosineBasisLinear),
+        (basis.ConvRaisedCosineLinear(10, window_size=11), RaisedCosineBasisLinear),
         (basis.EvalRaisedCosineLog(10), RaisedCosineBasisLog),
         (basis.ConvRaisedCosineLog(10, window_size=11), RaisedCosineBasisLog),
         (basis.EvalOrthExponential(10, np.arange(1, 11)), OrthExponentialBasis),
-        (basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12), OrthExponentialBasis),
-    ]
+        (
+            basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12),
+            OrthExponentialBasis,
+        ),
+    ],
 )
 def test_expected_output_eval_on_grid(basis_instance, super_class):
     x, y = super_class.evaluate_on_grid(basis_instance, 100)
@@ -163,12 +177,15 @@ def test_expected_output_eval_on_grid(basis_instance, super_class):
         (basis.EvalMSpline(10), MSplineBasis),
         (basis.ConvMSpline(10, window_size=11), MSplineBasis),
         (basis.EvalRaisedCosineLinear(10), RaisedCosineBasisLinear),
-        (basis.ConvRaisedCosineLinear(10, window_size=11),RaisedCosineBasisLinear),
+        (basis.ConvRaisedCosineLinear(10, window_size=11), RaisedCosineBasisLinear),
         (basis.EvalRaisedCosineLog(10), RaisedCosineBasisLog),
         (basis.ConvRaisedCosineLog(10, window_size=11), RaisedCosineBasisLog),
         (basis.EvalOrthExponential(10, np.arange(1, 11)), OrthExponentialBasis),
-        (basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12), OrthExponentialBasis),
-    ]
+        (
+            basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12),
+            OrthExponentialBasis,
+        ),
+    ],
 )
 def test_expected_output_compute_features(basis_instance, super_class):
     x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
@@ -184,16 +201,33 @@ def test_expected_output_compute_features(basis_instance, super_class):
         (basis.EvalBSpline(10, label="label"), BSplineBasis),
         (basis.ConvBSpline(10, window_size=11, label="label"), BSplineBasis),
         (basis.EvalCyclicBSpline(10, label="label"), CyclicBSplineBasis),
-        (basis.ConvCyclicBSpline(10, window_size=11, label="label"), CyclicBSplineBasis),
+        (
+            basis.ConvCyclicBSpline(10, window_size=11, label="label"),
+            CyclicBSplineBasis,
+        ),
         (basis.EvalMSpline(10, label="label"), MSplineBasis),
         (basis.ConvMSpline(10, window_size=11, label="label"), MSplineBasis),
         (basis.EvalRaisedCosineLinear(10, label="label"), RaisedCosineBasisLinear),
-        (basis.ConvRaisedCosineLinear(10, window_size=11, label="label"),RaisedCosineBasisLinear),
+        (
+            basis.ConvRaisedCosineLinear(10, window_size=11, label="label"),
+            RaisedCosineBasisLinear,
+        ),
         (basis.EvalRaisedCosineLog(10, label="label"), RaisedCosineBasisLog),
-        (basis.ConvRaisedCosineLog(10, window_size=11, label="label"), RaisedCosineBasisLog),
-        (basis.EvalOrthExponential(10, np.arange(1, 11), label="label"), OrthExponentialBasis),
-        (basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12, label="label"), OrthExponentialBasis),
-    ]
+        (
+            basis.ConvRaisedCosineLog(10, window_size=11, label="label"),
+            RaisedCosineBasisLog,
+        ),
+        (
+            basis.EvalOrthExponential(10, np.arange(1, 11), label="label"),
+            OrthExponentialBasis,
+        ),
+        (
+            basis.ConvOrthExponential(
+                10, decay_rates=np.arange(1, 11), window_size=12, label="label"
+            ),
+            OrthExponentialBasis,
+        ),
+    ],
 )
 def test_expected_output_split_by_feature(basis_instance, super_class):
     x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
@@ -202,10 +236,9 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
     assert xdict.keys() == xxdict.keys()
     xx = xxdict["label"]
     x = xdict["label"]
-    nans = np.isnan(x.sum(axis=(1,2)))
+    nans = np.isnan(x.sum(axis=(1, 2)))
     assert np.all(np.isnan(xx[nans]))
     np.testing.assert_array_equal(xx[~nans], x[~nans])
-
 
 
 class BasisFuncsTesting(abc.ABC):
@@ -5140,9 +5173,9 @@ class TestAdditiveBasis(CombinedBasis):
     def test_non_empty_samples(self, samples, mode, ws):
         if mode == "conv" and len(samples[0]) < 2:
             return
-        basis_obj = basis.EvalMSpline(
+        basis_obj = basis.EvalMSpline(5, mode=mode, window_size=ws) + basis.EvalMSpline(
             5, mode=mode, window_size=ws
-        ) + basis.EvalMSpline(5, mode=mode, window_size=ws)
+        )
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
@@ -5682,9 +5715,9 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_non_empty_samples(self, samples, mode, ws):
         if mode == "conv" and len(samples[0]) < 2:
             return
-        basis_obj = basis.EvalMSpline(
+        basis_obj = basis.EvalMSpline(5, mode=mode, window_size=ws) * basis.EvalMSpline(
             5, mode=mode, window_size=ws
-        ) * basis.EvalMSpline(5, mode=mode, window_size=ws)
+        )
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"

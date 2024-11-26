@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import abc
 import copy
-
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -14,11 +13,9 @@ from pynapple import Tsd, TsdFrame
 
 from ..base_class import Base
 from ..type_casting import support_pynapple
-
-from ..utils import row_wise_kron
 from ..typing import FeatureMatrix
+from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-
 
 
 def add_docstring(method_name, cls=None):
@@ -26,6 +23,7 @@ def add_docstring(method_name, cls=None):
     if attr is None:
         raise AttributeError(f"{cls.__name__} has no attribute {method_name}!")
     doc = attr.__doc__
+
     # Decorator to add the docstring
     def wrapper(func):
         func.__doc__ = "\n".join([doc, func.__doc__])  # Combine docstrings
@@ -142,6 +140,7 @@ class Basis(Base, abc.ABC):
     ValueError:
         If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
+
     def __init__(
         self,
         n_basis_funcs: int,

@@ -5,14 +5,25 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from numpy.typing import NDArray, ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
-from ._basis_mixin import EvalBasisMixin, ConvBasisMixin
-
-from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis, add_docstrings_mspline, add_docstrings_bspline, add_docstrings_cyclic_bspline
-from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog, add_raised_cosine_linear_docstring, add_raised_cosine_log_docstring
-from ._decaying_exponential import OrthExponentialBasis, add_orth_exp_decay_docstring
 from ..typing import FeatureMatrix
+from ._basis_mixin import ConvBasisMixin, EvalBasisMixin
+from ._decaying_exponential import OrthExponentialBasis, add_orth_exp_decay_docstring
+from ._raised_cosine_basis import (
+    RaisedCosineBasisLinear,
+    RaisedCosineBasisLog,
+    add_raised_cosine_linear_docstring,
+    add_raised_cosine_log_docstring,
+)
+from ._spline_basis import (
+    BSplineBasis,
+    CyclicBSplineBasis,
+    MSplineBasis,
+    add_docstrings_bspline,
+    add_docstrings_cyclic_bspline,
+    add_docstrings_mspline,
+)
 
 __all__ = [
     "EvalMSpline",
@@ -30,18 +41,17 @@ __all__ = [
 ]
 
 
-
 def __dir__() -> list[str]:
     return __all__
 
 
 class EvalBSpline(EvalBasisMixin, BSplineBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            order: int = 4,
-            bounds: Optional[Tuple[float, float]] = None,
-            label: Optional[str] = "EvalBSpline",
+        self,
+        n_basis_funcs: int,
+        order: int = 4,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "EvalBSpline",
     ):
         EvalBasisMixin.__init__(self, bounds=bounds)
         BSplineBasis.__init__(
@@ -54,9 +64,9 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
 
     @add_docstrings_bspline("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -118,16 +128,14 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         return BSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-
-
 class ConvBSpline(ConvBasisMixin, BSplineBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            window_size: int,
-            order: int = 4,
-            label: Optional[str] = "ConvBSpline",
-            conv_kwargs: Optional[dict] = None,
+        self,
+        n_basis_funcs: int,
+        window_size: int,
+        order: int = 4,
+        label: Optional[str] = "ConvBSpline",
+        conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
@@ -140,9 +148,9 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
 
     @add_docstrings_bspline("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -206,11 +214,11 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
 
 class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            order: int = 4,
-            bounds: Optional[Tuple[float, float]] = None,
-            label: Optional[str] = "EvalCyclicBSpline",
+        self,
+        n_basis_funcs: int,
+        order: int = 4,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "EvalCyclicBSpline",
     ):
         EvalBasisMixin.__init__(self, bounds=bounds)
         CyclicBSplineBasis.__init__(
@@ -223,9 +231,9 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
 
     @add_docstrings_cyclic_bspline("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -289,12 +297,12 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
 
 class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            window_size: int,
-            order: int = 4,
-            label: Optional[str] = "ConvCyclicBSpline",
-            conv_kwargs: Optional[dict] = None,
+        self,
+        n_basis_funcs: int,
+        window_size: int,
+        order: int = 4,
+        label: Optional[str] = "ConvCyclicBSpline",
+        conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         CyclicBSplineBasis.__init__(
@@ -307,9 +315,9 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
 
     @add_docstrings_cyclic_bspline("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -371,14 +379,13 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
         return CyclicBSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-
 class EvalMSpline(EvalBasisMixin, MSplineBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            order: int = 4,
-            bounds: Optional[Tuple[float, float]] = None,
-            label: Optional[str] = "EvalMSpline",
+        self,
+        n_basis_funcs: int,
+        order: int = 4,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "EvalMSpline",
     ):
         EvalBasisMixin.__init__(self, bounds=bounds)
         MSplineBasis.__init__(
@@ -457,12 +464,12 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
 
 class ConvMSpline(ConvBasisMixin, MSplineBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            window_size: int,
-            order: int = 4,
-            label: Optional[str] = "ConvMSpline",
-            conv_kwargs: Optional[dict] = None,
+        self,
+        n_basis_funcs: int,
+        window_size: int,
+        order: int = 4,
+        label: Optional[str] = "ConvMSpline",
+        conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
@@ -475,9 +482,9 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
 
     @add_docstrings_mspline("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -541,11 +548,11 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
 
 class EvalRaisedCosineLinear(EvalBasisMixin, RaisedCosineBasisLinear):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            width: float = 2.0,
-            bounds: Optional[Tuple[float, float]] = None,
-            label: Optional[str] = "EvalRaisedCosineLinear",
+        self,
+        n_basis_funcs: int,
+        width: float = 2.0,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "EvalRaisedCosineLinear",
     ):
         EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLinear.__init__(
@@ -594,9 +601,9 @@ class EvalRaisedCosineLinear(EvalBasisMixin, RaisedCosineBasisLinear):
 
     @add_raised_cosine_linear_docstring("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -617,12 +624,12 @@ class EvalRaisedCosineLinear(EvalBasisMixin, RaisedCosineBasisLinear):
 
 class ConvRaisedCosineLinear(ConvBasisMixin, RaisedCosineBasisLinear):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            window_size: int,
-            width: float = 2.0,
-            label: Optional[str] = "ConvRaisedCosineLinear",
-            conv_kwargs: Optional[dict] = None,
+        self,
+        n_basis_funcs: int,
+        window_size: int,
+        width: float = 2.0,
+        label: Optional[str] = "ConvRaisedCosineLinear",
+        conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLinear.__init__(
@@ -671,9 +678,9 @@ class ConvRaisedCosineLinear(ConvBasisMixin, RaisedCosineBasisLinear):
 
     @add_raised_cosine_linear_docstring("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -694,13 +701,13 @@ class ConvRaisedCosineLinear(ConvBasisMixin, RaisedCosineBasisLinear):
 
 class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            width: float = 2.0,
-            time_scaling: float = None,
-            enforce_decay_to_zero: bool = True,
-            bounds: Optional[Tuple[float, float]] = None,
-            label: Optional[str] = "EvalRaisedCosineLog",
+        self,
+        n_basis_funcs: int,
+        width: float = 2.0,
+        time_scaling: float = None,
+        enforce_decay_to_zero: bool = True,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "EvalRaisedCosineLog",
     ):
         EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLog.__init__(
@@ -751,9 +758,9 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
 
     @add_raised_cosine_log_docstring("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -774,14 +781,14 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
 
 class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            window_size: int,
-            width: float = 2.0,
-            time_scaling: float = None,
-            enforce_decay_to_zero: bool = True,
-            label: Optional[str] = "ConvRaisedCosineLog",
-            conv_kwargs: Optional[dict] = None,
+        self,
+        n_basis_funcs: int,
+        window_size: int,
+        width: float = 2.0,
+        time_scaling: float = None,
+        enforce_decay_to_zero: bool = True,
+        label: Optional[str] = "ConvRaisedCosineLog",
+        conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
@@ -832,9 +839,9 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
 
     @add_raised_cosine_log_docstring("split_by_feature")
     def split_by_feature(
-            self,
-            x: NDArray,
-            axis: int = 1,
+        self,
+        x: NDArray,
+        axis: int = 1,
     ):
         r"""
         Examples
@@ -855,11 +862,11 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
 
 class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
     def __init__(
-            self,
-            n_basis_funcs: int,
-            decay_rates: NDArray,
-            bounds: Optional[Tuple[float, float]] = None,
-            label: Optional[str] = "EvalOrthExponential",
+        self,
+        n_basis_funcs: int,
+        decay_rates: NDArray,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "EvalOrthExponential",
     ):
         """Set of 1D basis decaying exponential functions numerically orthogonalized.
 
@@ -980,13 +987,14 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     >>> basis_functions = ortho_basis.compute_features(sample_points)
 
     """
+
     def __init__(
-            self,
-            n_basis_funcs: int,
-            window_size: int,
-            decay_rates: NDArray,
-            label: Optional[str] = "ConvOrthExponential",
-            conv_kwargs: Optional[dict] = None,
+        self,
+        n_basis_funcs: int,
+        window_size: int,
+        decay_rates: NDArray,
+        label: Optional[str] = "ConvOrthExponential",
+        conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         OrthExponentialBasis.__init__(
@@ -1054,5 +1062,3 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
 
         """
         return OrthExponentialBasis.split_by_feature(self, x, axis=axis)
-
-

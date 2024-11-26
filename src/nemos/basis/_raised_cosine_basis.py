@@ -1,7 +1,8 @@
-
 # required to get ArrayLike to render correctly
 from __future__ import annotations
 
+import abc
+from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
@@ -9,12 +10,13 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-
-
-from ._basis import Basis, check_transform_input, check_one_dimensional, min_max_rescale_samples, add_docstring
-import abc
-
-from functools import partial
+from ._basis import (
+    Basis,
+    add_docstring,
+    check_one_dimensional,
+    check_transform_input,
+    min_max_rescale_samples,
+)
 
 
 class RaisedCosineBasisLinear(Basis, abc.ABC):
@@ -147,7 +149,9 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
             # additive_basis(*([x] * 2)) would modify both inputs
-            sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), getattr(self, "bounds", None))
+            sample_pts, _ = min_max_rescale_samples(
+                np.copy(sample_pts), getattr(self, "bounds", None)
+            )
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
@@ -336,7 +340,9 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         """
         # rescale to [0,1]
         # copy is necessary to avoid unwanted rescaling in additive/multiplicative basis.
-        sample_pts, _ = min_max_rescale_samples(np.copy(sample_pts), getattr(self, "bounds", None))
+        sample_pts, _ = min_max_rescale_samples(
+            np.copy(sample_pts), getattr(self, "bounds", None)
+        )
         # This log-stretching of the sample axis has the following effect:
         # - as the time_scaling tends to 0, the points will be linearly spaced across the whole domain.
         # - as the time_scaling tends to inf, basis will be small and dense around 0 and

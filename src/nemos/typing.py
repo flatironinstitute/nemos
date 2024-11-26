@@ -4,9 +4,8 @@ from typing import Any, Callable, NamedTuple, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
-from jax.typing import ArrayLike
-
 import pynapple as nap
+from jax.typing import ArrayLike
 from statsmodels.tools.typing import NDArray
 
 from .pytrees import FeaturePytree

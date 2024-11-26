@@ -1,10 +1,13 @@
 """Mixin classes for basis."""
 
-from numpy.typing import ArrayLike
-from ..convolve import create_convolutional_predictor
-import numpy as np
-from typing import Union, Tuple, Optional
 import inspect
+from typing import Optional, Tuple, Union
+
+import numpy as np
+from numpy.typing import ArrayLike
+
+from ..convolve import create_convolutional_predictor
+
 
 class EvalBasisMixin:
 
@@ -104,9 +107,7 @@ class ConvBasisMixin:
         # before calling the convolve, check that the input matches
         # the expectation. We can check xi[0] only, since convolution
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
-        conv = create_convolutional_predictor(
-            self.kernel_, *xi, **self._conv_kwargs
-        )
+        conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
         return np.reshape(conv, newshape=(conv.shape[0], -1))
 
