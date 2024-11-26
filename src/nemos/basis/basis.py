@@ -888,7 +888,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         --------
         >>> import numpy as np
         >>> from numpy import linspace
-        >>> from nemos.basis import ConvOrthExponential
+        >>> from nemos.basis import EvalOrthExponential
         >>> X = np.random.normal(size=(1000, 1))
         >>> n_basis_funcs = 5
         >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05])  # sample decay rates

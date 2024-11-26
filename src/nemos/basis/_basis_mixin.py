@@ -81,8 +81,7 @@ class ConvBasisMixin:
 
     def __init__(self, window_size: int, conv_kwargs: Optional[dict] = None):
         self.window_size = window_size
-        self._conv_kwargs = {} if conv_kwargs is None else conv_kwargs
-        self._check_convolution_kwargs()
+        self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
 
     def _compute_features(self, *xi: ArrayLike):
         """
@@ -171,7 +170,14 @@ class ConvBasisMixin:
         """
         return self._conv_kwargs
 
-    def _check_convolution_kwargs(self):
+    @conv_kwargs.setter
+    def conv_kwargs(self, values: dict):
+        """Check and set convolution kwargs."""
+        self._check_convolution_kwargs(values)
+        self._conv_kwargs = values
+
+    @staticmethod
+    def _check_convolution_kwargs(conv_kwargs: dict):
         """Check convolution kwargs settings.
 
         Raises
@@ -183,7 +189,7 @@ class ConvBasisMixin:
             If ``self._conv_kwargs`` include parameters not recognized or that do not have
             default values in ``create_convolutional_predictor``.
         """
-        if "axis" in self._conv_kwargs:
+        if "axis" in conv_kwargs:
             raise ValueError(
                 "Setting the `axis` parameter is not allowed. Basis requires the "
                 "convolution to be applied along the first axis (`axis=0`).\n"
@@ -199,12 +205,12 @@ class ConvBasisMixin:
             # `basis_matrix` or `time_series` in kwargs.
             is not inspect.Parameter.empty
         }
-        if not set(self._conv_kwargs.keys()).issubset(convolve_configs):
+        if not set(conv_kwargs.keys()).issubset(convolve_configs):
             # do not encourage to set axis.
             convolve_configs = convolve_configs.difference({"axis"})
             # remove the parameter in case axis=0 was passed, since it is allowed.
             invalid = (
-                set(self._conv_kwargs.keys())
+                set(conv_kwargs.keys())
                 .difference(convolve_configs)
                 .difference({"axis"})
             )
