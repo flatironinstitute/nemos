@@ -16,7 +16,6 @@ from sklearn.base import clone as sk_clone
 
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis import EvalMSpline
 from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._raised_cosine_basis import (
@@ -253,23 +252,24 @@ class BasisFuncsTesting(abc.ABC):
         pass
 
 
+
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
-    cls = basis.RaisedCosineBasisLog
+    cls = {"eval": basis.EvalRaisedCosineLog, "conv": basis.ConvRaisedCosineLog}
 
     @pytest.mark.parametrize("samples", [[], [0], [0, 0]])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_non_empty_samples(self, samples, mode, window_size):
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_non_empty_samples(self, samples, mode, kwargs):
         if mode == "conv" and len(samples) == 1:
             return
         if len(samples) == 0:
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
             ):
-                self.cls(5, mode=mode, window_size=window_size).compute_features(
+                self.cls[mode](5, **kwargs).compute_features(
                     samples
                 )
         else:
-            self.cls(5, mode=mode, window_size=window_size).compute_features(samples)
+            self.cls[mode](5, **kwargs).compute_features(samples)
 
     @pytest.mark.parametrize(
         "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
