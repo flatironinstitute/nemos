@@ -497,15 +497,21 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
+    def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls, kwargs):
         """
         Checks that the evaluate_on_grid() method returns a grid of the expected size.
         """
-        basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = sample_size <= 0
-        if raise_exception:
+        basis_obj = cls(n_basis_funcs=5, **kwargs)
+        if sample_size <= 0:
             with pytest.raises(
-                ValueError, match=r"All sample counts provided must be greater"
+                    ValueError, match=r"All sample counts provided must be greater"
             ):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
