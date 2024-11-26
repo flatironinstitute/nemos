@@ -282,31 +282,35 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (10, does_not_raise()),
             (10.5, does_not_raise()),
             (
-                0.5,
-                pytest.raises(
-                    ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
-                ),
+                    0.5,
+                    pytest.raises(
+                        ValueError,
+                        match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    ),
             ),
             (
-                10.3,
-                pytest.raises(
-                    ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
-                ),
+                    10.3,
+                    pytest.raises(
+                        ValueError,
+                        match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    ),
             ),
             (
-                -10,
-                pytest.raises(
-                    ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
-                ),
+                    -10,
+                    pytest.raises(
+                        ValueError,
+                        match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    ),
             ),
             (None, pytest.raises(TypeError, match="'<=' not supported between")),
         ],
     )
-    def test_set_width(self, width, expectation):
-        basis_obj = self.cls(n_basis_funcs=5)
+    @pytest.mark.parametrize("cls, kwargs", [
+        (basis.EvalRaisedCosineLog, {}),
+        (basis.ConvRaisedCosineLog, {"window_size": 5}),
+    ])
+    def test_set_width(self, width, expectation, cls, kwargs):
+        basis_obj = cls(n_basis_funcs=5, **kwargs)
         with expectation:
             basis_obj.width = width
         with expectation:
