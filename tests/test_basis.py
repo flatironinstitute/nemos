@@ -357,24 +357,23 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ],
     )
     def test_compute_features_conv_input(
-        self,
-        n_basis_funcs,
-        time_scaling,
-        enforce_decay,
-        window_size,
-        input_shape,
-        expected_n_input,
+            self,
+            n_basis_funcs,
+            time_scaling,
+            enforce_decay,
+            window_size,
+            input_shape,
+            expected_n_input,
     ):
         x = np.ones(input_shape)
-        bas = self.cls(
+        basis_obj = self.cls["conv"](
             n_basis_funcs=n_basis_funcs,
             time_scaling=time_scaling,
-            mode="conv",
             window_size=window_size,
             enforce_decay_to_zero=enforce_decay,
         )
-        out = bas.compute_features(x)
-        assert out.shape[1] == expected_n_input * bas.n_basis_funcs
+        out = basis_obj.compute_features(x)
+        assert out.shape[1] == expected_n_input * basis_obj.n_basis_funcs
 
     @pytest.mark.parametrize(
         "args, sample_size",
