@@ -118,7 +118,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
         """
         if len(set(self._decay_rates)) != len(self._decay_rates):
             raise ValueError(
-                "Two or more rate are repeated! Repeating rate will result in a "
+                "Two or more rates are repeated! Repeating rates will result in a "
                 "linearly dependent set of function for the basis."
             )
 
