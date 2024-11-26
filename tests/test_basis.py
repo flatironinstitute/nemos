@@ -547,14 +547,14 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             bas(inp)
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_sample_axis(self, time_axis_shape, mode, window_size):
-        bas = self.cls(5, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_sample_axis(self, time_axis_shape, mode, kwargs):
+        bas = self.cls[mode](n_basis_funcs=5, **kwargs)
         assert bas(np.linspace(0, 1, time_axis_shape)).shape[0] == time_axis_shape
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_nan(self, mode, window_size):
-        bas = self.cls(5, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_nan(self, mode, kwargs):
+        bas = self.cls[mode](n_basis_funcs=5, **kwargs)
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
         assert all(np.isnan(bas(x)[3]))
@@ -564,25 +564,25 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [
             (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
             (
-                np.array(["a", "1", "2", "3", "4", "5"]),
-                pytest.raises(TypeError, match="Input samples must"),
+                    np.array(["a", "1", "2", "3", "4", "5"]),
+                    pytest.raises(TypeError, match="Input samples must"),
             ),
         ],
     )
     def test_call_input_type(self, samples, expectation):
-        bas = self.cls(5)
+        bas = self.cls["eval"](n_basis_funcs=5)  # Only eval mode is relevant here
         with expectation:
             bas(samples)
 
     def test_call_equivalent_in_conv(self):
-        bas_con = self.cls(5, mode="conv", window_size=10)
-        bas_eva = self.cls(5, mode="eval")
+        bas_con = self.cls["conv"](n_basis_funcs=5, window_size=10)
+        bas_eval = self.cls["eval"](n_basis_funcs=5)
         x = np.linspace(0, 1, 10)
-        assert np.all(bas_con(x) == bas_eva(x))
+        assert np.all(bas_con(x) == bas_eval(x))
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_pynapple_support(self, mode, window_size):
-        bas = self.cls(5, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_pynapple_support(self, mode, kwargs):
+        bas = self.cls[mode](n_basis_funcs=5, **kwargs)
         x = np.linspace(0, 1, 10)
         x_nap = nap.Tsd(t=np.arange(10), d=x)
         y = bas(x)
@@ -592,16 +592,16 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert np.all(y_nap.t == x_nap.t)
 
     @pytest.mark.parametrize("n_basis", [2, 3])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_basis_number(self, n_basis, mode, window_size):
-        bas = self.cls(n_basis, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_basis_number(self, n_basis, mode, kwargs):
+        bas = self.cls[mode](n_basis_funcs=n_basis, **kwargs)
         x = np.linspace(0, 1, 10)
         assert bas(x).shape[1] == n_basis
 
     @pytest.mark.parametrize("n_basis", [2, 3])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_non_empty(self, n_basis, mode, window_size):
-        bas = self.cls(n_basis, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_non_empty(self, n_basis, mode, kwargs):
+        bas = self.cls[mode](n_basis_funcs=n_basis, **kwargs)
         with pytest.raises(ValueError, match="All sample provided must"):
             bas(np.array([]))
 
@@ -612,51 +612,34 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (-2, 2, does_not_raise()),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_sample_range(self, mn, mx, expectation, mode, window_size):
-        bas = self.cls(5, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_sample_range(self, mn, mx, expectation, mode, kwargs):
+        bas = self.cls[mode](n_basis_funcs=5, **kwargs)
         with expectation:
             bas(np.linspace(mn, mx, 10))
 
     def test_fit_kernel(self):
-        bas = self.cls(5, mode="conv", window_size=3)
-        bas._set_kernel(None)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=3)
+        bas._set_kernel()
         assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self):
-        bas = self.cls(5, mode="conv", window_size=3)
-        bas._set_kernel(None)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=3)
+        bas._set_kernel()
         assert bas.kernel_.shape == (3, 5)
 
     def test_transform_fails(self):
-        bas = self.cls(5, mode="conv", window_size=3)
+        bas = self.cls["conv"](n_basis_funcs=5, window_size=3)
         with pytest.raises(
-            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+                ValueError, match="You must call `_set_kernel` before `_compute_features`"
         ):
             bas._compute_features(np.linspace(0, 1, 10))
 
-    @pytest.mark.parametrize(
-        "mode, expectation",
-        [
-            ("eval", does_not_raise()),
-            ("conv", does_not_raise()),
-            (
-                "invalid",
-                pytest.raises(
-                    ValueError, match="`mode` should be either 'conv' or 'eval'"
-                ),
-            ),
-        ],
-    )
-    def test_init_mode(self, mode, expectation):
-        window_size = None if mode == "eval" else 2
-        with expectation:
-            self.cls(5, mode=mode, window_size=window_size)
-
     @pytest.mark.parametrize("label", [None, "label"])
     def test_init_label(self, label):
-        bas = self.cls(5, label=label)
-        assert bas.label == (str(label) if label is not None else self.cls.__name__)
+        bas = self.cls["eval"](n_basis_funcs=5, label=label)
+        expected_label = str(label) if label is not None else self.cls["eval"].__name__
+        assert bas.label == expected_label
 
     @pytest.mark.parametrize(
         "attribute, value",
@@ -668,9 +651,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ],
     )
     def test_attr_setter(self, attribute, value):
-        bas = self.cls(5)
+        bas = self.cls["eval"](n_basis_funcs=5)
         with pytest.raises(
-            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
+                AttributeError, match=rf"can't set attribute|property '{attribute}' of"
         ):
             setattr(bas, attribute, value)
 
