@@ -75,7 +75,7 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         return BSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_bspline("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -161,7 +161,7 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
         return BSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_bspline("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -244,7 +244,7 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         return CyclicBSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_cyclic_bspline("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -328,7 +328,7 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
         return CyclicBSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_cyclic_bspline("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -412,7 +412,7 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_mspline("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -496,7 +496,7 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
         return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_mspline("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -574,7 +574,7 @@ class EvalRaisedCosineLinear(EvalBasisMixin, RaisedCosineBasisLinear):
         return RaisedCosineBasisLinear.evaluate_on_grid(self, n_samples)
 
     @add_raised_cosine_linear_docstring("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -590,7 +590,7 @@ class EvalRaisedCosineLinear(EvalBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
-        return RaisedCosineBasisLinear.compute_features(self, *xi)
+        return RaisedCosineBasisLinear.compute_features(self, xi)
 
     @add_raised_cosine_linear_docstring("split_by_feature")
     def split_by_feature(
@@ -651,7 +651,7 @@ class ConvRaisedCosineLinear(ConvBasisMixin, RaisedCosineBasisLinear):
         return RaisedCosineBasisLinear.evaluate_on_grid(self, n_samples)
 
     @add_raised_cosine_linear_docstring("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -667,7 +667,7 @@ class ConvRaisedCosineLinear(ConvBasisMixin, RaisedCosineBasisLinear):
         (1000, 10)
 
         """
-        return RaisedCosineBasisLinear.compute_features(self, *xi)
+        return RaisedCosineBasisLinear.compute_features(self, xi)
 
     @add_raised_cosine_linear_docstring("split_by_feature")
     def split_by_feature(
@@ -731,7 +731,7 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
         return RaisedCosineBasisLog.evaluate_on_grid(self, n_samples)
 
     @add_raised_cosine_log_docstring("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -747,7 +747,7 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
-        return RaisedCosineBasisLog.compute_features(self, *xi)
+        return RaisedCosineBasisLog.compute_features(self, xi)
 
     @add_raised_cosine_log_docstring("split_by_feature")
     def split_by_feature(
@@ -812,7 +812,7 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
         return RaisedCosineBasisLog.evaluate_on_grid(self, n_samples)
 
     @add_raised_cosine_log_docstring("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -828,7 +828,7 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
         (1000, 10)
 
         """
-        return RaisedCosineBasisLog.compute_features(self, *xi)
+        return RaisedCosineBasisLog.compute_features(self, xi)
 
     @add_raised_cosine_log_docstring("split_by_feature")
     def split_by_feature(
@@ -919,7 +919,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         return OrthExponentialBasis.evaluate_on_grid(self, n_samples=n_samples)
 
     @add_orth_exp_decay_docstring("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -935,7 +935,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
-        return OrthExponentialBasis.compute_features(self, *xi)
+        return OrthExponentialBasis.compute_features(self, xi)
 
     @add_orth_exp_decay_docstring("split_by_feature")
     def split_by_feature(
@@ -1015,7 +1015,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
         return OrthExponentialBasis.evaluate_on_grid(self, n_samples)
 
     @add_orth_exp_decay_docstring("compute_features")
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
@@ -1031,7 +1031,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
-        return OrthExponentialBasis.compute_features(self, *xi)
+        return OrthExponentialBasis.compute_features(self, xi)
 
     @add_orth_exp_decay_docstring("split_by_feature")
     def split_by_feature(

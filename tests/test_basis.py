@@ -153,6 +153,61 @@ def test_expected_output_eval_on_grid(basis_instance, super_class):
     np.testing.assert_equal(yy, y)
 
 
+@pytest.mark.parametrize(
+    "basis_instance, super_class",
+    [
+        (basis.EvalBSpline(10), BSplineBasis),
+        (basis.ConvBSpline(10, window_size=11), BSplineBasis),
+        (basis.EvalCyclicBSpline(10), CyclicBSplineBasis),
+        (basis.ConvCyclicBSpline(10, window_size=11), CyclicBSplineBasis),
+        (basis.EvalMSpline(10), MSplineBasis),
+        (basis.ConvMSpline(10, window_size=11), MSplineBasis),
+        (basis.EvalRaisedCosineLinear(10), RaisedCosineBasisLinear),
+        (basis.ConvRaisedCosineLinear(10, window_size=11),RaisedCosineBasisLinear),
+        (basis.EvalRaisedCosineLog(10), RaisedCosineBasisLog),
+        (basis.ConvRaisedCosineLog(10, window_size=11), RaisedCosineBasisLog),
+        (basis.EvalOrthExponential(10, np.arange(1, 11)), OrthExponentialBasis),
+        (basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12), OrthExponentialBasis),
+    ]
+)
+def test_expected_output_compute_features(basis_instance, super_class):
+    x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
+    xx = basis_instance.compute_features(np.linspace(0, 1, 100))
+    nans = np.isnan(x.sum(axis=1))
+    assert np.all(np.isnan(xx[nans]))
+    np.testing.assert_array_equal(xx[~nans], x[~nans])
+
+
+@pytest.mark.parametrize(
+    "basis_instance, super_class",
+    [
+        (basis.EvalBSpline(10, label="label"), BSplineBasis),
+        (basis.ConvBSpline(10, window_size=11, label="label"), BSplineBasis),
+        (basis.EvalCyclicBSpline(10, label="label"), CyclicBSplineBasis),
+        (basis.ConvCyclicBSpline(10, window_size=11, label="label"), CyclicBSplineBasis),
+        (basis.EvalMSpline(10, label="label"), MSplineBasis),
+        (basis.ConvMSpline(10, window_size=11, label="label"), MSplineBasis),
+        (basis.EvalRaisedCosineLinear(10, label="label"), RaisedCosineBasisLinear),
+        (basis.ConvRaisedCosineLinear(10, window_size=11, label="label"),RaisedCosineBasisLinear),
+        (basis.EvalRaisedCosineLog(10, label="label"), RaisedCosineBasisLog),
+        (basis.ConvRaisedCosineLog(10, window_size=11, label="label"), RaisedCosineBasisLog),
+        (basis.EvalOrthExponential(10, np.arange(1, 11), label="label"), OrthExponentialBasis),
+        (basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12, label="label"), OrthExponentialBasis),
+    ]
+)
+def test_expected_output_split_by_feature(basis_instance, super_class):
+    x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
+    xdict = super_class.split_by_feature(basis_instance, x)
+    xxdict = basis_instance.split_by_feature(x)
+    assert xdict.keys() == xxdict.keys()
+    xx = xxdict["label"]
+    x = xdict["label"]
+    nans = np.isnan(x.sum(axis=(1,2)))
+    assert np.all(np.isnan(xx[nans]))
+    np.testing.assert_array_equal(xx[~nans], x[~nans])
+
+
+
 class BasisFuncsTesting(abc.ABC):
     """
     An abstract base class that sets the foundation for individual basis function testing.
