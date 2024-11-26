@@ -379,23 +379,27 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "args, sample_size",
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
     def test_compute_features_returns_expected_number_of_basis(
-        self, args, mode, window_size, sample_size
+            self, args, sample_size, cls, kwargs
     ):
         """
-        Verifies the number of basis functions returned by the evaluate() method matches
+        Verifies the number of basis functions returned by the compute_features() method matches
         the expected number of basis functions.
         """
-        basis_obj = self.cls(mode=mode, window_size=window_size, **args)
+        basis_obj = cls(**args, **kwargs)
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
-        if eval_basis.shape[1] != args["n_basis_funcs"]:
-            raise ValueError(
-                "Dimensions do not agree: The number of basis should match the first dimension of the evaluated basis."
-                f"The number of basis is {args['n_basis_funcs']}",
-                f"The first dimension of the evaluated basis is {eval_basis.shape[1]}",
-            )
-        return
+        assert eval_basis.shape[1] == args["n_basis_funcs"], (
+            "Dimensions do not agree: The number of basis should match the first dimension "
+            f"of the evaluated basis. The number of basis is {args['n_basis_funcs']}, but the "
+            f"evaluated basis has dimension {eval_basis.shape[1]}"
+        )
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
