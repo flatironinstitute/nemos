@@ -262,12 +262,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         if mode == "conv" and len(samples) == 1:
             return
         if len(samples) == 0:
-            with pytest.raises(
-                ValueError, match="All sample provided must be non empty"
-            ):
-                self.cls[mode](5, **kwargs).compute_features(
-                    samples
-                )
+            with pytest.raises(ValueError, match="All sample provided must be non empty"):
+                self.cls[mode](5, **kwargs).compute_features(samples)
         else:
             self.cls[mode](5, **kwargs).compute_features(samples)
 
@@ -281,36 +277,15 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         [
             (10, does_not_raise()),
             (10.5, does_not_raise()),
-            (
-                    0.5,
-                    pytest.raises(
-                        ValueError,
-                        match=r"Invalid raised cosine width\. 2\*width must be a positive",
-                    ),
-            ),
-            (
-                    10.3,
-                    pytest.raises(
-                        ValueError,
-                        match=r"Invalid raised cosine width\. 2\*width must be a positive",
-                    ),
-            ),
-            (
-                    -10,
-                    pytest.raises(
-                        ValueError,
-                        match=r"Invalid raised cosine width\. 2\*width must be a positive",
-                    ),
-            ),
+            (0.5, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
+            (10.3, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
+            (-10, pytest.raises(ValueError, match=r"Invalid raised cosine width\. 2\*width must be a positive")),
             (None, pytest.raises(TypeError, match="'<=' not supported between")),
         ],
     )
-    @pytest.mark.parametrize("cls, kwargs", [
-        (basis.EvalRaisedCosineLog, {}),
-        (basis.ConvRaisedCosineLog, {"window_size": 5}),
-    ])
-    def test_set_width(self, width, expectation, cls, kwargs):
-        basis_obj = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})])
+    def test_set_width(self, width, expectation, mode, kwargs):
+        basis_obj = self.cls[mode](n_basis_funcs=5, **kwargs)
         with expectation:
             basis_obj.width = width
         with expectation:
@@ -320,20 +295,8 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "kwargs, input1_shape, expectation",
         [
             (dict(), (10,), does_not_raise()),
-            (
-                    dict(axis=0),
-                    (10,),
-                    pytest.raises(
-                        ValueError, match="Setting the `axis` parameter is not allowed"
-                    ),
-            ),
-            (
-                    dict(axis=1),
-                    (2, 10),
-                    pytest.raises(
-                        ValueError, match="Setting the `axis` parameter is not allowed"
-                    ),
-            ),
+            (dict(axis=0), (10,), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
+            (dict(axis=1), (2, 10), pytest.raises(ValueError, match="Setting the `axis` parameter is not allowed")),
         ],
     )
     def test_compute_features_axis(self, kwargs, input1_shape, expectation):
@@ -357,13 +320,13 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         ],
     )
     def test_compute_features_conv_input(
-            self,
-            n_basis_funcs,
-            time_scaling,
-            enforce_decay,
-            window_size,
-            input_shape,
-            expected_n_input,
+        self,
+        n_basis_funcs,
+        time_scaling,
+        enforce_decay,
+        window_size,
+        input_shape,
+        expected_n_input,
     ):
         x = np.ones(input_shape)
         basis_obj = self.cls["conv"](
@@ -379,21 +342,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         "args, sample_size",
         [[{"n_basis_funcs": n_basis}, 100] for n_basis in [2, 10, 100]],
     )
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_compute_features_returns_expected_number_of_basis(
-            self, args, sample_size, cls, kwargs
-    ):
-        """
-        Verifies the number of basis functions returned by the compute_features() method matches
-        the expected number of basis functions.
-        """
-        basis_obj = cls(**args, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_compute_features_returns_expected_number_of_basis(self, args, sample_size, mode, kwargs):
+        basis_obj = self.cls[mode](**args, **kwargs)
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[1] == args["n_basis_funcs"], (
             "Dimensions do not agree: The number of basis should match the first dimension "
@@ -403,20 +354,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_sample_size_of_compute_features_matches_that_of_input(
-            self, n_basis_funcs, sample_size, cls, kwargs
-    ):
-        """
-        Checks that the sample size of the output from the compute_features() method matches the input sample size.
-        """
-        basis_obj = cls(n_basis_funcs=n_basis_funcs, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_sample_size_of_compute_features_matches_that_of_input(self, n_basis_funcs, sample_size, mode, kwargs):
+        basis_obj = self.cls[mode](n_basis_funcs=n_basis_funcs, **kwargs)
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
         assert eval_basis.shape[0] == sample_size, (
             f"Dimensions do not agree: The sample size of the output should match the input sample size. "
@@ -429,62 +369,30 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (0.5, 0, 1, does_not_raise()),
             (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
             (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                    np.linspace(-1, 0, 10),
-                    0,
-                    1,
-                    pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                    np.linspace(1, 2, 10),
-                    0,
-                    1,
-                    pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
+            (np.linspace(-1, 0, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
+            (np.linspace(1, 2, 10), 0, 1, pytest.warns(UserWarning, match="More than 90% of the samples")),
         ],
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        """
-        Tests that compute_features handles samples correctly within specified bounds.
-        """
         basis_obj = self.cls["eval"](5, bounds=(vmin, vmax))
         with expectation:
             basis_obj.compute_features(samples)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, cls, kwargs):
-        """
-        Verifies that the minimum number of basis functions required (i.e., 2) is enforced.
-        """
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, mode, kwargs):
         if n_basis_funcs < 2:
             with pytest.raises(
-                    ValueError,
-                    match=f"Object class {cls.__name__} requires >= 2 basis elements.",
+                ValueError, match=f"Object class {self.cls[mode].__name__} requires >= 2 basis elements.",
             ):
-                cls(n_basis_funcs=n_basis_funcs, **kwargs)
+                self.cls[mode](n_basis_funcs=n_basis_funcs, **kwargs)
         else:
-            cls(n_basis_funcs=n_basis_funcs, **kwargs)
+            self.cls[mode](n_basis_funcs=n_basis_funcs, **kwargs)
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_number_of_required_inputs_compute_features(self, n_input, cls, kwargs):
-        """
-        Confirms that the compute_features() method correctly handles the number of input samples provided.
-        """
-        basis_obj = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_number_of_required_inputs_compute_features(self, n_input, mode, kwargs):
+        basis_obj = self.cls[mode](n_basis_funcs=5, **kwargs)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
             expectation = pytest.raises(TypeError, match="missing 1 required positional argument")
@@ -497,72 +405,39 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             basis_obj.compute_features(*inputs)
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_evaluate_on_grid_meshgrid_size(self, sample_size, cls, kwargs):
-        """
-        Checks that the evaluate_on_grid() method returns a grid of the expected size.
-        """
-        basis_obj = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_evaluate_on_grid_meshgrid_size(self, sample_size, mode, kwargs):
+        basis_obj = self.cls[mode](n_basis_funcs=5, **kwargs)
         if sample_size <= 0:
-            with pytest.raises(
-                    ValueError, match=r"All sample counts provided must be greater"
-            ):
+            with pytest.raises(ValueError, match=r"All sample counts provided must be greater"):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             grid, _ = basis_obj.evaluate_on_grid(sample_size)
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_evaluate_on_grid_basis_size(self, sample_size, cls, kwargs):
-        """
-        Ensures that the evaluate_on_grid() method returns basis functions of the expected size.
-        """
-        basis_obj = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_evaluate_on_grid_basis_size(self, sample_size, mode, kwargs):
+        basis_obj = self.cls[mode](n_basis_funcs=5, **kwargs)
         if sample_size <= 0:
-            with pytest.raises(
-                    ValueError, match=r"All sample counts provided must be greater"
-            ):
+            with pytest.raises(ValueError, match=r"All sample counts provided must be greater"):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
             _, eval_basis = basis_obj.evaluate_on_grid(sample_size)
             assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_evaluate_on_grid_input_number(self, n_input, cls, kwargs):
-        """
-        Validates that the evaluate_on_grid() method correctly handles the number of input samples provided.
-        """
-        basis_obj = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_evaluate_on_grid_input_number(self, n_input, mode, kwargs):
+        basis_obj = self.cls[mode](n_basis_funcs=5, **kwargs)
         inputs = [10] * n_input
         if n_input == 0:
             expectation = pytest.raises(
-                TypeError,
-                match=r"evaluate_on_grid\(\) missing 1 required positional argument",
+                TypeError, match=r"evaluate_on_grid\(\) missing 1 required positional argument",
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
-                TypeError,
-                match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
+                TypeError, match=r"evaluate_on_grid\(\) takes [0-9] positional arguments but [0-9] were given",
             )
         else:
             expectation = does_not_raise()
@@ -582,21 +457,13 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (2.1, pytest.raises(ValueError, match="Invalid raised cosine width. ")),
         ],
     )
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 2}),
-        ],
-    )
-    def test_width_values(self, width, expectation, cls, kwargs):
-        """Test allowable widths: integer multiple of 1/2, greater than 1."""
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
+    def test_width_values(self, width, expectation, mode, kwargs):
         with expectation:
-            cls(n_basis_funcs=5, width=width, **kwargs)
+            self.cls[mode](n_basis_funcs=5, width=width, **kwargs)
 
     @pytest.mark.parametrize("width", [1.5, 2, 2.5])
     def test_decay_to_zero_basis_number_match(self, width):
-        """Test that the number of basis is preserved."""
         n_basis_funcs = 10
         _, ev = self.cls["conv"](
             n_basis_funcs=n_basis_funcs, width=width, enforce_decay_to_zero=True, window_size=5
@@ -615,37 +482,26 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (10, does_not_raise()),
         ],
     )
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 5}),
-        ],
-    )
-    def test_time_scaling_values(self, time_scaling, expectation, cls, kwargs):
-        """Test that only positive time_scaling are allowed."""
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 5})])
+    def test_time_scaling_values(self, time_scaling, expectation, mode, kwargs):
         with expectation:
-            cls(n_basis_funcs=5, time_scaling=time_scaling, **kwargs)
+            self.cls[mode](n_basis_funcs=5, time_scaling=time_scaling, **kwargs)
 
     def test_time_scaling_property(self):
-        """Test that larger time_scaling results in larger departures from linearity."""
         time_scaling = [0.1, 10, 100]
         n_basis_funcs = 5
         _, lin_ev = basis.EvalRaisedCosineLinear(n_basis_funcs).evaluate_on_grid(100)
         corr = np.zeros(len(time_scaling))
         for idx, ts in enumerate(time_scaling):
-            # set default decay to zero to get comparable basis
             basis_log = self.cls["eval"](
                 n_basis_funcs=n_basis_funcs,
                 time_scaling=ts,
                 enforce_decay_to_zero=False,
             )
             _, log_ev = basis_log.evaluate_on_grid(100)
-            # compute the correlation
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
-                    np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
+                np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
-        # check that the correlation decreases as time_scale increases
         assert np.all(
             np.diff(corr) < 0
         ), "As time scales increases, deviation from linearity should increase!"
@@ -653,9 +509,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_compute_features(self, n_basis, sample_size):
-        """
-        Test compute_features compatibility with pynapple Tsd input.
-        """
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -666,7 +519,6 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
-    # TEST CALL
     @pytest.mark.parametrize(
         "num_input, expectation",
         [
@@ -675,18 +527,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (2, pytest.raises(TypeError, match="Input dimensionality mismatch")),
         ],
     )
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 3}),
-        ],
-    )
-    def test_call_input_num(self, num_input, cls, kwargs, expectation):
-        """
-        Test handling of input dimensionality mismatch when calling the basis.
-        """
-        bas = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_input_num(self, num_input, mode, kwargs, expectation):
+        bas = self.cls[mode](n_basis_funcs=5, **kwargs)
         with expectation:
             bas(*([np.linspace(0, 1, 10)] * num_input))
 
@@ -697,18 +540,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (np.linspace(0, 1, 10)[:, None], pytest.raises(ValueError)),
         ],
     )
-    @pytest.mark.parametrize(
-        "cls, kwargs",
-        [
-            (basis.EvalRaisedCosineLog, {}),
-            (basis.ConvRaisedCosineLog, {"window_size": 3}),
-        ],
-    )
-    def test_call_input_shape(self, inp, cls, kwargs, expectation):
-        """
-        Test handling of input shape mismatch when calling the basis.
-        """
-        bas = cls(n_basis_funcs=5, **kwargs)
+    @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})])
+    def test_call_input_shape(self, inp, mode, kwargs, expectation):
+        bas = self.cls[mode](n_basis_funcs=5, **kwargs)
         with expectation:
             bas(inp)
 
