@@ -258,7 +258,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
         conditions are handled such that the basis functions are positive and
         integrate to one over the domain defined by the sample points.
         """
-        sample_pts, scaling = min_max_rescale_samples(sample_pts, self.bounds)
+        sample_pts, scaling = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
         # add knots if not passed
         knot_locs = self._generate_knots(is_cyclic=False)
 
@@ -390,7 +390,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
         The evaluation is performed by looping over each element and using ``splev``
         from SciPy to compute the basis values.
         """
-        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
 
@@ -515,7 +515,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         SciPy to compute the basis values.
 
         """
-        sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
+        sample_pts, _ = min_max_rescale_samples(sample_pts, getattr(self, "bounds", None))
         knot_locs = self._generate_knots(is_cyclic=True)
 
         # for cyclic, do not repeat knots

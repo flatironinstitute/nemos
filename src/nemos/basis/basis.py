@@ -409,7 +409,7 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         two_inputs, shape (20, 2, 6)
 
         """
-        return EvalMSpline.split_by_feature(self, x, axis=axis)
+        return MSplineBasis.split_by_feature(self, x, axis=axis)
 
     @add_docstrings_mspline("compute_features")
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -916,7 +916,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
 
         """
-        return super().evaluate_on_grid(n_samples=n_samples)
+        return OrthExponentialBasis.evaluate_on_grid(self, n_samples=n_samples)
 
     @add_orth_exp_decay_docstring("compute_features")
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -935,7 +935,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         (1000, 10)
 
         """
-        return super().compute_features(*xi)
+        return OrthExponentialBasis.compute_features(self, *xi)
 
     @add_orth_exp_decay_docstring("split_by_feature")
     def split_by_feature(
@@ -961,7 +961,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         feature: shape (20, 1, 5)
 
         """
-        return super().split_by_feature(x, axis=axis)
+        return OrthExponentialBasis.split_by_feature(self, x, axis=axis)
 
 
 class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
@@ -1012,7 +1012,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
         >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
 
         """
-        return super().evaluate_on_grid(n_samples)
+        return OrthExponentialBasis.evaluate_on_grid(self, n_samples)
 
     @add_orth_exp_decay_docstring("compute_features")
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:

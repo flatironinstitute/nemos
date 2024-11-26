@@ -15,6 +15,11 @@ from sklearn.base import clone as sk_clone
 
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
+from nemos.basis import EvalMSpline
+from nemos.basis._spline_basis import BSplineBasis, MSplineBasis, CyclicBSplineBasis
+from nemos.basis._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
+from nemos.basis._decaying_exponential import OrthExponentialBasis
+
 from nemos.utils import pynapple_concatenate_numpy
 from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
 
@@ -123,6 +128,29 @@ def test_add_docstring():
 
     assert CustomSubClass().method.__doc__ == "My extra text.\nMy custom method."
 
+
+@pytest.mark.parametrize(
+    "basis_instance, super_class",
+    [
+        (basis.EvalBSpline(10), BSplineBasis),
+        (basis.ConvBSpline(10, window_size=11), BSplineBasis),
+        (basis.EvalCyclicBSpline(10), CyclicBSplineBasis),
+        (basis.ConvCyclicBSpline(10, window_size=11), CyclicBSplineBasis),
+        (basis.EvalMSpline(10), MSplineBasis),
+        (basis.ConvMSpline(10, window_size=11), MSplineBasis),
+        (basis.EvalRaisedCosineLinear(10), RaisedCosineBasisLinear),
+        (basis.ConvRaisedCosineLinear(10, window_size=11),RaisedCosineBasisLinear),
+        (basis.EvalRaisedCosineLog(10), RaisedCosineBasisLog),
+        (basis.ConvRaisedCosineLog(10, window_size=11), RaisedCosineBasisLog),
+        (basis.EvalOrthExponential(10, np.arange(1, 11)), OrthExponentialBasis),
+        (basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12), OrthExponentialBasis),
+    ]
+)
+def test_expected_output_eval_on_grid(basis_instance, super_class):
+    x, y = super_class.evaluate_on_grid(basis_instance, 100)
+    xx, yy = basis_instance.evaluate_on_grid(100)
+    np.testing.assert_equal(xx, x)
+    np.testing.assert_equal(yy, y)
 
 
 class BasisFuncsTesting(abc.ABC):
