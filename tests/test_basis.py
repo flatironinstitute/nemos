@@ -631,11 +631,11 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         """Test that larger time_scaling results in larger departures from linearity."""
         time_scaling = [0.1, 10, 100]
         n_basis_funcs = 5
-        _, lin_ev = basis.RaisedCosineBasisLinear(n_basis_funcs).evaluate_on_grid(100)
+        _, lin_ev = basis.EvalRaisedCosineLinear(n_basis_funcs).evaluate_on_grid(100)
         corr = np.zeros(len(time_scaling))
         for idx, ts in enumerate(time_scaling):
             # set default decay to zero to get comparable basis
-            basis_log = self.cls(
+            basis_log = self.cls["eval"](
                 n_basis_funcs=n_basis_funcs,
                 time_scaling=ts,
                 enforce_decay_to_zero=False,
@@ -643,7 +643,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             _, log_ev = basis_log.evaluate_on_grid(100)
             # compute the correlation
             corr[idx] = (lin_ev.flatten() @ log_ev.flatten()) / (
-                np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
+                    np.linalg.norm(lin_ev.flatten()) * np.linalg.norm(log_ev.flatten())
             )
         # check that the correlation decreases as time_scale increases
         assert np.all(
@@ -653,13 +653,16 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
     def test_pynapple_support_compute_features(self, n_basis, sample_size):
+        """
+        Test compute_features compatibility with pynapple Tsd input.
+        """
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        out = self.cls(n_basis).compute_features(inp)
+        out = self.cls["eval"](n_basis_funcs=n_basis).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
         assert np.all(out.time_support.values == inp.time_support.values)
 
@@ -672,9 +675,18 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (2, pytest.raises(TypeError, match="Input dimensionality mismatch")),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_input_num(self, num_input, mode, window_size, expectation):
-        bas = self.cls(5, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 3}),
+        ],
+    )
+    def test_call_input_num(self, num_input, cls, kwargs, expectation):
+        """
+        Test handling of input dimensionality mismatch when calling the basis.
+        """
+        bas = cls(n_basis_funcs=5, **kwargs)
         with expectation:
             bas(*([np.linspace(0, 1, 10)] * num_input))
 
@@ -685,9 +697,18 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             (np.linspace(0, 1, 10)[:, None], pytest.raises(ValueError)),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
-    def test_call_input_shape(self, inp, mode, window_size, expectation):
-        bas = self.cls(5, mode=mode, window_size=window_size)
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 3}),
+        ],
+    )
+    def test_call_input_shape(self, inp, cls, kwargs, expectation):
+        """
+        Test handling of input shape mismatch when calling the basis.
+        """
+        bas = cls(n_basis_funcs=5, **kwargs)
         with expectation:
             bas(inp)
 
