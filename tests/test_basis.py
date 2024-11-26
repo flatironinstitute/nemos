@@ -271,14 +271,9 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
         else:
             self.cls[mode](5, **kwargs).compute_features(samples)
 
-    @pytest.mark.parametrize(
-        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
-    )
+    @pytest.mark.parametrize("eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])])
     def test_compute_features_input(self, eval_input):
-        """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
-        """
-        basis_obj = self.cls(n_basis_funcs=5)
+        basis_obj = self.cls["eval"](n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
