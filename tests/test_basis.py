@@ -403,96 +403,96 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [2, 10, 100])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
     def test_sample_size_of_compute_features_matches_that_of_input(
-        self, n_basis_funcs, sample_size, mode, window_size
+            self, n_basis_funcs, sample_size, cls, kwargs
     ):
         """
-        Checks that the sample size of the output from the evaluate() method matches the input sample size.
+        Checks that the sample size of the output from the compute_features() method matches the input sample size.
         """
-        basis_obj = self.cls(
-            n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size
-        )
+        basis_obj = cls(n_basis_funcs=n_basis_funcs, **kwargs)
         eval_basis = basis_obj.compute_features(np.linspace(0, 1, sample_size))
-        if eval_basis.shape[0] != sample_size:
-            raise ValueError(
-                f"Dimensions do not agree: The window size should match the second dimension of the evaluated basis."
-                f"The window size is {sample_size}",
-                f"The second dimension of the evaluated basis is {eval_basis.shape[0]}",
-            )
+        assert eval_basis.shape[0] == sample_size, (
+            f"Dimensions do not agree: The sample size of the output should match the input sample size. "
+            f"Expected {sample_size}, but got {eval_basis.shape[0]}."
+        )
 
     @pytest.mark.parametrize(
         "samples, vmin, vmax, expectation",
         [
             (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
+            (-0.5, 0, 1, pytest.raises(ValueError, match="All the samples lie outside")),
             (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
             (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
+                    np.linspace(-1, 0, 10),
+                    0,
+                    1,
+                    pytest.warns(UserWarning, match="More than 90% of the samples"),
             ),
             (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
+                    np.linspace(1, 2, 10),
+                    0,
+                    1,
+                    pytest.warns(UserWarning, match="More than 90% of the samples"),
             ),
         ],
     )
     def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation):
-        bas = self.cls(5, bounds=(vmin, vmax))
+        """
+        Tests that compute_features handles samples correctly within specified bounds.
+        """
+        basis_obj = self.cls["eval"](5, bounds=(vmin, vmax))
         with expectation:
-            bas(samples)
+            basis_obj.compute_features(samples)
 
     @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_minimum_number_of_basis_required_is_matched(
-        self, n_basis_funcs, mode, window_size
-    ):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
+    def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, cls, kwargs):
         """
         Verifies that the minimum number of basis functions required (i.e., 2) is enforced.
         """
-        raise_exception = n_basis_funcs < 2
-        if raise_exception:
+        if n_basis_funcs < 2:
             with pytest.raises(
-                ValueError,
-                match=f"Object class {self.cls.__name__} "
-                "requires >= 2 basis elements.",
+                    ValueError,
+                    match=f"Object class {cls.__name__} requires >= 2 basis elements.",
             ):
-                self.cls(
-                    n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size
-                )
+                cls(n_basis_funcs=n_basis_funcs, **kwargs)
         else:
-            self.cls(n_basis_funcs=n_basis_funcs, mode=mode, window_size=window_size)
+            cls(n_basis_funcs=n_basis_funcs, **kwargs)
 
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 2)])
-    def test_number_of_required_inputs_compute_features(
-        self, n_input, mode, window_size
-    ):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
+    def test_number_of_required_inputs_compute_features(self, n_input, cls, kwargs):
         """
-        Confirms that the compute_features() method correctly handles the number of input samples that are provided.
+        Confirms that the compute_features() method correctly handles the number of input samples provided.
         """
-        basis_obj = self.cls(n_basis_funcs=5, mode=mode, window_size=window_size)
+        basis_obj = cls(n_basis_funcs=5, **kwargs)
         inputs = [np.linspace(0, 1, 20)] * n_input
         if n_input == 0:
-            expectation = pytest.raises(
-                TypeError, match="Input dimensionality mismatch"
-            )
+            expectation = pytest.raises(TypeError, match="missing 1 required positional argument")
         elif n_input != basis_obj._n_input_dimensionality:
-            expectation = pytest.raises(
-                TypeError,
-                match="Input dimensionality mismatch",
-            )
+            expectation = pytest.raises(TypeError, match="takes 2 positional arguments but \d were given")
         else:
             expectation = does_not_raise()
+
         with expectation:
             basis_obj.compute_features(*inputs)
 
