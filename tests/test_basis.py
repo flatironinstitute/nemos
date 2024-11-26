@@ -519,15 +519,21 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             assert grid.shape[0] == sample_size
 
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
-    def test_evaluate_on_grid_basis_size(self, sample_size):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
+    def test_evaluate_on_grid_basis_size(self, sample_size, cls, kwargs):
         """
         Ensures that the evaluate_on_grid() method returns basis functions of the expected size.
         """
-        basis_obj = self.cls(n_basis_funcs=5)
-        raise_exception = sample_size <= 0
-        if raise_exception:
+        basis_obj = cls(n_basis_funcs=5, **kwargs)
+        if sample_size <= 0:
             with pytest.raises(
-                ValueError, match=r"All sample counts provided must be greater"
+                    ValueError, match=r"All sample counts provided must be greater"
             ):
                 basis_obj.evaluate_on_grid(sample_size)
         else:
@@ -535,11 +541,18 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             assert eval_basis.shape[0] == sample_size
 
     @pytest.mark.parametrize("n_input", [0, 1, 2])
-    def test_evaluate_on_grid_input_number(self, n_input):
+    @pytest.mark.parametrize(
+        "cls, kwargs",
+        [
+            (basis.EvalRaisedCosineLog, {}),
+            (basis.ConvRaisedCosineLog, {"window_size": 2}),
+        ],
+    )
+    def test_evaluate_on_grid_input_number(self, n_input, cls, kwargs):
         """
-        Validates that the evaluate_on_grid() method correctly handles the number of input samples that are provided.
+        Validates that the evaluate_on_grid() method correctly handles the number of input samples provided.
         """
-        basis_obj = self.cls(n_basis_funcs=5)
+        basis_obj = cls(n_basis_funcs=5, **kwargs)
         inputs = [10] * n_input
         if n_input == 0:
             expectation = pytest.raises(
@@ -553,6 +566,7 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
             )
         else:
             expectation = does_not_raise()
+
         with expectation:
             basis_obj.evaluate_on_grid(*inputs)
 
