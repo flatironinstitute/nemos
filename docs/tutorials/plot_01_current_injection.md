@@ -357,7 +357,7 @@ if you are interested.
 :::
 
 ```{code-cell} ipython3
-doc_plots.current_injection_plot(current, spikes, firing_rate)
+doc_plots.current_injection_plot(current, spikes, firing_rate);
 ```
 
 So now that we can view the details of our experiment a little more clearly,
