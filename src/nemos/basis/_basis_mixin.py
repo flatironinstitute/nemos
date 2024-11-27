@@ -104,8 +104,10 @@ class ConvBasisMixin:
 
         """
         if self.kernel_ is None:
-            raise ValueError("You must call `_set_kernel` before `_compute_features`! "
-                             "Convolution kernel is not set.")
+            raise ValueError(
+                "You must call `_set_kernel` before `_compute_features`! "
+                "Convolution kernel is not set."
+            )
         # before calling the convolve, check that the input matches
         # the expectation. We can check xi[0] only, since convolution
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
