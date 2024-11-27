@@ -14,6 +14,7 @@ import pytest
 import utils_testing
 from sklearn.base import clone as sk_clone
 
+import nemos as nmo
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis._basis import (
@@ -30,7 +31,6 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
-import nemos as nmo
 
 
 @pytest.fixture()
@@ -83,7 +83,11 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
         class_obj
         for _, class_obj in utils_testing.get_non_abstract_classes(basis)
         if issubclass(class_obj, Basis)
-    ] + [bas for _, bas in utils_testing.get_non_abstract_classes(nmo.basis._basis) if bas != TransformerBasis]
+    ] + [
+        bas
+        for _, bas in utils_testing.get_non_abstract_classes(nmo.basis._basis)
+        if bas != TransformerBasis
+    ]
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
     return all_basis
@@ -107,7 +111,12 @@ def test_all_basis_are_tested() -> None:
     ]
 
     # Create the set of basis function objects that are tested using the cls definition
-    tested_bases = {test_cls.cls[mode] for mode in ["eval", "conv"] for test_cls in subclasses if test_cls != CombinedBasis}
+    tested_bases = {
+        test_cls.cls[mode]
+        for mode in ["eval", "conv"]
+        for test_cls in subclasses
+        if test_cls != CombinedBasis
+    }
 
     # Create the set of all the concrete basis classes
     all_bases = set(list_all_basis_classes())
@@ -131,7 +140,9 @@ def test_all_basis_are_tested() -> None:
         raise ValueError("cannot fine parametrization.")
 
     basis_tested_in_shared_methods = {o[key] for key in ("eval", "conv") for o in out}
-    all_one_dim_basis = set(list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    all_one_dim_basis = set(
+        list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
     assert basis_tested_in_shared_methods == all_one_dim_basis
 
 
@@ -153,9 +164,13 @@ def test_all_basis_are_tested() -> None:
         ),
     ],
 )
-def test_example_docstrings_add(basis_cls, method_name, descr_match, class_specific_params):
+def test_example_docstrings_add(
+    basis_cls, method_name, descr_match, class_specific_params
+):
 
-    basis_instance = CombinedBasis().instantiate_basis(5, basis_cls, class_specific_params, window_size=10)
+    basis_instance = CombinedBasis().instantiate_basis(
+        5, basis_cls, class_specific_params, window_size=10
+    )
     method = getattr(basis_instance, method_name)
     doc = method.__doc__
     examp_delim = "\n        Examples\n        --------"
@@ -2843,19 +2858,17 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(
             n_basis_b, basis_b, class_specific_params, window_size=10
         )
+        input_a = [np.linspace(0, 1, sample_size_a)] * basis_a_obj._n_input_dimensionality
+        input_b = [np.linspace(0, 1, sample_size_b)] * basis_b_obj._n_input_dimensionality
         basis_obj = basis_a_obj * basis_b_obj
         if raise_exception:
             with pytest.raises(
                 ValueError,
                 match=r"Sample size mismatch\. Input elements have inconsistent",
             ):
-                basis_obj.compute_features(
-                    np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
-                )
+                basis_obj.compute_features(*input_a, *input_b)
         else:
-            basis_obj.compute_features(
-                np.linspace(0, 1, sample_size_a), np.linspace(0, 1, sample_size_b)
-            )
+            basis_obj.compute_features(*input_a, *input_b)
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis_a", [5])
@@ -3273,10 +3286,13 @@ def test_power_of_basis(exponent, basis_class, class_specific_params):
         elif exponent == 3:
             basis_obj = basis_obj * basis_obj * basis_obj
 
+        non_nan = ~np.isnan(eval_pow)
+        out = basis_obj.compute_features(*[samples] * basis_obj._n_input_dimensionality)
         assert np.allclose(
-            eval_pow,
-            basis_obj.compute_features(*[samples] * basis_obj._n_input_dimensionality),
+            eval_pow[non_nan],
+            out[non_nan],
         )
+        assert np.all(np.isnan(out[~non_nan]))
 
 
 @pytest.mark.parametrize(

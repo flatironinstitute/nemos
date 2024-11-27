@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
-from functools import wraps, partial
+from functools import partial, wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
