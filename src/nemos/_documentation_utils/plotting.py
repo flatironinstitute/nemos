@@ -292,6 +292,7 @@ def current_injection_plot(
         bbox_to_anchor=(0.5, -0.4),
         bbox_transform=zoom_axes[1].transAxes,
     )
+    return fig
 
 
 def plot_weighted_sum_basis(time, weights, basis_kernels, basis_coeff):

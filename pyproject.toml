@@ -57,20 +57,29 @@ dev = [
     "seaborn",                      # Required by doctest for _documentation_utils module
 ]
 docs = [
-    "mkdocs",                       # Documentation generator
-    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
-    "mkdocs-section-index",         # Plugin for generating a section index in mkdocs
-    "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
-    "mkdocs-literate-nav>=0.6.1",   # Plugin for literate-style navigation in mkdocs
-    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "mkdocs-material",              # Material theme for mkdocs
-    "mkdocs-autorefs>=0.5",
-    "mkdocs-linkcheck",             # Check relative links
+    "numpydoc",
+    "sphinx",
+    "pydata-sphinx-theme",
+    "sphinx-autodoc-typehints",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-issues",
+    "sphinxcontrib-apidoc",
+    "sphinx-togglebutton",
+    "sphinx_code_tabs",
+    "sphinxemoji",
+    "myst-parser",
+    "myst-nb",
+    "dandi",
+    "sphinx-autobuild",
+    "sphinx-contributors",
     "scikit-learn",
     "dandi",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
+    "ipywidgets",
+    "ipykernel",
 ]
 examples = [
     "scikit-learn",

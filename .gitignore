@@ -117,8 +117,8 @@ venv.bak/
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
+# sphinx build documentation
+/docs/_build
 
 # mypy
 .mypy_cache/
@@ -143,3 +143,14 @@ docs/generated/
 
 # nwb cahce
 nwb-cache/
+
+# scripting folder
+_scripts/
+
+# env variable for nwbs
+docs/data/
+
+# rst generated files
+docs/stubs
+
+

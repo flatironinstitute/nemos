@@ -2,6 +2,8 @@
 hide:
   - navigation
 ---
+# Quickstart
+
 ## **Overview**
 
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
@@ -151,12 +153,12 @@ The `basis` module includes objects that perform two types of transformations on
 ### **Non-linear Mapping**
 
 <figure class="custom-figure">
-    <img src="../assets/glm_features_scheme.svg" width="100%">
+    <img src="_static/glm_features_scheme.svg" alt="GLM Feature Scheme" width="100%">
     <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
 </figure>
 
 Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping, 
-you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
+you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Reference](nemos_basis) for detailed information).
 
 ```python
 
@@ -188,7 +190,7 @@ shape `(n_samples, n_basis_funcs)`, where each column represents a feature gener
 ### **Convolution**
 
 <figure class="custom-figure">
-    <img src="../assets/glm_population_scheme.svg" alt="GLM Population Scheme">
+    <img src="_static/glm_population_scheme.svg" alt="GLM Population Scheme">
     <figcaption><strong>Figure 2:</strong> Basis as a bank of convolutional filters. The figure shows a population GLM for functional connectivity analysis, a classical use-case for basis functions in convolutional mode.</figcaption>
 
 </figure>
@@ -211,8 +213,11 @@ Once the basis is initialized, you can call `compute_features` on an input of sh
 `(n_samples, n_signals)` to perform the convolution. The output will be a 2-dimensional array of shape 
 `(n_samples, n_basis_funcs)` or `(n_samples, n_basis_funcs * n_signals)` respectively.
 
-!!! warning "Signal length and window size"
-    The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+:::{admonition} Signal length and window size
+:class: warning
+
+The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+:::
 
 ```python
 
@@ -234,12 +239,12 @@ Once the basis is initialized, you can call `compute_features` on an input of sh
 
 ```
 
-For additional information on one-dimensional convolutions, see [here](../generated/background/plot_03_1D_convolution).
+For additional information on one-dimensional convolutions, see [here](convolution_background).
 
 ## **Continuous Observations**
 
 
-By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
+By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
 To change the default observation model, set the `observation_model` argument during initialization:
 
@@ -254,13 +259,13 @@ To change the default observation model, set the `observation_model` argument du
 ```
 
 
-Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) for a detailed example.
+Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
 
 ## **Regularization**
 
 
-NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
+NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model:
 
@@ -279,11 +284,11 @@ You can specify the regularization scheme and its strength when initializing the
 ## **Pre-processing with `pynapple`**
 
 
-!!! warning
+:::{note}
 
-    This section assumes some familiarity with the `pynapple` package for time series manipulation and data
-    exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
-
+This section assumes some familiarity with the `pynapple` package for time series manipulation and data
+exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
+:::
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such
 as restricting your time series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common
@@ -296,7 +301,7 @@ also be a `pynapple` time series.
 A canonical example of this behavior is the `predict` method of `GLM`.
 
 
-```python
+```ipython
 
 >>> import numpy as np
 >>> import pynapple as nap
@@ -321,11 +326,12 @@ A canonical example of this behavior is the `predict` method of `GLM`.
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and NeMoS.
 
 
-!!! note
-    You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+:::{note}
 
+You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+:::
 
-```python
+```ipython
 
 >>> import nemos as nmo
 >>> import pynapple as nap
@@ -355,7 +361,7 @@ Let's see how you can greatly streamline your analysis pipeline by integrating `
 Finally, let's compare the tuning curves
 
 
-```python
+```ipython
 
 >>> import numpy as np
 >>> import matplotlib.pyplot as plt
@@ -381,7 +387,7 @@ Finally, let's compare the tuning curves
 ```
 
 
-<img src="../head_dir_tuning.jpg" width="40%">
+<img src="_static/head_dir_tuning.jpg" width="40%">
 
 
 ## **Compatibility with `scikit-learn`**
@@ -394,7 +400,7 @@ For example, if we would like to tune the critical hyper-parameter `regularizer_
 
 [^1]: For a detailed explanation and practical examples, refer to the [cross-validation page](https://scikit-learn.org/stable/modules/cross_validation.html) in the `scikit-learn` documentation.
 
-```python
+```ipython
 
 >>> # set up the model
 >>> import nemos as nmo
@@ -410,7 +416,7 @@ For example, if we would like to tune the critical hyper-parameter `regularizer_
 
 Fit a 5-fold cross-validation scheme for comparing two different regularizer strengths:
 
-```python
+```ipython
 
 >>> from sklearn.model_selection import GridSearchCV
 
@@ -426,13 +432,15 @@ Fit a 5-fold cross-validation scheme for comparing two different regularizer str
 ```
 
 
-!!! info "Cross-Validation in NeMoS"
+:::{admonition} Cross-Validation in NeMoS
+:class: info
 
-    For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
+For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](sklearn-how-to).
+:::
 
 Finally, we can print the regularizer strength with the best cross-validated performance:
 
-```python
+```ipython
 
 >>> # print best regularizer strength
 >>> print(cls.best_params_)

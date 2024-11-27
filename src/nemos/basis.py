@@ -77,8 +77,8 @@ def min_max_rescale_samples(
     sample_pts:
         The original samples.
     bounds:
-        Sample bounds. `bounds[0]` and `bounds[1]` are mapped to 0 and 1, respectively.
-        Default are `min(sample_pts), max(sample_pts)`.
+        Sample bounds. ``bounds[0]`` and ``bounds[1]`` are mapped to 0 and 1, respectively.
+        Default are ``min(sample_pts), max(sample_pts)``.
 
     Warns
     -----
@@ -107,7 +107,7 @@ def min_max_rescale_samples(
 
 
 class TransformerBasis:
-    """Basis as `scikit-learn` transformers.
+    """Basis as ``scikit-learn`` transformers.
 
     This class abstracts the underlying basis function details, offering methods
     similar to scikit-learn's transformers but specifically designed for basis
@@ -115,14 +115,14 @@ class TransformerBasis:
     of the basis functions), transforming data (applying the basis functions to
     data), and both fitting and transforming in one step.
 
-    `TransformerBasis`, unlike `Basis`, is compatible with scikit-learn pipelining and
+    ``TransformerBasis``, unlike ``Basis``, is compatible with scikit-learn pipelining and
     model selection, enabling the cross-validation of the basis type and parameters,
-    for example `n_basis_funcs`. See the example section below.
+    for example ``n_basis_funcs``. See the example section below.
 
     Parameters
     ----------
     basis :
-        A concrete subclass of `Basis`.
+        A concrete subclass of ``Basis``.
 
     Examples
     --------
@@ -132,7 +132,6 @@ class TransformerBasis:
     >>> from sklearn.model_selection import GridSearchCV
     >>> import numpy as np
     >>> np.random.seed(123)
-
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
     >>> x = np.random.normal(size=(num_samples, ))  # raw time series
@@ -140,7 +139,6 @@ class TransformerBasis:
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
     >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
-
     >>> # transformer can be used in pipelines
     >>> transformer = TransformerBasis(basis)
     >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
@@ -162,9 +160,9 @@ class TransformerBasis:
     def _unpack_inputs(X: FeatureMatrix):
         """Unpack impute without using transpose.
 
-        Unpack horizontally stacked inputs using slicing. This works gracefully with `pynapple`,
-        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a `pynapple`
-        exception since `pynapple` assumes that the time axis is the first axis.
+        Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
+        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``
+        exception since ``pynapple`` assumes that the time axis is the first axis.
 
         Parameters
         ----------
@@ -201,10 +199,8 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-
         >>> # Example input
         >>> X = np.random.normal(size=(100, 2))
-
         >>> # Define and fit tranformation basis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
@@ -233,21 +229,17 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
-
         >>> # Define and fit tranformation basis
         >>> basis = MSplineBasis(10, mode="conv", window_size=200)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
-
         >>> transformer_fitted = transformer.fit(X)
         >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
         >>> transformer_fitted.kernel_.shape
         (200, 10)
-
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X[:, 0:1])
         """
@@ -280,14 +272,11 @@ class TransformerBasis:
         --------
         >>> import numpy as np
         >>> from nemos.basis import MSplineBasis, TransformerBasis
-
         >>> # Example input
         >>> X = np.random.normal(size=(100, 1))
-
         >>> # Define tranformation basis
         >>> basis = MSplineBasis(10)
         >>> transformer = TransformerBasis(basis)
-
         >>> # Fit and transform basis
         >>> feature_transformed = transformer.fit_transform(X)
         """
@@ -343,7 +332,7 @@ class TransformerBasis:
         Raises
         ------
         ValueError
-            If the attribute being set is not `_basis` or an attribute of `_basis`.
+            If the attribute being set is not ``_basis`` or an attribute of ``_basis``.
 
         Examples
         --------
@@ -389,7 +378,7 @@ class TransformerBasis:
         """
         Set TransformerBasis parameters.
 
-        When used with `sklearn.model_selection`, users can set either the `_basis` attribute directly
+        When used with ``sklearn.model_selection``, users can set either the ``_basis`` attribute directly
         or the parameters of the underlying Basis, but not both.
 
         Examples
@@ -397,7 +386,6 @@ class TransformerBasis:
         >>> from nemos.basis import BSplineBasis, MSplineBasis, TransformerBasis
         >>> basis = MSplineBasis(10)
         >>> transformer_basis = TransformerBasis(basis=basis)
-
         >>> # setting parameters of _basis is allowed
         >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
         8
@@ -508,27 +496,30 @@ class Basis(Base, abc.ABC):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Raises
     ------
     ValueError:
-        - If `mode` is not 'eval' or 'conv'.
-        - If `kwargs` are not None and `mode =="eval".
-        - If `kwargs` include parameters not recognized or do not have
-        default values in `create_convolutional_predictor`.
-        - If `axis` different from 0 is provided as a keyword argument (samples must always be in the first axis).
+        If ``mode`` is not 'eval' or 'conv'.
+    ValueError:
+        If ``kwargs`` are not None and ``mode =="eval"``.
+    ValueError:
+        If ``kwargs`` include parameters not recognized or do not have
+        default values in ``create_convolutional_predictor``.
+    ValueError:
+        If ``axis`` different from 0 is provided as a keyword argument (samples must always be in the first axis).
     """
 
     def __init__(
@@ -578,11 +569,11 @@ class Basis(Base, abc.ABC):
         Raises
         ------
         ValueError:
-            - If `self._conv_kwargs` are not None and `mode =="eval".
-            - If `axis` is provided as an argument, and it is different from 0
+            - If ``self._conv_kwargs`` are not None and ``mode =="eval"``.
+            - If ``axis`` is provided as an argument, and it is different from 0
             (samples must always be in the first axis).
-            - If `self._conv_kwargs` include parameters not recognized or that do not have
-            default values in `create_convolutional_predictor`.
+            - If ``self._conv_kwargs`` include parameters not recognized or that do not have
+            default values in ``create_convolutional_predictor``.
         """
         if self._mode == "eval" and self._conv_kwargs:
             raise ValueError(
@@ -622,28 +613,34 @@ class Basis(Base, abc.ABC):
     @property
     def n_output_features(self) -> int | None:
         """
-        Read-only property indicating the number of features returned by the basis, when available.
+        Number of features returned by the basis.
 
         Notes
         -----
         The number of output features can be determined only when the number of inputs
-        provided to the basis is known. Therefore, before the first call to `compute_features`,
-        this property will return `None`. After that call, `n_output_features` will be available.
+        provided to the basis is known. Therefore, before the first call to ``compute_features``,
+        this property will return ``None``. After that call, ``n_output_features`` will be available.
         """
         return self._n_output_features
 
     @property
     def label(self) -> str:
+        """Label for the basis."""
         return self._label
 
     @property
     def n_basis_input(self) -> tuple | None:
+        """Number of expected inputs.
+
+        The number of inputs ``compute_feature`` expects.
+        """
         if self._n_basis_input is None:
             return
         return self._n_basis_input
 
     @property
     def n_basis_funcs(self):
+        """Number of basis functions."""
         return self._n_basis_funcs
 
     @n_basis_funcs.setter
@@ -658,6 +655,7 @@ class Basis(Base, abc.ABC):
 
     @property
     def bounds(self):
+        """Range of values covered by the basis."""
         return self._bounds
 
     @bounds.setter
@@ -684,10 +682,15 @@ class Basis(Base, abc.ABC):
 
     @property
     def mode(self):
+        """Mode of operation, either ``"conv"`` or ``"eval"``."""
         return self._mode
 
     @property
     def window_size(self):
+        """Window size as number of samples.
+
+        Duration of the convolutional kernel in number of samples.
+        """
         return self._window_size
 
     @window_size.setter
@@ -714,9 +717,9 @@ class Basis(Base, abc.ABC):
 
     @staticmethod
     def _apply_identifiability_constraints(X: NDArray):
-        """Apply identifiability constraints to a design matrix `X`.
+        """Apply identifiability constraints to a design matrix ``X``.
 
-         Removes columns from `X` until `[1, X]` is full rank to ensure the uniqueness
+         Removes columns from ``X`` until ``[1, X]`` is full rank to ensure the uniqueness
          of the GLM (Generalized Linear Model) maximum-likelihood solution. This is particularly
          crucial for models using bases like BSplines and CyclicBspline, which, due to their
          construction, sum to 1 and can cause rank deficiency when combined with an intercept.
@@ -768,16 +771,16 @@ class Basis(Base, abc.ABC):
         -------
         :
             A matrix with the transformed features. The shape of the output depends on the operation mode:
-                - If `mode == 'eval'`, the basis evaluated at the samples, or $b_i(*xi)$, where $b_i$ is a
-                basis element. xi[k] must be a one-dimensional array or a pynapple Tsd.
+                - If ``mode == 'eval'``, the basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i`
+                is a basis element. ``xi[k]`` must be a one-dimensional array or a pynapple Tsd.
 
-                - If `mode == 'conv'`, a bank of basis filters (created by calling fit) is convolved with the
+                - If ``mode == 'conv'``, a bank of basis filters (created by calling fit) is convolved with the
                 samples. Samples can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
                 except for the sample-axis are flattened, so that the method always returns a matrix.
                 For example, if samples are of shape (num_samples, 2, 3), the output will be
                 (num_samples, num_basis_funcs * 2 * 3).
-                The time-axis can be specified at basis initialization by setting the keyword argument `axis`.
-                For example, if `axis == 1` your samples should be (N1, num_samples N3, ...), the output of
+                The time-axis can be specified at basis initialization by setting the keyword argument ``axis``.
+                For example, if ``axis == 1`` your samples should be (N1, num_samples N3, ...), the output of
                 transform will be (num_samples, num_basis_funcs * N1 * N3 *...).
 
         Raises
@@ -830,7 +833,6 @@ class Basis(Base, abc.ABC):
         --------
         >>> import numpy as np
         >>> from nemos.basis import BSplineBasis
-
         >>> # Generate data
         >>> num_samples = 10000
         >>> X = np.random.normal(size=(num_samples, ))  # raw time series
@@ -878,7 +880,7 @@ class Basis(Base, abc.ABC):
         -----
         Subclasses implementing this method should detail the specifics of how the kernel is
         computed and how the input parameters are utilized. If the basis operates in 'eval'
-        mode exclusively, this method should simply return `self` without modification.
+        mode exclusively, this method should simply return ``self`` without modification.
         """
         if self.mode == "conv":
             self.kernel_ = self.__call__(np.linspace(0, 1, self.window_size))
@@ -924,7 +926,7 @@ class Basis(Base, abc.ABC):
         Returns
         -------
         :
-            A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by `n_samples`.
+            A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
         """
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
@@ -983,8 +985,8 @@ class Basis(Base, abc.ABC):
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
-        The i-th axis of the grid will be sampled with n_samples[i] equi-spaced points.
-        The method uses numpy.meshgrid with `indexing="ij"`, returning matrix indexing
+        The i-th axis of the grid will be sampled with ``n_samples[i]`` equi-spaced points.
+        The method uses numpy.meshgrid with ``indexing="ij"``, returning matrix indexing
         instead of the default cartesian indexing, see Notes.
 
         Parameters
@@ -998,24 +1000,25 @@ class Basis(Base, abc.ABC):
         *Xs :
             A tuple of arrays containing the meshgrid values, one element for each of the n dimension of the grid,
             where n equals to the number of inputs.
-            The size of Xs[i] is (n_samples[0], ... , n_samples[n]).
+            The size of ``Xs[i]`` is ``(n_samples[0], ... , n_samples[n])``.
         Y :
             The basis function evaluated at the samples,
-            shape (n_samples[0], ... , n_samples[n], number of basis).
+            shape ``(n_samples[0], ... , n_samples[n], number of basis)``.
 
         Raises
         ------
         ValueError
-            - If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
+            If the time point number is inconsistent between inputs or if the number of inputs doesn't match what
             the Basis object requires.
-            - If one of the n_samples is <= 0.
+        ValueError
+            If one of the n_samples is <= 0.
 
         Notes
         -----
-        Setting "indexing = 'ij'" returns a meshgrid with matrix indexing. In the N-D case with inputs of size
-        $M_1,...,M_N$, outputs are of shape $(M_1, M_2, M_3, ....,M_N)$.
+        Setting ``indexing = 'ij'`` returns a meshgrid with matrix indexing. In the N-D case with inputs of size
+        :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
-        For the same input, Cartesian indexing would return an output of shape $(M_2, M_1, M_3, ....,M_N)$.
+        For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
 
         Examples
         --------
@@ -1152,7 +1155,7 @@ class Basis(Base, abc.ABC):
         Returns
         -------
         :
-            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
+            The product of the basis with itself "exponent" times. Equivalent to ``self * self * ... * self``.
 
         Raises
         ------
@@ -1211,19 +1214,19 @@ class Basis(Base, abc.ABC):
         Calculate and return the slicing for features based on the input structure.
 
         This method determines how to slice the features for different basis types.
-        If the instance is of `AdditiveBasis` type, the slicing is calculated recursively
+        If the instance is of ``AdditiveBasis`` type, the slicing is calculated recursively
         for each component basis. Otherwise, it determines the slicing based on
-        the number of basis functions and `split_by_input` flag.
+        the number of basis functions and ``split_by_input`` flag.
 
         Parameters
         ----------
         n_inputs :
-            The number of input basis for each component, by default it uses `self._n_basis_input`.
+            The number of input basis for each component, by default it uses ``self._n_basis_input``.
         start_slice :
             The starting index for slicing, by default it starts from 0.
         split_by_input :
             Flag indicating whether to split the slicing by individual inputs or not.
-            If `False`, a single slice is generated for all inputs.
+            If ``False``, a single slice is generated for all inputs.
 
         Returns
         -------
@@ -1326,45 +1329,48 @@ class Basis(Base, abc.ABC):
 
         **How it works:**
 
-        - If the basis expects an input shape `(n_samples, n_inputs)`, then the feature axis length will
-        be `total_n_features = n_inputs * n_basis_funcs`. This axis is reshaped into dimensions
-        `(n_inputs, n_basis_funcs)`.
-        - If the basis expects an input of shape `(n_samples,)`, then the feature axis length will
-        be `total_n_features = n_basis_funcs`. This axis is reshaped into `(1, n_basis_funcs)`.
+        - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
+          be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
+          ``(n_inputs, n_basis_funcs)``.
 
-        For example, if the input array `x` has shape `(1, 2, total_n_features, 4, 5)`,
-        then after applying this method, it will be reshaped into `(1, 2, n_inputs, n_basis_funcs, 4, 5)`.
+        - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
+          be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
 
-        The specified axis (`axis`) determines where the split occurs, and all other dimensions
+        For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
+        then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
+
+        The specified axis (``axis``) determines where the split occurs, and all other dimensions
         remain unchanged. See the example section below for the most common use cases.
 
         Parameters
         ----------
         x :
             The input array to be split, representing concatenated features, coefficients,
-            or other data. The shape of `x` along the specified axis must match the total
-            number of features generated by the basis, i.e., `self.n_output_features`.
+            or other data. The shape of ``x`` along the specified axis must match the total
+            number of features generated by the basis, i.e., ``self.n_output_features``.
 
             **Examples:**
-            - For a design matrix: `(n_samples, total_n_features)`
-            - For model coefficients: `(total_n_features,)` or `(total_n_features, n_neurons)`.
+
+            - For a design matrix: ``(n_samples, total_n_features)``
+
+            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
 
         axis : int, optional
             The axis along which to split the features. Defaults to 1.
-            Use `axis=1` for design matrices (features along columns) and `axis=0` for
+            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
             coefficient arrays (features along rows). All other dimensions are preserved.
 
         Raises
         ------
         ValueError
-            If the shape of `x` along the specified axis does not match `self.n_output_features`.
+            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
 
         Returns
         -------
         dict
             A dictionary where:
             - **Key**: Label of the basis.
-            - **Value**: the array reshaped to: `(..., n_inputs, n_basis_funcs, ...)
+            - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
 
         Examples
         --------
@@ -1464,8 +1470,8 @@ class Basis(Base, abc.ABC):
 
         This function computes the number of inputs that are provided to the basis and uses
         that number, and the n_basis_funcs to calculate the number of output features that
-        `self.compute_features` will return. These quantities and the input shape (excluding the sample axis)
-        are stored in `self._n_basis_input` and `self._n_output_features`, and `self._input_shape`
+        ``self.compute_features`` will return. These quantities and the input shape (excluding the sample axis)
+        are stored in ``self._n_basis_input`` and ``self._n_output_features``, and ``self._input_shape``
         respectively.
 
         Parameters
@@ -1481,15 +1487,15 @@ class Basis(Base, abc.ABC):
         Raises
         ------
         ValueError:
-            If the number of inputs do not match `self._n_basis_input`, if  `self._n_basis_input` was
+            If the number of inputs do not match ``self._n_basis_input``, if  ``self._n_basis_input`` was
             not None.
 
         Notes
         -----
-        Once a `compute_features` is called, we enforce that for all subsequent calls of the method,
+        Once a ``compute_features`` is called, we enforce that for all subsequent calls of the method,
         the input that the basis receives preserves the shape of all axes, except for the sample axis.
         This condition guarantees the consistency of the feature axis, and therefore that
-         `self.split_by_feature` behaves appropriately.
+         ``self.split_by_feature`` behaves appropriately.
 
         """
         # Check that the input shape matches expectation
@@ -1524,7 +1530,7 @@ class AdditiveBasis(Basis):
 
     Attributes
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
 
     Examples
@@ -1533,16 +1539,15 @@ class AdditiveBasis(Basis):
     >>> import numpy as np
     >>> import nemos as nmo
     >>> X = np.random.normal(size=(30, 2))
-
     >>> # define two basis objects and add them
     >>> basis_1 = nmo.basis.BSplineBasis(10)
     >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
     >>> additive_basis = basis_1 + basis_2
-
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
     >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
     >>> additive_basis_2 = additive_basis + basis_3
+
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1641,7 +1646,7 @@ class AdditiveBasis(Basis):
         Parameters
         ----------
         *xi:
-            The sample inputs. Unused, necessary to conform to `scikit-learn` API.
+            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
 
         Returns
         -------
@@ -1666,52 +1671,50 @@ class AdditiveBasis(Basis):
 
         **How It Works:**
 
-        Suppose the basis is made up of **m components**, each with $b_i$ basis functions and $n_i$ inputs.
-        The total number of features, $N$, is calculated as:
+        Suppose the basis is made up of **m components**, each with :math:`b_i` basis functions and :math:`n_i` inputs.
+        The total number of features, :math:`N`, is calculated as:
 
-        $$
-        N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
-        $$
+        .. math::
+            N = b_1 \cdot n_1 + b_2 \cdot n_2 + \ldots + b_m \cdot n_m
 
-        This method splits any axis of length $N$ into sub-arrays, one for each basis component.
+        This method splits any axis of length :math:`N` into sub-arrays, one for each basis component.
 
         The sub-array for the i-th basis component is reshaped into dimensions
-        $(n_i, b_i)$.
+        :math:`(n_i, b_i)`.
 
-        For example, if the array shape is $(1, 2, N, 4, 5)$, then each split sub-array will have shape:
+        For example, if the array shape is :math:`(1, 2, N, 4, 5)`, then each split sub-array will have shape:
 
-        $$
-        (1, 2, n_i, b_i, 4, 5)
-        $$
+        .. math::
+            (1, 2, n_i, b_i, 4, 5)
 
         where:
 
-        - $n_i$ represents the number of inputs associated with the i-th component,
-        - $b_i$ represents the number of basis functions in that component.
+        - :math:`n_i` represents the number of inputs associated with the i-th component,
+        - :math:`b_i` represents the number of basis functions in that component.
 
-        The specified axis (`axis`) determines where the split occurs, and all other dimensions
+        The specified axis (``axis``) determines where the split occurs, and all other dimensions
         remain unchanged. See the example section below for the most common use cases.
 
         Parameters
         ----------
         x :
             The input array to be split, representing concatenated features, coefficients,
-            or other data. The shape of `x` along the specified axis must match the total
-            number of features generated by the basis, i.e., `self.n_output_features`.
+            or other data. The shape of ``x`` along the specified axis must match the total
+            number of features generated by the basis, i.e., ``self.n_output_features``.
 
             **Examples:**
-            - For a design matrix: `(n_samples, total_n_features)`
-            - For model coefficients: `(total_n_features,)` or `(total_n_features, n_neurons)`.
+            - For a design matrix: ``(n_samples, total_n_features)``
+            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
 
         axis : int, optional
             The axis along which to split the features. Defaults to 1.
-            Use `axis=1` for design matrices (features along columns) and `axis=0` for
+            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
             coefficient arrays (features along rows). All other dimensions are preserved.
 
         Raises
         ------
         ValueError
-            If the shape of `x` along the specified axis does not match `self.n_output_features`.
+            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
 
         Returns
         -------
@@ -1720,12 +1723,11 @@ class AdditiveBasis(Basis):
             - **Keys**: Labels of the additive basis components.
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 
-              $$
-              (..., n_i, b_i, ...)
-             $$
+            .. math::
+                (..., n_i, b_i, ...)
 
-              - `n_i`: The number of inputs processed by the i-th basis component.
-              - `b_i`: The number of basis functions for the i-th basis component.
+            - ``n_i``: The number of inputs processed by the i-th basis component.
+            - ``b_i``: The number of basis functions for the i-th basis component.
 
             These sub-arrays are reshaped along the specified axis, with all other dimensions
             remaining the same.
@@ -1783,7 +1785,7 @@ class MultiplicativeBasis(Basis):
 
     Attributes
     ----------
-    n_basis_funcs : int
+    n_basis_funcs :
         Number of basis functions.
 
     Examples
@@ -1792,12 +1794,10 @@ class MultiplicativeBasis(Basis):
     >>> import numpy as np
     >>> import nemos as nmo
     >>> X = np.random.normal(size=(30, 3))
-
     >>> # define two basis and multiply
     >>> basis_1 = nmo.basis.BSplineBasis(10)
     >>> basis_2 = nmo.basis.RaisedCosineBasisLinear(15)
     >>> multiplicative_basis = basis_1 * basis_2
-
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
     >>> basis_3 = nmo.basis.RaisedCosineBasisLog(100)
@@ -1828,7 +1828,7 @@ class MultiplicativeBasis(Basis):
         Parameters
         ----------
         *xi:
-            The sample inputs. Unused, necessary to conform to `scikit-learn` API.
+            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
 
         Returns
         -------
@@ -1921,18 +1921,18 @@ class SplineBasis(Basis, abc.ABC):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -1964,6 +1964,10 @@ class SplineBasis(Basis, abc.ABC):
 
     @property
     def order(self):
+        """Spline order.
+
+        Spline order, i.e. the polynomial degree of the spline plus one.
+        """
         return self._order
 
     @order.setter
@@ -2056,16 +2060,16 @@ class SplineBasis(Basis, abc.ABC):
 
 class MSplineBasis(SplineBasis):
     r"""
-    M-spline[$^{[1]}$](#references) basis functions for modeling and data transformation.
+    M-spline basis functions for modeling and data transformation.
 
-    M-splines are a type of spline basis function used for smooth curve fitting
+    M-splines [1]_ are a type of spline basis function used for smooth curve fitting
     and data representation. They are positive and integrate to one, making them
     suitable for probabilistic models and density estimation. The order of an
     M-spline defines its smoothness, with higher orders resulting in smoother
     splines.
 
     This class provides functionality to create M-spline basis functions, allowing
-    for flexible and smooth modeling of data. It inherits from the `SplineBasis`
+    for flexible and smooth modeling of data. It inherits from the ``SplineBasis``
     abstract class, providing specific implementations for M-splines.
 
     Parameters
@@ -2083,18 +2087,18 @@ class MSplineBasis(SplineBasis):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs:
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
@@ -2106,16 +2110,16 @@ class MSplineBasis(SplineBasis):
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = mspline_basis(sample_points)
 
-    # References
-    ------------
-    [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+    References
+    ----------
+    .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
         3(4), 425-441.
 
     Notes
     -----
-    MSplines must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
-    (x-axis) of an MSpline basis is expanded by a factor of $\alpha$, the values on the co-domain (y-axis) values
-    will shrink by a factor of $1/\alpha$.
+    ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+    (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain (y-axis) values
+    will shrink by a factor of :math:`1/\alpha`.
     For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
     If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
     """
@@ -2202,10 +2206,10 @@ class MSplineBasis(SplineBasis):
         -------
         X : NDArray
             A 1D array of uniformly spaced sample points within the domain [0, 1].
-            Shape: `(n_samples,)`.
+            Shape: ``(n_samples,)``.
         Y : NDArray
             A 2D array where each row corresponds to the evaluated M-spline basis
-            function values at the points in X. Shape: `(n_samples, n_basis_funcs)`.
+            function values at the points in X. Shape: ``(n_samples, n_basis_funcs)``.
 
         Examples
         --------
@@ -2231,34 +2235,36 @@ class MSplineBasis(SplineBasis):
 
 class BSplineBasis(SplineBasis):
     """
-    B-spline[$^{[1]}$](#references) 1-dimensional basis functions.
+    B-spline 1-dimensional basis functions.
+
+    Implementation of the one-dimensional BSpline basis [1]_.
 
     Parameters
     ----------
     n_basis_funcs :
         Number of basis functions.
     mode :
-        The mode of operation. 'eval' for evaluation at sample points,
+        The mode of operation. ``'eval'`` for evaluation at sample points,
         'conv' for convolutional operation.
     order :
-        Order of the splines used in basis functions. Must lie within [1, n_basis_funcs].
+        Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
         The B-splines have (order-2) continuous derivatives at each interior knot.
         The higher this number, the smoother the basis representation will be.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -2266,16 +2272,15 @@ class BSplineBasis(SplineBasis):
         Spline order.
 
 
-    # References
-    ------------
-    [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
+    References
+    ----------
+    .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import BSplineBasis
-
     >>> bspline_basis = BSplineBasis(n_basis_funcs=5, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = bspline_basis(sample_points)
@@ -2325,7 +2330,7 @@ class BSplineBasis(SplineBasis):
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev`
+        The evaluation is performed by looping over each element and using ``splev``
         from SciPy to compute the basis values.
         """
         sample_pts, _ = min_max_rescale_samples(sample_pts, self.bounds)
@@ -2348,14 +2353,14 @@ class BSplineBasis(SplineBasis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev` from
+        The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
 
         Examples
@@ -2387,32 +2392,31 @@ class CyclicBSplineBasis(SplineBasis):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
-    n_basis_funcs : int
-        Number of basis functions.
-    order : int
-        Order of the splines used in basis functions.
+    n_basis_funcs :
+        Number of basis functions, int.
+    order :
+        Order of the splines used in basis functions, int.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import CyclicBSplineBasis
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cyclic_basis = CyclicBSplineBasis(n_basis_funcs=5, order=3, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cyclic_basis(sample_points)
@@ -2465,7 +2469,7 @@ class CyclicBSplineBasis(SplineBasis):
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev` from
+        The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
 
         """
@@ -2513,14 +2517,14 @@ class CyclicBSplineBasis(SplineBasis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Notes
         -----
-        The evaluation is performed by looping over each element and using `splev` from
+        The evaluation is performed by looping over each element and using ``splev`` from
         SciPy to compute the basis values.
 
         Examples
@@ -2537,7 +2541,7 @@ class CyclicBSplineBasis(SplineBasis):
 class RaisedCosineBasisLinear(Basis):
     """Represent linearly-spaced raised cosine basis functions.
 
-    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -2552,35 +2556,34 @@ class RaisedCosineBasisLinear(Basis):
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import RaisedCosineBasisLinear
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cosine_basis(sample_points)
 
-    # References
-    ------------
-    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-        11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+        11003–11013.
     """
 
     def __init__(
@@ -2709,10 +2712,10 @@ class RaisedCosineBasisLinear(Basis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            Raised cosine basis functions, shape (n_samples, n_basis_funcs)
+            Raised cosine basis functions, shape ``(n_samples, n_basis_funcs)``
 
         Examples
         --------
@@ -2744,8 +2747,8 @@ class RaisedCosineBasisLinear(Basis):
 class RaisedCosineBasisLog(RaisedCosineBasisLinear):
     """Represent log-spaced raised cosine basis functions.
 
-    Similar to `RaisedCosineBasisLinear` but the basis functions are log-spaced.
-    This implementation is based on the cosine bumps used by Pillow et al.[$^{[1]}$](#references)
+    Similar to ``RaisedCosineBasisLinear`` but the basis functions are log-spaced.
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
     to uniformly tile the internal points of the domain.
 
     Parameters
@@ -2762,41 +2765,40 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear):
         larger values resulting in more stretching. As this approaches 0, the
         transformation becomes linear.
     enforce_decay_to_zero:
-        If set to True, the algorithm first constructs a basis with `n_basis_funcs + ceil(width)` elements
+        If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
     window_size :
         The window size for convolution. Required if mode is 'conv'.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
     >>> from numpy import linspace
     >>> from nemos.basis import RaisedCosineBasisLog
     >>> X = np.random.normal(size=(1000, 1))
-
     >>> cosine_basis = RaisedCosineBasisLog(n_basis_funcs=5, mode="conv", window_size=10)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = cosine_basis(sample_points)
 
-    # References
-    ------------
-    [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
-       11003–11013. http://dx.doi.org/10.1523/jneurosci.3305-05.2005
+       11003–11013.
     """
 
     def __init__(
@@ -2933,25 +2935,25 @@ class OrthExponentialBasis(Basis):
     n_basis_funcs
             Number of basis functions.
     decay_rates :
-            Decay rates of the exponentials, shape (n_basis_funcs,).
+            Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
     mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
+        The mode of operation. ``'eval'`` for evaluation at sample points,
+        ``'conv'`` for convolutional operation.
     window_size :
-        The window size for convolution. Required if mode is 'conv'.
+        The window size for convolution. Required if mode is ``'conv'``.
     bounds :
-        The bounds for the basis domain in `mode="eval"`. The default `bounds[0]` and `bounds[1]` are the
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
         If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
     **kwargs :
-        Additional keyword arguments passed to `nemos.convolve.create_convolutional_predictor` when
-        `mode='conv'`; These arguments are used to change the default behavior of the convolution.
-        For example, changing the `predictor_causality`, which by default is set to `"causal"`.
-        Note that one cannot change the default value for the `axis` parameter. Basis assumes
-        that the convolution axis is `axis=0`.
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
+        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
@@ -2969,8 +2971,8 @@ class OrthExponentialBasis(Basis):
     def __init__(
         self,
         n_basis_funcs: int,
-        decay_rates: NDArray[np.floating],
-        mode="eval",
+        decay_rates: NDArray,
+        mode: Literal["eval", "conv"] = "eval",
         window_size: Optional[int] = None,
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "OrthExponentialBasis",
@@ -2990,7 +2992,11 @@ class OrthExponentialBasis(Basis):
 
     @property
     def decay_rates(self):
-        """Decay rate getter."""
+        r"""Decay rate.
+
+        The rate of decay of the exponential functions. If :math:`f_i(t) = e^{-\alpha_i t}` is the i-th decay
+        exponential before orthogonalization, :math:`\alpha_i` is the i-th element of the ``decay_rate`` vector.
+        """
         return self._decay_rates
 
     @decay_rates.setter
@@ -3072,14 +3078,14 @@ class OrthExponentialBasis(Basis):
         Parameters
         ----------
         sample_pts
-            Spacing for basis functions, holding elements on the interval [0,
-            inf), shape (n_samples,).
+            Spacing for basis functions, holding elements on the interval :math:`[0,inf)`,
+            shape ``(n_samples,)``.
 
         Returns
         -------
         basis_funcs
             Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``.
 
         """
         self._check_sample_size(sample_pts)
@@ -3113,11 +3119,11 @@ class OrthExponentialBasis(Basis):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing the equi-spaced sample
+            Array of shape ``(n_samples,)`` containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
             Evaluated exponentially decaying basis functions, numerically
-            orthogonalized, shape (n_samples, n_basis_funcs)
+            orthogonalized, shape ``(n_samples, n_basis_funcs)``
 
         Examples
         --------
@@ -3157,7 +3163,6 @@ def mspline(x: NDArray, k: int, i: int, T: NDArray) -> NDArray:
     >>> import numpy as np
     >>> from numpy import linspace
     >>> from nemos.basis import mspline
-
     >>> sample_points = linspace(0, 1, 100)
     >>> mspline_eval = mspline(x=sample_points, k=3, i=2, T=np.random.rand(7)) # define a cubic M-spline
     >>> mspline_eval.shape
@@ -3223,7 +3228,7 @@ def bspline(
     Raises
     ------
     AssertionError
-        If `outer_ok` is False and the sample points lie outside the B-spline knots range.
+        If ``outer_ok`` is False and the sample points lie outside the B-spline knots range.
 
     Notes
     -----
@@ -3234,7 +3239,6 @@ def bspline(
     >>> import numpy as np
     >>> from numpy import linspace
     >>> from nemos.basis import bspline
-
     >>> sample_points = linspace(0, 1, 100)
     >>> knots = np.array([0, 0, 0, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1, 1, 1, 1])
     >>> bspline_eval = bspline(sample_points, knots) # define a cubic B-spline

@@ -54,38 +54,47 @@ class GLM(BaseRegressor):
     don't follow a normal distribution.
     Below is a table listing the default and available solvers for each regularizer.
 
+    +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
-    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG                                           |
-    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG                                         |
-
+    +===============+==================+=============================================================+
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
 
     **Fitting Large Models**
 
     For very large models, you may consider using the Stochastic Variance Reduced Gradient
-    ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
-    ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
+    :class:`nemos.solvers._svrg.SVRG` or its proximal variant
+    :class:`nemos.solvers._svrg.ProxSVRG` solver,
     which take advantage of batched computation. You can change the solver by passing
-    `"SVRG"` as `solver_name` at model initialization.
+    ``"SVRG"`` as ``solver_name`` at model initialization.
 
-    The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
+    The performance of the SVRG solver depends critically on the choice of ``batch_size`` and ``stepsize``
     hyperparameters. These parameters control the size of the mini-batches used for gradient computations
     and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
     convergence or even divergence of the optimization process.
 
-    To assist with this, for certain GLM configurations, we provide `batch_size` and `stepsize` default
+    To assist with this, for certain GLM configurations, we provide ``batch_size`` and ``stepsize`` default
     values that are theoretically guaranteed to ensure fast convergence.
 
     Below is a list of the configurations for which we can provide guaranteed default hyperparameters:
 
-    | GLM / PopulationGLM Configuration | Stepsize |  Batch Size |
-    | --------------------------------- | :------: | :---------: |
-    | Poisson + soft-plus + UnRegularized | ✅         | ❌                |
-    | Poisson + soft-plus + Ridge         | ✅         | ✅                |
-    | Poisson + soft-plus + Lasso         | ✅         | ❌                |
-    | Poisson + soft-plus + GroupLasso    | ✅         | ❌                |
+    +---------------------------------------+-----------+-------------+
+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |
+    +=======================================+===========+=============+
+    | Poisson + soft-plus + UnRegularized   | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Ridge           | ✅        | ✅          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Lasso           | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + GroupLasso      | ✅        | ❌          |
+    +---------------------------------------+-----------+-------------+
 
     Parameters
     ----------
@@ -102,7 +111,7 @@ class GLM(BaseRegressor):
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
-        Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+        Default is ``None``. If no solver specified, one will be chosen based on the regularizer.
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
@@ -113,15 +122,15 @@ class GLM(BaseRegressor):
     ----------
     intercept_ :
         Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
-        firing rate will be `jnp.exp(model.intercept_)`.
+        firing rate will be ``jnp.exp(model.intercept_)``.
     coef_ :
         Basis coefficients for the model.
     solver_state_ :
         State of the solver after fitting. May include details like optimization error.
     scale_:
-        Scale parameter for the model. The scale parameter is the constant $\Phi$, for which
-        $\text{Var} \left( y \right) = \Phi V(\mu)$. This parameter, together with the estimate
-        of the mean $\mu$ fully specifies the distribution of the activity $y$.
+        Scale parameter for the model. The scale parameter is the constant :math:`\Phi`, for which
+        :math:`\text{Var} \left( y \right) = \Phi V(\mu)`. This parameter, together with the estimate
+        of the mean :math:`\mu` fully specifies the distribution of the activity :math:`y`.
     dof_resid_:
         Degrees of freedom for the residuals.
 
@@ -129,20 +138,17 @@ class GLM(BaseRegressor):
     Raises
     ------
     TypeError
-        If provided `regularizer` or `observation_model` are not valid.
+        If provided ``regularizer`` or ``observation_model`` are not valid.
 
     Examples
     --------
     >>> import nemos as nmo
-
     >>> # define single neuron GLM model
     >>> model = nmo.glm.GLM()
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
-
-
     >>> # define GLM model of PoissonObservations model with soft-plus NL
     >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
     >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
@@ -178,7 +184,7 @@ class GLM(BaseRegressor):
 
     @property
     def observation_model(self) -> Union[None, obs.Observations]:
-        """Getter for the observation_model attribute."""
+        """Getter for the ``observation_model`` attribute."""
         return self._observation_model
 
     @observation_model.setter
@@ -260,9 +266,9 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
-            - If param and X have different structures.
-            - if the number of features is inconsistent between params[1] and X
-              (when provided).
+            If param and X have different structures.
+        ValueError
+            if the number of features is inconsistent between params[1] and X (when provided).
 
         """
         if X is not None:
@@ -303,8 +309,8 @@ class GLM(BaseRegressor):
         Predicts firing rates based on given parameters and design matrix.
 
         This function computes the predicted firing rates using the provided parameters
-        and model design matrix `X`. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the `GLM.predict`
+        and model design matrix ``X``. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
         method, it does not perform any input validation, assuming that the inputs are pre-validated.
 
 
@@ -336,47 +342,50 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            Predictors, array of shape (n_time_bins, n_features) or pytree of same.
+            Predictors, array of shape ``(n_time_bins, n_features)`` or pytree of same.
 
         Returns
         -------
         :
-            The predicted rates with shape (n_time_bins, ).
+            The predicted rates with shape ``(n_time_bins, )``.
 
         Raises
         ------
         NotFittedError
             If ``fit`` has not been called first with this instance.
         ValueError
-            - If `params` is not a JAX pytree of size two.
-            - If weights and bias terms in `params` don't have the expected dimensions.
-            - If `X` is not three-dimensional.
-            - If there's an inconsistent number of features between spike basis coefficients and `X`.
+            If ``params`` is not a JAX pytree of size two.
+        ValueError
+            If weights and bias terms in ``params`` don't have the expected dimensions.
+        ValueError
+            If ``X`` is not three-dimensional.
+        ValueError
+            If there's an inconsistent number of features between spike basis coefficients and ``X``.
 
         Examples
         --------
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> # define and fit a GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-
         >>> # predict new spike data
         >>> Xnew = np.random.normal(size=(20, X.shape[1]))
         >>> predicted_spikes = model.predict(Xnew)
 
         See Also
         --------
-        - [score](./#nemos.glm.GLM.score)
+        :meth:`nemos.glm.GLM.score`
             Score predicted rates against target spike counts.
-        - [simulate (feed-forward only)](../glm/#nemos.glm.GLM.simulate)
-            Simulate neural activity in response to a feed-forward input .
-        - [simulate_recurrent (feed-forward + coupling)](../simulation/#nemos.simulation.simulate_recurrent)
+
+        :meth:`nemos.glm.GLM.simulate`
+            Simulate neural activity in response to a feed-forward input (feed-forward only).
+
+        :func:`nemos.simulation.simulate_recurrent`
             Simulate neural activity in response to a feed-forward input
-            using the GLM as a recurrent network.
+            using the GLM as a recurrent network (feed-forward + coupling).
         """
         # check that the model is fitted
         self._check_is_fit()
@@ -403,7 +412,7 @@ class GLM(BaseRegressor):
     ) -> jnp.ndarray:
         r"""Predict the rate and compute the negative log-likelihood against neural activity.
 
-        This method computes the negative log-likelihood up to a constant term. Unlike `score`,
+        This method computes the negative log-likelihood up to a constant term. Unlike ``score``,
         it does not conduct parameter checks prior to evaluation. Passed directly to the solver,
         it serves to establish the optimization objective for learning the model parameters.
 
@@ -437,7 +446,7 @@ class GLM(BaseRegressor):
         r"""Evaluate the goodness-of-fit of the model to the observed neural data.
 
         This method computes the goodness-of-fit score, which can either be the mean
-        log-likelihood or of two versions of the pseudo-R^2.
+        log-likelihood or of two versions of the pseudo-:math:`R^2`.
         The scoring process includes validation of input compatibility with the model's
         parameters, ensuring that the model has been previously fitted and the input data
         are appropriate for scoring. A higher score indicates a better fit of the model
@@ -447,24 +456,26 @@ class GLM(BaseRegressor):
         Parameters
         ----------
         X :
-            The exogenous variables. Shape (n_time_bins, n_features)
+            The exogenous variables. Shape ``(n_time_bins, n_features)``.
         y :
-            Neural activity. Shape (n_time_bins, ).
+            Neural activity. Shape ``(n_time_bins, )``.
         score_type :
-            Type of scoring: either log-likelihood or pseudo-r2.
+            Type of scoring: either log-likelihood or pseudo-:math:`R^2`.
         aggregate_sample_scores :
             Function that aggregates the score of all samples.
 
         Returns
         -------
         score :
-            The log-likelihood or the pseudo-$R^2$ of the current model.
+            The log-likelihood or the pseudo-:math:`R^2` of the current model.
 
         Raises
         ------
         NotFittedError
+
             If ``fit`` has not been called first with this instance.
         ValueError
+
             If X structure doesn't match the params, and if X and y have different
             number of samples.
 
@@ -473,14 +484,11 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-
         >>> # get model score
         >>> log_likelihood_score = model.score(X, y)
-
         >>> # get a pseudo-R2 score
         >>> pseudo_r2_score = model.score(X, y, score_type='pseudo-r2-McFadden')
 
@@ -490,25 +498,26 @@ class GLM(BaseRegressor):
         among which the number of model parameters. The log-likelihood can assume both positive
         and negative values.
 
-        The Pseudo-$ R^2 $ is not equivalent to the $ R^2 $ value in linear regression. While both
+        The Pseudo-:math:`R^2` is not equivalent to the :math:`R^2` value in linear regression. While both
         provide a measure of model fit, and assume values in the [0,1] range, the methods and
-        interpretations can differ. The Pseudo-$ R^2 $ is particularly useful for generalized linear
-        models when the interpretation of the $ R^2 $ as explained variance does not apply
+        interpretations can differ. The Pseudo-:math:`R^2` is particularly useful for generalized linear
+        models when the interpretation of the :math:`R^2` as explained variance does not apply
         (i.e., when the observations are not Gaussian distributed).
 
-        Why does the traditional $R^2$ is usually a poor measure of performance in GLMs?
+        Why does the traditional :math:`R^2` is usually a poor measure of performance in GLMs?
 
         1.  In the context of GLMs the variance and the mean of the observations are related.
-        Ignoring the relation between them can result in underestimating the model
-        performance; for instance, when we model a Poisson variable with large mean we expect an
-        equally large variance. In this scenario, even if our model perfectly captures the mean,
-        the high-variance  will result in large residuals and low $R^2$.
-        Additionally, when the mean of the observations varies, the variance will vary too. This
-        violates the "homoschedasticity" assumption, necessary  for interpreting the $R^2$ as
-        variance explained.
-        2. The $R^2$ capture the variance explained when the relationship between the observations and
-        the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
-        and the mean of the observations, compromising the interpretation of the $R^2$.
+            Ignoring the relation between them can result in underestimating the model
+            performance; for instance, when we model a Poisson variable with large mean we expect an
+            equally large variance. In this scenario, even if our model perfectly captures the mean,
+            the high-variance  will result in large residuals and low :math:`R^2`.
+            Additionally, when the mean of the observations varies, the variance will vary too. This
+            violates the "homoschedasticity" assumption, necessary  for interpreting the :math:`R^2` as
+            variance explained.
+
+        2.  The :math:`R^2` capture the variance explained when the relationship between the observations and
+            the predictors is linear. In GLMs, the link function sets a non-linear mapping between the predictors
+            and the mean of the observations, compromising the interpretation of the :math:`R^2`.
 
         Note that it is possible to re-normalized the residuals by a mean-dependent quantity proportional
         to the model standard deviation (i.e. Pearson residuals). This "rescaled" residual distribution however
@@ -516,8 +525,8 @@ class GLM(BaseRegressor):
         Therefore, even the Pearson residuals performs poorly as a measure of fit quality, especially
         for GLM modeling counting data.
 
-        Refer to the `nmo.observation_models.Observations` concrete subclasses for the likelihood and
-        pseudo-$R^2$ equations.
+        Refer to the ``nmo.observation_models.Observations`` concrete subclasses for the likelihood and
+        pseudo-:math:`R^2` equations.
 
         """
         self._check_is_fit()
@@ -572,18 +581,19 @@ class GLM(BaseRegressor):
 
         This method initializes the coefficients (spike basis coefficients) and intercepts (bias terms)
         required for the GLM. The coefficients are initialized to zeros with dimensions based on the input X.
-        If X is a FeaturePytree, the coefficients retain the pytree structure with arrays of zeros shaped
-        according to the features in X. If X is a simple ndarray, the coefficients are initialized as a 2D
-        array. The intercepts are initialized based on the log mean of the target data y across the first
-        axis, corresponding to the average log activity of the neuron.
+        If X is a :class:`nemos.pytrees.FeaturePytree`, the coefficients retain the pytree structure with
+        arrays of zeros shaped according to the features in X.
+        If X is a simple ndarray, the coefficients are initialized as a 2D array. The intercepts are initialized
+        based on the log mean of the target data y across the first axis, corresponding to the average log activity
+        of the neuron.
 
         Parameters
         ----------
         X :
-            The input data which can be a FeaturePytree with n_features arrays of shape (n_timebins,
-            n_features), or a simple ndarray of shape (n_timebins, n_features).
+            The input data which can be a :class:`nemos.pytrees.FeaturePytree` with n_features arrays of shape
+            ``(n_timebins, n_features)``, or a simple ndarray of shape ``(n_timebins, n_features)``.
         y :
-            The target data array of shape (n_timebins, ), representing
+            The target data array of shape ``(n_timebins, )``, representing
             the neuron firing rates or similar metrics.
 
         Returns
@@ -660,27 +670,30 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
-            - If `init_params` is not of length two.
-            - If dimensionality of `init_params` are not correct.
-            - If `X` is not two-dimensional.
-            - If `y` is not one-dimensional.
-            - If solver returns at least one NaN parameter, which means it found
+            If ``init_params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not one-dimensional.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
               an invalid solution. Try tuning optimization hyperparameters.
         TypeError
-            - If `init_params` are not array-like
-            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+            If ``init_params`` are not array-like
+        TypeError
+            If ``init_params[i]`` cannot be converted to ``jnp.ndarray`` for all ``i``
 
         Examples
-        -------
+        --------
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> # fit a ridge regression Poisson GLM
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
         >>> model = model.fit(X, y)
-
         >>> # get model weights and intercept
         >>> model_weights = model.coef_
         >>> model_intercept = model.intercept_
@@ -767,14 +780,14 @@ class GLM(BaseRegressor):
         -------
         simulated_activity :
             Simulated activity (spike counts for Poisson GLMs) for the neuron over time.
-            Shape: (n_time_bins, ).
+            Shape: ``(n_time_bins, )``.
         firing_rates :
-            Simulated rates for the neuron over time. Shape, (n_time_bins, ).
+            Simulated rates for the neuron over time. Shape, ``(n_time_bins, )``.
 
         Raises
         ------
         NotFittedError
-            If the model hasn't been fitted prior to calling this method.
+            - If the model hasn't been fitted prior to calling this method.
         ValueError
             - If the instance has not been previously fitted.
 
@@ -783,12 +796,10 @@ class GLM(BaseRegressor):
         >>> # example input
         >>> import numpy as np
         >>> X, y = np.random.normal(size=(10, 2)), np.random.poisson(size=10)
-
         >>> # define and fit model
         >>> import nemos as nmo
         >>> model = nmo.glm.GLM()
         >>> model = model.fit(X, y)
-
         >>> # generate spikes and rates
         >>> random_key = jax.random.key(123)
         >>> Xnew = np.random.normal(size=(20, X.shape[1]))
@@ -796,8 +807,8 @@ class GLM(BaseRegressor):
 
         See Also
         --------
-        [predict](./#nemos.glm.GLM.predict) :
-        Method to predict rates based on the model's parameters.
+        :meth:`nemos.glm.GLM.predict`
+            Method to predict rates based on the model's parameters.
         """
         # check if the model is fit
         self._check_is_fit()
@@ -834,8 +845,8 @@ class GLM(BaseRegressor):
         X :
             The design matrix.
         n_samples :
-            The number of samples observed. If not provided, n_samples is set to `X.shape[0]`. If the fit is
-            batched, the n_samples could be larger than `X.shape[0]`.
+            The number of samples observed. If not provided, n_samples is set to ``X.shape[0]``. If the fit is
+            batched, the n_samples could be larger than ``X.shape[0]``.
 
         Returns
         -------
@@ -907,14 +918,18 @@ class GLM(BaseRegressor):
         Raises
         ------
         ValueError
-            - If `params` is not of length two.
-            - If dimensionality of `init_params` are not correct.
-            - If `X` is not two-dimensional.
-            - If `y` is not correct (1D for GLM, 2D for populationGLM).
+            If ``params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not correct (1D for GLM, 2D for populationGLM).
 
         TypeError
-            - If `params` are not array-like when provided.
-            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+            If ``params`` are not array-like when provided.
+        TypeError
+            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
 
         Examples
         --------
@@ -995,7 +1010,7 @@ class GLM(BaseRegressor):
                 )
                 self.regularizer.mask = jnp.ones((1, data.shape[1]))
 
-        opt_solver_kwargs = self.optimize_solver_params(data, y)
+        opt_solver_kwargs = self._optimize_solver_params(data, y)
 
         #  set up the solver init/run/update attrs
         self.instantiate_solver(solver_kwargs=opt_solver_kwargs)
@@ -1033,7 +1048,7 @@ class GLM(BaseRegressor):
             step sizes, and other optimizer-specific metrics.
         X :
             The predictors used in the model fitting process, which may include feature matrices
-            or FeaturePytree objects.
+            or :class:`nemos.pytrees.FeaturePytree` objects.
         y :
             The response variable or output data corresponding to the predictors, used in the model
             fitting process.
@@ -1041,7 +1056,7 @@ class GLM(BaseRegressor):
             Additional positional arguments to be passed to the solver's update method.
         n_samples:
             The tot number of samples. Usually larger than the samples of an indivisual batch,
-            the `n_samples` are used to estimate the scale parameter of the GLM.
+            the ``n_samples`` are used to estimate the scale parameter of the GLM.
         **kwargs
             Additional keyword arguments to be passed to the solver's update method.
 
@@ -1067,6 +1082,7 @@ class GLM(BaseRegressor):
         >>> params = glm_instance.coef_, glm_instance.intercept_
         >>> opt_state = glm_instance.solver_state_
         >>> new_params, new_opt_state = glm_instance.update(params, opt_state, X, y)
+
         """
         # find non-nans
         is_valid = tree_utils.get_valid_multitree(X, y)
@@ -1095,7 +1111,7 @@ class GLM(BaseRegressor):
 
         return opt_step
 
-    def get_optimal_solver_params_config(self):
+    def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
 
@@ -1109,41 +1125,50 @@ class PopulationGLM(GLM):
     combination of exogenous inputs (like convolved currents or light intensities) and a choice of observation model.
     It is suitable for scenarios where the relationship between predictors and the response
     variable might be non-linear, and the residuals  don't follow a normal distribution. The predictors must be
-    stored in tabular format, shape (n_timebins, num_features) or as [FeaturePytree](../pytrees).
+    stored in tabular format, shape (n_timebins, num_features) or as :class:`nemos.pytrees.FeaturePytree`.
     Below is a table listing the default and available solvers for each regularizer.
 
+    +---------------+------------------+-------------------------------------------------------------+
     | Regularizer   | Default Solver   | Available Solvers                                           |
-    | ------------- | ---------------- | ----------------------------------------------------------- |
-    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
-    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, SVRG, ProximalGradient, ProxSVRG |
-    | Lasso         | ProximalGradient | ProximalGradient, ProxSVRG                                           |
-    | GroupLasso    | ProximalGradient | ProximalGradient, ProxSVRG                                            |
-
+    +===============+==================+=============================================================+
+    | UnRegularized | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Ridge         | GradientDescent  | GradientDescent, BFGS, LBFGS, NonlinearCG, ProximalGradient |
+    +---------------+------------------+-------------------------------------------------------------+
+    | Lasso         | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
+    | GroupLasso    | ProximalGradient | ProximalGradient                                            |
+    +---------------+------------------+-------------------------------------------------------------+
 
     **Fitting Large Models**
 
     For very large models, you may consider using the Stochastic Variance Reduced Gradient
-    ([SVRG](../solvers/_svrg/#nemos.solvers._svrg.SVRG)) or its proximal variant
-    ([ProxSVRG](../solvers/_svrg/#nemos.solvers._svrg.ProxSVRG)) solver,
+    :class:`nemos.solvers._svrg.SVRG` or its proximal variant
+    (:class:`nemos.solvers._svrg.ProxSVRG`) solver,
     which take advantage of batched computation. You can change the solver by passing
-    `"SVRG"` or `"ProxSVRG"` as `solver_name` at model initialization.
+    ``"SVRG"`` or ``"ProxSVRG"`` as ``solver_name`` at model initialization.
 
-    The performance of the SVRG solver depends critically on the choice of `batch_size` and `stepsize`
+    The performance of the SVRG solver depends critically on the choice of ``batch_size`` and ``stepsize``
     hyperparameters. These parameters control the size of the mini-batches used for gradient computations
     and the step size for each iteration, respectively. Improper selection of these parameters can lead to slow
     convergence or even divergence of the optimization process.
 
-    To assist with this, for certain GLM configurations, we provide `batch_size` and `stepsize` default
+    To assist with this, for certain GLM configurations, we provide ``batch_size`` and ``stepsize`` default
     values that are theoretically guaranteed to ensure fast convergence.
 
     Below is a list of the configurations for which we can provide guaranteed hyperparameters:
 
-    | GLM / PopulationGLM Configuration | Stepsize |  Batch Size |
-    | --------------------------------- | :------: | :---------: |
-    | Poisson + soft-plus + UnRegularized | ✅         | ❌                |
-    | Poisson + soft-plus + Ridge         | ✅         | ✅                |
-    | Poisson + soft-plus + Lasso         | ✅         | ❌                |
-    | Poisson + soft-plus + GroupLasso    | ✅         | ❌                |
+    +---------------------------------------+-----------+-------------+
+    | GLM / PopulationGLM Configuration     | Stepsize  | Batch Size  |
+    +=======================================+===========+=============+
+    | Poisson + soft-plus + UnRegularized   | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Ridge           | ✅         | ✅         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + Lasso           | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
+    | Poisson + soft-plus + GroupLasso      | ✅         | ❌         |
+    +---------------------------------------+-----------+-------------+
 
     Parameters
     ----------
@@ -1160,22 +1185,22 @@ class PopulationGLM(GLM):
     solver_name :
         Solver to use for model optimization. Defines the optimization scheme and related parameters.
         The solver must be an appropriate match for the chosen regularizer.
-        Default is `None`. If no solver specified, one will be chosen based on the regularizer.
+        Default is ``None``. If no solver specified, one will be chosen based on the regularizer.
         Please see table above for regularizer/optimizer pairings.
     solver_kwargs :
         Optional dictionary for keyword arguments that are passed to the solver when instantiated.
         E.g. stepsize, acceleration, value_and_grad, etc.
          See the jaxopt documentation for details on each solver's kwargs: https://jaxopt.github.io/stable/
     feature_mask :
-        Either a matrix of shape (num_features, num_neurons) or a [FeaturePytree](../pytrees) of 0s and 1s, with
-        `feature_mask[feature_name]` of shape (num_neurons, ).
+        Either a matrix of shape (num_features, num_neurons) or a :meth:`nemos.pytrees.FeaturePytree` of 0s and 1s, with
+        ``feature_mask[feature_name]`` of shape (num_neurons, ).
         The mask will be used to select which features are used as predictors for which neuron.
 
     Attributes
     ----------
     intercept_ :
         Model baseline linked firing rate parameters, e.g. if the link is the logarithm, the baseline
-        firing rate will be `jnp.exp(model.intercept_)`.
+        firing rate will be ``jnp.exp(model.intercept_)``.
     coef_ :
         Basis coefficients for the model.
     solver_state_ :
@@ -1184,8 +1209,9 @@ class PopulationGLM(GLM):
     Raises
     ------
     TypeError
-        - If provided `regularizer` or `observation_model` are not valid.
-        - If provided `feature_mask` is not an array-like of dimension two.
+        If provided ``regularizer`` or ``observation_model`` are not valid.
+    TypeError
+        If provided ``feature_mask`` is not an array-like of dimension two.
 
     Examples
     --------
@@ -1221,12 +1247,10 @@ class PopulationGLM(GLM):
     >>> rate = np.exp(X["feature_1"].dot(weights["feature_1"]) + X["feature_2"].dot(weights["feature_2"]))
     >>> y = np.random.poisson(rate)
     >>> # Define a feature mask with arrays of shape (num_neurons, )
-
     >>> feature_mask = FeaturePytree(feature_1=jnp.array([0, 1]), feature_2=jnp.array([1, 0]))
     >>> print(feature_mask)
     feature_1: shape (2,), dtype int32
     feature_2: shape (2,), dtype int32
-
     >>> # Fit a PopulationGLM
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
     >>> # Coefficients are stored in a dictionary with keys the feature labels
@@ -1256,7 +1280,7 @@ class PopulationGLM(GLM):
 
     @property
     def feature_mask(self) -> Union[jnp.ndarray, dict]:
-        """Define a feature mask of shape (n_features, n_neurons)."""
+        """Define a feature mask of shape ``(n_features, n_neurons)``."""
         return self._feature_mask
 
     @feature_mask.setter
@@ -1470,10 +1494,10 @@ class PopulationGLM(GLM):
     ):
         """Fit GLM to the activity of a population of neurons.
 
-        Fit and store the model parameters as attributes `coef_` and `intercept_`.
-        Each neuron can have different predictors. The `feature_mask` will determine which
+        Fit and store the model parameters as attributes ``coef_`` and ``intercept_``.
+        Each neuron can have different predictors. The ``feature_mask`` will determine which
         feature will be used for which neurons. See the note below for more information on
-        the `feature_mask`.
+        the ``feature_mask``.
 
         Parameters
         ----------
@@ -1492,26 +1516,33 @@ class PopulationGLM(GLM):
         Raises
         ------
         ValueError
-            - If `init_params` is not of length two.
-            - If dimensionality of `init_params` are not correct.
-            - If `X` is not two-dimensional.
-            - If `y` is not two-dimensional.
-            - If the `feature_mask` is not of the right shape.
-            - If solver returns at least one NaN parameter, which means it found
-              an invalid solution. Try tuning optimization hyperparameters.
+            If ``init_params`` is not of length two.
+        ValueError
+            If dimensionality of ``init_params`` are not correct.
+        ValueError
+            If ``X`` is not two-dimensional.
+        ValueError
+            If ``y`` is not two-dimensional.
+        ValueError
+            If the ``feature_mask`` is not of the right shape.
+        ValueError
+            If solver returns at least one NaN parameter, which means it found
+            an invalid solution. Try tuning optimization hyperparameters.
         TypeError
-            - If `init_params` are not array-like
-            - If `init_params[i]` cannot be converted to jnp.ndarray for all i
+            If ``init_params`` are not array-like
+        TypeError
+            If ``init_params[i]`` cannot be converted to jnp.ndarray for all i
 
         Notes
         -----
-        The `feature_mask` is used to select features for each neuron, and it is
-        an NDArray or a `FeaturePytree` of 0s and 1s. In particular,
+        The ``feature_mask`` is used to select features for each neuron, and it is
+        an NDArray or a :class:`nemos.pytrees.FeaturePytree` of 0s and 1s. In particular,
 
-        - If the mask is in array format, feature `i` is a predictor for neuron `j` if
-        `feature_mask[i, j] == 1`.
-        - If the mask is a `FeaturePytree`, then `"feature_name"` is a predictor of neuron `j` if
-        `feature_mask["feature_name"][j] == 1`.
+        - If the mask is in array format, feature ``i`` is a predictor for neuron ``j`` if
+          ``feature_mask[i, j] == 1``.
+
+        - If the mask is a :class:``nemos.pytrees.FeaturePytree``, then
+          ``"feature_name"`` is a predictor of neuron ``j`` if ``feature_mask["feature_name"][j] == 1``.
 
         Examples
         --------
@@ -1519,7 +1550,6 @@ class PopulationGLM(GLM):
         >>> import jax.numpy as jnp
         >>> import numpy as np
         >>> from nemos.glm import PopulationGLM
-
         >>> # Define predictors (X), weights, and neural activity (y)
         >>> num_samples, num_features, num_neurons = 100, 3, 2
         >>> X = np.random.normal(size=(num_samples, num_features))
@@ -1527,10 +1557,8 @@ class PopulationGLM(GLM):
         >>> weights = np.array([[ 0.5,  0. ], [-0.5, -0.5], [ 0. ,  1. ]])
         >>> # Output y simulates a Poisson distribution based on a linear model between features X and wegihts
         >>> y = np.random.poisson(np.exp(X.dot(weights)))
-
         >>> # Define a feature mask, shape (num_features, num_neurons)
         >>> feature_mask = jnp.array([[1, 0], [1, 1], [0, 1]])
-
         >>> # Create and fit the model
         >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
         >>> print(model.coef_.shape)
@@ -1559,8 +1587,8 @@ class PopulationGLM(GLM):
         Predicts firing rates based on given parameters and design matrix.
 
         This function computes the predicted firing rates using the provided parameters, the feature
-        mask and model design matrix `X`. It is a streamlined version used internally within
-        optimization routines, where it serves as the loss function. Unlike the `GLM.predict`
+        mask and model design matrix ``X``. It is a streamlined version used internally within
+        optimization routines, where it serves as the loss function. Unlike the ``GLM.predict``
         method, it does not perform any input validation, assuming that the inputs are pre-validated.
         The parameters are first element-wise multiplied with the mask, then the canonical
         linear-non-linear GLM map is applied.

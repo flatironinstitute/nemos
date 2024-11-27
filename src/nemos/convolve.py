@@ -21,7 +21,7 @@ _CORR_VEC = jax.vmap(_CORR_VEC, (None, 1), 2)
 
 
 @jax.jit
-def reshape_convolve(array: NDArray, eval_basis: NDArray):
+def tensor_convolve(array: NDArray, eval_basis: NDArray):
     """
     Apply a convolution on the given array with the evaluation basis and reshapes the result.
 
@@ -32,22 +32,23 @@ def reshape_convolve(array: NDArray, eval_basis: NDArray):
     Parameters
     ----------
     array :
-        The input array to convolve. It is expected to be at least 1D.
+        The input array to convolve. It is expected to be at least 1D. The first axis is expeted to be
+        the sample axis, i.e. the shape of array is ``(num_samples, ...)``.
     eval_basis :
         The evaluation basis array for convolution. It should be 2D, where the first dimension
-        represents the window size for convolution.
+        represents the window size for convolution. Shape ``(window_size, n_basis_funcs)``.
 
     Returns
     -------
     :
         The convolved array, reshaped to maintain the original dimensions except for the first one,
-        which is adjusted based on the window size of `eval_basis`.
+        which is adjusted based on the window size of ``eval_basis``.
 
     Notes
     -----
-    The convolution implemented here is in mode `"valid"`. This implies that the time axis shrinks
-    `num_samples - window_size + 1`, where num_samples is the first size of the first axis of `array`
-    and `window_size` is the size of the first axis in `eval_basis`.
+    The convolution implemented here is in mode ``"valid"``. This implies that the time axis shrinks
+    ``num_samples - window_size + 1``, where num_samples is the first size of the first axis of ``array``
+    and ``window_size`` is the size of the first axis in ``eval_basis``.
     """
     # flatten over other dims & apply vectorized conv
     conv = _CORR_VEC(array.reshape(array.shape[0], -1), eval_basis)
@@ -95,7 +96,7 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
 
     # convolve
     if array.ndim > 1:
-        conv = reshape_convolve(array, eval_basis)
+        conv = tensor_convolve(array, eval_basis)
     else:
         conv = _CORR_VEC_BASIS(array, eval_basis)
 
@@ -247,14 +248,18 @@ def create_convolutional_predictor(
 
     Raises
     ------
-    ValueError
-        - If `basis_matrix` is not a 2-dimensional array or has a singleton first dimension.
-        - If `time_series` does not contain arrays of at least one dimension or contains
-          arrays with a dimensionality less than `axis`.
-        - If any array within `time_series` or `basis_matrix` is empty.
-        - If the number of elements along the convolution axis in any array within `time_series`
-          is less than the window size of the `basis_matrix`.
-        - If shifting is attempted with 'acausal' causality.
+    ValueError:
+        If `basis_matrix` is not a 2-dimensional array or has a singleton first dimension.
+    ValueError:
+        If `time_series` does not contain arrays of at least one dimension or contains
+        arrays with a dimensionality less than `axis`.
+    ValueError:
+        If any array within `time_series` or `basis_matrix` is empty.
+    ValueError:
+        If the number of elements along the convolution axis in any array within `time_series`
+        is less than the window size of the `basis_matrix`.
+    ValueError:
+        If shifting is attempted with 'acausal' causality.
     """
     # convert to jnp.ndarray
     basis_matrix = jnp.asarray(basis_matrix)

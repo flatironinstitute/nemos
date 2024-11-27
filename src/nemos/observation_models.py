@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from . import utils
 from .base_class import Base
 
-__all__ = ["PoissonObservations"]
+__all__ = ["PoissonObservations", "GammaObservations"]
 
 
 def __dir__():
@@ -23,8 +23,9 @@ class Observations(Base, abc.ABC):
 
     This is an abstract base class used to implement observation models for neural data.
     Specific observation models that inherit from this class should define their versions
-    of the abstract methods: _negative_log_likelihood, emission_probability, and
-    residual_deviance.
+    of the abstract methods such as :meth:`~nemos.observation_models.Observations.log_likelihood`,
+    :meth:`~nemos.observation_models.Observations.sample_generator`, and
+    :meth:`~nemos.observation_models.Observations.deviance`.
 
     Attributes
     ----------
@@ -33,8 +34,10 @@ class Observations(Base, abc.ABC):
 
     See Also
     --------
-    [PoissonObservations](./#nemos.observation_models.PoissonObservations) : A specific implementation of a
-    observation model using the Poisson distribution.
+    :class:`~nemos.observation_models.PoissonObservations`
+        A specific implementation of a observation model using the Poisson distribution.
+    :class:`~nemos.observation_models.GammaObservations`
+        A specific implementation of a observation model using the Gamma distribution.
     """
 
     def __init__(self, inverse_link_function: Callable, **kwargs):
@@ -72,6 +75,7 @@ class Observations(Base, abc.ABC):
         Check if the provided inverse_link_function is usable.
 
         This function verifies if the inverse link function:
+
         1. Is callable
         2. Returns a jax.numpy.ndarray
         3. Is differentiable (via jax)
@@ -210,9 +214,9 @@ class Observations(Base, abc.ABC):
         Parameters
         ----------
         spike_counts:
-            The spike counts. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+            The spike counts. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+            The predicted firing rates. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         scale:
             Scale parameter of the model.
 
@@ -232,17 +236,17 @@ class Observations(Base, abc.ABC):
     ) -> Union[float, jnp.ndarray]:
         r"""Estimate the scale parameter for the model.
 
-        This method estimates the scale parameter, often denoted as $\phi$, which determines the dispersion
+        This method estimates the scale parameter, often denoted as :math:`\phi`, which determines the dispersion
         of an exponential family distribution. The probability density function (pdf) for such a distribution
         is generally expressed as
-        $f(x; \theta, \phi) \propto \exp \left(a(\phi)\left(  y\theta - \mathcal{k}(\theta) \right)\right)$.
+        :math:`f(x; \theta, \phi) \propto \exp \left(a(\phi)\left(  y\theta - \mathcal{k}(\theta) \right)\right)`.
 
         The relationship between variance and the scale parameter is given by:
-        $$
-        \text{var}(Y) = \frac{V(\mu)}{a(\phi)}.
-        $$
 
-        The scale parameter, $\phi$, is necessary for capturing the variance of the data accurately.
+        .. math::
+           \text{var}(Y) = \frac{V(\mu)}{a(\phi)}.
+
+        The scale parameter, :math:`\phi`, is necessary for capturing the variance of the data accurately.
 
         Parameters
         ----------
@@ -265,61 +269,65 @@ class Observations(Base, abc.ABC):
         scale: Union[float, jnp.ndarray, NDArray] = 1.0,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
-        r"""Pseudo-$R^2$ calculation for a GLM.
+        r"""Pseudo-:math:`R^2` calculation for a GLM.
 
-        Compute the pseudo-$R^2$ metric for the GLM, as defined by McFadden et al.[$^{[1]}$](#references)
-        or by Cohen et al.[$^{[2]}$](#references).
+        Compute the pseudo-:math:`R^2` metric for the GLM, as defined by McFadden et al. [1]_
+        or by Cohen et al. [2]_.
 
         This metric evaluates the goodness-of-fit of the model relative to a null (baseline) model that assumes a
-        constant mean for the observations. While the pseudo-$R^2$ is bounded between 0 and 1 for the training set,
-        it can yield negative values on out-of-sample data, indicating potential over-fitting.
+        constant mean for the observations. While the pseudo-:math:`R^2` is bounded between 0 and 1 for the
+        training set, it can yield negative values on out-of-sample data, indicating potential over-fitting.
 
         Parameters
         ----------
         y:
-            The neural activity. Expected shape: (n_time_bins, )
+            The neural activity. Expected shape: ``(n_time_bins, )``
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, )
+            The mean neural activity. Expected shape: ``(n_time_bins, )``
         score_type:
-            The pseudo-R$^2$ type.
+            The pseudo-:math:`R^2` type.
         scale:
             The scale parameter of the model.
 
         Returns
         -------
         :
-            The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
+            The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
 
         Notes
         -----
-        - The McFadden pseudo-$R^2$ is given by:
-            $$
+        - The McFadden pseudo-:math:`R^2` is given by:
+
+          .. math::
                 R^2_{\text{mcf}} = 1 - \frac{\log(L_{M})}{\log(L_0)}.
-            $$
-          *Equivalent to statsmodels
-          [`GLMResults.pseudo_rsquared(kind='mcf')`](https://www.statsmodels.org/dev/generated/statsmodels.genmod.generalized_linear_model.GLMResults.pseudo_rsquared.html).*
-        - The Cohen pseudo-$R^2$ is given by:
-            $$
+
+          *Equivalent to statsmodels*
+          `GLMResults.pseudo_rsquared(kind='mcf') <https://www.statsmodels.org/dev/generated/statsmodels.genmod.
+          generalized_linear_model.GLMResults.pseudo_rsquared.html>`_ .
+
+        - The Cohen pseudo-:math:`R^2` is given by:
+
+          .. math::
                \begin{aligned}
                R^2_{\text{Cohen}} &= \frac{D_0 - D_M}{D_0} \\\
                &= 1 - \frac{\log(L_s) - \log(L_M)}{\log(L_s)-\log(L_0)},
                \end{aligned}
-            $$
-        where $L_M$, $L_0$ and $L_s$ are the likelihood of the fitted model, the null model (a
-        model with only the intercept term), and the saturated model (a model with one parameter per
-         sample, i.e. the maximum value that the likelihood could possibly achieve). $D_M$ and $D_0$ are
-         the model and the null deviance, $D_i = -2 \left[ \log(L_s) - \log(L_i) \right]$ for $i=M,0$.
 
-        # References
-        ------------
-        [1] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
-        developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
-        London: Croom Helm.
+          where :math:`L_M`, :math:`L_0` and :math:`L_s` are the likelihood of the fitted model, the null model (a
+          model with only the intercept term), and the saturated model (a model with one parameter per
+          sample, i.e. the maximum value that the likelihood could possibly achieve). :math:`D_M` and :math:`D_0` are
+          the model and the null deviance, :math:`D_i = -2 \left[ \log(L_s) - \log(L_i) \right]` for :math:`i=M,0`.
 
-        [2] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
-        *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
-        3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
+        References
+        ----------
+        .. [1] McFadden D (1979). Quantitative methods for analysing travel behavior of individuals: Some recent
+               developments. In D. A. Hensher & P. R. Stopher (Eds.), *Behavioural travel modelling* (pp. 279-318).
+               London: Croom Helm.
+
+        .. [2] Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken.
+               *Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences*.
+               3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
         """
         if score_type == "pseudo-r2-McFadden":
             pseudo_r2 = self._pseudo_r2_mcfadden(
@@ -342,22 +350,22 @@ class Observations(Base, abc.ABC):
         predicted_rate: jnp.ndarray,
         aggregate_sample_scores: Callable = jnp.mean,
     ) -> jnp.ndarray:
-        r"""Cohen's pseudo-$R^2$.
+        r"""Cohen's pseudo-:math:`R^2`.
 
-        Compute the pseudo-$R^2$ metric as defined by Cohen et al. (2002). See
-        [`pseudo_r2`](#pseudo_r2) for additional information.
+        Compute the pseudo-:math:`R^2` metric as defined by Cohen et al. (2002). See
+        :meth:`nemos.observation_models.Observations.pseudo_r2` for additional information.
 
         Parameters
         ----------
         y:
-            The neural activity. Expected shape: (n_time_bins, )
+            The neural activity. Expected shape: ``(n_time_bins, )``.
         predicted_rate:
-            The mean neural activity. Expected shape: (n_time_bins, )
+            The mean neural activity. Expected shape: ``(n_time_bins, )``
 
         Returns
         -------
         :
-            The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
+            The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         model_dev_t = self.deviance(y, predicted_rate)
@@ -376,10 +384,10 @@ class Observations(Base, abc.ABC):
         aggregate_sample_scores: Callable = jnp.mean,
     ):
         """
-        McFadden's pseudo-$R^2$.
+        McFadden's pseudo-:math:`R^2`.
 
-        Compute the pseudo-$R^2$ metric as defined by McFadden et al. (1979). See
-        [`pseudo_r2`](#pseudo_r2) for additional information.
+        Compute the pseudo-:math:`R^2` metric as defined by McFadden et al. (1979). See
+        :meth:`nemos.observation_models.Observations.pseudo_r2` for additional information.
 
         Parameters
         ----------
@@ -393,7 +401,7 @@ class Observations(Base, abc.ABC):
         Returns
         -------
         :
-            The pseudo-$R^2$ of the model. A value closer to 1 indicates a better model fit,
+            The pseudo-:math:`R^2` of the model. A value closer to 1 indicates a better model fit,
             whereas a value closer to 0 suggests that the model doesn't improve much over the null model.
         """
         mean_y = jnp.ones(y.shape) * y.mean(axis=0)
@@ -420,11 +428,7 @@ class PoissonObservations(Observations):
     Attributes
     ----------
     inverse_link_function :
-        A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to jnp.exp.
-
-    See Also
-    --------
-    [Observations](./#nemos.observation_models.Observations) : Base class for observation models.
+        A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to ``jax.numpy.exp``.
 
     """
 
@@ -459,20 +463,19 @@ class PoissonObservations(Observations):
         -----
         The formula for the Poisson mean log-likelihood is the following,
 
-        $$
+        .. math::
         \begin{aligned}
         \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
-        [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})] \\\
-        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
-        \hat{\lambda}\_{tn} - \Gamma({y\_{tn}+1})] \\\
-        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
-        \hat{\lambda}\_{tn}] + \\text{const}
+        [y_{tn} \log(\hat{\lambda}_{tn}) - \hat{\lambda}_{tn} - \log({y_{tn}!})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y_{tn} \log(\hat{\lambda}_{tn}) -
+        \hat{\lambda}_{tn} - \Gamma({y_{tn}+1})] \\\
+        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y_{tn} \log(\hat{\lambda}_{tn}) -
+        \hat{\lambda}_{tn}] + \\text{const}
         \end{aligned}
-        $$
 
-        Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for explanation.
+        Because :math:`\Gamma(k+1)=k!`, see `wikipedia <https://en.wikipedia.org/wiki/Gamma_function>` for explanation.
 
-        The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
+        The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
         predicted_rate = jnp.clip(
@@ -497,9 +500,9 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         y :
-            The target spikes to compare against. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The target spikes to compare against. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         predicted_rate :
-            The predicted rate of the current model. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            The predicted rate of the current model. Shape ``(n_time_bins, )``, or ``(n_time_bins, n_neurons)``.
         scale :
             The scale parameter of the model.
         aggregate_sample_scores :
@@ -514,20 +517,20 @@ class PoissonObservations(Observations):
         -----
         The formula for the Poisson mean log-likelihood is the following,
 
-        $$
-        \begin{aligned}
-        \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
-        [y\_{tn} \log(\hat{\lambda}\_{tn}) - \hat{\lambda}\_{tn} - \log({y\_{tn}!})] \\\
-        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
-        \hat{\lambda}\_{tn} - \Gamma({y\_{tn}+1})] \\\
-        &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y\_{tn} \log(\hat{\lambda}\_{tn}) -
-        \hat{\lambda}\_{tn}] + \\text{const}
-        \end{aligned}
-        $$
+        .. math::
+            \begin{aligned}
+            \text{LL}(\hat{\lambda} | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
+            [y_{tn} \log(\hat{\lambda}_{tn}) - \hat{\lambda}_{tn} - \log({y_{tn}!})] \\\
+            &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y_{tn} \log(\hat{\lambda}_{tn}) -
+            \hat{\lambda}_{tn} - \Gamma({y_{tn}+1})] \\\
+            &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T} [y_{tn} \log(\hat{\lambda}_{tn}) -
+            \hat{\lambda}_{tn}] + \text{const}
+            \end{aligned}
 
-        Because $\Gamma(k+1)=k!$, see [wikipedia](https://en.wikipedia.org/wiki/Gamma_function) for explanation.
 
-        The $\log({y\_{tn}!})$ term is not a function of the parameters and can be disregarded
+        Because :math:`\Gamma(k+1)=k!`, see `wikipedia <https://en.wikipedia.org/wiki/Gamma_function>`_ for explanation.
+
+        The :math:`\log({y_{tn}!})` term is not a function of the parameters and can be disregarded
         when computing the loss-function. This is why we incorporated it into the `const` term.
         """
         nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
@@ -550,7 +553,8 @@ class PoissonObservations(Observations):
         key :
             Random key used for the generation of random numbers in JAX.
         predicted_rate :
-            Expected rate (lambda) of the Poisson distribution. Shape (n_time_bins, ), or (n_time_bins, n_neurons).
+            Expected rate (lambda) of the Poisson distribution. Shape ``(n_time_bins, )``, or
+            ``(n_time_bins, n_neurons)``.
         scale :
             Scale parameter. For Poisson should be equal to 1.
 
@@ -572,9 +576,10 @@ class PoissonObservations(Observations):
         Parameters
         ----------
         spike_counts:
-            The spike counts. Shape (n_time_bins, ) or (n_time_bins, n_neurons) for population models.
+            The spike counts. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_neurons)`` for population models.
         predicted_rate:
-            The predicted firing rates. Shape (n_time_bins, )  or (n_time_bins, n_neurons) for population models.
+            The predicted firing rates. Shape ``(n_time_bins, )``  or ``(n_time_bins, n_neurons)`` for
+            population models.
         scale:
             Scale parameter of the model.
 
@@ -588,16 +593,15 @@ class PoissonObservations(Observations):
         The deviance is a measure of the goodness of fit of a statistical model.
         For a Poisson model, the residual deviance is computed as:
 
-        $$
-        \begin{aligned}
-            D(y\_{tn}, \hat{y}\_{tn}) &= 2 \left[ y\_{tn} \log\left(\frac{y\_{tn}}{\hat{y}\_{tn}}\right)
-            - (y\_{tn} - \hat{y}\_{tn}) \right]\\\
-            &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right)\right)
-        \end{aligned}
-        $$
+        .. math::
+            \begin{aligned}
+                D(y_{tn}, \hat{y}_{tn}) &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right)
+                - (y_{tn} - \hat{y}_{tn}) \right]\\\
+                &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn} | \hat{y}_{tn}\right)\right)
+            \end{aligned}
 
-        where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
-        log-likelihood. Lower values of deviance indicate a better fit.
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
+        the model log-likelihood. Lower values of deviance indicate a better fit.
         """
         # this takes care of 0s in the log
         ratio = jnp.clip(
@@ -615,13 +619,15 @@ class PoissonObservations(Observations):
         r"""
         Assign 1 to the scale parameter of the Poisson model.
 
-        For the Poisson exponential family distribution, the scale parameter $\phi$ is always 1.
+        For the Poisson exponential family distribution, the scale parameter :math:`\phi` is always 1.
         This property is consistent with the fact that the variance equals the mean in a Poisson distribution.
         As given in the general exponential family expression:
-        $$
-        \text{var}(Y) = \frac{V(\mu)}{a(\phi)},
-        $$
-        for the Poisson family, it simplifies to $\text{var}(Y) = \mu$ since $a(\phi) = 1$ and $V(\mu) = \mu$.
+
+        .. math::
+            \text{var}(Y) = \frac{V(\mu)}{a(\phi)},
+
+        for the Poisson family, it simplifies to :math:`\text{var}(Y) = \mu` since :math:`a(\phi) = 1`
+        and :math:`V(\mu) = \mu`.
 
         Parameters
         ----------
@@ -648,10 +654,6 @@ class GammaObservations(Observations):
     ----------
     inverse_link_function :
         A function that maps the predicted rate to the domain of the Poisson parameter. Defaults to jnp.exp.
-
-    See Also
-    --------
-    [Observations](./#nemos.observation_models.Observations) : Base class for observation models.
 
     """
 
@@ -786,16 +788,16 @@ class GammaObservations(Observations):
         The deviance is a measure of the goodness of fit of a statistical model.
         For a Gamma model, the residual deviance is computed as:
 
-        $$
-        \begin{aligned}
-            D(y\_{tn}, \hat{y}\_{tn}) &=  2 \left[ -\log \frac{ y\_{tn}}{\hat{y}\_{tn}} +  \frac{y\_{tn} -
-            \hat{y}\_{tn}}{\hat{y}\_{tn}}\right]\\\
-            &= 2 \left( \text{LL}\left(y\_{tn} | y\_{tn}\right) - \text{LL}\left(y\_{tn} | \hat{y}\_{tn}\right) \right)
-        \end{aligned}
-        $$
+        .. math::
+            \begin{aligned}
+                D(y_{tn}, \hat{y}_{tn}) &=  2 \left[ -\log \frac{ y_{tn}}{\hat{y}_{tn}} +  \frac{y_{tn} -
+                \hat{y}_{tn}}{\hat{y}_{tn}}\right]\\\
+                &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn} | \hat{y}_{tn}\right) \right)
+            \end{aligned}
 
-        where $ y $ is the observed data, $ \hat{y} $ is the predicted data, and $\text{LL}$ is the model
+        where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is the model
         log-likelihood. Lower values of deviance indicate a better fit.
+
         """
         y_mu = jnp.clip(neural_activity / predicted_rate, min=jnp.finfo(float).eps)
         resid_dev = 2 * (
@@ -812,11 +814,12 @@ class GammaObservations(Observations):
         r"""
         Estimate the scale of the model based on the GLM residuals.
 
-        For $y \sim \Gamma$ the scale is equal to,
-        $$
-        \Phi = \frac{\text{Var(y)}}{V(\mu)}
-        $$
-        with $V(\mu) = \mu^2$.
+        For :math:`y \sim \Gamma` the scale is equal to,
+
+        .. math::
+            \Phi = \frac{\text{Var(y)}}{V(\mu)}
+
+        with :math:`V(\mu) = \mu^2`.
 
         Therefore, the scale can be estimated as the ratio of the sample variance to the squared rate.
 
@@ -833,7 +836,7 @@ class GammaObservations(Observations):
         Returns
         -------
         :
-            The scale parameter. If predicted_rate is (n_samples, n_neurons), this method will return a
+            The scale parameter. If predicted_rate is ``(n_samples, n_neurons)``, this method will return a
             scale for each neuron.
         """
         predicted_rate = jnp.clip(
@@ -865,9 +868,11 @@ def check_observation_model(observation_model):
         If the `observation_model` does not have one of the required attributes.
 
     TypeError
-        - If an attribute is not a callable function.
-        - If a function does not return a jax.numpy.ndarray.
-        - If 'inverse_link_function' is not differentiable.
+        If an attribute is not a callable function.
+    TypeError
+        If a function does not return a jax.numpy.ndarray.
+    TypeError
+        If 'inverse_link_function' is not differentiable.
 
     Examples
     --------

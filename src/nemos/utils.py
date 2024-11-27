@@ -53,10 +53,11 @@ def validate_axis(tree: Any, axis: int):
     Raises
     ------
     ValueError
-        - If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
+        If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
         within the tree. This ensures that operations intended for a specific axis can be safely performed
         on every array in the tree.
-        - If the axis is negative or non-integer.
+    ValueError
+        If the axis is negative or non-integer.
     """
     if not isinstance(axis, int) or axis < 0:
         raise ValueError("`axis` must be a non negative integer.")

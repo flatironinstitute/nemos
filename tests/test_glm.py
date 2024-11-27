@@ -1962,7 +1962,7 @@ class TestGLM:
                 raise e
             return
 
-        kwargs = model.optimize_solver_params(X, y)
+        kwargs = model._optimize_solver_params(X, y)
         if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
             # if batch size was provided, then it should be returned unchanged
             assert batch_size == kwargs["batch_size"]
@@ -2049,7 +2049,7 @@ class TestGLM:
                 raise e
             return
 
-        kwargs = model.optimize_solver_params(X, y)
+        kwargs = model._optimize_solver_params(X, y)
         if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
             # if batch size was provided, then it should be returned unchanged
             assert batch_size == kwargs["batch_size"]
@@ -4057,7 +4057,7 @@ class TestPopulationGLM:
                 raise e
             return
 
-        kwargs = model.optimize_solver_params(X, y)
+        kwargs = model._optimize_solver_params(X, y)
         if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
             # if batch size was provided, then it should be returned unchanged
             assert batch_size == kwargs["batch_size"]
@@ -4144,7 +4144,7 @@ class TestPopulationGLM:
                 raise e
             return
 
-        kwargs = model.optimize_solver_params(X, y)
+        kwargs = model._optimize_solver_params(X, y)
         if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
             # if batch size was provided, then it should be returned unchanged
             assert batch_size == kwargs["batch_size"]

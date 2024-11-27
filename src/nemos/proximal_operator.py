@@ -11,7 +11,7 @@ operators are used to find the parameters that balance the minimization of the p
 More formally, proximal operators solve the minimization problem,
 
 $$
-\\text{prox}\_f(\bm{v}) = \arg\min\_{\bm{x}} \left( f(\bm{x}) + \frac{1}{2}\Vert \bm{x} - \bm{v}\Vert_2 ^2 \right)
+\\text{prox}_f(\bm{v}) = \arg\min_{\bm{x}} \left( f(\bm{x}) + \frac{1}{2}\Vert \bm{x} - \bm{v}\Vert_2 ^2 \right)
 $$
 
 
@@ -106,7 +106,7 @@ def prox_group_lasso(
     The proximal operator equation are,
 
     $$
-    \text{prox}(\beta_g) = \text{min}_{\beta} \left[ \lambda  \sum\_{g=1}^G \Vert \beta_g \Vert_2 +
+    \text{prox}(\beta_g) = \text{min}_{\beta} \left[ \lambda  \sum_{g=1}^G \Vert \beta_g \Vert_2 +
      \frac{1}{2} \Vert \hat{\beta} - \beta \Vert_2^2
     \right],
     $$
@@ -115,15 +115,15 @@ def prox_group_lasso(
     The analytical solution[$^{[1]}$](#references). for the beta is,
 
     $$
-    \text{prox}(\beta\_g) = \max \left(1 - \frac{\lambda \sqrt{p\_g}}{\Vert \hat{\beta}\_g \Vert_2},
-     0\right) \cdot \hat{\beta}\_g,
+    \text{prox}(\beta_g) = \max \left(1 - \frac{\lambda \sqrt{p_g}}{\Vert \hat{\beta}_g \Vert_2},
+     0\right) \cdot \hat{\beta}_g,
     $$
-    where $p_g$ is the dimensionality of $\beta\_g$ and $\hat{\beta}$ is typically the gradient step
+    where $p_g$ is the dimensionality of $\beta_g$ and $\hat{\beta}$ is typically the gradient step
     of the un-regularized optimization objective function. It's easy to see how the group-Lasso
     proximal operator acts as a shrinkage factor for the un-penalize update, and the half-rectification
     non-linearity that effectively sets to zero group of coefficients satisfying,
     $$
-    \Vert \hat{\beta}\_g \Vert_2 \le \frac{1}{\lambda \sqrt{p\_g}}.
+    \Vert \hat{\beta}_g \Vert_2 \le \frac{1}{\lambda \sqrt{p_g}}.
     $$
 
     # References
@@ -154,8 +154,8 @@ def prox_lasso(x: Any, l1reg: Optional[Any] = None, scaling: float = 1.0) -> Any
     Minimizes the following function:
 
     $$
-      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||\_2^2
-      + \text{scaling} \cdot \text{l1reg} \cdot ||y||\_1
+      \underset{y}{\text{argmin}} ~ \frac{1}{2} ||x - y||_2^2
+      + \text{scaling} \cdot \text{l1reg} \cdot ||y||_1
     $$
 
     When `l1reg` is a pytree, the weights are applied coordinate-wise.

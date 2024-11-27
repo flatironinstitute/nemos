@@ -4,7 +4,7 @@ from typing import Any, Callable, NamedTuple, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
-from jax._src.typing import ArrayLike
+from jax.typing import ArrayLike
 
 from .pytrees import FeaturePytree
 
