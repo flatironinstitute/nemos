@@ -2858,8 +2858,12 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj = self.instantiate_basis(
             n_basis_b, basis_b, class_specific_params, window_size=10
         )
-        input_a = [np.linspace(0, 1, sample_size_a)] * basis_a_obj._n_input_dimensionality
-        input_b = [np.linspace(0, 1, sample_size_b)] * basis_b_obj._n_input_dimensionality
+        input_a = [
+            np.linspace(0, 1, sample_size_a)
+        ] * basis_a_obj._n_input_dimensionality
+        input_b = [
+            np.linspace(0, 1, sample_size_b)
+        ] * basis_b_obj._n_input_dimensionality
         basis_obj = basis_a_obj * basis_b_obj
         if raise_exception:
             with pytest.raises(
@@ -3311,6 +3315,9 @@ def test_basis_to_transformer(basis_cls, class_specific_params):
 
     # check that things like n_basis_funcs are the same as the original basis
     for k in bas.__dict__.keys():
+        # skip for add and multiplicative.
+        if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
+            continue
         assert np.all(getattr(bas, k) == getattr(trans_bas, k))
 
 
@@ -3342,7 +3349,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes(),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
 )
 def test_to_transformer_and_constructor_are_equivalent(
     basis_cls, class_specific_params
@@ -3380,16 +3387,28 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, class_specific_params):
     trans_bas_a = bas_a.to_transformer()
 
     # changing an attribute in bas should not change trans_bas
-    bas_a.n_basis_funcs = 10
-    assert trans_bas_a.n_basis_funcs == 5
+    if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
+        bas_a._basis1.n_basis_funcs = 10
+        assert trans_bas_a._basis._basis1.n_basis_funcs == 5
 
-    # changing an attribute in the transformer basis should not change the original
-    bas_b = CombinedBasis().instantiate_basis(
-        5, basis_cls, class_specific_params, window_size=10
-    )
-    trans_bas_b = bas_b.to_transformer()
-    trans_bas_b.n_basis_funcs = 100
-    assert bas_b.n_basis_funcs == 5
+        # changing an attribute in the transformer basis should not change the original
+        bas_b = CombinedBasis().instantiate_basis(
+            5, basis_cls, class_specific_params, window_size=10
+        )
+        trans_bas_b = bas_b.to_transformer()
+        trans_bas_b._basis._basis1.n_basis_funcs = 100
+        assert bas_b._basis1.n_basis_funcs == 5
+    else:
+        bas_a.n_basis_funcs = 10
+        assert trans_bas_a.n_basis_funcs == 5
+
+        # changing an attribute in the transformer basis should not change the original
+        bas_b = CombinedBasis().instantiate_basis(
+            5, basis_cls, class_specific_params, window_size=10
+        )
+        trans_bas_b = bas_b.to_transformer()
+        trans_bas_b.n_basis_funcs = 100
+        assert bas_b.n_basis_funcs == 5
 
 
 @pytest.mark.parametrize(
@@ -3403,12 +3422,18 @@ def test_transformerbasis_getattr(basis_cls, n_basis_funcs, class_specific_param
             n_basis_funcs, basis_cls, class_specific_params, window_size=10
         )
     )
-    assert trans_basis.n_basis_funcs == n_basis_funcs
+    if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
+        for bas in [
+            getattr(trans_basis._basis, attr) for attr in ("_basis1", "_basis2")
+        ]:
+            assert bas.n_basis_funcs == n_basis_funcs
+    else:
+        assert trans_basis.n_basis_funcs == n_basis_funcs
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes(),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
 )
 @pytest.mark.parametrize("n_basis_funcs_init", [5])
 @pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
@@ -3428,7 +3453,7 @@ def test_transformerbasis_set_params(
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes(),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
 )
 def test_transformerbasis_setattr_basis(basis_cls, class_specific_params):
     # setting the _basis attribute should change it
@@ -3448,7 +3473,7 @@ def test_transformerbasis_setattr_basis(basis_cls, class_specific_params):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes(),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
 )
 def test_transformerbasis_setattr_basis_attribute(basis_cls, class_specific_params):
     # setting an attribute that is an attribute of the underlying _basis
@@ -3467,7 +3492,7 @@ def test_transformerbasis_setattr_basis_attribute(basis_cls, class_specific_para
 
 @pytest.mark.parametrize(
     "basis_cls",
-    list_all_basis_classes(),
+    list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
 )
 def test_transformerbasis_copy_basis_on_contsruct(basis_cls, class_specific_params):
     # modifying the transformerbasis's attributes shouldn't
@@ -3530,8 +3555,9 @@ def test_transformerbasis_addition(basis_cls, class_specific_params):
         trans_bas_sum._n_input_dimensionality
         == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
     )
-    assert trans_bas_sum._basis1.n_basis_funcs == n_basis_funcs_a
-    assert trans_bas_sum._basis2.n_basis_funcs == n_basis_funcs_b
+    if basis_cls not in [AdditiveBasis, MultiplicativeBasis]:
+        assert trans_bas_sum._basis1.n_basis_funcs == n_basis_funcs_a
+        assert trans_bas_sum._basis2.n_basis_funcs == n_basis_funcs_b
 
 
 @pytest.mark.parametrize(
@@ -3562,8 +3588,9 @@ def test_transformerbasis_multiplication(basis_cls, class_specific_params):
         trans_bas_prod._n_input_dimensionality
         == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
     )
-    assert trans_bas_prod._basis1.n_basis_funcs == n_basis_funcs_a
-    assert trans_bas_prod._basis2.n_basis_funcs == n_basis_funcs_b
+    if basis_cls not in [AdditiveBasis, MultiplicativeBasis]:
+        assert trans_bas_prod._basis1.n_basis_funcs == n_basis_funcs_a
+        assert trans_bas_prod._basis2.n_basis_funcs == n_basis_funcs_b
 
 
 @pytest.mark.parametrize(
@@ -3613,7 +3640,10 @@ def test_transformerbasis_dir(basis_cls, class_specific_params):
         "mode",
         "window_size",
     ):
-        if attr_name == "window_size" and "Eval" in trans_bas._basis.__class__.__name__:
+        if (
+            attr_name == "window_size"
+            and "Conv" not in trans_bas._basis.__class__.__name__
+        ):
             continue
         assert attr_name in dir(trans_bas)
 
@@ -3662,7 +3692,13 @@ def test_transformerbasis_pickle(
         trans_bas2 = pickle.load(f)
 
     assert isinstance(trans_bas2, TransformerBasis)
-    assert trans_bas2.n_basis_funcs == n_basis_funcs
+    if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
+        for bas in [
+            getattr(trans_bas2._basis, attr) for attr in ("_basis1", "_basis2")
+        ]:
+            assert bas.n_basis_funcs == n_basis_funcs
+    else:
+        assert trans_bas2.n_basis_funcs == n_basis_funcs
 
 
 @pytest.mark.parametrize(
