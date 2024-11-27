@@ -11,16 +11,13 @@ import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
-from scipy.sparse.csgraph import depth_first_tree
-from scipy.stats import expon
 
 import utils_testing
 from sklearn.base import clone as sk_clone
 
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis import EvalOrthExponential
-from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
+from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring, TransformerBasis
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
@@ -63,17 +60,19 @@ def extra_decay_rates(cls, n_basis):
 
 
 # automatic define user accessible basis and check the methods
-def list_all_basis_classes() -> list[type]:
+def list_all_basis_classes(filter_basis="all") -> list[type]:
     """
     Return all the classes in nemos.basis which are a subclass of Basis,
     which should be all concrete classes except TransformerBasis.
     """
-    return [
+    all_basis = [
         class_obj
         for _, class_obj in utils_testing.get_non_abstract_classes(basis)
         if issubclass(class_obj, Basis)
     ]
-
+    if filter_basis != "all":
+        all_basis = [a for a in all_basis if filter_basis in a.__name__]
+    return all_basis
 
 def test_all_basis_are_tested() -> None:
     """Meta-test.
@@ -1590,15 +1589,22 @@ class CombinedBasis(BasisFuncsTesting):
     cls = None
 
     @staticmethod
-    def instantiate_basis(n_basis, basis_class, class_specific_params, window_size=10):
+    def instantiate_basis(n_basis, basis_class, class_specific_params, window_size=10, **kwargs):
         """Instantiate and return two basis of the type specified."""
 
-        kwargs = {
+        # Set non-optional args
+        default_kwargs = {
             "n_basis_funcs": n_basis,
             "window_size": window_size,
-            "order": 2,
             "decay_rates": np.arange(1, 1 + n_basis)
         }
+        repeated_keys = set(default_kwargs.keys()).intersection(kwargs.keys())
+        if repeated_keys:
+            raise ValueError("Cannot set `n_basis_funcs, window_size, decay_rates` with kwargs")
+
+        # Merge with provided  extra kwargs
+        kwargs = {**default_kwargs, **kwargs}
+
 
         if basis_class == AdditiveBasis:
             kwargs_mspline = trim_kwargs(basis.EvalMSpline, kwargs, class_specific_params)
@@ -2743,7 +2749,7 @@ class TestMultiplicativeBasis(CombinedBasis):
     "exponent", [-1, 0, 0.5, basis.EvalRaisedCosineLog(4), 1, 2, 3]
 )
 @pytest.mark.parametrize("basis_class", list_all_basis_classes())
-def test_power_of_basis(exponent, basis_class):
+def test_power_of_basis(exponent, basis_class, class_specific_params):
     """Test if the power behaves as expected."""
     raise_exception_type = not type(exponent) is int
 
@@ -2752,7 +2758,7 @@ def test_power_of_basis(exponent, basis_class):
     else:
         raise_exception_value = False
 
-    basis_obj = CombinedBasis.instantiate_basis(5, basis_class)
+    basis_obj = CombinedBasis.instantiate_basis(5, basis_class, class_specific_params, window_size=10)
 
     if raise_exception_type:
         with pytest.raises(TypeError, match=r"Exponent should be an integer\!"):
@@ -2782,40 +2788,28 @@ def test_power_of_basis(exponent, basis_class):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_basis_to_transformer(basis_cls):
+def test_basis_to_transformer(basis_cls, class_specific_params):
     n_basis_funcs = 5
-    bas = basis_cls(n_basis_funcs)
+    bas = CombinedBasis().instantiate_basis(n_basis_funcs, basis_cls, class_specific_params, window_size=10)
 
     trans_bas = bas.to_transformer()
 
-    assert isinstance(trans_bas, basis.TransformerBasis)
+    assert isinstance(trans_bas, TransformerBasis)
 
     # check that things like n_basis_funcs are the same as the original basis
     for k in bas.__dict__.keys():
-        assert getattr(bas, k) == getattr(trans_bas, k)
+        assert np.all(getattr(bas, k) == getattr(trans_bas, k))
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformer_has_the_same_public_attributes_as_basis(basis_cls):
+def test_transformer_has_the_same_public_attributes_as_basis(basis_cls, class_specific_params):
     n_basis_funcs = 5
-    bas = basis_cls(n_basis_funcs)
+    bas = CombinedBasis().instantiate_basis(n_basis_funcs, basis_cls, class_specific_params, window_size=10)
 
     public_attrs_basis = {attr for attr in dir(bas) if not attr.startswith("_")}
     public_attrs_transformerbasis = {
@@ -2833,20 +2827,14 @@ def test_transformer_has_the_same_public_attributes_as_basis(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_to_transformer_and_constructor_are_equivalent(basis_cls):
+def test_to_transformer_and_constructor_are_equivalent(basis_cls, class_specific_params):
     n_basis_funcs = 5
-    bas = basis_cls(n_basis_funcs)
+    bas = CombinedBasis().instantiate_basis(n_basis_funcs, basis_cls, class_specific_params, window_size=10)
 
     trans_bas_a = bas.to_transformer()
-    trans_bas_b = basis.TransformerBasis(bas)
+    trans_bas_b = TransformerBasis(bas)
 
     # they both just have a _basis
     assert (
@@ -2855,29 +2843,24 @@ def test_to_transformer_and_constructor_are_equivalent(basis_cls):
         == ["_basis"]
     )
     # and those bases are the same
+    assert np.all(trans_bas_a._basis.__dict__.pop("_decay_rates", 1) == trans_bas_b._basis.__dict__.pop("_decay_rates", 1))
     assert trans_bas_a._basis.__dict__ == trans_bas_b._basis.__dict__
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_basis_to_transformer_makes_a_copy(basis_cls):
-    bas_a = basis_cls(5)
+def test_basis_to_transformer_makes_a_copy(basis_cls, class_specific_params):
+    bas_a = CombinedBasis().instantiate_basis(5, basis_cls, class_specific_params, window_size=10)
     trans_bas_a = bas_a.to_transformer()
 
     # changing an attribute in bas should not change trans_bas
     bas_a.n_basis_funcs = 10
     assert trans_bas_a.n_basis_funcs == 5
 
-    # changing an attribute in the transformerbasis should not change the original
-    bas_b = basis_cls(5)
+    # changing an attribute in the transformer basis should not change the original
+    bas_b = CombinedBasis().instantiate_basis(5, basis_cls, class_specific_params, window_size=10)
     trans_bas_b = bas_b.to_transformer()
     trans_bas_b.n_basis_funcs = 100
     assert bas_b.n_basis_funcs == 5
@@ -2885,34 +2868,26 @@ def test_basis_to_transformer_makes_a_copy(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
 @pytest.mark.parametrize("n_basis_funcs", [5, 10, 20])
-def test_transformerbasis_getattr(basis_cls, n_basis_funcs):
-    trans_basis = basis.TransformerBasis(basis_cls(n_basis_funcs))
+def test_transformerbasis_getattr(basis_cls, n_basis_funcs, class_specific_params):
+    trans_basis = TransformerBasis(
+        CombinedBasis().instantiate_basis(n_basis_funcs, basis_cls, class_specific_params, window_size=10)
+    )
     assert trans_basis.n_basis_funcs == n_basis_funcs
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
 @pytest.mark.parametrize("n_basis_funcs_init", [5])
 @pytest.mark.parametrize("n_basis_funcs_new", [6, 10, 20])
-def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_funcs_new):
-    trans_basis = basis.TransformerBasis(basis_cls(n_basis_funcs_init))
+def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_funcs_new, class_specific_params):
+    trans_basis = TransformerBasis(
+        CombinedBasis().instantiate_basis(n_basis_funcs_init, basis_cls, class_specific_params, window_size=10)
+    )
     trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
 
     assert trans_basis.n_basis_funcs == n_basis_funcs_new
@@ -2921,18 +2896,14 @@ def test_transformerbasis_set_params(basis_cls, n_basis_funcs_init, n_basis_func
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_setattr_basis(basis_cls):
+def test_transformerbasis_setattr_basis(basis_cls, class_specific_params):
     # setting the _basis attribute should change it
-    trans_bas = basis.TransformerBasis(basis_cls(10))
-    trans_bas._basis = basis_cls(20)
+    trans_bas = TransformerBasis(
+        CombinedBasis().instantiate_basis(10, basis_cls, class_specific_params, window_size=10)
+    )
+    trans_bas._basis = CombinedBasis().instantiate_basis(20, basis_cls, class_specific_params, window_size=10)
 
     assert trans_bas.n_basis_funcs == 20
     assert trans_bas._basis.n_basis_funcs == 20
@@ -2941,18 +2912,12 @@ def test_transformerbasis_setattr_basis(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_setattr_basis_attribute(basis_cls):
+def test_transformerbasis_setattr_basis_attribute(basis_cls, class_specific_params):
     # setting an attribute that is an attribute of the underlying _basis
     # should propagate setting it on _basis itself
-    trans_bas = basis.TransformerBasis(basis_cls(10))
+    trans_bas = TransformerBasis(CombinedBasis().instantiate_basis(10, basis_cls, class_specific_params, window_size=10))
     trans_bas.n_basis_funcs = 20
 
     assert trans_bas.n_basis_funcs == 20
@@ -2962,19 +2927,13 @@ def test_transformerbasis_setattr_basis_attribute(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_copy_basis_on_contsruct(basis_cls):
+def test_transformerbasis_copy_basis_on_contsruct(basis_cls, class_specific_params):
     # modifying the transformerbasis's attributes shouldn't
     # touch the original basis that was used to create it
-    orig_bas = basis_cls(10)
-    trans_bas = basis.TransformerBasis(orig_bas)
+    orig_bas = CombinedBasis().instantiate_basis(10, basis_cls, class_specific_params, window_size=10)
+    trans_bas = TransformerBasis(orig_bas)
     trans_bas.n_basis_funcs = 20
 
     assert orig_bas.n_basis_funcs == 10
@@ -2985,18 +2944,12 @@ def test_transformerbasis_copy_basis_on_contsruct(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_setattr_illegal_attribute(basis_cls):
+def test_transformerbasis_setattr_illegal_attribute(basis_cls, class_specific_params):
     # changing an attribute that is not _basis or an attribute of _basis
     # is not allowed
-    trans_bas = basis.TransformerBasis(basis_cls(10))
+    trans_bas = TransformerBasis(CombinedBasis().instantiate_basis(10, basis_cls, class_specific_params, window_size=10))
 
     with pytest.raises(
         ValueError,
@@ -3007,21 +2960,17 @@ def test_transformerbasis_setattr_illegal_attribute(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_addition(basis_cls):
+def test_transformerbasis_addition(basis_cls, class_specific_params):
     n_basis_funcs_a = 5
     n_basis_funcs_b = n_basis_funcs_a * 2
-    trans_bas_a = basis.TransformerBasis(basis_cls(n_basis_funcs_a))
-    trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
+    bas_a = CombinedBasis().instantiate_basis(n_basis_funcs_a, basis_cls, class_specific_params, window_size=10)
+    bas_b = CombinedBasis().instantiate_basis(n_basis_funcs_b, basis_cls, class_specific_params, window_size=10)
+    trans_bas_a = TransformerBasis(bas_a)
+    trans_bas_b = TransformerBasis(bas_b)
     trans_bas_sum = trans_bas_a + trans_bas_b
-    assert isinstance(trans_bas_sum, basis.TransformerBasis)
+    assert isinstance(trans_bas_sum, TransformerBasis)
     assert isinstance(trans_bas_sum._basis, AdditiveBasis)
     assert (
         trans_bas_sum.n_basis_funcs
@@ -3037,21 +2986,15 @@ def test_transformerbasis_addition(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_multiplication(basis_cls):
+def test_transformerbasis_multiplication(basis_cls, class_specific_params):
     n_basis_funcs_a = 5
     n_basis_funcs_b = n_basis_funcs_a * 2
-    trans_bas_a = basis.TransformerBasis(basis_cls(n_basis_funcs_a))
-    trans_bas_b = basis.TransformerBasis(basis_cls(n_basis_funcs_b))
+    trans_bas_a = TransformerBasis(CombinedBasis().instantiate_basis(n_basis_funcs_a, basis_cls, class_specific_params, window_size=10))
+    trans_bas_b = TransformerBasis(CombinedBasis().instantiate_basis(n_basis_funcs_b, basis_cls, class_specific_params, window_size=10))
     trans_bas_prod = trans_bas_a * trans_bas_b
-    assert isinstance(trans_bas_prod, basis.TransformerBasis)
+    assert isinstance(trans_bas_prod, TransformerBasis)
     assert isinstance(trans_bas_prod._basis, MultiplicativeBasis)
     assert (
         trans_bas_prod.n_basis_funcs
@@ -3067,13 +3010,7 @@ def test_transformerbasis_multiplication(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
 @pytest.mark.parametrize(
     "exponent, error_type, error_message",
@@ -3085,29 +3022,23 @@ def test_transformerbasis_multiplication(basis_cls):
     ],
 )
 def test_transformerbasis_exponentiation(
-    basis_cls, exponent: int, error_type, error_message
+    basis_cls, exponent: int, error_type, error_message, class_specific_params
 ):
-    trans_bas = basis.TransformerBasis(basis_cls(5))
+    trans_bas = TransformerBasis(CombinedBasis().instantiate_basis(5, basis_cls, class_specific_params, window_size=10))
 
     if not isinstance(exponent, int):
         with pytest.raises(error_type, match=error_message):
             trans_bas_exp = trans_bas**exponent
-            assert isinstance(trans_bas_exp, basis.TransformerBasis)
+            assert isinstance(trans_bas_exp, TransformerBasis)
             assert isinstance(trans_bas_exp._basis, MultiplicativeBasis)
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
-def test_transformerbasis_dir(basis_cls):
-    trans_bas = basis.TransformerBasis(basis_cls(5))
+def test_transformerbasis_dir(basis_cls, class_specific_params):
+    trans_bas = TransformerBasis(CombinedBasis().instantiate_basis(5, basis_cls, class_specific_params, window_size=10))
     for attr_name in (
         "fit",
         "transform",
@@ -3116,22 +3047,18 @@ def test_transformerbasis_dir(basis_cls):
         "mode",
         "window_size",
     ):
+        if attr_name == "window_size" and "Eval" in trans_bas._basis.__class__.__name__:
+            continue
         assert attr_name in dir(trans_bas)
 
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes("Conv"),
 )
-def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
-    orig_bas = basis_cls(10,  window_size=5)
-    trans_bas = basis.TransformerBasis(orig_bas)
+def test_transformerbasis_sk_clone_kernel_noned(basis_cls, class_specific_params):
+    orig_bas = CombinedBasis().instantiate_basis(10, basis_cls, class_specific_params, window_size=20)
+    trans_bas = TransformerBasis(orig_bas)
 
     # kernel should be saved in the object after fit
     trans_bas.fit(np.random.randn(100, 20))
@@ -3148,25 +3075,19 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
 
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-    ],
+    list_all_basis_classes(),
 )
 @pytest.mark.parametrize("n_basis_funcs", [5])
-def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
+def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs, class_specific_params):
     # the test that tries cross-validation with n_jobs = 2 already should test this
-    trans_bas = basis.TransformerBasis(basis_cls(n_basis_funcs))
+    trans_bas = TransformerBasis(CombinedBasis().instantiate_basis(n_basis_funcs, basis_cls, class_specific_params, window_size=10))
     filepath = tmpdir / "transformerbasis.pickle"
     with open(filepath, "wb") as f:
         pickle.dump(trans_bas, f)
     with open(filepath, "rb") as f:
         trans_bas2 = pickle.load(f)
 
-    assert isinstance(trans_bas2, basis.TransformerBasis)
+    assert isinstance(trans_bas2, TransformerBasis)
     assert trans_bas2.n_basis_funcs == n_basis_funcs
 
 
@@ -3199,52 +3120,21 @@ def test_transformerbasis_pickle(tmpdir, basis_cls, n_basis_funcs):
 )
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-        AdditiveBasis,
-        MultiplicativeBasis,
-    ],
+    list_all_basis_classes("Conv"),
 )
 def test_multi_epoch_pynapple_basis(
-    basis_cls, tsd, window_size, shift, predictor_causality, nan_index
+    basis_cls, tsd, window_size, shift, predictor_causality, nan_index, class_specific_params
 ):
     """Test nan location in multi-epoch pynapple tsd."""
-    if basis_cls == AdditiveBasis:
-        bas = basis.BSplineBasis(
-            5,
+    kwargs = dict(conv_kwargs=dict(shift=shift, predictor_causality=predictor_causality))
 
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
-        bas = bas + basis.RaisedCosineBasisLinear(
-            5,
-
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
-    elif basis_cls == MultiplicativeBasis:
-        bas = basis.RaisedCosineBasisLog(
-            5,
-
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
-        bas = basis.EvalMSpline(3) * bas
+    # require a ws of at least nbasis funcs.
+    if "OrthExp" in basis_cls.__name__:
+        nbasis = 2
+    # splines requires at least 1 basis more than the order of the spline.
     else:
-        bas = basis_cls(
-            5,
-
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
+        nbasis = 5
+    bas = CombinedBasis().instantiate_basis(nbasis, basis_cls, class_specific_params, window_size=window_size, **kwargs)
 
     n_input = bas._n_input_dimensionality
 
@@ -3287,57 +3177,26 @@ def test_multi_epoch_pynapple_basis(
 )
 @pytest.mark.parametrize(
     "basis_cls",
-    [
-        basis.EvalMSpline,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
-        AdditiveBasis,
-        MultiplicativeBasis,
-    ],
+    list_all_basis_classes("Conv"),
 )
 def test_multi_epoch_pynapple_basis_transformer(
-    basis_cls, tsd, window_size, shift, predictor_causality, nan_index
+    basis_cls, tsd, window_size, shift, predictor_causality, nan_index, class_specific_params
 ):
     """Test nan location in multi-epoch pynapple tsd."""
-    if basis_cls == AdditiveBasis:
-        bas = basis.BSplineBasis(
-            5,
-
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
-        bas = bas + basis.RaisedCosineBasisLinear(
-            5,
-
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
-    elif basis_cls == MultiplicativeBasis:
-        bas = basis.RaisedCosineBasisLog(
-            5,
-
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
-        bas = basis.EvalMSpline(3) * bas
+    kwargs = dict(conv_kwargs=dict(shift=shift, predictor_causality=predictor_causality))
+    # require a ws of at least nbasis funcs.
+    if "OrthExp" in basis_cls.__name__:
+        nbasis = 2
+    # splines requires at least 1 basis more than the order of the spline.
     else:
-        bas = basis_cls(
-            5,
+        nbasis = 5
 
-            window_size=window_size,
-            predictor_causality=predictor_causality,
-            shift=shift,
-        )
+    bas = CombinedBasis().instantiate_basis(nbasis, basis_cls, class_specific_params, window_size=window_size, **kwargs)
 
     n_input = bas._n_input_dimensionality
 
     # pass through transformer
-    bas = basis.TransformerBasis(bas)
+    bas = TransformerBasis(bas)
 
     # concat input
     X = pynapple_concatenate_numpy([tsd[:, None]] * n_input, axis=1)
@@ -3358,13 +3217,9 @@ def test_multi_epoch_pynapple_basis_transformer(
     "bas1, bas2, bas3",
     list(
         itertools.product(
-            *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 3
+            *[list_all_basis_classes()] * 3
         )
     ),
-)
-@pytest.mark.parametrize(
-    "mode1, mode2, mode3",
-    list(itertools.product(["eval", "conv"], ["eval", "conv"], ["eval", "conv"])),
 )
 @pytest.mark.parametrize(
     "operator1, operator2, compute_slice",
@@ -3437,50 +3292,22 @@ def test_multi_epoch_pynapple_basis_transformer(
     ],
 )
 def test__get_splitter(
-    mode1, mode2, mode3, bas1, bas2, bas3, operator1, operator2, compute_slice
+   bas1, bas2, bas3, operator1, operator2, compute_slice, class_specific_params
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
     # define the basis
     n_basis = [5, 6, 7]
     n_input_basis = [1, 2, 3]
-    extra_kwargs = (
-        {"decay_rates": np.arange(1, n_basis[0] + 1), "window_size": 5},
-        {"decay_rates": np.arange(1, n_basis[1] + 1), "window_size": 5},
-        {"decay_rates": np.arange(1, n_basis[2] + 1), "window_size": 5},
-    )
-    for i, val in enumerate(
-        zip([bas1, bas2, bas3], [mode1, mode2, mode3], extra_kwargs)
-    ):
-        bas,  kwrgs = val
-        if bas != basis.OrthExponentialBasis:
-            kwrgs.pop("decay_rates")
-        if mode == "eval":
-            n_input_basis[i] = 1
-            kwrgs.pop("window_size")
 
-    bas1_instance = bas1(
-        n_basis[0],
-        mode=mode1,
-        **extra_kwargs[0],
-        label="1",
-    )
-    bas2_instance = bas2(
-        n_basis[1],
-        mode=mode2,
-        **extra_kwargs[1],
-        label="2",
-    )
-    bas3_instance = bas3(
-        n_basis[2],
-        mode=mode3,
-        **extra_kwargs[2],
-        label="3",
-    )
+    combine_basis = CombinedBasis()
+    bas1_instance = combine_basis.instantiate_basis(n_basis[0], bas1, class_specific_params, window_size=10, label="1")
+    bas2_instance = combine_basis.instantiate_basis(n_basis[1], bas2, class_specific_params, window_size=10, label="2")
+    bas3_instance = combine_basis.instantiate_basis(n_basis[2], bas3, class_specific_params, window_size=10, label="3")
 
     func1 = getattr(bas1_instance, operator1)
     func2 = getattr(bas2_instance, operator2)
@@ -3497,7 +3324,7 @@ def test__get_splitter(
     "bas1, bas2",
     list(
         itertools.product(
-            *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
+            *[list_all_basis_classes()] * 2
         )
     ),
 )
@@ -3614,38 +3441,19 @@ def test__get_splitter(
     ],
 )
 def test__get_splitter_split_by_input(
-    bas1, bas2, operator, n_input_basis_1, n_input_basis_2, compute_slice
+    bas1, bas2, operator, n_input_basis_1, n_input_basis_2, compute_slice, class_specific_params
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return
     # define the basis
     n_basis = [5, 6]
-    mode = "conv"
-    extra_kwargs = (
-        {"decay_rates": np.arange(1, n_basis[0] + 1), "window_size": 5},
-        {"decay_rates": np.arange(1, n_basis[1] + 1), "window_size": 5},
-    )
-    for i, val in enumerate(zip([bas1, bas2], extra_kwargs)):
-        bas, kwrgs = val
-        if bas != basis.OrthExponentialBasis:
-            kwrgs.pop("decay_rates")
-
-    bas1_instance = bas1(
-        n_basis[0],
-
-        **extra_kwargs[0],
-        label="1",
-    )
-    bas2_instance = bas2(
-        n_basis[1],
-
-        **extra_kwargs[1],
-        label="2",
-    )
+    combine_basis = CombinedBasis()
+    bas1_instance = combine_basis.instantiate_basis(n_basis[0], bas1, class_specific_params, window_size=10, label="1")
+    bas2_instance = combine_basis.instantiate_basis(n_basis[1], bas2, class_specific_params, window_size=10, label="2")
 
     func1 = getattr(bas1_instance, operator)
     bas12 = func1(bas2_instance)
@@ -3664,32 +3472,24 @@ def test__get_splitter_split_by_input(
     "bas1, bas2, bas3",
     list(
         itertools.product(
-            *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 3
+            *[list_all_basis_classes()] * 3
         )
     ),
 )
-def test_duplicate_keys(bas1, bas2, bas3):
+def test_duplicate_keys(bas1, bas2, bas3, class_specific_params):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
 
-    extra_kwargs = (
-        {"decay_rates": np.arange(1, 5 + 1)},
-        {"decay_rates": np.arange(1, 5 + 1)},
-        {"decay_rates": np.arange(1, 5 + 1)},
-    )
-    for bas, kwrgs in zip((bas1, bas2, bas3), extra_kwargs):
-        if bas != basis.OrthExponentialBasis:
-            kwrgs.pop("decay_rates")
+    combine_basis = CombinedBasis()
+    bas1_instance = combine_basis.instantiate_basis(5, bas1, class_specific_params, window_size=10, label="label")
+    bas2_instance = combine_basis.instantiate_basis(5, bas2, class_specific_params, window_size=10, label="label")
+    bas3_instance = combine_basis.instantiate_basis(5, bas3, class_specific_params, window_size=10, label="label")
+    bas_obj = bas1_instance + bas2_instance + bas3_instance
 
-    bas_obj = (
-        bas1(5, **extra_kwargs[0], label="label")
-        + bas2(5, **extra_kwargs[1], label="label")
-        + bas3(5, **extra_kwargs[2], label="label")
-    )
     inps = [np.zeros((1,)) for n in range(3)]
     bas_obj._set_num_output_features(*inps)
     slice_dict = bas_obj._get_feature_slicing()[0]
@@ -3700,7 +3500,7 @@ def test_duplicate_keys(bas1, bas2, bas3):
     "bas1, bas2",
     list(
         itertools.product(
-            *[tuple((getattr(basis, basis_name) for basis_name in dir(basis)))] * 2
+            *[list_all_basis_classes()] * 2
         )
     ),
 )
@@ -3720,37 +3520,19 @@ def test_duplicate_keys(bas1, bas2, bas3):
         ),
     ],
 )
-def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes):
+def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes, class_specific_params):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return
     # define the basis
     n_basis = [5, 6]
-    mode = "conv"
-    extra_kwargs = (
-        {"decay_rates": np.arange(1, n_basis[0] + 1), "window_size": 5},
-        {"decay_rates": np.arange(1, n_basis[1] + 1), "window_size": 5},
-    )
-    for i, val in enumerate(zip([bas1, bas2], extra_kwargs)):
-        bas, kwrgs = val
-        if bas != basis.OrthExponentialBasis:
-            kwrgs.pop("decay_rates")
+    combine_basis = CombinedBasis()
+    bas1_instance = combine_basis.instantiate_basis(n_basis[0], bas1, class_specific_params, window_size=10, label="1")
+    bas2_instance = combine_basis.instantiate_basis(n_basis[1], bas2, class_specific_params, window_size=10, label="2")
 
-    bas1_instance = bas1(
-        n_basis[0],
-
-        **extra_kwargs[0],
-        label="1",
-    )
-    bas2_instance = bas2(
-        n_basis[1],
-
-        **extra_kwargs[1],
-        label="2",
-    )
     bas = bas1_instance + bas2_instance
     bas._set_num_output_features(np.zeros((1, 2)), np.zeros((1, 3)))
     with expectation:
