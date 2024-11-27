@@ -127,10 +127,11 @@ Here, we simply add two basis objects, `a_basis` and `b_basis`, together to defi
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 import numpy as np
+import nemos as nmo
 
 # Define 1D basis objects
-a_basis = nemos.basis.basis.EvalMSpline(n_basis_funcs=15, order=3)
-b_basis = nemos.basis.basis.RaisedCosineBasisLog(n_basis_funcs=14)
+a_basis = nmo.basis.EvalMSpline(n_basis_funcs=15, order=3)
+b_basis = nmo.basis.EvalRaisedCosineLog(n_basis_funcs=14)
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
@@ -279,7 +280,7 @@ for i, j in element_pairs:
     # select & plot the corresponding product basis element
     k = i * b_basis.n_basis_funcs + j
     axs[cc, 2].contourf(X, Y, Z[:, :, k], cmap='Blues')
-    axs[cc, 2].set_title(f"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
+    axs[cc, 2].set_title(fr"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
     axs[cc, 2].set_xlabel('x-coord')
     axs[cc, 2].set_ylabel('y-coord')
     axs[cc, 2].set_aspect("equal")
@@ -339,9 +340,9 @@ will output a $K^N \times T$ matrix.
 T = 10
 n_basis = 8
 
-a_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
-b_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
-c_basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis)
+a_basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=n_basis)
+b_basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=n_basis)
+c_basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=n_basis)
 
 prod_basis_3 = a_basis * b_basis * c_basis
 samples = np.linspace(0, 1, T)

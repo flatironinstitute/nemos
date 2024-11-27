@@ -45,7 +45,7 @@ warnings.filterwarnings(
 
 ## Defining a 1D Basis Object
 
-We'll start by defining a 1D basis function object of the type [`MSplineBasis`](nemos.basis.MSplineBasis).
+We'll start by defining a 1D basis function object of the type [`EvalMSpline`](nemos.basis.EvalMSpline).
 The hyperparameters required to initialize this class are:
 
 - The number of basis functions, which should be a positive integer.
@@ -63,7 +63,7 @@ order = 4
 n_basis = 10
 
 # Define the 1D basis function object
-bspline = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order)
+bspline = nmo.basis.EvalBSpline(n_basis_funcs=n_basis, order=order)
 ```
 
 ## Evaluating a Basis
@@ -119,7 +119,7 @@ parameter at initialization. Evaluating the basis at any sample outside the boun
 
 
 ```{code-cell} ipython3
-bspline_range = nmo.basis.BSplineBasis(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
+bspline_range = nmo.basis.EvalBSpline(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
 
 print("Evaluated basis:")
 # 0.5  is within the support, 0.1 is outside the support
@@ -140,20 +140,18 @@ axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 ```
 
-## Basis `mode`
-In constructing features, [`Basis`](nemos.basis.Basis) objects can be used in two modalities: `"eval"` for evaluate or `"conv"`
-for convolve. These two modalities change the behavior of the [`compute_features`](nemos.basis.Basis.compute_features) method of [`Basis`](nemos.basis.Basis), in particular,
+## Feature Computation
+The bases in the module `nemos.basis` can be classified in two categories:
 
-- If a basis is in mode `"eval"`, then [`compute_features`](nemos.basis.Basis.compute_features) simply returns the evaluated basis.
-- If a basis is in mode `"conv"`, then [`compute_features`](nemos.basis.Basis.compute_features) will convolve the input with a kernel of basis
-  with `window_size` specified by the user.
+- **Evaluation Bases**: Objects for which [`compute_features`](nemos.basis.Basis.compute_features) that returns the evaluated basis. This means that the basis are applying a non-linear transformation of the input. The class name for this kind of bases starts with "Eval", e.g. "EvalBSpline".
+- **Convolution Bases**: Objects for which [`compute_features`](nemos.basis.Basis.compute_features) will convolve the input with a kernel of basis elements with `window_size` specified by the user. The class name for this kind of bases starts with "Conv", e.g. "ConvBSpline".
 
 Let's see how this two modalities operate.
 
 
 ```{code-cell} ipython3
-eval_mode = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, mode="eval")
-conv_mode = nmo.basis.MSplineBasis(n_basis_funcs=n_basis, mode="conv", window_size=100)
+eval_mode = nmo.basis.EvalMSpline(n_basis_funcs=n_basis)
+conv_mode = nmo.basis.ConvMSpline(n_basis_funcs=n_basis, window_size=100)
 
 # define an input
 angles = np.linspace(0, np.pi*4, 201)
@@ -228,8 +226,8 @@ evaluate a log-spaced cosine raised function basis.
 
 
 ```{code-cell} ipython3
-# Instantiate the basis noting that the `RaisedCosineBasisLog` does not require an `order` parameter
-raised_cosine_log = nmo.basis.RaisedCosineBasisLog(n_basis_funcs=10, width=1.5, time_scaling=50)
+# Instantiate the basis noting that the `RaisedCosineLog` basis does not require an `order` parameter
+raised_cosine_log = nmo.basis.EvalRaisedCosineLog(n_basis_funcs=10, width=1.5, time_scaling=50)
 
 # Evaluate the raised cosine basis at the equi-spaced sample points
 # (same method in all Basis elements)

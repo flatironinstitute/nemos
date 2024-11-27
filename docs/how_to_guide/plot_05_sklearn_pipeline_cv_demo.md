@@ -152,31 +152,29 @@ sns.despine(ax=ax)
 ### Converting NeMoS `Basis` to a transformer
 In order to use NeMoS [`Basis`](nemos.basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis.TransformerBasis) wrapper class.
 
-Instantiating a [`TransformerBasis`](nemos.basis.TransformerBasis) can be done either using the constructor directly or with [`Basis.to_transformer()`](nemos.basis.Basis.to_transformer):
+Instantiating a [`TransformerBasis`](nemos.basis.TransformerBasis) can be done with [`Basis.to_transformer()`](nemos.basis.Basis.to_transformer):
 
 
 ```{code-cell} ipython3
-bas = nmo.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
-# these two ways of creating the TransformerBasis are equivalent
-trans_bas_a = nmo.basis.TransformerBasis(bas)
-trans_bas_b = bas.to_transformer()
+bas = nmo.basis.ConvRaisedCosineLinear(5, window_size=5)
+trans_bas = bas.to_transformer()
 ```
 
 [`TransformerBasis`](nemos.basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis.Basis) object's attributes:
 
 
 ```{code-cell} ipython3
-print(bas.n_basis_funcs, trans_bas_a.n_basis_funcs, trans_bas_b.n_basis_funcs)
+print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
 
 We can also set attributes of the underlying [`Basis`](nemos.basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis.Basis), and neither does changing the original [`Basis`](nemos.basis.Basis) change [`TransformerBasis`](nemos.basis.TransformerBasis) we created:
 
 
 ```{code-cell} ipython3
-trans_bas_a.n_basis_funcs = 10
+trans_bas.n_basis_funcs = 10
 bas.n_basis_funcs = 100
 
-print(bas.n_basis_funcs, trans_bas_a.n_basis_funcs, trans_bas_b.n_basis_funcs)
+print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
 
 ### Creating and fitting a pipeline
@@ -190,7 +188,7 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.TransformerBasis(nmo.basis.RaisedCosineBasisLinear(6)),
+            nmo.basis.EvalRaisedCosineLinear(6).to_transformer(),
         ),
         (
             "glm",
@@ -326,7 +324,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.TransformerBasis(nmo.basis.RaisedCosineBasisLinear(6))
+basis = nmo.basis.TransformerBasis(nmo.basis.EvalRaisedCosineLinear(6))
 model = nmo.glm.GLM(regularizer="Ridge")
 
 # loop over combinations
@@ -453,12 +451,12 @@ Here we include `transformerbasis___basis` in the parameter grid to try differen
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineBasisLinear(5),
-        nmo.basis.RaisedCosineBasisLinear(10),
-        nmo.basis.RaisedCosineBasisLog(5),
-        nmo.basis.RaisedCosineBasisLog(10),
-        nmo.basis.MSplineBasis(5),
-        nmo.basis.MSplineBasis(10),
+        nmo.basis.EvalRaisedCosineLinear(5),
+        nmo.basis.EvalRaisedCosineLinear(10),
+        nmo.basis.EvalRaisedCosineLog(5),
+        nmo.basis.EvalRaisedCosineLog(10),
+        nmo.basis.EvalMSpline(5),
+        nmo.basis.EvalMSpline(10),
     ),
 )
 ```
@@ -498,7 +496,7 @@ cvdf_wide = cvdf.pivot(
 doc_plots.plot_heatmap_cv_results(cvdf_wide)
 ```
 
-As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear basis (as used above), which appears to be a suitable choice for our toy data. 
+As shown in the table, the model with the highest score, highlighted in blue, used a EvalRaisedCosineLinear basis (as used above), which appears to be a suitable choice for our toy data. 
 We can confirm that by plotting the firing rate predictions:
 
 
@@ -539,12 +537,12 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineBasisLinear(5),
-        nmo.basis.RaisedCosineBasisLinear(10),
-        nmo.basis.RaisedCosineBasisLog(5),
-        nmo.basis.RaisedCosineBasisLog(10),
-        nmo.basis.MSplineBasis(5),
-        nmo.basis.MSplineBasis(10),
+        nmo.basis.EvalRaisedCosineLinear(5),
+        nmo.basis.EvalRaisedCosineLinear(10),
+        nmo.basis.EvalRaisedCosineLog(5),
+        nmo.basis.EvalRaisedCosineLog(10),
+        nmo.basis.EvalMSpline(5),
+        nmo.basis.EvalMSpline(10),
     ),
 )
 ```

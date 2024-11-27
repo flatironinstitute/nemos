@@ -335,15 +335,15 @@ print(count.shape)
 
 For each feature, we will use a different set of basis :
 
-  -   position : [`MSplineBasis`](nemos.basis.MSplineBasis)
-  -   theta phase : [`CyclicBSplineBasis`](nemos.basis.CyclicBSplineBasis)
-  -   speed : [`MSplineBasis`](nemos.basis.MSplineBasis)
+  -   position : [`EvalMSpline`](nemos.basis.EvalMSpline)
+  -   theta phase : [`EvalCyclicBSpline`](nemos.basis.EvalCyclicBSpline)
+  -   speed : [`EvalMSpline`](nemos.basis.EvalMSpline)
 
 
 ```{code-cell} ipython3
-position_basis = nmo.basis.MSplineBasis(n_basis_funcs=10)
-phase_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-speed_basis = nmo.basis.MSplineBasis(n_basis_funcs=15)
+position_basis = nmo.basis.EvalMSpline(n_basis_funcs=10)
+phase_basis = nmo.basis.EvalCyclicBSpline(n_basis_funcs=12)
+speed_basis = nmo.basis.EvalMSpline(n_basis_funcs=15)
 ```
 
 In addition, we will consider position and phase to be a joint variable. In NeMoS, we can combine basis by multiplying them and adding them. In this case the final basis object for our model can be made in one line :

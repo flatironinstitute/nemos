@@ -21,7 +21,7 @@ Abstract Class Basis
 │
 ├─ Concrete Subclass RaisedCosineBasisLinear 
 │   │
-│   └─ Concrete Subclass RaisedCosineBasisLog
+│   └─ Concrete Subclass EvalRaisedCosineLog
 │
 └─ Concrete Subclass OrthExponentialBasis
 ```
