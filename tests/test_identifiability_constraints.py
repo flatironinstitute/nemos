@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nemos.basis.basis import EvalBSpline, ConvBSpline, EvalRaisedCosineLinear
+from nemos.basis.basis import ConvBSpline, EvalBSpline, EvalRaisedCosineLinear
 from nemos.identifiability_constraints import (
     _WARN_FLOAT32_MESSAGE,
     _find_drop_column,

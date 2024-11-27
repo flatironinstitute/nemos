@@ -8,6 +8,7 @@ from sklearn.model_selection import GridSearchCV
 from nemos import basis
 from nemos.basis._basis import TransformerBasis
 
+
 @pytest.mark.parametrize(
     "bas",
     [
@@ -146,13 +147,11 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
         (basis.ConvRaisedCosineLinear(5, window_size=3), 6),
         (basis.ConvRaisedCosineLog(5, window_size=3), 6),
         (
-            basis.ConvRaisedCosineLog(5, window_size=3)
-            + basis.EvalMSpline(5),
+            basis.ConvRaisedCosineLog(5, window_size=3) + basis.EvalMSpline(5),
             6,
         ),
         (
-            basis.ConvRaisedCosineLog(5, window_size=3)
-            * basis.EvalMSpline(5),
+            basis.ConvRaisedCosineLog(5, window_size=3) * basis.EvalMSpline(5),
             6,
         ),
     ],
