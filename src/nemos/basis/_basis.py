@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
-from functools import wraps
+from functools import wraps, partial
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
@@ -880,7 +880,8 @@ class TransformerBasis:
 
     Examples
     --------
-    >>> from nemos.basis import EvalBSpline, TransformerBasis
+    >>> from nemos.basis import EvalBSpline
+    >>> from nemos.basis._basis import TransformerBasis
     >>> from nemos.glm import GLM
     >>> from sklearn.pipeline import Pipeline
     >>> from sklearn.model_selection import GridSearchCV
@@ -1244,6 +1245,10 @@ class TransformerBasis:
         return TransformerBasis(self._basis**exponent)
 
 
+add_docstring_additive = partial(add_docstring, cls=Basis)
+add_docstring_multiplicative = partial(add_docstring, cls=Basis)
+
+
 class AdditiveBasis(Basis):
     """
     Class representing the addition of two Basis objects.
@@ -1326,6 +1331,21 @@ class AdditiveBasis(Basis):
         :
             The basis function evaluated at the samples, shape (n_samples, n_basis_funcs)
 
+        Examples
+        --------
+        >>> # Generate sample data
+        >>> import numpy as np
+        >>> import nemos as nmo
+        >>> x, y = np.random.normal(size=(2, 30))
+
+        >>> # define two basis objects and add them
+        >>> basis_1 = nmo.basis.EvalBSpline(10)
+        >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
+        >>> additive_basis = basis_1 + basis_2
+
+        >>> # call the basis.
+        >>> out = additive_basis(x, y)
+
         """
         X = np.hstack(
             (
@@ -1334,6 +1354,24 @@ class AdditiveBasis(Basis):
             )
         )
         return X
+
+    @add_docstring_additive("compute_features")
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalBSpline, ConvRaisedCosineLog
+        >>> from nemos.glm import GLM
+        >>> basis1 = EvalBSpline(n_basis_funcs=5, label="one_input")
+        >>> basis2 = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis_add = basis1 + basis2
+        >>> X_multi = basis_add.compute_features(np.random.randn(20), np.random.randn(20, 2))
+        >>> print(X_multi.shape) # num_features: 17 = 5 + 2*6
+        (20, 17)
+
+        """
+        return super().compute_features(*xi)
 
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
@@ -1509,7 +1547,7 @@ class AdditiveBasis(Basis):
         Parameters
         ----------
         n_samples[0],...,n_samples[n]
-            The number of samples in each axis of the grid. The length of
+            The number of points in the uniformly spaced grid. The length of
             n_samples must equal the number of combined bases.
 
         Returns
@@ -1536,6 +1574,20 @@ class AdditiveBasis(Basis):
         :math:`M_1,...,M_N`, outputs are of shape :math:`(M_1, M_2, M_3, ....,M_N)`.
         This differs from the numpy.meshgrid default, which uses Cartesian indexing.
         For the same input, Cartesian indexing would return an output of shape :math:`(M_2, M_1, M_3, ....,M_N)`.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import nemos as nmo
+
+        >>> # define two basis objects and add them
+        >>> basis_1 = nmo.basis.EvalBSpline(10)
+        >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
+        >>> additive_basis = basis_1 + basis_2
+
+        >>> # evaluate on a grid of 10 x 10 equi-spaced samples
+        >>> X, Y, Z = additive_basis.evaluate_on_grid(10, 10)
+
         """
         return super().evaluate_on_grid(*n_samples)
 
@@ -1699,7 +1751,7 @@ class MultiplicativeBasis(Basis):
         Parameters
         ----------
         n_samples[0],...,n_samples[n]
-            The number of samples in each axis of the grid. The length of
+            The number of points in the uniformly spaced grid. The length of
             n_samples must equal the number of combined bases.
 
         Returns
@@ -1735,3 +1787,49 @@ class MultiplicativeBasis(Basis):
         >>> X, Y, Z = mult_basis.evaluate_on_grid(10, 10)
         """
         return super().evaluate_on_grid(*n_samples)
+
+    @add_docstring_multiplicative("compute_features")
+    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalBSpline, ConvRaisedCosineLog
+        >>> from nemos.glm import GLM
+        >>> basis1 = EvalBSpline(n_basis_funcs=5, label="one_input")
+        >>> basis2 = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis_mul = basis1 * basis2
+        >>> X_multi = basis_mul.compute_features(np.random.randn(20), np.random.randn(20, 2))
+        >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6
+        (20, 60)
+
+        """
+        return super().compute_features(*xi)
+
+    @add_docstring_multiplicative("split_by_feature")
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalBSpline, ConvRaisedCosineLog
+        >>> from nemos.glm import GLM
+        >>> basis1 = EvalBSpline(n_basis_funcs=5, label="one_input")
+        >>> basis2 = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis_mul = basis1 * basis2
+        >>> X_multi = basis_mul.compute_features(np.random.randn(20), np.random.randn(20, 2))
+        >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6
+        (20, 60)
+
+        >>> # The multiplicative basis is a single 2D component.
+        >>> split_features = basis_mul.split_by_feature(X_multi, axis=1)
+        >>> for feature, arr in split_features.items():
+        ...     print(f"{feature}: shape {arr.shape}")
+        (one_input * two_inputs): shape (20, 1, 60)
+
+        """
+        return super().split_by_feature(x, axis=axis)

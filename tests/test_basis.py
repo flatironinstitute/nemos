@@ -30,6 +30,7 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
+import nemos as nmo
 
 
 @pytest.fixture()
@@ -82,7 +83,7 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
         class_obj
         for _, class_obj in utils_testing.get_non_abstract_classes(basis)
         if issubclass(class_obj, Basis)
-    ]
+    ] + [bas for _, bas in utils_testing.get_non_abstract_classes(nmo.basis._basis) if bas != TransformerBasis]
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
     return all_basis
@@ -106,7 +107,7 @@ def test_all_basis_are_tested() -> None:
     ]
 
     # Create the set of basis function objects that are tested using the cls definition
-    tested_bases = {test_cls.cls for test_cls in subclasses}
+    tested_bases = {test_cls.cls[mode] for mode in ["eval", "conv"] for test_cls in subclasses if test_cls != CombinedBasis}
 
     # Create the set of all the concrete basis classes
     all_bases = set(list_all_basis_classes())
@@ -117,23 +118,26 @@ def test_all_basis_are_tested() -> None:
             f"The following classes are not tested: {[bas.__qualname__ for bas in all_bases.difference(tested_bases)]}"
         )
 
+    pytest_marks = getattr(TestSharedMethods, "pytestmark", [])
+
+    # Find the parametrize mark for TestSharedMethods
+    out = None
+    for mark in pytest_marks:
+        if mark.name == "parametrize":
+            # Return the arguments of the parametrize mark
+            out = mark.args[1]  # The second argument contains the list
+
+    if out is None:
+        raise ValueError("cannot fine parametrization.")
+
+    basis_tested_in_shared_methods = {o[key] for key in ("eval", "conv") for o in out}
+    all_one_dim_basis = set(list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    assert basis_tested_in_shared_methods == all_one_dim_basis
+
 
 @pytest.mark.parametrize(
-    "basis_instance",
-    [
-        basis.EvalBSpline(10),
-        basis.ConvBSpline(10, window_size=11),
-        basis.EvalCyclicBSpline(10),
-        basis.ConvCyclicBSpline(10, window_size=11),
-        basis.EvalMSpline(10),
-        basis.ConvMSpline(10, window_size=11),
-        basis.EvalRaisedCosineLinear(10),
-        basis.ConvRaisedCosineLinear(10, window_size=11),
-        basis.EvalRaisedCosineLog(10),
-        basis.ConvRaisedCosineLog(10, window_size=11),
-        basis.EvalOrthExponential(10, np.arange(1, 11)),
-        basis.ConvOrthExponential(10, decay_rates=np.arange(1, 11), window_size=12),
-    ],
+    "basis_cls",
+    list_all_basis_classes(),
 )
 @pytest.mark.parametrize(
     "method_name, descr_match",
@@ -149,7 +153,9 @@ def test_all_basis_are_tested() -> None:
         ),
     ],
 )
-def test_example_docstrings_add(basis_instance, method_name, descr_match):
+def test_example_docstrings_add(basis_cls, method_name, descr_match, class_specific_params):
+
+    basis_instance = CombinedBasis().instantiate_basis(5, basis_cls, class_specific_params, window_size=10)
     method = getattr(basis_instance, method_name)
     doc = method.__doc__
     examp_delim = "\n        Examples\n        --------"
@@ -161,10 +167,13 @@ def test_example_docstrings_add(basis_instance, method_name, descr_match):
     assert re.search(descr_match, doc_components[0])
 
     # check that the basis name is in the example
-    assert basis_instance.__class__.__name__ in doc_components[1]
+    if basis_cls not in [AdditiveBasis, MultiplicativeBasis]:
+        assert basis_cls.__name__ in doc_components[1]
 
-    # check that no other basis name is in the example
+    # check that no other basis name is in the example (except for additive and multiplicative)
     for basis_name in basis.__dir__():
+        if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
+            continue
         if basis_name == basis_instance.__class__.__name__:
             continue
         assert basis_name not in doc_components[1]
@@ -1340,7 +1349,7 @@ class TestSharedMethods:
         assert np.all(rates_1 == rates_2)
 
 
-class TestRaisedCosineLogBasis:
+class TestRaisedCosineLogBasis(BasisFuncsTesting):
     cls = {"eval": basis.EvalRaisedCosineLog, "conv": basis.ConvRaisedCosineLog}
 
     @pytest.mark.parametrize("width", [1.5, 2, 2.5])
@@ -1961,7 +1970,7 @@ class CombinedBasis(BasisFuncsTesting):
                 basis.ConvRaisedCosineLinear, kwargs, class_specific_params
             )
             b1 = basis.EvalMSpline(**kwargs_mspline)
-            b2 = basis.RaisedCosineBasisLinear(**kwargs_raised_cosine)
+            b2 = basis.ConvRaisedCosineLinear(**kwargs_raised_cosine)
             basis_obj = b1 + b2
         elif basis_class == MultiplicativeBasis:
             kwargs_mspline = trim_kwargs(
@@ -1971,7 +1980,7 @@ class CombinedBasis(BasisFuncsTesting):
                 basis.ConvRaisedCosineLinear, kwargs, class_specific_params
             )
             b1 = basis.EvalMSpline(**kwargs_mspline)
-            b2 = basis.RaisedCosineBasisLinear(**kwargs_raised_cosine)
+            b2 = basis.ConvRaisedCosineLinear(**kwargs_raised_cosine)
             basis_obj = b1 * b2
         else:
             basis_obj = basis_class(
@@ -1981,7 +1990,7 @@ class CombinedBasis(BasisFuncsTesting):
 
 
 class TestAdditiveBasis(CombinedBasis):
-    cls = AdditiveBasis
+    cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
     @pytest.mark.parametrize("samples", [[[0], []], [[], [0]], [[0, 0], [0, 0]]])
     @pytest.mark.parametrize("base_cls", [basis.EvalBSpline, basis.ConvBSpline])
@@ -2581,7 +2590,7 @@ class TestAdditiveBasis(CombinedBasis):
 
 
 class TestMultiplicativeBasis(CombinedBasis):
-    cls = MultiplicativeBasis
+    cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
 
     @pytest.mark.parametrize(
         "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
