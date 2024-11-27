@@ -476,38 +476,6 @@ class TestSharedMethods:
         assert bas._n_basis_input == (n_input,)
 
     @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        basis_obj = cls["eval"](
-            5, bounds=(vmin, vmax), **extra_decay_rates(cls["eval"], 5)
-        )
-        with expectation:
-            basis_obj.compute_features(samples)
-
-    @pytest.mark.parametrize(
         "bounds, samples, nan_idx, mn, mx",
         [
             (None, np.arange(5), [4], 0, 1),
@@ -576,57 +544,6 @@ class TestSharedMethods:
             bas = cls["eval"](
                 n_basis_funcs=5, bounds=bounds, **extra_decay_rates(cls["eval"], 5)
             )
-            assert bounds == bas.bounds if bounds else bas.bounds is None
-
-    @pytest.mark.parametrize(
-        "bounds, expectation",
-        [
-            (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            (
-                (1, 2, 3),
-                pytest.raises(
-                    ValueError, match="The provided `bounds` must be of length two"
-                ),
-            ),
-        ],
-    )
-    def test_vmin_vmax_init(self, bounds, expectation, cls):
-        with expectation:
-            bas = cls["eval"](
-                n_basis_funcs=5, bounds=bounds, **extra_decay_rates(cls["eval"], 5)
-            )
-            assert bounds == bas.bounds if bounds else bas.bounds is None
-
-    @pytest.mark.parametrize(
-        "bounds, expectation",
-        [
-            (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            (
-                (2, 1),
-                pytest.raises(
-                    ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater"
-                ),
-            ),
-        ],
-    )
-    def test_vmin_vmax_setter(self, bounds, expectation, cls):
-        bas = cls["eval"](
-            n_basis_funcs=5, bounds=(1, 3), **extra_decay_rates(cls["eval"], 5)
-        )
-        with expectation:
-            bas.set_params(bounds=bounds)
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize("n_basis", [6, 7])
