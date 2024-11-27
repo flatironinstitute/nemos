@@ -11,6 +11,7 @@ import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
+from scipy.sparse.csgraph import depth_first_tree
 from scipy.stats import expon
 
 import utils_testing
@@ -48,6 +49,10 @@ def class_specific_params():
         EvalOrthExponential= shared_params + eval_params + ["decay_rates"],
         ConvOrthExponential = shared_params + conv_params +["decay_rates"]
     )
+
+
+def trim_kwargs(cls, kwargs, class_specific_params):
+    return {key: value for key, value in kwargs.items() if key in class_specific_params[cls.__name__]}
 
 
 def extra_decay_rates(cls, n_basis):
@@ -682,7 +687,7 @@ class TestSharedMethods:
             width=width,)
 
         # figure out which kwargs needs to be removed
-        kwargs = {key: value for key, value in kwargs.items() if key in class_specific_params[cls["conv"].__name__]}
+        kwargs = trim_kwargs(cls["conv"], kwargs, class_specific_params)
 
         basis_obj = cls["conv"](**kwargs)
         out = basis_obj.compute_features(x)
@@ -1585,51 +1590,30 @@ class CombinedBasis(BasisFuncsTesting):
     cls = None
 
     @staticmethod
-    def instantiate_basis(n_basis, basis_class, mode="eval", window_size=10):
+    def instantiate_basis(n_basis, basis_class, class_specific_params, window_size=10):
         """Instantiate and return two basis of the type specified."""
 
-        if mode == "eval":
-            window_size = None
+        kwargs = {
+            "n_basis_funcs": n_basis,
+            "window_size": window_size,
+            "order": 2,
+            "decay_rates": np.arange(1, 1 + n_basis)
+        }
 
-        if basis_class == basis.EvalMSpline:
-            basis_obj = basis_class(
-                n_basis_funcs=n_basis, order=4, mode=mode, window_size=window_size
-            )
-        elif basis_class in [basis.RaisedCosineBasisLinear, basis.RaisedCosineBasisLog]:
-            basis_obj = basis_class(
-                n_basis_funcs=n_basis, mode=mode, window_size=window_size
-            )
-        elif basis_class == basis.OrthExponentialBasis:
-            basis_obj = basis_class(
-                n_basis_funcs=n_basis,
-                decay_rates=np.arange(1, 1 + n_basis),
-                mode=mode,
-                window_size=window_size,
-            )
-        elif basis_class == basis.BSplineBasis:
-            basis_obj = basis_class(
-                n_basis_funcs=n_basis, order=3, mode=mode, window_size=window_size
-            )
-        elif basis_class == basis.CyclicBSplineBasis:
-            basis_obj = basis_class(
-                n_basis_funcs=n_basis, order=3, mode=mode, window_size=window_size
-            )
-        elif basis_class == AdditiveBasis:
-            b1 = basis.EvalMSpline(
-                n_basis_funcs=n_basis, order=2, mode=mode, window_size=window_size
-            )
-            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
+        if basis_class == AdditiveBasis:
+            kwargs_mspline = trim_kwargs(basis.EvalMSpline, kwargs, class_specific_params)
+            kwargs_raised_cosine = trim_kwargs(basis.ConvRaisedCosineLinear, kwargs, class_specific_params)
+            b1 = basis.EvalMSpline(**kwargs_mspline)
+            b2 = basis.RaisedCosineBasisLinear(**kwargs_raised_cosine)
             basis_obj = b1 + b2
         elif basis_class == MultiplicativeBasis:
-            b1 = basis.EvalMSpline(
-                n_basis_funcs=n_basis, order=2, mode=mode, window_size=window_size
-            )
-            b2 = basis.RaisedCosineBasisLinear(n_basis_funcs=n_basis + 1)
+            kwargs_mspline = trim_kwargs(basis.EvalMSpline, kwargs, class_specific_params)
+            kwargs_raised_cosine = trim_kwargs(basis.ConvRaisedCosineLinear, kwargs, class_specific_params)
+            b1 = basis.EvalMSpline(**kwargs_mspline)
+            b2 = basis.RaisedCosineBasisLinear(**kwargs_raised_cosine)
             basis_obj = b1 * b2
         else:
-            raise ValueError(
-                f"Test for basis addition not implemented for basis of type {basis_class}!"
-            )
+            basis_obj = basis_class(**trim_kwargs(basis_class, kwargs, class_specific_params))
         return basis_obj
 
 
@@ -1637,15 +1621,13 @@ class TestAdditiveBasis(CombinedBasis):
     cls = AdditiveBasis
 
     @pytest.mark.parametrize(
-        "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
+        "samples", [[[0], []], [[], [0]], [[0, 0], [0, 0]]]
     )
-    @pytest.mark.parametrize("mode, ws", [("conv", 2), ("eval", None)])
-    def test_non_empty_samples(self, samples, mode, ws):
-        if mode == "conv" and len(samples[0]) < 2:
-            return
-        basis_obj = basis.EvalMSpline(5, mode=mode, window_size=ws) + basis.EvalMSpline(
-            5, mode=mode, window_size=ws
-        )
+    @pytest.mark.parametrize("base_cls", [basis.EvalBSpline, basis.ConvBSpline])
+    def test_non_empty_samples(self, base_cls, samples, class_specific_params):
+        kwargs = {"window_size": 2, "n_basis_funcs": 5}
+        kwargs = trim_kwargs(base_cls, kwargs, class_specific_params)
+        basis_obj = base_cls(**kwargs) + base_cls(**kwargs)
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
                 ValueError, match="All sample provided must be non empty"
@@ -1676,9 +1658,9 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [10, 1000])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
+    @pytest.mark.parametrize("window_size", [10])
     def test_compute_features_returns_expected_number_of_basis(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b,  window_size, class_specific_params
     ):
         """
         Test whether the evaluation of the `AdditiveBasis` results in a number of basis
@@ -1686,10 +1668,10 @@ class TestAdditiveBasis(CombinedBasis):
         """
         # define the two basis
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params, window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params, window_size=window_size
         )
 
         basis_obj = basis_a_obj + basis_b_obj
@@ -1708,18 +1690,18 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
+    @pytest.mark.parametrize("window_size", [10])
     def test_sample_size_of_compute_features_matches_that_of_input(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b,  window_size, class_specific_params
     ):
         """
         Test whether the output sample size from `AdditiveBasis` compute_features function matches input sample size.
         """
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
         eval_basis = basis_obj.compute_features(
@@ -1738,19 +1720,19 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
+    @pytest.mark.parametrize("window_size", [10])
     def test_number_of_required_inputs_compute_features(
-        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b,  window_size, class_specific_params
     ):
         """
         Test whether the number of required inputs for the `compute_features` function matches
         the sum of the number of input samples from the two bases.
         """
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
         required_dim = (
@@ -1772,13 +1754,13 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_meshgrid_size(
-        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b, class_specific_params
     ):
         """
         Test whether the resulting meshgrid size matches the sample size input.
         """
-        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
-        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, class_specific_params, window_size=10)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, class_specific_params, window_size=10)
         basis_obj = basis_a_obj + basis_b_obj
         res = basis_obj.evaluate_on_grid(
             *[sample_size] * basis_obj._n_input_dimensionality
@@ -1792,13 +1774,13 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_basis_size(
-        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b
+        self, sample_size, n_basis_a, n_basis_b, basis_a, basis_b, class_specific_params
     ):
         """
         Test whether the number sample size output by evaluate_on_grid matches the sample size of the input.
         """
-        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
-        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, class_specific_params, window_size=10)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, class_specific_params, window_size=10)
         basis_obj = basis_a_obj + basis_b_obj
         eval_basis = basis_obj.evaluate_on_grid(
             *[sample_size] * basis_obj._n_input_dimensionality
@@ -1811,14 +1793,14 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [6])
     def test_evaluate_on_grid_input_number(
-        self, n_input, basis_a, basis_b, n_basis_a, n_basis_b
+        self, n_input, basis_a, basis_b, n_basis_a, n_basis_b, class_specific_params
     ):
         """
         Test whether the number of inputs provided to `evaluate_on_grid` matches
         the sum of the number of input samples required from each of the basis objects.
         """
-        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a)
-        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b)
+        basis_a_obj = self.instantiate_basis(n_basis_a, basis_a, class_specific_params, window_size=10)
+        basis_b_obj = self.instantiate_basis(n_basis_b, basis_b, class_specific_params, window_size=10)
         basis_obj = basis_a_obj + basis_b_obj
         inputs = [20] * n_input
         required_dim = (
@@ -1839,7 +1821,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_pynapple_support_compute_features(
-        self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size
+        self, basis_a, basis_b, n_basis_a, n_basis_b, sample_size, class_specific_params
     ):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
@@ -1847,9 +1829,10 @@ class TestAdditiveBasis(CombinedBasis):
             d=np.linspace(0, 1, sample_size),
             time_support=iset,
         )
-        basis_add = self.instantiate_basis(n_basis_a, basis_a) + self.instantiate_basis(
-            n_basis_b, basis_b
-        )
+        basis_add = (self.instantiate_basis(n_basis_a, basis_a, class_specific_params, window_size=10) +
+                     self.instantiate_basis(
+            n_basis_b, basis_b, class_specific_params, window_size=10
+        ))
         # compute_features the basis over pynapple Tsd objects
         out = basis_add.compute_features(*([inp] * basis_add._n_input_dimensionality))
         # check type
@@ -1863,15 +1846,15 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     @pytest.mark.parametrize("num_input", [0, 1, 2, 3, 4, 5])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     def test_call_input_num(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, num_input, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b, num_input,  window_size, class_specific_params
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
         if num_input == basis_obj._n_input_dimensionality:
@@ -1890,7 +1873,7 @@ class TestAdditiveBasis(CombinedBasis):
             (np.linspace(0, 1, 10)[:, None], pytest.raises(ValueError)),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
@@ -1902,55 +1885,55 @@ class TestAdditiveBasis(CombinedBasis):
         basis_a,
         basis_b,
         inp,
-        mode,
         window_size,
         expectation,
+        class_specific_params,
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
         with expectation:
             basis_obj(*([inp] * basis_obj._n_input_dimensionality))
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_sample_axis(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, time_axis_shape, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b, time_axis_shape,  window_size, class_specific_params
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
         inp = [np.linspace(0, 1, time_axis_shape)] * basis_obj._n_input_dimensionality
         assert basis_obj(*inp).shape[0] == time_axis_shape
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    def test_call_nan(self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size):
+    def test_call_nan(self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size, class_specific_params):
         if (
             basis_a == basis.OrthExponentialBasis
             or basis_b == basis.OrthExponentialBasis
         ):
             return
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         basis_obj = basis_a_obj + basis_b_obj
         inp = [np.linspace(0, 1, 10)] * basis_obj._n_input_dimensionality
@@ -1962,39 +1945,39 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    def test_call_equivalent_in_conv(self, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_call_equivalent_in_conv(self, n_basis_a, n_basis_b, basis_a, basis_b, class_specific_params):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="eval", window_size=None
+            n_basis_a, basis_a, class_specific_params,  window_size=3
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="eval", window_size=None
+            n_basis_b, basis_b, class_specific_params,  window_size=3
         )
         bas_eva = basis_a_obj + basis_b_obj
 
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="conv", window_size=8
+            n_basis_a, basis_a, class_specific_params,  window_size=8
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="conv", window_size=8
+            n_basis_b, basis_b, class_specific_params,  window_size=8
         )
         bas_con = basis_a_obj + basis_b_obj
 
         x = [np.linspace(0, 1, 10)] * bas_con._n_input_dimensionality
         assert np.all(bas_con(*x) == bas_eva(*x))
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_pynapple_support(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size, class_specific_params
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         bas = basis_a_obj + basis_b_obj
         x = np.linspace(0, 1, 10)
@@ -2006,37 +1989,37 @@ class TestAdditiveBasis(CombinedBasis):
         assert np.all(y == y_nap.d)
         assert np.all(y_nap.t == x_nap[0].t)
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [6, 7])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_basis_number(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size, class_specific_params
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         bas = basis_a_obj + basis_b_obj
         x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
         assert bas(*x).shape[1] == basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_non_empty(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size, class_specific_params
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         bas = basis_a_obj + basis_b_obj
         with pytest.raises(ValueError, match="All sample provided must"):
@@ -2050,7 +2033,7 @@ class TestAdditiveBasis(CombinedBasis):
             (0.1, 2, does_not_raise()),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
@@ -2064,8 +2047,9 @@ class TestAdditiveBasis(CombinedBasis):
         mn,
         mx,
         expectation,
-        mode,
+
         window_size,
+        class_specific_params
     ):
         if expectation == "check":
             if (
@@ -2078,10 +2062,10 @@ class TestAdditiveBasis(CombinedBasis):
             else:
                 expectation = does_not_raise()
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a, class_specific_params,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b, class_specific_params,  window_size=window_size
         )
         bas = basis_a_obj + basis_b_obj
         with expectation:
@@ -2091,15 +2075,15 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    def test_fit_kernel(self, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_fit_kernel(self, n_basis_a, n_basis_b, basis_a, basis_b, class_specific_params):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="conv", window_size=10
+            n_basis_a, basis_a, class_specific_params,  window_size=10
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="conv", window_size=10
+            n_basis_b, basis_b, class_specific_params,  window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        bas._set_kernel(None)
+        bas._set_kernel()
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -2118,25 +2102,27 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    def test_transform_fails(self, n_basis_a, n_basis_b, basis_a, basis_b):
+    def test_transform_fails(self, n_basis_a, n_basis_b, basis_a, basis_b, class_specific_params):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="conv", window_size=10
+            n_basis_a, basis_a, class_specific_params,  window_size=10
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="conv", window_size=10
+            n_basis_b, basis_b, class_specific_params,  window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        with pytest.raises(
-            ValueError, match="You must call `_set_kernel` before `_compute_features`"
-        ):
+        if "Eval" in basis_a.__name__ and "Eval" in basis_b.__name__:
+            context = does_not_raise()
+        else:
+            context = pytest.raises(ValueError, match="You must call `_set_kernel` before `_compute_features`")
+        with context:
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
             bas._compute_features(*x)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(11, mode="conv", window_size=10)
+        bas1 = basis.ConvRaisedCosineLinear(10,  window_size=10)
+        bas2 = basis.ConvBSpline(11,  window_size=10)
         bas_add = bas1 + bas2
         assert bas_add.n_output_features is None
         bas_add.compute_features(
@@ -2147,8 +2133,8 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
+        bas1 = basis.ConvRaisedCosineLinear(10,  window_size=10)
+        bas2 = basis.ConvBSpline(10,  window_size=10)
         bas_add = bas1 + bas2
         assert bas_add.n_basis_input is None
         bas_add.compute_features(
@@ -2166,8 +2152,8 @@ class TestAdditiveBasis(CombinedBasis):
         ],
     )
     def test_expected_input_number(self, n_input, expectation):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
+        bas1 = basis.ConvRaisedCosineLinear(10,  window_size=10)
+        bas2 = basis.ConvBSpline(10,  window_size=10)
         bas = bas1 + bas2
         x = np.random.randn(20, 2), np.random.randn(20, 3)
         bas.compute_features(*x)
@@ -2181,12 +2167,12 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
     )
-    @pytest.mark.parametrize("mode, ws", [("conv", 2), ("eval", None)])
-    def test_non_empty_samples(self, samples, mode, ws):
+    @pytest.mark.parametrize(" ws", [3, None])
+    def test_non_empty_samples(self, samples,  ws):
         if mode == "conv" and len(samples[0]) < 2:
             return
-        basis_obj = basis.EvalMSpline(5, mode=mode, window_size=ws) * basis.EvalMSpline(
-            5, mode=mode, window_size=ws
+        basis_obj = basis.EvalMSpline(5,  window_size=ws) * basis.EvalMSpline(
+            5,  window_size=ws
         )
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
@@ -2218,9 +2204,9 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("sample_size", [10, 1000])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
+    @pytest.mark.parametrize("window_size", [None, 10])
     def test_compute_features_returns_expected_number_of_basis(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b,  window_size
     ):
         """
         Test whether the evaluation of the `MultiplicativeBasis` results in a number of basis
@@ -2228,10 +2214,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         # define the two basis
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
 
         basis_obj = basis_a_obj * basis_b_obj
@@ -2251,19 +2237,19 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_b", [5, 6])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
+    @pytest.mark.parametrize("window_size", [None, 10])
     def test_sample_size_of_compute_features_matches_that_of_input(
-        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, sample_size, basis_a, basis_b,  window_size
     ):
         """
         Test whether the output sample size from the `MultiplicativeBasis` fit_transform function
         matches the input sample size.
         """
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
         eval_basis = basis_obj.compute_features(
@@ -2281,19 +2267,19 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_input", [0, 1, 2, 3, 10, 30])
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 10)])
+    @pytest.mark.parametrize("window_size", [None, 10])
     def test_number_of_required_inputs_compute_features(
-        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_input, n_basis_a, n_basis_b, basis_a, basis_b, window_size
     ):
         """
         Test whether the number of required inputs for the `compute_features` function matches
         the sum of the number of input samples from the two bases.
         """
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
         required_dim = (
@@ -2430,15 +2416,15 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     @pytest.mark.parametrize("num_input", [0, 1, 2, 3, 4, 5])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     def test_call_input_num(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, num_input, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b, num_input,  window_size
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
         if num_input == basis_obj._n_input_dimensionality:
@@ -2457,7 +2443,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             (np.linspace(0, 1, 10)[:, None], pytest.raises(ValueError)),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
@@ -2469,55 +2455,55 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_a,
         basis_b,
         inp,
-        mode,
+
         window_size,
         expectation,
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
         with expectation:
             basis_obj(*([inp] * basis_obj._n_input_dimensionality))
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_sample_axis(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, time_axis_shape, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b, time_axis_shape,  window_size
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
         inp = [np.linspace(0, 1, time_axis_shape)] * basis_obj._n_input_dimensionality
         assert basis_obj(*inp).shape[0] == time_axis_shape
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
-    def test_call_nan(self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size):
+    def test_call_nan(self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size):
         if (
             basis_a == basis.OrthExponentialBasis
             or basis_b == basis.OrthExponentialBasis
         ):
             return
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         basis_obj = basis_a_obj * basis_b_obj
         inp = [np.linspace(0, 1, 10)] * basis_obj._n_input_dimensionality
@@ -2531,37 +2517,37 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_equivalent_in_conv(self, n_basis_a, n_basis_b, basis_a, basis_b):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="eval", window_size=None
+            n_basis_a, basis_a, "eval", window_size=None
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="eval", window_size=None
+            n_basis_b, basis_b,  window_size=None
         )
         bas_eva = basis_a_obj * basis_b_obj
 
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="conv", window_size=8
+            n_basis_a, basis_a,  window_size=8
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="conv", window_size=8
+            n_basis_b, basis_b,  window_size=8
         )
         bas_con = basis_a_obj * basis_b_obj
 
         x = [np.linspace(0, 1, 10)] * bas_con._n_input_dimensionality
         assert np.all(bas_con(*x) == bas_eva(*x))
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_pynapple_support(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         bas = basis_a_obj * basis_b_obj
         x = np.linspace(0, 1, 10)
@@ -2573,37 +2559,37 @@ class TestMultiplicativeBasis(CombinedBasis):
         assert np.all(y == y_nap.d)
         assert np.all(y_nap.t == x_nap[0].t)
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [6, 7])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_basis_number(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         bas = basis_a_obj * basis_b_obj
         x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
         assert bas(*x).shape[1] == basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs
 
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_call_non_empty(
-        self, n_basis_a, n_basis_b, basis_a, basis_b, mode, window_size
+        self, n_basis_a, n_basis_b, basis_a, basis_b,  window_size
     ):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         bas = basis_a_obj * basis_b_obj
         with pytest.raises(ValueError, match="All sample provided must"):
@@ -2617,7 +2603,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             (0.1, 2, does_not_raise()),
         ],
     )
-    @pytest.mark.parametrize("mode, window_size", [("eval", None), ("conv", 3)])
+    @pytest.mark.parametrize(" window_size", [None, 3])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     @pytest.mark.parametrize("n_basis_a", [5])
@@ -2631,7 +2617,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         mn,
         mx,
         expectation,
-        mode,
+
         window_size,
     ):
         if expectation == "check":
@@ -2645,10 +2631,10 @@ class TestMultiplicativeBasis(CombinedBasis):
             else:
                 expectation = does_not_raise()
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode=mode, window_size=window_size
+            n_basis_a, basis_a,  window_size=window_size
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode=mode, window_size=window_size
+            n_basis_b, basis_b,  window_size=window_size
         )
         bas = basis_a_obj * basis_b_obj
         with expectation:
@@ -2660,10 +2646,10 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_fit_kernel(self, n_basis_a, n_basis_b, basis_a, basis_b):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="conv", window_size=10
+            n_basis_a, basis_a,  window_size=10
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="conv", window_size=10
+            n_basis_b, basis_b,  window_size=10
         )
         bas = basis_a_obj * basis_b_obj
         bas._set_kernel(None)
@@ -2687,10 +2673,10 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_b", [5])
     def test_transform_fails(self, n_basis_a, n_basis_b, basis_a, basis_b):
         basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, mode="conv", window_size=10
+            n_basis_a, basis_a,  window_size=10
         )
         basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, mode="conv", window_size=10
+            n_basis_b, basis_b,  window_size=10
         )
         bas = basis_a_obj * basis_b_obj
         with pytest.raises(
@@ -2702,8 +2688,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_output_features(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(11, mode="conv", window_size=10)
+        bas1 = basis.RaisedCosineBasisLinear(10,  window_size=10)
+        bas2 = basis.BSplineBasis(11,  window_size=10)
         bas_add = bas1 * bas2
         assert bas_add.n_output_features is None
         bas_add.compute_features(
@@ -2714,8 +2700,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_set_num_basis_input(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
+        bas1 = basis.RaisedCosineBasisLinear(10,  window_size=10)
+        bas2 = basis.BSplineBasis(10,  window_size=10)
         bas_add = bas1 * bas2
         assert bas_add.n_basis_input is None
         bas_add.compute_features(
@@ -2733,8 +2719,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         ],
     )
     def test_expected_input_number(self, n_input, expectation):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
+        bas1 = basis.RaisedCosineBasisLinear(10,  window_size=10)
+        bas2 = basis.BSplineBasis(10,  window_size=10)
         bas = bas1 * bas2
         x = np.random.randn(20, 2), np.random.randn(20, 3)
         bas.compute_features(*x)
@@ -2744,8 +2730,8 @@ class TestMultiplicativeBasis(CombinedBasis):
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
     def test_n_basis_input(self, n_basis_input1, n_basis_input2):
-        bas1 = basis.RaisedCosineBasisLinear(10, mode="conv", window_size=10)
-        bas2 = basis.BSplineBasis(10, mode="conv", window_size=10)
+        bas1 = basis.RaisedCosineBasisLinear(10,  window_size=10)
+        bas2 = basis.BSplineBasis(10,  window_size=10)
         bas_prod = bas1 * bas2
         bas_prod.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
@@ -3144,7 +3130,7 @@ def test_transformerbasis_dir(basis_cls):
     ],
 )
 def test_transformerbasis_sk_clone_kernel_noned(basis_cls):
-    orig_bas = basis_cls(10, mode="conv", window_size=5)
+    orig_bas = basis_cls(10,  window_size=5)
     trans_bas = basis.TransformerBasis(orig_bas)
 
     # kernel should be saved in the object after fit
@@ -3230,14 +3216,14 @@ def test_multi_epoch_pynapple_basis(
     if basis_cls == AdditiveBasis:
         bas = basis.BSplineBasis(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
         )
         bas = bas + basis.RaisedCosineBasisLinear(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
@@ -3245,7 +3231,7 @@ def test_multi_epoch_pynapple_basis(
     elif basis_cls == MultiplicativeBasis:
         bas = basis.RaisedCosineBasisLog(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
@@ -3254,7 +3240,7 @@ def test_multi_epoch_pynapple_basis(
     else:
         bas = basis_cls(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
@@ -3318,14 +3304,14 @@ def test_multi_epoch_pynapple_basis_transformer(
     if basis_cls == AdditiveBasis:
         bas = basis.BSplineBasis(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
         )
         bas = bas + basis.RaisedCosineBasisLinear(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
@@ -3333,7 +3319,7 @@ def test_multi_epoch_pynapple_basis_transformer(
     elif basis_cls == MultiplicativeBasis:
         bas = basis.RaisedCosineBasisLog(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
@@ -3342,7 +3328,7 @@ def test_multi_epoch_pynapple_basis_transformer(
     else:
         bas = basis_cls(
             5,
-            mode="conv",
+
             window_size=window_size,
             predictor_causality=predictor_causality,
             shift=shift,
@@ -3470,7 +3456,7 @@ def test__get_splitter(
     for i, val in enumerate(
         zip([bas1, bas2, bas3], [mode1, mode2, mode3], extra_kwargs)
     ):
-        bas, mode, kwrgs = val
+        bas,  kwrgs = val
         if bas != basis.OrthExponentialBasis:
             kwrgs.pop("decay_rates")
         if mode == "eval":
@@ -3650,13 +3636,13 @@ def test__get_splitter_split_by_input(
 
     bas1_instance = bas1(
         n_basis[0],
-        mode=mode,
+
         **extra_kwargs[0],
         label="1",
     )
     bas2_instance = bas2(
         n_basis[1],
-        mode=mode,
+
         **extra_kwargs[1],
         label="2",
     )
@@ -3755,13 +3741,13 @@ def test_split_feature_axis(bas1, bas2, x, axis, expectation, exp_shapes):
 
     bas1_instance = bas1(
         n_basis[0],
-        mode=mode,
+
         **extra_kwargs[0],
         label="1",
     )
     bas2_instance = bas2(
         n_basis[1],
-        mode=mode,
+
         **extra_kwargs[1],
         label="2",
     )
