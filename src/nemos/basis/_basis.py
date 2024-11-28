@@ -16,6 +16,7 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
+from ._basis_mixin import BasisTransformerMixin
 
 
 def add_docstring(method_name, cls=None):
@@ -112,21 +113,9 @@ class Basis(Base, abc.ABC):
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     Raises
     ------
@@ -550,35 +539,6 @@ class Basis(Base, abc.ABC):
             result = result * self
         return result
 
-    def to_transformer(self) -> TransformerBasis:
-        """
-        Turn the Basis into a TransformerBasis for use with scikit-learn.
-
-        Examples
-        --------
-        Jointly cross-validating basis and GLM parameters with scikit-learn.
-
-        >>> import nemos as nmo
-        >>> from sklearn.pipeline import Pipeline
-        >>> from sklearn.model_selection import GridSearchCV
-        >>> # load some data
-        >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.EvalRaisedCosineLinear(10).to_transformer()
-        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
-        >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
-        >>> param_grid = dict(
-        ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
-        ...     basis__n_basis_funcs=(3, 5, 10, 20, 100),
-        ... )
-        >>> gridsearch = GridSearchCV(
-        ...     pipeline,
-        ...     param_grid=param_grid,
-        ...     cv=5,
-        ... )
-        >>> gridsearch = gridsearch.fit(X, y)
-        """
-        return TransformerBasis(copy.deepcopy(self))
-
     def _get_feature_slicing(
         self,
         n_inputs: Optional[tuple] = None,
@@ -860,396 +820,11 @@ class Basis(Base, abc.ABC):
         return self
 
 
-class TransformerBasis:
-    """Basis as ``scikit-learn`` transformers.
-
-    This class abstracts the underlying basis function details, offering methods
-    similar to scikit-learn's transformers but specifically designed for basis
-    transformations. It supports fitting to data (calculating any necessary parameters
-    of the basis functions), transforming data (applying the basis functions to
-    data), and both fitting and transforming in one step.
-
-    ``TransformerBasis``, unlike ``Basis``, is compatible with scikit-learn pipelining and
-    model selection, enabling the cross-validation of the basis type and parameters,
-    for example ``n_basis_funcs``. See the example section below.
-
-    Parameters
-    ----------
-    basis :
-        A concrete subclass of ``Basis``.
-
-    Examples
-    --------
-    >>> from nemos.basis import EvalBSpline
-    >>> from nemos.basis._basis import TransformerBasis
-    >>> from nemos.glm import GLM
-    >>> from sklearn.pipeline import Pipeline
-    >>> from sklearn.model_selection import GridSearchCV
-    >>> import numpy as np
-    >>> np.random.seed(123)
-
-    >>> # Generate data
-    >>> num_samples, num_features = 10000, 1
-    >>> x = np.random.normal(size=(num_samples, ))  # raw time series
-    >>> basis = EvalBSpline(10)
-    >>> features = basis.compute_features(x)  # basis transformed time series
-    >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
-    >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
-
-    >>> # transformer can be used in pipelines
-    >>> transformer = TransformerBasis(basis)
-    >>> pipeline = Pipeline([ ("compute_features", transformer), ("glm", GLM()),])
-    >>> pipeline = pipeline.fit(x[:, None], y)  # x need to be 2D for sklearn transformer API
-    >>> out = pipeline.predict(np.arange(10)[:, None]) # predict rate from new datas
-    >>> # TransformerBasis parameter can be cross-validated.
-    >>> # 5-fold cross-validate the number of basis
-    >>> param_grid = dict(compute_features__n_basis_funcs=[4, 10])
-    >>> grid_cv = GridSearchCV(pipeline, param_grid, cv=5)
-    >>> grid_cv = grid_cv.fit(x[:, None], y)
-    >>> print("Cross-validated number of basis:", grid_cv.best_params_)
-    Cross-validated number of basis: {'compute_features__n_basis_funcs': 10}
-    """
-
-    def __init__(self, basis: Basis):
-        self._basis = copy.deepcopy(basis)
-
-    @staticmethod
-    def _unpack_inputs(X: FeatureMatrix):
-        """Unpack impute without using transpose.
-
-        Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
-        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``
-        exception since ``pynapple`` assumes that the time axis is the first axis.
-
-        Parameters
-        ----------
-        X:
-            The inputs horizontally stacked.
-
-        Returns
-        -------
-        :
-            A tuple of each individual input.
-
-        """
-        return (X[:, k] for k in range(X.shape[1]))
-
-    def fit(self, X: FeatureMatrix, y=None):
-        """
-        Compute the convolutional kernels.
-
-        If any of the 1D basis in self._basis is in "conv" mode, it computes the convolutional kernels.
-
-        Parameters
-        ----------
-        X :
-            The data to fit the basis functions to, shape (num_samples, num_input).
-        y : ignored
-            Not used, present for API consistency by convention.
-
-        Returns
-        -------
-        self :
-            The transformer object.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import EvalMSpline, TransformerBasis
-
-        >>> # Example input
-        >>> X = np.random.normal(size=(100, 2))
-
-        >>> # Define and fit tranformation basis
-        >>> basis = EvalMSpline(10)
-        >>> transformer = TransformerBasis(basis)
-        >>> transformer_fitted = transformer.fit(X)
-        """
-        self._basis._set_kernel()
-        return self
-
-    def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
-        """
-        Transform the data using the fitted basis functions.
-
-        Parameters
-        ----------
-        X :
-            The data to transform using the basis functions, shape (num_samples, num_input).
-        y :
-            Not used, present for API consistency by convention.
-
-        Returns
-        -------
-        :
-            The data transformed by the basis functions.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import EvalMSpline, TransformerBasis
-
-        >>> # Example input
-        >>> X = np.random.normal(size=(10000, 2))
-
-        >>> # Define and fit tranformation basis
-        >>> basis = EvalMSpline(10, mode="conv", window_size=200)
-        >>> transformer = TransformerBasis(basis)
-        >>> # Before calling `fit` the convolution kernel is not set
-        >>> transformer.kernel_
-
-        >>> transformer_fitted = transformer.fit(X)
-        >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
-        >>> transformer_fitted.kernel_.shape
-        (200, 10)
-
-        >>> # Transform basis
-        >>> feature_transformed = transformer.transform(X[:, 0:1])
-        """
-        # transpose does not work with pynapple
-        # can't use func(*X.T) to unwrap
-
-        return self._basis._compute_features(*self._unpack_inputs(X))
-
-    def fit_transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
-        """
-        Compute the kernels and the features.
-
-        This method is a convenience that combines fit and transform into
-        one step.
-
-        Parameters
-        ----------
-        X :
-            The data to fit the basis functions to and then transform.
-        y :
-            Not used, present for API consistency by convention.
-
-        Returns
-        -------
-        array-like
-            The data transformed by the basis functions, after fitting the basis
-            functions to the data.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from nemos.basis import EvalMSpline, TransformerBasis
-
-        >>> # Example input
-        >>> X = np.random.normal(size=(100, 1))
-
-        >>> # Define tranformation basis
-        >>> basis = EvalMSpline(10)
-        >>> transformer = TransformerBasis(basis)
-
-        >>> # Fit and transform basis
-        >>> feature_transformed = transformer.fit_transform(X)
-        """
-        return self._basis.compute_features(*self._unpack_inputs(X))
-
-    def __getstate__(self):
-        """
-        Explicitly define how to pickle TransformerBasis object.
-
-        See https://docs.python.org/3/library/pickle.html#object.__getstate__
-        and https://docs.python.org/3/library/pickle.html#pickle-state
-        """
-        return {"_basis": self._basis}
-
-    def __setstate__(self, state):
-        """
-        Define how to populate the object's state when unpickling.
-
-        Note that during unpickling a new object is created without calling __init__.
-        Needed to avoid infinite recursion in __getattr__ when unpickling.
-
-        See https://docs.python.org/3/library/pickle.html#object.__setstate__
-        and https://docs.python.org/3/library/pickle.html#pickle-state
-        """
-        self._basis = state["_basis"]
-
-    def __getattr__(self, name: str):
-        """
-        Enable easy access to attributes of the underlying Basis object.
-
-        Examples
-        --------
-        >>> from nemos import basis
-        >>> bas = basis.EvalRaisedCosineLinear(5)
-        >>> trans_bas = basis.TransformerBasis(bas)
-        >>> bas.n_basis_funcs
-        5
-        >>> trans_bas.n_basis_funcs
-        5
-        """
-        return getattr(self._basis, name)
-
-    def __setattr__(self, name: str, value) -> None:
-        r"""
-        Allow setting _basis or the attributes of _basis with a convenient dot assignment syntax.
-
-        Setting any other attribute is not allowed.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        ValueError
-            If the attribute being set is not ``_basis`` or an attribute of ``_basis``.
-
-        Examples
-        --------
-        >>> import nemos as nmo
-        >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.EvalMSpline(10))
-        >>> # allowed
-        >>> trans_bas._basis = nmo.basis.EvalBSpline(10)
-        >>> # allowed
-        >>> trans_bas.n_basis_funcs = 20
-        >>> # not allowed
-        >>> try:
-        ...     trans_bas.random_attribute_name = "some value"
-        ... except ValueError as e:
-        ...     print(repr(e))
-        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
-        """
-        # allow self._basis = basis
-        if name == "_basis":
-            super().__setattr__(name, value)
-        # allow changing existing attributes of self._basis
-        elif hasattr(self._basis, name):
-            setattr(self._basis, name, value)
-        # don't allow setting any other attribute
-        else:
-            raise ValueError(
-                "Only setting _basis or existing attributes of _basis is allowed."
-            )
-
-    def __sklearn_clone__(self) -> TransformerBasis:
-        """
-        Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
-
-        By default, scikit-learn tries to clone the object by calling __init__ using the output of get_params,
-        which fails in our case.
-
-        For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
-        """
-        cloned_obj = TransformerBasis(copy.deepcopy(self._basis))
-        cloned_obj._basis.kernel_ = None
-        return cloned_obj
-
-    def set_params(self, **parameters) -> TransformerBasis:
-        """
-        Set TransformerBasis parameters.
-
-        When used with ``sklearn.model_selection``, users can set either the ``_basis`` attribute directly
-        or the parameters of the underlying Basis, but not both.
-
-        Examples
-        --------
-        >>> from nemos.basis import EvalBSpline, EvalMSpline, TransformerBasis
-        >>> basis = EvalMSpline(10)
-        >>> transformer_basis = TransformerBasis(basis=basis)
-
-        >>> # setting parameters of _basis is allowed
-        >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
-        8
-        >>> # setting _basis directly is allowed
-        >>> print(type(transformer_basis.set_params(_basis=EvalBSpline(10))._basis))
-        <class 'nemos.basis.BSplineBasis'>
-        >>> # mixing is not allowed, this will raise an exception
-        >>> try:
-        ...     transformer_basis.set_params(_basis=EvalBSpline(10), n_basis_funcs=2)
-        ... except ValueError as e:
-        ...     print(repr(e))
-        ValueError('Set either new _basis object or parameters for existing _basis, not both.')
-        """
-        new_basis = parameters.pop("_basis", None)
-        if new_basis is not None:
-            self._basis = new_basis
-            if len(parameters) > 0:
-                raise ValueError(
-                    "Set either new _basis object or parameters for existing _basis, not both."
-                )
-        else:
-            self._basis = self._basis.set_params(**parameters)
-
-        return self
-
-    def get_params(self, deep: bool = True) -> dict:
-        """Extend the dict of parameters from the underlying Basis with _basis."""
-        return {"_basis": self._basis, **self._basis.get_params(deep)}
-
-    def __dir__(self) -> list[str]:
-        """Extend the list of properties of methods with the ones from the underlying Basis."""
-        return super().__dir__() + self._basis.__dir__()
-
-    def __add__(self, other: TransformerBasis) -> TransformerBasis:
-        """
-        Add two TransformerBasis objects.
-
-        Parameters
-        ----------
-        other
-            The other TransformerBasis object to add.
-
-        Returns
-        -------
-        : TransformerBasis
-            The resulting Basis object.
-        """
-        return TransformerBasis(self._basis + other._basis)
-
-    def __mul__(self, other: TransformerBasis) -> TransformerBasis:
-        """
-        Multiply two TransformerBasis objects.
-
-        Parameters
-        ----------
-        other
-            The other TransformerBasis object to multiply.
-
-        Returns
-        -------
-        :
-            The resulting Basis object.
-        """
-        return TransformerBasis(self._basis * other._basis)
-
-    def __pow__(self, exponent: int) -> TransformerBasis:
-        """Exponentiation of a TransformerBasis object.
-
-        Define the power of a basis by repeatedly applying the method __mul__.
-        The exponent must be a positive integer.
-
-        Parameters
-        ----------
-        exponent :
-            Positive integer exponent
-
-        Returns
-        -------
-        :
-            The product of the basis with itself "exponent" times. Equivalent to self * self * ... * self.
-
-        Raises
-        ------
-        TypeError
-            If the provided exponent is not an integer.
-        ValueError
-            If the integer is zero or negative.
-        """
-        # errors are handled by Basis.__pow__
-        return TransformerBasis(self._basis**exponent)
-
-
 add_docstring_additive = partial(add_docstring, cls=Basis)
 add_docstring_multiplicative = partial(add_docstring, cls=Basis)
 
 
-class AdditiveBasis(Basis):
+class AdditiveBasis(Basis, BasisTransformerMixin):
     """
     Class representing the addition of two Basis objects.
 
@@ -1294,7 +869,7 @@ class AdditiveBasis(Basis):
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
-        return
+        BasisTransformerMixin.__init__(self)
 
     def _set_num_output_features(self, *xi: NDArray) -> Basis:
         self._n_basis_input = (
@@ -1592,7 +1167,7 @@ class AdditiveBasis(Basis):
         return super().evaluate_on_grid(*n_samples)
 
 
-class MultiplicativeBasis(Basis):
+class MultiplicativeBasis(Basis, BasisTransformerMixin):
     """
     Class representing the multiplication (external product) of two Basis objects.
 
@@ -1637,7 +1212,7 @@ class MultiplicativeBasis(Basis):
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
-        return
+        BasisTransformerMixin.__init__(self)
 
     def _check_n_basis_min(self) -> None:
         pass

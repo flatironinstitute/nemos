@@ -1,5 +1,6 @@
 """Mixin classes for basis."""
 
+import copy
 import inspect
 from typing import Optional, Tuple, Union
 
@@ -7,6 +8,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from ..convolve import create_convolutional_predictor
+from ._transformer_basis import TransformerBasis
 
 
 class EvalBasisMixin:
@@ -220,3 +222,36 @@ class ConvBasisMixin:
                 f"Unrecognized keyword arguments: {invalid}. "
                 f"Allowed convolution keyword arguments are: {convolve_configs}."
             )
+
+
+class BasisTransformerMixin:
+    """Mixin class for constructing a transformer"""
+
+    def to_transformer(self) -> TransformerBasis:
+        """
+        Turn the Basis into a TransformerBasis for use with scikit-learn.
+
+        Examples
+        --------
+        Jointly cross-validating basis and GLM parameters with scikit-learn.
+
+        >>> import nemos as nmo
+        >>> from sklearn.pipeline import Pipeline
+        >>> from sklearn.model_selection import GridSearchCV
+        >>> # load some data
+        >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
+        >>> basis = nmo.basis.EvalRaisedCosineLinear(10).to_transformer()
+        >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
+        >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
+        >>> param_grid = dict(
+        ...     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
+        ...     basis__n_basis_funcs=(3, 5, 10, 20, 100),
+        ... )
+        >>> gridsearch = GridSearchCV(
+        ...     pipeline,
+        ...     param_grid=param_grid,
+        ...     cv=5,
+        ... )
+        >>> gridsearch = gridsearch.fit(X, y)
+        """
+        return TransformerBasis(copy.deepcopy(self))

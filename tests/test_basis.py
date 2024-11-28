@@ -17,13 +17,7 @@ from sklearn.base import clone as sk_clone
 import nemos as nmo
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis._basis import (
-    AdditiveBasis,
-    Basis,
-    MultiplicativeBasis,
-    TransformerBasis,
-    add_docstring,
-)
+from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._raised_cosine_basis import (
     RaisedCosineBasisLinear,
@@ -86,7 +80,7 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     ] + [
         bas
         for _, bas in utils_testing.get_non_abstract_classes(nmo.basis._basis)
-        if bas != TransformerBasis
+        if bas != basis.TransformerBasis
     ]
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
@@ -3228,7 +3222,7 @@ def test_basis_to_transformer(basis_cls, class_specific_params):
 
     trans_bas = bas.to_transformer()
 
-    assert isinstance(trans_bas, TransformerBasis)
+    assert isinstance(trans_bas, basis.TransformerBasis)
 
     # check that things like n_basis_funcs are the same as the original basis
     for k in bas.__dict__.keys():
@@ -3277,7 +3271,7 @@ def test_to_transformer_and_constructor_are_equivalent(
     )
 
     trans_bas_a = bas.to_transformer()
-    trans_bas_b = TransformerBasis(bas)
+    trans_bas_b = basis.TransformerBasis(bas)
 
     # they both just have a _basis
     assert (
@@ -3334,7 +3328,7 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, class_specific_params):
 )
 @pytest.mark.parametrize("n_basis_funcs", [5, 10, 20])
 def test_transformerbasis_getattr(basis_cls, n_basis_funcs, class_specific_params):
-    trans_basis = TransformerBasis(
+    trans_basis = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             n_basis_funcs, basis_cls, class_specific_params, window_size=10
         )
@@ -3357,7 +3351,7 @@ def test_transformerbasis_getattr(basis_cls, n_basis_funcs, class_specific_param
 def test_transformerbasis_set_params(
     basis_cls, n_basis_funcs_init, n_basis_funcs_new, class_specific_params
 ):
-    trans_basis = TransformerBasis(
+    trans_basis = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             n_basis_funcs_init, basis_cls, class_specific_params, window_size=10
         )
@@ -3374,7 +3368,7 @@ def test_transformerbasis_set_params(
 )
 def test_transformerbasis_setattr_basis(basis_cls, class_specific_params):
     # setting the _basis attribute should change it
-    trans_bas = TransformerBasis(
+    trans_bas = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             10, basis_cls, class_specific_params, window_size=10
         )
@@ -3395,7 +3389,7 @@ def test_transformerbasis_setattr_basis(basis_cls, class_specific_params):
 def test_transformerbasis_setattr_basis_attribute(basis_cls, class_specific_params):
     # setting an attribute that is an attribute of the underlying _basis
     # should propagate setting it on _basis itself
-    trans_bas = TransformerBasis(
+    trans_bas = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             10, basis_cls, class_specific_params, window_size=10
         )
@@ -3417,7 +3411,7 @@ def test_transformerbasis_copy_basis_on_contsruct(basis_cls, class_specific_para
     orig_bas = CombinedBasis().instantiate_basis(
         10, basis_cls, class_specific_params, window_size=10
     )
-    trans_bas = TransformerBasis(orig_bas)
+    trans_bas = basis.TransformerBasis(orig_bas)
     trans_bas.n_basis_funcs = 20
 
     assert orig_bas.n_basis_funcs == 10
@@ -3433,7 +3427,7 @@ def test_transformerbasis_copy_basis_on_contsruct(basis_cls, class_specific_para
 def test_transformerbasis_setattr_illegal_attribute(basis_cls, class_specific_params):
     # changing an attribute that is not _basis or an attribute of _basis
     # is not allowed
-    trans_bas = TransformerBasis(
+    trans_bas = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             10, basis_cls, class_specific_params, window_size=10
         )
@@ -3459,10 +3453,10 @@ def test_transformerbasis_addition(basis_cls, class_specific_params):
     bas_b = CombinedBasis().instantiate_basis(
         n_basis_funcs_b, basis_cls, class_specific_params, window_size=10
     )
-    trans_bas_a = TransformerBasis(bas_a)
-    trans_bas_b = TransformerBasis(bas_b)
+    trans_bas_a = basis.TransformerBasis(bas_a)
+    trans_bas_b = basis.TransformerBasis(bas_b)
     trans_bas_sum = trans_bas_a + trans_bas_b
-    assert isinstance(trans_bas_sum, TransformerBasis)
+    assert isinstance(trans_bas_sum, basis.TransformerBasis)
     assert isinstance(trans_bas_sum._basis, AdditiveBasis)
     assert (
         trans_bas_sum.n_basis_funcs
@@ -3484,18 +3478,18 @@ def test_transformerbasis_addition(basis_cls, class_specific_params):
 def test_transformerbasis_multiplication(basis_cls, class_specific_params):
     n_basis_funcs_a = 5
     n_basis_funcs_b = n_basis_funcs_a * 2
-    trans_bas_a = TransformerBasis(
+    trans_bas_a = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             n_basis_funcs_a, basis_cls, class_specific_params, window_size=10
         )
     )
-    trans_bas_b = TransformerBasis(
+    trans_bas_b = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             n_basis_funcs_b, basis_cls, class_specific_params, window_size=10
         )
     )
     trans_bas_prod = trans_bas_a * trans_bas_b
-    assert isinstance(trans_bas_prod, TransformerBasis)
+    assert isinstance(trans_bas_prod, basis.TransformerBasis)
     assert isinstance(trans_bas_prod._basis, MultiplicativeBasis)
     assert (
         trans_bas_prod.n_basis_funcs
@@ -3526,7 +3520,7 @@ def test_transformerbasis_multiplication(basis_cls, class_specific_params):
 def test_transformerbasis_exponentiation(
     basis_cls, exponent: int, error_type, error_message, class_specific_params
 ):
-    trans_bas = TransformerBasis(
+    trans_bas = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             5, basis_cls, class_specific_params, window_size=10
         )
@@ -3535,7 +3529,7 @@ def test_transformerbasis_exponentiation(
     if not isinstance(exponent, int):
         with pytest.raises(error_type, match=error_message):
             trans_bas_exp = trans_bas**exponent
-            assert isinstance(trans_bas_exp, TransformerBasis)
+            assert isinstance(trans_bas_exp, basis.TransformerBasis)
             assert isinstance(trans_bas_exp._basis, MultiplicativeBasis)
 
 
@@ -3544,7 +3538,7 @@ def test_transformerbasis_exponentiation(
     list_all_basis_classes(),
 )
 def test_transformerbasis_dir(basis_cls, class_specific_params):
-    trans_bas = TransformerBasis(
+    trans_bas = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             5, basis_cls, class_specific_params, window_size=10
         )
@@ -3573,7 +3567,7 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls, class_specific_params
     orig_bas = CombinedBasis().instantiate_basis(
         10, basis_cls, class_specific_params, window_size=20
     )
-    trans_bas = TransformerBasis(orig_bas)
+    trans_bas = basis.TransformerBasis(orig_bas)
 
     # kernel should be saved in the object after fit
     trans_bas.fit(np.random.randn(100, 20))
@@ -3597,7 +3591,7 @@ def test_transformerbasis_pickle(
     tmpdir, basis_cls, n_basis_funcs, class_specific_params
 ):
     # the test that tries cross-validation with n_jobs = 2 already should test this
-    trans_bas = TransformerBasis(
+    trans_bas = basis.TransformerBasis(
         CombinedBasis().instantiate_basis(
             n_basis_funcs, basis_cls, class_specific_params, window_size=10
         )
@@ -3608,7 +3602,7 @@ def test_transformerbasis_pickle(
     with open(filepath, "rb") as f:
         trans_bas2 = pickle.load(f)
 
-    assert isinstance(trans_bas2, TransformerBasis)
+    assert isinstance(trans_bas2, basis.TransformerBasis)
     if basis_cls in [AdditiveBasis, MultiplicativeBasis]:
         for bas in [
             getattr(trans_bas2._basis, attr) for attr in ("_basis1", "_basis2")
@@ -3743,7 +3737,7 @@ def test_multi_epoch_pynapple_basis_transformer(
     n_input = bas._n_input_dimensionality
 
     # pass through transformer
-    bas = TransformerBasis(bas)
+    bas = basis.TransformerBasis(bas)
 
     # concat input
     X = pynapple_concatenate_numpy([tsd[:, None]] * n_input, axis=1)
@@ -3839,7 +3833,7 @@ def test__get_splitter(
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
@@ -3996,7 +3990,7 @@ def test__get_splitter_split_by_input(
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return
@@ -4030,7 +4024,7 @@ def test__get_splitter_split_by_input(
 def test_duplicate_keys(bas1, bas2, bas3, class_specific_params):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
@@ -4078,7 +4072,7 @@ def test_split_feature_axis(
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return
