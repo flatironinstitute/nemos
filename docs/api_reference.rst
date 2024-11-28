@@ -28,6 +28,8 @@ as non-linear maps.
 
 **The abstract classes:**
 
+These classes are building blocks for concrete basis classes.
+
 .. currentmodule:: nemos.basis._basis
 
 .. autosummary::

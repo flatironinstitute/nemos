@@ -45,7 +45,7 @@ warnings.filterwarnings(
 
 ## Defining a 1D Basis Object
 
-We'll start by defining a 1D basis function object of the type [`EvalMSpline`](nemos.basis.EvalMSpline).
+We'll start by defining a 1D basis function object of the type [`EvalMSpline`](nemos.basis.basis.EvalMSpline).
 The hyperparameters required to initialize this class are:
 
 - The number of basis functions, which should be a positive integer.
