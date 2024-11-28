@@ -186,14 +186,14 @@ if path.exists():
   fig.savefig(path / "plot_03_1D_convolution.svg")
 ```
 
-## Convolve using [`Basis.compute_features`](nemos.basis.Basis.compute_features)
+## Convolve using [`Basis.compute_features`](nemos.basis._basis.Basis.compute_features)
 
 Every basis in the `nemos.basis` module whose class name starts with "Conv" will perform a 1D convolution over the 
 provided input when the `compute_features` method is called. The basis elements will be used as filters for the
 convolution.
 
 All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to the object directly at initialization. 
-Let's see how we can get the same results through [`Basis`](nemos.basis.Basis).
+Let's see how we can get the same results through [`Basis`](nemos.basis._basis.Basis).
 
 
 ```{code-cell} ipython3

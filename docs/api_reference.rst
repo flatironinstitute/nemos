@@ -26,7 +26,7 @@ Basis can be grouped according to the mode of operation into basis that performs
 as non-linear maps.
 
 
-**The abstract class `Basis`:**
+**The abstract classes:**
 
 .. currentmodule:: nemos.basis._basis
 
@@ -36,6 +36,15 @@ as non-linear maps.
     :nosignatures:
 
     Basis
+
+.. currentmodule:: nemos.basis._spline_basis
+.. autosummary::
+    :toctree: generated/_basis
+    :recursive:
+    :nosignatures:
+
+    SplineBasis
+
 
 **Bases For Convolution:**
 

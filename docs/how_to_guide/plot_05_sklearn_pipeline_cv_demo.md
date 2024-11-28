@@ -152,7 +152,7 @@ sns.despine(ax=ax)
 ### Converting NeMoS `Basis` to a transformer
 In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) wrapper class.
 
-Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) can be done with [`Basis.to_transformer()`](nemos.basis.Basis.to_transformer):
+Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) can be done with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
 
 
 ```{code-cell} ipython3

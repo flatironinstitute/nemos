@@ -68,8 +68,8 @@ bspline = nmo.basis.EvalBSpline(n_basis_funcs=n_basis, order=order)
 
 ## Evaluating a Basis
 
-The [`Basis`](nemos.basis.Basis) object is callable, and can be evaluated as a function. By default, the support of the basis
-is defined by the samples that we input to the [`__call__`](nemos.basis.Basis.__call__) method, and covers from the smallest to the largest value.
+The [`Basis`](nemos.basis._basis.Basis) object is callable, and can be evaluated as a function. By default, the support of the basis
+is defined by the samples that we input to the [`__call__`](nemos.basis._basis.Basis.__call__) method, and covers from the smallest to the largest value.
 
 
 ```{code-cell} ipython3
@@ -143,8 +143,8 @@ plt.tight_layout()
 ## Feature Computation
 The bases in the module `nemos.basis` can be classified in two categories:
 
-- **Evaluation Bases**: Objects for which [`compute_features`](nemos.basis.Basis.compute_features) that returns the evaluated basis. This means that the basis are applying a non-linear transformation of the input. The class name for this kind of bases starts with "Eval", e.g. "EvalBSpline".
-- **Convolution Bases**: Objects for which [`compute_features`](nemos.basis.Basis.compute_features) will convolve the input with a kernel of basis elements with `window_size` specified by the user. The class name for this kind of bases starts with "Conv", e.g. "ConvBSpline".
+- **Evaluation Bases**: Objects for which [`compute_features`](nemos.basis._basis.Basis.compute_features) that returns the evaluated basis. This means that the basis are applying a non-linear transformation of the input. The class name for this kind of bases starts with "Eval", e.g. "EvalBSpline".
+- **Convolution Bases**: Objects for which [`compute_features`](nemos.basis._basis.Basis.compute_features) will convolve the input with a kernel of basis elements with `window_size` specified by the user. The class name for this kind of bases starts with "Conv", e.g. "ConvBSpline".
 
 Let's see how this two modalities operate.
 
@@ -198,7 +198,7 @@ check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 Plotting the Basis Function Elements:
 --------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
-and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
+and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis._basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
 the equi-spaced samples along with the evaluated basis functions. The benefits of using Basis.evaluate_on_grid become
 particularly evident when working with multidimensional basis functions. You can find more details and visual
 background in the
