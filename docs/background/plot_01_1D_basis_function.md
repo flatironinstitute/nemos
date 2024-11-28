@@ -141,10 +141,11 @@ plt.tight_layout()
 ```
 
 ## Feature Computation
-The bases in the module `nemos.basis` can be classified in two categories:
+The bases in the `nemos.basis` module can be grouped into two categories:
 
-- **Evaluation Bases**: Objects for which [`compute_features`](nemos.basis._basis.Basis.compute_features) that returns the evaluated basis. This means that the basis are applying a non-linear transformation of the input. The class name for this kind of bases starts with "Eval", e.g. "EvalBSpline".
-- **Convolution Bases**: Objects for which [`compute_features`](nemos.basis._basis.Basis.compute_features) will convolve the input with a kernel of basis elements with `window_size` specified by the user. The class name for this kind of bases starts with "Conv", e.g. "ConvBSpline".
+1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names starting with "Eval," such as `EvalBSpline`.
+
+2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names starting with "Conv," such as `ConvBSpline`.
 
 Let's see how this two modalities operate.
 
