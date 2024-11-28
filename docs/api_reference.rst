@@ -26,17 +26,20 @@ Basis can be grouped according to the mode of operation into basis that performs
 as non-linear maps.
 
 
+**The abstract class `Basis`:**
 
-.. currentmodule:: nemos.basis
+.. currentmodule:: nemos.basis._basis
 
 .. autosummary::
-    :toctree: generated/basis
+    :toctree: generated/_basis
     :recursive:
     :nosignatures:
 
     Basis
 
 **Bases For Convolution:**
+
+.. currentmodule:: nemos.basis.basis
 
 .. autosummary::
     :toctree: generated/basis
@@ -53,6 +56,8 @@ as non-linear maps.
 
 **Bases For Non-Linear Mapping:**
 
+.. currentmodule:: nemos.basis.basis
+
 .. autosummary::
     :toctree: generated/basis
     :recursive:
@@ -67,13 +72,26 @@ as non-linear maps.
 
 **Composite Bases:**
 
+.. currentmodule:: nemos.basis._basis
+
 .. autosummary::
-    :toctree: generated/basis
+    :toctree: generated/_basis
     :recursive:
     :nosignatures:
 
     AdditiveBasis
     MultiplicativeBasis
+
+**Basis as scikit-learn tranformers:**
+
+.. currentmodule:: nemos.basis._transformer_basis
+
+.. autosummary::
+    :toctree: generated/_transformer_basis
+    :recursive:
+    :nosignatures:
+
+    TransformerBasis
 
 .. _observation_models:
 The ``nemos.observation_models`` module
@@ -163,7 +181,7 @@ These objects can be provided as input to nemos GLM methods.
 .. currentmodule:: nemos.pytrees
 
 .. autosummary::
-    :toctree: generated/identifiability_constraints
+    :toctree: generated/pytree
     :recursive:
     :nosignatures:
 

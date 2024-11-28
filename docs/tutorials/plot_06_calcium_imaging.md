@@ -184,7 +184,7 @@ heading_basis = nmo.basis.EvalCyclicBSpline(n_basis_funcs=12)
 coupling_basis = nmo.basis.ConvRaisedCosineLog(3, window_size=10)
 ```
 
-We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis.AdditiveBasis) object).
+We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis._basis.AdditiveBasis) object).
 
 
 ```{code-cell} ipython3
