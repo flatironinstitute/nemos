@@ -64,7 +64,6 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
             label=label,
         )
 
-
     @add_docstrings_bspline("split_by_feature")
     def split_by_feature(
         self,
@@ -149,7 +148,6 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
             label=label,
         )
 
-
     @add_docstrings_bspline("split_by_feature")
     def split_by_feature(
         self,
@@ -232,7 +230,6 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
             order=order,
             label=label,
         )
-
 
     @add_docstrings_cyclic_bspline("split_by_feature")
     def split_by_feature(
@@ -318,7 +315,6 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
             label=label,
         )
 
-
     @add_docstrings_cyclic_bspline("split_by_feature")
     def split_by_feature(
         self,
@@ -401,7 +397,6 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
             order=order,
             label=label,
         )
-
 
     @add_docstrings_mspline("split_by_feature")
     def split_by_feature(
@@ -486,7 +481,6 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
             order=order,
             label=label,
         )
-
 
     @add_docstrings_mspline("split_by_feature")
     def split_by_feature(
@@ -573,7 +567,6 @@ class EvalRaisedCosineLinear(
             label=label,
         )
 
-
     @add_raised_cosine_linear_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
@@ -652,7 +645,6 @@ class ConvRaisedCosineLinear(
             width=width,
             label=label,
         )
-
 
     @add_raised_cosine_linear_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -734,7 +726,6 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
             label=label,
         )
 
-
     @add_raised_cosine_log_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
@@ -815,7 +806,6 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
-
 
     @add_raised_cosine_log_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -924,7 +914,6 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
             label=label,
         )
 
-
     @add_orth_exp_decay_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """
@@ -1021,7 +1010,6 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
             decay_rates=decay_rates,
             label=label,
         )
-
 
     @add_orth_exp_decay_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
