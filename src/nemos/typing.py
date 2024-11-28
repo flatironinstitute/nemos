@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jaxopt
 import pynapple as nap
 from jax.typing import ArrayLike
-from statsmodels.tools.typing import NDArray
+from numpy.typing import NDArray
 
 from .pytrees import FeaturePytree
 
