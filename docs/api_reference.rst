@@ -26,9 +26,9 @@ Basis can be grouped according to the mode of operation into basis that performs
 as non-linear maps.
 
 
-**The abstract classes:**
+**The Abstract Classes:**
 
-These classes are building blocks for concrete basis classes.
+These classes are the building blocks for the concrete basis classes.
 
 .. currentmodule:: nemos.basis._basis
 
@@ -93,7 +93,7 @@ These classes are building blocks for concrete basis classes.
     AdditiveBasis
     MultiplicativeBasis
 
-**Basis as scikit-learn tranformers:**
+**Basis As `scikit-learn` Tranformers:**
 
 .. currentmodule:: nemos.basis._transformer_basis
 
