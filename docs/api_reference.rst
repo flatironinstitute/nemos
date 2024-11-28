@@ -22,6 +22,10 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
 The ``nemos.basis`` module
 --------------------------
 Provides basis function classes to construct and transform features for model inputs.
+Basis can be grouped according to the mode of operation into basis that performs convolution and basis that operates
+as non-linear maps.
+
+
 
 .. currentmodule:: nemos.basis
 
@@ -31,8 +35,45 @@ Provides basis function classes to construct and transform features for model in
     :nosignatures:
 
     Basis
-    EvalOrthExponential
+
+**Bases For Convolution:**
+
+.. autosummary::
+    :toctree: generated/basis
+    :recursive:
+    :nosignatures:
+
+
+    ConvMSpline
+    ConvBSpline
+    ConvCyclicBSpline
+    ConvRaisedCosineLinear
+    ConvRaisedCosineLog
     ConvOrthExponential
+
+**Bases For Non-Linear Mapping:**
+
+.. autosummary::
+    :toctree: generated/basis
+    :recursive:
+    :nosignatures:
+
+    EvalMSpline
+    EvalBSpline
+    EvalCyclicBSpline
+    EvalRaisedCosineLinear
+    EvalRaisedCosineLog
+    EvalOrthExponential
+
+**Composite Bases:**
+
+.. autosummary::
+    :toctree: generated/basis
+    :recursive:
+    :nosignatures:
+
+    AdditiveBasis
+    MultiplicativeBasis
 
 .. _observation_models:
 The ``nemos.observation_models`` module
