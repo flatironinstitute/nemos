@@ -98,7 +98,7 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
-class Basis(Base, abc.ABC):
+class Basis(Base, abc.ABC, BasisTransformerMixin):
     """
     Abstract base class for defining basis functions for feature transformation.
 
@@ -824,7 +824,7 @@ add_docstring_additive = partial(add_docstring, cls=Basis)
 add_docstring_multiplicative = partial(add_docstring, cls=Basis)
 
 
-class AdditiveBasis(Basis, BasisTransformerMixin):
+class AdditiveBasis(Basis):
     """
     Class representing the addition of two Basis objects.
 
@@ -869,7 +869,6 @@ class AdditiveBasis(Basis, BasisTransformerMixin):
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
         self._basis1 = basis1
         self._basis2 = basis2
-        BasisTransformerMixin.__init__(self)
 
     def _set_num_output_features(self, *xi: NDArray) -> Basis:
         self._n_basis_input = (
@@ -1167,7 +1166,7 @@ class AdditiveBasis(Basis, BasisTransformerMixin):
         return super().evaluate_on_grid(*n_samples)
 
 
-class MultiplicativeBasis(Basis, BasisTransformerMixin):
+class MultiplicativeBasis(Basis):
     """
     Class representing the multiplication (external product) of two Basis objects.
 

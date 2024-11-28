@@ -47,7 +47,7 @@ def __dir__() -> list[str]:
     return __all__
 
 
-class EvalBSpline(EvalBasisMixin, BSplineBasis, BasisTransformerMixin):
+class EvalBSpline(EvalBasisMixin, BSplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -63,7 +63,7 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis, BasisTransformerMixin):
             order=order,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_docstrings_bspline("split_by_feature")
     def split_by_feature(
@@ -131,7 +131,7 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis, BasisTransformerMixin):
         return BSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-class ConvBSpline(ConvBasisMixin, BSplineBasis, BasisTransformerMixin):
+class ConvBSpline(ConvBasisMixin, BSplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -148,7 +148,7 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis, BasisTransformerMixin):
             order=order,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_docstrings_bspline("split_by_feature")
     def split_by_feature(
@@ -216,7 +216,7 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis, BasisTransformerMixin):
         return BSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis, BasisTransformerMixin):
+class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -232,7 +232,7 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis, BasisTransformerMixi
             order=order,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_docstrings_cyclic_bspline("split_by_feature")
     def split_by_feature(
@@ -300,7 +300,7 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis, BasisTransformerMixi
         return CyclicBSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis, BasisTransformerMixin):
+class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -317,7 +317,7 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis, BasisTransformerMixi
             order=order,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_docstrings_cyclic_bspline("split_by_feature")
     def split_by_feature(
@@ -385,7 +385,7 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis, BasisTransformerMixi
         return CyclicBSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-class EvalMSpline(EvalBasisMixin, MSplineBasis, BasisTransformerMixin):
+class EvalMSpline(EvalBasisMixin, MSplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -401,7 +401,7 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis, BasisTransformerMixin):
             order=order,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_docstrings_mspline("split_by_feature")
     def split_by_feature(
@@ -469,7 +469,7 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis, BasisTransformerMixin):
         return MSplineBasis.evaluate_on_grid(self, n_samples)
 
 
-class ConvMSpline(ConvBasisMixin, MSplineBasis, BasisTransformerMixin):
+class ConvMSpline(ConvBasisMixin, MSplineBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -486,7 +486,7 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis, BasisTransformerMixin):
             order=order,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_docstrings_mspline("split_by_feature")
     def split_by_feature(
@@ -572,7 +572,7 @@ class EvalRaisedCosineLinear(
             mode="eval",
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_raised_cosine_linear_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -652,7 +652,7 @@ class ConvRaisedCosineLinear(
             width=width,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_raised_cosine_linear_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -713,7 +713,7 @@ class ConvRaisedCosineLinear(
         return RaisedCosineBasisLinear.split_by_feature(self, x, axis=axis)
 
 
-class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog, BasisTransformerMixin):
+class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -733,7 +733,7 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog, BasisTransformer
             mode="eval",
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_raised_cosine_log_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -794,7 +794,7 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog, BasisTransformer
         return RaisedCosineBasisLog.split_by_feature(self, x, axis=axis)
 
 
-class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog, BasisTransformerMixin):
+class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -815,7 +815,7 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog, BasisTransformer
             enforce_decay_to_zero=enforce_decay_to_zero,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_raised_cosine_log_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -876,7 +876,7 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog, BasisTransformer
         return RaisedCosineBasisLog.split_by_feature(self, x, axis=axis)
 
 
-class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis, BasisTransformerMixin):
+class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
     def __init__(
         self,
         n_basis_funcs: int,
@@ -923,7 +923,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis, BasisTransformer
             mode="eval",
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_orth_exp_decay_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -988,7 +988,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis, BasisTransformer
         return OrthExponentialBasis.split_by_feature(self, x, axis=axis)
 
 
-class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis, BasisTransformerMixin):
+class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     """
     Examples
     --------
@@ -1021,7 +1021,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis, BasisTransformer
             decay_rates=decay_rates,
             label=label,
         )
-        BasisTransformerMixin.__init__(self)
+
 
     @add_orth_exp_decay_docstring("evaluate_on_grid")
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:

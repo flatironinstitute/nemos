@@ -274,7 +274,7 @@ Okay, let's use unit number 7.
 Now let's set up our design matrix. First, let's fit the head direction by
 itself. Head direction is a circular variable (pi and -pi are adjacent to
 each other), so we need to use a basis that has this property as well.
-[`EvalCyclicBSpline`](nemos.basis.EvalCyclicBSpline) is one such basis.
+[`EvalCyclicBSpline`](nemos.basis.basis.EvalCyclicBSpline) is one such basis.
 
 Let's create our basis and then arrange our data properly.
 
