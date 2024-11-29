@@ -76,12 +76,12 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         >>> import numpy as np
         >>> from nemos.basis import EvalBSpline
         >>> from nemos.glm import GLM
-        >>> basis = EvalBSpline(n_basis_funcs=6, label="two_inputs")
-        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> basis = EvalBSpline(n_basis_funcs=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        two_inputs, shape (20, 2, 6)
+        one_input, shape (20, 1, 6)
 
         """
         return BSplineBasis.split_by_feature(self, x, axis=axis)
@@ -120,7 +120,7 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         >>> for i in range(4):
         ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
         >>> plt.title('B-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        Text(0.5, 1.0, 'B-Spline Basis Functions')
         >>> plt.xlabel('Domain')
         Text(0.5, 0, 'Domain')
         >>> plt.ylabel('Basis Function Value')
@@ -204,7 +204,7 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
         >>> for i in range(4):
         ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
         >>> plt.title('B-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        Text(0.5, 1.0, 'B-Spline Basis Functions')
         >>> plt.xlabel('Domain')
         Text(0.5, 0, 'Domain')
         >>> plt.ylabel('Basis Function Value')
@@ -243,12 +243,12 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         >>> import numpy as np
         >>> from nemos.basis import EvalCyclicBSpline
         >>> from nemos.glm import GLM
-        >>> basis = EvalCyclicBSpline(n_basis_funcs=6, label="two_inputs")
-        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> basis = EvalCyclicBSpline(n_basis_funcs=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        two_inputs, shape (20, 2, 6)
+        one_input, shape (20, 1, 6)
 
         """
         return CyclicBSplineBasis.split_by_feature(self, x, axis=axis)
@@ -287,7 +287,7 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         >>> for i in range(4):
         ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
         >>> plt.title('Cyclic B-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
         >>> plt.xlabel('Domain')
         Text(0.5, 0, 'Domain')
         >>> plt.ylabel('Basis Function Value')
@@ -371,7 +371,7 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
         >>> for i in range(4):
         ...     p = plt.plot(sample_points, basis_values[:, i], label=f'Function {i+1}')
         >>> plt.title('Cyclic B-Spline Basis Functions')
-        Text(0.5, 1.0, 'M-Spline Basis Functions')
+        Text(0.5, 1.0, 'Cyclic B-Spline Basis Functions')
         >>> plt.xlabel('Domain')
         Text(0.5, 0, 'Domain')
         >>> plt.ylabel('Basis Function Value')
@@ -410,12 +410,12 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         >>> import numpy as np
         >>> from nemos.basis import EvalMSpline
         >>> from nemos.glm import GLM
-        >>> basis = EvalMSpline(n_basis_funcs=6, label="two_inputs")
-        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> basis = EvalMSpline(n_basis_funcs=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        two_inputs, shape (20, 2, 6)
+        one_input, shape (20, 1, 6)
 
         """
         return MSplineBasis.split_by_feature(self, x, axis=axis)
@@ -615,12 +615,12 @@ class EvalRaisedCosineLinear(
         >>> import numpy as np
         >>> from nemos.basis import EvalRaisedCosineLinear
         >>> from nemos.glm import GLM
-        >>> basis = EvalRaisedCosineLinear(n_basis_funcs=6, label="two_inputs")
-        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> basis = EvalRaisedCosineLinear(n_basis_funcs=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        two_inputs, shape (20, 2, 6)
+        one_input, shape (20, 1, 6)
 
         """
         return RaisedCosineBasisLinear.split_by_feature(self, x, axis=axis)
@@ -774,12 +774,12 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
         >>> import numpy as np
         >>> from nemos.basis import EvalRaisedCosineLog
         >>> from nemos.glm import GLM
-        >>> basis = EvalRaisedCosineLog(n_basis_funcs=6, label="two_inputs")
-        >>> X_multi = basis.compute_features(np.random.randn(20, 2))
-        >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
+        >>> basis = EvalRaisedCosineLog(n_basis_funcs=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        two_inputs, shape (20, 2, 6)
+        one_input, shape (20, 1, 6)
 
         """
         return RaisedCosineBasisLog.split_by_feature(self, x, axis=axis)
@@ -963,7 +963,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         >>> from nemos.basis import EvalOrthExponential
         >>> from nemos.glm import GLM
         >>> # Define an additive basis
-        >>> basis = EvalOrthExponential(n_basis_funcs=5, label="feature")
+        >>> basis = EvalOrthExponential(n_basis_funcs=5, decay_rates=np.arange(1, 6), label="feature")
         >>> # Generate a sample input array and compute features
         >>> x = np.random.randn(20)
         >>> X = basis.compute_features(x)
@@ -1059,7 +1059,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
         >>> import numpy as np
         >>> from nemos.basis import ConvOrthExponential
         >>> from nemos.glm import GLM
-        >>> basis = ConvOrthExponential(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis = ConvOrthExponential(n_basis_funcs=6, decay_rates=np.arange(1, 7), window_size=10, label="two_inputs")
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():

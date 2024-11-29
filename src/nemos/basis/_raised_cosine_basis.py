@@ -50,15 +50,6 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
         that the convolution axis is ``axis=0``.
 
-    Examples
-    --------
-    >>> from numpy import linspace
-    >>> from nemos.basis import RaisedCosineBasisLinear
-    >>> X = np.random.normal(size=(1000, 1))
-    >>> cosine_basis = RaisedCosineBasisLinear(n_basis_funcs=5, mode="conv", window_size=10)
-    >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = cosine_basis(sample_points)
-
     References
     ----------
     .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
@@ -255,15 +246,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
         Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
         that the convolution axis is ``axis=0``.
-
-    Examples
-    --------
-    >>> from numpy import linspace
-    >>> from nemos.basis import RaisedCosineBasisLog
-    >>> X = np.random.normal(size=(1000, 1))
-    >>> cosine_basis = RaisedCosineBasisLog(n_basis_funcs=5, mode="conv", window_size=10)
-    >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = cosine_basis(sample_points)
 
     References
     ----------

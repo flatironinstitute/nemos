@@ -216,10 +216,10 @@ def apply_identifiability_constraints(
     --------
     >>> import numpy as np
     >>> from nemos.identifiability_constraints import apply_identifiability_constraints
-    >>> from nemos.basis import BSplineBasis
+    >>> from nemos.basis import EvalBSpline
     >>> from nemos.glm import GLM
     >>> # define a feature matrix
-    >>> bas = BSplineBasis(5) + BSplineBasis(6)
+    >>> bas = EvalBSpline(5) + EvalBSpline(6)
     >>> feature_matrix = bas.compute_features(np.random.randn(100), np.random.randn(100))
     >>> # apply constraints
     >>> constrained_x, kept_columns = apply_identifiability_constraints(feature_matrix)
@@ -281,10 +281,10 @@ def apply_identifiability_constraints_by_basis_component(
     --------
     >>> import numpy as np
     >>> from nemos.identifiability_constraints import apply_identifiability_constraints_by_basis_component
-    >>> from nemos.basis import BSplineBasis
+    >>> from nemos.basis import EvalBSpline
     >>> from nemos.glm import GLM
     >>> # define a feature matrix
-    >>> bas = BSplineBasis(5) + BSplineBasis(6)
+    >>> bas = EvalBSpline(5) + EvalBSpline(6)
     >>> feature_matrix = bas.compute_features(np.random.randn(100), np.random.randn(100))
     >>> # apply constraints
     >>> constrained_x, kept_columns = apply_identifiability_constraints_by_basis_component(bas, feature_matrix)

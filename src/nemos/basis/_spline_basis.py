@@ -343,14 +343,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
     ----------
     .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
         Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
-
-    Examples
-    --------
-    >>> from numpy import linspace
-    >>> from nemos.basis import BSplineBasis
-    >>> bspline_basis = BSplineBasis(n_basis_funcs=5, order=3)
-    >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = bspline_basis(sample_points)
     """
 
     def __init__(
@@ -463,15 +455,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         Number of basis functions, int.
     order :
         Order of the splines used in basis functions, int.
-
-    Examples
-    --------
-    >>> from numpy import linspace
-    >>> from nemos.basis import EvalCyclicBSpline
-    >>> X = np.random.normal(size=(1000, 1))
-    >>> cyclic_basis = EvalCyclicBSpline(n_basis_funcs=5, order=3, mode="conv", window_size=10)
-    >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = cyclic_basis(sample_points)
     """
 
     def __init__(

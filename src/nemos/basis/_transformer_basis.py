@@ -136,13 +136,12 @@ class TransformerBasis:
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import EvalMSpline, TransformerBasis
+        >>> from nemos.basis import ConvMSpline, TransformerBasis
 
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
 
-        >>> # Define and fit tranformation basis
-        >>> basis = EvalMSpline(10, mode="conv", window_size=200)
+        >>> basis = ConvMSpline(10, window_size=200)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
@@ -306,7 +305,7 @@ class TransformerBasis:
         8
         >>> # setting _basis directly is allowed
         >>> print(type(transformer_basis.set_params(_basis=EvalBSpline(10))._basis))
-        <class 'nemos.basis.BSplineBasis'>
+        <class 'nemos.basis.basis.EvalBSpline'>
         >>> # mixing is not allowed, this will raise an exception
         >>> try:
         ...     transformer_basis.set_params(_basis=EvalBSpline(10), n_basis_funcs=2)
