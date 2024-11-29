@@ -215,7 +215,7 @@ def test_apply_constraint_by_basis_with_invalid(invalid_entries):
     )
     # add invalid
     x[:2, 2] = invalid_entries
-    constrained_x, kept_cols = apply_identifiability_constraints(x)
+    constrained_x, kept_cols = apply_identifiability_constraints(x, warn_if_float32=False)
     assert jnp.array_equal(kept_cols, jnp.arange(1, 5))
     assert constrained_x.shape[0] == x.shape[0]
     assert jnp.all(jnp.isnan(constrained_x[:2]))
