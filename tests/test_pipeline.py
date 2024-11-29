@@ -6,7 +6,7 @@ from sklearn import pipeline
 from sklearn.model_selection import GridSearchCV
 
 from nemos import basis
-from nemos.basis._basis import TransformerBasis
+from nemos.basis._transformer_basis import TransformerBasis
 
 
 @pytest.mark.parametrize(
