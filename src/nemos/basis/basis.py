@@ -1059,7 +1059,12 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
         >>> import numpy as np
         >>> from nemos.basis import ConvOrthExponential
         >>> from nemos.glm import GLM
-        >>> basis = ConvOrthExponential(n_basis_funcs=6, decay_rates=np.arange(1, 7), window_size=10, label="two_inputs")
+        >>> basis = ConvOrthExponential(
+        ...     n_basis_funcs=6,
+        ...     decay_rates=np.arange(1, 7),
+        ...     window_size=10,
+        ...     label="two_inputs"
+        ... )
         >>> X_multi = basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = basis.split_by_feature(X_multi, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
