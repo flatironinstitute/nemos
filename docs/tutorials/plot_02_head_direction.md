@@ -374,6 +374,7 @@ worst if we needed a finer temporal resolution, such 1ms time bins
 (which would require 800 coefficients instead of 80).
 What can we do to mitigate over-fitting now?
 
+(head_direction_reducing_dimensionality)=
 #### Reducing feature dimensionality
 One way to proceed is to find a lower-dimensional representation of the response
 by parametrizing the decay effect. For instance, we could try to model it

@@ -331,6 +331,7 @@ print(speed.shape)
 print(count.shape)
 ```
 
+(basis_eval_place_cells)=
 ## Basis evaluation
 
 For each feature, we will use a different set of basis :

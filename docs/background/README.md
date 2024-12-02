@@ -34,26 +34,13 @@ plot_00_conceptual_intro.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/background/plot_01_1D_basis_function.svg" style="height: 100px", alt="One-Dimensional Basis."/>
+<img src="../_images/EvalRaisedCosineLinear.svg" style="height: 100px", alt="Basis Functions"/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-plot_01_1D_basis_function.md
-```
-:::
-
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnails/background/plot_02_ND_basis_function.svg" style="height: 100px", alt="N-Dimensional Basis."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_02_ND_basis_function.md
+basis/README.md
 ```
 :::
 
