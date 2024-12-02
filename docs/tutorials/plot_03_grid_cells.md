@@ -221,7 +221,7 @@ Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 ```{code-cell} ipython3
 model = nmo.glm.GLM(
     regularizer="Ridge",
-    regularizer_strength=0.001,
+    regularizer_strength=0.0001,
     # lowering the tolerance means that the solution will be closer to the optimum 
     # (at the cost of increasing execution time)
     solver_kwargs=dict(tol=10**-12), 
