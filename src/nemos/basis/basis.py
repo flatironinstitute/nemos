@@ -68,6 +68,10 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
             Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
             The B-splines have (order-2) continuous derivatives at each interior knot.
             The higher this number, the smoother the basis representation will be.
+        bounds :
+            The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+            minimum and the maximum of the samples provided when evaluating the basis.
+            If a sample is outside the bounds, the basis will return NaN.
         label :
             The label of the basis, intended to be descriptive of the task variable being processed.
             For example: velocity, position, spike_counts.
@@ -311,6 +315,10 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
             Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
             The B-splines have (order-2) continuous derivatives at each interior knot.
             The higher this number, the smoother the basis representation will be.
+        bounds :
+            The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+            minimum and the maximum of the samples provided when evaluating the basis.
+            If a sample is outside the bounds, the basis will return NaN.
         label :
             The label of the basis, intended to be descriptive of the task variable being processed.
             For example: velocity, position, spike_counts.
@@ -555,6 +563,10 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
             The order of the splines used in basis functions. Must be between [1,
             n_basis_funcs]. Default is 2. Higher order splines have more continuous
             derivatives at each interior knot, resulting in smoother basis functions.
+        bounds :
+            The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+            minimum and the maximum of the samples provided when evaluating the basis.
+            If a sample is outside the bounds, the basis will return NaN.
         label :
             The label of the basis, intended to be descriptive of the task variable being processed.
             For example: velocity, position, spike_counts.
@@ -1222,7 +1234,20 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
 
 
 class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
-    """
+    """Set of 1D basis decaying exponential functions numerically orthogonalized.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size :
+        The window size for convolution in number of samples.
+    decay_rates :
+        Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
     Examples
     --------
     >>> import numpy as np
