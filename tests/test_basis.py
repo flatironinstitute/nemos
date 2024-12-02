@@ -27,31 +27,6 @@ from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineB
 from nemos.utils import pynapple_concatenate_numpy
 
 
-@pytest.fixture()
-def class_specific_params():
-    shared_params = ["n_basis_funcs", "label"]
-    eval_params = ["bounds"]
-    conv_params = ["window_size", "conv_kwargs"]
-    return dict(
-        EvalBSpline=shared_params + eval_params + ["order"],
-        ConvBSpline=shared_params + conv_params + ["order"],
-        EvalMSpline=shared_params + eval_params + ["order"],
-        ConvMSpline=shared_params + conv_params + ["order"],
-        EvalCyclicBSpline=shared_params + eval_params + ["order"],
-        ConvCyclicBSpline=shared_params + conv_params + ["order"],
-        EvalRaisedCosineLinear=shared_params + eval_params + ["width"],
-        ConvRaisedCosineLinear=shared_params + conv_params + ["width"],
-        EvalRaisedCosineLog=shared_params
-        + eval_params
-        + ["width", "time_scaling", "enforce_decay_to_zero"],
-        ConvRaisedCosineLog=shared_params
-        + conv_params
-        + ["width", "time_scaling", "enforce_decay_to_zero"],
-        EvalOrthExponential=shared_params + eval_params + ["decay_rates"],
-        ConvOrthExponential=shared_params + conv_params + ["decay_rates"],
-    )
-
-
 def trim_kwargs(cls, kwargs, class_specific_params):
     return {
         key: value
@@ -85,6 +60,13 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
     return all_basis
+
+
+@pytest.fixture()
+def class_specific_params():
+    """Returns all the params for each class."""
+    all_cls = list_all_basis_classes("Conv") + list_all_basis_classes("Eval")
+    return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
 
 def test_all_basis_are_tested() -> None:
