@@ -11,7 +11,7 @@
 |           **M-Spline**            | <img src="images/EvalMSpline.svg"  alt="M-spline."/>                         | [Place cells](basis_eval_place_cells)                    | [EvalMSpline](nemos.basis.basis.EvalMSpline)<br>[ConvMSpline](nemos.basis.basis.ConvMSpline)                                             | 🟢 Eval              |
 | **Linearly Spaced Raised Cosine** | <img src="images/EvalRaisedCosineLinear.svg"  alt="Raised Cosine Linear."/>  |                                                          | [EvalRaisedCosineLinear](nemos.basis.basis.EvalRaisedCosineLinear)<br>[ConvRaisedCosineLinear](nemos.basis.basis.ConvRaisedCosineLinear) | 🟢 Eval              |
 |    **Log Spaced Raised Cosine**   | <img src="images/EvalRaisedCosineLog.svg"  alt="Raised Cosine Log."/>        | [Head Direction](head_direction_reducing_dimensionality) | [EvalRaisedCosineLog](nemos.basis.basis.EvalRaisedCosineLog)<br>[ConvRaisedCosineLog](nemos.basis.basis.ConvRaisedCosineLog)             | 🔵 Conv              |
-| **Orthogonalized Exponential Decays** | <img src="images/EvalOrthExponential.svg"  alt="Orth Exponential Decays"/> | [Head Direction](head_direction_reducing_dimensionality) | [EvalOrthExponential](nemos.basis.basis.EvalOrthExponential)<br>[ConvOrthExponential](nemos.basis.basis.ConvOrthExponential)    | 🟢 Eval              |
+| **Orthogonalized Exponential Decays** | <img src="images/EvalOrthExponential.svg"  alt="Orth Exponential Decays"/> |         | [EvalOrthExponential](nemos.basis.basis.EvalOrthExponential)<br>[ConvOrthExponential](nemos.basis.basis.ConvOrthExponential)    | 🟢 Eval              |
 ```
 
 ## Overview
