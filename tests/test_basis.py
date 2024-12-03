@@ -982,14 +982,14 @@ class TestSharedMethods:
         bas = cls["conv"](
             n_basis_funcs=5, window_size=30, **extra_decay_rates(cls["conv"], 5)
         )
-        bas._set_kernel()
+        bas.set_kernel()
         assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self, cls):
         bas = cls["conv"](
             n_basis_funcs=5, window_size=30, **extra_decay_rates(cls["conv"], 5)
         )
-        bas._set_kernel()
+        bas.set_kernel()
         assert bas.kernel_.shape == (30, 5)
 
     @pytest.mark.parametrize(
@@ -2420,7 +2420,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, class_specific_params, window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        bas._set_kernel()
+        bas.set_kernel()
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -3058,7 +3058,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, class_specific_params, window_size=10
         )
         bas = basis_a_obj * basis_b_obj
-        bas._set_kernel()
+        bas.set_kernel()
 
         def check_kernel(basis_obj):
             has_kern = []

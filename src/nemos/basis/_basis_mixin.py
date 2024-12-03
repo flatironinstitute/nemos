@@ -42,7 +42,7 @@ class EvalBasisMixin:
         return np.reshape(out, (out.shape[0], -1))
 
 
-    def _set_kernel(self) -> "EvalBasisMixin":
+    def set_kernel(self) -> "EvalBasisMixin":
         """
         Prepare or compute the convolutional kernel for the basis functions.
 
@@ -121,7 +121,7 @@ class ConvBasisMixin:
         # make sure to return a matrix
         return np.reshape(conv, newshape=(conv.shape[0], -1))
 
-    def _set_kernel(self) -> "ConvBasisMixin":
+    def set_kernel(self) -> "ConvBasisMixin":
         """
         Prepare or compute the convolutional kernel for the basis functions.
 

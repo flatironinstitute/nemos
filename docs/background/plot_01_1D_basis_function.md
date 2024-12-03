@@ -140,6 +140,16 @@ axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 ```
 
+Note that the samples can be an arbitrary N-dimensional array.
+
+```{code-cell} ipython3
+# generate a 4D array
+inp = np.random.uniform(size=(50, 1, 2, 3))
+
+bspline_range(inp).shape
+```
+
+
 ## Feature Computation
 The bases in the `nemos.basis` module can be grouped into two categories:
 
@@ -147,8 +157,10 @@ The bases in the `nemos.basis` module can be grouped into two categories:
 
 2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names starting with "Conv," such as `ConvBSpline`.
 
-Let's see how this two modalities operate.
+The `compute_features` method always transform inputs into a feature matrix, i.e. a 2D output `(n_samples, n_features)`, which is the type of arrays that NeMoS and scikit-learn  models expect.
+The input can be an N-dimensional array (N >= 1) or a `pynapple` time series with data (Tsd, TsdFrame, or TsdTensor).
 
+Let's see how this two modalities operate on a one-dimensional input.
 
 ```{code-cell} ipython3
 eval_mode = nmo.basis.EvalMSpline(n_basis_funcs=n_basis)
@@ -195,9 +207,64 @@ check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 :::
 
 
+### Multi-dimensional inputs
+For N-dimensional input, with $N>1$, the method assumes that first axis is the sample axis. This is automatically true for pynapple time series data, for arrays you can use `numpy.transpose` to re-arrange the axis if the assumption is not matched.
 
-Plotting the Basis Function Elements:
---------------------------------------
+For "Eval" basis, `compute_features` is equivalent to "calling" the basis and then reshaping the input into a 2-dimensional feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=5)
+
+# generate a 3D array
+inp = np.random.randn(50, 2, 3)
+
+out = basis.compute_features(inp)
+out.shape
+```
+
+For each of the `3 * 2 = 6` inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
+`3 * 2 * 5  = 30` outputs. 
+
+Let's explicitly check how things are processed,
+
+```{code-cell} ipython3
+# call the basis, the output won't be 2D
+out_two_steps = basis(inp)
+print(f"Call output shape: {out_two_steps.shape}")
+
+# reshape to 2D (concatenating all features into the second axis)
+out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs)
+
+# check that this is equivalent to the output of compute_features
+print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
+```
+
+For "Conv" type basis, `compute_features` is equivalent of convolving each input with `n_basis_funcs` kernels, and concatenate the output into a 2D design matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.ConvRaisedCosineLinear(n_basis_funcs=5, window_size=6)
+
+# compute_features to perform the convolution and concatenate
+out = basis.compute_features(inp)
+print(f"`compute_features` output shape {out.shape}")
+
+# compute the kernels
+basis.set_kernel()
+print(f"Kernel shape (window_size, n_basis_funcs): {basis.kernel_.shape}")
+
+# apply the convolution
+out_two_steps = nmo.convolve.create_convolutional_predictor(basis.kernel_, inp)
+print(f"Convolution output shape: {out_two_steps.shape}")
+
+# then reshape to 2D
+out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs)
+
+# check that this is equivalent to the output of compute_features
+print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
+```
+
+Plotting the Basis Function Elements
+------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
 and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis._basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
 the equi-spaced samples along with the evaluated basis functions. The benefits of using Basis.evaluate_on_grid become

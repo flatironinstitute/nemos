@@ -274,7 +274,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         basis function types and operation modes.
         """
         self._set_num_output_features(*xi)
-        self._set_kernel()
+        self.set_kernel()
         return self._compute_features(*xi)
 
     @abc.abstractmethod
@@ -283,7 +283,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _set_kernel(self):
+    def set_kernel(self):
         """Set kernel for conv basis and return self or just return self for eval."""
         pass
 
@@ -981,7 +981,7 @@ class AdditiveBasis(Basis):
         )
         return X
 
-    def _set_kernel(self, *xi: ArrayLike) -> Basis:
+    def set_kernel(self, *xi: ArrayLike) -> Basis:
         """Call fit on the added basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -996,8 +996,8 @@ class AdditiveBasis(Basis):
         :
             The AdditiveBasis ready to be evaluated.
         """
-        self._basis1._set_kernel()
-        self._basis2._set_kernel()
+        self._basis1.set_kernel()
+        self._basis2.set_kernel()
         return self
 
     def split_by_feature(
@@ -1219,7 +1219,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def _set_kernel(self, *xi: NDArray) -> Basis:
+    def set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -1234,8 +1234,8 @@ class MultiplicativeBasis(Basis):
         :
             The MultiplicativeBasis ready to be evaluated.
         """
-        self._basis1._set_kernel()
-        self._basis2._set_kernel()
+        self._basis1.set_kernel()
+        self._basis2.set_kernel()
         return self
 
     @support_pynapple(conv_type="numpy")
