@@ -221,7 +221,7 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
         >>> order = 3
         >>> bspline_basis = ConvBSpline(n_basis_funcs, order=order, window_size=10)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = bspline_basis.compute_features(sample_points)
+        >>> features = bspline_basis.compute_features(sample_points)
         """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
@@ -340,7 +340,7 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         >>> order = 3
         >>> cyclic_bspline_basis = EvalCyclicBSpline(n_basis_funcs, order=order)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = cyclic_bspline_basis.compute_features(sample_points)
+        >>> features = cyclic_bspline_basis.compute_features(sample_points)
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
         CyclicBSplineBasis.__init__(
@@ -458,7 +458,7 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
         >>> order = 3
         >>> cyclic_bspline_basis = ConvCyclicBSpline(n_basis_funcs, order=order, window_size=10)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = cyclic_bspline_basis.compute_features(sample_points)
+        >>> features = cyclic_bspline_basis.compute_features(sample_points)
         """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         CyclicBSplineBasis.__init__(
@@ -594,7 +594,7 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         >>> order = 3
         >>> mspline_basis = EvalMSpline(n_basis_funcs, order=order)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = mspline_basis.compute_features(sample_points)
+        >>> features = mspline_basis.compute_features(sample_points)
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
         MSplineBasis.__init__(
@@ -729,7 +729,7 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
         >>> order = 3
         >>> mspline_basis = ConvMSpline(n_basis_funcs, order=order, window_size=10)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = mspline_basis.compute_features(sample_points)
+        >>> features = mspline_basis.compute_features(sample_points)
         """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
@@ -844,7 +844,7 @@ class EvalRaisedCosineLinear(
     >>> raised_cosine_basis = EvalRaisedCosineLinear(n_basis_funcs)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
-    >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+    >>> features = raised_cosine_basis.compute_features(sample_points)
     """
 
     def __init__(
@@ -958,7 +958,7 @@ class ConvRaisedCosineLinear(
     >>> raised_cosine_basis = ConvRaisedCosineLinear(n_basis_funcs, window_size=10)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
-    >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+    >>> features = raised_cosine_basis.compute_features(sample_points)
     """
 
     def __init__(
@@ -1088,7 +1088,7 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
         >>> raised_cosine_basis = EvalRaisedCosineLog(n_basis_funcs)
         >>> sample_points = np.random.randn(100)
         >>> # convolve the basis
-        >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+        >>> features = raised_cosine_basis.compute_features(sample_points)
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLog.__init__(
@@ -1212,7 +1212,7 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
         >>> raised_cosine_basis = ConvRaisedCosineLog(n_basis_funcs, window_size=10)
         >>> sample_points = np.random.randn(100)
         >>> # convolve the basis
-        >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+        >>> features = raised_cosine_basis.compute_features(sample_points)
         """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
@@ -1320,7 +1320,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         >>> ortho_basis = EvalOrthExponential(n_basis_funcs, decay_rates)
         >>> sample_points = linspace(0, 1, 100)
         >>> # evaluate the basis
-        >>> basis_functions = ortho_basis.compute_features(sample_points)
+        >>> features = ortho_basis.compute_features(sample_points)
 
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
@@ -1421,7 +1421,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     >>> ortho_basis = ConvOrthExponential(n_basis_funcs, window_size, decay_rates)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
-    >>> basis_functions = ortho_basis.compute_features(sample_points)
+    >>> features = ortho_basis.compute_features(sample_points)
     """
 
     def __init__(
