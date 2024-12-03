@@ -34,8 +34,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
     mode :
         The mode of operation. ``'eval'`` for evaluation at sample points,
         ``'conv'`` for convolutional operation.
-    window_size :
-        The window size for convolution. Required if mode is ``'conv'``.
     bounds :
         The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
         minimum and the maximum of the samples provided when evaluating the basis.
@@ -43,12 +41,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
     """
 
     def __init__(
@@ -57,13 +49,11 @@ class OrthExponentialBasis(Basis, abc.ABC):
         decay_rates: NDArray[np.floating],
         mode="eval",
         label: Optional[str] = "OrthExponentialBasis",
-        **kwargs,
     ):
         super().__init__(
             n_basis_funcs,
             mode=mode,
             label=label,
-            **kwargs,
         )
         self.decay_rates = decay_rates
         self._check_rates()

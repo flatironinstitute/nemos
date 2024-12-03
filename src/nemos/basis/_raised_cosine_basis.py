@@ -34,21 +34,9 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         'conv' for convolutional operation.
     width :
         Width of the raised cosine. By default, it's set to 2.0.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -64,13 +52,11 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         mode="eval",
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
-        **kwargs,
     ) -> None:
         super().__init__(
             n_basis_funcs,
             mode=mode,
             label=label,
-            **kwargs,
         )
         self._n_input_dimensionality = 1
         self._check_width(width)
@@ -240,12 +226,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -263,13 +243,11 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
         label: Optional[str] = "RaisedCosineBasisLog",
-        **kwargs,
     ) -> None:
         super().__init__(
             n_basis_funcs,
             mode=mode,
             width=width,
-            **kwargs,
             label=label,
         )
         # The samples are scaled appropriately in the self._transform_samples which scales

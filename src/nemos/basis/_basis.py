@@ -20,6 +20,7 @@ from ._basis_mixin import BasisTransformerMixin
 
 
 def add_docstring(method_name, cls=None):
+    """Prepend super-class docstrings."""
     attr = getattr(cls, method_name, None)
     if attr is None:
         raise AttributeError(f"{cls.__name__} has no attribute {method_name}!")
@@ -49,6 +50,8 @@ def check_transform_input(func: Callable) -> Callable:
 
 
 def check_one_dimensional(func: Callable) -> Callable:
+    """Check if the input is one-dimensional."""
+
     @wraps(func)
     def wrapper(self: Basis, *xi: ArrayLike, **kwargs):
         if any(x.ndim != 1 for x in xi):

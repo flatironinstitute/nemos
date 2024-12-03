@@ -4,7 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import partial
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -34,21 +34,9 @@ class SplineBasis(Basis, abc.ABC):
         'conv' for convolutional operation.
     order : optional
         Spline order.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to ``nemos.convolve.create_convolutional_predictor`` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -61,13 +49,13 @@ class SplineBasis(Basis, abc.ABC):
         n_basis_funcs: int,
         order: int = 2,
         label: Optional[str] = None,
-        **kwargs,
+        mode: Literal["conv", "eval"] = "eval",
     ) -> None:
         self.order = order
         super().__init__(
             n_basis_funcs,
             label=label,
-            **kwargs,
+            mode=mode,
         )
 
         self._n_input_dimensionality = 1
@@ -186,17 +174,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
         The order of the splines used in basis functions. Must be between [1,
         n_basis_funcs]. Default is 2. Higher order splines have more continuous
         derivatives at each interior knot, resulting in smoother basis functions.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs:
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -225,13 +205,13 @@ class MSplineBasis(SplineBasis, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
+        mode: Literal["eval", "conv"] = "eval",
         order: int = 2,
         label: Optional[str] = "EvalMSpline",
-        **kwargs,
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            mode="eval",
+            mode=mode,
             order=order,
             label=label,
         )
@@ -326,12 +306,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -351,14 +325,12 @@ class BSplineBasis(SplineBasis, abc.ABC):
         mode="eval",
         order: int = 4,
         label: Optional[str] = "BSplineBasis",
-        **kwargs,
     ):
         super().__init__(
             n_basis_funcs,
             mode=mode,
             order=order,
             label=label,
-            **kwargs,
         )
 
     @support_pynapple(conv_type="numpy")
@@ -442,12 +414,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    **kwargs :
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor` when
-        ``mode='conv'``; These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     Attributes
     ----------
@@ -462,17 +428,13 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         n_basis_funcs: int,
         mode="eval",
         order: int = 4,
-        window_size: Optional[int] = None,
-        bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "CyclicBSplineBasis",
-        **kwargs,
     ):
         super().__init__(
             n_basis_funcs,
             mode=mode,
             order=order,
             label=label,
-            **kwargs,
         )
         if self.order < 2:
             raise ValueError(

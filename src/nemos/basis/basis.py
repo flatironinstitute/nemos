@@ -55,6 +55,49 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "EvalBSpline",
     ):
+        """
+        B-spline 1-dimensional basis functions.
+
+        Implementation of the one-dimensional BSpline basis [1]_.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            Number of basis functions.
+        order :
+            Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
+            The B-splines have (order-2) continuous derivatives at each interior knot.
+            The higher this number, the smoother the basis representation will be.
+        bounds :
+            The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+            minimum and the maximum of the samples provided when evaluating the basis.
+            If a sample is outside the bounds, the basis will return NaN.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        Attributes
+        ----------
+        order :
+            Spline order.
+
+
+        References
+        ----------
+        .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline
+            Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
+            https://doi.org/10.1007/978-3-662-04919-8_5
+
+        Examples
+        --------
+        >>> from numpy import linspace
+        >>> from nemos.basis import EvalBSpline
+        >>> n_basis_funcs = 5
+        >>> order = 3
+        >>> bspline_basis = EvalBSpline(n_basis_funcs, order=order)
+        >>> sample_points = linspace(0, 1, 100)
+        >>> basis_functions = bspline_basis.compute_features(sample_points)
+        """
         EvalBasisMixin.__init__(self, bounds=bounds)
         BSplineBasis.__init__(
             self,
@@ -139,6 +182,47 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
         label: Optional[str] = "ConvBSpline",
         conv_kwargs: Optional[dict] = None,
     ):
+        """
+        B-spline 1-dimensional basis functions.
+
+        Implementation of the one-dimensional BSpline basis [1]_.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            Number of basis functions.
+        window_size :
+            The window size for convolution in number of samples.
+        order :
+            Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
+            The B-splines have (order-2) continuous derivatives at each interior knot.
+            The higher this number, the smoother the basis representation will be.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        Attributes
+        ----------
+        order :
+            Spline order.
+
+
+        References
+        ----------
+        .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In:
+            Bézier and B-Spline Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
+            https://doi.org/10.1007/978-3-662-04919-8_5
+
+        Examples
+        --------
+        >>> from numpy import linspace
+        >>> from nemos.basis import ConvBSpline
+        >>> n_basis_funcs = 5
+        >>> order = 3
+        >>> bspline_basis = ConvBSpline(n_basis_funcs, order=order, window_size=10)
+        >>> sample_points = linspace(0, 1, 100)
+        >>> features = bspline_basis.compute_features(sample_points)
+        """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
             self,
@@ -222,6 +306,42 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "EvalCyclicBSpline",
     ):
+        """
+        B-spline 1-dimensional basis functions for cyclic splines.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            Number of basis functions.
+        order :
+            Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
+            The B-splines have (order-2) continuous derivatives at each interior knot.
+            The higher this number, the smoother the basis representation will be.
+        bounds :
+            The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+            minimum and the maximum of the samples provided when evaluating the basis.
+            If a sample is outside the bounds, the basis will return NaN.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        Attributes
+        ----------
+        n_basis_funcs :
+            Number of basis functions, int.
+        order :
+            Order of the splines used in basis functions, int.
+
+        Examples
+        --------
+        >>> from numpy import linspace
+        >>> from nemos.basis import EvalCyclicBSpline
+        >>> n_basis_funcs = 5
+        >>> order = 3
+        >>> cyclic_bspline_basis = EvalCyclicBSpline(n_basis_funcs, order=order)
+        >>> sample_points = linspace(0, 1, 100)
+        >>> features = cyclic_bspline_basis.compute_features(sample_points)
+        """
         EvalBasisMixin.__init__(self, bounds=bounds)
         CyclicBSplineBasis.__init__(
             self,
@@ -306,6 +426,40 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
         label: Optional[str] = "ConvCyclicBSpline",
         conv_kwargs: Optional[dict] = None,
     ):
+        """
+        B-spline 1-dimensional basis functions for cyclic splines.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            Number of basis functions.
+        window_size :
+            The window size for convolution in number of samples.
+        order :
+            Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
+            The B-splines have (order-2) continuous derivatives at each interior knot.
+            The higher this number, the smoother the basis representation will be.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        Attributes
+        ----------
+        n_basis_funcs :
+            Number of basis functions, int.
+        order :
+            Order of the splines used in basis functions, int.
+
+        Examples
+        --------
+        >>> from numpy import linspace
+        >>> from nemos.basis import ConvCyclicBSpline
+        >>> n_basis_funcs = 5
+        >>> order = 3
+        >>> cyclic_bspline_basis = ConvCyclicBSpline(n_basis_funcs, order=order, window_size=10)
+        >>> sample_points = linspace(0, 1, 100)
+        >>> features = cyclic_bspline_basis.compute_features(sample_points)
+        """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         CyclicBSplineBasis.__init__(
             self,
@@ -389,6 +543,59 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "EvalMSpline",
     ):
+        r"""
+        M-spline basis functions for modeling and data transformation.
+
+        M-splines [1]_ are a type of spline basis function used for smooth curve fitting
+        and data representation. They are positive and integrate to one, making them
+        suitable for probabilistic models and density estimation. The order of an
+        M-spline defines its smoothness, with higher orders resulting in smoother
+        splines.
+
+        This class provides functionality to create M-spline basis functions, allowing
+        for flexible and smooth modeling of data. It inherits from the ``SplineBasis``
+        abstract class, providing specific implementations for M-splines.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            The number of basis functions to generate. More basis functions allow for
+            more flexible data modeling but can lead to overfitting.
+        order :
+            The order of the splines used in basis functions. Must be between [1,
+            n_basis_funcs]. Default is 2. Higher order splines have more continuous
+            derivatives at each interior knot, resulting in smoother basis functions.
+        bounds :
+            The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+            minimum and the maximum of the samples provided when evaluating the basis.
+            If a sample is outside the bounds, the basis will return NaN.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        References
+        ----------
+        .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+            3(4), 425-441.
+
+        Notes
+        -----
+        ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+        (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain
+        (y-axis) values will shrink by a factor of :math:`1/\alpha`.
+        For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
+        If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
+
+        Examples
+        --------
+        >>> from numpy import linspace
+        >>> from nemos.basis import EvalMSpline
+        >>> n_basis_funcs = 5
+        >>> order = 3
+        >>> mspline_basis = EvalMSpline(n_basis_funcs, order=order)
+        >>> sample_points = linspace(0, 1, 100)
+        >>> features = mspline_basis.compute_features(sample_points)
+        """
         EvalBasisMixin.__init__(self, bounds=bounds)
         MSplineBasis.__init__(
             self,
@@ -473,6 +680,57 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
         label: Optional[str] = "ConvMSpline",
         conv_kwargs: Optional[dict] = None,
     ):
+        r"""
+        M-spline basis functions for modeling and data transformation.
+
+        M-splines [1]_ are a type of spline basis function used for smooth curve fitting
+        and data representation. They are positive and integrate to one, making them
+        suitable for probabilistic models and density estimation. The order of an
+        M-spline defines its smoothness, with higher orders resulting in smoother
+        splines.
+
+        This class provides functionality to create M-spline basis functions, allowing
+        for flexible and smooth modeling of data. It inherits from the ``SplineBasis``
+        abstract class, providing specific implementations for M-splines.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            The number of basis functions to generate. More basis functions allow for
+            more flexible data modeling but can lead to overfitting.
+        order :
+            The order of the splines used in basis functions. Must be between [1,
+            n_basis_funcs]. Default is 2. Higher order splines have more continuous
+            derivatives at each interior knot, resulting in smoother basis functions.
+        window_size :
+            The window size for convolution in number of samples.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        References
+        ----------
+        .. [1] Ramsay, J. O. (1988). Monotone regression splines in action. Statistical science,
+            3(4), 425-441.
+
+        Notes
+        -----
+        ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
+        (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain
+        (y-axis) values will shrink by a factor of :math:`1/\alpha`.
+        For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
+        If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
+
+        Examples
+        --------
+        >>> from numpy import linspace
+        >>> from nemos.basis import ConvMSpline
+        >>> n_basis_funcs = 5
+        >>> order = 3
+        >>> mspline_basis = ConvMSpline(n_basis_funcs, order=order, window_size=10)
+        >>> sample_points = linspace(0, 1, 100)
+        >>> features = mspline_basis.compute_features(sample_points)
+        """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
             self,
@@ -551,6 +809,44 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
 class EvalRaisedCosineLinear(
     EvalBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
 ):
+    """
+    Represent linearly-spaced raised cosine basis functions.
+
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
+    to uniformly tile the internal points of the domain.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        The number of basis functions.
+    width :
+        Width of the raised cosine. By default, it's set to 2.0.
+    bounds :
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+        11003–11013.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import EvalRaisedCosineLinear
+    >>> n_basis_funcs = 5
+    >>> raised_cosine_basis = EvalRaisedCosineLinear(n_basis_funcs)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> features = raised_cosine_basis.compute_features(sample_points)
+    """
+
     def __init__(
         self,
         n_basis_funcs: int,
@@ -629,6 +925,42 @@ class EvalRaisedCosineLinear(
 class ConvRaisedCosineLinear(
     ConvBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
 ):
+    """
+    Represent linearly-spaced raised cosine basis functions.
+
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
+    to uniformly tile the internal points of the domain.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        The number of basis functions.
+    width :
+        Width of the raised cosine. By default, it's set to 2.0.
+    window_size :
+        The window size for convolution in number of samples.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+        11003–11013.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import ConvRaisedCosineLinear
+    >>> n_basis_funcs = 5
+    >>> raised_cosine_basis = ConvRaisedCosineLinear(n_basis_funcs, window_size=10)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> features = raised_cosine_basis.compute_features(sample_points)
+    """
+
     def __init__(
         self,
         n_basis_funcs: int,
@@ -715,6 +1047,49 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "EvalRaisedCosineLog",
     ):
+        """Represent log-spaced raised cosine basis functions.
+
+        Similar to ``EvalRaisedCosineLinear`` but the basis functions are log-spaced.
+        This implementation is based on the cosine bumps used by Pillow et al. [1]_
+        to uniformly tile the internal points of the domain.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            The number of basis functions.
+        width :
+            Width of the raised cosine.
+        time_scaling :
+            Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
+            larger values resulting in more stretching. As this approaches 0, the
+            transformation becomes linear.
+        enforce_decay_to_zero:
+            If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
+            and subsequently trims off the extra basis elements. This ensures that the final basis element
+            decays to 0.
+        window_size :
+            The window size for convolution. Required if mode is 'conv'.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        References
+        ----------
+        .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+           C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+           with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+           11003–11013.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalRaisedCosineLog
+        >>> n_basis_funcs = 5
+        >>> raised_cosine_basis = EvalRaisedCosineLog(n_basis_funcs)
+        >>> sample_points = np.random.randn(100)
+        >>> # convolve the basis
+        >>> features = raised_cosine_basis.compute_features(sample_points)
+        """
         EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLog.__init__(
             self,
@@ -796,6 +1171,49 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
         label: Optional[str] = "ConvRaisedCosineLog",
         conv_kwargs: Optional[dict] = None,
     ):
+        """Represent log-spaced raised cosine basis functions.
+
+        Similar to ``ConvRaisedCosineLinear`` but the basis functions are log-spaced.
+        This implementation is based on the cosine bumps used by Pillow et al. [1]_
+        to uniformly tile the internal points of the domain.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            The number of basis functions.
+        width :
+            Width of the raised cosine.
+        time_scaling :
+            Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
+            larger values resulting in more stretching. As this approaches 0, the
+            transformation becomes linear.
+        enforce_decay_to_zero:
+            If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
+            and subsequently trims off the extra basis elements. This ensures that the final basis element
+            decays to 0.
+        window_size :
+            The window size for convolution. Required if mode is 'conv'.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        References
+        ----------
+        .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+           C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+           with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+           11003–11013.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import ConvRaisedCosineLog
+        >>> n_basis_funcs = 5
+        >>> raised_cosine_basis = ConvRaisedCosineLog(n_basis_funcs, window_size=10)
+        >>> sample_points = np.random.randn(100)
+        >>> # convolve the basis
+        >>> features = raised_cosine_basis.compute_features(sample_points)
+        """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
             self,
@@ -902,7 +1320,7 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
         >>> ortho_basis = EvalOrthExponential(n_basis_funcs, decay_rates)
         >>> sample_points = linspace(0, 1, 100)
         >>> # evaluate the basis
-        >>> basis_functions = ortho_basis.compute_features(sample_points)
+        >>> features = ortho_basis.compute_features(sample_points)
 
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
@@ -978,7 +1396,20 @@ class EvalOrthExponential(EvalBasisMixin, OrthExponentialBasis):
 
 
 class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
-    """
+    """Set of 1D basis decaying exponential functions numerically orthogonalized.
+
+    Parameters
+    ----------
+    n_basis_funcs
+        Number of basis functions.
+    window_size :
+        The window size for convolution in number of samples.
+    decay_rates :
+        Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
     Examples
     --------
     >>> import numpy as np
@@ -990,8 +1421,7 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     >>> ortho_basis = ConvOrthExponential(n_basis_funcs, window_size, decay_rates)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
-    >>> basis_functions = ortho_basis.compute_features(sample_points)
-
+    >>> features = ortho_basis.compute_features(sample_points)
     """
 
     def __init__(
