@@ -12,6 +12,7 @@ from ._transformer_basis import TransformerBasis
 
 
 class EvalBasisMixin:
+    """Mixin class for evaluational basis."""
 
     def __init__(self, bounds: Optional[Tuple[float, float]] = None):
         self.bounds = bounds
@@ -80,6 +81,7 @@ class EvalBasisMixin:
 
 
 class ConvBasisMixin:
+    """Mixin class for convolutional basis."""
 
     def __init__(self, window_size: int, conv_kwargs: Optional[dict] = None):
         self.window_size = window_size
@@ -153,7 +155,6 @@ class ConvBasisMixin:
     @window_size.setter
     def window_size(self, window_size):
         """Setter for the window size parameter."""
-
         if window_size is None:
             raise ValueError(
                 "If the basis is in `conv` mode, you must provide a window_size!"
@@ -225,7 +226,7 @@ class ConvBasisMixin:
 
 
 class BasisTransformerMixin:
-    """Mixin class for constructing a transformer"""
+    """Mixin class for constructing a transformer."""
 
     def to_transformer(self) -> TransformerBasis:
         """
