@@ -1073,7 +1073,7 @@ class TestSharedMethods:
             )
         elif n_input != basis_obj._n_input_dimensionality:
             expectation = pytest.raises(
-                TypeError, match="takes 2 positional arguments but \d were given"
+                TypeError, match=r"takes 2 positional arguments but \d were given"
             )
         else:
             expectation = does_not_raise()
