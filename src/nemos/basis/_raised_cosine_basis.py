@@ -100,7 +100,6 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def __call__(
         self,
         sample_pts: ArrayLike,
@@ -132,6 +131,11 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
+
+        # reshape samples
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(-1, )
+
         # generate a set of shifted cosines, and constrain them to be non-zero
         # over a single period, then enforce the codomain to be [0,1], by adding 1
         # and then multiply by 0.5
@@ -145,6 +149,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
             )
             + 1
         )
+        basis_funcs = basis_funcs.reshape(*shape, basis_funcs.shape[1])
         return basis_funcs
 
     def _compute_peaks(self) -> NDArray:
@@ -335,7 +340,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def __call__(
         self,
         sample_pts: ArrayLike,
