@@ -84,8 +84,9 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
 
         References
         ----------
-        .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
-            Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+        .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline
+            Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
+            https://doi.org/10.1007/978-3-662-04919-8_5
 
         Examples
         --------
@@ -208,8 +209,9 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
 
         References
         ----------
-        .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In: Bézier and B-Spline Techniques.
-            Mathematics and Visualization. Springer, Berlin, Heidelberg. https://doi.org/10.1007/978-3-662-04919-8_5
+        .. [1] Prautzsch, H., Boehm, W., Paluszny, M. (2002). B-spline representation. In:
+            Bézier and B-Spline Techniques. Mathematics and Visualization. Springer, Berlin, Heidelberg.
+            https://doi.org/10.1007/978-3-662-04919-8_5
 
         Examples
         --------
@@ -579,8 +581,8 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         Notes
         -----
         ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
-        (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain (y-axis) values
-        will shrink by a factor of :math:`1/\alpha`.
+        (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain
+        (y-axis) values will shrink by a factor of :math:`1/\alpha`.
         For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
         If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
 
@@ -714,8 +716,8 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
         Notes
         -----
         ``MSplines`` must integrate to 1 over their domain (the area under the curve is 1). Therefore, if the domain
-        (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain (y-axis) values
-        will shrink by a factor of :math:`1/\alpha`.
+        (x-axis) of an MSpline basis is expanded by a factor of :math:`\alpha`, the values on the co-domain
+        (y-axis) values will shrink by a factor of :math:`1/\alpha`.
         For example, over the standard bounds of (0, 1), the maximum value of the MSpline is 18.
         If we set the bounds to (0, 2), the maximum value will be 9, i.e., 18 / 2.
 
@@ -844,6 +846,7 @@ class EvalRaisedCosineLinear(
     >>> # convolve the basis
     >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
     """
+
     def __init__(
         self,
         n_basis_funcs: int,
@@ -957,6 +960,7 @@ class ConvRaisedCosineLinear(
     >>> # convolve the basis
     >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
     """
+
     def __init__(
         self,
         n_basis_funcs: int,
