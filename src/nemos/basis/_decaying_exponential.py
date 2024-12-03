@@ -137,7 +137,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def __call__(
         self,
         sample_pts: NDArray,
@@ -161,6 +160,11 @@ class OrthExponentialBasis(Basis, abc.ABC):
         sample_pts, _ = min_max_rescale_samples(
             sample_pts, getattr(self, "bounds", None)
         )
+
+        # reshape
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(-1, )
+
         valid_idx = ~np.isnan(sample_pts)
         # because of how scipy.linalg.orth works, have to create a matrix of
         # shape (n_pts, n_basis_funcs) and then transpose, rather than
@@ -177,6 +181,9 @@ class OrthExponentialBasis(Basis, abc.ABC):
         )
         # orthonormalize on valid points
         basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
+
+        # reshape back
+        basis_funcs = basis_funcs.reshape(*shape, basis_funcs.shape[1])
         return basis_funcs
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
