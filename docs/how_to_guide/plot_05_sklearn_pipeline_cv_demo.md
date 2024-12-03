@@ -156,7 +156,7 @@ Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerB
 
 
 ```{code-cell} ipython3
-bas = nmo.basis.ConvRaisedCosineLinear(5, window_size=5)
+bas = nmo.basis.RaisedCosineLinearConv(5, window_size=5)
 trans_bas = bas.to_transformer()
 ```
 
@@ -188,7 +188,7 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.EvalRaisedCosineLinear(6).to_transformer(),
+            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
         ),
         (
             "glm",
@@ -324,7 +324,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.TransformerBasis(nmo.basis.EvalRaisedCosineLinear(6))
+basis = nmo.basis.TransformerBasis(nmo.basis.RaisedCosineLinearEval(6))
 model = nmo.glm.GLM(regularizer="Ridge")
 
 # loop over combinations
@@ -451,12 +451,12 @@ Here we include `transformerbasis___basis` in the parameter grid to try differen
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis___basis=(
-        nmo.basis.EvalRaisedCosineLinear(5),
-        nmo.basis.EvalRaisedCosineLinear(10),
-        nmo.basis.EvalRaisedCosineLog(5),
-        nmo.basis.EvalRaisedCosineLog(10),
-        nmo.basis.EvalMSpline(5),
-        nmo.basis.EvalMSpline(10),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```
@@ -496,7 +496,7 @@ cvdf_wide = cvdf.pivot(
 doc_plots.plot_heatmap_cv_results(cvdf_wide)
 ```
 
-As shown in the table, the model with the highest score, highlighted in blue, used a EvalRaisedCosineLinear basis (as used above), which appears to be a suitable choice for our toy data. 
+As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineLinearEval basis (as used above), which appears to be a suitable choice for our toy data. 
 We can confirm that by plotting the firing rate predictions:
 
 
@@ -537,12 +537,12 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis___basis=(
-        nmo.basis.EvalRaisedCosineLinear(5),
-        nmo.basis.EvalRaisedCosineLinear(10),
-        nmo.basis.EvalRaisedCosineLog(5),
-        nmo.basis.EvalRaisedCosineLog(10),
-        nmo.basis.EvalMSpline(5),
-        nmo.basis.EvalMSpline(10),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```

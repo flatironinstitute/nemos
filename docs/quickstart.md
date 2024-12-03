@@ -165,7 +165,7 @@ you need to specify the number of basis functions. For some `basis` objects, add
 >>> import nemos as nmo
 
 >>> n_basis_funcs = 10
->>> basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs)
+>>> basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs)
 
 ```
 
@@ -205,7 +205,7 @@ number of sample points.
 
 >>> n_basis_funcs = 10
 >>> # define a filter bank of 10 basis function, 200 samples long.
->>> basis = nmo.basis.ConvBSpline(n_basis_funcs, window_size=200)
+>>> basis = nmo.basis.BSplineConv(n_basis_funcs, window_size=200)
 
 ```
 
@@ -350,7 +350,7 @@ You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oa
 >>> upsampled_head_dir = head_dir.bin_average(0.01)  
 
 >>> # create your features
->>> X = nmo.basis.EvalCyclicBSpline(10).compute_features(upsampled_head_dir)
+>>> X = nmo.basis.CyclicBSplineEval(10).compute_features(upsampled_head_dir)
 
 >>> # add a neuron axis and fit model
 >>> model = nmo.glm.GLM().fit(X, counts) 

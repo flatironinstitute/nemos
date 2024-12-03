@@ -146,9 +146,9 @@ We can define a two-dimensional basis for position by multiplying two one-dimens
 see [here](../../background/plot_02_ND_basis_function) for more details.
 
 ```{code-cell} ipython3
-basis_2d = nmo.basis.EvalRaisedCosineLinear(
+basis_2d = nmo.basis.RaisedCosineLinearEval(
     n_basis_funcs=10
-) * nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=10)
+) * nmo.basis.RaisedCosineLinearEval(n_basis_funcs=10)
 ```
 
 Let's see what a few basis look like. Here we evaluate it on a 100 x 100 grid.

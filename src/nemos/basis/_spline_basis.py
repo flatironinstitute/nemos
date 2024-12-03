@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import abc
 import copy
-from functools import partial
 from typing import Literal, Optional, Tuple
 
 import numpy as np
@@ -14,7 +13,6 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import (
     Basis,
-    add_docstring,
     check_one_dimensional,
     check_transform_input,
     min_max_rescale_samples,
@@ -194,12 +192,12 @@ class MSplineBasis(SplineBasis, abc.ABC):
     Examples
     --------
     >>> from numpy import linspace
-    >>> from nemos.basis import EvalMSpline
+    >>> from nemos.basis import MSplineEval
     >>> n_basis_funcs = 5
     >>> order = 3
-    >>> mspline_basis = EvalMSpline(n_basis_funcs, order=order)
+    >>> mspline_basis = MSplineEval(n_basis_funcs, order=order)
     >>> sample_points = linspace(0, 1, 100)
-    >>> basis_functions = mspline_basis(sample_points)
+    >>> basis_functions = mspline_basis.compute_features(sample_points)
     """
 
     def __init__(
@@ -207,7 +205,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
         n_basis_funcs: int,
         mode: Literal["eval", "conv"] = "eval",
         order: int = 2,
-        label: Optional[str] = "EvalMSpline",
+        label: Optional[str] = "MSplineEval",
     ) -> None:
         super().__init__(
             n_basis_funcs,
@@ -219,7 +217,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the M-spline basis functions at given sample points.
 
@@ -336,7 +334,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, sample_pts: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -445,7 +443,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(
+    def _evaluate(
         self,
         sample_pts: ArrayLike,
     ) -> FeatureMatrix:
@@ -669,8 +667,3 @@ def bspline(
         )
 
     return basis_eval.T
-
-
-add_docstrings_mspline = partial(add_docstring, cls=MSplineBasis)
-add_docstrings_bspline = partial(add_docstring, cls=BSplineBasis)
-add_docstrings_cyclic_bspline = partial(add_docstring, cls=CyclicBSplineBasis)

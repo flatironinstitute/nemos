@@ -82,7 +82,7 @@ see [jax.numpy.convolve](https://jax.readthedocs.io/en/latest/_autosummary/jax.n
 
 ```{code-cell} ipython3
 # create three filters
-basis_obj = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=3)
+basis_obj = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=3)
 _, w = basis_obj.evaluate_on_grid(ws)
 
 plt.plot(w)
@@ -198,18 +198,18 @@ Let's see how we can get the same results through [`Basis`](nemos.basis._basis.B
 
 ```{code-cell} ipython3
 # define basis with different predictor causality
-causal_basis = nmo.basis.ConvRaisedCosineLinear(
+causal_basis = nmo.basis.RaisedCosineLinearConv(
         n_basis_funcs=3, window_size=ws,
         conv_kwargs=dict(predictor_causality="causal")
         
 )
 
-acausal_basis = nmo.basis.ConvRaisedCosineLinear(
+acausal_basis = nmo.basis.RaisedCosineLinearConv(
         n_basis_funcs=3, window_size=ws,
         conv_kwargs=dict(predictor_causality="acausal")
 )
 
-anticausal_basis = nmo.basis.ConvRaisedCosineLinear(
+anticausal_basis = nmo.basis.RaisedCosineLinearConv(
         n_basis_funcs=3, window_size=ws,
         conv_kwargs=dict(predictor_causality="anti-causal")
 )
