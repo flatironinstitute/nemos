@@ -34,10 +34,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
     mode :
         The mode of operation. ``'eval'`` for evaluation at sample points,
         ``'conv'`` for convolutional operation.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
