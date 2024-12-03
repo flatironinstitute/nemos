@@ -217,12 +217,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
