@@ -34,12 +34,6 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         'conv' for convolutional operation.
     width :
         Width of the raised cosine. By default, it's set to 2.0.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
-    bounds :
-        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
-        minimum and the maximum of the samples provided when evaluating the basis.
-        If a sample is outside the bounds, the basis will return NaN.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -58,7 +52,6 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         mode="eval",
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
-        **kwargs,
     ) -> None:
         super().__init__(
             n_basis_funcs,
