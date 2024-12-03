@@ -69,11 +69,6 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
 
-    Attributes
-    ----------
-    order :
-        Spline order.
-
 
     References
     ----------
@@ -193,12 +188,6 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-
-    Attributes
-    ----------
-    order :
-        Spline order.
-
 
     References
     ----------
@@ -320,13 +309,6 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
 
-    Attributes
-    ----------
-    n_basis_funcs :
-        Number of basis functions, int.
-    order :
-        Order of the splines used in basis functions, int.
-
     Examples
     --------
     >>> from numpy import linspace
@@ -437,13 +419,6 @@ class ConvCyclicBSpline(ConvBasisMixin, CyclicBSplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-
-    Attributes
-    ----------
-    n_basis_funcs :
-        Number of basis functions, int.
-    order :
-        Order of the splines used in basis functions, int.
 
     Examples
     --------
