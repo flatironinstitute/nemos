@@ -1,5 +1,7 @@
 """Collection of nemos typing."""
 
+from __future__ import annotations
+
 from typing import Any, Callable, NamedTuple, Tuple, Union
 
 import jax.numpy as jnp
