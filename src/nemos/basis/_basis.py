@@ -81,16 +81,16 @@ def min_max_rescale_samples(
         If more than 90% of the sample points contain NaNs or Infs.
     """
     sample_pts = sample_pts.astype(float)
-    vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
-    vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
+    # if not normalize all array
+    vmin = np.nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
+    vmax = np.nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
-    # this passes if `samples_pts` contains a single value
-    if vmin != vmax:
-        scaling = vmax - vmin
-        sample_pts /= scaling
-    else:
-        scaling = 1.0
+
+    # do not normalize if samples contain a single value
+    scaling = vmax - vmin
+    scaling[scaling == 0] = 1.
+    sample_pts /= scaling
 
     check_fraction_valid_samples(
         sample_pts,

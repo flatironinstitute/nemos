@@ -5,7 +5,7 @@ import inspect
 from typing import Optional, Tuple, Union
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 
 from ..convolve import create_convolutional_predictor
 from ._transformer_basis import TransformerBasis
@@ -17,7 +17,7 @@ class EvalBasisMixin:
     def __init__(self, bounds: Optional[Tuple[float, float]] = None):
         self.bounds = bounds
 
-    def _compute_features(self, *xi: ArrayLike):
+    def _compute_features(self, *xi: NDArray):
         """
         Apply the basis transformation to the input data.
 
@@ -38,7 +38,9 @@ class EvalBasisMixin:
             or a pynapple Tsd.
 
         """
-        return self.__call__(*xi)
+        out = self.__call__(*(x.reshape(x.shape[0], -1) for x in xi))
+        return out.reshape(out.shape[0], -1)
+
 
     def _set_kernel(self) -> "EvalBasisMixin":
         """
@@ -87,7 +89,7 @@ class ConvBasisMixin:
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
 
-    def _compute_features(self, *xi: ArrayLike):
+    def _compute_features(self, *xi: NDArray):
         """
         Apply the basis transformation to the input data.
 
