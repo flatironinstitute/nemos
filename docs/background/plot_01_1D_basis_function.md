@@ -210,6 +210,8 @@ check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 ### Multi-dimensional inputs
 For N-dimensional input, with $N>1$, the method assumes that first axis is the sample axis. This is automatically true for pynapple time series data, for arrays you can use `numpy.transpose` to re-arrange the axis if the assumption is not matched.
 
+#### "Eval" Basis
+
 For "Eval" basis, `compute_features` is equivalent to "calling" the basis and then reshaping the input into a 2-dimensional feature matrix.
 
 ```{code-cell} ipython3
@@ -238,6 +240,8 @@ out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] 
 # check that this is equivalent to the output of compute_features
 print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
 ```
+
+#### "Conv" Basis
 
 For "Conv" type basis, `compute_features` is equivalent of convolving each input with `n_basis_funcs` kernels, and concatenate the output into a 2D design matrix.
 
