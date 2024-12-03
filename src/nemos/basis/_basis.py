@@ -64,7 +64,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 def min_max_rescale_samples(
     sample_pts: NDArray,
     bounds: Optional[Tuple[float, float]] = None,
-) -> Tuple[NDArray, float]:
+) -> Tuple[NDArray, NDArray]:
     """Rescale samples to [0,1].
 
     Parameters

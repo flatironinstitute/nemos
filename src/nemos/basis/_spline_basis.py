@@ -225,8 +225,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
         Parameters
         ----------
         sample_pts :
-            The sample points at which the M-spline is evaluated. Samples must be stored in a
-            multi-dimensional array with first axis being the samples, i.e. `sample_pts.shape[0] == n_samples`.
+            The sample points at which the M-spline is evaluated.
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------
@@ -345,8 +346,9 @@ class BSplineBasis(SplineBasis, abc.ABC):
         Parameters
         ----------
         sample_pts :
-            The sample points at which the B-spline is evaluated, shape (n_samples,). Samples must be stored in a
-            multi-dimensional array with first axis being the samples, i.e. `sample_pts.shape[0] == n_samples`.
+            The sample points at which the B-spline is evaluated, shape (n_samples,).
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------

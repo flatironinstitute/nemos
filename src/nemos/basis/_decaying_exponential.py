@@ -147,7 +147,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
         ----------
         sample_pts
             Spacing for basis functions, holding elements on the interval :math:`[0,inf)`.
-            Samples must be stored in a multi-dimensional array with first axis being the samples, i.e.
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
             `sample_pts.shape[0] == n_samples`.
 
         Returns

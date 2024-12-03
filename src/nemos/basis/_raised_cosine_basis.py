@@ -109,7 +109,9 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         Parameters
         ----------
         sample_pts :
-            Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
+            Spacing for basis functions, holding elements on interval [0, 1].
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Raises
         ------
@@ -350,6 +352,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         ----------
         sample_pts :
             Spacing for basis functions. Samples will be rescaled to the interval [0, 1].
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------
