@@ -38,8 +38,8 @@ class EvalBasisMixin:
             or a pynapple Tsd.
 
         """
-        out = self.__call__(*(x.reshape(x.shape[0], -1) for x in xi))
-        return out.reshape(out.shape[0], -1)
+        out = self.__call__(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        return np.reshape(out, (out.shape[0], -1))
 
 
     def _set_kernel(self) -> "EvalBasisMixin":

@@ -162,30 +162,44 @@ class OrthExponentialBasis(Basis, abc.ABC):
             sample_pts, getattr(self, "bounds", None)
         )
 
-        # reshape
-        shape = sample_pts.shape
-        sample_pts = sample_pts.reshape(-1, )
+        # process one input at the time (orthogonalization must be done one input at the time)
 
-        valid_idx = ~np.isnan(sample_pts)
-        # because of how scipy.linalg.orth works, have to create a matrix of
-        # shape (n_pts, n_basis_funcs) and then transpose, rather than
-        # directly computing orth on the matrix of shape (n_basis_funcs,
-        # n_pts)
-        exp_decay_eval = np.stack(
-            [np.exp(-lam * sample_pts[valid_idx]) for lam in self._decay_rates], axis=1
-        )
-        # count the linear independent components (could be lower than n_basis_funcs for num precision).
-        n_independent_component = np.linalg.matrix_rank(exp_decay_eval)
-        # initialize output to nan
-        basis_funcs = np.full(
-            shape=(sample_pts.shape[0], n_independent_component), fill_value=np.nan
-        )
-        # orthonormalize on valid points
-        basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
+        # flatten all inputs
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(sample_pts.shape[0], -1)
+        basis_list = []
+        max_rank = 0
+        for samp in sample_pts.T:
+            valid_idx = ~np.isnan(samp)
+            # because of how scipy.linalg.orth works, have to create a matrix of
+            # shape (n_pts, n_basis_funcs) and then transpose, rather than
+            # directly computing orth on the matrix of shape (n_basis_funcs,
+            # n_pts)
+            exp_decay_eval = np.stack(
+                [np.exp(-lam * samp[valid_idx]) for lam in self._decay_rates], axis=1
+            )
+            # count the linear independent components (could be lower than n_basis_funcs for num precision).
+            n_independent_component = np.linalg.matrix_rank(exp_decay_eval)
+            # initialize output to nan
+            basis_funcs = np.full(
+                shape=(samp.shape[0], n_independent_component), fill_value=np.nan
+            )
+            # orthonormalize on valid points
+            basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
+
+            max_rank = max(max_rank, basis_funcs.shape[1])
+
+            # append the basis
+            basis_list.append(basis_funcs)
+
+        # fill the value in
+        out = np.full(shape=(shape[0], len(basis_list), max_rank), fill_value=np.nan, dtype=np.float64)
+        for i, bas in enumerate(basis_list):
+            out[:, i, :bas.shape[1]] = bas
 
         # reshape back
-        basis_funcs = basis_funcs.reshape(*shape, basis_funcs.shape[1])
-        return basis_funcs
+        out = out.reshape(*shape, -1)
+        return out
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

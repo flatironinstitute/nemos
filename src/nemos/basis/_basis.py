@@ -88,7 +88,7 @@ def min_max_rescale_samples(
     sample_pts -= vmin
 
     # do not normalize if samples contain a single value
-    scaling = vmax - vmin
+    scaling = np.asarray(vmax - vmin)
     scaling[scaling == 0] = 1.
     sample_pts /= scaling
 

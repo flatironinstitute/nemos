@@ -570,7 +570,8 @@ class TestSharedMethods:
         "inp, expectation",
         [
             (np.linspace(0, 1, 10), does_not_raise()),
-            (np.linspace(0, 1, 10)[:, None], pytest.raises(ValueError)),
+            (np.linspace(0, 1, 10)[:, None], does_not_raise()),
+            (np.repeat(np.linspace(0,1, 10), 10).reshape(10, 5, 2), does_not_raise()),
         ],
     )
     @pytest.mark.parametrize("n_basis", [6])
@@ -582,7 +583,29 @@ class TestSharedMethods:
             n_basis_funcs=n_basis, **kwargs, **extra_decay_rates(cls[mode], n_basis)
         )
         with expectation:
-            bas(inp)
+            out = bas(inp)
+            out2 = bas.evaluate_on_grid(inp.shape[0])[1]
+            assert np.all((out.reshape(out.shape[0], -1, n_basis) - out2[:, None]) == 0)
+            assert out.shape == tuple((*inp.shape, n_basis))
+
+
+    @pytest.mark.parametrize("n_basis", [6])
+    @pytest.mark.parametrize(
+        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 3})]
+    )
+    def test_call_nan_location(self, mode, kwargs, n_basis, cls):
+        bas = cls[mode](
+            n_basis_funcs=n_basis, **kwargs, **extra_decay_rates(cls[mode], n_basis)
+        )
+        inp = np.random.randn(10, 2, 3)
+        inp[2, 0, [0, 2]] = np.nan
+        inp[4, 1, 1] = np.nan
+        out = bas(inp)
+        assert np.all(np.isnan(out[2, 0, [0, 2]]))
+        assert np.all(np.isnan(out[4, 1, 1]))
+        assert np.isnan(out).sum() == 3 * n_basis
+
+
 
     @pytest.mark.parametrize(
         "samples, expectation",
@@ -1014,23 +1037,6 @@ class TestSharedMethods:
             cls[mode](
                 n_basis_funcs=5, window_size=ws, **extra_decay_rates(cls[mode], 5)
             )
-
-    # @pytest.mark.parametrize("n_basis_funcs", [-1, 0, 1, 3, 10, 20])
-    # @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
-    # @pytest.mark.parametrize("mode, kwargs", [("eval", {}), ("conv", {"window_size": 2})])
-    # def test_minimum_number_of_basis_required_is_matched(self, n_basis_funcs, mode, kwargs, order, cls):
-    #     min_per_basis = {
-    #         "EvalMSpline": (order < 1) | (n_basis_funcs < 1) | (order > n_basis_funcs),
-    #         "EvalRaisedCosineLog": lambda x: x < 2,
-    #         "EvalBSpline": lambda x: order > x,
-    #     }
-    #     if n_basis_funcs < 2:
-    #         with pytest.raises(
-    #                 ValueError, match=f"Object class {cls[mode].__name__} requires >= 2 basis elements.",
-    #         ):
-    #             cls[mode](n_basis_funcs=n_basis_funcs, **kwargs)
-    #     else:
-    #         cls[mode](n_basis_funcs=n_basis_funcs, **kwargs)
 
     @pytest.mark.parametrize("samples", [[], [0], [0, 0]])
     @pytest.mark.parametrize(
