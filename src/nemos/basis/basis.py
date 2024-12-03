@@ -95,7 +95,7 @@ class EvalBSpline(EvalBasisMixin, BSplineBasis):
         >>> order = 3
         >>> bspline_basis = EvalBSpline(n_basis_funcs, order=order)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = bspline_basis(sample_points)
+        >>> basis_functions = bspline_basis.compute_features(sample_points)
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
         BSplineBasis.__init__(
@@ -219,7 +219,7 @@ class ConvBSpline(ConvBasisMixin, BSplineBasis):
         >>> order = 3
         >>> bspline_basis = ConvBSpline(n_basis_funcs, order=order, window_size=10)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = bspline_basis(sample_points)
+        >>> basis_functions = bspline_basis.compute_features(sample_points)
         """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
@@ -338,7 +338,7 @@ class EvalCyclicBSpline(EvalBasisMixin, CyclicBSplineBasis):
         >>> order = 3
         >>> cyclic_bspline_basis = EvalCyclicBSpline(n_basis_funcs, order=order)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = cyclic_bspline_basis(sample_points)
+        >>> basis_functions = cyclic_bspline_basis.compute_features(sample_points)
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
         CyclicBSplineBasis.__init__(
@@ -592,7 +592,7 @@ class EvalMSpline(EvalBasisMixin, MSplineBasis):
         >>> order = 3
         >>> mspline_basis = EvalMSpline(n_basis_funcs, order=order)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = mspline_basis(sample_points)
+        >>> basis_functions = mspline_basis.compute_features(sample_points)
         """
         EvalBasisMixin.__init__(self, bounds=bounds)
         MSplineBasis.__init__(
@@ -727,7 +727,7 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
         >>> order = 3
         >>> mspline_basis = ConvMSpline(n_basis_funcs, order=order, window_size=10)
         >>> sample_points = linspace(0, 1, 100)
-        >>> basis_functions = mspline_basis(sample_points)
+        >>> basis_functions = mspline_basis.compute_features(sample_points)
         """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
@@ -807,6 +807,43 @@ class ConvMSpline(ConvBasisMixin, MSplineBasis):
 class EvalRaisedCosineLinear(
     EvalBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
 ):
+    """
+    Represent linearly-spaced raised cosine basis functions.
+
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
+    to uniformly tile the internal points of the domain.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        The number of basis functions.
+    width :
+        Width of the raised cosine. By default, it's set to 2.0.
+    bounds :
+        The bounds for the basis domain in ``mode="eval"``. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+        11003–11013.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import EvalRaisedCosineLinear
+    >>> n_basis_funcs = 5
+    >>> raised_cosine_basis = EvalRaisedCosineLinear(n_basis_funcs)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+    """
     def __init__(
         self,
         n_basis_funcs: int,
@@ -885,6 +922,41 @@ class EvalRaisedCosineLinear(
 class ConvRaisedCosineLinear(
     ConvBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
 ):
+    """
+    Represent linearly-spaced raised cosine basis functions.
+
+    This implementation is based on the cosine bumps used by Pillow et al. [1]_
+    to uniformly tile the internal points of the domain.
+
+    Parameters
+    ----------
+    n_basis_funcs :
+        The number of basis functions.
+    width :
+        Width of the raised cosine. By default, it's set to 2.0.
+    window_size :
+        The window size for convolution in number of samples.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    References
+    ----------
+    .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+        11003–11013.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import ConvRaisedCosineLinear
+    >>> n_basis_funcs = 5
+    >>> raised_cosine_basis = ConvRaisedCosineLinear(n_basis_funcs, window_size=10)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+    """
     def __init__(
         self,
         n_basis_funcs: int,
@@ -971,6 +1043,49 @@ class EvalRaisedCosineLog(EvalBasisMixin, RaisedCosineBasisLog):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "EvalRaisedCosineLog",
     ):
+        """Represent log-spaced raised cosine basis functions.
+
+        Similar to ``EvalRaisedCosineLinear`` but the basis functions are log-spaced.
+        This implementation is based on the cosine bumps used by Pillow et al. [1]_
+        to uniformly tile the internal points of the domain.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            The number of basis functions.
+        width :
+            Width of the raised cosine.
+        time_scaling :
+            Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
+            larger values resulting in more stretching. As this approaches 0, the
+            transformation becomes linear.
+        enforce_decay_to_zero:
+            If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
+            and subsequently trims off the extra basis elements. This ensures that the final basis element
+            decays to 0.
+        window_size :
+            The window size for convolution. Required if mode is 'conv'.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        References
+        ----------
+        .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+           C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+           with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+           11003–11013.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import EvalRaisedCosineLog
+        >>> n_basis_funcs = 5
+        >>> raised_cosine_basis = EvalRaisedCosineLog(n_basis_funcs)
+        >>> sample_points = np.random.randn(100)
+        >>> # convolve the basis
+        >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+        """
         EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLog.__init__(
             self,
@@ -1052,6 +1167,49 @@ class ConvRaisedCosineLog(ConvBasisMixin, RaisedCosineBasisLog):
         label: Optional[str] = "ConvRaisedCosineLog",
         conv_kwargs: Optional[dict] = None,
     ):
+        """Represent log-spaced raised cosine basis functions.
+
+        Similar to ``ConvRaisedCosineLinear`` but the basis functions are log-spaced.
+        This implementation is based on the cosine bumps used by Pillow et al. [1]_
+        to uniformly tile the internal points of the domain.
+
+        Parameters
+        ----------
+        n_basis_funcs :
+            The number of basis functions.
+        width :
+            Width of the raised cosine.
+        time_scaling :
+            Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
+            larger values resulting in more stretching. As this approaches 0, the
+            transformation becomes linear.
+        enforce_decay_to_zero:
+            If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
+            and subsequently trims off the extra basis elements. This ensures that the final basis element
+            decays to 0.
+        window_size :
+            The window size for convolution. Required if mode is 'conv'.
+        label :
+            The label of the basis, intended to be descriptive of the task variable being processed.
+            For example: velocity, position, spike_counts.
+
+        References
+        ----------
+        .. [1] Pillow, J. W., Paninski, L., Uzzel, V. J., Simoncelli, E. P., & J.,
+           C. E. (2005). Prediction and decoding of retinal ganglion cell responses
+           with a probabilistic spiking model. Journal of Neuroscience, 25(47),
+           11003–11013.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import ConvRaisedCosineLog
+        >>> n_basis_funcs = 5
+        >>> raised_cosine_basis = ConvRaisedCosineLog(n_basis_funcs, window_size=10)
+        >>> sample_points = np.random.randn(100)
+        >>> # convolve the basis
+        >>> basis_functions = raised_cosine_basis.compute_features(sample_points)
+        """
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
             self,
@@ -1260,7 +1418,6 @@ class ConvOrthExponential(ConvBasisMixin, OrthExponentialBasis):
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> basis_functions = ortho_basis.compute_features(sample_points)
-
     """
 
     def __init__(
