@@ -40,6 +40,8 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx_autodoc_typehints',
     'sphinx_togglebutton',
+    'matplotlib.sphinxext.plot_directive',
+    "matplotlib.sphinxext.mathmpl",
 ]
 
 myst_enable_extensions = [
@@ -121,7 +123,11 @@ html_theme_options = {
     "logo": {
       "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
-   }
+   },
+    "secondary_sidebar_items": {
+        "**": ["page-toc", "sourcelink"],
+        "background/basis/README": [],
+    },
 }
 
 html_sidebars = {
@@ -160,3 +166,6 @@ if exclude_tutorials:
     nb_execution_excludepatterns = ["tutorials/**", "how_to_guide/**", "background/**"]
 
 viewcode_follow_imported_members = True
+
+# option for mpl extension
+plot_html_show_formats = False

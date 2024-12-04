@@ -11,10 +11,10 @@ import jax.numpy
 import numpy as np
 import pynapple as nap
 import pytest
-import utils_testing
 from sklearn.base import clone as sk_clone
 
 import nemos as nmo
+import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
@@ -25,14 +25,6 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
-
-
-def trim_kwargs(cls, kwargs, class_specific_params):
-    return {
-        key: value
-        for key, value in kwargs.items()
-        if key in class_specific_params[cls.__name__]
-    }
 
 
 def extra_decay_rates(cls, n_basis):
@@ -50,11 +42,11 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     """
     all_basis = [
         class_obj
-        for _, class_obj in utils_testing.get_non_abstract_classes(basis)
+        for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
         if issubclass(class_obj, Basis)
     ] + [
         bas
-        for _, bas in utils_testing.get_non_abstract_classes(nmo.basis._basis)
+        for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
         if bas != basis.TransformerBasis
     ]
     if filter_basis != "all":
@@ -741,7 +733,7 @@ class TestSharedMethods:
         )
 
         # figure out which kwargs needs to be removed
-        kwargs = trim_kwargs(cls["conv"], kwargs, class_specific_params)
+        kwargs = inspect_utils.trim_kwargs(cls["conv"], kwargs, class_specific_params)
 
         basis_obj = cls["conv"](**kwargs)
         out = basis_obj.compute_features(x)
@@ -1877,20 +1869,20 @@ class CombinedBasis(BasisFuncsTesting):
         kwargs = {**default_kwargs, **kwargs}
 
         if basis_class == AdditiveBasis:
-            kwargs_mspline = trim_kwargs(
+            kwargs_mspline = inspect_utils.trim_kwargs(
                 basis.MSplineEval, kwargs, class_specific_params
             )
-            kwargs_raised_cosine = trim_kwargs(
+            kwargs_raised_cosine = inspect_utils.trim_kwargs(
                 basis.RaisedCosineLinearConv, kwargs, class_specific_params
             )
             b1 = basis.MSplineEval(**kwargs_mspline)
             b2 = basis.RaisedCosineLinearConv(**kwargs_raised_cosine)
             basis_obj = b1 + b2
         elif basis_class == MultiplicativeBasis:
-            kwargs_mspline = trim_kwargs(
+            kwargs_mspline = inspect_utils.trim_kwargs(
                 basis.MSplineEval, kwargs, class_specific_params
             )
-            kwargs_raised_cosine = trim_kwargs(
+            kwargs_raised_cosine = inspect_utils.trim_kwargs(
                 basis.RaisedCosineLinearConv, kwargs, class_specific_params
             )
             b1 = basis.MSplineEval(**kwargs_mspline)
@@ -1898,7 +1890,7 @@ class CombinedBasis(BasisFuncsTesting):
             basis_obj = b1 * b2
         else:
             basis_obj = basis_class(
-                **trim_kwargs(basis_class, kwargs, class_specific_params)
+                **inspect_utils.trim_kwargs(basis_class, kwargs, class_specific_params)
             )
         return basis_obj
 
@@ -1910,7 +1902,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize("base_cls", [basis.BSplineEval, basis.BSplineConv])
     def test_non_empty_samples(self, base_cls, samples, class_specific_params):
         kwargs = {"window_size": 2, "n_basis_funcs": 5}
-        kwargs = trim_kwargs(base_cls, kwargs, class_specific_params)
+        kwargs = inspect_utils.trim_kwargs(base_cls, kwargs, class_specific_params)
         basis_obj = base_cls(**kwargs) + base_cls(**kwargs)
         if any(tuple(len(s) == 0 for s in samples)):
             with pytest.raises(
