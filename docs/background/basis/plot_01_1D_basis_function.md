@@ -168,7 +168,7 @@ For N-dimensional input, with $N>1$, the method assumes that first axis is the s
 For "Eval" basis, `compute_features` is equivalent to "calling" the basis and then reshaping the input into a 2-dimensional feature matrix.
 
 ```{code-cell} ipython3
-basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=5)
+basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=5)
 
 # generate a 3D array
 inp = np.random.randn(50, 2, 3)
@@ -185,7 +185,7 @@ For each of the `3 * 2 = 6` inputs, `n_basis_funcs = 5` features are computed. T
 For "Conv" type basis, `compute_features` is equivalent to convolving each input with `n_basis_funcs` kernels, and concatenate the output into a 2D design matrix.
 
 ```{code-cell} ipython3
-basis = nmo.basis.ConvRaisedCosineLinear(n_basis_funcs=5, window_size=6)
+basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
 
 # compute_features to perform the convolution and concatenate
 out = basis.compute_features(inp)

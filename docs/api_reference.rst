@@ -4,6 +4,7 @@ API Reference
 =============
 
 .. _nemos_glm:
+
 The ``nemos.glm`` module
 ------------------------
 Classes for creating Generalized Linear Models (GLMs) for both single neurons and neural populations.
@@ -19,6 +20,7 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
     PopulationGLM
 
 .. _nemos_basis:
+
 The ``nemos.basis`` module
 --------------------------
 Provides basis function classes to construct and transform features for model inputs.
@@ -107,8 +109,9 @@ These classes are the building blocks for the concrete basis classes.
     TransformerBasis
 
 .. _observation_models:
+
 The ``nemos.observation_models`` module
---------------------------------------
+---------------------------------------
 Statistical models to describe the distribution of neural responses or other predicted variables, given inputs.
 
 .. currentmodule:: nemos.observation_models
@@ -123,6 +126,7 @@ Statistical models to describe the distribution of neural responses or other pre
     GammaObservations
 
 .. _regularizers:
+
 The ``nemos.regularizer`` module
 --------------------------------
 Implements various regularization techniques to constrain model parameters, which helps prevent overfitting.

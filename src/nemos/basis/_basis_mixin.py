@@ -24,7 +24,7 @@ class EvalBasisMixin:
         Apply the basis transformation to the input data.
 
         The basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i` is a
-        basis element. xi[k] must be a one-dimensional array or a pynapple Tsd.
+        basis element. xi[k] must be a N-dimensional array (N >= 1) or a pynapple Tsd/TsdFrame/TsdTensor.
 
         Parameters
         ----------
@@ -36,8 +36,7 @@ class EvalBasisMixin:
         -------
         :
             A matrix with the transformed features. The basis evaluated at the samples,
-            or :math:`b_i(*xi)`, where :math:`b_i` is a basis element. xi[k] must be a one-dimensional array
-            or a pynapple Tsd.
+            or :math:`b_i(*xi)`, where :math:`b_i` is a basis element.
 
         """
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
