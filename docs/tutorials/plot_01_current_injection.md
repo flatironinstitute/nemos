@@ -446,7 +446,7 @@ following properties:
 :::{admonition} What is jax?
 :class: note
 
-[jax](https://github.com/google/jax) is a Google-supported python library
+[jax](https://github.com/jax-ml/jax) is a Google-supported python library
 for automatic differentiation. It has all sorts of neat features, but the
 most relevant of which for NeMoS is its GPU-compatibility and
 just-in-time compilation (both of which make code faster with little
