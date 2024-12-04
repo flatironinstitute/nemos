@@ -304,7 +304,7 @@ if root:
    path = Path(root) / "html/_static/thumbnails/background"
 # if local store in ../_build/html/...
 else:
-   path = Path("../_build/html/_static/thumbnails/background")
+   path = Path("../../_build/html/_static/thumbnails/background")
  
 # make sure the folder exists if run from build
 if root or Path("../_build/html/_static").exists():
