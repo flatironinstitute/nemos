@@ -38,6 +38,7 @@ warnings.filterwarnings(
     ),
     category=RuntimeWarning,
 )
+
 ```
 
 (simple_basis_function)=
@@ -58,12 +59,48 @@ import pynapple as nap
 
 import nemos as nmo
 
+# configure plots some
+plt.style.use(nmo.styles.plot_style)
+
 # Initialize hyperparameters
 order = 4
 n_basis = 10
 
 # Define the 1D basis function object
 bspline = nmo.basis.BSplineEval(n_basis_funcs=n_basis, order=order)
+```
+
+We provide the convenience method `evaluate_on_grid` for evaluating the basis on an equi-spaced grid of points that makes it easier to plot and visualize all basis elements.
+
+```{code-cell} ipython3
+# evaluate the basis on 100 sample points
+x, y = bspline.evaluate_on_grid(100)
+
+fig = plt.figure(figsize=(5, 3))
+plt.plot(x, y, lw=2)
+plt.title("B-Spline Basis")
+```
+
+```{code-cell} ipython3
+:tags: [hide-input]
+
+# save image for thumbnail
+from pathlib import Path
+import os
+
+root = os.environ.get("READTHEDOCS_OUTPUT")
+if root:
+   path = Path(root) / "html/_static/thumbnails/background"
+# if local store in ../_build/html/...
+else:
+   path = Path("../_build/html/_static/thumbnails/background")
+ 
+# make sure the folder exists if run from build
+if root or Path("../_build/html/_static").exists():
+   path.mkdir(parents=True, exist_ok=True)
+
+if path.exists():
+  fig.savefig(path / "plot_01_1D_basis_function.svg")
 ```
 
 ## Feature Computation
@@ -74,7 +111,6 @@ The bases in the `nemos.basis` module can be grouped into two categories:
 2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names starting with "Conv," such as `BSplineConv`.
 
 Let's see how this two modalities operate.
-
 
 ```{code-cell} ipython3
 eval_mode = nmo.basis.MSplineEval(n_basis_funcs=n_basis)
@@ -165,6 +201,7 @@ the fixed range basis.
 
 
 ```{code-cell} ipython3
+samples = np.linspace(0, 1, 200)
 fig, axs = plt.subplots(2,1, sharex=True)
 plt.suptitle("B-spline basis ")
 axs[0].plot(samples, bspline.compute_features(samples), color="k")
