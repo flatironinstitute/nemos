@@ -19,6 +19,7 @@
    * - **B-Spline**
      - .. plot:: scripts/basis_table_figs.py plot_bspline
           :show-source-link: False
+          :height: 80px
      - :ref:`Grid cells <grid_cells_nemos>`
      - :class:`~nemos.basis.BSplineEval` :raw-html:`<br />`
        :class:`~nemos.basis.BSplineConv`
@@ -26,6 +27,7 @@
    * - **Cyclic B-Spline**
      - .. plot:: scripts/basis_table_figs.py plot_cyclic_bspline
           :show-source-link: False
+          :height: 80px
      - :ref:`Place cells <basis_eval_place_cells>`
      - :class:`~nemos.basis.CyclicBSplineEval`  :raw-html:`<br />`
        :class:`~nemos.basis.CyclicBSplineConv`
@@ -33,6 +35,7 @@
    * - **M-Spline**
      - .. plot:: scripts/basis_table_figs.py plot_mspline
           :show-source-link: False
+          :height: 80px
      - :ref:`Place cells <basis_eval_place_cells>`
      - :class:`~nemos.basis.MSplineEval`  :raw-html:`<br />`
        :class:`~nemos.basis.MSplineConv`
@@ -40,6 +43,7 @@
    * - **Linearly Spaced Raised Cosine**
      - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_linear
           :show-source-link: False
+          :height: 80px
      - 
      - :class:`~nemos.basis.RaisedCosineLinearEval`  :raw-html:`<br />`
        :class:`~nemos.basis.RaisedCosineLinearConv`
@@ -47,6 +51,7 @@
    * - **Log Spaced Raised Cosine**
      - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_log
           :show-source-link: False
+          :height: 80px
      - :ref:`Head Direction <head_direction_reducing_dimensionality>`
      - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
        :class:`nemos.basis.RaisedCosineLogConv`
@@ -54,6 +59,7 @@
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_table_figs.py plot_orth_exp_basis
           :show-source-link: False
+          :height: 80px
      - 
      - :class:`~nemos.basis.OrthExponentialEval`  :raw-html:`<br />`
        :class:`~nemos.basis.OrthExponentialConv`
