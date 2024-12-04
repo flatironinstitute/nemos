@@ -145,7 +145,7 @@ position = position.interpolate(counts)
 ```
 
 We can define a two-dimensional basis for position by multiplying two one-dimensional bases,
-see [here](../../background/plot_02_ND_basis_function) for more details.
+see [here](composing_basis_function) for more details.
 
 ```{code-cell} ipython3
 basis_2d = nmo.basis.BSplineEval(

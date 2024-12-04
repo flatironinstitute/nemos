@@ -336,9 +336,9 @@ print(count.shape)
 
 For each feature, we will use a different set of basis :
 
-  -   position : [`MSplineEval`](nemos.basis.basis.MSplineEval)
-  -   theta phase : [`CyclicBSplineEval`](nemos.basis.basis.CyclicBSplineEval)
-  -   speed : [`MSplineEval`](nemos.basis.basis.MSplineEval)
+  -   position : [`MSplineEval`](nemos.basis.MSplineEval)
+  -   theta phase : [`CyclicBSplineEval`](nemos.basis.CyclicBSplineEval)
+  -   speed : [`MSplineEval`](nemos.basis.MSplineEval)
 
 
 ```{code-cell} ipython3

@@ -1,5 +1,7 @@
 """Mixin classes for basis."""
 
+from __future__ import annotations
+
 import copy
 import inspect
 from typing import Optional, Tuple, Union
@@ -95,10 +97,10 @@ class ConvBasisMixin:
         samples. Samples can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
         except for the sample-axis are flattened, so that the method always returns a matrix.
         For example, if samples are of shape (num_samples, 2, 3), the output will be
-        (num_samples, num_basis_funcs * 2 * 3).
+        ``(num_samples, num_basis_funcs * 2 * 3)``.
         The time-axis can be specified at basis initialization by setting the keyword argument ``axis``.
-        For example, if ``axis == 1`` your samples should be (N1, num_samples N3, ...), the output of
-        transform will be (num_samples, num_basis_funcs * N1 * N3 *...).
+        For example, if ``axis == 1`` your samples should be ``(N1, num_samples N3, ...)``, the output of
+        transform will be ``(num_samples, num_basis_funcs * N1 * N3 *...)``.
 
         Parameters
         ----------
