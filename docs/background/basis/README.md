@@ -19,44 +19,44 @@
    * - **B-Spline**
      - .. plot:: scripts/basis_table_figs.py plot_bspline
           :show-source-link: False
-     - `Grid cells <grid_cells_nemos>`_
-     - `EvalBSpline <nemos.basis.basis.EvalBSpline>`_ :raw-html:`<br />`
-       `BSplineConv <nemos.basis.basis.BSplineConv>`_
+     - :ref:`Grid cells <grid_cells_nemos>`
+     - :class:`~nemos.basis.BSplineEval` :raw-html:`<br />`
+       :class:`~nemos.basis.BSplineConv`
      - 🟢 Eval
    * - **Cyclic B-Spline**
      - .. plot:: scripts/basis_table_figs.py plot_cyclic_bspline
           :show-source-link: False
-     - `Place cells <basis_eval_place_cells>`_
-     - `EvalCyclicBSpline <nemos.basis.basis.EvalCyclicBSpline>`_  :raw-html:`<br />`
-       `ConvCyclicBSpline <nemos.basis.basis.ConvCyclicBSpline>`_
+     - :ref:`Place cells <basis_eval_place_cells>`
+     - :class:`~nemos.basis.CyclicBSplineEval`  :raw-html:`<br />`
+       :class:`~nemos.basis.CyclicBSplineConv`
      - 🟢 Eval
    * - **M-Spline**
      - .. plot:: scripts/basis_table_figs.py plot_mspline
           :show-source-link: False
-     - `Place cells <basis_eval_place_cells>`_
-     - `EvalMSpline <nemos.basis.basis.EvalMSpline>`_  :raw-html:`<br />`
-       `ConvMSpline <nemos.basis.basis.ConvMSpline>`_
+     - :ref:`Place cells <basis_eval_place_cells>`
+     - :class:`~nemos.basis.MSplineEval`  :raw-html:`<br />`
+       :class:`~nemos.basis.MSplineConv`
      - 🟢 Eval
    * - **Linearly Spaced Raised Cosine**
      - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_linear
           :show-source-link: False
      - 
-     - `EvalRaisedCosineLinear <nemos.basis.basis.EvalRaisedCosineLinear>`_  :raw-html:`<br />`
-       `ConvRaisedCosineLinear <nemos.basis.basis.ConvRaisedCosineLinear>`_
+     - :class:`~nemos.basis.RaisedCosineLinearEval`  :raw-html:`<br />`
+       :class:`~nemos.basis.RaisedCosineLinearConv`
      - 🟢 Eval
    * - **Log Spaced Raised Cosine**
      - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_log
           :show-source-link: False
-     - `Head Direction <head_direction_reducing_dimensionality>`_
-     - `EvalRaisedCosineLog <nemos.basis.basis.EvalRaisedCosineLog>`_  :raw-html:`<br />`
-       `ConvRaisedCosineLog <nemos.basis.basis.ConvRaisedCosineLog>`_
+     - :ref:`Head Direction <head_direction_reducing_dimensionality>`
+     - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
+       :class:`nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_table_figs.py plot_orth_exp_basis
           :show-source-link: False
      - 
-     - `EvalOrthExponential <nemos.basis.basis.EvalOrthExponential>`_  :raw-html:`<br />`
-       `ConvOrthExponential <nemos.basis.basis.ConvOrthExponential>`_
+     - :class:`~nemos.basis.OrthExponentialEval`  :raw-html:`<br />`
+       :class:`~nemos.basis.OrthExponentialConv`
      - 🟢 Eval
 ```
 

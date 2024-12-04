@@ -123,7 +123,11 @@ html_theme_options = {
     "logo": {
       "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
-   }
+   },
+    "secondary_sidebar_items": {
+        "**": ["page-toc", "sourcelink"],
+        "background/basis/README": [],
+    },
 }
 
 html_sidebars = {

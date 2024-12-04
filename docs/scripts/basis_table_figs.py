@@ -24,7 +24,7 @@ def plot_basis(cls):
     cls_params = cls._get_param_names()
     new_kwargs = trim_kwargs(cls, KWARGS.copy(), {cls.__name__: cls_params})
     bas = cls(**new_kwargs)
-    fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+    fig, ax = plt.subplots(1, 1, figsize=(5/4, 2.5/4))
     ax.plot(*bas.evaluate_on_grid(300), lw=4)
     for side in ["left", "right", "top", "bottom"]:
         ax.spines[side].set_visible(False)
