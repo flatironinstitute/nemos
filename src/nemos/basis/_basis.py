@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
-from functools import partial, wraps
+from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
@@ -19,7 +19,7 @@ from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin
 
 
-def add_docstring(method_name, cls=None):
+def add_docstring(method_name, cls):
     """Prepend super-class docstrings."""
     attr = getattr(cls, method_name, None)
     if attr is None:
@@ -38,7 +38,7 @@ def check_transform_input(func: Callable) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
-    when the wrong number of input is provided to __call__.
+    when the wrong number of input is provided to _evaluate.
     """
 
     @wraps(func)
@@ -182,8 +182,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         The number of inputs ``compute_feature`` expects.
         """
-        if self._n_basis_input is None:
-            return
         return self._n_basis_input
 
     @property
@@ -246,7 +244,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     @check_transform_input
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
-        Compute the basis functions and transform input data into model features.
+        Apply the basis transformation to the input data.
 
         This method is designed to be a high-level interface for transforming input
         data using the basis functions defined by the subclass. Depending on the basis'
@@ -288,7 +286,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -411,7 +409,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # evaluates the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self.__call__(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        Y = self._evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
@@ -823,10 +821,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self
 
 
-add_docstring_additive = partial(add_docstring, cls=Basis)
-add_docstring_multiplicative = partial(add_docstring, cls=Basis)
-
-
 class AdditiveBasis(Basis):
     """
     Class representing the addition of two Basis objects.
@@ -851,13 +845,13 @@ class AdditiveBasis(Basis):
     >>> X = np.random.normal(size=(30, 2))
 
     >>> # define two basis objects and add them
-    >>> basis_1 = nmo.basis.EvalBSpline(10)
-    >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
+    >>> basis_1 = nmo.basis.BSplineEval(10)
+    >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> additive_basis = basis_1 + basis_2
 
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
-    >>> basis_3 = nmo.basis.EvalRaisedCosineLog(100)
+    >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> additive_basis_2 = additive_basis + basis_3
     """
 
@@ -893,7 +887,7 @@ class AdditiveBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -916,32 +910,32 @@ class AdditiveBasis(Basis):
         >>> x, y = np.random.normal(size=(2, 30))
 
         >>> # define two basis objects and add them
-        >>> basis_1 = nmo.basis.EvalBSpline(10)
-        >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
+        >>> basis_1 = nmo.basis.BSplineEval(10)
+        >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
         >>> additive_basis = basis_1 + basis_2
 
         >>> # call the basis.
-        >>> out = additive_basis(x, y)
+        >>> out = additive_basis._evaluate(x, y)
 
         """
         X = np.hstack(
             (
-                self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
             )
         )
         return X
 
-    @add_docstring_additive("compute_features")
+    @add_docstring("compute_features", Basis)
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         r"""
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import EvalBSpline, ConvRaisedCosineLog
+        >>> from nemos.basis import BSplineEval, RaisedCosineLogConv
         >>> from nemos.glm import GLM
-        >>> basis1 = EvalBSpline(n_basis_funcs=5, label="one_input")
-        >>> basis2 = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
+        >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
         >>> basis_add = basis1 + basis2
         >>> X_multi = basis_add.compute_features(np.random.randn(20), np.random.randn(20, 2))
         >>> print(X_multi.shape) # num_features: 17 = 5 + 2*6
@@ -1078,12 +1072,12 @@ class AdditiveBasis(Basis):
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import ConvBSpline
+        >>> from nemos.basis import BSplineConv
         >>> from nemos.glm import GLM
         >>> # Define an additive basis
         >>> basis = (
-        ...     ConvBSpline(n_basis_funcs=5, window_size=10, label="feature_1") +
-        ...     ConvBSpline(n_basis_funcs=6, window_size=10, label="feature_2")
+        ...     BSplineConv(n_basis_funcs=5, window_size=10, label="feature_1") +
+        ...     BSplineConv(n_basis_funcs=6, window_size=10, label="feature_2")
         ... )
         >>> # Generate a sample input array and compute features
         >>> x1, x2 = np.random.randn(20), np.random.randn(20)
@@ -1095,7 +1089,7 @@ class AdditiveBasis(Basis):
         feature_1: shape (20, 1, 5)
         feature_2: shape (20, 1, 6)
         >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
-        >>> multi_input_basis = ConvBSpline(n_basis_funcs=6, window_size=10,
+        >>> multi_input_basis = BSplineConv(n_basis_funcs=6, window_size=10,
         ... label="multi_input")
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
         >>> split_features_multi = multi_input_basis.split_by_feature(X_multi, axis=1)
@@ -1158,8 +1152,8 @@ class AdditiveBasis(Basis):
         >>> import nemos as nmo
 
         >>> # define two basis objects and add them
-        >>> basis_1 = nmo.basis.EvalBSpline(10)
-        >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
+        >>> basis_1 = nmo.basis.BSplineEval(10)
+        >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
         >>> additive_basis = basis_1 + basis_2
 
         >>> # evaluate on a grid of 10 x 10 equi-spaced samples
@@ -1193,13 +1187,13 @@ class MultiplicativeBasis(Basis):
     >>> X = np.random.normal(size=(30, 3))
 
     >>> # define two basis and multiply
-    >>> basis_1 = nmo.basis.EvalBSpline(10)
-    >>> basis_2 = nmo.basis.EvalRaisedCosineLinear(15)
+    >>> basis_1 = nmo.basis.BSplineEval(10)
+    >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> multiplicative_basis = basis_1 * basis_2
 
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
-    >>> basis_3 = nmo.basis.EvalRaisedCosineLog(100)
+    >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     """
 
@@ -1241,7 +1235,7 @@ class MultiplicativeBasis(Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -1260,14 +1254,14 @@ class MultiplicativeBasis(Basis):
         --------
         >>> import numpy as np
         >>> import nemos as nmo
-        >>> mult_basis = nmo.basis.EvalBSpline(5) * nmo.basis.EvalRaisedCosineLinear(6)
+        >>> mult_basis = nmo.basis.BSplineEval(5) * nmo.basis.RaisedCosineLinearEval(6)
         >>> x, y = np.random.randn(2, 30)
-        >>> X = mult_basis(x, y)
+        >>> X = mult_basis._evaluate(x, y)
         """
         X = np.asarray(
             row_wise_kron(
-                self._basis1.__call__(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2.__call__(*xi[self._basis1._n_input_dimensionality :]),
+                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
+                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
@@ -1292,7 +1286,7 @@ class MultiplicativeBasis(Basis):
         --------
         >>> import numpy as np
         >>> import nemos as nmo
-        >>> mult_basis = nmo.basis.EvalBSpline(5) * nmo.basis.EvalRaisedCosineLinear(6)
+        >>> mult_basis = nmo.basis.BSplineEval(5) * nmo.basis.RaisedCosineLinearEval(6)
         >>> x, y = np.random.randn(2, 30)
         >>> X = mult_basis.compute_features(x, y)
         """
@@ -1360,21 +1354,21 @@ class MultiplicativeBasis(Basis):
         --------
         >>> import numpy as np
         >>> import nemos as nmo
-        >>> mult_basis = nmo.basis.EvalBSpline(4) * nmo.basis.EvalRaisedCosineLinear(5)
+        >>> mult_basis = nmo.basis.BSplineEval(4) * nmo.basis.RaisedCosineLinearEval(5)
         >>> X, Y, Z = mult_basis.evaluate_on_grid(10, 10)
         """
         return super().evaluate_on_grid(*n_samples)
 
-    @add_docstring_multiplicative("compute_features")
+    @add_docstring("compute_features", Basis)
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import EvalBSpline, ConvRaisedCosineLog
+        >>> from nemos.basis import BSplineEval, RaisedCosineLogConv
         >>> from nemos.glm import GLM
-        >>> basis1 = EvalBSpline(n_basis_funcs=5, label="one_input")
-        >>> basis2 = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
+        >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
         >>> basis_mul = basis1 * basis2
         >>> X_multi = basis_mul.compute_features(np.random.randn(20), np.random.randn(20, 2))
         >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6
@@ -1383,7 +1377,7 @@ class MultiplicativeBasis(Basis):
         """
         return super().compute_features(*xi)
 
-    @add_docstring_multiplicative("split_by_feature")
+    @add_docstring("split_by_feature", Basis)
     def split_by_feature(
         self,
         x: NDArray,
@@ -1393,10 +1387,10 @@ class MultiplicativeBasis(Basis):
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import EvalBSpline, ConvRaisedCosineLog
+        >>> from nemos.basis import BSplineEval, RaisedCosineLogConv
         >>> from nemos.glm import GLM
-        >>> basis1 = EvalBSpline(n_basis_funcs=5, label="one_input")
-        >>> basis2 = ConvRaisedCosineLog(n_basis_funcs=6, window_size=10, label="two_inputs")
+        >>> basis1 = BSplineEval(n_basis_funcs=5, label="one_input")
+        >>> basis2 = RaisedCosineLogConv(n_basis_funcs=6, window_size=10, label="two_inputs")
         >>> basis_mul = basis1 * basis2
         >>> X_multi = basis_mul.compute_features(np.random.randn(20), np.random.randn(20, 2))
         >>> print(X_multi.shape) # num_features: 60 = 5 * 2 * 6

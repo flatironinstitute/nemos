@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import abc
-from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
@@ -15,7 +14,6 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import (
     Basis,
-    add_docstring,
     check_one_dimensional,
     check_transform_input,
     min_max_rescale_samples,
@@ -134,7 +132,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def __call__(
+    def _evaluate(
         self,
         sample_pts: NDArray,
     ) -> FeatureMatrix:
@@ -193,6 +191,3 @@ class OrthExponentialBasis(Basis, abc.ABC):
             OrthExponential basis functions, shape (n_samples, n_basis_funcs).
         """
         return super().evaluate_on_grid(n_samples)
-
-
-add_orth_exp_decay_docstring = partial(add_docstring, cls=OrthExponentialBasis)

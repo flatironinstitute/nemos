@@ -130,8 +130,8 @@ import numpy as np
 import nemos as nmo
 
 # Define 1D basis objects
-a_basis = nmo.basis.EvalMSpline(n_basis_funcs=15, order=3)
-b_basis = nmo.basis.EvalRaisedCosineLog(n_basis_funcs=14)
+a_basis = nmo.basis.MSplineEval(n_basis_funcs=15, order=3)
+b_basis = nmo.basis.RaisedCosineLogEval(n_basis_funcs=14)
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
@@ -340,9 +340,9 @@ will output a $K^N \times T$ matrix.
 T = 10
 n_basis = 8
 
-a_basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=n_basis)
-b_basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=n_basis)
-c_basis = nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=n_basis)
+a_basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=n_basis)
+b_basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=n_basis)
+c_basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=n_basis)
 
 prod_basis_3 = a_basis * b_basis * c_basis
 samples = np.linspace(0, 1, T)

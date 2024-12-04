@@ -12,11 +12,11 @@ from nemos.basis._transformer_basis import TransformerBasis
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.EvalMSpline(5),
-        basis.EvalBSpline(5),
-        basis.EvalCyclicBSpline(5),
-        basis.EvalOrthExponential(5, decay_rates=np.arange(1, 6)),
-        basis.EvalRaisedCosineLinear(5),
+        basis.MSplineEval(5),
+        basis.BSplineEval(5),
+        basis.CyclicBSplineEval(5),
+        basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6)),
+        basis.RaisedCosineLinearEval(5),
     ],
 )
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
@@ -30,11 +30,11 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.EvalMSpline(5),
-        basis.EvalBSpline(5),
-        basis.EvalCyclicBSpline(5),
-        basis.EvalRaisedCosineLinear(5),
-        basis.EvalRaisedCosineLog(5),
+        basis.MSplineEval(5),
+        basis.BSplineEval(5),
+        basis.CyclicBSplineEval(5),
+        basis.RaisedCosineLinearEval(5),
+        basis.RaisedCosineLogEval(5),
     ],
 )
 def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
@@ -49,11 +49,11 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.EvalMSpline(5),
-        basis.EvalBSpline(5),
-        basis.EvalCyclicBSpline(5),
-        basis.EvalRaisedCosineLinear(5),
-        basis.EvalRaisedCosineLog(5),
+        basis.MSplineEval(5),
+        basis.BSplineEval(5),
+        basis.CyclicBSplineEval(5),
+        basis.RaisedCosineLinearEval(5),
+        basis.RaisedCosineLogEval(5),
     ],
 )
 def test_sklearn_transformer_pipeline_cv_multiprocess(
@@ -74,11 +74,11 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
 @pytest.mark.parametrize(
     "bas_cls",
     [
-        basis.EvalMSpline,
-        basis.EvalMSpline,
-        basis.EvalCyclicBSpline,
-        basis.EvalRaisedCosineLinear,
-        basis.EvalRaisedCosineLog,
+        basis.MSplineEval,
+        basis.MSplineEval,
+        basis.CyclicBSplineEval,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLogEval,
     ],
 )
 def test_sklearn_transformer_pipeline_cv_directly_over_basis(
@@ -95,11 +95,11 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
 @pytest.mark.parametrize(
     "bas_cls",
     [
-        basis.EvalMSpline,
-        basis.EvalMSpline,
-        basis.EvalCyclicBSpline,
-        basis.EvalRaisedCosineLinear,
-        basis.EvalRaisedCosineLog,
+        basis.MSplineEval,
+        basis.MSplineEval,
+        basis.CyclicBSplineEval,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLogEval,
     ],
 )
 def test_sklearn_transformer_pipeline_cv_illegal_combination(
@@ -123,35 +123,35 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
-        (basis.EvalMSpline(5), 0),
-        (basis.EvalBSpline(5), 0),
-        (basis.EvalCyclicBSpline(5), 0),
-        (basis.EvalOrthExponential(5, decay_rates=np.arange(1, 6)), 0),
-        (basis.EvalRaisedCosineLinear(5), 0),
-        (basis.EvalRaisedCosineLog(5), 0),
-        (basis.EvalRaisedCosineLog(5) + basis.EvalMSpline(5), 0),
-        (basis.ConvMSpline(5, window_size=3), 6),
-        (basis.ConvBSpline(5, window_size=3), 6),
+        (basis.MSplineEval(5), 0),
+        (basis.BSplineEval(5), 0),
+        (basis.CyclicBSplineEval(5), 0),
+        (basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6)), 0),
+        (basis.RaisedCosineLinearEval(5), 0),
+        (basis.RaisedCosineLogEval(5), 0),
+        (basis.RaisedCosineLogEval(5) + basis.MSplineEval(5), 0),
+        (basis.MSplineConv(5, window_size=3), 6),
+        (basis.BSplineConv(5, window_size=3), 6),
         (
-            basis.ConvCyclicBSpline(
+            basis.CyclicBSplineConv(
                 5, window_size=3, conv_kwargs=dict(predictor_causality="acausal")
             ),
             4,
         ),
         (
-            basis.ConvOrthExponential(
+            basis.OrthExponentialConv(
                 5, decay_rates=np.linspace(0.1, 1, 5), window_size=7
             ),
             14,
         ),
-        (basis.ConvRaisedCosineLinear(5, window_size=3), 6),
-        (basis.ConvRaisedCosineLog(5, window_size=3), 6),
+        (basis.RaisedCosineLinearConv(5, window_size=3), 6),
+        (basis.RaisedCosineLogConv(5, window_size=3), 6),
         (
-            basis.ConvRaisedCosineLog(5, window_size=3) + basis.EvalMSpline(5),
+            basis.RaisedCosineLogConv(5, window_size=3) + basis.MSplineEval(5),
             6,
         ),
         (
-            basis.ConvRaisedCosineLog(5, window_size=3) * basis.EvalMSpline(5),
+            basis.RaisedCosineLogConv(5, window_size=3) * basis.MSplineEval(5),
             6,
         ),
     ],

@@ -1,17 +1,53 @@
 # Basis Function
 
 (table_basis)=
-```{table}
-:name: table-basis
+```{eval-rst}
 
-|           **Basis**               |                                     **Kernel Visualization**                 |                       **Examples**                       |                           **Evaluation/Convolution**                                                                                     | **Preferred Mode**   |                               
-|:---------------------------------:|:----------------------------------------------------------------------------:|:--------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------------------------:|:--------------------:|
-|            **B-Spline**           | <img src="images/EvalBSpline.svg"  alt="B-spline."/>                         | [Grid cells](grid_cells_nemos)                           | [EvalBSpline](nemos.basis.basis.EvalBSpline)<br>[ConvBSpline](nemos.basis.basis.ConvBSpline)                                             | 🟢 Eval              |
-|      **Cyclic B-Spline**          | <img src="images/EvalCyclicBSpline.svg"  alt="Cyclic B-spline."/>            | [Place cells](basis_eval_place_cells)                    | [EvalCyclicBSpline](nemos.basis.basis.EvalCyclicBSpline)<br>[ConvCyclicBSpline](nemos.basis.basis.ConvCyclicBSpline)                     | 🟢 Eval              |
-|           **M-Spline**            | <img src="images/EvalMSpline.svg"  alt="M-spline."/>                         | [Place cells](basis_eval_place_cells)                    | [EvalMSpline](nemos.basis.basis.EvalMSpline)<br>[ConvMSpline](nemos.basis.basis.ConvMSpline)                                             | 🟢 Eval              |
-| **Linearly Spaced Raised Cosine** | <img src="images/EvalRaisedCosineLinear.svg"  alt="Raised Cosine Linear."/>  |                                                          | [EvalRaisedCosineLinear](nemos.basis.basis.EvalRaisedCosineLinear)<br>[ConvRaisedCosineLinear](nemos.basis.basis.ConvRaisedCosineLinear) | 🟢 Eval              |
-|    **Log Spaced Raised Cosine**   | <img src="images/EvalRaisedCosineLog.svg"  alt="Raised Cosine Log."/>        | [Head Direction](head_direction_reducing_dimensionality) | [EvalRaisedCosineLog](nemos.basis.basis.EvalRaisedCosineLog)<br>[ConvRaisedCosineLog](nemos.basis.basis.ConvRaisedCosineLog)             | 🔵 Conv              |
-| **Orthogonalized Exponential Decays** | <img src="images/EvalOrthExponential.svg"  alt="Orth Exponential Decays"/> |         | [EvalOrthExponential](nemos.basis.basis.EvalOrthExponential)<br>[ConvOrthExponential](nemos.basis.basis.ConvOrthExponential)    | 🟢 Eval              |
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 20 30 20
+
+   * - **Basis**
+     - **Kernel Visualization**
+     - **Examples**
+     - **Evaluation/Convolution**
+     - **Preferred Mode**
+   * - **B-Spline**
+     - .. plot:: scripts/basis_table_figs.py plot_bspline
+     - `Grid cells <grid_cells_nemos>`_
+     - `EvalBSpline <nemos.basis.basis.EvalBSpline>`_  
+       `ConvBSpline <nemos.basis.basis.ConvBSpline>`_
+     - 🟢 Eval
+   * - **Cyclic B-Spline**
+     - .. plot:: scripts/basis_table_figs.py plot_cyclic_bspline
+     - `Place cells <basis_eval_place_cells>`_
+     - `EvalCyclicBSpline <nemos.basis.basis.EvalCyclicBSpline>`_  
+       `ConvCyclicBSpline <nemos.basis.basis.ConvCyclicBSpline>`_
+     - 🟢 Eval
+   * - **M-Spline**
+     - .. plot:: scripts/basis_table_figs.py plot_mspline
+     - `Place cells <basis_eval_place_cells>`_
+     - `EvalMSpline <nemos.basis.basis.EvalMSpline>`_  
+       `ConvMSpline <nemos.basis.basis.ConvMSpline>`_
+     - 🟢 Eval
+   * - **Linearly Spaced Raised Cosine**
+     - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_linear
+     - 
+     - `EvalRaisedCosineLinear <nemos.basis.basis.EvalRaisedCosineLinear>`_  
+       `ConvRaisedCosineLinear <nemos.basis.basis.ConvRaisedCosineLinear>`_
+     - 🟢 Eval
+   * - **Log Spaced Raised Cosine**
+     - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_log
+     - `Head Direction <head_direction_reducing_dimensionality>`_
+     - `EvalRaisedCosineLog <nemos.basis.basis.EvalRaisedCosineLog>`_  
+       `ConvRaisedCosineLog <nemos.basis.basis.ConvRaisedCosineLog>`_
+     - 🔵 Conv
+   * - **Orthogonalized Exponential Decays**
+     - .. plot:: scripts/basis_table_figs.py plot_orth_exp_basis
+     - 
+     - `EvalOrthExponential <nemos.basis.basis.EvalOrthExponential>`_  
+       `ConvOrthExponential <nemos.basis.basis.ConvOrthExponential>`_
+     - 🟢 Eval
 ```
 
 ## Overview

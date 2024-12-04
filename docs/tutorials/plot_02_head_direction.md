@@ -420,7 +420,7 @@ the cost of adding additional parameters.
 
 ```{code-cell} ipython3
 # a basis object can be instantiated in "conv" mode for convolving  the input.
-basis = nmo.basis.ConvRaisedCosineLog(
+basis = nmo.basis.RaisedCosineLogConv(
     n_basis_funcs=8, window_size=window_size
 )
 
@@ -601,7 +601,7 @@ to get an array of predictors of shape, `(num_time_points, num_neurons * num_bas
 
 ```{code-cell} ipython3
 # re-initialize basis
-basis = nmo.basis.ConvRaisedCosineLog(
+basis = nmo.basis.RaisedCosineLogConv(
     n_basis_funcs=8, window_size=window_size
 )
 

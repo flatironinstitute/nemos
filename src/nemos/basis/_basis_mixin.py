@@ -38,7 +38,7 @@ class EvalBasisMixin:
             or a pynapple Tsd.
 
         """
-        return self.__call__(*xi)
+        return self._evaluate(*xi)
 
     def _set_kernel(self) -> "EvalBasisMixin":
         """
@@ -141,7 +141,7 @@ class ConvBasisMixin:
         computed and how the input parameters are utilized. If the basis operates in 'eval'
         mode exclusively, this method should simply return `self` without modification.
         """
-        self.kernel_ = self.__call__(np.linspace(0, 1, self.window_size))
+        self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
 
     @property
@@ -241,7 +241,7 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.EvalRaisedCosineLinear(10).to_transformer()
+        >>> basis = nmo.basis.RaisedCosineLinearEval(10).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(

@@ -180,8 +180,8 @@ We can combine the two bases.
 
 
 ```{code-cell} ipython3
-heading_basis = nmo.basis.EvalCyclicBSpline(n_basis_funcs=12)
-coupling_basis = nmo.basis.ConvRaisedCosineLog(3, window_size=10)
+heading_basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=12)
+coupling_basis = nmo.basis.RaisedCosineLogConv(3, window_size=10)
 ```
 
 We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis._basis.AdditiveBasis) object).
