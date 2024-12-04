@@ -93,7 +93,7 @@ if root:
    path = Path(root) / "html/_static/thumbnails/background"
 # if local store in ../_build/html/...
 else:
-   path = Path("../_build/html/_static/thumbnails/background")
+   path = Path("../../_build/html/_static/thumbnails/background")
  
 # make sure the folder exists if run from build
 if root or Path("../../_build/html/_static").exists():
@@ -101,6 +101,9 @@ if root or Path("../../_build/html/_static").exists():
 
 if path.exists():
   fig.savefig(path / "plot_01_1D_basis_function.svg")
+
+
+print(path.resolve(), path.exists())
 ```
 
 ## Feature Computation
