@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nemos.basis import BSplineBasis, RaisedCosineBasisLinear
+from nemos.basis.basis import BSplineConv, BSplineEval, RaisedCosineLinearEval
 from nemos.identifiability_constraints import (
     _WARN_FLOAT32_MESSAGE,
     _find_drop_column,
@@ -92,20 +92,20 @@ def test_apply_identifiability_constraints_add_constant(add_intercept, expected_
 @pytest.mark.parametrize(
     "basis, input_shape, output_shape, expected_columns",
     [
-        (RaisedCosineBasisLinear(10, width=4), (50,), (50, 10), jnp.arange(10)),
+        (RaisedCosineLinearEval(10, width=4), (50,), (50, 10), jnp.arange(10)),
         (
-            BSplineBasis(5) + BSplineBasis(6),
+            BSplineEval(5) + BSplineEval(6),
             (20,),
             (20, 9),
             jnp.array([1, 2, 3, 4, 6, 7, 8, 9, 10]),
         ),
         (
-            BSplineBasis(5, mode="conv", window_size=10) + BSplineBasis(6),
+            BSplineConv(5, window_size=10) + BSplineEval(6),
             (20,),
             (20, 10),
             jnp.array([0, 1, 2, 3, 4, 6, 7, 8, 9, 10]),
         ),
-        (BSplineBasis(5), (10,), (10, 4), jnp.arange(1, 5)),
+        (BSplineEval(5), (10,), (10, 4), jnp.arange(1, 5)),
     ],
 )
 def test_apply_identifiability_constraints_by_basis_component(
@@ -207,7 +207,7 @@ def test_apply_constraint_with_invalid(invalid_entries):
 )
 def test_apply_constraint_by_basis_with_invalid(invalid_entries):
     """Test if the matrix retains its dtype after applying constraints."""
-    basis = BSplineBasis(5)
+    basis = BSplineEval(5)
     x = basis.compute_features(
         np.random.randn(
             10,
@@ -215,7 +215,9 @@ def test_apply_constraint_by_basis_with_invalid(invalid_entries):
     )
     # add invalid
     x[:2, 2] = invalid_entries
-    constrained_x, kept_cols = apply_identifiability_constraints(x)
+    constrained_x, kept_cols = apply_identifiability_constraints(
+        x, warn_if_float32=False
+    )
     assert jnp.array_equal(kept_cols, jnp.arange(1, 5))
     assert constrained_x.shape[0] == x.shape[0]
     assert jnp.all(jnp.isnan(constrained_x[:2]))
