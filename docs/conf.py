@@ -41,6 +41,7 @@ extensions = [
     'sphinx_autodoc_typehints',
     'sphinx_togglebutton',
     'matplotlib.sphinxext.plot_directive',
+    "matplotlib.sphinxext.mathmpl",
 ]
 
 myst_enable_extensions = [
@@ -161,3 +162,6 @@ if exclude_tutorials:
     nb_execution_excludepatterns = ["tutorials/**", "how_to_guide/**", "background/**"]
 
 viewcode_follow_imported_members = True
+
+# option for mpl extension
+plot_html_show_formats = False

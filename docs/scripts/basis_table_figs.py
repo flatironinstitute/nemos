@@ -1,8 +1,15 @@
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
 import nemos as nmo
 from nemos._inspect_utils import trim_kwargs
+
+plt.rcParams.update(
+    {
+        "figure.dpi": 300,
+    }
+)
 
 KWARGS = dict(
     n_basis_funcs=10,
@@ -17,8 +24,8 @@ def plot_basis(cls):
     cls_params = cls._get_param_names()
     new_kwargs = trim_kwargs(cls, KWARGS.copy(), {cls.__name__: cls_params})
     bas = cls(**new_kwargs)
-    fig, ax = plt.subplots(1, 1, figsize=(5 / 4, 2.5 / 4))
-    ax.plot(*bas.evaluate_on_grid(300), lw=0.8)
+    fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+    ax.plot(*bas.evaluate_on_grid(300), lw=4)
     for side in ["left", "right", "top", "bottom"]:
         ax.spines[side].set_visible(False)
     ax.set_xticks([])

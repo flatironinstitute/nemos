@@ -94,6 +94,10 @@ html[data-theme=light]{
     font-weight: normal;
 }
 
+table.table-center{
+    text-align: center;
+}
+
  #table-basis {
     table-layout: auto;
     width: 100%;
