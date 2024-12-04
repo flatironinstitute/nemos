@@ -175,7 +175,7 @@ Now we can "evaluate" the basis for each position of the animal
 
 
 ```{code-cell} ipython3
-position_basis = basis_2d(position["x"], position["y"])
+position_basis = basis_2d.compute_features(position["x"], position["y"])
 ```
 
 Now try to make sense of what it is

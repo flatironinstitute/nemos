@@ -357,7 +357,7 @@ The object basis only tell us how each basis covers the feature space. For each 
 
 
 ```{code-cell} ipython3
-X = basis(position, theta, speed)
+X = basis.compute_features(position, theta, speed)
 ```
 
 `X` is our design matrix. For each timestamps, it contains the information about the current position,
@@ -455,7 +455,7 @@ predicted_rates = {}
 
 for m in models:
     print("1. Evaluating basis : ", m)
-    X = models[m](*features[m])
+    X = models[m].compute_features(*features[m])
 
     print("2. Fitting model : ", m)
     glm.fit(
