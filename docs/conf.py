@@ -68,7 +68,7 @@ autodoc_default_options = {
     'inherited-members': True,
     'undoc-members': True,
     'show-inheritance': True,
-    'special-members': '__call__, __add__, __mul__, __pow__'
+    'special-members': ' __add__, __mul__, __pow__'
 }
 
 # # napolean configs

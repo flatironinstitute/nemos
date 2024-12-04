@@ -345,7 +345,7 @@ GLM:
 
 ```{code-cell} ipython3
 window_size = 100
-basis = nmo.basis.ConvRaisedCosineLog(8, window_size=window_size)
+basis = nmo.basis.RaisedCosineLogConv(8, window_size=window_size)
 
 convolved_input = basis.compute_features(filtered_stimulus)
 ```

@@ -29,7 +29,7 @@ class TransformerBasis:
 
     Examples
     --------
-    >>> from nemos.basis import EvalBSpline
+    >>> from nemos.basis import BSplineEval
     >>> from nemos.basis import TransformerBasis
     >>> from nemos.glm import GLM
     >>> from sklearn.pipeline import Pipeline
@@ -40,7 +40,7 @@ class TransformerBasis:
     >>> # Generate data
     >>> num_samples, num_features = 10000, 1
     >>> x = np.random.normal(size=(num_samples, ))  # raw time series
-    >>> basis = EvalBSpline(10)
+    >>> basis = BSplineEval(10)
     >>> features = basis.compute_features(x)  # basis transformed time series
     >>> weights = np.random.normal(size=basis.n_basis_funcs)  # true weights
     >>> y = np.random.poisson(np.exp(features.dot(weights)))  # spike counts
@@ -104,13 +104,13 @@ class TransformerBasis:
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import EvalMSpline, TransformerBasis
+        >>> from nemos.basis import MSplineEval, TransformerBasis
 
         >>> # Example input
         >>> X = np.random.normal(size=(100, 2))
 
         >>> # Define and fit tranformation basis
-        >>> basis = EvalMSpline(10)
+        >>> basis = MSplineEval(10)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
@@ -136,12 +136,12 @@ class TransformerBasis:
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import ConvMSpline, TransformerBasis
+        >>> from nemos.basis import MSplineConv, TransformerBasis
 
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
 
-        >>> basis = ConvMSpline(10, window_size=200)
+        >>> basis = MSplineConv(10, window_size=200)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
@@ -181,13 +181,13 @@ class TransformerBasis:
         Examples
         --------
         >>> import numpy as np
-        >>> from nemos.basis import EvalMSpline, TransformerBasis
+        >>> from nemos.basis import MSplineEval, TransformerBasis
 
         >>> # Example input
         >>> X = np.random.normal(size=(100, 1))
 
         >>> # Define tranformation basis
-        >>> basis = EvalMSpline(10)
+        >>> basis = MSplineEval(10)
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
@@ -223,7 +223,7 @@ class TransformerBasis:
         Examples
         --------
         >>> from nemos import basis
-        >>> bas = basis.EvalRaisedCosineLinear(5)
+        >>> bas = basis.RaisedCosineLinearEval(5)
         >>> trans_bas = basis.TransformerBasis(bas)
         >>> bas.n_basis_funcs
         5
@@ -250,9 +250,9 @@ class TransformerBasis:
         Examples
         --------
         >>> import nemos as nmo
-        >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.EvalMSpline(10))
+        >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.MSplineEval(10))
         >>> # allowed
-        >>> trans_bas._basis = nmo.basis.EvalBSpline(10)
+        >>> trans_bas._basis = nmo.basis.BSplineEval(10)
         >>> # allowed
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
@@ -296,19 +296,19 @@ class TransformerBasis:
 
         Examples
         --------
-        >>> from nemos.basis import EvalBSpline, EvalMSpline, TransformerBasis
-        >>> basis = EvalMSpline(10)
+        >>> from nemos.basis import BSplineEval, MSplineEval, TransformerBasis
+        >>> basis = MSplineEval(10)
         >>> transformer_basis = TransformerBasis(basis=basis)
 
         >>> # setting parameters of _basis is allowed
         >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
         8
         >>> # setting _basis directly is allowed
-        >>> print(type(transformer_basis.set_params(_basis=EvalBSpline(10))._basis))
-        <class 'nemos.basis.basis.EvalBSpline'>
+        >>> print(type(transformer_basis.set_params(_basis=BSplineEval(10))._basis))
+        <class 'nemos.basis.basis.BSplineEval'>
         >>> # mixing is not allowed, this will raise an exception
         >>> try:
-        ...     transformer_basis.set_params(_basis=EvalBSpline(10), n_basis_funcs=2)
+        ...     transformer_basis.set_params(_basis=BSplineEval(10), n_basis_funcs=2)
         ... except ValueError as e:
         ...     print(repr(e))
         ValueError('Set either new _basis object or parameters for existing _basis, not both.')

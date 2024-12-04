@@ -50,7 +50,7 @@ These classes are the building blocks for the concrete basis classes.
 
 **Bases For Convolution:**
 
-.. currentmodule:: nemos.basis.basis
+.. currentmodule:: nemos.basis
 
 .. autosummary::
     :toctree: generated/basis
@@ -58,28 +58,30 @@ These classes are the building blocks for the concrete basis classes.
     :nosignatures:
 
 
-    ConvMSpline
-    ConvBSpline
-    ConvCyclicBSpline
-    ConvRaisedCosineLinear
-    ConvRaisedCosineLog
-    ConvOrthExponential
+    MSplineConv
+    BSplineConv
+    CyclicBSplineConv
+    RaisedCosineLinearConv
+    RaisedCosineLogConv
+    OrthExponentialConv
+
+.. check for a config that prints only nemos.basis.Name
 
 **Bases For Non-Linear Mapping:**
 
-.. currentmodule:: nemos.basis.basis
+.. currentmodule:: nemos.basis
 
 .. autosummary::
     :toctree: generated/basis
     :recursive:
     :nosignatures:
 
-    EvalMSpline
-    EvalBSpline
-    EvalCyclicBSpline
-    EvalRaisedCosineLinear
-    EvalRaisedCosineLog
-    EvalOrthExponential
+    MSplineEval
+    BSplineEval
+    CyclicBSplineEval
+    RaisedCosineLinearEval
+    RaisedCosineLogEval
+    OrthExponentialEval
 
 **Composite Bases:**
 

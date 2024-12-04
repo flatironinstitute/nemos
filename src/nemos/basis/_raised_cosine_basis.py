@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import abc
-from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
@@ -10,13 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import (
-    Basis,
-    add_docstring,
-    check_one_dimensional,
-    check_transform_input,
-    min_max_rescale_samples,
-)
+from ._basis import Basis, check_transform_input, min_max_rescale_samples
 
 
 class RaisedCosineBasisLinear(Basis, abc.ABC):
@@ -100,7 +93,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def __call__(
+    def _evaluate(  # call these _evaluate
         self,
         sample_pts: ArrayLike,
     ) -> FeatureMatrix:
@@ -136,7 +129,9 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
         # reshape samples
         shape = sample_pts.shape
-        sample_pts = sample_pts.reshape(-1, )
+        sample_pts = sample_pts.reshape(
+            -1,
+        )
 
         # generate a set of shifted cosines, and constrain them to be non-zero
         # over a single period, then enforce the codomain to be [0,1], by adding 1
@@ -336,7 +331,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def __call__(
+    def _evaluate(
         self,
         sample_pts: ArrayLike,
     ) -> FeatureMatrix:
@@ -359,9 +354,4 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         ValueError
             If the sample provided do not lie in [0,1].
         """
-        return super().__call__(self._transform_samples(sample_pts))
-
-
-add_raised_cosine_linear_docstring = partial(add_docstring, cls=RaisedCosineBasisLinear)
-
-add_raised_cosine_log_docstring = partial(add_docstring, cls=RaisedCosineBasisLog)
+        return super()._evaluate(self._transform_samples(sample_pts))

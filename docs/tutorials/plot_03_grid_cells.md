@@ -143,12 +143,12 @@ position = position.interpolate(counts)
 ```
 
 We can define a two-dimensional basis for position by multiplying two one-dimensional bases,
-see [here](../../background/plot_02_ND_basis_function) for more details.
+see [here](composing_basis_function) for more details.
 
 ```{code-cell} ipython3
-basis_2d = nmo.basis.EvalRaisedCosineLinear(
+basis_2d = nmo.basis.RaisedCosineLinearEval(
     n_basis_funcs=10
-) * nmo.basis.EvalRaisedCosineLinear(n_basis_funcs=10)
+) * nmo.basis.RaisedCosineLinearEval(n_basis_funcs=10)
 ```
 
 Let's see what a few basis look like. Here we evaluate it on a 100 x 100 grid.
@@ -175,7 +175,7 @@ Now we can "evaluate" the basis for each position of the animal
 
 
 ```{code-cell} ipython3
-position_basis = basis_2d(position["x"], position["y"])
+position_basis = basis_2d.compute_features(position["x"], position["y"])
 ```
 
 Now try to make sense of what it is

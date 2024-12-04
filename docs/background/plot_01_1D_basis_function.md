@@ -38,6 +38,7 @@ warnings.filterwarnings(
     ),
     category=RuntimeWarning,
 )
+
 ```
 
 (simple_basis_function)=
@@ -45,7 +46,7 @@ warnings.filterwarnings(
 
 ## Defining a 1D Basis Object
 
-We'll start by defining a 1D basis function object of the type [`EvalMSpline`](nemos.basis.basis.EvalMSpline).
+We'll start by defining a 1D basis function object of the type [`MSplineEval`](nemos.basis.MSplineEval).
 The hyperparameters required to initialize this class are:
 
 - The number of basis functions, which should be a positive integer.
@@ -58,35 +59,26 @@ import pynapple as nap
 
 import nemos as nmo
 
+# configure plots some
+plt.style.use(nmo.styles.plot_style)
+
 # Initialize hyperparameters
 order = 4
 n_basis = 10
 
 # Define the 1D basis function object
-bspline = nmo.basis.EvalBSpline(n_basis_funcs=n_basis, order=order)
+bspline = nmo.basis.BSplineEval(n_basis_funcs=n_basis, order=order)
 ```
 
-## Evaluating a Basis
-
-The [`Basis`](nemos.basis._basis.Basis) object is callable, and can be evaluated as a function. By default, the support of the basis
-is defined by the samples that we input to the [`__call__`](nemos.basis._basis.Basis.__call__) method, and covers from the smallest to the largest value.
-
+We provide the convenience method `evaluate_on_grid` for evaluating the basis on an equi-spaced grid of points that makes it easier to plot and visualize all basis elements.
 
 ```{code-cell} ipython3
+# evaluate the basis on 100 sample points
+x, y = bspline.evaluate_on_grid(100)
 
-# Generate a time series of sample points
-samples = nap.Tsd(t=np.arange(1001), d=np.linspace(0, 1,1001))
-
-# Evaluate the basis at the sample points
-eval_basis = bspline(samples)
-
-# Output information about the evaluated basis
-print(f"Evaluated B-spline of order {order} with {eval_basis.shape[1]} "
-      f"basis element and {eval_basis.shape[0]} samples.")
-
-fig = plt.figure()
-plt.title("B-spline basis")
-plt.plot(samples, eval_basis);
+fig = plt.figure(figsize=(5, 3))
+plt.plot(x, y, lw=2)
+plt.title("B-Spline Basis")
 ```
 
 ```{code-cell} ipython3
@@ -111,60 +103,19 @@ if path.exists():
   fig.savefig(path / "plot_01_1D_basis_function.svg")
 ```
 
-## Setting the basis support
-Sometimes, it is useful to restrict the basis to a fixed range. This can help manage outliers or ensure that
-your basis covers the same range across multiple experimental sessions.
-You can specify a range for the support of your basis by setting the `bounds`
-parameter at initialization. Evaluating the basis at any sample outside the bounds will result in a NaN.
-
-
-```{code-cell} ipython3
-bspline_range = nmo.basis.EvalBSpline(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
-
-print("Evaluated basis:")
-# 0.5  is within the support, 0.1 is outside the support
-print(np.round(bspline_range([0.5, 0.1]), 3))
-```
-
-Let's compare the default behavior of basis (estimating the range from the samples) with
-the fixed range basis.
-
-
-```{code-cell} ipython3
-fig, axs = plt.subplots(2,1, sharex=True)
-plt.suptitle("B-spline basis ")
-axs[0].plot(samples, bspline(samples), color="k")
-axs[0].set_title("default")
-axs[1].plot(samples, bspline_range(samples), color="tomato")
-axs[1].set_title("bounds=[0.2, 0.8]")
-plt.tight_layout()
-```
-
-Note that the samples can be an arbitrary N-dimensional array.
-
-```{code-cell} ipython3
-# generate a 4D array
-inp = np.random.uniform(size=(50, 1, 2, 3))
-
-bspline_range(inp).shape
-```
-
-
 ## Feature Computation
 The bases in the `nemos.basis` module can be grouped into two categories:
 
-1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names starting with "Eval," such as `EvalBSpline`.
+1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names starting with "Eval," such as `BSplineEval`.
 
-2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names starting with "Conv," such as `ConvBSpline`.
+2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names starting with "Conv," such as `BSplineConv`.
 
 The `compute_features` method always transform inputs into a feature matrix, i.e. a 2D output `(n_samples, n_features)`, which is the type of arrays that NeMoS and scikit-learn  models expect.
 The input can be an N-dimensional array (N >= 1) or a `pynapple` time series with data (Tsd, TsdFrame, or TsdTensor).
 
-Let's see how this two modalities operate on a one-dimensional input.
-
 ```{code-cell} ipython3
-eval_mode = nmo.basis.EvalMSpline(n_basis_funcs=n_basis)
-conv_mode = nmo.basis.ConvMSpline(n_basis_funcs=n_basis, window_size=100)
+eval_mode = nmo.basis.MSplineEval(n_basis_funcs=n_basis)
+conv_mode = nmo.basis.MSplineConv(n_basis_funcs=n_basis, window_size=100)
 
 # define an input
 angles = np.linspace(0, np.pi*4, 201)
@@ -206,7 +157,6 @@ If you want to learn more about convolutions, as well as how and when to change 
 check out the tutorial on [1D convolutions](plot_03_1D_convolution).
 :::
 
-
 ### Multi-dimensional inputs
 For N-dimensional input, with $N>1$, the method assumes that first axis is the sample axis. This is automatically true for pynapple time series data, for arrays you can use `numpy.transpose` to re-arrange the axis if the assumption is not matched.
 
@@ -225,25 +175,11 @@ out.shape
 ```
 
 For each of the `3 * 2 = 6` inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
-`3 * 2 * 5  = 30` outputs. 
-
-Let's explicitly check how things are processed,
-
-```{code-cell} ipython3
-# call the basis, the output won't be 2D
-out_two_steps = basis(inp)
-print(f"Call output shape: {out_two_steps.shape}")
-
-# reshape to 2D (concatenating all features into the second axis)
-out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs)
-
-# check that this is equivalent to the output of compute_features
-print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
-```
+`3 * 2 * 5  = 30` outputs.
 
 #### "Conv" Basis
 
-For "Conv" type basis, `compute_features` is equivalent of convolving each input with `n_basis_funcs` kernels, and concatenate the output into a 2D design matrix.
+For "Conv" type basis, `compute_features` is equivalent to convolving each input with `n_basis_funcs` kernels, and concatenate the output into a 2D design matrix.
 
 ```{code-cell} ipython3
 basis = nmo.basis.ConvRaisedCosineLinear(n_basis_funcs=5, window_size=6)
@@ -252,6 +188,11 @@ basis = nmo.basis.ConvRaisedCosineLinear(n_basis_funcs=5, window_size=6)
 out = basis.compute_features(inp)
 print(f"`compute_features` output shape {out.shape}")
 
+```
+
+Below the equivalent two way procedure, convolving the kernel using the NeMoS [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) method, and then reshaping the output.
+
+```{code-cell} ipython3
 # compute the kernels
 basis.set_kernel()
 print(f"Kernel shape (window_size, n_basis_funcs): {basis.kernel_.shape}")
@@ -289,6 +230,38 @@ plt.plot(equispaced_samples, eval_basis)
 plt.show()
 ```
 
+
+## Setting the basis support (Eval only)
+Sometimes, it is useful to restrict the basis to a fixed range. This can help manage outliers or ensure that
+your basis covers the same range across multiple experimental sessions.
+You can specify a range for the support of your basis by setting the `bounds`
+parameter at initialization of "Eval" type basis (it doesn't make sense for convolutions). 
+Evaluating the basis at any sample outside the bounds will result in a NaN.
+
+
+```{code-cell} ipython3
+bspline_range = nmo.basis.BSplineEval(n_basis_funcs=n_basis, order=order, bounds=(0.2, 0.8))
+
+print("Evaluated basis:")
+# 0.5  is within the support, 0.1 is outside the support
+print(np.round(bspline_range.compute_features([0.5, 0.1]), 3))
+```
+
+Let's compare the default behavior of basis (estimating the range from the samples) with
+the fixed range basis.
+
+
+```{code-cell} ipython3
+samples = np.linspace(0, 1, 200)
+fig, axs = plt.subplots(2,1, sharex=True)
+plt.suptitle("B-spline basis ")
+axs[0].plot(samples, bspline.compute_features(samples), color="k")
+axs[0].set_title("default")
+axs[1].plot(samples, bspline_range.compute_features(samples), color="tomato")
+axs[1].set_title("bounds=[0.2, 0.8]")
+plt.tight_layout()
+```
+
 Other Basis Types
 -----------------
 Each basis type may necessitate specific hyperparameters for instantiation. For a comprehensive description,
@@ -299,7 +272,7 @@ evaluate a log-spaced cosine raised function basis.
 
 ```{code-cell} ipython3
 # Instantiate the basis noting that the `RaisedCosineLog` basis does not require an `order` parameter
-raised_cosine_log = nmo.basis.EvalRaisedCosineLog(n_basis_funcs=10, width=1.5, time_scaling=50)
+raised_cosine_log = nmo.basis.RaisedCosineLogEval(n_basis_funcs=10, width=1.5, time_scaling=50)
 
 # Evaluate the raised cosine basis at the equi-spaced sample points
 # (same method in all Basis elements)

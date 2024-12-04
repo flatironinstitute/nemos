@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import abc
-from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
@@ -13,13 +12,7 @@ from numpy.typing import NDArray
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import (
-    Basis,
-    add_docstring,
-    check_one_dimensional,
-    check_transform_input,
-    min_max_rescale_samples,
-)
+from ._basis import Basis, check_transform_input, min_max_rescale_samples
 
 
 class OrthExponentialBasis(Basis, abc.ABC):
@@ -133,7 +126,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def __call__(
+    def _evaluate(
         self,
         sample_pts: NDArray,
     ) -> FeatureMatrix:
@@ -189,9 +182,13 @@ class OrthExponentialBasis(Basis, abc.ABC):
             basis_list.append(basis_funcs)
 
         # fill the value in
-        out = np.full(shape=(shape[0], len(basis_list), max_rank), fill_value=np.nan, dtype=np.float64)
+        out = np.full(
+            shape=(shape[0], len(basis_list), max_rank),
+            fill_value=np.nan,
+            dtype=np.float64,
+        )
         for i, bas in enumerate(basis_list):
-            out[:, i, :bas.shape[1]] = bas
+            out[:, i, : bas.shape[1]] = bas
 
         # reshape back
         out = out.reshape(*shape, -1)
@@ -215,6 +212,3 @@ class OrthExponentialBasis(Basis, abc.ABC):
             OrthExponential basis functions, shape (n_samples, n_basis_funcs).
         """
         return super().evaluate_on_grid(n_samples)
-
-
-add_orth_exp_decay_docstring = partial(add_docstring, cls=OrthExponentialBasis)
