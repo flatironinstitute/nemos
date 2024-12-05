@@ -1248,7 +1248,7 @@ class TestSharedMethods:
 
     def test_transformer_get_params(self, cls):
         bas = cls["eval"](n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5))
-        bas.set_input_shape(*([1] * bas._n_basis_input))
+        bas.set_input_shape( *([1] * bas._n_input_dimensionality))
         bas_transformer = bas.to_transformer()
         params_transf = bas_transformer.get_params()
         params_transf.pop("_basis")
