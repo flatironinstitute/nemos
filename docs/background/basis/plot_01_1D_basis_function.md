@@ -47,10 +47,10 @@ warnings.filterwarnings(
 ## Defining a 1D Basis Object
 
 We'll start by defining a 1D basis function object of the type [`MSplineEval`](nemos.basis.MSplineEval).
-The hyperparameters required to initialize this class are:
+The hyperparameters needed to initialize this class are:
 
-- The number of basis functions, which should be a positive integer.
-- The order of the spline, which should be an integer greater than 1.
+- The number of basis functions, which should be a positive integer (required).
+- The order of the spline, which should be an integer greater than 1 (optional, default 4 for a cubic spline).
 
 ```{code-cell} ipython3
 import matplotlib.pylab as plt
@@ -107,11 +107,12 @@ print(path.resolve(), path.exists())
 ```
 
 ## Feature Computation
-The bases in the `nemos.basis` module can be grouped into two categories:
+All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
+We can be group the bases into two categories depending on the type of transformation that [`compute_features`](nemos.basis._basis.Basis.compute_features) applies:
 
-1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names starting with "Eval," such as `BSplineEval`.
+1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names ends with "Eval," such as `BSplineEval`.
 
-2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names starting with "Conv," such as `BSplineConv`.
+2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names ending with "Conv", such as `BSplineConv`.
 
 Let's see how this two modalities operate.
 
