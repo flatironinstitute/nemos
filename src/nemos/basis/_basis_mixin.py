@@ -322,4 +322,13 @@ class CompositeBasisMixin:
         self._basis2 = bas
 
     def _list_components(self):
+        """List all basis components.
+
+        Reimplements the default behavior by iteratively calling _list_components of the
+        elements.
+
+        Returns
+        -------
+            A list with all 1d basis components.
+        """
         return self._basis1._list_components() + self._basis2._list_components()

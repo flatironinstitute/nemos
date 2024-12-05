@@ -821,6 +821,24 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self
 
     def _list_components(self):
+        """List all basis components.
+
+        This is re-implemented for composite basis in the mixin class.
+
+        Returns
+        -------
+            A list with all 1d basis components.
+
+        Raises
+        ------
+        RuntimeError
+            If the basis has multiple components. This would only happen if there is an
+            implementation issue, for example, if a composite basis is implemented but the
+            mixin class is not initialized, or if the _list_components method of the composite mixin
+            class is accidentally removed.
+        """
+        if hasattr(self, "basis1"):
+            raise RuntimeError("Composite basis must implement the _list_components method.")
         return [self]
 
 
