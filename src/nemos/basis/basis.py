@@ -158,7 +158,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("set_input_shape", BSplineBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -184,7 +184,6 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
 
         """
         return super().set_input_shape(xi)
-
 
 
 class BSplineConv(ConvBasisMixin, BSplineBasis):
@@ -307,7 +306,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("set_input_shape", BSplineBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -448,7 +447,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("set_input_shape", CyclicBSplineBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -588,7 +587,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("set_input_shape", CyclicBSplineBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -753,7 +752,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("set_input_shape", MSplineBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -917,7 +916,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
     @add_docstring("set_input_shape", MSplineBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -1061,7 +1060,7 @@ class RaisedCosineLinearEval(
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", RaisedCosineBasisLinear)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -1204,7 +1203,7 @@ class RaisedCosineLinearConv(
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", RaisedCosineBasisLinear)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -1356,7 +1355,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", RaisedCosineBasisLog)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -1509,7 +1508,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", RaisedCosineBasisLog)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -1535,6 +1534,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
 
         """
         return super().set_input_shape(xi)
+
 
 class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -1648,7 +1648,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", OrthExponentialBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------
@@ -1674,6 +1674,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
 
         """
         return super().set_input_shape(xi)
+
 
 class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -1785,7 +1786,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         return super().split_by_feature(x, axis=axis)
 
     @add_docstring("set_input_shape", OrthExponentialBasis)
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
         --------

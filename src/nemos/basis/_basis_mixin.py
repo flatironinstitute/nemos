@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import inspect
-from typing import Optional, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -14,6 +14,7 @@ from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
     from ._basis import Basis
+
 
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
@@ -293,5 +294,9 @@ class CompositeBasisMixin:
 
     def _check_input_shape_consistency(self, *xi: NDArray):
         """Check the input shape consistency for all basis elements."""
-        self._basis1._check_input_shape_consistency(*xi[: self._basis1._n_input_dimensionality])
-        self._basis2._check_input_shape_consistency(*xi[self._basis1._n_input_dimensionality:])
+        self._basis1._check_input_shape_consistency(
+            *xi[: self._basis1._n_input_dimensionality]
+        )
+        self._basis2._check_input_shape_consistency(
+            *xi[self._basis1._n_input_dimensionality :]
+        )

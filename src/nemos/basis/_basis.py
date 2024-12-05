@@ -773,7 +773,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 "different shape, please create a new basis instance."
             )
 
-    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Set the expected input shape for the basis object.
 
@@ -803,7 +803,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         if isinstance(xi, tuple):
             if not all(isinstance(i, int) for i in xi):
-                raise ValueError(f"The tuple provided contains non integer values. Tuple: {xi}.")
+                raise ValueError(
+                    f"The tuple provided contains non integer values. Tuple: {xi}."
+                )
             shape = xi
         elif isinstance(xi, int):
             shape = () if xi == 1 else (xi,)
@@ -866,7 +868,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         self._basis2 = basis2
         CompositeBasisMixin.__init__(self)
 
-    def set_input_shape(self, *xi: int | tuple[int,...] | NDArray) -> Basis:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
         Set the expected input shape for the basis object.
 
@@ -1237,7 +1239,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         BasisTransformerMixin.__init__(self)
         CompositeBasisMixin.__init__(self)
 
-
     def set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.
 
@@ -1323,7 +1324,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         )
         return X
 
-    def set_input_shape(self, *xi: int | tuple[int,...] | NDArray) -> Basis:
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
         Set the expected input shape for the basis object.
 
