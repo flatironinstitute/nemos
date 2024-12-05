@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING
+from typing import List, TYPE_CHECKING
+
+import numpy as np
 
 from ..typing import FeatureMatrix
 
@@ -60,15 +62,19 @@ class TransformerBasis:
     """
 
     def __init__(self, basis: Basis):
+        if basis._n_basis_input is None:
+            raise RuntimeError(
+                "TransformerBasis initialization failed: the provided basis has no defined input shape. "
+                "Please call `set_input_shape` on the basis before initializing the transformer."
+            )
+
         self._basis = copy.deepcopy(basis)
 
-    @staticmethod
-    def _unpack_inputs(X: FeatureMatrix):
-        """Unpack impute without using transpose.
+    def _unpack_inputs(self, X: FeatureMatrix) -> List:
+        """Unpack inputs.
 
         Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
-        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``
-        exception since ``pynapple`` assumes that the time axis is the first axis.
+        returning a list of Tsd objects.
 
         Parameters
         ----------
@@ -78,10 +84,17 @@ class TransformerBasis:
         Returns
         -------
         :
-            A tuple of each individual input.
+            A list of each individual input.
 
         """
-        return (X[:, k] for k in range(X.shape[1]))
+        n_samples = X.shape[0]
+        out = []
+        cc = 0
+        for i, bas in enumerate(self._basis._list_components()):
+            n_input = self._n_basis_input[i]
+            out.append(np.reshape(X[:, cc:cc + n_input], (n_samples, *bas._input_shape)))
+            cc += n_input
+        return out
 
     def fit(self, X: FeatureMatrix, y=None):
         """

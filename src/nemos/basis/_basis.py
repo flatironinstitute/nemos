@@ -820,6 +820,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._n_output_features = self.n_basis_funcs * self._n_basis_input[0]
         return self
 
+    def _list_components(self):
+        return [self]
+
+
 
 class AdditiveBasis(CompositeBasisMixin, Basis):
     """
@@ -857,16 +861,15 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
-        super().__init__(self.n_basis_funcs, mode="eval")
+        CompositeBasisMixin.__init__(self, basis1, basis2)
+        Basis.__init__(self, self.n_basis_funcs, mode="eval")
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         self._n_basis_input = None
         self._n_output_features = None
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
-        self._basis1 = basis1
-        self._basis2 = basis2
-        CompositeBasisMixin.__init__(self)
+
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
@@ -1226,8 +1229,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
-        CompositeBasisMixin.__init__(self)
-        super().__init__(self.n_basis_funcs, mode="eval")
+        CompositeBasisMixin.__init__(self, basis1, basis2)
+        Basis.__init__(self, self.n_basis_funcs, mode="eval")
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
@@ -1237,7 +1240,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self._basis1 = basis1
         self._basis2 = basis2
         BasisTransformerMixin.__init__(self)
-        CompositeBasisMixin.__init__(self)
 
     def set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.

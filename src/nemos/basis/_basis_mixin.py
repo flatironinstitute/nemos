@@ -270,6 +270,10 @@ class CompositeBasisMixin:
     (AdditiveBasis and MultiplicativeBasis).
     """
 
+    def __init__(self, basis1: Basis, basis2: Basis):
+        self.basis1 = basis1
+        self.basis2 = basis2
+
     def _check_n_basis_min(self) -> None:
         pass
 
@@ -300,3 +304,22 @@ class CompositeBasisMixin:
         self._basis2._check_input_shape_consistency(
             *xi[self._basis1._n_input_dimensionality :]
         )
+
+    @property
+    def basis1(self):
+        return self._basis1
+
+    @basis1.setter
+    def basis1(self, bas: Basis):
+        self._basis1 = bas
+
+    @property
+    def basis2(self):
+        return self._basis2
+
+    @basis2.setter
+    def basis2(self, bas: Basis):
+        self._basis2 = bas
+
+    def _list_components(self):
+        return self._basis1._list_components() + self._basis2._list_components()
