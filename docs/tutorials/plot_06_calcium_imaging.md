@@ -180,11 +180,11 @@ We can combine the two bases.
 
 
 ```{code-cell} ipython3
-heading_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-coupling_basis = nmo.basis.RaisedCosineBasisLog(3, mode="conv", window_size=10)
+heading_basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=12)
+coupling_basis = nmo.basis.RaisedCosineLogConv(3, window_size=10)
 ```
 
-We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis.AdditiveBasis) object).
+We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis._basis.AdditiveBasis) object).
 
 
 ```{code-cell} ipython3
@@ -371,7 +371,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():

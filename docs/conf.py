@@ -40,6 +40,8 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx_autodoc_typehints',
     'sphinx_togglebutton',
+    'matplotlib.sphinxext.plot_directive',
+    "matplotlib.sphinxext.mathmpl",
 ]
 
 myst_enable_extensions = [
@@ -68,7 +70,7 @@ autodoc_default_options = {
     'inherited-members': True,
     'undoc-members': True,
     'show-inheritance': True,
-    'special-members': '__call__, __add__, __mul__, __pow__'
+    'special-members': ' __add__, __mul__, __pow__'
 }
 
 # # napolean configs
@@ -121,7 +123,11 @@ html_theme_options = {
     "logo": {
       "image_light": "_static/NeMoS_Logo_CMYK_Full.svg",
       "image_dark": "_static/NeMoS_Logo_CMYK_White.svg",
-   }
+   },
+    "secondary_sidebar_items": {
+        "**": ["page-toc", "sourcelink"],
+        "background/basis/README": [],
+    },
 }
 
 html_sidebars = {
@@ -158,3 +164,11 @@ exclude_tutorials = os.environ.get("EXCLUDE_TUTORIALS", "false").lower() == "tru
 
 if exclude_tutorials:
     nb_execution_excludepatterns = ["tutorials/**", "how_to_guide/**", "background/**"]
+
+viewcode_follow_imported_members = True
+
+# option for mpl extension
+plot_html_show_formats = False
+
+# raise an error if exec error in notebooks
+nb_execution_raise_on_error = True

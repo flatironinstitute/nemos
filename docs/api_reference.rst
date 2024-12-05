@@ -4,6 +4,7 @@ API Reference
 =============
 
 .. _nemos_glm:
+
 The ``nemos.glm`` module
 ------------------------
 Classes for creating Generalized Linear Models (GLMs) for both single neurons and neural populations.
@@ -19,9 +20,37 @@ Classes for creating Generalized Linear Models (GLMs) for both single neurons an
     PopulationGLM
 
 .. _nemos_basis:
+
 The ``nemos.basis`` module
 --------------------------
 Provides basis function classes to construct and transform features for model inputs.
+Basis can be grouped according to the mode of operation into basis that performs convolution and basis that operates
+as non-linear maps.
+
+
+**The Abstract Classes:**
+
+These classes are the building blocks for the concrete basis classes.
+
+.. currentmodule:: nemos.basis._basis
+
+.. autosummary::
+    :toctree: generated/_basis
+    :recursive:
+    :nosignatures:
+
+    Basis
+
+.. currentmodule:: nemos.basis._spline_basis
+.. autosummary::
+    :toctree: generated/_basis
+    :recursive:
+    :nosignatures:
+
+    SplineBasis
+
+
+**Bases For Convolution:**
 
 .. currentmodule:: nemos.basis
 
@@ -30,21 +59,59 @@ Provides basis function classes to construct and transform features for model in
     :recursive:
     :nosignatures:
 
-    Basis
-    SplineBasis
-    BSplineBasis
-    CyclicBSplineBasis
-    MSplineBasis
-    OrthExponentialBasis
-    RaisedCosineBasisLinear
-    RaisedCosineBasisLog
+
+    MSplineConv
+    BSplineConv
+    CyclicBSplineConv
+    RaisedCosineLinearConv
+    RaisedCosineLogConv
+    OrthExponentialConv
+
+.. check for a config that prints only nemos.basis.Name
+
+**Bases For Non-Linear Mapping:**
+
+.. currentmodule:: nemos.basis
+
+.. autosummary::
+    :toctree: generated/basis
+    :recursive:
+    :nosignatures:
+
+    MSplineEval
+    BSplineEval
+    CyclicBSplineEval
+    RaisedCosineLinearEval
+    RaisedCosineLogEval
+    OrthExponentialEval
+
+**Composite Bases:**
+
+.. currentmodule:: nemos.basis._basis
+
+.. autosummary::
+    :toctree: generated/_basis
+    :recursive:
+    :nosignatures:
+
     AdditiveBasis
     MultiplicativeBasis
+
+**Basis As `scikit-learn` Tranformers:**
+
+.. currentmodule:: nemos.basis._transformer_basis
+
+.. autosummary::
+    :toctree: generated/_transformer_basis
+    :recursive:
+    :nosignatures:
+
     TransformerBasis
 
 .. _observation_models:
+
 The ``nemos.observation_models`` module
---------------------------------------
+---------------------------------------
 Statistical models to describe the distribution of neural responses or other predicted variables, given inputs.
 
 .. currentmodule:: nemos.observation_models
@@ -59,6 +126,7 @@ Statistical models to describe the distribution of neural responses or other pre
     GammaObservations
 
 .. _regularizers:
+
 The ``nemos.regularizer`` module
 --------------------------------
 Implements various regularization techniques to constrain model parameters, which helps prevent overfitting.
@@ -130,7 +198,7 @@ These objects can be provided as input to nemos GLM methods.
 .. currentmodule:: nemos.pytrees
 
 .. autosummary::
-    :toctree: generated/identifiability_constraints
+    :toctree: generated/pytree
     :recursive:
     :nosignatures:
 
