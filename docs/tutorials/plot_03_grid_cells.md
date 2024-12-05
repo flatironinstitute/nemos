@@ -123,6 +123,8 @@ for i in range(len(spikes)):
 plt.tight_layout()
 ```
 
+
+(grid_cells_nemos)=
 ## NeMoS
 It's time to use NeMoS.
 Let's try to predict the spikes as a function of position and see if we can generate better tuning curves
@@ -143,13 +145,12 @@ position = position.interpolate(counts)
 ```
 
 We can define a two-dimensional basis for position by multiplying two one-dimensional bases,
-see [here](../../background/plot_02_ND_basis_function) for more details.
-
+see [here](composing_basis_function) for more details.
 
 ```{code-cell} ipython3
-basis_2d = nmo.basis.RaisedCosineBasisLinear(
+basis_2d = nmo.basis.BSplineEval(
     n_basis_funcs=10
-) * nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=10)
+) * nmo.basis.BSplineEval(n_basis_funcs=10)
 ```
 
 Let's see what a few basis look like. Here we evaluate it on a 100 x 100 grid.
@@ -176,7 +177,7 @@ Now we can "evaluate" the basis for each position of the animal
 
 
 ```{code-cell} ipython3
-position_basis = basis_2d(position["x"], position["y"])
+position_basis = basis_2d.compute_features(position["x"], position["y"])
 ```
 
 Now try to make sense of what it is
@@ -220,7 +221,10 @@ Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 ```{code-cell} ipython3
 model = nmo.glm.GLM(
     regularizer="Ridge",
-    regularizer_strength=0.001
+    regularizer_strength=0.0001,
+    # lowering the tolerance means that the solution will be closer to the optimum 
+    # (at the cost of increasing execution time)
+    solver_kwargs=dict(tol=10**-12), 
 )
 ```
 
@@ -344,7 +348,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
    
 if path.exists():

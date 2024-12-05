@@ -357,7 +357,7 @@ if you are interested.
 :::
 
 ```{code-cell} ipython3
-doc_plots.current_injection_plot(current, spikes, firing_rate)
+doc_plots.current_injection_plot(current, spikes, firing_rate);
 ```
 
 So now that we can view the details of our experiment a little more clearly,
@@ -446,7 +446,7 @@ following properties:
 :::{admonition} What is jax?
 :class: note
 
-[jax](https://github.com/google/jax) is a Google-supported python library
+[jax](https://github.com/jax-ml/jax) is a Google-supported python library
 for automatic differentiation. It has all sorts of neat features, but the
 most relevant of which for NeMoS is its GPU-compatibility and
 just-in-time compilation (both of which make code faster with little
@@ -635,7 +635,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():

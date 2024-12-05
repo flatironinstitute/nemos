@@ -40,7 +40,7 @@ def get_subclass_methods(class_obj: type) -> List[Tuple[str, type]]:
 
     Returns
     -------
-    List[Tuple[str, type]]
+    :
         A list of tuples representing the methods that are specific to the subclass.
         Each tuple contains the method name (str) and the corresponding method object.
     """
@@ -113,7 +113,7 @@ def get_non_abstract_classes(module) -> List[Tuple[str, type]]:
 
     Returns
     -------
-    List[Tuple[str, type]]
+    :
         A list of tuples representing the non-abstract classes in the module.
         Each tuple contains the class name (str) and the corresponding class object.
     """
@@ -208,3 +208,40 @@ def check_all_abstract_methods_compliance(module) -> None:
                 raise ValueError(
                     f"Abstract method {method} not implemented in {base_class} sub-class!"
                 )
+
+
+def trim_kwargs(cls: type, kwargs: dict, class_specific_params: dict):
+    """
+    Filter a dictionary of keyword arguments to include only those specific to a given class.
+
+    Parameters
+    ----------
+    cls :
+        The class object for which the keyword arguments are filtered.
+    kwargs :
+        A dictionary of keyword arguments to be filtered.
+    class_specific_params :
+        A mapping of class names to sets or lists of allowed parameter names.
+
+    Returns
+    -------
+    :
+        A dictionary containing only the keyword arguments specific to the given class.
+
+    Example
+    -------
+    >>> class_specific_params = {
+    ...     'MyClass': {'param1', 'param2'},
+    ...     'OtherClass': {'param3', 'param4'}
+    ... }
+    >>> kwargs = {'param1': 10, 'param3': 20, 'param5': 30}
+    >>> class MyClass:
+    ...     pass
+    >>> trim_kwargs(MyClass, kwargs, class_specific_params)
+    {'param1': 10}
+    """
+    return {
+        key: value
+        for key, value in kwargs.items()
+        if key in class_specific_params[cls.__name__]
+    }
