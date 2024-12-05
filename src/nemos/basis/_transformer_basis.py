@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 
@@ -62,13 +62,24 @@ class TransformerBasis:
     """
 
     def __init__(self, basis: Basis):
+        self.basis = copy.deepcopy(basis)
+
+    @staticmethod
+    def _check_initialized(basis):
         if basis._n_basis_input is None:
             raise RuntimeError(
                 "TransformerBasis initialization failed: the provided basis has no defined input shape. "
                 "Please call `set_input_shape` on the basis before initializing the transformer."
             )
 
-        self._basis = copy.deepcopy(basis)
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis):
+        self._check_initialized(basis)
+        self._basis = basis
 
     def _unpack_inputs(self, X: FeatureMatrix) -> List:
         """Unpack inputs.
@@ -92,7 +103,9 @@ class TransformerBasis:
         cc = 0
         for i, bas in enumerate(self._basis._list_components()):
             n_input = self._n_basis_input[i]
-            out.append(np.reshape(X[:, cc:cc + n_input], (n_samples, *bas._input_shape)))
+            out.append(
+                np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape))
+            )
             cc += n_input
         return out
 
@@ -276,7 +289,7 @@ class TransformerBasis:
         ValueError('Only setting _basis or existing attributes of _basis is allowed.')
         """
         # allow self._basis = basis
-        if name == "_basis":
+        if name == "_basis" or name == "basis":
             super().__setattr__(name, value)
         # allow changing existing attributes of self._basis
         elif hasattr(self._basis, name):

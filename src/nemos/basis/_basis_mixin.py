@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import inspect
+import warnings
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
@@ -273,6 +274,21 @@ class CompositeBasisMixin:
     def __init__(self, basis1: Basis, basis2: Basis):
         self.basis1 = basis1
         self.basis2 = basis2
+        shapes = (
+            *(bas1._input_shape for bas1 in basis1._list_components()),
+            *(bas2._input_shape for bas2 in basis2._list_components()),
+        )
+        # if all bases where set, then set input for composition.
+        set_bases = (s is not None for s in shapes)
+        if all(set_bases):
+            # pass down the input shapes
+            self.set_input_shape(*shapes)
+        elif any(set_bases):
+            warnings.warn(
+                "Only some of the basis where initialized with `set_input_shape`, "
+                "please initialize the composite basis before computing features.",
+                category=UserWarning,
+            )
 
     def _check_n_basis_min(self) -> None:
         pass
