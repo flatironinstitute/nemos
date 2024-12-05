@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import inspect
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,6 +12,8 @@ from numpy.typing import NDArray
 from ..convolve import create_convolutional_predictor
 from ._transformer_basis import TransformerBasis
 
+if TYPE_CHECKING:
+    from ._basis import Basis
 
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
@@ -258,3 +260,38 @@ class BasisTransformerMixin:
         >>> gridsearch = gridsearch.fit(X, y)
         """
         return TransformerBasis(copy.deepcopy(self))
+
+
+class CompositeBasisMixin:
+    """Mixin class for composite basis.
+
+    Add overwrites concrete methods or defines abstract methods for composite basis
+    (AdditiveBasis and MultiplicativeBasis).
+    """
+
+    def _check_n_basis_min(self) -> None:
+        pass
+
+    def set_kernel(self, *xi: NDArray) -> Basis:
+        """Call set_kernel on the basis elements.
+
+        If any of the basis elements is in "conv" mode, it will prepare its kernels for the convolution.
+
+        Parameters
+        ----------
+        *xi:
+            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
+
+        Returns
+        -------
+        :
+            The basis ready to be evaluated.
+        """
+        self._basis1.set_kernel()
+        self._basis2.set_kernel()
+        return self
+
+    def _check_input_shape_consistency(self, *xi: NDArray):
+        """Check the input shape consistency for all basis elements."""
+        self._basis1._check_input_shape_consistency(*xi[: self._basis1._n_input_dimensionality])
+        self._basis2._check_input_shape_consistency(*xi[self._basis1._n_input_dimensionality:])

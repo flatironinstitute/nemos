@@ -157,6 +157,35 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
+    @add_docstring("set_input_shape", BSplineBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.BSplineEval(5)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
+
+
 
 class BSplineConv(ConvBasisMixin, BSplineBasis):
     """
@@ -277,6 +306,34 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
+    @add_docstring("set_input_shape", BSplineBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.BSplineConv(5, 10)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
+
 
 class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
     """
@@ -390,6 +447,34 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
+    @add_docstring("set_input_shape", CyclicBSplineBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.CyclicBSplineEval(5)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
+
 
 class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
     """
@@ -501,6 +586,34 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         >>> l = plt.legend()
         """
         return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("set_input_shape", CyclicBSplineBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.CyclicBSplineConv(5, 10)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
 
 
 class MSplineEval(EvalBasisMixin, MSplineBasis):
@@ -639,6 +752,34 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
+    @add_docstring("set_input_shape", MSplineBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.MSplineEval(5)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
+
 
 class MSplineConv(ConvBasisMixin, MSplineBasis):
     r"""
@@ -775,6 +916,34 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
+    @add_docstring("set_input_shape", MSplineBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.MSplineConv(5, 10)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
+
 
 class RaisedCosineLinearEval(
     EvalBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
@@ -891,6 +1060,34 @@ class RaisedCosineLinearEval(
         """
         return super().split_by_feature(x, axis=axis)
 
+    @add_docstring("set_input_shape", RaisedCosineBasisLinear)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.RaisedCosineLinearEval(5)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
+
 
 class RaisedCosineLinearConv(
     ConvBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
@@ -1005,6 +1202,34 @@ class RaisedCosineLinearConv(
 
         """
         return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", RaisedCosineBasisLinear)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.RaisedCosineLinearConv(5, 10)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
 
 
 class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
@@ -1129,6 +1354,34 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
 
         """
         return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", RaisedCosineBasisLog)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.RaisedCosineLogEval(5)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
 
 
 class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
@@ -1255,6 +1508,33 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         """
         return super().split_by_feature(x, axis=axis)
 
+    @add_docstring("set_input_shape", RaisedCosineBasisLog)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.RaisedCosineLogConv(5, 10)
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
 
 class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -1367,6 +1647,33 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         """
         return super().split_by_feature(x, axis=axis)
 
+    @add_docstring("set_input_shape", OrthExponentialBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6))
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)
 
 class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
@@ -1476,3 +1783,31 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
 
         """
         return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", OrthExponentialBasis)
+    def set_input_shape(self, xi: int | tuple[int,...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.OrthExponentialConv(5, window_size=10, decay_rates=np.arange(1, 6))
+
+        Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+
+        Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+
+        Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return super().set_input_shape(xi)

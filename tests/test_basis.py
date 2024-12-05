@@ -130,6 +130,10 @@ def test_all_basis_are_tested() -> None:
             "split_by_feature",
             "Decompose an array along a specified axis into sub-arrays",
         ),
+        (
+            "set_input_shape",
+            "Set the expected input shape for the basis object",
+        ),
     ],
 )
 def test_example_docstrings_add(
@@ -1254,6 +1258,44 @@ class TestSharedMethods:
         assert params_transf == params_basis
         assert np.all(rates_1 == rates_2)
 
+    @pytest.mark.parametrize(
+        "x, inp_shape, expectation",
+        [
+            (np.ones((10,)), 1, does_not_raise()),
+            (np.ones((10, 1)), 1, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10, 2)), 2, does_not_raise()),
+            (np.ones((10, 1)), 2, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10, 2, 1)), 2, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10, 1, 2)), 2, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10, 1)), (1,),  does_not_raise()),
+            (np.ones((10,)), tuple(), does_not_raise()),
+            (np.ones((10,)), np.zeros((12,)), does_not_raise()),
+            (np.ones((10,)), (1,), pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10,1)), (), pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10,1)), np.zeros((12, )), pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (np.ones((10)), np.zeros((12, 1)), pytest.raises(ValueError, match="Input shape mismatch detected")),
+
+        ]
+    )
+    def test_input_shape_validity(self, x, inp_shape, expectation, cls):
+        bas = cls["eval"](n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5))
+        bas.set_input_shape(inp_shape)
+        with expectation:
+            bas.compute_features(x)
+
+    @pytest.mark.parametrize(
+        "inp_shape, expectation",
+        [
+            ((1, 1), does_not_raise()),
+            ((1, 1.), pytest.raises(ValueError, match="The tuple provided contains non integer")),
+            (np.ones((1, )), does_not_raise()),
+            (np.ones((1, 1)), does_not_raise()),
+        ]
+    )
+    def test_set_input_value_types(self, inp_shape, expectation, cls):
+        bas = cls["eval"](n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5))
+        with  expectation:
+            bas.set_input_shape(inp_shape)
 
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv}
@@ -2497,6 +2539,99 @@ class TestAdditiveBasis(CombinedBasis):
         with expectation:
             bas.compute_features(np.random.randn(30, 2), np.random.randn(30, n_input))
 
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
+    @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
+    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
+    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    def test_set_input_shape_type_1d_arrays(self, basis_a, basis_b, shape_a, shape_b, class_specific_params, add_shape_a, add_shape_b):
+        x = (np.ones((10, *add_shape_a)), np.ones((10, *add_shape_b)))
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        add = basis_a + basis_b
+
+        add.set_input_shape(shape_a, shape_b)
+        if add_shape_a == () and add_shape_b == ():
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="Input shape mismatch detected")
+        with expectation:
+            add.compute_features(*x)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
+    @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
+    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
+    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    def test_set_input_shape_type_2d_arrays(self, basis_a, basis_b, shape_a, shape_b, class_specific_params,
+                                                    add_shape_a, add_shape_b):
+        x = (np.ones((10, 2, *add_shape_a)), np.ones((10, 3, *add_shape_b)))
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        add = basis_a + basis_b
+
+        add.set_input_shape(shape_a, shape_b)
+        if add_shape_a == () and add_shape_b == ():
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="Input shape mismatch detected")
+        with expectation:
+            add.compute_features(*x)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
+    @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
+    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
+    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    def test_set_input_shape_type_nd_arrays(self, basis_a, basis_b, shape_a, shape_b, class_specific_params,add_shape_a,add_shape_b):
+        x = (np.ones((10, 2, 2, *add_shape_a)), np.ones((10, 3, 1, *add_shape_b)))
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        add = basis_a + basis_b
+
+        add.set_input_shape(shape_a, shape_b)
+        if add_shape_a == () and add_shape_b == ():
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="Input shape mismatch detected")
+        with expectation:
+            add.compute_features(*x)
+
+    @pytest.mark.parametrize(
+        "inp_shape, expectation",
+        [
+            (((1, 1), (1, 1)), does_not_raise()),
+            (((1, 1.), (1, 1)), pytest.raises(ValueError, match="The tuple provided contains non integer")),
+            (((1, 1), (1, 1.)), pytest.raises(ValueError, match="The tuple provided contains non integer")),
+        ]
+    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    def test_set_input_value_types(self, inp_shape, expectation, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        add = basis_a + basis_b
+        with  expectation:
+            add.set_input_shape(*inp_shape)
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
@@ -3148,6 +3283,100 @@ class TestMultiplicativeBasis(CombinedBasis):
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
         assert bas_prod.n_basis_input == (n_basis_input1, n_basis_input2)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("shape_a", [1, (), np.ones(3)])
+    @pytest.mark.parametrize("shape_b", [1, (), np.ones(3)])
+    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
+    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    def test_set_input_shape_type_1d_arrays(self, basis_a, basis_b, shape_a, shape_b, class_specific_params, add_shape_a, add_shape_b):
+        x = (np.ones((10, *add_shape_a)), np.ones((10, *add_shape_b)))
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        mul = basis_a * basis_b
+
+        mul.set_input_shape(shape_a, shape_b)
+        if add_shape_a == () and add_shape_b == ():
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="Input shape mismatch detected")
+        with expectation:
+            mul.compute_features(*x)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("shape_a", [2, (2,), np.ones((3, 2))])
+    @pytest.mark.parametrize("shape_b", [3, (3,), np.ones((3, 3))])
+    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
+    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    def test_set_input_shape_type_2d_arrays(self, basis_a, basis_b, shape_a, shape_b, class_specific_params,
+                                                    add_shape_a, add_shape_b):
+        x = (np.ones((10, 2, *add_shape_a)), np.ones((10, 3, *add_shape_b)))
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        mul = basis_a * basis_b
+
+        mul.set_input_shape(shape_a, shape_b)
+        if add_shape_a == () and add_shape_b == ():
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="Input shape mismatch detected")
+        with expectation:
+            mul.compute_features(*x)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("shape_a", [(2, 2), np.ones((3, 2, 2))])
+    @pytest.mark.parametrize("shape_b", [(3, 1), np.ones((3, 3, 1))])
+    @pytest.mark.parametrize("add_shape_a", [(), (1,)])
+    @pytest.mark.parametrize("add_shape_b", [(), (1,)])
+    def test_set_input_shape_type_nd_arrays(self, basis_a, basis_b, shape_a, shape_b, class_specific_params,add_shape_a,add_shape_b):
+        x = (np.ones((10, 2, 2, *add_shape_a)), np.ones((10, 3, 1, *add_shape_b)))
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        mul = basis_a * basis_b
+
+        mul.set_input_shape(shape_a, shape_b)
+        if add_shape_a == () and add_shape_b == ():
+            expectation = does_not_raise()
+        else:
+            expectation = pytest.raises(ValueError, match="Input shape mismatch detected")
+        with expectation:
+            mul.compute_features(*x)
+
+    @pytest.mark.parametrize(
+        "inp_shape, expectation",
+        [
+            (((1, 1), (1, 1)), does_not_raise()),
+            (((1, 1.), (1, 1)), pytest.raises(ValueError, match="The tuple provided contains non integer")),
+            (((1, 1), (1, 1.)), pytest.raises(ValueError, match="The tuple provided contains non integer")),
+        ]
+    )
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+    def test_set_input_value_types(self, inp_shape, expectation, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        mul = basis_a * basis_b
+        with  expectation:
+            mul.set_input_shape(*inp_shape)
 
 
 @pytest.mark.parametrize(
@@ -3843,7 +4072,7 @@ def test__get_splitter(
     bas23 = func2(bas3_instance)
     bas123 = func1(bas23)
     inps = [np.zeros((1, n)) if n > 1 else np.zeros((1,)) for n in n_input_basis]
-    bas123._set_num_output_features(*inps)
+    bas123.set_input_shape(*inps)
     splitter_dict, _ = bas123._get_feature_slicing(split_by_input=False)
     exp_slices = compute_slice(bas1_instance, bas2_instance, bas3_instance)
     assert exp_slices == splitter_dict
@@ -3997,7 +4226,7 @@ def test__get_splitter_split_by_input(
         np.zeros((1, n)) if n > 1 else np.zeros((1,))
         for n in (n_input_basis_1, n_input_basis_2)
     ]
-    bas12._set_num_output_features(*inps)
+    bas12.set_input_shape(*inps)
     splitter_dict, _ = bas12._get_feature_slicing()
     exp_slices = compute_slice(bas1_instance, bas2_instance)
     assert exp_slices == splitter_dict
@@ -4028,7 +4257,7 @@ def test_duplicate_keys(bas1, bas2, bas3, class_specific_params):
     bas_obj = bas1_instance + bas2_instance + bas3_instance
 
     inps = [np.zeros((1,)) for n in range(3)]
-    bas_obj._set_num_output_features(*inps)
+    bas_obj.set_input_shape(*inps)
     slice_dict = bas_obj._get_feature_slicing()[0]
     assert tuple(slice_dict.keys()) == ("label", "label-1", "label-2")
 
@@ -4073,7 +4302,7 @@ def test_split_feature_axis(
     )
 
     bas = bas1_instance + bas2_instance
-    bas._set_num_output_features(np.zeros((1, 2)), np.zeros((1, 3)))
+    bas.set_input_shape(np.zeros((1, 2)), np.zeros((1, 3)))
     with expectation:
         out = bas.split_by_feature(x, axis=axis)
         for i, itm in enumerate(out.items()):
