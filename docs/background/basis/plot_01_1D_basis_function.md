@@ -107,15 +107,20 @@ print(path.resolve(), path.exists())
 ```
 
 ## Feature Computation
-All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
-We can be group the bases into two categories depending on the type of transformation that [`compute_features`](nemos.basis._basis.Basis.compute_features) applies:
+All bases in the `nemos.basis` module transform one or more time series into a set of features. This transformation is performed out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
+The bases are categorized into two types based on the transformation applied by [`compute_features`](nemos.basis._basis.Basis.compute_features):
 
-1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names ends with "Eval," such as `BSplineEval`.
+1. **Evaluation Bases**: TThese bases evaluate the basis functions directly, applying a non-linear transformation to the input. Classes in this category have names ending with "Eval", such as `BSplineEval`.
 
-2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names ending with "Conv", such as `BSplineConv`.
+2. **Convolution Bases**: hese bases convolve the input with a kernel of basis elements using a user-specified `window_size`. Classes in this category have names ending with "Conv", such as `BSplineConv`.
 
-The `compute_features` method always transform inputs into a feature matrix, i.e. a 2D output `(n_samples, n_features)`, which is the type of arrays that NeMoS and scikit-learn  models expect.
-The input can be an N-dimensional array (N >= 1) or a `pynapple` time series with data (Tsd, TsdFrame, or TsdTensor).
+`compute_features` always outputs a feature matrix, i.e. a 2D output of shape `(n_samples, n_features)`. This is the arrays structure that NeMoS and scikit-learn models requires.
+The input can be:
+
+- An N-dimensional array (N >= 1)
+- A `pynapple` time series: ([Tsd](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html), [TsdFrame](https://pynapple.org/generated/pynapple.core.time_series.TsdFrame.html), or [TsdTensor](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html)).
+
+### Example: Feature Computation for Evaluation and Convolution Bases
 
 ```{code-cell} ipython3
 eval_mode = nmo.basis.MSplineEval(n_basis_funcs=n_basis)
@@ -162,11 +167,11 @@ check out the tutorial on [1D convolutions](convolution_background).
 :::
 
 ### Multi-dimensional inputs
-For N-dimensional input, with $N>1$, the method assumes that first axis is the sample axis. This is automatically true for pynapple time series data, for arrays you can use `numpy.transpose` to re-arrange the axis if the assumption is not matched.
+For N-dimensional input with $N>1$, `compute_features` assumes the first axis represents samples. This is always valid for `pynapple` time series. For arrays, you can use `numpy.transpose` to re-arrange the axis if needed.
 
 #### "Eval" Basis
 
-For "Eval" basis, `compute_features` is equivalent to "calling" the basis and then reshaping the input into a 2-dimensional feature matrix.
+For "Eval" bases, `compute_features` evaluates the basis and then reshape the result into a 2D feature matrix.
 
 ```{code-cell} ipython3
 basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=5)
@@ -178,12 +183,12 @@ out = basis.compute_features(inp)
 out.shape
 ```
 
-For each of the `3 * 2 = 6` inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
-`3 * 2 * 5  = 30` outputs.
+For each of the $3 \times 2 = 6$ inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
+$3 \times 2 \times 5  = 30$ outputs concatenated on the second axis.
 
 #### "Conv" Basis
 
-For "Conv" type basis, `compute_features` is equivalent to convolving each input with `n_basis_funcs` kernels, and concatenate the output into a 2D design matrix.
+For "Conv" bases, `compute_features` convolves each input with `n_basis_funcs` kernels, and reshaping the output into a 2D feature matrix.
 
 ```{code-cell} ipython3
 basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
@@ -194,7 +199,7 @@ print(f"`compute_features` output shape {out.shape}")
 
 ```
 
-Below the equivalent two way procedure, convolving the kernel using the NeMoS [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) method, and then reshaping the output.
+This process is equivalent to performing the convolution separately usingS [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
 
 ```{code-cell} ipython3
 # compute the kernels
