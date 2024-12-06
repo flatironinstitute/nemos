@@ -53,7 +53,7 @@ def check_one_dimensional(func: Callable) -> Callable:
     """Check if the input is one-dimensional."""
 
     @wraps(func)
-    def wrapper(self: Basis, *xi: ArrayLike, **kwargs):
+    def wrapper(self: Basis, *xi: NDArray, **kwargs):
         if any(x.ndim != 1 for x in xi):
             raise ValueError("Input sample must be one dimensional!")
         return func(self, *xi, **kwargs)
@@ -850,11 +850,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         First basis object to add.
     basis2 :
         Second basis object to add.
-
-    Attributes
-    ----------
-    n_basis_funcs : int
-        Number of basis functions.
 
     Examples
     --------
