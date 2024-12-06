@@ -62,11 +62,11 @@ class TransformerBasis:
     """
 
     def __init__(self, basis: Basis):
-        self.basis = copy.deepcopy(basis)
+        self._basis = copy.deepcopy(basis)
 
     @staticmethod
     def _check_initialized(basis):
-        if basis._n_basis_input is None:
+        if basis._n_basis_input_ is None:
             raise RuntimeError(
                 "TransformerBasis initialization failed: the provided basis has no defined input shape. "
                 "Please call `set_input_shape` on the basis before initializing the transformer."
@@ -102,7 +102,7 @@ class TransformerBasis:
         out = []
         cc = 0
         for i, bas in enumerate(self._basis._list_components()):
-            n_input = self._n_basis_input[i]
+            n_input = self._n_basis_input_[i]
             out.append(
                 np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape))
             )

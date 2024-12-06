@@ -149,7 +149,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._check_n_basis_min()
 
         # specified only after inputs/input shapes are provided
-        self._n_basis_input = None
+        self._n_basis_input_ = None
         self._input_shape = None
 
         # set by set_kernel
@@ -166,8 +166,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         provided to the basis is known. Therefore, before the first call to ``compute_features``,
         this property will return ``None``. After that call, ``n_output_features`` will be available.
         """
-        if self._n_basis_input is not None:
-            return self.n_basis_funcs * self._n_basis_input[0]
+        if self._n_basis_input_ is not None:
+            return self.n_basis_funcs * self._n_basis_input_[0]
         return None
 
     @property
@@ -176,12 +176,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._label
 
     @property
-    def n_basis_input(self) -> tuple | None:
+    def n_basis_input_(self) -> tuple | None:
         """Number of expected inputs.
 
         The number of inputs ``compute_feature`` expects.
         """
-        return self._n_basis_input
+        return self._n_basis_input_
 
     @property
     def n_basis_funcs(self):
@@ -270,7 +270,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
-        if self._n_basis_input is None:
+        if self._n_basis_input_ is None:
             self.set_input_shape(*xi)
         self._check_input_shape_consistency(*xi)
         self.set_kernel()
@@ -558,7 +558,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Parameters
         ----------
         n_inputs :
-            The number of input basis for each component, by default it uses ``self._n_basis_input``.
+            The number of input basis for each component, by default it uses ``self._n_basis_input_``.
         start_slice :
             The starting index for slicing, by default it starts from 0.
         split_by_input :
@@ -580,18 +580,18 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
         """
         # Set default values for n_inputs and start_slice if not provided
-        n_inputs = n_inputs or self._n_basis_input
+        n_inputs = n_inputs or self._n_basis_input_
         start_slice = start_slice or 0
 
         # If the instance is of AdditiveBasis type, handle slicing for the additive components
         if isinstance(self, AdditiveBasis):
             split_dict, start_slice = self._basis1._get_feature_slicing(
-                n_inputs[: len(self._basis1._n_basis_input)],
+                n_inputs[: len(self._basis1._n_basis_input_)],
                 start_slice,
                 split_by_input=split_by_input,
             )
             sp2, start_slice = self._basis2._get_feature_slicing(
-                n_inputs[len(self._basis1._n_basis_input) :],
+                n_inputs[len(self._basis1._n_basis_input_):],
                 start_slice,
                 split_by_input=split_by_input,
             )
@@ -630,7 +630,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """Handle default slicing logic."""
         if split_by_input:
             # should we remove this option?
-            if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
+            if self._n_basis_input_[0] == 1 or isinstance(self, MultiplicativeBasis):
                 split_dict = {
                     self.label: slice(start_slice, start_slice + self.n_output_features)
                 }
@@ -641,7 +641,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                             start_slice + i * self.n_basis_funcs,
                             start_slice + (i + 1) * self.n_basis_funcs,
                         )
-                        for i in range(self._n_basis_input[0])
+                        for i in range(self._n_basis_input_[0])
                     }
                 }
         else:
@@ -739,13 +739,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # Apply the slicing using the custom leaf function
         out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
 
-        # reshape the arrays to spilt by n_basis_input
+        # reshape the arrays to spilt by n_basis_input_
         reshaped_out = dict()
         for i, vals in enumerate(out.items()):
             key, val = vals
             shape = list(val.shape)
             reshaped_out[key] = val.reshape(
-                shape[:axis] + [self._n_basis_input[i], -1] + shape[axis + 1 :]
+                shape[:axis] + [self._n_basis_input_[i], -1] + shape[axis + 1:]
             )
         return reshaped_out
 
@@ -813,7 +813,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         self._input_shape = shape
 
-        self._n_basis_input = n_inputs
+        self._n_basis_input_ = n_inputs
         return self
 
     def _list_components(self):
@@ -950,13 +950,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         181
 
         """
-        self._n_basis_input = (
+        self._n_basis_input_ = (
             *self._basis1.set_input_shape(
                 *xi[: self._basis1._n_input_dimensionality]
-            )._n_basis_input,
+            )._n_basis_input_,
             *self._basis2.set_input_shape(
                 *xi[self._basis1._n_input_dimensionality :]
-            )._n_basis_input,
+            )._n_basis_input_,
         )
         return self
 
@@ -1231,11 +1231,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     basis2 :
         Second basis object to multiply.
 
-    Attributes
-    ----------
-    n_basis_funcs :
-        Number of basis functions.
-
     Examples
     --------
     >>> # Generate sample data
@@ -1275,7 +1270,11 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
-        return self._basis1.n_output_features * self._basis2.n_output_features
+        out1 = getattr(self._basis1, "n_output_features", None)
+        out2 = getattr(self._basis2, "n_output_features", None)
+        if out1 is None or out2 is None:
+            return None
+        return out1 * out2
 
     def set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.
@@ -1410,13 +1409,13 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         25200
 
         """
-        self._n_basis_input = (
+        self._n_basis_input_ = (
             *self._basis1.set_input_shape(
                 *xi[: self._basis1._n_input_dimensionality]
-            )._n_basis_input,
+            )._n_basis_input_,
             *self._basis2.set_input_shape(
                 *xi[self._basis1._n_input_dimensionality :]
-            )._n_basis_input,
+            )._n_basis_input_,
         )
         return self
 

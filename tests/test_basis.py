@@ -347,7 +347,7 @@ class TestSharedMethods:
         [
             ("label", None),
             ("label", "label"),
-            ("n_basis_input", 1),
+            ("n_basis_input_", 1),
             ("n_output_features", 5),
         ],
     )
@@ -441,10 +441,10 @@ class TestSharedMethods:
         bas = cls["conv"](
             n_basis_funcs=5, window_size=10, **extra_decay_rates(cls["conv"], 5)
         )
-        assert bas.n_basis_input is None
+        assert bas.n_basis_input_ is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input == (n_input,)
-        assert bas._n_basis_input == (n_input,)
+        assert bas.n_basis_input_ == (n_input,)
+        assert bas._n_basis_input_ == (n_input,)
 
     @pytest.mark.parametrize(
         "bounds, samples, nan_idx, mn, mx",
@@ -2552,11 +2552,11 @@ class TestAdditiveBasis(CombinedBasis):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_add = bas1 + bas2
-        assert bas_add.n_basis_input is None
+        assert bas_add.n_basis_input_ is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
+        assert bas_add.n_basis_input_ == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -3427,11 +3427,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_add = bas1 * bas2
-        assert bas_add.n_basis_input is None
+        assert bas_add.n_basis_input_ is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_basis_input == (n_basis_input1, n_basis_input2)
+        assert bas_add.n_basis_input_ == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -3453,14 +3453,14 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
-    def test_n_basis_input(self, n_basis_input1, n_basis_input2):
+    def test_n_basis_input_(self, n_basis_input1, n_basis_input2):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_prod = bas1 * bas2
         bas_prod.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_prod.n_basis_input == (n_basis_input1, n_basis_input2)
+        assert bas_prod.n_basis_input_ == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4329,18 +4329,18 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             "__add__",
             lambda bas1, bas2, bas3: {
-                "1": slice(0, bas1._n_basis_input[0] * bas1.n_basis_funcs),
+                "1": slice(0, bas1._n_basis_input_[0] * bas1.n_basis_funcs),
                 "2": slice(
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs,
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input[0] * bas2.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
+                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs,
                 ),
                 "3": slice(
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input[0] * bas2.n_basis_funcs,
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input[0] * bas2.n_basis_funcs
-                    + bas3._n_basis_input[0] * bas3.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
+                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
+                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs
+                    + bas3._n_basis_input_[0] * bas3.n_basis_funcs,
                 ),
             },
         ),
@@ -4348,13 +4348,13 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             "__mul__",
             lambda bas1, bas2, bas3: {
-                "1": slice(0, bas1._n_basis_input[0] * bas1.n_basis_funcs),
+                "1": slice(0, bas1._n_basis_input_[0] * bas1.n_basis_funcs),
                 "(2 * 3)": slice(
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs,
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input[0]
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
+                    + bas2._n_basis_input_[0]
                     * bas2.n_basis_funcs
-                    * bas3._n_basis_input[0]
+                    * bas3._n_basis_input_[0]
                     * bas3.n_basis_funcs,
                 ),
             },
@@ -4366,11 +4366,11 @@ def test_multi_epoch_pynapple_basis_transformer(
                 # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
                 "(1 * (2 + 3))": slice(
                     0,
-                    bas1._n_basis_input[0]
+                    bas1._n_basis_input_[0]
                     * bas1.n_basis_funcs
                     * (
-                        bas2._n_basis_input[0] * bas2.n_basis_funcs
-                        + bas3._n_basis_input[0] * bas3.n_basis_funcs
+                            bas2._n_basis_input_[0] * bas2.n_basis_funcs
+                            + bas3._n_basis_input_[0] * bas3.n_basis_funcs
                     ),
                 ),
             },
@@ -4381,11 +4381,11 @@ def test_multi_epoch_pynapple_basis_transformer(
             lambda bas1, bas2, bas3: {
                 "(1 * (2 * 3))": slice(
                     0,
-                    bas1._n_basis_input[0]
+                    bas1._n_basis_input_[0]
                     * bas1.n_basis_funcs
-                    * bas2._n_basis_input[0]
+                    * bas2._n_basis_input_[0]
                     * bas2.n_basis_funcs
-                    * bas3._n_basis_input[0]
+                    * bas3._n_basis_input_[0]
                     * bas3.n_basis_funcs,
                 ),
             },
@@ -4448,11 +4448,11 @@ def test__get_splitter(
             1,
             1,
             lambda bas1, bas2: {
-                "1": slice(0, bas1._n_basis_input[0] * bas1.n_basis_funcs),
+                "1": slice(0, bas1._n_basis_input_[0] * bas1.n_basis_funcs),
                 "2": slice(
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs,
-                    bas1._n_basis_input[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input[0] * bas2.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs,
+                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
+                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs,
                 ),
             },
         ),
@@ -4463,9 +4463,9 @@ def test__get_splitter(
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
                     0,
-                    bas1._n_basis_input[0]
+                    bas1._n_basis_input_[0]
                     * bas1.n_basis_funcs
-                    * bas2._n_basis_input[0]
+                    * bas2._n_basis_input_[0]
                     * bas2.n_basis_funcs,
                 )
             },
@@ -4490,7 +4490,7 @@ def test__get_splitter(
             1,
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
-                    0, bas1._n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
+                    0, bas1._n_basis_input_[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
                 )
             },
         ),
@@ -4517,7 +4517,7 @@ def test__get_splitter(
             2,
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
-                    0, bas2._n_basis_input[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
+                    0, bas2._n_basis_input_[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
                 )
             },
         ),

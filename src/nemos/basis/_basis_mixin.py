@@ -268,7 +268,7 @@ class BasisTransformerMixin:
         ... )
         >>> gridsearch = gridsearch.fit(X, y)
         """
-        return TransformerBasis(copy.deepcopy(self))
+        return TransformerBasis(self)
 
 
 class CompositeBasisMixin:
