@@ -284,8 +284,8 @@ class CompositeBasisMixin:
         self.basis1 = copy.deepcopy(basis1)
         self.basis2 = copy.deepcopy(basis2)
         shapes = (
-            *(bas1._input_shape for bas1 in basis1._list_components()),
-            *(bas2._input_shape for bas2 in basis2._list_components()),
+            *(bas1._input_shape_ for bas1 in basis1._list_components()),
+            *(bas2._input_shape_ for bas2 in basis2._list_components()),
         )
         # if all bases where set, then set input for composition.
         set_bases = (s is not None for s in shapes)

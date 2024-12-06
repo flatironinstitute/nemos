@@ -150,7 +150,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # specified only after inputs/input shapes are provided
         self._n_basis_input_ = None
-        self._input_shape = None
+        self._input_shape_ = None
 
         # set by set_kernel
         self.kernel_ = None
@@ -754,10 +754,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # remove sample axis and squeeze
         shape = x.shape[1:]
 
-        initialized = self._input_shape is not None
-        is_shape_match = self._input_shape == shape
+        initialized = self._input_shape_ is not None
+        is_shape_match = self._input_shape_ == shape
         if initialized and not is_shape_match:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape}"[1:]
+            expected_shape_str = "(n_samples, " + f"{self._input_shape_}"[1:]
             expected_shape_str = expected_shape_str.replace(",)", ")")
             raise ValueError(
                 f"Input shape mismatch detected.\n\n"
@@ -811,7 +811,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         n_inputs = (int(np.prod(shape)),)
 
-        self._input_shape = shape
+        self._input_shape_ = shape
 
         self._n_basis_input_ = n_inputs
         return self

@@ -104,7 +104,7 @@ class TransformerBasis:
         for i, bas in enumerate(self._basis._list_components()):
             n_input = self._n_basis_input_[i]
             out.append(
-                np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape))
+                np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
             )
             cc += n_input
         return out
