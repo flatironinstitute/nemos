@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 import copy
 import inspect
 import warnings
@@ -20,8 +21,11 @@ if TYPE_CHECKING:
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
 
-    def __init__(self, bounds: Optional[Tuple[float, float]] = None):
+    def __init__(
+        self, n_basis_funcs: int, bounds: Optional[Tuple[float, float]] = None
+    ):
         self.bounds = bounds
+        self._n_basis_funcs = n_basis_funcs
 
     def _compute_features(self, *xi: NDArray):
         """
@@ -89,9 +93,12 @@ class EvalBasisMixin:
 class ConvBasisMixin:
     """Mixin class for convolutional basis."""
 
-    def __init__(self, window_size: int, conv_kwargs: Optional[dict] = None):
+    def __init__(
+        self, n_basis_funcs: int, window_size: int, conv_kwargs: Optional[dict] = None
+    ):
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
+        self._n_basis_funcs = n_basis_funcs
 
     def _compute_features(self, *xi: NDArray):
         """
@@ -272,14 +279,17 @@ class CompositeBasisMixin:
     """
 
     def __init__(self, basis1: Basis, basis2: Basis):
-        self.basis1 = basis1
-        self.basis2 = basis2
+        # deep copy to avoid changes directly to the 1d basis to be reflected
+        # in the composite basis.
+        self.basis1 = copy.deepcopy(basis1)
+        self.basis2 = copy.deepcopy(basis2)
         shapes = (
             *(bas1._input_shape for bas1 in basis1._list_components()),
             *(bas2._input_shape for bas2 in basis2._list_components()),
         )
         # if all bases where set, then set input for composition.
         set_bases = (s is not None for s in shapes)
+
         if all(set_bases):
             # pass down the input shapes
             self.set_input_shape(*shapes)
@@ -289,6 +299,12 @@ class CompositeBasisMixin:
                 "please initialize the composite basis before computing features.",
                 category=UserWarning,
             )
+
+    @property
+    @abc.abstractmethod
+    def n_basis_funcs(self):
+        """Read only property for composite bases."""
+        pass
 
     def _check_n_basis_min(self) -> None:
         pass

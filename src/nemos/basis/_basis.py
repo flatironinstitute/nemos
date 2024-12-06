@@ -111,8 +111,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     Parameters
     ----------
-    n_basis_funcs :
-        The number of basis functions.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -135,27 +133,26 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __init__(
         self,
-        n_basis_funcs: int,
         mode: Literal["eval", "conv"] = "eval",
         label: Optional[str] = None,
     ) -> None:
-        self.n_basis_funcs = n_basis_funcs
+        self._n_basis_funcs = getattr(self, "_n_basis_funcs", None)
         self._n_input_dimensionality = 0
 
         self._mode = mode
-
-        self._n_basis_input = None
-
-        # these parameters are going to be set at the first call of `compute_features`
-        # since we cannot know a-priori how many features may be convolved
-        self._n_output_features = None
-        self._input_shape = None
 
         if label is None:
             self._label = self.__class__.__name__
         else:
             self._label = str(label)
 
+        self._check_n_basis_min()
+
+        # specified only after inputs/input shapes are provided
+        self._n_basis_input = None
+        self._input_shape = None
+
+        # set by set_kernel
         self.kernel_ = None
 
     @property
@@ -169,7 +166,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         provided to the basis is known. Therefore, before the first call to ``compute_features``,
         this property will return ``None``. After that call, ``n_output_features`` will be available.
         """
-        return self._n_output_features
+        if self._n_basis_input is not None:
+            return self.n_basis_funcs * self._n_basis_input[0]
+        return None
 
     @property
     def label(self) -> str:
@@ -633,9 +632,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             # should we remove this option?
             if self._n_basis_input[0] == 1 or isinstance(self, MultiplicativeBasis):
                 split_dict = {
-                    self.label: slice(
-                        start_slice, start_slice + self._n_output_features
-                    )
+                    self.label: slice(start_slice, start_slice + self.n_output_features)
                 }
             else:
                 split_dict = {
@@ -649,9 +646,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 }
         else:
             split_dict = {
-                self.label: slice(start_slice, start_slice + self._n_output_features)
+                self.label: slice(start_slice, start_slice + self.n_output_features)
             }
-        start_slice += self._n_output_features
+        start_slice += self.n_output_features
         return split_dict, start_slice
 
     def split_by_feature(
@@ -817,7 +814,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._input_shape = shape
 
         self._n_basis_input = n_inputs
-        self._n_output_features = self.n_basis_funcs * self._n_basis_input[0]
         return self
 
     def _list_components(self):
@@ -879,14 +875,31 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        self.n_basis_funcs = basis1.n_basis_funcs + basis2.n_basis_funcs
-        Basis.__init__(self, self.n_basis_funcs, mode="eval")
-        self._label = "(" + basis1.label + " + " + basis2.label + ")"
         CompositeBasisMixin.__init__(self, basis1, basis2)
+        Basis.__init__(self, mode="eval")
+        self._label = "(" + basis1.label + " + " + basis2.label + ")"
 
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+
+    @property
+    def n_basis_funcs(self):
+        """Compute the n-basis function runtime.
+
+        This plays well with cross-validation where the number of basis function of the
+        underlying bases can be changed. It must be read-only since the number of basis
+        is determined by the two basis elements and the type of composition.
+        """
+        return self.basis1.n_basis_funcs + self.basis2.n_basis_funcs
+
+    @property
+    def n_output_features(self):
+        out1 = getattr(self._basis1, "n_output_features", None)
+        out2 = getattr(self._basis2, "n_output_features", None)
+        if out1 is None or out2 is None:
+            return None
+        return out1 + out2
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
@@ -944,9 +957,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             *self._basis2.set_input_shape(
                 *xi[self._basis1._n_input_dimensionality :]
             )._n_basis_input,
-        )
-        self._n_output_features = (
-            self._basis1.n_output_features + self._basis2.n_output_features
         )
         return self
 
@@ -1245,14 +1255,27 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        self.n_basis_funcs = basis1.n_basis_funcs * basis2.n_basis_funcs
-        Basis.__init__(self, self.n_basis_funcs, mode="eval")
-        self._label = "(" + basis1.label + " * " + basis2.label + ")"
         CompositeBasisMixin.__init__(self, basis1, basis2)
+        Basis.__init__(self, mode="eval")
+        self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         BasisTransformerMixin.__init__(self)
+
+    @property
+    def n_basis_funcs(self):
+        """Compute the n-basis function runtime.
+
+        This plays well with cross-validation where the number of basis function of the
+        underlying bases can be changed. It must be read-only since the number of basis
+        is determined by the two basis elements and the type of composition.
+        """
+        return self.basis1.n_basis_funcs * self.basis2.n_basis_funcs
+
+    @property
+    def n_output_features(self):
+        return self._basis1.n_output_features * self._basis2.n_output_features
 
     def set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.
@@ -1394,9 +1417,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
             *self._basis2.set_input_shape(
                 *xi[self._basis1._n_input_dimensionality :]
             )._n_basis_input,
-        )
-        self._n_output_features = (
-            self._basis1.n_output_features * self._basis2.n_output_features
         )
         return self
 

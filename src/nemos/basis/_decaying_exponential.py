@@ -20,8 +20,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
     Parameters
     ----------
-    n_basis_funcs
-            Number of basis functions.
     decay_rates :
             Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
     mode :
@@ -34,13 +32,11 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
     def __init__(
         self,
-        n_basis_funcs: int,
         decay_rates: NDArray[np.floating],
         mode="eval",
         label: Optional[str] = "OrthExponentialBasis",
     ):
         super().__init__(
-            n_basis_funcs,
             mode=mode,
             label=label,
         )

@@ -1248,7 +1248,7 @@ class TestSharedMethods:
 
     def test_transformer_get_params(self, cls):
         bas = cls["eval"](n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5))
-        bas.set_input_shape( *([1] * bas._n_input_dimensionality))
+        bas.set_input_shape(*([1] * bas._n_input_dimensionality))
         bas_transformer = bas.to_transformer()
         params_transf = bas_transformer.get_params()
         params_transf.pop("_basis")
@@ -2730,6 +2730,86 @@ class TestAdditiveBasis(CombinedBasis):
         with expectation:
             add.set_input_shape(*inp_shape)
 
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_deep_copy_basis(self, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        add = basis_a + basis_b
+        # test pointing to different objects
+        assert id(add.basis1) != id(basis_a)
+        assert id(add.basis1) != id(basis_b)
+        assert id(add.basis2) != id(basis_a)
+        assert id(add.basis2) != id(basis_b)
+
+        # test attributes are not related
+        basis_a.n_basis_funcs = 10
+        basis_b.n_basis_funcs = 10
+        assert add.basis1.n_basis_funcs == 5
+        assert add.basis2.n_basis_funcs == 5
+
+        add.basis1.n_basis_funcs = 6
+        add.basis2.n_basis_funcs = 6
+        assert basis_a.n_basis_funcs == 10
+        assert basis_b.n_basis_funcs == 10
+
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_compute_n_basis_runtime(self, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        add = basis_a + basis_b
+        add.basis1.n_basis_funcs = 10
+        assert add.n_basis_funcs == 15
+        add.basis2.n_basis_funcs = 10
+        assert add.n_basis_funcs == 20
+
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes()
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes()
+    )
+    def test_runtime_n_basis_out_compute(self, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_a.set_input_shape(*([1] * basis_a._n_input_dimensionality)).to_transformer()
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        basis_b.set_input_shape(*([1] * basis_b._n_input_dimensionality)).to_transformer()
+        add = basis_a + basis_b
+        inps_a = [2] * basis_a._n_input_dimensionality
+        add.basis1.set_input_shape(*inps_a)
+        if isinstance(basis_a, MultiplicativeBasis):
+            new_out_num = np.prod(inps_a) * add.basis1.n_basis_funcs
+        else:
+            new_out_num = inps_a[0] * add.basis1.n_basis_funcs
+        assert add.n_output_features == new_out_num + add.basis2.n_basis_funcs
+        inps_b = [3] * basis_b._n_input_dimensionality
+        if isinstance(basis_b, MultiplicativeBasis):
+            new_out_num_b = np.prod(inps_b) * add.basis2.n_basis_funcs
+        else:
+            new_out_num_b = inps_b[0] * add.basis2.n_basis_funcs
+        add.basis2.set_input_shape(*inps_b)
+        assert add.n_output_features == new_out_num + new_out_num_b
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
@@ -3536,6 +3616,87 @@ class TestMultiplicativeBasis(CombinedBasis):
         with expectation:
             mul.set_input_shape(*inp_shape)
 
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_deep_copy_basis(self, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        mul = basis_a * basis_b
+        # test pointing to different objects
+        assert id(mul.basis1) != id(basis_a)
+        assert id(mul.basis1) != id(basis_b)
+        assert id(mul.basis2) != id(basis_a)
+        assert id(mul.basis2) != id(basis_b)
+
+        # test attributes are not related
+        basis_a.n_basis_funcs = 10
+        basis_b.n_basis_funcs = 10
+        assert mul.basis1.n_basis_funcs == 5
+        assert mul.basis2.n_basis_funcs == 5
+
+        mul.basis1.n_basis_funcs = 6
+        mul.basis2.n_basis_funcs = 6
+        assert basis_a.n_basis_funcs == 10
+        assert basis_b.n_basis_funcs == 10
+
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_compute_n_basis_runtime(self, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        mul = basis_a * basis_b
+        mul.basis1.n_basis_funcs = 10
+        assert mul.n_basis_funcs == 50
+        mul.basis2.n_basis_funcs = 10
+        assert mul.n_basis_funcs == 100
+
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes()
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes()
+    )
+    def test_runtime_n_basis_out_compute(self, basis_a, basis_b, class_specific_params):
+        basis_a = self.instantiate_basis(
+            5, basis_a, class_specific_params, window_size=10
+        )
+        basis_a.set_input_shape(*([1] * basis_a._n_input_dimensionality)).to_transformer()
+        basis_b = self.instantiate_basis(
+            5, basis_b, class_specific_params, window_size=10
+        )
+        basis_b.set_input_shape(*([1] * basis_b._n_input_dimensionality)).to_transformer()
+        mul = basis_a * basis_b
+        inps_a = [2] * basis_a._n_input_dimensionality
+        mul.basis1.set_input_shape(*inps_a)
+        if isinstance(basis_a, MultiplicativeBasis):
+            new_out_num = np.prod(inps_a) * mul.basis1.n_basis_funcs
+        else:
+            new_out_num = inps_a[0] * mul.basis1.n_basis_funcs
+        assert mul.n_output_features == new_out_num * mul.basis2.n_basis_funcs
+        inps_b = [3] * basis_b._n_input_dimensionality
+        if isinstance(basis_b, MultiplicativeBasis):
+            new_out_num_b = np.prod(inps_b) * mul.basis2.n_basis_funcs
+        else:
+            new_out_num_b = inps_b[0] * mul.basis2.n_basis_funcs
+        mul.basis2.set_input_shape(*inps_b)
+        assert mul.n_output_features == new_out_num * new_out_num_b
+
 
 @pytest.mark.parametrize(
     "exponent", [-1, 0, 0.5, basis.RaisedCosineLogEval(4), 1, 2, 3]
@@ -3581,6 +3742,8 @@ def test_power_of_basis(exponent, basis_class, class_specific_params):
             out[non_nan],
         )
         assert np.all(np.isnan(out[~non_nan]))
+
+
 
 
 @pytest.mark.parametrize(
@@ -4246,11 +4409,20 @@ def test__get_splitter(
     bas1_instance = combine_basis.instantiate_basis(
         n_basis[0], bas1, class_specific_params, window_size=10, label="1"
     )
+    bas1_instance.set_input_shape(
+        *([n_input_basis[0]] * bas1_instance._n_input_dimensionality)
+    )
     bas2_instance = combine_basis.instantiate_basis(
         n_basis[1], bas2, class_specific_params, window_size=10, label="2"
     )
+    bas2_instance.set_input_shape(
+        *([n_input_basis[1]] * bas2_instance._n_input_dimensionality)
+    )
     bas3_instance = combine_basis.instantiate_basis(
         n_basis[2], bas3, class_specific_params, window_size=10, label="3"
+    )
+    bas3_instance.set_input_shape(
+        *([n_input_basis[2]] * bas3_instance._n_input_dimensionality)
     )
 
     func1 = getattr(bas1_instance, operator1)
@@ -4401,8 +4573,15 @@ def test__get_splitter_split_by_input(
     bas1_instance = combine_basis.instantiate_basis(
         n_basis[0], bas1, class_specific_params, window_size=10, label="1"
     )
+    bas1_instance.set_input_shape(
+        *([n_input_basis_1] * bas1_instance._n_input_dimensionality)
+    )
+
     bas2_instance = combine_basis.instantiate_basis(
         n_basis[1], bas2, class_specific_params, window_size=10, label="2"
+    )
+    bas2_instance.set_input_shape(
+        *([n_input_basis_2] * bas1_instance._n_input_dimensionality)
     )
 
     func1 = getattr(bas1_instance, operator)
