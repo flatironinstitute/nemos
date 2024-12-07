@@ -50,6 +50,30 @@ class EvalBasisMixin:
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
 
+    def _fit_basis(self, *xi: NDArray) -> Basis:
+        """
+        Set all basis states.
+
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. kernel_ and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
+
+        Parameters
+        ----------
+        xi:
+            Input arrays.
+
+        Returns
+        -------
+        :
+            The basis with ready for evaluation.
+        """
+        self.set_kernel()
+        self.set_input_shape(*xi)
+        return self
+
     def set_kernel(self) -> "EvalBasisMixin":
         """
         Prepare or compute the convolutional kernel for the basis functions.
@@ -64,6 +88,15 @@ class EvalBasisMixin:
 
         """
         return self
+
+    def _reset_all_input_independent_states(self):
+        """Set all states that are input independent for self only.
+
+        This method sets all the input independent states. This reimplements an abstract method
+        of basis, and it is different from ``set_kernel`` because it won't traverse the basis
+        tree in any basis (including composite basis), while ``set_kernel`` applies to all the tree.
+        """
+        return
 
     @property
     def bounds(self):
@@ -119,6 +152,14 @@ class ConvBasisMixin:
             The input samples over which to apply the basis transformation. The samples can be passed
             as multiple arguments, each representing a different dimension for multivariate inputs.
 
+        Notes
+        -----
+        This method is intended to be 1-to-1 mappable to sklearn ``transform`` method of transformer. This
+        means that for the method to be callable, all the state attributes have to be pre-computed in a
+        method that is mappable to ``fit``, which for us is ``_fit_basis``. It is fundamental that both
+        methods behaves like the corresponding transformer method, with the only difference being the input
+        structure: a single (X, y) pair for the transformer, a number of time series for the Basis.
+
         """
         if self.kernel_ is None:
             raise ValueError(
@@ -131,6 +172,30 @@ class ConvBasisMixin:
         conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
         return np.reshape(conv, newshape=(conv.shape[0], -1))
+
+    def _fit_basis(self, *xi: NDArray) -> Basis:
+        """
+        Set all basis states.
+
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. kernel_ and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
+
+        Parameters
+        ----------
+        xi:
+            Input arrays.
+
+        Returns
+        -------
+        :
+            The basis with ready for evaluation.
+        """
+        self.set_kernel()
+        self.set_input_shape(*xi)
+        return self
 
     def set_kernel(self) -> "ConvBasisMixin":
         """
@@ -157,6 +222,33 @@ class ConvBasisMixin:
         self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
 
+    def _reset_all_input_independent_states(self):
+        """Set all states that are input independent for self only.
+
+        This method sets all the input independent states. This reimplements an abstract method
+        of basis, and it is different from ``set_kernel`` because it won't traverse the basis
+        tree in any basis (including composite basis), while ``set_kernel`` applies to all the tree.
+        Called by the setattr of basis.
+        """
+        current_kernel = getattr(self, "kernel_", None)
+        try:
+            self.kernel_ = (
+                current_kernel
+                if current_kernel is None
+                else self._evaluate(np.linspace(0, 1, self.window_size))
+            )
+        except Exception as e:
+            # if basis not fully initialized attribute is not there yet.
+            kernel = getattr(self, "kernel_", None)
+            if kernel:
+                warnings.warn(
+                    message=f"Unable to automatically re-initialize the kernel for basis {self.label}, "
+                    f"with exception: {repr(e)}. \n"
+                    f"Resetting the kernel `None`.",
+                    category=UserWarning,
+                )
+                self.kernel_ = None
+
     @property
     def window_size(self):
         """Window size as number of samples.
@@ -168,6 +260,11 @@ class ConvBasisMixin:
     @window_size.setter
     def window_size(self, window_size):
         """Setter for the window size parameter."""
+        self._check_window_size(window_size)
+
+        self._window_size = window_size
+
+    def _check_window_size(self, window_size):
         if window_size is None:
             raise ValueError(
                 "If the basis is in `conv` mode, you must provide a window_size!"
@@ -177,8 +274,6 @@ class ConvBasisMixin:
             raise ValueError(
                 f"`window_size` must be a positive integer. {window_size} provided instead!"
             )
-
-        self._window_size = window_size
 
     @property
     def conv_kwargs(self):
@@ -283,6 +378,11 @@ class CompositeBasisMixin:
         # in the composite basis.
         self.basis1 = copy.deepcopy(basis1)
         self.basis2 = copy.deepcopy(basis2)
+
+        # set parents
+        self.basis1._parent = self
+        self.basis2._parent = self
+
         shapes = (
             *(bas1._input_shape_ for bas1 in basis1._list_components()),
             *(bas2._input_shape_ for bas2 in basis2._list_components()),
@@ -309,20 +409,46 @@ class CompositeBasisMixin:
     def _check_n_basis_min(self) -> None:
         pass
 
-    def set_kernel(self, *xi: NDArray) -> Basis:
-        """Call set_kernel on the basis elements.
+    def _fit_basis(self, *xi: NDArray) -> Basis:
+        """
+        Set all basis states.
 
-        If any of the basis elements is in "conv" mode, it will prepare its kernels for the convolution.
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. kernel_ and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
 
         Parameters
         ----------
-        *xi:
-            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
+        xi:
+            Input arrays.
 
         Returns
         -------
         :
-            The basis ready to be evaluated.
+            The basis with ready for evaluation.
+        """
+        self.basis1.set_kernel()
+        self.basis2.set_kernel()
+        self.basis1.set_input_shape(*xi[: self._basis1._n_input_dimensionality])
+        self.basis2.set_input_shape(*xi[self._basis1._n_input_dimensionality :])
+        return self
+
+    def set_kernel(self) -> Basis:
+        """Call set_kernel on the basis elements.
+
+        If any of the basis elements is in "conv" mode, it will prepare its kernels for the convolution.
+        Addi
+        Also grabs input shapes if provided, similar to what sklean transformer `fit` method does
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        :
+            The basis with the kernels set up.
         """
         self._basis1.set_kernel()
         self._basis2.set_kernel()
@@ -364,3 +490,12 @@ class CompositeBasisMixin:
             A list with all 1d basis components.
         """
         return self._basis1._list_components() + self._basis2._list_components()
+
+    def _reset_all_input_independent_states(self):
+        """Set all states that are input independent for self only.
+
+        This method sets all the input independent states. This reimplements an abstract method
+        of basis, and it is different from ``set_kernel`` because it won't traverse the basis
+        tree in any basis (including composite basis), while ``set_kernel`` applies to all the tree.
+        """
+        return

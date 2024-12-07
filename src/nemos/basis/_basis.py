@@ -4,7 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Callable, Generator, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -137,7 +137,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         label: Optional[str] = None,
     ) -> None:
         self._n_basis_funcs = getattr(self, "_n_basis_funcs", None)
-        self._n_input_dimensionality = 0
+        self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
 
         self._mode = mode
 
@@ -154,6 +154,56 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # set by set_kernel
         self.kernel_ = None
+
+        # initialize parent to None. This should not end in "_" because it is
+        # a permanent property of a basis, defined at composite basis init
+        self._parent = None
+
+    def _recompute_kernels(self):
+        """Recompute all kernels if needed.
+
+        Traverse the tree upwards and reset all input-independent states.
+        If the node is the root, directly update its states; otherwise, propagate
+        the request to the parent node.
+        """
+        # Assumes that state updates in the basis tree can be handled independently for each node.
+        # This is currently true but may change if dependencies are introduced.
+        # The only such state is self.kernel_, which is set independently for each basis component.
+        # If dependencies are introduced, use `self.set_kernel` at the root level instead.
+        # (A basis is the tree root if self._parend is None).
+        # Note: `self.set_kernel` is more expensive as it recomputes kernels for the entire tree.
+        update_states = getattr(self, "_reset_all_input_independent_states", None)
+        if update_states:
+            update_states()
+        if getattr(self, "_parent", None):
+            self._parent._recompute_kernels()
+
+    def _is_init_params_updated(self, name: str, value: Any):
+        """Check if an attribute set at initialization have been updated."""
+        return name in self._get_param_names()
+
+    def __setattr__(self, name: str, value: Any):
+        """
+        Set to None all attributes ending with '_'.
+
+        This __setattr__ resets all the attributes that are defined by a method
+        like the `kernel_` or `_n_input_shape_` (states of the basis) when an initialization configuration
+        is updated.
+        A Basis class must respect the following naming convention: all names of parameters that are settable
+        by with a method (like `kernel_` computed in `set_kernel`) must end in "_".
+
+        Parameters
+        ----------
+        name :
+            The name of the attribute to set.
+        value :
+            The value to set the attribute to.
+        """
+        # check if the attribute was defined in the __init__ signature
+        # and if so, then resets all computable states.
+        super().__setattr__(name, value)
+        if self._is_init_params_updated(name, value):
+            self._recompute_kernels()
 
     @property
     def n_output_features(self) -> int | None:
@@ -203,43 +253,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """Mode of operation, either ``"conv"`` or ``"eval"``."""
         return self._mode
 
-    @staticmethod
-    def _apply_identifiability_constraints(X: NDArray):
-        """Apply identifiability constraints to a design matrix `X`.
-
-         Removes columns from `X` until `[1, X]` is full rank to ensure the uniqueness
-         of the GLM (Generalized Linear Model) maximum-likelihood solution. This is particularly
-         crucial for models using bases like BSplines and CyclicBspline, which, due to their
-         construction, sum to 1 and can cause rank deficiency when combined with an intercept.
-
-         For GLMs, this rank deficiency means that different sets of coefficients might yield
-         identical predicted rates and log-likelihood, complicating parameter learning, especially
-         in the absence of regularization.
-
-        Parameters
-        ----------
-        X:
-            The design matrix before applying the identifiability constraints.
-
-        Returns
-        -------
-        :
-            The adjusted design matrix with redundant columns dropped and columns mean-centered.
-        """
-
-        def add_constant(x):
-            return np.hstack((np.ones((x.shape[0], 1)), x))
-
-        rank = np.linalg.matrix_rank(add_constant(X))
-        # mean center
-        X = X - np.nanmean(X, axis=0)
-        while rank < X.shape[1] + 1:
-            # drop a column
-            X = X[:, :-1]
-            # recompute rank
-            rank = np.linalg.matrix_rank(add_constant(X))
-        return X
-
     @check_transform_input
     def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
         """
@@ -278,13 +291,106 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     @abc.abstractmethod
     def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
-        """Convolve or evaluate the basis."""
+        """Convolve or evaluate the basis.
+
+        This method is intended to be equivalent to the sklearn transformer ``transform`` method.
+        As the latter, it computes the transformation assuming that all the states are already
+        pre-computed by ``_fit_basis``, a method corresponding to ``fit``.
+
+        The method differs from  transformer's ``transform`` for the structure of the input that it accepts.
+        In particular, ``_compute_features`` accepts a number of different time series, one per 1D basis component,
+        while ``transform`` requires all inputs to be concatenated in a single array.
+        """
+        pass
+
+    @abc.abstractmethod
+    def _fit_basis(self, *xi: ArrayLike) -> FeatureMatrix:
+        """Pre-compute all basis state variables.
+
+        This method is intended to be equivalent to the sklearn transformer ``fit`` method.
+        As the latter, it computes all the state attributes, and store it with the convention
+        that the attribute name **must** end with "_", for example ``self.kernel_``,
+        ``self._input_shape_``.
+
+        The method differs from  transformer's ``fit`` for the structure of the input that it accepts.
+        In particular, ``_fit_basis`` accepts a number of different time series, one per 1D basis component,
+        while ``fit`` requires all inputs to be concatenated in a single array.
+        """
         pass
 
     @abc.abstractmethod
     def set_kernel(self):
-        """Set kernel for conv basis and return self or just return self for eval."""
+        """Set kernel for conv basis and return self or just return self for eval.
+
+        For the basis API to work correctly, specifically, for the `_fit_basis`
+        method to work as intended, this method should set **all** state attributes
+        that do not require inspection of input time series.
+
+        This method currently "just" sets the kernel because this is the only such state
+        but if in the future new states will be added, they must be funneled through this
+        method.
+
+        Note that the name of this method can and should be refactored in case more such
+        states will be set in the future.
+        """
         pass
+
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Set the expected input shape for the basis object.
+
+        This method configures the shape of the input data that the basis object expects.
+        ``xi`` can be specified as an integer, a tuple of integers, or derived
+        from an array. The method also calculates the total number of input
+        features and output features based on the number of basis functions.
+
+        Parameters
+        ----------
+        xi :
+            The input shape specification.
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided and it contains non-integer elements.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+
+        Notes
+        -----
+        All state attributes that depends on the input must be set in this method in order for
+        the API of basis to work correctly. In particular, this method is called by ``_basis_fit``,
+        which is equivalent to ``fit`` for a transformer. If any input dependent state
+        is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
+
+        Separating states related to the input (settable with this method) and states that are unrelated
+        from the input (settable with ``set_kernel``) is a deliberate design choice that improves modularity.
+
+        """
+        if isinstance(xi, tuple):
+            if not all(isinstance(i, int) for i in xi):
+                raise ValueError(
+                    f"The tuple provided contains non integer values. Tuple: {xi}."
+                )
+            shape = xi
+        elif isinstance(xi, int):
+            shape = () if xi == 1 else (xi,)
+        else:
+            shape = xi.shape[1:]
+
+        n_inputs = (int(np.prod(shape)),)
+
+        self._input_shape_ = shape
+
+        self._n_basis_input_ = n_inputs
+        return self
 
     @abc.abstractmethod
     def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
@@ -591,7 +697,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 split_by_input=split_by_input,
             )
             sp2, start_slice = self._basis2._get_feature_slicing(
-                n_inputs[len(self._basis1._n_basis_input_):],
+                n_inputs[len(self._basis1._n_basis_input_) :],
                 start_slice,
                 split_by_input=split_by_input,
             )
@@ -745,7 +851,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             key, val = vals
             shape = list(val.shape)
             reshaped_out[key] = val.reshape(
-                shape[:axis] + [self._n_basis_input_[i], -1] + shape[axis + 1:]
+                shape[:axis] + [self._n_basis_input_[i], -1] + shape[axis + 1 :]
             )
         return reshaped_out
 
@@ -769,52 +875,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 "but all other dimensions must remain the same. If you need to process inputs with a "
                 "different shape, please create a new basis instance."
             )
-
-    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
-        """
-        Set the expected input shape for the basis object.
-
-        This method configures the shape of the input data that the basis object expects.
-        ``xi`` can be specified as an integer, a tuple of integers, or derived
-        from an array. The method also calculates the total number of input
-        features and output features based on the number of basis functions.
-
-        Parameters
-        ----------
-        xi :
-            The input shape specification.
-            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
-            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
-              All elements must be integers.
-            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
-
-        Raises
-        ------
-        ValueError
-            If a tuple is provided and it contains non-integer elements.
-
-        Returns
-        -------
-        self :
-            Returns the instance itself to allow method chaining.
-        """
-        if isinstance(xi, tuple):
-            if not all(isinstance(i, int) for i in xi):
-                raise ValueError(
-                    f"The tuple provided contains non integer values. Tuple: {xi}."
-                )
-            shape = xi
-        elif isinstance(xi, int):
-            shape = () if xi == 1 else (xi,)
-        else:
-            shape = xi.shape[1:]
-
-        n_inputs = (int(np.prod(shape)),)
-
-        self._input_shape_ = shape
-
-        self._n_basis_input_ = n_inputs
-        return self
 
     def _list_components(self):
         """List all basis components.
@@ -1270,25 +1330,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         if out1 is None or out2 is None:
             return None
         return out1 * out2
-
-    def set_kernel(self, *xi: NDArray) -> Basis:
-        """Call fit on the multiplied basis.
-
-        If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
-
-        Parameters
-        ----------
-        *xi:
-            The sample inputs. Unused, necessary to conform to ``scikit-learn`` API.
-
-        Returns
-        -------
-        :
-            The MultiplicativeBasis ready to be evaluated.
-        """
-        self._basis1.set_kernel()
-        self._basis2.set_kernel()
-        return self
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input

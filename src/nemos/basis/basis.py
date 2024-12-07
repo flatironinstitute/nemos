@@ -1739,6 +1739,9 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             decay_rates=decay_rates,
             label=label,
         )
+        # re-check window size because n_basis_funcs is not set yet when the
+        # property setter runs the first check.
+        self._check_window_size(self.window_size)
 
     @add_docstring("evaluate_on_grid", OrthExponentialBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1830,3 +1833,15 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
 
         """
         return super().set_input_shape(xi)
+
+    def _check_window_size(self, window_size: int):
+        """OrthExponentialBasis specific window size check."""
+        super()._check_window_size(window_size)
+        # if n_basis_funcs is not yet initialized, skip check
+        n_basis = getattr(self, "n_basis_funcs", None)
+        if n_basis and window_size < n_basis:
+            raise ValueError(
+                "OrthExponentialConv basis requires at least a window_size larger then the number "
+                f"of basis functions. window_size is {window_size}, n_basis_funcs while"
+                f"is {self.n_basis_funcs}."
+            )
