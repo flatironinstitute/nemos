@@ -6,21 +6,22 @@ from sklearn import pipeline
 from sklearn.model_selection import GridSearchCV
 
 from nemos import basis
+from nemos.basis._transformer_basis import TransformerBasis
 
 
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
-        basis.BSplineBasis(5),
-        basis.CyclicBSplineBasis(5),
-        basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)),
-        basis.RaisedCosineBasisLinear(5),
+        basis.MSplineEval(5),
+        basis.BSplineEval(5),
+        basis.CyclicBSplineEval(5),
+        basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6)),
+        basis.RaisedCosineLinearEval(5),
     ],
 )
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.TransformerBasis(bas)
+    bas = TransformerBasis(bas)
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
     pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
@@ -29,16 +30,16 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
-        basis.BSplineBasis(5),
-        basis.CyclicBSplineBasis(5),
-        basis.RaisedCosineBasisLinear(5),
-        basis.RaisedCosineBasisLog(5),
+        basis.MSplineEval(5),
+        basis.BSplineEval(5),
+        basis.CyclicBSplineEval(5),
+        basis.RaisedCosineLinearEval(5),
+        basis.RaisedCosineLogEval(5),
     ],
 )
 def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.TransformerBasis(bas)
+    bas = TransformerBasis(bas)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -48,18 +49,18 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
 @pytest.mark.parametrize(
     "bas",
     [
-        basis.MSplineBasis(5),
-        basis.BSplineBasis(5),
-        basis.CyclicBSplineBasis(5),
-        basis.RaisedCosineBasisLinear(5),
-        basis.RaisedCosineBasisLog(5),
+        basis.MSplineEval(5),
+        basis.BSplineEval(5),
+        basis.CyclicBSplineEval(5),
+        basis.RaisedCosineLinearEval(5),
+        basis.RaisedCosineLogEval(5),
     ],
 )
 def test_sklearn_transformer_pipeline_cv_multiprocess(
     bas, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.TransformerBasis(bas)
+    bas = TransformerBasis(bas)
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(
@@ -73,18 +74,18 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
 @pytest.mark.parametrize(
     "bas_cls",
     [
-        basis.MSplineBasis,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
+        basis.MSplineEval,
+        basis.MSplineEval,
+        basis.CyclicBSplineEval,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLogEval,
     ],
 )
 def test_sklearn_transformer_pipeline_cv_directly_over_basis(
     bas_cls, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.TransformerBasis(bas_cls(5))
+    bas = TransformerBasis(bas_cls(5))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(transformerbasis___basis=(bas_cls(5), bas_cls(10), bas_cls(20)))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -94,18 +95,18 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
 @pytest.mark.parametrize(
     "bas_cls",
     [
-        basis.MSplineBasis,
-        basis.BSplineBasis,
-        basis.CyclicBSplineBasis,
-        basis.RaisedCosineBasisLinear,
-        basis.RaisedCosineBasisLog,
+        basis.MSplineEval,
+        basis.MSplineEval,
+        basis.CyclicBSplineEval,
+        basis.RaisedCosineLinearEval,
+        basis.RaisedCosineLogEval,
     ],
 )
 def test_sklearn_transformer_pipeline_cv_illegal_combination(
     bas_cls, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = basis.TransformerBasis(bas_cls(5))
+    bas = TransformerBasis(bas_cls(5))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
         transformerbasis___basis=(bas_cls(5), bas_cls(10), bas_cls(20)),
@@ -122,37 +123,35 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
 @pytest.mark.parametrize(
     "bas, expected_nans",
     [
-        (basis.MSplineBasis(5), 0),
-        (basis.BSplineBasis(5), 0),
-        (basis.CyclicBSplineBasis(5), 0),
-        (basis.OrthExponentialBasis(5, decay_rates=np.arange(1, 6)), 0),
-        (basis.RaisedCosineBasisLinear(5), 0),
-        (basis.RaisedCosineBasisLog(5), 0),
-        (basis.RaisedCosineBasisLog(5) + basis.MSplineBasis(5), 0),
-        (basis.MSplineBasis(5, mode="conv", window_size=3), 6),
-        (basis.BSplineBasis(5, mode="conv", window_size=3), 6),
+        (basis.MSplineEval(5), 0),
+        (basis.BSplineEval(5), 0),
+        (basis.CyclicBSplineEval(5), 0),
+        (basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6)), 0),
+        (basis.RaisedCosineLinearEval(5), 0),
+        (basis.RaisedCosineLogEval(5), 0),
+        (basis.RaisedCosineLogEval(5) + basis.MSplineEval(5), 0),
+        (basis.MSplineConv(5, window_size=3), 6),
+        (basis.BSplineConv(5, window_size=3), 6),
         (
-            basis.CyclicBSplineBasis(
-                5, mode="conv", window_size=3, predictor_causality="acausal"
+            basis.CyclicBSplineConv(
+                5, window_size=3, conv_kwargs=dict(predictor_causality="acausal")
             ),
             4,
         ),
         (
-            basis.OrthExponentialBasis(
-                5, decay_rates=np.linspace(0.1, 1, 5), mode="conv", window_size=7
+            basis.OrthExponentialConv(
+                5, decay_rates=np.linspace(0.1, 1, 5), window_size=7
             ),
             14,
         ),
-        (basis.RaisedCosineBasisLinear(5, mode="conv", window_size=3), 6),
-        (basis.RaisedCosineBasisLog(5, mode="conv", window_size=3), 6),
+        (basis.RaisedCosineLinearConv(5, window_size=3), 6),
+        (basis.RaisedCosineLogConv(5, window_size=3), 6),
         (
-            basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
-            + basis.MSplineBasis(5),
+            basis.RaisedCosineLogConv(5, window_size=3) + basis.MSplineEval(5),
             6,
         ),
         (
-            basis.RaisedCosineBasisLog(5, mode="conv", window_size=3)
-            * basis.MSplineBasis(5),
+            basis.RaisedCosineLogConv(5, window_size=3) * basis.MSplineEval(5),
             6,
         ),
     ],
@@ -166,7 +165,7 @@ def test_sklearn_transformer_pipeline_pynapple(
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
     y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
-    bas = basis.TransformerBasis(bas)
+    bas = TransformerBasis(bas)
     # fit a pipeline & predict from pynapple
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
     pipe.fit(X_nap[:, : bas._basis._n_input_dimensionality] ** 2, y_nap)
