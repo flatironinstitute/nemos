@@ -152,7 +152,7 @@ class ConvBasisMixin:
         """Setter for the window size parameter."""
         if window_size is None:
             raise ValueError(
-                "If the basis is in `conv` mode, you must provide a window_size!"
+                "You must provide a window_size!"
             )
 
         elif not (isinstance(window_size, int) and window_size > 0):
