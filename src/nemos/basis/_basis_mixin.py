@@ -36,7 +36,7 @@ class EvalBasisMixin:
         Returns
         -------
         :
-            A matrix with the transformed features. 
+            A matrix with the transformed features.
 
         """
         return self._evaluate(*xi)
@@ -149,17 +149,14 @@ class ConvBasisMixin:
 
     @property
     def window_size(self):
-        """Duration of the convolutional kernel in number of samples.
-        """
+        """Duration of the convolutional kernel in number of samples."""
         return self._window_size
 
     @window_size.setter
     def window_size(self, window_size):
         """Setter for the window size parameter."""
         if window_size is None:
-            raise ValueError(
-                "You must provide a window_size!"
-            )
+            raise ValueError("You must provide a window_size!")
 
         elif not (isinstance(window_size, int) and window_size > 0):
             raise ValueError(
