@@ -68,7 +68,7 @@ This method performs the following steps:
 
 The [`nemos.basis._basis.Basis`](nemos.basis._basis.Basis) class has the following abstract methods, which every concrete subclass must implement:
 
-1. `_evaluate`: Evaluates a basis over some specified samples.
+1. [`_evaluate`](nemos.basis._basis.Basis._evaluate) : Evaluates a basis over some specified samples.
 2. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
 
 ## Contributors Guidelines
