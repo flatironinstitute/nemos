@@ -35,9 +35,7 @@ class EvalBasisMixin:
         Returns
         -------
         :
-            A matrix with the transformed features. The basis evaluated at the samples,
-            or :math:`b_i(*xi)`, where :math:`b_i` is a basis element. xi[k] must be a one-dimensional array
-            or a pynapple Tsd.
+            A matrix with the transformed features. 
 
         """
         return self._evaluate(*xi)
