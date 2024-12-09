@@ -242,7 +242,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return X
 
     @check_transform_input
-    def compute_features(self, *xi: ArrayLike | Tsd | TsdFrame |  TsdTensor) -> FeatureMatrix:
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Apply the basis transformation to the input data.
 
@@ -276,7 +278,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._compute_features(*xi)
 
     @abc.abstractmethod
-    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def _compute_features(
+        self, *xi: NDArray | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """Convolve or evaluate the basis."""
         pass
 
@@ -901,7 +905,9 @@ class AdditiveBasis(Basis):
         return X
 
     @add_docstring("compute_features", Basis)
-    def compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         r"""
         Examples
         --------
@@ -918,7 +924,9 @@ class AdditiveBasis(Basis):
         """
         return super().compute_features(*xi)
 
-    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def _compute_features(
+        self, *xi: NDArray | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Compute features for added bases and concatenate.
 
@@ -1304,7 +1312,9 @@ class MultiplicativeBasis(Basis):
         )
         return X
 
-    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def _compute_features(
+        self, *xi: NDArray | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Compute the features for the multiplied bases, and compute their outer product.
 
@@ -1397,7 +1407,9 @@ class MultiplicativeBasis(Basis):
         return super().evaluate_on_grid(*n_samples)
 
     @add_docstring("compute_features", Basis)
-    def compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Examples
         --------

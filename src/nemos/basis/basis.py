@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis import add_docstring
-from ._basis_mixin import BasisTransformerMixin, ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import ConvBasisMixin, EvalBasisMixin
 from ._decaying_exponential import OrthExponentialBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
@@ -794,9 +794,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().evaluate_on_grid(n_samples)
 
 
-class RaisedCosineLinearEval(
-    EvalBasisMixin, RaisedCosineBasisLinear
-):
+class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
     """
     Represent linearly-spaced raised cosine basis functions.
 
@@ -910,9 +908,7 @@ class RaisedCosineLinearEval(
         return super().split_by_feature(x, axis=axis)
 
 
-class RaisedCosineLinearConv(
-    ConvBasisMixin, RaisedCosineBasisLinear
-):
+class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
     """
     Represent linearly-spaced raised cosine basis functions.
 

@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -16,7 +17,6 @@ from ._basis import (
     min_max_rescale_samples,
 )
 
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 class RaisedCosineBasisLinear(Basis, abc.ABC):
     """Represent linearly-spaced raised cosine basis functions.

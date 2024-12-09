@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 import numpy as np
 import scipy.linalg
 from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -19,7 +20,6 @@ from ._basis import (
     min_max_rescale_samples,
 )
 
-from pynapple import Tsd, TsdFrame, TsdTensor
 
 class OrthExponentialBasis(Basis, abc.ABC):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
