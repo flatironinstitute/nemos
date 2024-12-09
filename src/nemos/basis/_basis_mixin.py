@@ -137,11 +137,6 @@ class ConvBasisMixin:
             The instance itself, modified to include the computed kernel if applicable. This
             allows for method chaining and integration into transformation pipelines.
 
-        Notes
-        -----
-        Subclasses implementing this method should detail the specifics of how the kernel is
-        computed and how the input parameters are utilized. If the basis operates in 'eval'
-        mode exclusively, this method should simply return `self` without modification.
         """
         self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
