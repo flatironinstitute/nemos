@@ -62,13 +62,14 @@ class TransformerBasis:
     """
 
     def __init__(self, basis: Basis):
+        self._check_initialized(basis)
         self._basis = copy.deepcopy(basis)
 
     @staticmethod
     def _check_initialized(basis):
         if basis._n_basis_input_ is None:
             raise RuntimeError(
-                "TransformerBasis initialization failed: the provided basis has no defined input shape. "
+                "Cannot initialize TransformerBasis: the provided basis has no defined input shape. "
                 "Please call `set_input_shape` on the basis before initializing the transformer."
             )
 
@@ -101,7 +102,7 @@ class TransformerBasis:
         n_samples = X.shape[0]
         out = []
         cc = 0
-        for i, bas in enumerate(self._basis._list_components()):
+        for i, bas in enumerate(self._list_components()):
             n_input = self._n_basis_input_[i]
             out.append(
                 np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
@@ -113,7 +114,11 @@ class TransformerBasis:
         """
         Compute the convolutional kernels.
 
-        If any of the 1D basis in self._basis is in "conv" mode, it computes the convolutional kernels.
+        Checks the input structure and, if any of the 1D basis in self._basis is in "conv" mode,
+        it computes the convolutional kernels.
+
+        Note that the input must be 2-dimensional, and the number of column must match the number of inputs
+        that the basis expect. The number of input can be reset by calling the ``set_input_shape`` method.
 
         Parameters
         ----------
@@ -126,6 +131,11 @@ class TransformerBasis:
         -------
         self :
             The transformer object.
+
+        Raises
+        ------
+        ValueError:
+            If the number of columns in X do not match the number of inputs that the basis expects.
 
         Examples
         --------
@@ -140,6 +150,7 @@ class TransformerBasis:
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
+        self._check_input(X, y)
         self._basis.set_kernel()
         return self
 
@@ -219,6 +230,7 @@ class TransformerBasis:
         >>> # Fit and transform basis
         >>> feature_transformed = transformer.fit_transform(X)
         """
+        self.fit(X, y=y)
         return self._basis.compute_features(*self._unpack_inputs(X))
 
     def __getstate__(self):
@@ -416,3 +428,35 @@ class TransformerBasis:
         """
         # errors are handled by Basis.__pow__
         return TransformerBasis(self._basis**exponent)
+
+    def _check_input(self, X: FeatureMatrix, y=None):
+        """Check that the input structure.
+
+        TransformerBasis expects a 2-d array as an input. The number of columns should match the number of inputs
+        the basis expects. This number can be set before the TransformerBasis is initialized, by calling
+        ``Basis.set_input_shape``.
+
+        Parameters
+        ----------
+        X:
+            The input FeatureMatrix.
+
+        Raises
+        ------
+        ValueError:
+            If the input is not a 2-d array or if the number of columns does not match the expected number of inputs.
+        """
+        ndim = getattr(X, "ndim", None)
+        if ndim is None or y is not None:
+            raise ValueError("The input must be a 2-dimensional array.")
+
+        elif ndim != 2:
+            raise ValueError(
+                f"X must be 2-dimensional, shape (n_samples, n_features). The provided X has shape {X.shape} instead."
+            )
+
+        if X.shape[1] != sum(self.n_basis_input_):
+            raise ValueError(
+                f"Input mismatch: expected {sum(self.n_basis_input_)} inputs, but got {X.shape[1]} columns in X.\n"
+                "To modify the required number of inputs, call `set_input_shape` before using `fit` or `fit_transform`."
+            )

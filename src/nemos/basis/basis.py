@@ -1851,11 +1851,13 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             super().set_kernel()
         except ValueError as e:
             if "OrthExponentialBasis requires at least as many" in str(e):
-                raise ValueError("Cannot set the kernels for OrthExponentialBasis when `window_size` is smaller "
-                                 "than `n_basis_funcs.\n"
-                                 "Please, increase the window size or reduce the number of basis functions. "
-                                 f"Current `window_size` is {self.window_size}, while `n_basis_funcs` is "
-                                 f"{self.n_basis_funcs}.")
+                raise ValueError(
+                    "Cannot set the kernels for OrthExponentialBasis when `window_size` is smaller "
+                    "than `n_basis_funcs.\n"
+                    "Please, increase the window size or reduce the number of basis functions. "
+                    f"Current `window_size` is {self.window_size}, while `n_basis_funcs` is "
+                    f"{self.n_basis_funcs}."
+                )
             else:
                 raise e
         return self

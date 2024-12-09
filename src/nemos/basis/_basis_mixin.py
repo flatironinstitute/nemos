@@ -50,7 +50,7 @@ class EvalBasisMixin:
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
 
-    def set_basis(self, *xi: NDArray) -> Basis:
+    def setup_basis(self, *xi: NDArray) -> Basis:
         """
         Set all basis states.
 

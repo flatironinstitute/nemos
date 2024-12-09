@@ -149,8 +149,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._check_n_basis_min()
 
         # specified only after inputs/input shapes are provided
-        self._n_basis_input_ = None
-        self._input_shape_ = None
+        self._n_basis_input_ = getattr(self, "_n_basis_input_", None)
+        self._input_shape_ = getattr(self, "_input_shape_", None)
 
         # set by set_kernel
         self.kernel_ = None
