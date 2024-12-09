@@ -7,7 +7,8 @@ import inspect
 from typing import Optional, Tuple, Union
 
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ._transformer_basis import TransformerBasis
@@ -19,12 +20,12 @@ class EvalBasisMixin:
     def __init__(self, bounds: Optional[Tuple[float, float]] = None):
         self.bounds = bounds
 
-    def _compute_features(self, *xi: ArrayLike):
+    def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
         """
-        Apply the basis transformation to the input data.
+        Evaluate basis at sample points.
 
         The basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i` is a
-        basis element. xi[k] must be a one-dimensional array or a pynapple Tsd.
+        basis element. xi[k] must be a one-dimensional array or a pynapple Tsd/TsdFrame/TsdTensor.
 
         Parameters
         ----------
@@ -89,7 +90,7 @@ class ConvBasisMixin:
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
 
-    def _compute_features(self, *xi: ArrayLike):
+    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor):
         """
         Convolve basis functions with input time series.
 

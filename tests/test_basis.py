@@ -132,7 +132,7 @@ def test_all_basis_are_tested() -> None:
         ("evaluate_on_grid", "The number of points in the uniformly spaced grid"),
         (
             "compute_features",
-            "Apply the basis transformation to the input data|Convolve basis functions with input time series",
+            "Apply the basis transformation to the input data|Convolve basis functions with input time series|Evaluate basis at sample points",
         ),
         (
             "split_by_feature",

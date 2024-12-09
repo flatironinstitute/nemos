@@ -795,7 +795,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
 
 
 class RaisedCosineLinearEval(
-    EvalBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
+    EvalBasisMixin, RaisedCosineBasisLinear
 ):
     """
     Represent linearly-spaced raised cosine basis functions.
@@ -911,7 +911,7 @@ class RaisedCosineLinearEval(
 
 
 class RaisedCosineLinearConv(
-    ConvBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
+    ConvBasisMixin, RaisedCosineBasisLinear
 ):
     """
     Represent linearly-spaced raised cosine basis functions.

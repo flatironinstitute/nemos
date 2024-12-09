@@ -16,6 +16,7 @@ from ._basis import (
     min_max_rescale_samples,
 )
 
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 class RaisedCosineBasisLinear(Basis, abc.ABC):
     """Represent linearly-spaced raised cosine basis functions.
@@ -101,7 +102,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
     @check_one_dimensional
     def _evaluate(  # call these _evaluate
         self,
-        sample_pts: ArrayLike,
+        sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
         """Generate basis functions with given samples.
 
@@ -330,7 +331,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     @check_one_dimensional
     def _evaluate(
         self,
-        sample_pts: ArrayLike,
+        sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
         """Generate log-spaced raised cosine basis with given samples.
 

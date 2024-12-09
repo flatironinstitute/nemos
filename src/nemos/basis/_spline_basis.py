@@ -18,6 +18,7 @@ from ._basis import (
     min_max_rescale_samples,
 )
 
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 class SplineBasis(Basis, abc.ABC):
     """
@@ -217,7 +218,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the M-spline basis functions at given sample points.
 
@@ -334,7 +335,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -445,7 +446,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     @check_one_dimensional
     def _evaluate(
         self,
-        sample_pts: ArrayLike,
+        sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 
