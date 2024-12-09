@@ -36,9 +36,7 @@ class EvalBasisMixin:
         Returns
         -------
         :
-            A matrix with the transformed features. The basis evaluated at the samples,
-            or :math:`b_i(*xi)`, where :math:`b_i` is a basis element. xi[k] must be a one-dimensional array
-            or a pynapple Tsd.
+            A matrix with the transformed features. 
 
         """
         return self._evaluate(*xi)
@@ -144,15 +142,14 @@ class ConvBasisMixin:
         -----
         Subclasses implementing this method should detail the specifics of how the kernel is
         computed and how the input parameters are utilized.
+
         """
         self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
 
     @property
     def window_size(self):
-        """Window size as number of samples.
-
-        Duration of the convolutional kernel in number of samples.
+        """Duration of the convolutional kernel in number of samples.
         """
         return self._window_size
 
@@ -161,7 +158,7 @@ class ConvBasisMixin:
         """Setter for the window size parameter."""
         if window_size is None:
             raise ValueError(
-                "If the basis is in `conv` mode, you must provide a window_size!"
+                "You must provide a window_size!"
             )
 
         elif not (isinstance(window_size, int) and window_size > 0):
