@@ -143,9 +143,7 @@ class ConvBasisMixin:
 
     @property
     def window_size(self):
-        """Window size as number of samples.
-
-        Duration of the convolutional kernel in number of samples.
+        """Duration of the convolutional kernel in number of samples.
         """
         return self._window_size
 
