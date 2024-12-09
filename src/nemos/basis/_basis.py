@@ -550,9 +550,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Calculate and return the slicing for features based on the input structure.
 
         This method determines how to slice the features for different basis types.
-        If the instance is of ``AdditiveBasis`` type, the slicing is calculated recursively
-        for each component basis. Otherwise, it determines the slicing based on
-        the number of basis functions and ``split_by_input`` flag.
 
         Parameters
         ----------

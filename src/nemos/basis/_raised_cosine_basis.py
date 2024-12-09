@@ -123,7 +123,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
             # basis1 = nmo.basis.RaisedCosineBasisLinear(5)
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
-            # additive_basis(*([x] * 2)) would modify both inputs
+            # additive_basis._evaluate(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
                 np.copy(sample_pts), getattr(self, "bounds", None)
             )

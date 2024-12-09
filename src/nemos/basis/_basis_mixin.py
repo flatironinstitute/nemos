@@ -91,21 +91,23 @@ class ConvBasisMixin:
 
     def _compute_features(self, *xi: ArrayLike):
         """
-        Apply the basis transformation to the input data.
+        Convolve basis functions with input time series.
 
         A bank of basis filters (created by calling fit) is convolved with the
-        samples. Samples can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
+        input data. Inputs can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
         except for the sample-axis are flattened, so that the method always returns a matrix.
-        For example, if samples are of shape (num_samples, 2, 3), the output will be
+
+        For example, if inputs are of shape (num_samples, 2, 3), the output will be
         ``(num_samples, num_basis_funcs * 2 * 3)``.
+
         The time-axis can be specified at basis initialization by setting the keyword argument ``axis``.
-        For example, if ``axis == 1`` your samples should be ``(N1, num_samples N3, ...)``, the output of
-        transform will be ``(num_samples, num_basis_funcs * N1 * N3 *...)``.
+        For example, if ``axis == 1`` your input should be of shape ``(N1, num_samples N3, ...)``, the output of
+        transform will be of shape ``(num_samples, num_basis_funcs * N1 * N3 *...)``.
 
         Parameters
         ----------
         *xi:
-            The input samples over which to apply the basis transformation. The samples can be passed
+            The input data over which to apply the basis transformation. The samples can be passed
             as multiple arguments, each representing a different dimension for multivariate inputs.
 
         """
@@ -126,7 +128,7 @@ class ConvBasisMixin:
         Prepare or compute the convolutional kernel for the basis functions.
 
         This method is called to prepare the basis functions for convolution operations
-        in subclasses where the 'conv' mode is used. It typically involves computing a
+        in subclasses. It computes a
         kernel based on the basis functions that will be used for convolution with the
         input data. The specifics of kernel computation depend on the subclass implementation
         and the nature of the basis functions.
@@ -134,14 +136,13 @@ class ConvBasisMixin:
         Returns
         -------
         self :
-            The instance itself, modified to include the computed kernel if applicable. This
+            The instance itself, modified to include the computed kernel. This
             allows for method chaining and integration into transformation pipelines.
 
         Notes
         -----
         Subclasses implementing this method should detail the specifics of how the kernel is
-        computed and how the input parameters are utilized. If the basis operates in 'eval'
-        mode exclusively, this method should simply return `self` without modification.
+        computed and how the input parameters are utilized.
         """
         self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
