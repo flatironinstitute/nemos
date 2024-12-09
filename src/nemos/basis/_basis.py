@@ -4,7 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Any, Callable, Generator, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -159,52 +159,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
 
-    def _recompute_kernels(self):
-        """Recompute all kernels if needed.
-
-        Traverse the tree upwards and reset all input-independent states.
-        If the node is the root, directly update its states; otherwise, propagate
-        the request to the parent node.
-        """
-        # Assumes that state updates in the basis tree can be handled independently for each node.
-        # This is currently true but may change if dependencies are introduced.
-        # The only such state is self.kernel_, which is set independently for each basis component.
-        # If dependencies are introduced, use `self.set_kernel` at the root level instead.
-        # (A basis is the tree root if self._parend is None).
-        # Note: `self.set_kernel` is more expensive as it recomputes kernels for the entire tree.
-        update_states = getattr(self, "_reset_all_input_independent_states", None)
-        if update_states:
-            update_states()
-        if getattr(self, "_parent", None):
-            self._parent._recompute_kernels()
-
-    def _is_init_params_updated(self, name: str, value: Any):
-        """Check if an attribute set at initialization have been updated."""
-        return name in self._get_param_names()
-
-    def __setattr__(self, name: str, value: Any):
-        """
-        Set to None all attributes ending with '_'.
-
-        This __setattr__ resets all the attributes that are defined by a method
-        like the `kernel_` or `_n_input_shape_` (states of the basis) when an initialization configuration
-        is updated.
-        A Basis class must respect the following naming convention: all names of parameters that are settable
-        by with a method (like `kernel_` computed in `set_kernel`) must end in "_".
-
-        Parameters
-        ----------
-        name :
-            The name of the attribute to set.
-        value :
-            The value to set the attribute to.
-        """
-        # check if the attribute was defined in the __init__ signature
-        # and if so, then resets all computable states.
-        super().__setattr__(name, value)
-        if self._is_init_params_updated(name, value):
-            self._recompute_kernels()
-
     @property
     def n_output_features(self) -> int | None:
         """
@@ -304,7 +258,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _fit_basis(self, *xi: ArrayLike) -> FeatureMatrix:
+    def setup_basis(self, *xi: ArrayLike) -> FeatureMatrix:
         """Pre-compute all basis state variables.
 
         This method is intended to be equivalent to the sklearn transformer ``fit`` method.

@@ -50,7 +50,7 @@ class EvalBasisMixin:
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
 
-    def _fit_basis(self, *xi: NDArray) -> Basis:
+    def set_basis(self, *xi: NDArray) -> Basis:
         """
         Set all basis states.
 
@@ -88,15 +88,6 @@ class EvalBasisMixin:
 
         """
         return self
-
-    def _reset_all_input_independent_states(self):
-        """Set all states that are input independent for self only.
-
-        This method sets all the input independent states. This reimplements an abstract method
-        of basis, and it is different from ``set_kernel`` because it won't traverse the basis
-        tree in any basis (including composite basis), while ``set_kernel`` applies to all the tree.
-        """
-        return
 
     @property
     def bounds(self):
@@ -173,7 +164,7 @@ class ConvBasisMixin:
         # make sure to return a matrix
         return np.reshape(conv, newshape=(conv.shape[0], -1))
 
-    def _fit_basis(self, *xi: NDArray) -> Basis:
+    def setup_basis(self, *xi: NDArray) -> Basis:
         """
         Set all basis states.
 
@@ -221,33 +212,6 @@ class ConvBasisMixin:
         """
         self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
-
-    def _reset_all_input_independent_states(self):
-        """Set all states that are input independent for self only.
-
-        This method sets all the input independent states. This reimplements an abstract method
-        of basis, and it is different from ``set_kernel`` because it won't traverse the basis
-        tree in any basis (including composite basis), while ``set_kernel`` applies to all the tree.
-        Called by the setattr of basis.
-        """
-        current_kernel = getattr(self, "kernel_", None)
-        try:
-            self.kernel_ = (
-                current_kernel
-                if current_kernel is None
-                else self._evaluate(np.linspace(0, 1, self.window_size))
-            )
-        except Exception as e:
-            # if basis not fully initialized attribute is not there yet.
-            kernel = getattr(self, "kernel_", None)
-            if kernel:
-                warnings.warn(
-                    message=f"Unable to automatically re-initialize the kernel for basis {self.label}, "
-                    f"with exception: {repr(e)}. \n"
-                    f"Resetting the kernel `None`.",
-                    category=UserWarning,
-                )
-                self.kernel_ = None
 
     @property
     def window_size(self):
@@ -409,7 +373,7 @@ class CompositeBasisMixin:
     def _check_n_basis_min(self) -> None:
         pass
 
-    def _fit_basis(self, *xi: NDArray) -> Basis:
+    def setup_basis(self, *xi: NDArray) -> Basis:
         """
         Set all basis states.
 
@@ -429,8 +393,7 @@ class CompositeBasisMixin:
         :
             The basis with ready for evaluation.
         """
-        self.basis1.set_kernel()
-        self.basis2.set_kernel()
+        self.set_kernel()
         self.basis1.set_input_shape(*xi[: self._basis1._n_input_dimensionality])
         self.basis2.set_input_shape(*xi[self._basis1._n_input_dimensionality :])
         return self
@@ -490,12 +453,3 @@ class CompositeBasisMixin:
             A list with all 1d basis components.
         """
         return self._basis1._list_components() + self._basis2._list_components()
-
-    def _reset_all_input_independent_states(self):
-        """Set all states that are input independent for self only.
-
-        This method sets all the input independent states. This reimplements an abstract method
-        of basis, and it is different from ``set_kernel`` because it won't traverse the basis
-        tree in any basis (including composite basis), while ``set_kernel`` applies to all the tree.
-        """
-        return
