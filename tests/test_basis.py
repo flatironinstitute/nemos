@@ -979,14 +979,14 @@ class TestSharedMethods:
             (
                 "conv",
                 -1,
-                pytest.raises(ValueError, match="You must provide a window_siz"),
+                pytest.raises(ValueError, match="`window_size` must be a positive integer"),
             ),
             (
                 "conv",
                 None,
                 pytest.raises(
                     ValueError,
-                    match="You must provide a window_siz",
+                    match="You must provide a window_size",
                 ),
             ),
             (
