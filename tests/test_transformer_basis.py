@@ -381,7 +381,7 @@ def test_transformerbasis_sk_clone_kernel_noned(basis_cls, basis_class_specific_
     trans_bas = basis.TransformerBasis(orig_bas)
 
     # kernel should be saved in the object after fit
-    trans_bas.fit(np.random.randn(100, 20))
+    trans_bas.fit(np.random.randn(100, 1))
     assert isinstance(trans_bas.kernel_, np.ndarray)
 
     # cloning should set kernel_ to None
@@ -485,7 +485,8 @@ def test_transformer_fit(basis_cls, inp, basis_class_specific_params, expectatio
 
     # try and pass segmented time series
     if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
-        expectation = pytest.raises(ValueError, match="The input must be a 2-")
+        if inp.ndim == 2:
+            expectation = pytest.raises(ValueError, match="Input mismatch: expected ")
 
     with expectation:
         transformer.fit(*([inp] * bas._n_input_dimensionality))
@@ -653,8 +654,9 @@ def test_transformer_fit_transform_input_struct(
         assert transformer.kernel_ is not None
 
     # try and pass a tuple of time series
-    if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
-        expectation = pytest.raises(ValueError, match="The input must be a 2-")
-
+    if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)) and inp.ndim != 2:
+        expectation = pytest.raises(ValueError, match="X must be 2-")
+    elif isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)) and inp.ndim == 2:
+        expectation = pytest.raises(ValueError, match="Input mismatch: expected")
     with expectation:
         transformer.fit(*([inp] * bas._n_input_dimensionality))

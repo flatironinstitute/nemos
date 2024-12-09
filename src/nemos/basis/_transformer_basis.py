@@ -447,7 +447,7 @@ class TransformerBasis:
             If the input is not a 2-d array or if the number of columns does not match the expected number of inputs.
         """
         ndim = getattr(X, "ndim", None)
-        if ndim is None or y is not None:
+        if ndim is None:
             raise ValueError("The input must be a 2-dimensional array.")
 
         elif ndim != 2:
@@ -460,3 +460,7 @@ class TransformerBasis:
                 f"Input mismatch: expected {sum(self.n_basis_input_)} inputs, but got {X.shape[1]} columns in X.\n"
                 "To modify the required number of inputs, call `set_input_shape` before using `fit` or `fit_transform`."
             )
+
+        if y is not None and y.shape[0] != X.shape[0]:
+            raise ValueError("X and y must have the same number of samples. "
+                             f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples.")
