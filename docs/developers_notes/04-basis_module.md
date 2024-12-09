@@ -42,7 +42,7 @@ It accepts one or more NumPy array or pynapple `Tsd` object as input, and perfor
 
 1. Checks that the inputs all have the same sample size `M`, and raises a `ValueError` if this is not the case.
 2. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
-3. In `"eval"` mode, calls the `_evaluate` method on the input, which is the subclass-specific implementation of the basis set evaluation. In `"conv"` mode, generates a filter bank using [`compute_features`](nemos.basis._basis.Basis.evaluate_on_grid) and then applies the convolution to the input with [`nemos.convolve.create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor).
+3. In `"eval"` mode, calls the [`_evaluate`](nemos.basis._basis.Basis._evaluate) method on the input, which is the subclass-specific implementation of the basis set evaluation. In `"conv"` mode, generates a filter bank using [`compute_features`](nemos.basis._basis.Basis.evaluate_on_grid) and then applies the convolution to the input with [`nemos.convolve.create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor).
 4. Returns a NumPy array or  pynapple `TsdFrame` of shape `(M, n_basis_funcs)`, with each basis element evaluated at the samples.
 
 :::{admonition} Multiple epochs
