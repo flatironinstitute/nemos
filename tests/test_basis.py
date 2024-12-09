@@ -979,14 +979,14 @@ class TestSharedMethods:
             (
                 "conv",
                 -1,
-                pytest.raises(ValueError, match="`window_size` must be a positive "),
+                pytest.raises(ValueError, match="You must provide a window_siz"),
             ),
             (
                 "conv",
                 None,
                 pytest.raises(
                     ValueError,
-                    match="If the basis is in `conv` mode, you must provide a ",
+                    match="You must provide a window_siz",
                 ),
             ),
             (
@@ -1229,7 +1229,7 @@ class TestSharedMethods:
             bas = cls["conv"](
                 n_basis_funcs=10, window_size=10, **extra_decay_rates(cls["conv"], 10)
             )
-            with pytest.raises(ValueError, match="If the basis is in `conv` mode"):
+            with pytest.raises(ValueError, match="You must provide a window_siz"):
                 bas.set_params(window_size=None)
 
         if mode == "eval":
