@@ -114,13 +114,7 @@ The bases are categorized into two types based on the transformation applied by 
 
 2. **Convolution Bases**: hese bases convolve the input with a kernel of basis elements using a user-specified `window_size`. Classes in this category have names ending with "Conv", such as `BSplineConv`.
 
-`compute_features` always outputs a feature matrix, i.e. a 2D output of shape `(n_samples, n_features)`. This is the arrays structure that NeMoS and scikit-learn models requires.
-The input can be:
-
-- An N-dimensional array (N >= 1)
-- A `pynapple` time series: ([Tsd](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html), [TsdFrame](https://pynapple.org/generated/pynapple.core.time_series.TsdFrame.html), or [TsdTensor](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html)).
-
-### Example: Feature Computation for Evaluation and Convolution Bases
+Let's see how this two modalities operate.
 
 ```{code-cell} ipython3
 eval_mode = nmo.basis.MSplineEval(n_basis_funcs=n_basis)

@@ -7,6 +7,7 @@ from typing import Literal, Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 from scipy.interpolate import splev
 
 from ..type_casting import support_pynapple
@@ -211,7 +212,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def _evaluate(
+        self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Evaluate the M-spline basis functions at given sample points.
 
@@ -339,7 +342,9 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(self, sample_pts: ArrayLike) -> FeatureMatrix:
+    def _evaluate(
+        self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Evaluate the B-spline basis functions with given sample points.
 
@@ -458,7 +463,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     @check_transform_input
     def _evaluate(
         self,
-        sample_pts: ArrayLike,
+        sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
         """Evaluate the Cyclic B-spline basis functions with given sample points.
 

@@ -188,7 +188,7 @@ if path.exists():
 
 ## Convolve using [`Basis.compute_features`](nemos.basis._basis.Basis.compute_features)
 
-Every basis in the `nemos.basis` module whose class name starts with "Conv" will perform a 1D convolution over the 
+Every basis in the `nemos.basis` module whose class name ends with "Conv" will perform a 1D convolution over the 
 provided input when the `compute_features` method is called. The basis elements will be used as filters for the
 convolution.
 
