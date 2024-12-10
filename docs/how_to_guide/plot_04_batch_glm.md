@@ -106,7 +106,7 @@ Here we instantiate the basis. `ws` is 40 time bins. It corresponds to a 200 ms 
 
 ```{code-cell} ipython3
 ws = 40
-basis = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=ws)
+basis = nmo.basis.RaisedCosineLogConv(5, window_size=ws)
 ```
 
 ## Batch definition

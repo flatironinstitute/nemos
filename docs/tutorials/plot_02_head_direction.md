@@ -374,6 +374,7 @@ worst if we needed a finer temporal resolution, such 1ms time bins
 (which would require 800 coefficients instead of 80).
 What can we do to mitigate over-fitting now?
 
+(head_direction_reducing_dimensionality)=
 #### Reducing feature dimensionality
 One way to proceed is to find a lower-dimensional representation of the response
 by parametrizing the decay effect. For instance, we could try to model it
@@ -419,8 +420,8 @@ the cost of adding additional parameters.
 
 ```{code-cell} ipython3
 # a basis object can be instantiated in "conv" mode for convolving  the input.
-basis = nmo.basis.RaisedCosineBasisLog(
-    n_basis_funcs=8, mode="conv", window_size=window_size
+basis = nmo.basis.RaisedCosineLogConv(
+    n_basis_funcs=8, window_size=window_size
 )
 
 # `basis.evaluate_on_grid` is a convenience method to view all basis functions
@@ -600,8 +601,8 @@ to get an array of predictors of shape, `(num_time_points, num_neurons * num_bas
 
 ```{code-cell} ipython3
 # re-initialize basis
-basis = nmo.basis.RaisedCosineBasisLog(
-    n_basis_funcs=8, mode="conv", window_size=window_size
+basis = nmo.basis.RaisedCosineLogConv(
+    n_basis_funcs=8, window_size=window_size
 )
 
 # convolve all the neurons

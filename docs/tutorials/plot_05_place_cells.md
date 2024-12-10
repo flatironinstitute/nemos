@@ -331,19 +331,20 @@ print(speed.shape)
 print(count.shape)
 ```
 
+(basis_eval_place_cells)=
 ## Basis evaluation
 
 For each feature, we will use a different set of basis :
 
-  -   position : [`MSplineBasis`](nemos.basis.MSplineBasis)
-  -   theta phase : [`CyclicBSplineBasis`](nemos.basis.CyclicBSplineBasis)
-  -   speed : [`MSplineBasis`](nemos.basis.MSplineBasis)
+  -   position : [`MSplineEval`](nemos.basis.MSplineEval)
+  -   theta phase : [`CyclicBSplineEval`](nemos.basis.CyclicBSplineEval)
+  -   speed : [`MSplineEval`](nemos.basis.MSplineEval)
 
 
 ```{code-cell} ipython3
-position_basis = nmo.basis.MSplineBasis(n_basis_funcs=10)
-phase_basis = nmo.basis.CyclicBSplineBasis(n_basis_funcs=12)
-speed_basis = nmo.basis.MSplineBasis(n_basis_funcs=15)
+position_basis = nmo.basis.MSplineEval(n_basis_funcs=10)
+phase_basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=12)
+speed_basis = nmo.basis.MSplineEval(n_basis_funcs=15)
 ```
 
 In addition, we will consider position and phase to be a joint variable. In NeMoS, we can combine basis by multiplying them and adding them. In this case the final basis object for our model can be made in one line :
@@ -357,7 +358,7 @@ The object basis only tell us how each basis covers the feature space. For each 
 
 
 ```{code-cell} ipython3
-X = basis(position, theta, speed)
+X = basis.compute_features(position, theta, speed)
 ```
 
 `X` is our design matrix. For each timestamps, it contains the information about the current position,
@@ -455,7 +456,7 @@ predicted_rates = {}
 
 for m in models:
     print("1. Evaluating basis : ", m)
-    X = models[m](*features[m])
+    X = models[m].compute_features(*features[m])
 
     print("2. Fitting model : ", m)
     glm.fit(
