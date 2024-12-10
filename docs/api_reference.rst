@@ -95,7 +95,7 @@ These classes are the building blocks for the concrete basis classes.
     AdditiveBasis
     MultiplicativeBasis
 
-**Basis As `scikit-learn` Tranformers:**
+**Basis As ``scikit-learn`` Tranformers:**
 
 .. currentmodule:: nemos.basis._transformer_basis
 

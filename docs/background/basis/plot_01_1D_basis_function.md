@@ -114,6 +114,7 @@ We can be group the bases into two categories depending on the type of transform
 
 2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names ending with "Conv", such as `BSplineConv`.
 
+
 Let's see how this two modalities operate.
 
 ```{code-cell} ipython3
