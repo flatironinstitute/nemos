@@ -247,7 +247,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
@@ -345,7 +345,7 @@ GLM:
 
 ```{code-cell} ipython3
 window_size = 100
-basis = nmo.basis.RaisedCosineBasisLog(8, mode="conv", window_size=window_size)
+basis = nmo.basis.RaisedCosineLogConv(8, window_size=window_size)
 
 convolved_input = basis.compute_features(filtered_stimulus)
 ```

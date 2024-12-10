@@ -329,7 +329,7 @@ coupling_filter_bank *= 0.8
 
 # define a basis function
 n_basis_funcs = 20
-basis = nmo.basis.RaisedCosineBasisLog(n_basis_funcs)
+basis = nmo.basis.RaisedCosineLogEval(n_basis_funcs)
 
 # approximate the coupling filters in terms of the basis function
 _, coupling_basis = basis.evaluate_on_grid(coupling_filter_bank.shape[0])
@@ -450,7 +450,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
