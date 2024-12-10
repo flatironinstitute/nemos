@@ -64,7 +64,7 @@ class TransformerBasis:
 
     @staticmethod
     def _unpack_inputs(X: FeatureMatrix):
-        """Unpack impute without using transpose.
+        """Unpack inputs without using transpose.
 
         Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
         returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``

@@ -124,7 +124,7 @@ def test_all_basis_are_tested() -> None:
         ("evaluate_on_grid", "The number of points in the uniformly spaced grid"),
         (
             "compute_features",
-            "Apply the basis transformation to the input data",
+            "Apply the basis transformation to the input data|Convolve basis functions with input time series|Evaluate basis at sample points",
         ),
         (
             "split_by_feature",
@@ -991,14 +991,16 @@ class TestSharedMethods:
             (
                 "conv",
                 -1,
-                pytest.raises(ValueError, match="`window_size` must be a positive "),
+                pytest.raises(
+                    ValueError, match="`window_size` must be a positive integer"
+                ),
             ),
             (
                 "conv",
                 None,
                 pytest.raises(
                     ValueError,
-                    match="If the basis is in `conv` mode, you must provide a ",
+                    match="You must provide a window_size",
                 ),
             ),
             (
@@ -1224,7 +1226,7 @@ class TestSharedMethods:
             bas = cls["conv"](
                 n_basis_funcs=10, window_size=10, **extra_decay_rates(cls["conv"], 10)
             )
-            with pytest.raises(ValueError, match="If the basis is in `conv` mode"):
+            with pytest.raises(ValueError, match="You must provide a window_siz"):
                 bas.set_params(window_size=None)
 
         if mode == "eval":

@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
@@ -95,7 +96,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
     @check_transform_input
     def _evaluate(  # call these _evaluate
         self,
-        sample_pts: ArrayLike,
+        sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
         """Generate basis functions with given samples.
 
@@ -119,7 +120,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
             # basis1 = nmo.basis.RaisedCosineBasisLinear(5)
             # basis2 = nmo.basis.RaisedCosineBasisLog(5)
             # additive_basis = basis1 + basis2
-            # additive_basis(*([x] * 2)) would modify both inputs
+            # additive_basis._evaluate(*([x] * 2)) would modify both inputs
             sample_pts, _ = min_max_rescale_samples(
                 np.copy(sample_pts), getattr(self, "bounds", None)
             )
@@ -333,7 +334,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     @check_transform_input
     def _evaluate(
         self,
-        sample_pts: ArrayLike,
+        sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
         """Generate log-spaced raised cosine basis with given samples.
 
