@@ -42,7 +42,7 @@ It accepts one or more NumPy array or pynapple `Tsd` object as input, and perfor
 
 1. Checks that the inputs all have the same sample size `M`, and raises a `ValueError` if this is not the case.
 2. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
-3. In `"eval"` mode, calls the [`_evaluate`](nemos.basis._basis.Basis._evaluate) method on the input, which is the subclass-specific implementation of the basis set evaluation. In `"conv"` mode, generates a filter bank using [`compute_features`](nemos.basis._basis.Basis.evaluate_on_grid) and then applies the convolution to the input with [`nemos.convolve.create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor).
+3. In `"eval"` mode, calls the `_evaluate` method on the input, which is the subclass-specific implementation of the basis set evaluation. In `"conv"` mode, generates a filter bank using [`compute_features`](nemos.basis._basis.Basis.evaluate_on_grid) and then applies the convolution to the input with [`nemos.convolve.create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor).
 4. Returns a NumPy array or  pynapple `TsdFrame` of shape `(M, n_basis_funcs)`, with each basis element evaluated at the samples.
 
 :::{admonition} Multiple epochs
@@ -61,14 +61,14 @@ This method performs the following steps:
 
 1. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
 2. Calls `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
-3. Calls the [`_evaluate`](nemos.basis._basis.Basis._evaluate) method on these samples.
+3. Calls the `_evaluate` method on these samples.
 4. Returns both the sample grid points of shape `(m1, ..., mN)`, and the evaluation output at each grid point of shape `(m1, ..., mN, n_basis_funcs)`, where `mi` is the number of sample points for the i-th axis of the grid.
 
 ### Abstract Methods
 
 The [`nemos.basis._basis.Basis`](nemos.basis._basis.Basis) class has the following abstract methods, which every concrete subclass must implement:
 
-1. [`_evaluate`](nemos.basis._basis.Basis._evaluate) : Evaluates a basis over some specified samples.
+1. `_evaluate` : Evaluates a basis over some specified samples.
 2. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
 
 ## Contributors Guidelines
