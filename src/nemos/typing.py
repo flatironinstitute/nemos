@@ -1,10 +1,14 @@
 """Collection of nemos typing."""
 
+from __future__ import annotations
+
 from typing import Any, Callable, NamedTuple, Tuple, Union
 
 import jax.numpy as jnp
 import jaxopt
+import pynapple as nap
 from jax.typing import ArrayLike
+from numpy.typing import NDArray
 
 from .pytrees import FeaturePytree
 
@@ -51,3 +55,5 @@ ProximalOperator = Callable[
     ],  # Step-size for optimization (must be a float)
     Tuple[jnp.ndarray, jnp.ndarray],
 ]
+
+FeatureMatrix = nap.TsdFrame | NDArray

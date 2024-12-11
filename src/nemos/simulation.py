@@ -151,11 +151,11 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> from nemos.simulation import regress_filter, difference_of_gammas
-    >>> from nemos.basis import RaisedCosineBasisLog
+    >>> from nemos.basis import RaisedCosineLogEval
     >>> filter_duration = 100
     >>> n_basis_funcs = 20
     >>> filter_bank = difference_of_gammas(filter_duration).reshape(filter_duration, 1, 1)
-    >>> _, basis = RaisedCosineBasisLog(10).evaluate_on_grid(filter_duration)
+    >>> _, basis = RaisedCosineLogEval(10).evaluate_on_grid(filter_duration)
     >>> weights = regress_filter(filter_bank, basis)[0, 0]
     >>> print("Weights shape:", weights.shape)
     Weights shape: (10,)
@@ -275,7 +275,7 @@ def simulate_recurrent(
     >>> feedforward_input = np.random.normal(size=(1000, n_neurons, 1))
     >>> coupling_basis = np.random.normal(size=(coupling_duration, 10))
     >>> coupling_coef = np.random.normal(size=(n_neurons, n_neurons, 10))
-    >>> intercept = -8 * np.ones(n_neurons)
+    >>> intercept = -9 * np.ones(n_neurons)
     >>> init_spikes = np.zeros((coupling_duration, n_neurons))
     >>> random_key = jax.random.key(123)
     >>> spikes, rates = simulate_recurrent(

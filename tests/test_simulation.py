@@ -5,8 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import nemos.basis as basis
 import nemos.simulation as simulation
+from nemos import basis
 
 
 @pytest.mark.parametrize(
@@ -213,7 +213,7 @@ def test_least_square_correctness():
     # set up problem dimensionality
     ws, n_neurons_receiver, n_neurons_sender, n_basis_funcs = 100, 1, 2, 10
     # evaluate a basis
-    _, eval_basis = basis.RaisedCosineBasisLog(n_basis_funcs).evaluate_on_grid(ws)
+    _, eval_basis = basis.RaisedCosineLinearEval(n_basis_funcs).evaluate_on_grid(ws)
     # generate random weights to define filters
     weights = np.random.normal(
         size=(n_neurons_receiver, n_neurons_sender, n_basis_funcs)

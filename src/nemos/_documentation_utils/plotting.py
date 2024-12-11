@@ -33,7 +33,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.patches import Rectangle
 from numpy.typing import NDArray
 
-from ..basis import RaisedCosineBasisLog
+from ..basis import RaisedCosineLogEval
 
 warnings.warn(
     "plotting functions contained within `_documentation_utils` are intended for nemos's documentation. "
@@ -682,7 +682,7 @@ def plot_rates_and_smoothed_counts(
 
 def plot_basis(n_basis_funcs=8, window_size_sec=0.8):
     fig = plt.figure()
-    basis = RaisedCosineBasisLog(n_basis_funcs=n_basis_funcs)
+    basis = RaisedCosineLogEval(n_basis_funcs=n_basis_funcs)
     time, basis_kernels = basis.evaluate_on_grid(1000)
     time *= window_size_sec
     plt.plot(time, basis_kernels)

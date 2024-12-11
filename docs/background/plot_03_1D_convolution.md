@@ -82,7 +82,7 @@ see [jax.numpy.convolve](https://jax.readthedocs.io/en/latest/_autosummary/jax.n
 
 ```{code-cell} ipython3
 # create three filters
-basis_obj = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs=3)
+basis_obj = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=3)
 _, w = basis_obj.evaluate_on_grid(ws)
 
 plt.plot(w)
@@ -186,27 +186,32 @@ if path.exists():
   fig.savefig(path / "plot_03_1D_convolution.svg")
 ```
 
-## Convolve using [`Basis.compute_features`](nemos.basis.Basis.compute_features)
-All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to a [`Basis`](nemos.basis.Basis) directly
-at initialization. Note that you must set `mode == "conv"` to actually perform convolution
-with [`Basis.compute_features`](nemos.basis.Basis.compute_features). Let's see how we can get the same results through [`Basis`](nemos.basis.Basis).
+## Convolve using [`Basis.compute_features`](nemos.basis._basis.Basis.compute_features)
+
+Every basis in the `nemos.basis` module whose class name ends with "Conv" will perform a 1D convolution over the 
+provided input when the `compute_features` method is called. The basis elements will be used as filters for the
+convolution.
+
+All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to the object directly at initialization. 
+Let's see how we can get the same results through [`Basis`](nemos.basis._basis.Basis).
 
 
 ```{code-cell} ipython3
 # define basis with different predictor causality
-causal_basis = nmo.basis.RaisedCosineBasisLinear(
-        n_basis_funcs=3, mode="conv", window_size=ws,
-        predictor_causality="causal"
+causal_basis = nmo.basis.RaisedCosineLinearConv(
+        n_basis_funcs=3, window_size=ws,
+        conv_kwargs=dict(predictor_causality="causal")
+        
 )
 
-acausal_basis = nmo.basis.RaisedCosineBasisLinear(
-        n_basis_funcs=3, mode="conv", window_size=ws,
-        predictor_causality="acausal"
+acausal_basis = nmo.basis.RaisedCosineLinearConv(
+        n_basis_funcs=3, window_size=ws,
+        conv_kwargs=dict(predictor_causality="acausal")
 )
 
-anticausal_basis = nmo.basis.RaisedCosineBasisLinear(
-        n_basis_funcs=3, mode="conv", window_size=ws,
-        predictor_causality="anti-causal"
+anticausal_basis = nmo.basis.RaisedCosineLinearConv(
+        n_basis_funcs=3, window_size=ws,
+        conv_kwargs=dict(predictor_causality="anti-causal")
 )
 
 # compute convolutions

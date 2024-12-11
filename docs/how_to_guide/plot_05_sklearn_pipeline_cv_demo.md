@@ -48,7 +48,7 @@ In particular, we will learn:
 
 1. What a scikit-learn pipeline is.
 2. Why pipelines are useful.
-3. How to combine NeMoS [`Basis`](nemos.basis.Basis) and [`GLM`](nemos.glm.GLM) objects in a pipeline.
+3. How to combine NeMoS [`Basis`](nemos.basis._basis.Basis) and [`GLM`](nemos.glm.GLM) objects in a pipeline.
 4. How to select the number of bases and the basis type through cross-validation (or any other hyperparameter in the pipeline).
 5. How to use a custom scoring metric to quantify the performance of each configuration.
 
@@ -150,33 +150,37 @@ sns.despine(ax=ax)
 ```
 
 ### Converting NeMoS `Basis` to a transformer
-In order to use NeMoS [`Basis`](nemos.basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis.TransformerBasis) wrapper class.
+In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) wrapper class.
 
-Instantiating a [`TransformerBasis`](nemos.basis.TransformerBasis) can be done either using the constructor directly or with [`Basis.to_transformer()`](nemos.basis.Basis.to_transformer):
+Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) can be done either using by the constructor directly or with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
 
 
 ```{code-cell} ipython3
-bas = nmo.basis.RaisedCosineBasisLinear(5, mode="conv", window_size=5)
-# these two ways of creating the TransformerBasis are equivalent
-trans_bas_a = nmo.basis.TransformerBasis(bas)
-trans_bas_b = bas.to_transformer()
+bas = nmo.basis.RaisedCosineLinearConv(5, window_size=5)
+
+# initalize using the constructor
+trans_bas = nmo.basis.TransformerBasis(bas)
+
+# equivalent initialization via "to_transformer"
+trans_bas = bas.to_transformer()
+
 ```
 
-[`TransformerBasis`](nemos.basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis.Basis) object's attributes:
+[`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis._basis.Basis) object's attributes:
 
 
 ```{code-cell} ipython3
-print(bas.n_basis_funcs, trans_bas_a.n_basis_funcs, trans_bas_b.n_basis_funcs)
+print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
 
-We can also set attributes of the underlying [`Basis`](nemos.basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis.Basis), and neither does changing the original [`Basis`](nemos.basis.Basis) change [`TransformerBasis`](nemos.basis.TransformerBasis) we created:
+We can also set attributes of the underlying [`Basis`](nemos.basis._basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis._basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis._basis.Basis), and neither does changing the original [`Basis`](nemos.basis._basis.Basis) change [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) we created:
 
 
 ```{code-cell} ipython3
-trans_bas_a.n_basis_funcs = 10
+trans_bas.n_basis_funcs = 10
 bas.n_basis_funcs = 100
 
-print(bas.n_basis_funcs, trans_bas_a.n_basis_funcs, trans_bas_b.n_basis_funcs)
+print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
 
 ### Creating and fitting a pipeline
@@ -190,7 +194,7 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.TransformerBasis(nmo.basis.RaisedCosineBasisLinear(6)),
+            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
         ),
         (
             "glm",
@@ -326,7 +330,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.TransformerBasis(nmo.basis.RaisedCosineBasisLinear(6))
+basis = nmo.basis.TransformerBasis(nmo.basis.RaisedCosineLinearEval(6))
 model = nmo.glm.GLM(regularizer="Ridge")
 
 # loop over combinations
@@ -444,7 +448,7 @@ We are now able to capture the distribution of the firing rate appropriately: bo
 
 ### Evaluating different bases directly
 
-In the previous example we set the number of basis functions of the [`Basis`](nemos.basis.Basis) wrapped in our [`TransformerBasis`](nemos.basis.TransformerBasis). However, if we are for example not sure about the type of basis functions we want to use, or we have already defined some basis functions of our own, then we can use cross-validation to directly evaluate those as well.
+In the previous example we set the number of basis functions of the [`Basis`](nemos.basis._basis.Basis) wrapped in our [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis). However, if we are for example not sure about the type of basis functions we want to use, or we have already defined some basis functions of our own, then we can use cross-validation to directly evaluate those as well.
 
 Here we include `transformerbasis___basis` in the parameter grid to try different values for `TransformerBasis._basis`:
 
@@ -453,12 +457,12 @@ Here we include `transformerbasis___basis` in the parameter grid to try differen
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineBasisLinear(5),
-        nmo.basis.RaisedCosineBasisLinear(10),
-        nmo.basis.RaisedCosineBasisLog(5),
-        nmo.basis.RaisedCosineBasisLog(10),
-        nmo.basis.MSplineBasis(5),
-        nmo.basis.MSplineBasis(10),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```
@@ -498,7 +502,7 @@ cvdf_wide = cvdf.pivot(
 doc_plots.plot_heatmap_cv_results(cvdf_wide)
 ```
 
-As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineBasisLinear basis (as used above), which appears to be a suitable choice for our toy data. 
+As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineLinearEval basis (as used above), which appears to be a suitable choice for our toy data. 
 We can confirm that by plotting the firing rate predictions:
 
 
@@ -539,12 +543,12 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineBasisLinear(5),
-        nmo.basis.RaisedCosineBasisLinear(10),
-        nmo.basis.RaisedCosineBasisLog(5),
-        nmo.basis.RaisedCosineBasisLog(10),
-        nmo.basis.MSplineBasis(5),
-        nmo.basis.MSplineBasis(10),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```
