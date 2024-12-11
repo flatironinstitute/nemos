@@ -685,6 +685,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         -------
         dict
             A dictionary where:
+
             - **Key**: Label of the basis.
             - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
         """
@@ -1066,6 +1067,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         -------
         dict
             A dictionary where:
+
             - **Keys**: Labels of the additive basis components.
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 

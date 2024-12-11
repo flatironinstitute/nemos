@@ -24,11 +24,17 @@ class EvalBasisMixin:
         self.bounds = bounds
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
-        """
-        Evaluate basis at sample points.
+        """Evaluate basis at sample points.
 
-        The basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i` is a
-        basis element. xi[k] must be a N-dimensional array (N >= 1) or a pynapple Tsd/TsdFrame/TsdTensor.
+        The basis is evaluated at the locations specified in the inputs. For example,
+        ``compute_features(np.array([0, .5]))`` would return the array:
+
+        .. code-block:: text
+
+           b_1(0) ... b_n(0)
+           b_1(.5) ... b_n(.5)
+
+        where ``b_i`` is the i-th basis.
 
         Parameters
         ----------
@@ -93,19 +99,14 @@ class ConvBasisMixin:
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
 
     def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor):
-        """
-        Convolve basis functions with input time series.
+        """Convolve basis functions with input time series.
 
-        A bank of basis filters (created by calling fit) is convolved with the
-        input data. Inputs can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
-        except for the sample-axis are flattened, so that the method always returns a matrix.
+        A bank of basis filters is convolved with the input data. All the dimensions
+        except for the sample-axis are flattened, so that the method always returns a
+        matrix.
 
         For example, if inputs are of shape (num_samples, 2, 3), the output will be
         ``(num_samples, num_basis_funcs * 2 * 3)``.
-
-        The time-axis can be specified at basis initialization by setting the keyword argument ``axis``.
-        For example, if ``axis == 1`` your input should be of shape ``(N1, num_samples N3, ...)``, the output of
-        transform will be of shape ``(num_samples, num_basis_funcs * N1 * N3 *...)``.
 
         Parameters
         ----------
