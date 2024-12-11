@@ -54,7 +54,7 @@
           :height: 80px
      - :ref:`Head Direction <head_direction_reducing_dimensionality>`
      - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
-       :class:`nemos.basis.RaisedCosineLogConv`
+       :class:`~nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
    * - **Orthogonalized Exponential Decays**
      - .. plot:: scripts/basis_table_figs.py plot_orth_exp_basis
@@ -88,12 +88,12 @@ Instead of tackling the hard problem of learning an unknown function $f(x)$ dire
 
 ## Basis in NeMoS
 
-NeMoS provides a variety of basis functions (see the [table](table_basis) above). For each basis type, there are two dedicated classes of objects, corresponding to the two key uses described in the overview:
+NeMoS provides a variety of basis functions (see the [table](table_basis) above). For each basis type, there are two dedicated classes of objects, corresponding to the two uses described above:
 
-- **Eval-basis objects**: For representing non-linear mappings between task variables and outputs. These objects are identified by names starting with `Eval`.
-- **Conv-basis objects**: For linear temporal effects. These objects are identified by names starting with `Conv`.
+- **Eval basis objects**: For representing non-linear mappings between task variables and outputs. These objects all have names ending with `Eval`.
+- **Conv basis objects**: For linear temporal effects. These objects all have names ending with `Conv`.
 
-`Eval` and `Conv` objects can be combined to construct multi-dimensional basis functions, enabling complex feature construction.
+`Eval` and `Conv` objects can be combined to construct multi-dimensional basis functions, enabling [complex feature construction](composing_basis_function).
 
 ## Learn More
 
