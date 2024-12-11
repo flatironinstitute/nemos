@@ -46,7 +46,7 @@ warnings.filterwarnings(
 
 ## Defining a 1D Basis Object
 
-We'll start by defining a 1D basis function object of the type [`MSplineEval`](nemos.basis.MSplineEval).
+We'll start by defining a 1D basis function object of the type [`BSplineEval`](nemos.basis.BSplineEval).
 The hyperparameters needed to initialize this class are:
 
 - The number of basis functions, which should be a positive integer (required).
@@ -106,26 +106,25 @@ if path.exists():
 print(path.resolve(), path.exists())
 ```
 
-## Feature Computation
+## Computing Features
 All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
-We can be group the bases into two categories depending on the type of transformation that [`compute_features`](nemos.basis._basis.Basis.compute_features) applies:
+We can group the bases into two categories depending on the type of transformation that [`compute_features`](nemos.basis._basis.Basis.compute_features) applies:
 
-1. **Evaluation Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names ends with "Eval," such as `BSplineEval`.
+1. **Evaluation Bases**: These bases use `compute_features` to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names ending with "Eval," such as `BSplineEval`.
 
-2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names ending with "Conv", such as `BSplineConv`.
+2. **Convolution Bases**: These bases use `compute_features` to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names ending with "Conv", such as `BSplineConv`.
 
-
-Let's see how this two modalities operate.
+Let's see how these two categories operate:
 
 ```{code-cell} ipython3
-eval_mode = nmo.basis.MSplineEval(n_basis_funcs=n_basis)
-conv_mode = nmo.basis.MSplineConv(n_basis_funcs=n_basis, window_size=100)
+eval_mode = nmo.basis.BSplineEval(n_basis_funcs=n_basis)
+conv_mode = nmo.basis.BSplineConv(n_basis_funcs=n_basis, window_size=100)
 
 # define an input
 angles = np.linspace(0, np.pi*4, 201)
 y = np.cos(angles)
 
-# compute features in the two modalities
+# compute features
 eval_feature = eval_mode.compute_features(y)
 conv_feature = conv_mode.compute_features(y)
 
@@ -162,15 +161,17 @@ check out the tutorial on [1D convolutions](convolution_background).
 :::
 
 
-Plotting the Basis Function Elements:
+Plotting the Basis Function Elements
 --------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
 and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis._basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
-the equi-spaced samples along with the evaluated basis functions. The benefits of using Basis.evaluate_on_grid become
-particularly evident when working with multidimensional basis functions. You can find more details and visual
-background in the
-[2D basis elements plotting section](plotting-2d-additive-basis-elements).
+the equi-spaced samples along with the evaluated basis functions. 
 
+:::{admonition} Note
+
+The array returned by `evaluate_on_grid(n_samples)` is the same as the kernel that is used by the Conv bases initialized with `window_sizes=n_samples`!
+
+:::
 
 ```{code-cell} ipython3
 # Call evaluate on grid on 100 sample points to generate samples and evaluate the basis at those samples
@@ -184,12 +185,13 @@ plt.plot(equispaced_samples, eval_basis)
 plt.show()
 ```
 
+The benefits of using `evaluate_on_grid` become particularly evident when working with multidimensional basis functions. You can find more details in the [2D basis elements plotting section](plotting-2d-additive-basis-elements).
 
 ## Setting the basis support (Eval only)
 Sometimes, it is useful to restrict the basis to a fixed range. This can help manage outliers or ensure that
 your basis covers the same range across multiple experimental sessions.
 You can specify a range for the support of your basis by setting the `bounds`
-parameter at initialization of "Eval" type basis (it doesn't make sense for convolutions). 
+parameter at initialization of Eval bases. 
 Evaluating the basis at any sample outside the bounds will result in a NaN.
 
 
@@ -214,27 +216,4 @@ axs[0].set_title("default")
 axs[1].plot(samples, bspline_range.compute_features(samples), color="tomato")
 axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
-```
-
-Other Basis Types
------------------
-Each basis type may necessitate specific hyperparameters for instantiation. For a comprehensive description,
-please refer to the  [API Guide](nemos_basis). After instantiation, all classes
-share the same syntax for basis evaluation. The following is an example of how to instantiate and
-evaluate a log-spaced cosine raised function basis.
-
-
-```{code-cell} ipython3
-# Instantiate the basis noting that the `RaisedCosineLog` basis does not require an `order` parameter
-raised_cosine_log = nmo.basis.RaisedCosineLogEval(n_basis_funcs=10, width=1.5, time_scaling=50)
-
-# Evaluate the raised cosine basis at the equi-spaced sample points
-# (same method in all Basis elements)
-samples, eval_basis = raised_cosine_log.evaluate_on_grid(100)
-
-# Plot the evaluated log-spaced raised cosine basis
-plt.figure()
-plt.title(f"Log-spaced Raised Cosine basis with {eval_basis.shape[1]} elements")
-plt.plot(samples, eval_basis)
-plt.show()
 ```
