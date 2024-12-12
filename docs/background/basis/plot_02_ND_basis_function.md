@@ -51,10 +51,9 @@ combination of some multidimensional basis elements.
 
 In this document, we introduce two strategies for defining a high-dimensional basis function by combining
 two lower-dimensional bases. We refer to these strategies as "addition" and "multiplication" of bases,
-and the resulting basis objects will be referred to as additive or multiplicative basis respectively.
+and the resulting basis objects will be referred to as additive or multiplicative basis respectively: additive bases have their component bases operate *independently*, whereas multiplicative bases take the *outer product*. And these composite basis objects can be constructed using other composite bases, so that you can combine them as much as you'd like!
 
-
-Consider we have two inputs $\mathbf{x} \in \mathbb{R}^N,\; \mathbf{y}\in \mathbb{R}^M$.
+More precisely, let's say we have two inputs $\mathbf{x} \in \mathbb{R}^N,\; \mathbf{y}\in \mathbb{R}^M$.
 Let's say we've defined two basis functions for these inputs:
 
 - $ [ a_0 (\mathbf{x}), ..., a_{k-1} (\mathbf{x}) ] $ for $\mathbf{x}$
@@ -106,6 +105,7 @@ In the subsequent sections, we will:
 1. Demonstrate the definition, evaluation, and visualization of 2D additive and multiplicative bases.
 2. Illustrate how to iteratively apply addition and multiplication operations to extend to dimensions beyond two.
 
+(composite_basis_2d)=
 ## 2D Basis Functions
 
 Consider an instance where we want to capture a neuron's response to an animal's position within a given arena.
@@ -290,28 +290,6 @@ axs[2, 0].set_xlabel('x-coord')
 axs[2, 1].set_xlabel('y-coord')
 
 plt.tight_layout()
-```
-
-```{code-cell} ipython3
-:tags: [hide-input]
-
-# save image for thumbnail
-from pathlib import Path
-import os
-
-root = os.environ.get("READTHEDOCS_OUTPUT")
-if root:
-   path = Path(root) / "html/_static/thumbnails/background"
-# if local store in ../_build/html/...
-else:
-   path = Path("../../_build/html/_static/thumbnails/background")
- 
-# make sure the folder exists if run from build
-if root or Path("../../assets/stylesheets").exists():
-   path.mkdir(parents=True, exist_ok=True)
-
-if path.exists():
-  fig.savefig(path / "plot_02_ND_basis_function.svg")
 ```
 
 :::{note}

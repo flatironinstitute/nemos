@@ -9,7 +9,7 @@ inspect_utils : module
     identify abstract classes, and verify method compliance in subclasses.
 """
 
-from .inpsect_utils import (
+from .inspect_utils import (
     check_all_abstract_methods_compliance,
     get_abstract_classes,
     get_non_abstract_classes,
