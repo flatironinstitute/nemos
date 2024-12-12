@@ -136,6 +136,52 @@ If you want to learn more about convolutions, as well as how and when to change 
 check out the tutorial on [1D convolutions](convolution_background).
 :::
 
+### Multi-dimensional inputs
+For N-dimensional input with $N>1$, `compute_features` assumes the first axis represents samples. This is always valid for `pynapple` time series. For arrays, you can use [`numpy.transpose`](https://numpy.org/doc/stable/reference/generated/numpy.transpose.html) to re-arrange the axis if needed.
+
+#### Eval Basis
+
+For Eval bases, `compute_features` evaluates the basis and then reshape the result into a 2D feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=5)
+# generate a 3D array
+inp = np.random.randn(50, 3, 2)
+out = basis.compute_features(inp)
+out.shape
+```
+
+For each of the $3 \times 2 = 6$ inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
+$3 \times 2 \times 5  = 30$ outputs.
+
+#### Conv Basis
+
+For Conv bases, `compute_features` convolves each input with `n_basis_funcs` kernels, and reshaping the output into a 2D feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
+# compute_features to perform the convolution and concatenate
+out = basis.compute_features(inp)
+print(f"`compute_features` output shape {out.shape}")
+```
+
+This process is equivalent to performing the convolution separately with [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
+
+```{code-cell} ipython3
+# compute the kernels
+basis.set_kernel()
+print(f"Kernel shape (window_size, n_basis_funcs): {basis.kernel_.shape}")
+
+# apply the convolution
+out_two_steps = nmo.convolve.create_convolutional_predictor(basis.kernel_, inp)
+print(f"Convolution output shape: {out_two_steps.shape}")
+
+# then reshape to 2D
+out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs)
+
+# check that this is equivalent to the output of compute_features
+print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
+```
 
 Plotting the Basis Function Elements
 ------------------------------------
