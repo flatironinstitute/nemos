@@ -2490,7 +2490,7 @@ class TestAdditiveBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         bas = basis_a_obj + basis_b_obj
-        bas.set_kernel()
+        bas.setup_basis(*([np.ones(10)] * bas._n_input_dimensionality))
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -2524,7 +2524,7 @@ class TestAdditiveBasis(CombinedBasis):
         else:
             context = pytest.raises(
                 ValueError,
-                match="You must call `_set_kernel` before `_compute_features`",
+                match="You must call `setup_basis` before `_compute_features`",
             )
         with context:
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
@@ -3418,7 +3418,7 @@ class TestMultiplicativeBasis(CombinedBasis):
             n_basis_b, basis_b, basis_class_specific_params, window_size=10
         )
         bas = basis_a_obj * basis_b_obj
-        bas.set_kernel()
+        bas._set_input_independent_states()
 
         def check_kernel(basis_obj):
             has_kern = []
@@ -3452,7 +3452,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         else:
             context = pytest.raises(
                 ValueError,
-                match="You must call `_set_kernel` before `_compute_features`",
+                match="You must call `setup_basis` before `_compute_features`",
             )
         with context:
             x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality

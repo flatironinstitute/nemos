@@ -70,13 +70,12 @@ class EvalBasisMixin:
         :
             The basis with ready for evaluation.
         """
-        self.set_kernel()
         self.set_input_shape(*xi)
         return self
 
-    def set_kernel(self) -> "EvalBasisMixin":
+    def _set_input_independent_states(self) -> "EvalBasisMixin":
         """
-        Prepare or compute the convolutional kernel for the basis functions.
+        Compute all the basis states that do not depend on the input.
 
         For EvalBasisMixin, this method might not perform any operation but simply return the
         instance itself, as no kernel preparation is necessary.
@@ -120,6 +119,7 @@ class ConvBasisMixin:
     def __init__(
         self, n_basis_funcs: int, window_size: int, conv_kwargs: Optional[dict] = None
     ):
+        self.kernel_ = None
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
         self._n_basis_funcs = n_basis_funcs
@@ -154,7 +154,7 @@ class ConvBasisMixin:
         """
         if self.kernel_ is None:
             raise ValueError(
-                "You must call `_set_kernel` before `_compute_features`! "
+                "You must call `setup_basis` before `_compute_features`! "
                 "Convolution kernel is not set."
             )
         # before calling the convolve, check that the input matches
@@ -187,6 +187,14 @@ class ConvBasisMixin:
         self.set_kernel()
         self.set_input_shape(*xi)
         return self
+
+    def _set_input_independent_states(self):
+        """
+        Compute all the basis states that do not depend on the input.
+
+        For Conv mixin the only attribute is the kernel.
+        """
+        return self.set_kernel()
 
     def set_kernel(self) -> "ConvBasisMixin":
         """
@@ -296,6 +304,13 @@ class ConvBasisMixin:
                 f"Allowed convolution keyword arguments are: {convolve_configs}."
             )
 
+    def _check_has_kernel(self) -> None:
+        """Check that the kernel is pre-computed."""
+        if self.kernel_ is None:
+            raise ValueError(
+                "You must call `_set_kernel` before `_compute_features` for Conv basis."
+            )
+
 
 class BasisTransformerMixin:
     """Mixin class for constructing a transformer."""
@@ -393,29 +408,25 @@ class CompositeBasisMixin:
         :
             The basis with ready for evaluation.
         """
-        self.set_kernel()
-        self.basis1.set_input_shape(*xi[: self._basis1._n_input_dimensionality])
-        self.basis2.set_input_shape(*xi[self._basis1._n_input_dimensionality :])
+        # setup both input independent
+        self._set_input_independent_states()
+
+        # and input dependent states
+        self.set_input_shape(*xi)
+
         return self
 
-    def set_kernel(self) -> Basis:
-        """Call set_kernel on the basis elements.
-
-        If any of the basis elements is in "conv" mode, it will prepare its kernels for the convolution.
-        Addi
-        Also grabs input shapes if provided, similar to what sklean transformer `fit` method does
-
-        Parameters
-        ----------
+    def _set_input_independent_states(self):
+        """
+        Compute the input dependent states for traversing the composite basis.
 
         Returns
         -------
         :
-            The basis with the kernels set up.
+            The basis with the states stored as attributes of each component.
         """
-        self._basis1.set_kernel()
-        self._basis2.set_kernel()
-        return self
+        self.basis1._set_input_independent_states()
+        self.basis2._set_input_independent_states()
 
     def _check_input_shape_consistency(self, *xi: NDArray):
         """Check the input shape consistency for all basis elements."""

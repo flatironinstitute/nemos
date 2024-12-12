@@ -151,7 +151,7 @@ class TransformerBasis:
         >>> transformer_fitted = transformer.fit(X)
         """
         self._check_input(X, y)
-        self._basis.set_kernel()
+        self._basis.setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
@@ -462,5 +462,7 @@ class TransformerBasis:
             )
 
         if y is not None and y.shape[0] != X.shape[0]:
-            raise ValueError("X and y must have the same number of samples. "
-                             f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples.")
+            raise ValueError(
+                "X and y must have the same number of samples. "
+                f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples."
+            )

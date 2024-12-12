@@ -152,9 +152,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._n_basis_input_ = getattr(self, "_n_basis_input_", None)
         self._input_shape_ = getattr(self, "_input_shape_", None)
 
-        # set by set_kernel
-        self.kernel_ = None
-
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
@@ -240,7 +237,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if self._n_basis_input_ is None:
             self.set_input_shape(*xi)
         self._check_input_shape_consistency(*xi)
-        self.set_kernel()
+        self._set_input_independent_states()
         return self._compute_features(*xi)
 
     @abc.abstractmethod
@@ -273,19 +270,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def set_kernel(self):
-        """Set kernel for conv basis and return self or just return self for eval.
+    def _set_input_independent_states(self):
+        """
+        Compute all the basis states that do not depend on the input.
 
-        For the basis API to work correctly, specifically, for the `_fit_basis`
-        method to work as intended, this method should set **all** state attributes
-        that do not require inspection of input time series.
-
-        This method currently "just" sets the kernel because this is the only such state
-        but if in the future new states will be added, they must be funneled through this
-        method.
-
-        Note that the name of this method can and should be refactored in case more such
-        states will be set in the future.
+        An example of such state is the kernel_ for Conv baisis, which can be computed
+        without any input (it only depends on the basis type, the window size and the
+        number of basis elements).
         """
         pass
 
@@ -325,7 +316,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
 
         Separating states related to the input (settable with this method) and states that are unrelated
-        from the input (settable with ``set_kernel``) is a deliberate design choice that improves modularity.
+        from the input (settable with ``set_kernel`` for Conv bases) is a deliberate design choice
+        that improves modularity.
 
         """
         if isinstance(xi, tuple):
@@ -435,13 +427,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._check_input_dimensionality(xi)
 
         return xi
-
-    def _check_has_kernel(self) -> None:
-        """Check that the kernel is pre-computed."""
-        if self.mode == "conv" and self.kernel_ is None:
-            raise ValueError(
-                "You must call `_set_kernel` before `_compute_features` when mode =`conv`."
-            )
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

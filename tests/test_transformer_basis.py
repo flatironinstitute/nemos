@@ -5,10 +5,11 @@ import numpy as np
 import pytest
 from conftest import CombinedBasis, list_all_basis_classes
 from sklearn.base import clone as sk_clone
-
-from nemos import basis
-import nemos as nmo
 from sklearn.pipeline import Pipeline
+
+import nemos as nmo
+from nemos import basis
+
 
 @pytest.mark.parametrize(
     "basis_cls",
@@ -655,12 +656,19 @@ def test_transformer_fit_transform_input_struct(
         assert transformer.kernel_ is not None
 
     # try and pass a tuple of time series
-    if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)) and inp.ndim != 2:
+    if (
+        isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis))
+        and inp.ndim != 2
+    ):
         expectation = pytest.raises(ValueError, match="X must be 2-")
-    elif isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)) and inp.ndim == 2:
+    elif (
+        isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis))
+        and inp.ndim == 2
+    ):
         expectation = pytest.raises(ValueError, match="Input mismatch: expected")
     with expectation:
         transformer.fit(*([inp] * bas._n_input_dimensionality))
+
 
 @pytest.mark.parametrize(
     "basis_cls",
@@ -669,7 +677,9 @@ def test_transformer_fit_transform_input_struct(
 @pytest.mark.parametrize(
     "inp",
     [
-        np.random.randn(100,),
+        np.random.randn(
+            100,
+        ),
         np.random.randn(100, 1),
         np.random.randn(100, 2),
         np.random.randn(100, 1, 2),
@@ -687,14 +697,16 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     X = bas.compute_features(*([inp] * bas._n_input_dimensionality))
     log_mu = X.dot(0.005 * np.ones(X.shape[1]))
     y = np.full(X.shape[0], 0)
-    y[~np.isnan(log_mu)] = np.random.poisson(np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu)))
+    y[~np.isnan(log_mu)] = np.random.poisson(
+        np.exp(log_mu[~np.isnan(log_mu)] - np.nanmean(log_mu))
+    )
     model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001).fit(X, y)
 
     # pipeline
     pipe = Pipeline(
         [
             ("bas", transformer),
-            ("glm", nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001))
+            ("glm", nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)),
         ]
     )
     x = np.concatenate(
@@ -706,12 +718,18 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     # set basis & refit
     if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
         pipe.set_params(bas__basis2__n_basis_funcs=4)
-        assert bas.basis2.n_basis_funcs == 5  # make sure that the change did not affect bas
-        X = bas.set_params(basis2__n_basis_funcs=4).compute_features(*([inp] * bas._n_input_dimensionality))
+        assert (
+            bas.basis2.n_basis_funcs == 5
+        )  # make sure that the change did not affect bas
+        X = bas.set_params(basis2__n_basis_funcs=4).compute_features(
+            *([inp] * bas._n_input_dimensionality)
+        )
     else:
         pipe.set_params(bas__n_basis_funcs=4)
         assert bas.n_basis_funcs == 5  # make sure that the change did not affect bas
-        X = bas.set_params(n_basis_funcs=4).compute_features(*([inp] * bas._n_input_dimensionality))
+        X = bas.set_params(n_basis_funcs=4).compute_features(
+            *([inp] * bas._n_input_dimensionality)
+        )
     pipe.fit(x, y)
     model.fit(X, y)
     np.testing.assert_allclose(pipe["glm"].coef_, model.coef_)
