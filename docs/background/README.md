@@ -41,10 +41,11 @@ plot_00_conceptual_intro.md
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 3
 
 basis/README.md
 ```
+
 :::
 
 :::{grid-item-card}
