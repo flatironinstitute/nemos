@@ -34,10 +34,26 @@ def functions():
             multi_line_init_with_black_3,
         )
 
+    @myst_utils.capture_print
+    def func_decorated(
+        long_variable_names,
+        multi_line_init_with_black,
+        multi_line_init_with_black_1,
+        multi_line_init_with_black_3,
+    ):
+        # func_decorated body
+        return (
+            long_variable_names,
+            multi_line_init_with_black,
+            multi_line_init_with_black_1,
+            multi_line_init_with_black_3,
+        )
+
     return (
         (func, "# func body"),
         (func_multiline_init, "# func_multiline_init body"),
         (func_multiline_return, "# func_multiline_return body"),
+        (func_decorated, "# func_decorated body"),
     )
 
 
