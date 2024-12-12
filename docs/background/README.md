@@ -35,16 +35,17 @@ plot_00_conceptual_intro.md
 
 ```{eval-rst}
 
-.. plot:: scripts/basis_table_figs.py plot_raised_cosine_linear
+.. plot:: scripts/basis_figs.py plot_raised_cosine_linear
    :show-source-link: False
    :height: 100px
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 3
 
 basis/README.md
 ```
+
 :::
 
 :::{grid-item-card}
