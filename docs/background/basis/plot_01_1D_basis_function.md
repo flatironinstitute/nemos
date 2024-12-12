@@ -141,7 +141,7 @@ For inputs with more than one dimension, `compute_features` assumes the first ax
 
 #### Eval Basis
 
-For Eval bases, `compute_features` evaluates the basis and then reshape the result into a 2D feature matrix.
+For Eval bases, `compute_features` evaluates the basis and outputs a 2D feature matrix.
 
 ```{code-cell} ipython3
 basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=5)
