@@ -1,6 +1,8 @@
 """overwrite string repr for gluing string variable outputs."""
+
 import inspect
 import textwrap
+
 import numpy as np
 
 try:
@@ -11,10 +13,13 @@ except ImportError:
         " Please use pip or "
         "conda to install 'myst-nb'."
     )
+import io
+import sys
+from functools import wraps
+
 from .. import basis as nmo_basis
 from .. import convolve
-import io, sys
-from functools import wraps
+
 
 class FormattedString:
     def __init__(self, text):
@@ -23,6 +28,7 @@ class FormattedString:
     def __repr__(self):
         # Return the text as it would be printed
         return self.text
+
 
 def capture_print(func):
     """
@@ -39,6 +45,7 @@ def capture_print(func):
         A wrapped function that captures print output and returns it along
         with the original return value.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Redirect stdout to a StringIO object
@@ -87,7 +94,9 @@ def extract_body_exclude_def_and_return(func):
             continue
         if skip_first_line:
             continue
-        if line.strip().startswith("return"):  # Stop processing at the `return` statement
+        if line.strip().startswith(
+            "return"
+        ):  # Stop processing at the `return` statement
             break
         body_lines.append(line)
 
@@ -105,11 +114,12 @@ def two_step_convolve_cell_body(basis, inp, out):
     print(f"Convolution output shape: {out_two_steps.shape}")
 
     # then reshape to 2D
-    out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs)
+    out_two_steps = out_two_steps.reshape(
+        inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs
+    )
 
     # check that this is equivalent to the output of compute_features
     print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
-
 
 
 def glue_two_step_convolve():
@@ -126,5 +136,7 @@ def glue_two_step_convolve():
     glue("two-step-convolution", formatted_string, display=False)
 
     # glue second cell
-    source = FormattedString(extract_body_exclude_def_and_return(two_step_convolve_cell_body))
+    source = FormattedString(
+        extract_body_exclude_def_and_return(two_step_convolve_cell_body)
+    )
     glue("two-step-convolution-source-code", source, display=False)

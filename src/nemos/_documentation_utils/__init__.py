@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from ._myst_nb_glue import FormattedString, glue_two_step_convolve
 from .plotting import (
     PlotSlidingWindow,
     current_injection_plot,
@@ -21,5 +22,3 @@ from .plotting import (
     run_animation,
     tuning_curve_plot,
 )
-
-from ._myst_nb_glue import FormattedString, glue_two_step_convolve
