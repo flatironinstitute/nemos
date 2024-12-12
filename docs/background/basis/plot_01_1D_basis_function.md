@@ -137,7 +137,7 @@ check out the tutorial on [1D convolutions](convolution_background).
 :::
 
 ### Multi-dimensional inputs
-For N-dimensional input with $N>1$, `compute_features` assumes the first axis represents samples. This is always valid for `pynapple` time series. For arrays, you can use [`numpy.transpose`](https://numpy.org/doc/stable/reference/generated/numpy.transpose.html) to re-arrange the axis if needed.
+For inputs with more than one dimension, `compute_features` assumes the first axis represents samples. This is always valid for `pynapple` time series. For arrays, you can use [`numpy.transpose`](https://numpy.org/doc/stable/reference/generated/numpy.transpose.html) to re-arrange the axis if needed.
 
 #### Eval Basis
 
