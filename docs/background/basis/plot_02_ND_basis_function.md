@@ -292,28 +292,6 @@ axs[2, 1].set_xlabel('y-coord')
 plt.tight_layout()
 ```
 
-```{code-cell} ipython3
-:tags: [hide-input]
-
-# save image for thumbnail
-from pathlib import Path
-import os
-
-root = os.environ.get("READTHEDOCS_OUTPUT")
-if root:
-   path = Path(root) / "html/_static/thumbnails/background"
-# if local store in ../_build/html/...
-else:
-   path = Path("../../_build/html/_static/thumbnails/background")
- 
-# make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
-   path.mkdir(parents=True, exist_ok=True)
-
-if path.exists():
-  fig.savefig(path / "plot_02_ND_basis_function.svg")
-```
-
 :::{note}
 Basis objects of different types can be combined through multiplication or addition.
 This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.

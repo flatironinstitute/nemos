@@ -81,30 +81,6 @@ plt.plot(x, y, lw=2)
 plt.title("B-Spline Basis")
 ```
 
-```{code-cell} ipython3
-:tags: [hide-input]
-
-# save image for thumbnail
-from pathlib import Path
-import os
-
-root = os.environ.get("READTHEDOCS_OUTPUT")
-if root:
-   path = Path(root) / "html/_static/thumbnails/background"
-# if local store in ../_build/html/...
-else:
-   path = Path("../../_build/html/_static/thumbnails/background")
- 
-# make sure the folder exists if run from build
-if root or Path("../../_build/html/_static").exists():
-   path.mkdir(parents=True, exist_ok=True)
-
-if path.exists():
-  fig.savefig(path / "plot_01_1D_basis_function.svg")
-
-
-print(path.resolve(), path.exists())
-```
 
 ## Computing Features
 All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
