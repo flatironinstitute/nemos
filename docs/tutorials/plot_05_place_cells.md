@@ -159,7 +159,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
@@ -331,6 +331,7 @@ print(speed.shape)
 print(count.shape)
 ```
 
+(basis_eval_place_cells)=
 ## Basis evaluation
 
 For each feature, we will use a different set of basis :

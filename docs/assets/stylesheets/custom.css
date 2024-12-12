@@ -94,17 +94,29 @@ html[data-theme=light]{
     font-weight: normal;
 }
 
-/*!* Style the brackets *!*/
-/*span.fn-bracket {*/
-/*    color: #666; !* Dim the brackets *!*/
-/*}*/
+table.table-center{
+    text-align: center;
+}
 
-/*!* Style the links within the footnotes *!*/
-/*aside.footnote a {*/
-/*    color: #007BFF; !* Blue link color *!*/
-/*    text-decoration: none; !* Remove underline *!*/
-/*}*/
+ #table-basis {
+    table-layout: auto;
+    width: 100%;
+}
 
-/*aside.footnote a:hover {*/
-/*    text-decoration: underline; !* Add underline on hover *!*/
-/*}*/
+#table-basis th:nth-child(1), #table-basis td:nth-child(1) {
+    width: 22%;
+}
+
+#table-basis th:nth-child(2), #table-basis td:nth-child(2) {
+    width: 22%;
+}
+#table-basis th:nth-child(3), #table-basis td:nth-child(3) {
+    width: 10%;
+}
+
+#table-basis th:nth-child(4), #table-basis td:nth-child(4) {
+    width: 20%;
+}
+#table-basis th:nth-child(5), #table-basis td:nth-child(5) {
+    width: 10%;
+}

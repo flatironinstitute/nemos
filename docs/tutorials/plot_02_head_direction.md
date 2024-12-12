@@ -374,6 +374,7 @@ worst if we needed a finer temporal resolution, such 1ms time bins
 (which would require 800 coefficients instead of 80).
 What can we do to mitigate over-fitting now?
 
+(head_direction_reducing_dimensionality)=
 #### Reducing feature dimensionality
 One way to proceed is to find a lower-dimensional representation of the response
 by parametrizing the decay effect. For instance, we could try to model it
@@ -716,7 +717,7 @@ else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
  
 # make sure the folder exists if run from build
-if root or Path("../_build/html/_static").exists():
+if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():

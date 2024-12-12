@@ -33,28 +33,19 @@ plot_00_conceptual_intro.md
 
 :::{grid-item-card}
 
-<figure>
-<img src="../_static/thumbnails/background/plot_01_1D_basis_function.svg" style="height: 100px", alt="One-Dimensional Basis."/>
-</figure>
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_raised_cosine_linear
+   :show-source-link: False
+   :height: 100px
+```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 3
 
-plot_01_1D_basis_function.md
+basis/README.md
 ```
-:::
 
-:::{grid-item-card}
-
-<figure>
-<img src="../_static/thumbnails/background/plot_02_ND_basis_function.svg" style="height: 100px", alt="N-Dimensional Basis."/>
-</figure>
-
-```{toctree}
-:maxdepth: 2
-
-plot_02_ND_basis_function.md
-```
 :::
 
 :::{grid-item-card}
