@@ -168,7 +168,7 @@ out.shape
 This process is equivalent to performing the convolution separately with [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
 
 ```{code-cell} ipython3
-# compute the kernels
+# setup the kernels
 basis.set_kernel()
 print(f"Kernel shape (window_size, n_basis_funcs): {basis.kernel_.shape}")
 
