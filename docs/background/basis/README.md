@@ -83,7 +83,7 @@ $$
 
 Here, $\approx$ means "approximately equal". 
 
-Instead of tackling the hard problem of learning an unknown function $f(x)$ directly, we reduce it to the simpler task of learning the weights $\{\alpha_i\}$.
+Instead of tackling the hard problem of learning an unknown function $f(x)$ directly, we reduce it to the simpler task of learning the weights $\{\alpha_i\}$. This preserves convexity, resulting in a much simpler optimization problem.
 
 
 ## Basis in NeMoS
