@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from functools import wraps
 from typing import TYPE_CHECKING, List
 
 import numpy as np
@@ -10,6 +11,17 @@ from ..typing import FeatureMatrix
 if TYPE_CHECKING:
     from ._basis import Basis
 
+
+def transformer_chaining(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        # Call the wrapped function and capture its return value
+        result = func(*args, **kwargs)
+
+        # If the method returns the inner `self`, replace it with the outer `self` (no deepcopy here).
+        return self if result is self._basis else result
+
+    return wrapper
 
 class TransformerBasis:
     """Basis as ``scikit-learn`` transformers.
@@ -61,16 +73,19 @@ class TransformerBasis:
     Cross-validated number of basis: {'compute_features__n_basis_funcs': 10}
     """
 
+    _chainable_methods = ("set_kernel", "set_input_shape", "_set_input_independent_states", "setup_basis")
+
     def __init__(self, basis: Basis):
-        self._check_initialized(basis)
         self._basis = copy.deepcopy(basis)
+
 
     @staticmethod
     def _check_initialized(basis):
         if basis._n_basis_input_ is None:
             raise RuntimeError(
                 "Cannot initialize TransformerBasis: the provided basis has no defined input shape. "
-                "Please call `set_input_shape` on the basis before initializing the transformer."
+                "Please call `set_input_shape` on the basis before calling `fit`, `transform`, or "
+                "`fit_transform`."
             )
 
     @property
@@ -145,11 +160,12 @@ class TransformerBasis:
         >>> # Example input
         >>> X = np.random.normal(size=(100, 2))
 
-        >>> # Define and fit tranformation basis
+        >>> # Define, setup and fit transformer basis
         >>> basis = MSplineEval(10)
-        >>> transformer = TransformerBasis(basis)
+        >>> transformer = TransformerBasis(basis).set_input_shape(2)
         >>> transformer_fitted = transformer.fit(X)
         """
+        self._check_initialized(self._basis)
         self._check_input(X, y)
         self._basis.setup_basis(*self._unpack_inputs(X))
         return self
@@ -191,6 +207,7 @@ class TransformerBasis:
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X[:, 0:1])
         """
+        self._check_initialized(self._basis)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
         return self._basis._compute_features(*self._unpack_inputs(X))
@@ -221,17 +238,22 @@ class TransformerBasis:
         >>> from nemos.basis import MSplineEval, TransformerBasis
 
         >>> # Example input
-        >>> X = np.random.normal(size=(100, 1))
+        >>> n_inputs = 2
+        >>> X = np.random.normal(size=(100, 2))
 
         >>> # Define tranformation basis
         >>> basis = MSplineEval(10)
+        >>> # Prepare basis to process 2 inputs
+        >>> # This step must be done before
+        >>> basis.set_input_shape(n_inputs)
+
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
         >>> feature_transformed = transformer.fit_transform(X)
         """
         self.fit(X, y=y)
-        return self._basis.compute_features(*self._unpack_inputs(X))
+        return self.transform(X)
 
     def __getstate__(self):
         """
@@ -268,6 +290,13 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs
         5
         """
+        # set chainable methods decorating the basis method
+        # this must be done lazily (runtime) when the attribute is requested
+        # otherwise it will create an infinite loop when pickling
+        if name in self._chainable_methods:
+            method = getattr(self._basis, name, None)
+            if method is not None:
+                return transformer_chaining(method).__get__(self)
         return getattr(self._basis, name)
 
     def __setattr__(self, name: str, value) -> None:

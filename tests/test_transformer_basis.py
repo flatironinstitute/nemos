@@ -68,6 +68,21 @@ def test_to_transformer_and_constructor_are_equivalent(
         trans_bas_a._basis.__dict__.pop("_decay_rates", 1)
         == trans_bas_b._basis.__dict__.pop("_decay_rates", 1)
     )
+
+    # extract the wrapped func for these methods
+    wrapped_methods_a = {}
+    for method in trans_bas_a._chainable_methods:
+        out = trans_bas_a._basis.__dict__.pop(method, False)
+        val = out if out is False else out.__func__.__qualname__
+        wrapped_methods_a.update({method: val})
+
+    wrapped_methods_b = {}
+    for method in trans_bas_b._chainable_methods:
+        out = trans_bas_b._basis.__dict__.pop(method, False)
+        val = out if out is False else out.__func__.__qualname__
+        wrapped_methods_b.update({method: val})
+
+    assert wrapped_methods_a == wrapped_methods_b
     assert trans_bas_a._basis.__dict__ == trans_bas_b._basis.__dict__
 
 
@@ -454,8 +469,9 @@ def test_to_transformer_and_set_input(
     )
     if set_input:
         bas.set_input_shape(*([inp] * bas._n_input_dimensionality))
+    trans = bas.to_transformer()
     with expectation:
-        bas.to_transformer()
+        trans.fit(inp)
 
 
 @pytest.mark.parametrize(
