@@ -1,4 +1,19 @@
-"""overwrite string repr for gluing string variable outputs."""
+"""
+Utilities for capturing and gluing function outputs for interactive documentation.
+
+This module provides tools to enhance documentation workflows by enabling the capture
+of print outputs and source code from Python functions. These outputs can then be
+formatted and embedded into Jupyter Notebooks or static documentation using the
+`myst-nb` glue functionality.
+
+## Main Features:
+- `capture_print`: A decorator to capture print statements from a function and return them alongside the function's
+   output.
+- `extract_body_exclude_def_and_return`: A utility to extract and format the body of a function, excluding its
+   definition and return statement.
+- `FormattedString`: A helper class to wrap and format text for use with the glue functionality.
+
+"""
 
 import inspect
 import textwrap
