@@ -156,7 +156,7 @@ $3 \times 2 \times 5  = 30$ outputs.
 
 #### Conv Basis
 
-For Conv bases, `compute_features` convolves each input with `n_basis_funcs` kernels, and reshaping the output into a 2D feature matrix.
+For Conv bases, `compute_features` convolves each input with `n_basis_funcs` kernels and outputs a 2D feature matrix.
 
 ```{code-cell} ipython3
 basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
