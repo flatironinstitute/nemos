@@ -162,7 +162,7 @@ For Conv bases, `compute_features` convolves each input with `n_basis_funcs` ker
 basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
 # compute_features to perform the convolution and concatenate
 out = basis.compute_features(inp)
-print(f"`compute_features` output shape {out.shape}")
+out.shape
 ```
 
 This process is equivalent to performing the convolution separately with [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
