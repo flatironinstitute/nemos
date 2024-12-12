@@ -70,32 +70,35 @@ def plot_nd_basis_thumbnail():
     element_pairs = [[0, 0], [5, 1], [10, 5]]
 
     # plot the 1D basis element and their product
-    fig, axs = plt.subplots(3,3,figsize=(8, 6))
+    fig, axs = plt.subplots(3, 3, figsize=(8, 6))
     cc = 0
     for i, j in element_pairs:
         # plot the element form a_basis
-        axs[cc, 0].plot(x_coord, a_basis.compute_features(x_coord), "grey", alpha=.3)
+        axs[cc, 0].plot(x_coord, a_basis.compute_features(x_coord), "grey", alpha=0.3)
         axs[cc, 0].plot(x_coord, a_basis.compute_features(x_coord)[:, i], "b")
-        axs[cc, 0].set_title(f"$a_{{{i}}}(x)$",color='b')
+        axs[cc, 0].set_title(f"$a_{{{i}}}(x)$", color="b")
 
         # plot the element form b_basis
-        axs[cc, 1].plot(y_coord, b_basis.compute_features(y_coord), "grey", alpha=.3)
+        axs[cc, 1].plot(y_coord, b_basis.compute_features(y_coord), "grey", alpha=0.3)
         axs[cc, 1].plot(y_coord, b_basis.compute_features(y_coord)[:, j], "b")
-        axs[cc, 1].set_title(f"$b_{{{j}}}(y)$",color='b')
+        axs[cc, 1].set_title(f"$b_{{{j}}}(y)$", color="b")
 
         # select & plot the corresponding product basis element
         k = i * b_basis.n_basis_funcs + j
-        axs[cc, 2].contourf(X, Y, Z[:, :, k], cmap='Blues')
-        axs[cc, 2].set_title(fr"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color='b')
-        axs[cc, 2].set_xlabel('x-coord')
-        axs[cc, 2].set_ylabel('y-coord')
+        axs[cc, 2].contourf(X, Y, Z[:, :, k], cmap="Blues")
+        axs[cc, 2].set_title(
+            rf"$A_{{{k}}}(x,y) = a_{{{i}}}(x) \cdot b_{{{j}}}(y)$", color="b"
+        )
+        axs[cc, 2].set_xlabel("x-coord")
+        axs[cc, 2].set_ylabel("y-coord")
         axs[cc, 2].set_aspect("equal")
 
         cc += 1
-    axs[2, 0].set_xlabel('x-coord')
-    axs[2, 1].set_xlabel('y-coord')
+    axs[2, 0].set_xlabel("x-coord")
+    axs[2, 1].set_xlabel("y-coord")
 
     plt.tight_layout()
+
 
 def plot_1d_basis_thumbnail():
     order = 4
