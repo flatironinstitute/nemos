@@ -21,3 +21,5 @@ from .plotting import (
     run_animation,
     tuning_curve_plot,
 )
+
+from ._myst_nb_glue import FormattedString, glue_two_step_convolve

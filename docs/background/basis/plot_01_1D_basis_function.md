@@ -39,6 +39,10 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 
+from nemos._documentation_utils._myst_nb_glue import glue_two_step_convolve
+
+glue_two_step_convolve()
+
 ```
 
 (simple_basis_function)=
@@ -165,23 +169,17 @@ out = basis.compute_features(inp)
 out.shape
 ```
 
+:::{admonition} Note
+
 This process is equivalent to performing the convolution separately with [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
 
-```{code-cell} ipython3
-# setup the kernels
-basis.set_kernel()
-print(f"Kernel shape (window_size, n_basis_funcs): {basis.kernel_.shape}")
-
-# apply the convolution
-out_two_steps = nmo.convolve.create_convolutional_predictor(basis.kernel_, inp)
-print(f"Convolution output shape: {out_two_steps.shape}")
-
-# then reshape to 2D
-out_two_steps = out_two_steps.reshape(inp.shape[0], inp.shape[1] * inp.shape[2] * basis.n_basis_funcs)
-
-# check that this is equivalent to the output of compute_features
-print(f"All matching: {np.array_equal(out_two_steps, out, equal_nan=True)}")
+```{glue} two-step-convolution-source-code
 ```
+
+```{glue} two-step-convolution
+```
+
+:::
 
 Plotting the Basis Function Elements
 ------------------------------------
