@@ -111,8 +111,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     Parameters
     ----------
-    n_basis_funcs :
-        The number of basis functions.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
