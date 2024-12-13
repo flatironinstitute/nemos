@@ -167,4 +167,5 @@ out2 = trans_bas.fit_transform(inp2)
 
 ### Learn more
 
-If you want to learn more about basis hyperparameters with `sklearn` pipelining and cross-validation, check out [this guide](sklearn-how-to).
+If you want to learn more about basis how to select basis hyperparameters with `sklearn` pipelining and cross-validation, check out [this guide](sklearn-how-to).
+
