@@ -87,7 +87,6 @@ class AtomicBasisMixin:
             setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
-
     def _list_components(self):
         """List all basis components.
 
@@ -158,9 +157,7 @@ class AtomicBasisMixin:
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
 
-    def __init__(
-        self, bounds: Optional[Tuple[float, float]] = None
-    ):
+    def __init__(self, bounds: Optional[Tuple[float, float]] = None):
         self.bounds = bounds
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
@@ -257,13 +254,10 @@ class EvalBasisMixin:
 class ConvBasisMixin:
     """Mixin class for convolutional basis."""
 
-    def __init__(
-        self, window_size: int, conv_kwargs: Optional[dict] = None
-    ):
+    def __init__(self, window_size: int, conv_kwargs: Optional[dict] = None):
         self.kernel_ = None
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
-
 
     def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor):
         """Convolve basis functions with input time series.
@@ -443,7 +437,6 @@ class ConvBasisMixin:
             raise ValueError(
                 "You must call `_set_kernel` before `_compute_features` for Conv basis."
             )
-
 
 
 class BasisTransformerMixin:

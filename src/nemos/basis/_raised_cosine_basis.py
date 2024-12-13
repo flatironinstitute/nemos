@@ -13,6 +13,7 @@ from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
 from ._basis_mixin import AtomicBasisMixin
 
+
 class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
     """Represent linearly-spaced raised cosine basis functions.
 
