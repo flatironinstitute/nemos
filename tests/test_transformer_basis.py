@@ -449,7 +449,7 @@ def test_transformerbasis_pickle(
             False,
             pytest.raises(
                 RuntimeError,
-                match="Cannot initialize TransformerBasis: the provided basis has no defined input shape",
+                match="Cannot apply TransformerBasis: the provided basis has no defined input shape",
             ),
         ),
     ],

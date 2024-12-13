@@ -272,7 +272,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-<<<<<<< HEAD
     def _set_input_independent_states(self):
         """
         Compute all the basis states that do not depend on the input.
