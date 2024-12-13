@@ -243,7 +243,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._compute_features(*xi)
 
     @abc.abstractmethod
-    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def _compute_features(
+        self, *xi: NDArray | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """Convolve or evaluate the basis.
 
         This method is intended to be equivalent to the sklearn transformer ``transform`` method.
@@ -1317,7 +1319,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-
 
     @property
     def n_basis_funcs(self):
