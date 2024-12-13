@@ -17,7 +17,7 @@
      - **Evaluation/Convolution**
      - **Preferred Mode**
    * - **B-Spline**
-     - .. plot:: scripts/basis_table_figs.py plot_bspline
+     - .. plot:: scripts/basis_figs.py plot_bspline
           :show-source-link: False
           :height: 80px
      - :ref:`Grid cells <grid_cells_nemos>`
@@ -25,7 +25,7 @@
        :class:`~nemos.basis.BSplineConv`
      - 🟢 Eval
    * - **Cyclic B-Spline**
-     - .. plot:: scripts/basis_table_figs.py plot_cyclic_bspline
+     - .. plot:: scripts/basis_figs.py plot_cyclic_bspline
           :show-source-link: False
           :height: 80px
      - :ref:`Place cells <basis_eval_place_cells>`
@@ -33,7 +33,7 @@
        :class:`~nemos.basis.CyclicBSplineConv`
      - 🟢 Eval
    * - **M-Spline**
-     - .. plot:: scripts/basis_table_figs.py plot_mspline
+     - .. plot:: scripts/basis_figs.py plot_mspline
           :show-source-link: False
           :height: 80px
      - :ref:`Place cells <basis_eval_place_cells>`
@@ -41,7 +41,7 @@
        :class:`~nemos.basis.MSplineConv`
      - 🟢 Eval
    * - **Linearly Spaced Raised Cosine**
-     - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_linear
+     - .. plot:: scripts/basis_figs.py plot_raised_cosine_linear
           :show-source-link: False
           :height: 80px
      - 
@@ -49,15 +49,15 @@
        :class:`~nemos.basis.RaisedCosineLinearConv`
      - 🟢 Eval
    * - **Log Spaced Raised Cosine**
-     - .. plot:: scripts/basis_table_figs.py plot_raised_cosine_log
+     - .. plot:: scripts/basis_figs.py plot_raised_cosine_log
           :show-source-link: False
           :height: 80px
      - :ref:`Head Direction <head_direction_reducing_dimensionality>`
      - :class:`~nemos.basis.RaisedCosineLogEval`  :raw-html:`<br />`
-       :class:`nemos.basis.RaisedCosineLogConv`
+       :class:`~nemos.basis.RaisedCosineLogConv`
      - 🔵 Conv
    * - **Orthogonalized Exponential Decays**
-     - .. plot:: scripts/basis_table_figs.py plot_orth_exp_basis
+     - .. plot:: scripts/basis_figs.py plot_orth_exp_basis
           :show-source-link: False
           :height: 80px
      - 
@@ -83,17 +83,17 @@ $$
 
 Here, $\approx$ means "approximately equal". 
 
-Instead of tackling the hard problem of learning an unknown function $f(x)$ directly, we reduce it to the simpler task of learning the weights $\{\alpha_i\}$.
+Instead of tackling the hard problem of learning an unknown function $f(x)$ directly, we reduce it to the simpler task of learning the weights $\{\alpha_i\}$. This preserves convexity, resulting in a much simpler optimization problem.
 
 
 ## Basis in NeMoS
 
-NeMoS provides a variety of basis functions (see the [table](table_basis) above). For each basis type, there are two dedicated classes of objects, corresponding to the two key uses described in the overview:
+NeMoS provides a variety of basis functions (see the [table](table_basis) above). For each basis type, there are two dedicated classes of objects, corresponding to the two uses described above:
 
-- **Eval-basis objects**: For representing non-linear mappings between task variables and outputs. These objects are identified by names starting with `Eval`.
-- **Conv-basis objects**: For linear temporal effects. These objects are identified by names starting with `Conv`.
+- **Eval basis objects**: For representing non-linear mappings between task variables and outputs. These objects all have names ending with `Eval`.
+- **Conv basis objects**: For linear temporal effects. These objects all have names ending with `Conv`.
 
-`Eval` and `Conv` objects can be combined to construct multi-dimensional basis functions, enabling complex feature construction.
+`Eval` and `Conv` objects can be combined to construct multi-dimensional basis functions, enabling [complex feature construction](composing_basis_function).
 
 ## Learn More
 
@@ -101,9 +101,12 @@ NeMoS provides a variety of basis functions (see the [table](table_basis) above)
 
 :::{grid-item-card}
 
-<figure>
-<img src="../../_static/thumbnails/background/plot_01_1D_basis_function.svg" style="height: 100px", alt="One-Dimensional Basis."/>
-</figure>
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_1d_basis_thumbnail
+   :show-source-link: False
+   :height: 100px
+```
 
 ```{toctree}
 :maxdepth: 2
@@ -114,9 +117,12 @@ plot_01_1D_basis_function.md
 
 :::{grid-item-card}
 
-<figure>
-<img src="../../_static/thumbnails/background/plot_02_ND_basis_function.svg" style="height: 100px", alt="N-Dimensional Basis."/>
-</figure>
+```{eval-rst}
+
+.. plot:: scripts/basis_figs.py plot_nd_basis_thumbnail
+   :show-source-link: False
+   :height: 100px
+```
 
 ```{toctree}
 :maxdepth: 2

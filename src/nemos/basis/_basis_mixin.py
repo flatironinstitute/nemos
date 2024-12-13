@@ -9,7 +9,8 @@ import warnings
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ._transformer_basis import TransformerBasis
@@ -27,12 +28,18 @@ class EvalBasisMixin:
         self.bounds = bounds
         self._n_basis_funcs = n_basis_funcs
 
-    def _compute_features(self, *xi: NDArray):
-        """
-        Apply the basis transformation to the input data.
+    def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
+        """Evaluate basis at sample points.
 
-        The basis evaluated at the samples, or :math:`b_i(*xi)`, where :math:`b_i` is a
-        basis element. xi[k] must be a N-dimensional array (N >= 1) or a pynapple Tsd/TsdFrame/TsdTensor.
+        The basis is evaluated at the locations specified in the inputs. For example,
+        ``compute_features(np.array([0, .5]))`` would return the array:
+
+        .. code-block:: text
+
+           b_1(0) ... b_n(0)
+           b_1(.5) ... b_n(.5)
+
+        where ``b_i`` is the i-th basis.
 
         Parameters
         ----------
@@ -43,9 +50,7 @@ class EvalBasisMixin:
         Returns
         -------
         :
-            A matrix with the transformed features. The basis evaluated at the samples,
-            or :math:`b_i(*xi)`, where :math:`b_i` is a basis element.
-
+            A matrix with the transformed features.
         """
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
@@ -124,23 +129,20 @@ class ConvBasisMixin:
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
         self._n_basis_funcs = n_basis_funcs
 
-    def _compute_features(self, *xi: NDArray):
-        """
-        Apply the basis transformation to the input data.
+    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor):
+        """Convolve basis functions with input time series.
 
-        A bank of basis filters (created by calling fit) is convolved with the
-        samples. Samples can be a NDArray, or a pynapple Tsd/TsdFrame/TsdTensor. All the dimensions
-        except for the sample-axis are flattened, so that the method always returns a matrix.
-        For example, if samples are of shape (num_samples, 2, 3), the output will be
+        A bank of basis filters is convolved with the input data. All the dimensions
+        except for the sample-axis are flattened, so that the method always returns a
+        matrix.
+
+        For example, if inputs are of shape (num_samples, 2, 3), the output will be
         ``(num_samples, num_basis_funcs * 2 * 3)``.
-        The time-axis can be specified at basis initialization by setting the keyword argument ``axis``.
-        For example, if ``axis == 1`` your samples should be ``(N1, num_samples N3, ...)``, the output of
-        transform will be ``(num_samples, num_basis_funcs * N1 * N3 *...)``.
 
         Parameters
         ----------
         *xi:
-            The input samples over which to apply the basis transformation. The samples can be passed
+            The input data over which to apply the basis transformation. The samples can be passed
             as multiple arguments, each representing a different dimension for multivariate inputs.
 
         Notes
@@ -201,7 +203,7 @@ class ConvBasisMixin:
         Prepare or compute the convolutional kernel for the basis functions.
 
         This method is called to prepare the basis functions for convolution operations
-        in subclasses where the 'conv' mode is used. It typically involves computing a
+        in subclasses. It computes a
         kernel based on the basis functions that will be used for convolution with the
         input data. The specifics of kernel computation depend on the subclass implementation
         and the nature of the basis functions.
@@ -209,24 +211,21 @@ class ConvBasisMixin:
         Returns
         -------
         self :
-            The instance itself, modified to include the computed kernel if applicable. This
+            The instance itself, modified to include the computed kernel. This
             allows for method chaining and integration into transformation pipelines.
 
         Notes
         -----
         Subclasses implementing this method should detail the specifics of how the kernel is
-        computed and how the input parameters are utilized. If the basis operates in 'eval'
-        mode exclusively, this method should simply return `self` without modification.
+        computed and how the input parameters are utilized.
+
         """
         self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
         return self
 
     @property
     def window_size(self):
-        """Window size as number of samples.
-
-        Duration of the convolutional kernel in number of samples.
-        """
+        """Duration of the convolutional kernel in number of samples."""
         return self._window_size
 
     @window_size.setter
@@ -238,9 +237,7 @@ class ConvBasisMixin:
 
     def _check_window_size(self, window_size):
         if window_size is None:
-            raise ValueError(
-                "If the basis is in `conv` mode, you must provide a window_size!"
-            )
+            raise ValueError("You must provide a window_size!")
 
         elif not (isinstance(window_size, int) and window_size > 0):
             raise ValueError(

@@ -89,8 +89,8 @@ class TransformerBasis:
     def _check_initialized(basis):
         if basis._n_basis_input_ is None:
             raise RuntimeError(
-                "Cannot initialize TransformerBasis: the provided basis has no defined input shape. "
-                "Please call `set_input_shape` on the basis before calling `fit`, `transform`, or "
+                "Cannot apply TransformerBasis: the provided basis has no defined input shape. "
+                "Please call `set_input_shape` before calling `fit`, `transform`, or "
                 "`fit_transform`."
             )
 

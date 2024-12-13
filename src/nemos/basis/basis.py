@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis import add_docstring
-from ._basis_mixin import BasisTransformerMixin, ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import ConvBasisMixin, EvalBasisMixin
 from ._decaying_exponential import OrthExponentialBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
@@ -204,6 +204,12 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -494,6 +500,12 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------
@@ -813,6 +825,12 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -953,9 +971,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         return super().set_input_shape(xi)
 
 
-class RaisedCosineLinearEval(
-    EvalBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
-):
+class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
     """
     Represent linearly-spaced raised cosine basis functions.
 
@@ -1096,9 +1112,7 @@ class RaisedCosineLinearEval(
         return super().set_input_shape(xi)
 
 
-class RaisedCosineLinearConv(
-    ConvBasisMixin, RaisedCosineBasisLinear, BasisTransformerMixin
-):
+class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
     """
     Represent linearly-spaced raised cosine basis functions.
 
@@ -1116,6 +1130,12 @@ class RaisedCosineLinearConv(
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -1269,6 +1289,12 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -1420,6 +1446,12 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -1704,6 +1736,12 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
 
     Examples
     --------

@@ -28,7 +28,7 @@ Abstract Class Basis
 
 The super-class [`Basis`](nemos.basis._basis.Basis) provides two public methods, [`compute_features`](the-public-method-compute_features) and [`evaluate_on_grid`](the-public-method-evaluate_on_grid). These methods perform checks on both the input provided by the user and the output of the evaluation to ensure correctness, and are thus considered "safe". They both make use of the abstract method `_evaluate` that is specific for each concrete class. See below for more details.
 
-## The Class `nemos.basis._basis.Basis`
+## The Abstract Super-class [`Basis`](nemos.basis._basis.Basis)
 
 (the-public-method-compute_features)=
 ### The Public Method `compute_features`
@@ -61,14 +61,14 @@ This method performs the following steps:
 
 1. Checks that the number of inputs matches what the basis being evaluated expects (e.g., one input for a 1-D basis, N inputs for an N-D basis, or the sum of N 1-D bases), and raises a `ValueError` if this is not the case.
 2. Calls `_get_samples` method, which returns equidistant samples over the domain of the basis function. The domain may depend on the type of basis.
-3. Calls the `_evaluate` method.
+3. Calls the `_evaluate` method on these samples.
 4. Returns both the sample grid points of shape `(m1, ..., mN)`, and the evaluation output at each grid point of shape `(m1, ..., mN, n_basis_funcs)`, where `mi` is the number of sample points for the i-th axis of the grid.
 
 ### Abstract Methods
 
 The [`nemos.basis._basis.Basis`](nemos.basis._basis.Basis) class has the following abstract methods, which every concrete subclass must implement:
 
-1. `_evaluate`: Evaluates a basis over some specified samples.
+1. `_evaluate` : Evaluates a basis over some specified samples.
 2. `_check_n_basis_min`: Checks the minimum number of basis functions required. This requirement can be specific to the type of basis.
 
 ## Contributors Guidelines

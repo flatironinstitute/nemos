@@ -9,7 +9,7 @@ from typing import Callable, Generator, Literal, Optional, Tuple, Union
 import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from pynapple import Tsd, TsdFrame
+from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
 from ..type_casting import support_pynapple
@@ -205,13 +205,15 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._mode
 
     @check_transform_input
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Apply the basis transformation to the input data.
 
         This method is designed to be a high-level interface for transforming input
         data using the basis functions defined by the subclass. Depending on the basis'
-        mode ('eval' or 'conv'), it either evaluates the basis functions at the sample
+        mode ('Eval' or 'Conv'), it either evaluates the basis functions at the sample
         points or performs a convolution operation between the input data and the
         basis functions.
 
@@ -219,7 +221,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ----------
         *xi :
             Input data arrays to be transformed. The shape and content requirements
-            depend on the subclass and mode of operation ('eval' or 'conv').
+            depend on the subclass and mode of operation ('Eval' or 'Conv').
 
         Returns
         -------
@@ -241,7 +243,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._compute_features(*xi)
 
     @abc.abstractmethod
-    def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """Convolve or evaluate the basis.
 
         This method is intended to be equivalent to the sklearn transformer ``transform`` method.
@@ -270,6 +272,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
+<<<<<<< HEAD
     def _set_input_independent_states(self):
         """
         Compute all the basis states that do not depend on the input.
@@ -339,7 +342,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self
 
     @abc.abstractmethod
-    def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -596,9 +599,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Calculate and return the slicing for features based on the input structure.
 
         This method determines how to slice the features for different basis types.
-        If the instance is of ``AdditiveBasis`` type, the slicing is calculated recursively
-        for each component basis. Otherwise, it determines the slicing based on
-        the number of basis functions and ``split_by_input`` flag.
 
         Parameters
         ----------
@@ -627,37 +627,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # Set default values for n_inputs and start_slice if not provided
         n_inputs = n_inputs or self._n_basis_input_
         start_slice = start_slice or 0
-
-        # If the instance is of AdditiveBasis type, handle slicing for the additive components
-        if isinstance(self, AdditiveBasis):
-            split_dict, start_slice = self._basis1._get_feature_slicing(
-                n_inputs[: len(self._basis1._n_basis_input_)],
-                start_slice,
-                split_by_input=split_by_input,
-            )
-            sp2, start_slice = self._basis2._get_feature_slicing(
-                n_inputs[len(self._basis1._n_basis_input_) :],
-                start_slice,
-                split_by_input=split_by_input,
-            )
-            split_dict = self._merge_slicing_dicts(split_dict, sp2)
-        else:
-            # Handle the default case for other basis types
-            split_dict, start_slice = self._get_default_slicing(
-                split_by_input, start_slice
-            )
+        # Handle the default case for non-additive basis types
+        # See overwritten method for recursion logic
+        split_dict, start_slice = self._get_default_slicing(
+            split_by_input=split_by_input, start_slice=start_slice
+        )
 
         return split_dict, start_slice
-
-    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
-        """Merge two slicing dictionaries, handling key conflicts."""
-        for key, val in dict2.items():
-            if key in dict1:
-                new_key = self._generate_unique_key(dict1, key)
-                dict1[new_key] = val
-            else:
-                dict1[key] = val
-        return dict1
 
     @staticmethod
     def _generate_unique_key(existing_dict: dict, key: str) -> str:
@@ -749,6 +725,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         -------
         dict
             A dictionary where:
+
             - **Key**: Label of the basis.
             - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
         """
@@ -979,7 +956,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -1019,7 +996,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         return X
 
     @add_docstring("compute_features", Basis)
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         r"""
         Examples
         --------
@@ -1036,7 +1015,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         """
         return super().compute_features(*xi)
 
-    def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _compute_features(
+        self, *xi: NDArray | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Compute features for added bases and concatenate.
 
@@ -1130,6 +1111,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         -------
         dict
             A dictionary where:
+
             - **Keys**: Labels of the additive basis components.
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 
@@ -1235,6 +1217,70 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         """
         return super().evaluate_on_grid(*n_samples)
 
+    def _get_feature_slicing(
+        self,
+        n_inputs: Optional[tuple] = None,
+        start_slice: Optional[int] = None,
+        split_by_input: bool = True,
+    ) -> Tuple[dict, int]:
+        """
+        Calculate and return the slicing for features based on the input structure.
+
+        This method determines how to slice the features for different basis types.
+
+        Parameters
+        ----------
+        n_inputs :
+            The number of input basis for each component, by default it uses ``self._n_basis_input``.
+        start_slice :
+            The starting index for slicing, by default it starts from 0.
+        split_by_input :
+            Flag indicating whether to split the slicing by individual inputs or not.
+            If ``False``, a single slice is generated for all inputs.
+
+        Returns
+        -------
+        split_dict :
+            Dictionary with keys as labels and values as slices representing
+            the slicing for each input or additive component, if split_by_input equals to
+            True or False respectively.
+        start_slice :
+            The updated starting index after slicing.
+
+        See Also
+        --------
+        _get_default_slicing : Handles default slicing logic.
+        _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
+        """
+        # Set default values for n_inputs and start_slice if not provided
+        n_inputs = n_inputs or self._n_basis_input
+        start_slice = start_slice or 0
+
+        # If the instance is of AdditiveBasis type, handle slicing for the additive components
+
+        split_dict, start_slice = self._basis1._get_feature_slicing(
+            n_inputs[: len(self._basis1._n_basis_input)],
+            start_slice,
+            split_by_input=split_by_input,
+        )
+        sp2, start_slice = self._basis2._get_feature_slicing(
+            n_inputs[len(self._basis1._n_basis_input) :],
+            start_slice,
+            split_by_input=split_by_input,
+        )
+        split_dict = self._merge_slicing_dicts(split_dict, sp2)
+        return split_dict, start_slice
+
+    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
+        """Merge two slicing dictionaries, handling key conflicts."""
+        for key, val in dict2.items():
+            if key in dict1:
+                new_key = self._generate_unique_key(dict1, key)
+                dict1[new_key] = val
+            else:
+                dict1[key] = val
+        return dict1
+
 
 class MultiplicativeBasis(CompositeBasisMixin, Basis):
     """
@@ -1273,6 +1319,11 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
         BasisTransformerMixin.__init__(self)
+        self._n_basis_input = None
+        self._n_output_features = None
+        self._label = "(" + basis1.label + " * " + basis2.label + ")"
+        self._basis1 = basis1
+        self._basis2 = basis2
 
     @property
     def n_basis_funcs(self):
@@ -1295,7 +1346,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -1327,7 +1378,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         )
         return X
 
-    def _compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def _compute_features(
+        self, *xi: NDArray | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Compute the features for the multiplied bases, and compute their outer product.
 
@@ -1464,7 +1517,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         return super().evaluate_on_grid(*n_samples)
 
     @add_docstring("compute_features", Basis)
-    def compute_features(self, *xi: ArrayLike) -> FeatureMatrix:
+    def compute_features(
+        self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
+    ) -> FeatureMatrix:
         """
         Examples
         --------
