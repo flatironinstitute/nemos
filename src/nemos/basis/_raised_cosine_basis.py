@@ -11,9 +11,9 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
+from ._basis_mixin import AtomicBasisMixin
 
-
-class RaisedCosineBasisLinear(Basis, abc.ABC):
+class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
     """Represent linearly-spaced raised cosine basis functions.
 
     This implementation is based on the cosine bumps used by Pillow et al. [1]_
@@ -21,6 +21,8 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
     Parameters
     ----------
+    n_basis_funcs :
+        The number of basis functions.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -40,10 +42,12 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         mode="eval",
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
         super().__init__(
             mode=mode,
             label=label,
@@ -230,6 +234,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         mode="eval",
         width: float = 2.0,
         time_scaling: float = None,
@@ -237,6 +242,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         label: Optional[str] = "RaisedCosineBasisLog",
     ) -> None:
         super().__init__(
+            n_basis_funcs,
             mode=mode,
             width=width,
             label=label,

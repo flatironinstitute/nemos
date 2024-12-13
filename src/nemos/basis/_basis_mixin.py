@@ -66,14 +66,102 @@ def set_input_shape_state(method):
     return wrapper
 
 
+class AtomicBasisMixin:
+
+    def __init__(self, n_basis_funcs: int):
+        self._n_basis_funcs = n_basis_funcs
+        self._check_n_basis_min()
+
+    @set_input_shape_state
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        """
+        klass = self.__class__(**self.get_params())
+
+        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+            setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
+
+
+    def _list_components(self):
+        """List all basis components.
+
+        For atomic bases, the list is just [self].
+
+        Returns
+        -------
+            A list with the basis components.
+
+        """
+        return [self]
+
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Set the expected input shape for the basis object.
+
+        This method configures the shape of the input data that the basis object expects.
+        ``xi`` can be specified as an integer, a tuple of integers, or derived
+        from an array. The method also calculates the total number of input
+        features and output features based on the number of basis functions.
+
+        Parameters
+        ----------
+        xi :
+            The input shape specification.
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided and it contains non-integer elements.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+
+        Notes
+        -----
+        All state attributes that depends on the input must be set in this method in order for
+        the API of basis to work correctly. In particular, this method is called by ``setup_basis``,
+        which is equivalent to ``fit`` for a transformer. If any input dependent state
+        is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
+
+        """
+        if isinstance(xi, tuple):
+            if not all(isinstance(i, int) for i in xi):
+                raise ValueError(
+                    f"The tuple provided contains non integer values. Tuple: {xi}."
+                )
+            shape = xi
+        elif isinstance(xi, int):
+            shape = () if xi == 1 else (xi,)
+        else:
+            shape = xi.shape[1:]
+
+        n_inputs = (int(np.prod(shape)),)
+
+        self._input_shape_ = shape
+
+        self._n_basis_input_ = n_inputs
+        return self
+
+
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""
 
     def __init__(
-        self, n_basis_funcs: int, bounds: Optional[Tuple[float, float]] = None
+        self, bounds: Optional[Tuple[float, float]] = None
     ):
         self.bounds = bounds
-        self._n_basis_funcs = n_basis_funcs
 
     def _compute_features(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor):
         """Evaluate basis at sample points.
@@ -165,32 +253,17 @@ class EvalBasisMixin:
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
 
-    @set_input_shape_state
-    def __sklearn_clone__(self) -> Basis:
-        """Clone the basis while preserving attributes related to input shapes.
-
-        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
-        `_input_shape_`) are preserved during cloning. Reinitializing the class
-        as in the regular sklearn clone would drop these attributes, rendering
-        cross-validation unusable.
-        """
-        klass = self.__class__(**self.get_params())
-
-        # for attr_name in ["_n_basis_input_", "_input_shape_"]:
-        #     setattr(klass, attr_name, getattr(self, attr_name))
-        return klass
-
 
 class ConvBasisMixin:
     """Mixin class for convolutional basis."""
 
     def __init__(
-        self, n_basis_funcs: int, window_size: int, conv_kwargs: Optional[dict] = None
+        self, window_size: int, conv_kwargs: Optional[dict] = None
     ):
         self.kernel_ = None
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
-        self._n_basis_funcs = n_basis_funcs
+
 
     def _compute_features(self, *xi: NDArray | Tsd | TsdFrame | TsdTensor):
         """Convolve basis functions with input time series.
@@ -371,20 +444,6 @@ class ConvBasisMixin:
                 "You must call `_set_kernel` before `_compute_features` for Conv basis."
             )
 
-    @set_input_shape_state
-    def __sklearn_clone__(self) -> Basis:
-        """Clone the basis while preserving attributes related to input shapes.
-
-        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
-        `_input_shape_`) are preserved during cloning. Reinitializing the class
-        as in the regular sklearn clone would drop these attributes, rendering
-        cross-validation unusable.
-        """
-        klass = self.__class__(**self.get_params())
-
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
-        return klass
 
 
 class BasisTransformerMixin:
@@ -458,9 +517,6 @@ class CompositeBasisMixin:
     @abc.abstractmethod
     def n_basis_funcs(self):
         """Read only property for composite bases."""
-        pass
-
-    def _check_n_basis_min(self) -> None:
         pass
 
     def setup_basis(self, *xi: NDArray) -> Basis:
@@ -558,3 +614,41 @@ class CompositeBasisMixin:
         for attr_name in ["_n_basis_input_", "_input_shape_"]:
             setattr(klass, attr_name, getattr(self, attr_name))
         return klass
+
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
+        """
+        Set the expected input shape for the basis object.
+
+        This method sets the input shape for each component basis in the basis.
+        One ``xi`` must be provided for each basis component, specified as an integer,
+        a tuple of integers, or an array. The method calculates and stores the total number of output features
+        based on the number of basis functions in each component and the provided input shapes.
+
+        Parameters
+        ----------
+        *xi :
+            The input shape specifications. For every k,``xi[k]`` can be:
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided and it contains non-integer elements.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+        """
+        self._n_basis_input_ = (
+            *self._basis1.set_input_shape(
+                *xi[: self._basis1._n_input_dimensionality]
+            )._n_basis_input_,
+            *self._basis2.set_input_shape(
+                *xi[self._basis1._n_input_dimensionality :]
+            )._n_basis_input_,
+        )
+        return self

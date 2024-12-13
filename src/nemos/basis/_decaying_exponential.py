@@ -14,13 +14,16 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
+from ._basis_mixin import AtomicBasisMixin
 
 
-class OrthExponentialBasis(Basis, abc.ABC):
+class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
     """Set of 1D basis decaying exponential functions numerically orthogonalized.
 
     Parameters
     ----------
+    n_basis_funcs
+            Number of basis functions.
     decay_rates :
             Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
     mode :
@@ -33,10 +36,12 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         decay_rates: NDArray[np.floating],
         mode="eval",
         label: Optional[str] = "OrthExponentialBasis",
     ):
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
         super().__init__(
             mode=mode,
             label=label,

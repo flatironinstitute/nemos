@@ -13,14 +13,16 @@ from scipy.interpolate import splev
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
+from ._basis_mixin import AtomicBasisMixin
 
-
-class SplineBasis(Basis, abc.ABC):
+class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
     """
     SplineBasis class inherits from the Basis class and represents spline basis functions.
 
     Parameters
     ----------
+    n_basis_funcs :
+        Number of basis functions.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -38,11 +40,13 @@ class SplineBasis(Basis, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         order: int = 2,
         label: Optional[str] = None,
         mode: Literal["conv", "eval"] = "eval",
     ) -> None:
         self.order = order
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
         super().__init__(
             label=label,
             mode=mode,
@@ -154,6 +158,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
     Parameters
     ----------
+    n_basis_funcs :
+        The number of basis functions to generate. More basis functions allow for
+        more flexible data modeling but can lead to overfitting.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -191,11 +198,13 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         mode: Literal["eval", "conv"] = "eval",
         order: int = 2,
         label: Optional[str] = "MSplineEval",
     ) -> None:
         super().__init__(
+            n_basis_funcs,
             mode=mode,
             order=order,
             label=label,
@@ -292,6 +301,8 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     Parameters
     ----------
+    n_basis_funcs :
+        Number of basis functions.
     mode :
         The mode of operation. ``'eval'`` for evaluation at sample points,
         'conv' for convolutional operation.
@@ -317,11 +328,13 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         mode="eval",
         order: int = 4,
         label: Optional[str] = "BSplineBasis",
     ):
         super().__init__(
+            n_basis_funcs,
             mode=mode,
             order=order,
             label=label,
@@ -406,6 +419,8 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
     Parameters
     ----------
+    n_basis_funcs :
+        Number of basis functions.
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
@@ -427,11 +442,13 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
     def __init__(
         self,
+        n_basis_funcs: int,
         mode="eval",
         order: int = 4,
         label: Optional[str] = "CyclicBSplineBasis",
     ):
         super().__init__(
+            n_basis_funcs,
             mode=mode,
             order=order,
             label=label,
