@@ -23,6 +23,7 @@ def transformer_chaining(func):
 
     return wrapper
 
+
 class TransformerBasis:
     """Basis as ``scikit-learn`` transformers.
 
@@ -73,11 +74,16 @@ class TransformerBasis:
     Cross-validated number of basis: {'compute_features__n_basis_funcs': 10}
     """
 
-    _chainable_methods = ("set_kernel", "set_input_shape", "_set_input_independent_states", "setup_basis")
+    _chainable_methods = (
+        "set_kernel",
+        "set_input_shape",
+        "_set_input_independent_states",
+        "setup_basis",
+    )
 
     def __init__(self, basis: Basis):
         self._basis = copy.deepcopy(basis)
-
+        self._wrapped_methods = {}  # Cache for wrapped methods
 
     @staticmethod
     def _check_initialized(basis):
@@ -199,13 +205,13 @@ class TransformerBasis:
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
 
-        >>> transformer_fitted = transformer.fit(X)
+        >>> transformer_fitted = transformer.set_input_shape(2).fit(X)
         >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
         >>> transformer_fitted.kernel_.shape
         (200, 10)
 
         >>> # Transform basis
-        >>> feature_transformed = transformer.transform(X[:, 0:1])
+        >>> feature_transformed = transformer.transform(X)
         """
         self._check_initialized(self._basis)
         # transpose does not work with pynapple
@@ -245,7 +251,7 @@ class TransformerBasis:
         >>> basis = MSplineEval(10)
         >>> # Prepare basis to process 2 inputs
         >>> # This step must be done before
-        >>> basis.set_input_shape(n_inputs)
+        >>> basis = basis.set_input_shape(n_inputs)
 
         >>> transformer = TransformerBasis(basis)
 
@@ -262,6 +268,10 @@ class TransformerBasis:
         See https://docs.python.org/3/library/pickle.html#object.__getstate__
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
+        # this is the only state needed at initalization
+        # returning the cached wrapped methods would create
+        # a circular binding of the state to self (i.e. infinite recursion when
+        # unpickling).
         return {"_basis": self._basis}
 
     def __setstate__(self, state):
@@ -275,10 +285,15 @@ class TransformerBasis:
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
         self._basis = state["_basis"]
+        self._wrapped_methods = {}  # Reinitialize the cache
 
     def __getattr__(self, name: str):
         """
         Enable easy access to attributes of the underlying Basis object.
+
+        This method chaces all chainable methods (methods returning self) in a dicitonary.
+        These mehtods are created the first time they are accessed by decorating the `self._basis.name`
+        and cached for future use.
 
         Examples
         --------
@@ -290,14 +305,21 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs
         5
         """
-        # set chainable methods decorating the basis method
-        # this must be done lazily (runtime) when the attribute is requested
-        # otherwise it will create an infinite loop when pickling
+        # Check if the method has already been wrapped
+        if name in self._wrapped_methods:
+            return self._wrapped_methods[name]
+
+        # Get the original attribute from the basis
+        attr = getattr(self._basis, name)
+
+        # If the attribute is a callable method, wrap it dynamically
         if name in self._chainable_methods:
-            method = getattr(self._basis, name, None)
-            if method is not None:
-                return transformer_chaining(method).__get__(self)
-        return getattr(self._basis, name)
+            wrapped = transformer_chaining(attr).__get__(self)
+            self._wrapped_methods[name] = wrapped  # Cache the wrapped method
+            return wrapped
+
+        # For non-callable attributes, return them directly
+        return attr
 
     def __setattr__(self, name: str, value) -> None:
         r"""
@@ -324,13 +346,13 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
         >>> try:
-        ...     trans_bas.random_attribute_name = "some value"
+        ...     trans_bas.rand_attr = "some value"
         ... except ValueError as e:
         ...     print(repr(e))
-        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
+        ValueError('Only setting _basis or existing attributes of _basis is allowed. Attempt to set `rand_attr`.')
         """
-        # allow self._basis = basis
-        if name == "_basis" or name == "basis":
+        # allow self._basis = basis and other attrs of self to be retrievable
+        if name == "_basis" or name == "basis" or name == "_wrapped_methods":
             super().__setattr__(name, value)
         # allow changing existing attributes of self._basis
         elif hasattr(self._basis, name):
@@ -338,7 +360,7 @@ class TransformerBasis:
         # don't allow setting any other attribute
         else:
             raise ValueError(
-                "Only setting _basis or existing attributes of _basis is allowed."
+                f"Only setting _basis or existing attributes of _basis is allowed. Attempt to set `{name}`."
             )
 
     def __sklearn_clone__(self) -> TransformerBasis:

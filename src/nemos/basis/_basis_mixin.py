@@ -328,7 +328,7 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineLinearEval(10).to_transformer()
+        >>> basis = nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(

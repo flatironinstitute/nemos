@@ -61,7 +61,7 @@ def test_to_transformer_and_constructor_are_equivalent(
     assert (
         list(trans_bas_a.__dict__.keys())
         == list(trans_bas_b.__dict__.keys())
-        == ["_basis"]
+        == ["_basis", "_wrapped_methods"]
     )
     # and those bases are the same
     assert np.all(
@@ -471,7 +471,10 @@ def test_to_transformer_and_set_input(
         bas.set_input_shape(*([inp] * bas._n_input_dimensionality))
     trans = bas.to_transformer()
     with expectation:
-        trans.fit(inp)
+        X = np.concatenate(
+            [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
+        )
+        trans.fit(X)
 
 
 @pytest.mark.parametrize(
