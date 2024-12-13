@@ -126,7 +126,7 @@ testpaths = ["tests"]             # Specify the directory where test files are l
 filterwarnings = [
     # note the use of single quote below to denote "raw" strings in TOML
     'ignore:plotting functions contained within:UserWarning',
-    'ignore:Tolerance of \d\.\d+e-\d\d reached:RuntimeWarning',
+    'ignore:Tolerance of -?\d\.\d+e-\d\d reached:RuntimeWarning',
 ]
 
 [tool.coverage.run]

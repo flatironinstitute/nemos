@@ -67,6 +67,7 @@ def set_input_shape_state(method):
 
 
 class AtomicBasisMixin:
+    """Mixin class for atomic bases (i.e. non-composite)."""
 
     def __init__(self, n_basis_funcs: int):
         self._n_basis_funcs = n_basis_funcs
