@@ -71,7 +71,8 @@ To set up a scikit-learn [`Pipeline`](https://scikit-learn.org/1.5/modules/gener
 Each transformation step takes a 2D array `X` of shape `(num_samples, num_original_features)` as input and outputs another 2D array of shape `(num_samples, num_transformed_features)`. The final step takes a pair `(X, y)`, where `X` is as before, and `y` is a 1D array of shape `(n_samples,)` containing the observations to be modeled.
 
 You can define a pipeline as follows:
-```python
+
+```{code} ipython3
 from sklearn.pipeline import Pipeline
 
 # Assume transformer_i/predictor is a transformer/model object
@@ -92,7 +93,7 @@ Here we used a placeholder `"label_i"` for demonstration; you should choose a mo
 :::
 
 Calling `pipe.fit(X, y)` will perform the following computations:
-```python
+```{code} ipython3
 # Chain of transformations
 X1 = transformer_1.fit_transform(X)
 X2 = transformer_2.fit_transform(X1)
@@ -111,6 +112,7 @@ Pipelines not only streamline and simplify your code but also offer several othe
 In the following sections, we will showcase this approach with a concrete example: selecting the appropriate basis type and number of bases for a GLM regression in NeMoS.
 
 ## Combining basis transformations and GLM in a pipeline
+
 Let's start by creating some toy data.
 
 
@@ -148,7 +150,6 @@ ax.set_xlabel("input")
 ax.set_ylabel("spike count")
 sns.despine(ax=ax)
 ```
-
 ### Converting NeMoS `Basis` to a transformer
 In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) wrapper class.
 
@@ -182,7 +183,6 @@ bas.n_basis_funcs = 100
 
 print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
-
 ### Creating and fitting a pipeline
 We might want to combine first transforming the input data with our basis functions, then fitting a GLM on the transformed data.
 

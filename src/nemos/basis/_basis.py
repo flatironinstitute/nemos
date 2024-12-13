@@ -710,27 +710,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
         return reshaped_out
 
-    def _check_input_shape_consistency(self, x: NDArray):
-        """Check input consistency across calls."""
-        # remove sample axis and squeeze
-        shape = x.shape[1:]
-
-        initialized = self._input_shape_ is not None
-        is_shape_match = self._input_shape_ == shape
-        if initialized and not is_shape_match:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape_}"[1:]
-            expected_shape_str = expected_shape_str.replace(",)", ")")
-            raise ValueError(
-                f"Input shape mismatch detected.\n\n"
-                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
-                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
-                f"  Expected: {expected_shape_str}\n"
-                f"  But got:  {x.shape}.\n\n"
-                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
-                "but all other dimensions must remain the same. If you need to process inputs with a "
-                "different shape, please create a new basis instance."
-            )
-
 
 class AdditiveBasis(CompositeBasisMixin, Basis):
     """
