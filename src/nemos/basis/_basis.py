@@ -625,8 +625,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         _get_default_slicing : Handles default slicing logic.
         _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
         """
-        # Set default values for n_inputs and start_slice if not provided
-        n_inputs = n_inputs or self._n_basis_input_
+        # Set default values for start_slice if not provided
         start_slice = start_slice or 0
         # Handle the default case for non-additive basis types
         # See overwritten method for recursion logic
@@ -815,28 +814,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 "Composite basis must implement the _list_components method."
             )
         return [self]
-
-    def __sklearn_clone__(self) -> Basis:
-        """Clone the basis while preserving attributes related to input shapes.
-
-        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
-        `_input_shape_`) are preserved during cloning. Reinitializing the class
-        as in the regular sklearn clone would drop these attributes, rendering
-        cross-validation unusable.
-        The method also handles recursive cloning for composite basis structures.
-        """
-        # clone recursively
-        if hasattr(self, "_basis1") and hasattr(self, "_basis2"):
-            basis1 = self._basis1.__sklearn_clone__()
-            basis2 = self._basis2.__sklearn_clone__()
-            klass = self.__class__(basis1, basis2)
-
-        else:
-            klass = self.__class__(**self.get_params())
-
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
-        return klass
 
 
 class AdditiveBasis(CompositeBasisMixin, Basis):

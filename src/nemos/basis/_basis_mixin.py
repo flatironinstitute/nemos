@@ -6,6 +6,7 @@ import abc
 import copy
 import inspect
 import warnings
+from functools import wraps
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import numpy as np
@@ -17,6 +18,52 @@ from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
     from ._basis import Basis
+
+
+def set_input_shape_state(method):
+    """
+    Decorator to preserve input shape-related attributes during method execution.
+
+    This decorator ensures that the attributes `_n_basis_input_` and `_input_shape_`
+    are copied from the original object (`self`) to the returned object (`klass`)
+    after the wrapped method executes. It is intended to be used with methods that
+    clone or create a new instance of the class, ensuring these critical attributes
+    are retained for functionality such as cross-validation.
+
+    Parameters
+    ----------
+    method :
+        The method to be wrapped. This method is expected to return an object
+        (`klass`) that requires the `_n_basis_input_` and `_input_shape_` attributes.
+
+    Returns
+    -------
+    :
+        The wrapped method that copies `_n_basis_input_` and `_input_shape_` from
+        the original object (`self`) to the new object (`klass`).
+
+    Examples
+    --------
+    Applying the decorator to a method:
+
+    >>> from functools import wraps
+    >>> @set_input_shape_state
+    ... def __sklearn_clone__(self):
+    ...     klass = self.__class__(**self.get_params())
+    ...     return klass
+
+    The `_n_basis_input_` and `_input_shape_` attributes of `self` will be
+    copied to `klass` after the method executes.
+    """
+
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        klass: Basis = method(self, *args, **kwargs)
+        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+            setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
+
+    return wrapper
 
 
 class EvalBasisMixin:
@@ -117,6 +164,21 @@ class EvalBasisMixin:
             raise ValueError(
                 f"Invalid bound {values}. Lower bound is greater or equal than the upper bound."
             )
+
+    @set_input_shape_state
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        """
+        klass = self.__class__(**self.get_params())
+
+        # for attr_name in ["_n_basis_input_", "_input_shape_"]:
+        #     setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
 
 
 class ConvBasisMixin:
@@ -309,6 +371,21 @@ class ConvBasisMixin:
                 "You must call `_set_kernel` before `_compute_features` for Conv basis."
             )
 
+    @set_input_shape_state
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        """
+        klass = self.__class__(**self.get_params())
+
+        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+            setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
+
 
 class BasisTransformerMixin:
     """Mixin class for constructing a transformer."""
@@ -462,3 +539,22 @@ class CompositeBasisMixin:
             A list with all 1d basis components.
         """
         return self._basis1._list_components() + self._basis2._list_components()
+
+    @set_input_shape_state
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        The method also handles recursive cloning for composite basis structures.
+        """
+        # clone recursively
+        basis1 = self._basis1.__sklearn_clone__()
+        basis2 = self._basis2.__sklearn_clone__()
+        klass = self.__class__(basis1, basis2)
+
+        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+            setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
