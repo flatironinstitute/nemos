@@ -352,7 +352,7 @@ class TransformerBasis:
         ValueError('Only setting _basis or existing attributes of _basis is allowed. Attempt to set `rand_attr`.')
         """
         # allow self._basis = basis and other attrs of self to be retrievable
-        if name == "_basis" or name == "basis" or name == "_wrapped_methods":
+        if name in ["_basis", "basis", "_wrapped_methods"]:
             super().__setattr__(name, value)
         # allow changing existing attributes of self._basis
         elif hasattr(self._basis, name):
@@ -372,7 +372,7 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(copy.deepcopy(self._basis))
+        cloned_obj = TransformerBasis(self._basis.__sklearn_clone__())
         cloned_obj._basis.kernel_ = None
         return cloned_obj
 

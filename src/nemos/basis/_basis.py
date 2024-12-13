@@ -838,11 +838,14 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
         return [self]
 
-    def __sklearn_clone__(self):
-        """Clone the basis while preserving input shapes related attributes.
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
 
-        This keeps the input shapes. Reinitializing the class, as in the regular
-        sklearn clone would drop them, making the cross-validation unusable.
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        The method also handles recursive cloning for composite basis structures.
         """
         # clone recursively
         if hasattr(self, "_basis1") and hasattr(self, "_basis2"):
