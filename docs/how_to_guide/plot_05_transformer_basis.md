@@ -18,11 +18,6 @@ NeMoS design favours object composability, one can combine any two or more bases
 Both approaches to data transformations are valuable and have their own advantages. 
 Wouldn't it be great if one could combine them? Well, this is what NeMoS `TransformerBasis` are for!
 
-:::{admonition} Select Basis Hyperparameters with skit-learn
-:class: note
-
-If you want to learn more about basis hyperparameters with `sklearn` pipelining and cross-validation, check out [this guide](sklearn-how-to).
-:::
 
 ## From Basis to TransformerBasis
 
@@ -40,7 +35,7 @@ speed = np.random.normal(size=(100))
 
 # create a composite basis
 counts_basis = nmo.basis.RaisedCosineLogConv(5, window_size=10)
-speed_basis = nmo.basis.BSplineBasis(5)
+speed_basis = nmo.basis.BSplineEval(5)
 composite_basis = counts_basis + speed_basis
 
 # compute the features
@@ -51,9 +46,9 @@ X = composite_basis.compute_features(counts, speed)
 ### Converting NeMoS `Basis` to a transformer
 
 Now, imagine that we want to use this basis as a step in a `scikit-learn` pipeline. 
-In this standard (for NeMoS) form, it would not be possible the `composite_basis` object requires two inputs. We need to convert it first into a compliant scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) wrapper class.
+In this standard (for NeMoS) form, it would not be possible the `composite_basis` object requires two inputs. We need to convert it first into a compliant scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) wrapper class.
 
-Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) can be done either using by the constructor directly or with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
+Instantiating a [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) can be done either using by the constructor directly or with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
 
 
 ```{code-cell} ipython3
@@ -67,14 +62,14 @@ trans_bas = bas.to_transformer()
 
 ```
 
-[`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis._basis.Basis) object's attributes:
+[`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis._basis.Basis) object's attributes:
 
 
 ```{code-cell} ipython3
 print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
 
-We can also set attributes of the underlying [`Basis`](nemos.basis._basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis._basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis._basis.Basis), and neither does changing the original [`Basis`](nemos.basis._basis.Basis) change [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) we created:
+We can also set attributes of the underlying [`Basis`](nemos.basis._basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis._basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis._basis.Basis), and neither does changing the original [`Basis`](nemos.basis._basis.Basis) change [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) we created:
 
 
 ```{code-cell} ipython3
@@ -91,19 +86,19 @@ As any `sckit-learn` tansformer, the `TransformerBasis` implements `fit`, a prep
 At this point we have an object equipped with the correct methods, so now all we have to do is concatenate the inputs into a unique array and call `fit_transform`, right? 
 
 ```{code-cell} ipython3
+
 # reinstantiate the basis transformer for illustration porpuses
 composite_basis = counts_basis + speed_basis
-transformer_bas = (composite_basis).to_transformer()
+trans_bas = (composite_basis).to_transformer()
 
 # concatenate the inputs
-inp = np.concatenate([counts, speed[:, np.newaxis]])
+inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
 print(inp.shape)
 
 try:
-    transformer_bas.fit_transform(inp)
+    trans_bas.fit_transform(inp)
 except RuntimeError as e:
     print(repr(e))
-    
 ```
 
 Unfortunately not yet. The problem is that the basis has never interacted with the two separate inputs, and therefore doesn't know which columns of `inp` should be processed by `count_basis` and which by `speed_basis`.
@@ -117,35 +112,59 @@ This can be called before or after the transformer basis is defined. The method 
 ```{code-cell} ipython3
 
 composite_basis.set_input_shape(counts, speed)
-out = transformer_bas.fit_transform(inp)
+out = composite_basis.to_transformer().fit_transform(inp)
 ```
 
 If the input is 1D or 2D, the number of columns,
 ```{code-cell} ipython3
 
 trans_bas = composite_basis.set_input_shape(5, 1).transformer()
-out = transformer_bas.fit_transform(inp)
+out = composite_basis.to_transformer().fit_transform(inp)
 ```
 
 A tuple containing the shapes of all axis other than the first,
 ```{code-cell} ipython3
 
 composite_basis.set_input_shape((5,), (1,))
-out = transformer_bas.fit_transform(inp)
+out = composite_basis.to_transformer().fit_transform(inp)
 ```
 
-Or a mix of any of the above.
-
+Or a mix of the above.
 ```{code-cell} ipython3
 
 composite_basis.set_input_shape(counts, 1)
-out = transformer_bas.fit_transform(inp)
+out = composite_basis.to_transformer().fit_transform(inp)
 ```
 
 You can also invert the order and call `to_transform` first and set the input shapes after. 
 ```{code-cell} ipython3
 
-trans_bas = composite_basis.transformer()
+trans_bas = composite_basis.to_transformer()
 trans_bas.set_input_shape(5, 1) 
-out = transformer_bas.fit_transform(inp)
+out = trans_bas.fit_transform(inp)
 ```
+
+:::{note}
+
+If you define a NeMoS basis and call `compute_features` on your inputs, internally, the basis will store the
+input shapes, and the `TransformerBasis` will be ready to process without any direct call to `set_input_shape`.
+:::
+
+If for some reason you will need to provide an input of different shape to the transformer, you must setup the 
+`TransformerBasis` again.
+
+```{code-cell} ipython3
+
+# define inputs with different shapes and concatenate
+x, y = np.random.poisson(size=(10, 3)), np.random.randn(10, 2, 3) 
+inp2 = np.concatenate([x, y.reshape(10, 6)], axis=1)
+
+trans_bas = composite_basis.to_transformer()
+trans_bas.set_input_shape(3, (2, 3)) 
+out2 = trans_bas.fit_transform(inp2)
+```
+
+
+### Learn more
+
+If you want to learn more about basis hyperparameters with `sklearn` pipelining and cross-validation, check out [this guide](sklearn-how-to).
