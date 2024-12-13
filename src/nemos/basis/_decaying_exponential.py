@@ -150,7 +150,7 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
         # process one input at the time (orthogonalization must be done one input at the time)
 
-        # flatten all inputs
+        # flatten all non-time dimensions
         shape = sample_pts.shape
         sample_pts = sample_pts.reshape(sample_pts.shape[0], -1)
         basis_list = []

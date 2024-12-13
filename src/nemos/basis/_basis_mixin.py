@@ -51,6 +51,7 @@ class EvalBasisMixin:
         -------
         :
             A matrix with the transformed features.
+
         """
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))

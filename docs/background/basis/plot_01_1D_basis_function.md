@@ -39,6 +39,10 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 
+from nemos._documentation_utils._myst_nb_glue import glue_two_step_convolve
+
+glue_two_step_convolve()
+
 ```
 
 (simple_basis_function)=
@@ -84,6 +88,7 @@ plt.title("B-Spline Basis")
 ```{code-cell} ipython3
 :tags: [hide-input]
 
+<<<<<<< HEAD
 # save image for thumbnail
 from pathlib import Path
 import os
@@ -106,7 +111,8 @@ if path.exists():
 print(path.resolve(), path.exists())
 ```
 
-## Feature Computation
+## Computing Features
+
 All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
 We can be group the bases into two categories depending on the type of transformation that [`compute_features`](nemos.basis._basis.Basis.compute_features) applies:
 
@@ -114,7 +120,7 @@ We can be group the bases into two categories depending on the type of transform
 
 2. **Convolution Bases**: These bases use the [`compute_features`](nemos.basis._basis.Basis.compute_features) method to convolve the input with a kernel of basis elements, using a `window_size` specified by the user. Classes in this category have names ending with "Conv", such as `BSplineConv`.
 
-Let's see how this two modalities operate.
+Let's see how these two categories operate:
 
 ```{code-cell} ipython3
 eval_mode = nmo.basis.MSplineEval(n_basis_funcs=n_basis)
@@ -161,8 +167,49 @@ check out the tutorial on [1D convolutions](convolution_background).
 :::
 
 
-Plotting the Basis Function Elements:
---------------------------------------
+### Multi-dimensional inputs
+For inputs with more than one dimension, `compute_features` assumes the first axis represents samples. This is always valid for `pynapple` time series. For arrays, you can use [`numpy.transpose`](https://numpy.org/doc/stable/reference/generated/numpy.transpose.html) to re-arrange the axis if needed.
+
+#### Eval Basis
+
+For Eval bases, `compute_features` evaluates the basis and outputs a 2D feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=5)
+# generate a 3D array
+inp = np.random.randn(50, 3, 2)
+out = basis.compute_features(inp)
+out.shape
+```
+
+For each of the $3 \times 2 = 6$ inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
+$3 \times 2 \times 5  = 30$ outputs.
+
+#### Conv Basis
+
+For Conv bases, `compute_features` convolves each input with `n_basis_funcs` kernels and outputs a 2D feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
+# compute_features to perform the convolution and concatenate
+out = basis.compute_features(inp)
+out.shape
+```
+
+:::{admonition} Note
+
+This process is equivalent to performing the convolution separately with [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
+
+```{glue} two-step-convolution-source-code
+```
+
+```{glue} two-step-convolution
+```
+
+:::
+
+Plotting the Basis Function Elements
+------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
 and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis._basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
 the equi-spaced samples along with the evaluated basis functions. The benefits of using Basis.evaluate_on_grid become
@@ -215,25 +262,3 @@ axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 ```
 
-Other Basis Types
------------------
-Each basis type may necessitate specific hyperparameters for instantiation. For a comprehensive description,
-please refer to the  [API Guide](nemos_basis). After instantiation, all classes
-share the same syntax for basis evaluation. The following is an example of how to instantiate and
-evaluate a log-spaced cosine raised function basis.
-
-
-```{code-cell} ipython3
-# Instantiate the basis noting that the `RaisedCosineLog` basis does not require an `order` parameter
-raised_cosine_log = nmo.basis.RaisedCosineLogEval(n_basis_funcs=10, width=1.5, time_scaling=50)
-
-# Evaluate the raised cosine basis at the equi-spaced sample points
-# (same method in all Basis elements)
-samples, eval_basis = raised_cosine_log.evaluate_on_grid(100)
-
-# Plot the evaluated log-spaced raised cosine basis
-plt.figure()
-plt.title(f"Log-spaced Raised Cosine basis with {eval_basis.shape[1]} elements")
-plt.plot(samples, eval_basis)
-plt.show()
-```

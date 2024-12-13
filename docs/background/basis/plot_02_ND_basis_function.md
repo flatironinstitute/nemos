@@ -292,7 +292,6 @@ axs[2, 1].set_xlabel('y-coord')
 plt.tight_layout()
 ```
 
-
 :::{note}
 Basis objects of different types can be combined through multiplication or addition.
 This feature is particularly useful when one of the axes represents a periodic variable and another is non-periodic.
