@@ -1252,18 +1252,18 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
         """
         # Set default values for n_inputs and start_slice if not provided
-        n_inputs = n_inputs or self._n_basis_input
+        n_inputs = n_inputs or self._n_basis_input_
         start_slice = start_slice or 0
 
         # If the instance is of AdditiveBasis type, handle slicing for the additive components
 
         split_dict, start_slice = self._basis1._get_feature_slicing(
-            n_inputs[: len(self._basis1._n_basis_input)],
+            n_inputs[: len(self._basis1._n_basis_input_)],
             start_slice,
             split_by_input=split_by_input,
         )
         sp2, start_slice = self._basis2._get_feature_slicing(
-            n_inputs[len(self._basis1._n_basis_input) :],
+            n_inputs[len(self._basis1._n_basis_input_) :],
             start_slice,
             split_by_input=split_by_input,
         )
@@ -1317,12 +1317,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
-        BasisTransformerMixin.__init__(self)
-        self._n_basis_input = None
-        self._n_output_features = None
-        self._label = "(" + basis1.label + " * " + basis2.label + ")"
-        self._basis1 = basis1
-        self._basis2 = basis2
+
 
     @property
     def n_basis_funcs(self):
