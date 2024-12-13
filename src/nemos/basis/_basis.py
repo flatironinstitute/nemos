@@ -838,6 +838,17 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
         return [self]
 
+    def __sklearn_clone__(self):
+        """Deep copy the basis.
+
+        This keeps the input shapes. Reinitializing the class, as in the regular
+        sklearn clone would drop them, making the cross-validation unusable.
+        """
+        bas = copy.deepcopy(self)
+        if hasattr(bas, "kernel_"):
+            bas.kernel_ = None
+        return bas
+
 
 class AdditiveBasis(CompositeBasisMixin, Basis):
     """

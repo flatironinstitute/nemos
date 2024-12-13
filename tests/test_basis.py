@@ -1202,7 +1202,7 @@ class TestSharedMethods:
             n_basis_funcs=5, window_size=5, **extra_decay_rates(cls["conv"], 5)
         )
         with pytest.raises(
-            ValueError, match="You must call `_set_kernel` before `_compute_features`"
+            ValueError, match="You must call `setup_basis` before `_compute_features`"
         ):
             bas._compute_features(np.linspace(0, 1, 10))
 
