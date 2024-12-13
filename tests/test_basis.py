@@ -300,6 +300,31 @@ class TestSharedMethods:
         with expectation:
             bas._evaluate(samples)
 
+
+    @pytest.mark.parametrize("n_basis", [5, 6])
+    @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_sklearn_clone_eval(self, cls, n_basis, vmin, vmax,inp_num):
+        bas = cls["eval"](n_basis, bounds=(vmin, vmax), **extra_decay_rates(cls["eval"], n_basis))
+        bas.set_input_shape(inp_num)
+        bas2 = bas.__sklearn_clone__()
+        assert id(bas) != id(bas2)
+        assert np.all(bas.__dict__.pop("decay_rates", True) == bas2.__dict__.pop("decay_rates", True))
+        assert bas.__dict__ == bas2.__dict__
+
+
+    @pytest.mark.parametrize("n_basis", [5, 6])
+    @pytest.mark.parametrize("ws", [10, 20])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_sklearn_clone_conv(self, cls, n_basis, ws,inp_num):
+        bas = cls["conv"](n_basis, window_size=ws, **extra_decay_rates(cls["eval"], n_basis))
+        bas.set_input_shape(inp_num)
+        bas2 = bas.__sklearn_clone__()
+        assert id(bas) != id(bas2)
+        assert np.all(bas.__dict__.pop("decay_rates", True) == bas2.__dict__.pop("decay_rates", True))
+        assert bas.__dict__ == bas2.__dict__
+
+
     @pytest.mark.parametrize(
         "attribute, value",
         [
@@ -1955,6 +1980,49 @@ class TestAdditiveBasis(CombinedBasis):
         """
         basis_obj = basis.MSplineEval(5) + basis.MSplineEval(5)
         basis_obj.compute_features(*eval_input)
+
+    @pytest.mark.parametrize("n_basis_a", [6])
+    @pytest.mark.parametrize("n_basis_b", [5])
+    @pytest.mark.parametrize("vmin, vmax", [(-1, 1)])
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_sklearn_clone(self, basis_a, basis_b, n_basis_a, n_basis_b, vmin, vmax, inp_num, basis_class_specific_params):
+        """Recursively check cloning."""
+        basis_a_obj = self.instantiate_basis(
+            n_basis_a, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_a_obj = basis_a_obj.set_input_shape(*([inp_num] * basis_a_obj._n_input_dimensionality))
+        basis_b_obj = self.instantiate_basis(
+            n_basis_b, basis_b, basis_class_specific_params, window_size=15
+        )
+        basis_b_obj = basis_b_obj.set_input_shape(*([inp_num]*basis_b_obj._n_input_dimensionality))
+        add = basis_a_obj + basis_b_obj
+
+        def filter_attributes(obj, exclude_keys):
+            return {key: val for key, val in obj.__dict__.items() if key not in exclude_keys}
+
+        def compare(b1, b2):
+            assert id(b1) != id(b2)
+            assert b1.__class__.__name__ == b2.__class__.__name__
+            if hasattr(b1, "basis1"):
+                compare(b1.basis1, b2.basis1)
+                compare(b1.basis2, b2.basis2)
+                # add all params that are not parent or _basis1,_basis2
+                d1 = filter_attributes(b1, exclude_keys=["_basis1", "_basis2", "_parent"])
+                d2 = filter_attributes(b2, exclude_keys=["_basis1", "_basis2", "_parent"])
+                assert d1 == d2
+            else:
+                decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
+                decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
+                assert np.array_equal(decay_rates_b1, decay_rates_b2)
+                d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
+                d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
+                assert d1 == d2
+
+        add2 = add.__sklearn_clone__()
+        compare(add, add2)
+
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
