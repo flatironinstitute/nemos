@@ -286,7 +286,7 @@ spikes = nwb['units'][unit_no]
 basis = nmo.basis.CyclicBSplineEval(10, order=5)
 x = np.linspace(-np.pi, np.pi, 100)
 plt.figure()
-plt.plot(x, basis(x))
+plt.plot(x, basis.compute_features(x))
 
 # Find the interval on which head_dir has no NaNs
 head_dir = head_dir.dropna()
@@ -300,7 +300,7 @@ spikes = spikes.count(bin_size=1/head_dir.rate, ep=valid_data)
 # center.
 head_dir = head_dir.interpolate(spikes)
 
-X = nmo.pytrees.FeaturePytree(head_direction=basis(head_dir))
+X = nmo.pytrees.FeaturePytree(head_direction=basis.compute_features(head_dir))
 ```
 
 Now we'll fit our GLM and then see what our head direction tuning looks like:
@@ -311,7 +311,7 @@ model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)
 model.fit(X, spikes)
 print(model.coef_['head_direction'])
 
-bs_vis = basis(x)
+bs_vis = basis.compute_features(x)
 tuning = jnp.einsum('b, tb->t', model.coef_['head_direction'], bs_vis)
 plt.figure()
 plt.polar(x, tuning)
@@ -354,7 +354,7 @@ our data similarly.
 pos_basis = nmo.basis.RaisedCosineLinearEval(10) * nmo.basis.RaisedCosineLinearEval(10)
 spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data)
 
-X['spatial_position'] = pos_basis(*spatial_pos.values.T)
+X['spatial_position'] = pos_basis.compute_features(*spatial_pos.values.T)
 ```
 
 Running the GLM is identical to before, but we can see that our coef_
@@ -373,7 +373,7 @@ coefficients).
 
 
 ```{code-cell} ipython3
-bs_vis = basis(x)
+bs_vis = basis.compute_features(x)
 tuning = jnp.einsum('b,nb->n', model.coef_['head_direction'], bs_vis)
 print(model.coef_['head_direction'])
 plt.figure()

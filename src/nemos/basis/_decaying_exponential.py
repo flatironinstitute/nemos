@@ -13,12 +13,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import (
-    Basis,
-    check_one_dimensional,
-    check_transform_input,
-    min_max_rescale_samples,
-)
+from ._basis import Basis, check_transform_input, min_max_rescale_samples
 
 
 class OrthExponentialBasis(Basis, abc.ABC):
@@ -132,7 +127,6 @@ class OrthExponentialBasis(Basis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def _evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
@@ -142,8 +136,9 @@ class OrthExponentialBasis(Basis, abc.ABC):
         Parameters
         ----------
         sample_pts
-            Spacing for basis functions, holding elements on the interval :math:`[0,inf)`,
-            shape ``(n_samples,)``.
+            Spacing for basis functions, holding elements on the interval :math:`[0,inf)`.
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------
@@ -156,23 +151,49 @@ class OrthExponentialBasis(Basis, abc.ABC):
         sample_pts, _ = min_max_rescale_samples(
             sample_pts, getattr(self, "bounds", None)
         )
-        valid_idx = ~np.isnan(sample_pts)
-        # because of how scipy.linalg.orth works, have to create a matrix of
-        # shape (n_pts, n_basis_funcs) and then transpose, rather than
-        # directly computing orth on the matrix of shape (n_basis_funcs,
-        # n_pts)
-        exp_decay_eval = np.stack(
-            [np.exp(-lam * sample_pts[valid_idx]) for lam in self._decay_rates], axis=1
+
+        # process one input at the time (orthogonalization must be done one input at the time)
+
+        # flatten all non-time dimensions
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(sample_pts.shape[0], -1)
+        basis_list = []
+        max_rank = 0
+        for samp in sample_pts.T:
+            valid_idx = ~np.isnan(samp)
+            # because of how scipy.linalg.orth works, have to create a matrix of
+            # shape (n_pts, n_basis_funcs) and then transpose, rather than
+            # directly computing orth on the matrix of shape (n_basis_funcs,
+            # n_pts)
+            exp_decay_eval = np.stack(
+                [np.exp(-lam * samp[valid_idx]) for lam in self._decay_rates], axis=1
+            )
+            # count the linear independent components (could be lower than n_basis_funcs for num precision).
+            n_independent_component = np.linalg.matrix_rank(exp_decay_eval)
+            # initialize output to nan
+            basis_funcs = np.full(
+                shape=(samp.shape[0], n_independent_component), fill_value=np.nan
+            )
+            # orthonormalize on valid points
+            basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
+
+            max_rank = max(max_rank, basis_funcs.shape[1])
+
+            # append the basis
+            basis_list.append(basis_funcs)
+
+        # fill the value in
+        out = np.full(
+            shape=(shape[0], len(basis_list), max_rank),
+            fill_value=np.nan,
+            dtype=np.float64,
         )
-        # count the linear independent components (could be lower than n_basis_funcs for num precision).
-        n_independent_component = np.linalg.matrix_rank(exp_decay_eval)
-        # initialize output to nan
-        basis_funcs = np.full(
-            shape=(sample_pts.shape[0], n_independent_component), fill_value=np.nan
-        )
-        # orthonormalize on valid points
-        basis_funcs[valid_idx] = scipy.linalg.orth(exp_decay_eval)
-        return basis_funcs
+        for i, bas in enumerate(basis_list):
+            out[:, i, : bas.shape[1]] = bas
+
+        # reshape back
+        out = out.reshape(*shape, -1)
+        return out
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.

@@ -12,12 +12,7 @@ from scipy.interpolate import splev
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import (
-    Basis,
-    check_one_dimensional,
-    check_transform_input,
-    min_max_rescale_samples,
-)
+from ._basis import Basis, check_transform_input, min_max_rescale_samples
 
 
 class SplineBasis(Basis, abc.ABC):
@@ -217,7 +212,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def _evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -227,8 +221,9 @@ class MSplineBasis(SplineBasis, abc.ABC):
         Parameters
         ----------
         sample_pts :
-            An array of sample points where the M-spline basis functions are to be
-            evaluated.
+            The sample points at which the M-spline is evaluated.
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------
@@ -249,15 +244,26 @@ class MSplineBasis(SplineBasis, abc.ABC):
         # add knots if not passed
         knot_locs = self._generate_knots(is_cyclic=False)
 
+        # get the original shape
+        shape = sample_pts.shape
         X = np.stack(
             [
-                mspline(sample_pts, self.order, i, knot_locs)
+                mspline(
+                    sample_pts.reshape(
+                        -1,
+                    ),
+                    self.order,
+                    i,
+                    knot_locs,
+                )
                 for i in range(self.n_basis_funcs)
             ],
             axis=1,
         )
+        X = X.reshape(*shape, X.shape[1])
         # re-normalize so that it integrates to 1 over the range.
-        X /= scaling
+        X /= scaling[..., None]
+
         return X
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -336,7 +342,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def _evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
@@ -347,6 +352,8 @@ class BSplineBasis(SplineBasis, abc.ABC):
         ----------
         sample_pts :
             The sample points at which the B-spline is evaluated, shape (n_samples,).
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------
@@ -369,9 +376,16 @@ class BSplineBasis(SplineBasis, abc.ABC):
         # add knots
         knot_locs = self._generate_knots(is_cyclic=False)
 
+        # reshape to flat and store original shape
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(
+            -1,
+        )
+
         basis_eval = bspline(
             sample_pts, knot_locs, order=self.order, der=0, outer_ok=False
         )
+        basis_eval = basis_eval.reshape(*shape, basis_eval.shape[1])
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -447,7 +461,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def _evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
@@ -457,8 +470,8 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
         Parameters
         ----------
         sample_pts :
-            The sample points at which the cyclic B-spline is evaluated, shape
-            (n_samples,).
+            The sample points at which the cyclic B-spline is evaluated. Samples must be stored in a
+            multi-dimensional array with first axis being the samples, i.e. `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------
@@ -493,6 +506,12 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
             )
         )
 
+        # reshape to flat and store original shape
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(
+            -1,
+        )
+
         ind = sample_pts > xc
 
         basis_eval = bspline(sample_pts, knots, order=self.order, der=0, outer_ok=True)
@@ -504,6 +523,8 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
             )
         # restore points
         sample_pts[ind] = sample_pts[ind] + knots.max() - knot_locs[0]
+
+        basis_eval = basis_eval.reshape(*shape, basis_eval.shape[1])
         return basis_eval
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:

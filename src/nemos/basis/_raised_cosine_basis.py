@@ -10,12 +10,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import (
-    Basis,
-    check_one_dimensional,
-    check_transform_input,
-    min_max_rescale_samples,
-)
+from ._basis import Basis, check_transform_input, min_max_rescale_samples
 
 
 class RaisedCosineBasisLinear(Basis, abc.ABC):
@@ -99,7 +94,6 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def _evaluate(  # call these _evaluate
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
@@ -109,7 +103,9 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
         Parameters
         ----------
         sample_pts :
-            Spacing for basis functions, holding elements on interval [0, 1], Shape (number of samples, ).
+            Spacing for basis functions, holding elements on interval [0, 1].
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Raises
         ------
@@ -131,6 +127,13 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
 
         peaks = self._compute_peaks()
         delta = peaks[1] - peaks[0]
+
+        # reshape samples
+        shape = sample_pts.shape
+        sample_pts = sample_pts.reshape(
+            -1,
+        )
+
         # generate a set of shifted cosines, and constrain them to be non-zero
         # over a single period, then enforce the codomain to be [0,1], by adding 1
         # and then multiply by 0.5
@@ -144,6 +147,7 @@ class RaisedCosineBasisLinear(Basis, abc.ABC):
             )
             + 1
         )
+        basis_funcs = basis_funcs.reshape(*shape, basis_funcs.shape[1])
         return basis_funcs
 
     def _compute_peaks(self) -> NDArray:
@@ -328,7 +332,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    @check_one_dimensional
     def _evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
@@ -339,6 +342,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         ----------
         sample_pts :
             Spacing for basis functions. Samples will be rescaled to the interval [0, 1].
+            `sample_pts` is a n-dimensional (n >= 1) array with first axis being the samples, i.e.
+            `sample_pts.shape[0] == n_samples`.
 
         Returns
         -------

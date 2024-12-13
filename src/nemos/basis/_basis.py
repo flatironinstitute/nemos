@@ -64,7 +64,7 @@ def check_one_dimensional(func: Callable) -> Callable:
 def min_max_rescale_samples(
     sample_pts: NDArray,
     bounds: Optional[Tuple[float, float]] = None,
-) -> Tuple[NDArray, float]:
+) -> Tuple[NDArray, NDArray]:
     """Rescale samples to [0,1].
 
     Parameters
@@ -81,16 +81,16 @@ def min_max_rescale_samples(
         If more than 90% of the sample points contain NaNs or Infs.
     """
     sample_pts = sample_pts.astype(float)
-    vmin = np.nanmin(sample_pts) if bounds is None else bounds[0]
-    vmax = np.nanmax(sample_pts) if bounds is None else bounds[1]
+    # if not normalize all array
+    vmin = np.nanmin(sample_pts, axis=0) if bounds is None else bounds[0]
+    vmax = np.nanmax(sample_pts, axis=0) if bounds is None else bounds[1]
     sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
     sample_pts -= vmin
-    # this passes if `samples_pts` contains a single value
-    if vmin != vmax:
-        scaling = vmax - vmin
-        sample_pts /= scaling
-    else:
-        scaling = 1.0
+
+    scaling = np.asarray(vmax - vmin)
+    # do not normalize if samples contain a single value (in which case vmax=vmin)
+    scaling[scaling == 0] = 1.0
+    sample_pts /= scaling
 
     check_fraction_valid_samples(
         sample_pts,
@@ -274,7 +274,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         basis function types and operation modes.
         """
         self._set_num_output_features(*xi)
-        self._set_kernel()
+        self.set_kernel()
         return self._compute_features(*xi)
 
     @abc.abstractmethod
@@ -285,7 +285,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _set_kernel(self):
+    def set_kernel(self):
         """Set kernel for conv basis and return self or just return self for eval."""
         pass
 
@@ -958,7 +958,7 @@ class AdditiveBasis(Basis):
         )
         return X
 
-    def _set_kernel(self, *xi: ArrayLike) -> Basis:
+    def set_kernel(self, *xi: ArrayLike) -> Basis:
         """Call fit on the added basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -973,8 +973,8 @@ class AdditiveBasis(Basis):
         :
             The AdditiveBasis ready to be evaluated.
         """
-        self._basis1._set_kernel()
-        self._basis2._set_kernel()
+        self._basis1.set_kernel()
+        self._basis2.set_kernel()
         return self
 
     def split_by_feature(
@@ -1260,7 +1260,7 @@ class MultiplicativeBasis(Basis):
     def _check_n_basis_min(self) -> None:
         pass
 
-    def _set_kernel(self, *xi: NDArray) -> Basis:
+    def set_kernel(self, *xi: NDArray) -> Basis:
         """Call fit on the multiplied basis.
 
         If any of the added basis is in "conv" mode, it will prepare its kernels for the convolution.
@@ -1275,8 +1275,8 @@ class MultiplicativeBasis(Basis):
         :
             The MultiplicativeBasis ready to be evaluated.
         """
-        self._basis1._set_kernel()
-        self._basis2._set_kernel()
+        self._basis1.set_kernel()
+        self._basis2.set_kernel()
         return self
 
     @support_pynapple(conv_type="numpy")

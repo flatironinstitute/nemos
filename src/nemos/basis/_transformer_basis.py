@@ -114,7 +114,7 @@ class TransformerBasis:
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
-        self._basis._set_kernel()
+        self._basis.set_kernel()
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:

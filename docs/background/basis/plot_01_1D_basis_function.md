@@ -39,6 +39,10 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 
+from nemos._documentation_utils._myst_nb_glue import glue_two_step_convolve
+
+glue_two_step_convolve()
+
 ```
 
 (simple_basis_function)=
@@ -136,9 +140,49 @@ If you want to learn more about convolutions, as well as how and when to change 
 check out the tutorial on [1D convolutions](convolution_background).
 :::
 
+### Multi-dimensional inputs
+For inputs with more than one dimension, `compute_features` assumes the first axis represents samples. This is always valid for `pynapple` time series. For arrays, you can use [`numpy.transpose`](https://numpy.org/doc/stable/reference/generated/numpy.transpose.html) to re-arrange the axis if needed.
+
+#### Eval Basis
+
+For Eval bases, `compute_features` evaluates the basis and outputs a 2D feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs=5)
+# generate a 3D array
+inp = np.random.randn(50, 3, 2)
+out = basis.compute_features(inp)
+out.shape
+```
+
+For each of the $3 \times 2 = 6$ inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
+$3 \times 2 \times 5  = 30$ outputs.
+
+#### Conv Basis
+
+For Conv bases, `compute_features` convolves each input with `n_basis_funcs` kernels and outputs a 2D feature matrix.
+
+```{code-cell} ipython3
+basis = nmo.basis.RaisedCosineLinearConv(n_basis_funcs=5, window_size=6)
+# compute_features to perform the convolution and concatenate
+out = basis.compute_features(inp)
+out.shape
+```
+
+:::{admonition} Note
+
+This process is equivalent to performing the convolution separately with [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) and then reshaping the output.
+
+```{glue} two-step-convolution-source-code
+```
+
+```{glue} two-step-convolution
+```
+
+:::
 
 Plotting the Basis Function Elements
---------------------------------------
+------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
 and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis._basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
 the equi-spaced samples along with the evaluated basis functions. 
@@ -193,3 +237,4 @@ axs[1].plot(samples, bspline_range.compute_features(samples), color="tomato")
 axs[1].set_title("bounds=[0.2, 0.8]")
 plt.tight_layout()
 ```
+
