@@ -83,10 +83,9 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "BSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
         BSplineBasis.__init__(
             self,
-            n_basis_funcs,
             mode="eval",
             order=order,
             label=label,
@@ -237,10 +236,14 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         label: Optional[str] = "BSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        ConvBasisMixin.__init__(
+            self,
+            n_basis_funcs=n_basis_funcs,
+            window_size=window_size,
+            conv_kwargs=conv_kwargs,
+        )
         BSplineBasis.__init__(
             self,
-            n_basis_funcs,
             mode="conv",
             order=order,
             label=label,
@@ -378,10 +381,9 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "CyclicBSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
         CyclicBSplineBasis.__init__(
             self,
-            n_basis_funcs,
             mode="eval",
             order=order,
             label=label,
@@ -524,10 +526,14 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         label: Optional[str] = "CyclicBSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        ConvBasisMixin.__init__(
+            self,
+            n_basis_funcs=n_basis_funcs,
+            window_size=window_size,
+            conv_kwargs=conv_kwargs,
+        )
         CyclicBSplineBasis.__init__(
             self,
-            n_basis_funcs,
             mode="conv",
             order=order,
             label=label,
@@ -689,10 +695,9 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "MSplineEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
         MSplineBasis.__init__(
             self,
-            n_basis_funcs,
             mode="eval",
             order=order,
             label=label,
@@ -859,10 +864,14 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         label: Optional[str] = "MSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        ConvBasisMixin.__init__(
+            self,
+            n_basis_funcs=n_basis_funcs,
+            window_size=window_size,
+            conv_kwargs=conv_kwargs,
+        )
         MSplineBasis.__init__(
             self,
-            n_basis_funcs,
             mode="conv",
             order=order,
             label=label,
@@ -1008,10 +1017,9 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "RaisedCosineLinearEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
         RaisedCosineBasisLinear.__init__(
             self,
-            n_basis_funcs,
             width=width,
             mode="eval",
             label=label,
@@ -1155,10 +1163,14 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         label: Optional[str] = "RaisedCosineLinearConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        ConvBasisMixin.__init__(
+            self,
+            n_basis_funcs=n_basis_funcs,
+            window_size=window_size,
+            conv_kwargs=conv_kwargs,
+        )
         RaisedCosineBasisLinear.__init__(
             self,
-            n_basis_funcs,
             mode="conv",
             width=width,
             label=label,
@@ -1311,10 +1323,9 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "RaisedCosineLogEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
         RaisedCosineBasisLog.__init__(
             self,
-            n_basis_funcs,
             width=width,
             time_scaling=time_scaling,
             enforce_decay_to_zero=enforce_decay_to_zero,
@@ -1470,10 +1481,14 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         label: Optional[str] = "RaisedCosineLogConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        ConvBasisMixin.__init__(
+            self,
+            n_basis_funcs=n_basis_funcs,
+            window_size=window_size,
+            conv_kwargs=conv_kwargs,
+        )
         RaisedCosineBasisLog.__init__(
             self,
-            n_basis_funcs,
             mode="conv",
             width=width,
             time_scaling=time_scaling,
@@ -1608,10 +1623,9 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "OrthExponentialEval",
     ):
-        EvalBasisMixin.__init__(self, bounds=bounds)
+        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
         OrthExponentialBasis.__init__(
             self,
-            n_basis_funcs,
             decay_rates=decay_rates,
             mode="eval",
             label=label,
@@ -1751,14 +1765,21 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         label: Optional[str] = "OrthExponentialConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        ConvBasisMixin.__init__(
+            self,
+            n_basis_funcs=n_basis_funcs,
+            window_size=window_size,
+            conv_kwargs=conv_kwargs,
+        )
         OrthExponentialBasis.__init__(
             self,
-            n_basis_funcs,
             mode="conv",
             decay_rates=decay_rates,
             label=label,
         )
+        # re-check window size because n_basis_funcs is not set yet when the
+        # property setter runs the first check.
+        self._check_window_size(self.window_size)
 
     @add_docstring("evaluate_on_grid", OrthExponentialBasis)
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
@@ -1850,3 +1871,31 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
 
         """
         return super().set_input_shape(xi)
+
+    def _check_window_size(self, window_size: int):
+        """OrthExponentialBasis specific window size check."""
+        super()._check_window_size(window_size)
+        # if n_basis_funcs is not yet initialized, skip check
+        n_basis = getattr(self, "n_basis_funcs", None)
+        if n_basis and window_size < n_basis:
+            raise ValueError(
+                "OrthExponentialConv basis requires at least a window_size larger then the number "
+                f"of basis functions. window_size is {window_size}, n_basis_funcs while"
+                f"is {self.n_basis_funcs}."
+            )
+
+    def set_kernel(self):
+        try:
+            super().set_kernel()
+        except ValueError as e:
+            if "OrthExponentialBasis requires at least as many" in str(e):
+                raise ValueError(
+                    "Cannot set the kernels for OrthExponentialBasis when `window_size` is smaller "
+                    "than `n_basis_funcs.\n"
+                    "Please, increase the window size or reduce the number of basis functions. "
+                    f"Current `window_size` is {self.window_size}, while `n_basis_funcs` is "
+                    f"{self.n_basis_funcs}."
+                )
+            else:
+                raise e
+        return self

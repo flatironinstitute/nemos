@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
+
+import numpy as np
 
 from ..typing import FeatureMatrix
 
@@ -63,12 +65,28 @@ class TransformerBasis:
         self._basis = copy.deepcopy(basis)
 
     @staticmethod
-    def _unpack_inputs(X: FeatureMatrix):
-        """Unpack inputs without using transpose.
+    def _check_initialized(basis):
+        if basis._n_basis_input_ is None:
+            raise RuntimeError(
+                "Cannot apply TransformerBasis: the provided basis has no defined input shape. "
+                "Please call `set_input_shape` before calling `fit`, `transform`, or "
+                "`fit_transform`."
+            )
+
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis):
+        self._check_initialized(basis)
+        self._basis = basis
+
+    def _unpack_inputs(self, X: FeatureMatrix) -> List:
+        """Unpack inputs.
 
         Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
-        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``
-        exception since ``pynapple`` assumes that the time axis is the first axis.
+        returning a list of Tsd objects.
 
         Parameters
         ----------
@@ -78,10 +96,19 @@ class TransformerBasis:
         Returns
         -------
         :
-            A tuple of each individual input.
+            A list of each individual input.
 
         """
-        return (X[:, k] for k in range(X.shape[1]))
+        n_samples = X.shape[0]
+        out = []
+        cc = 0
+        for i, bas in enumerate(self._list_components()):
+            n_input = self._n_basis_input_[i]
+            out.append(
+                np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
+            )
+            cc += n_input
+        return out
 
     def fit(self, X: FeatureMatrix, y=None):
         """
@@ -110,11 +137,11 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 2))
 
         >>> # Define and fit tranformation basis
-        >>> basis = MSplineEval(10)
+        >>> basis = MSplineEval(10).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
-        self._basis.set_kernel()
+        self._basis.setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
@@ -141,7 +168,7 @@ class TransformerBasis:
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
 
-        >>> basis = MSplineConv(10, window_size=200)
+        >>> basis = MSplineConv(10, window_size=200).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
@@ -152,7 +179,7 @@ class TransformerBasis:
         (200, 10)
 
         >>> # Transform basis
-        >>> feature_transformed = transformer.transform(X[:, 0:1])
+        >>> feature_transformed = transformer.transform(X)
         """
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
@@ -187,7 +214,7 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 1))
 
         >>> # Define tranformation basis
-        >>> basis = MSplineEval(10)
+        >>> basis = MSplineEval(10).set_input_shape(1)
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
