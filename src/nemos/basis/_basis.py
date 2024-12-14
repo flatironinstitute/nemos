@@ -146,8 +146,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         else:
             self._label = str(label)
 
-        self._check_n_basis_min()
-
         # specified only after inputs/input shapes are provided
         self._n_basis_input_ = getattr(self, "_n_basis_input_", None)
         self._input_shape_ = getattr(self, "_input_shape_", None)
@@ -278,12 +276,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         Compute all the basis states that do not depend on the input.
 
-        An example of such state is the kernel_ for Conv baisis, which can be computed
+        An example of such state is the kernel_ for Conv bases, which can be computed
         without any input (it only depends on the basis type, the window size and the
         number of basis elements).
         """
         pass
 
+    @abc.abstractmethod
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Set the expected input shape for the basis object.
@@ -293,54 +292,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         from an array. The method also calculates the total number of input
         features and output features based on the number of basis functions.
 
-        Parameters
-        ----------
-        xi :
-            The input shape specification.
-            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
-            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
-              All elements must be integers.
-            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
-
-        Raises
-        ------
-        ValueError
-            If a tuple is provided and it contains non-integer elements.
-
-        Returns
-        -------
-        self :
-            Returns the instance itself to allow method chaining.
-
-        Notes
-        -----
-        All state attributes that depends on the input must be set in this method in order for
-        the API of basis to work correctly. In particular, this method is called by ``_basis_fit``,
-        which is equivalent to ``fit`` for a transformer. If any input dependent state
-        is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
-
-        Separating states related to the input (settable with this method) and states that are unrelated
-        from the input (settable with ``set_kernel`` for Conv bases) is a deliberate design choice
-        that improves modularity.
-
         """
-        if isinstance(xi, tuple):
-            if not all(isinstance(i, int) for i in xi):
-                raise ValueError(
-                    f"The tuple provided contains non integer values. Tuple: {xi}."
-                )
-            shape = xi
-        elif isinstance(xi, int):
-            shape = () if xi == 1 else (xi,)
-        else:
-            shape = xi.shape[1:]
-
-        n_inputs = (int(np.prod(shape)),)
-
-        self._input_shape_ = shape
-
-        self._n_basis_input_ = n_inputs
-        return self
+        pass
 
     @abc.abstractmethod
     def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
@@ -510,20 +463,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
 
-    @abc.abstractmethod
-    def _check_n_basis_min(self) -> None:
-        """Check that the user required enough basis elements.
-
-        Most of the basis work with at least 1 element, but some
-        such as the RaisedCosineBasisLog requires a minimum of 2 basis to be well defined.
-
-        Raises
-        ------
-        ValueError
-            If an insufficient number of basis element is requested for the basis type
-        """
-        pass
-
     def __add__(self, other: Basis) -> AdditiveBasis:
         """
         Add two Basis objects together.
@@ -625,8 +564,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         _get_default_slicing : Handles default slicing logic.
         _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
         """
-        # Set default values for n_inputs and start_slice if not provided
-        n_inputs = n_inputs or self._n_basis_input_
+        # Set default values for start_slice if not provided
         start_slice = start_slice or 0
         # Handle the default case for non-additive basis types
         # See overwritten method for recursion logic
@@ -772,72 +710,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
         return reshaped_out
 
-    def _check_input_shape_consistency(self, x: NDArray):
-        """Check input consistency across calls."""
-        # remove sample axis and squeeze
-        shape = x.shape[1:]
-
-        initialized = self._input_shape_ is not None
-        is_shape_match = self._input_shape_ == shape
-        if initialized and not is_shape_match:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape_}"[1:]
-            expected_shape_str = expected_shape_str.replace(",)", ")")
-            raise ValueError(
-                f"Input shape mismatch detected.\n\n"
-                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
-                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
-                f"  Expected: {expected_shape_str}\n"
-                f"  But got:  {x.shape}.\n\n"
-                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
-                "but all other dimensions must remain the same. If you need to process inputs with a "
-                "different shape, please create a new basis instance."
-            )
-
-    def _list_components(self):
-        """List all basis components.
-
-        This is re-implemented for composite basis in the mixin class.
-
-        Returns
-        -------
-            A list with all 1d basis components.
-
-        Raises
-        ------
-        RuntimeError
-            If the basis has multiple components. This would only happen if there is an
-            implementation issue, for example, if a composite basis is implemented but the
-            mixin class is not initialized, or if the _list_components method of the composite mixin
-            class is accidentally removed.
-        """
-        if hasattr(self, "basis1"):
-            raise RuntimeError(
-                "Composite basis must implement the _list_components method."
-            )
-        return [self]
-
-    def __sklearn_clone__(self) -> Basis:
-        """Clone the basis while preserving attributes related to input shapes.
-
-        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
-        `_input_shape_`) are preserved during cloning. Reinitializing the class
-        as in the regular sklearn clone would drop these attributes, rendering
-        cross-validation unusable.
-        The method also handles recursive cloning for composite basis structures.
-        """
-        # clone recursively
-        if hasattr(self, "_basis1") and hasattr(self, "_basis2"):
-            basis1 = self._basis1.__sklearn_clone__()
-            basis2 = self._basis2.__sklearn_clone__()
-            klass = self.__class__(basis1, basis2)
-
-        else:
-            klass = self.__class__(**self.get_params())
-
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
-        return klass
-
 
 class AdditiveBasis(CompositeBasisMixin, Basis):
     """
@@ -895,34 +767,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             return None
         return out1 + out2
 
+    @add_docstring("set_input_shape", CompositeBasisMixin)
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
         """
-        Set the expected input shape for the basis object.
-
-        This method sets the input shape for each component basis in the ``AdditiveBasis``.
-        One ``xi`` must be provided for each basis component, specified as an integer,
-        a tuple of integers, or an array. The method calculates and stores the total number of output features
-        based on the number of basis functions in each component and the provided input shapes.
-
-        Parameters
-        ----------
-        *xi :
-            The input shape specifications. For every k, ``xi[k]`` can be:
-            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
-            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
-              All elements must be integers.
-            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
-
-        Raises
-        ------
-        ValueError
-            If a tuple is provided and it contains non-integer elements.
-
-        Returns
-        -------
-        self :
-            Returns the instance itself to allow method chaining.
-
         Examples
         --------
         >>> # Generate sample data
@@ -944,15 +791,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         181
 
         """
-        self._n_basis_input_ = (
-            *self._basis1.set_input_shape(
-                *xi[: self._basis1._n_input_dimensionality]
-            )._n_basis_input_,
-            *self._basis2.set_input_shape(
-                *xi[self._basis1._n_input_dimensionality :]
-            )._n_basis_input_,
-        )
-        return self
+        return super().set_input_shape(*xi)
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -1406,64 +1245,6 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         )
         return X
 
-    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
-        """
-        Set the expected input shape for the basis object.
-
-        This method sets the input shape for each component basis in the ``MultiplicativeBasis``.
-        One ``xi`` must be provided for each basis component, specified as an integer,
-        a tuple of integers, or an array. The method calculates and stores the total number of output features
-        based on the number of basis functions in each component and the provided input shapes.
-
-        Parameters
-        ----------
-        *xi :
-            The input shape specifications. For every k,``xi[k]`` can be:
-            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
-            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
-              All elements must be integers.
-            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
-
-        Raises
-        ------
-        ValueError
-            If a tuple is provided and it contains non-integer elements.
-
-        Returns
-        -------
-        self :
-            Returns the instance itself to allow method chaining.
-        Examples
-        --------
-        >>> # Generate sample data
-        >>> import numpy as np
-        >>> import nemos as nmo
-
-        >>> # define an additive basis
-        >>> basis_1 = nmo.basis.BSplineEval(5)
-        >>> basis_2 = nmo.basis.RaisedCosineLinearEval(6)
-        >>> basis_3 = nmo.basis.MSplineEval(7)
-        >>> multiplicative_basis = basis_1 * basis_2 * basis_3
-
-        Specify the input shape using all 3 allowed ways: integer, tuple, array
-        >>> _ = multiplicative_basis.set_input_shape(1, (2, 3), np.ones((10, 4, 5)))
-
-        Expected output features are:
-        (5 * 6 * 7 bases) * (1 * 6 * 20 inputs) = 25200
-        >>> multiplicative_basis.n_output_features
-        25200
-
-        """
-        self._n_basis_input_ = (
-            *self._basis1.set_input_shape(
-                *xi[: self._basis1._n_input_dimensionality]
-            )._n_basis_input_,
-            *self._basis2.set_input_shape(
-                *xi[self._basis1._n_input_dimensionality :]
-            )._n_basis_input_,
-        )
-        return self
-
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
@@ -1558,3 +1339,29 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
         """
         return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", CompositeBasisMixin)
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
+        """
+        Examples
+        --------
+        >>> # Generate sample data
+        >>> import numpy as np
+        >>> import nemos as nmo
+
+        >>> # define an additive basis
+        >>> basis_1 = nmo.basis.BSplineEval(5)
+        >>> basis_2 = nmo.basis.RaisedCosineLinearEval(6)
+        >>> basis_3 = nmo.basis.MSplineEval(7)
+        >>> multiplicative_basis = basis_1 * basis_2 * basis_3
+
+        Specify the input shape using all 3 allowed ways: integer, tuple, array
+        >>> _ = multiplicative_basis.set_input_shape(1, (2, 3), np.ones((10, 4, 5)))
+
+        Expected output features are:
+        (5 * 6 * 7 bases) * (1 * 6 * 20 inputs) = 25200
+        >>> multiplicative_basis.n_output_features
+        25200
+
+        """
+        return super().set_input_shape(*xi)

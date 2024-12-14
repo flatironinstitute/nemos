@@ -125,8 +125,12 @@ profile = "black"
 testpaths = ["tests"]             # Specify the directory where test files are located
 filterwarnings = [
     # note the use of single quote below to denote "raw" strings in TOML
+    # this is raised whenever one imports the plotting utils
     'ignore:plotting functions contained within:UserWarning',
-    'ignore:Tolerance of \d\.\d+e-\d\d reached:RuntimeWarning',
+    # numerical inversion test reaches tolerance...
+    'ignore:Tolerance of -?\d\.\d+e-\d\d reached:RuntimeWarning',
+    # mpl must be non-interctive for testing otherwise doctests will freeze
+    'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
 ]
 
 [tool.coverage.run]

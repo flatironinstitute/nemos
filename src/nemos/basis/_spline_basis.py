@@ -13,9 +13,10 @@ from scipy.interpolate import splev
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ._basis import Basis, check_transform_input, min_max_rescale_samples
+from ._basis_mixin import AtomicBasisMixin
 
 
-class SplineBasis(Basis, abc.ABC):
+class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
     """
     SplineBasis class inherits from the Basis class and represents spline basis functions.
 
@@ -43,6 +44,7 @@ class SplineBasis(Basis, abc.ABC):
         mode: Literal["conv", "eval"] = "eval",
     ) -> None:
         self.order = order
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
         super().__init__(
             label=label,
             mode=mode,

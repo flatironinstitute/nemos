@@ -174,6 +174,7 @@ def test_sklearn_transformer_pipeline_pynapple(
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
     y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+
     # fit a pipeline & predict from pynapple
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
     pipe.fit(X_nap[:, : bas._basis._n_input_dimensionality] ** 2, y_nap)

@@ -100,7 +100,6 @@ class TransformerBasis:
 
     @basis.setter
     def basis(self, basis):
-        self._check_initialized(basis)
         self._basis = basis
 
     def _unpack_inputs(self, X: FeatureMatrix) -> List:
@@ -121,14 +120,13 @@ class TransformerBasis:
 
         """
         n_samples = X.shape[0]
-        out = []
-        cc = 0
-        for i, bas in enumerate(self._list_components()):
-            n_input = self._n_basis_input_[i]
-            out.append(
-                np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
+        out = [
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
+            for i, (bas, n_input) in enumerate(
+                zip(self._list_components(), self._n_basis_input_)
             )
-            cc += n_input
+            for cc in [sum(self._n_basis_input_[:i])]
+        ]
         return out
 
     def fit(self, X: FeatureMatrix, y=None):
@@ -166,9 +164,9 @@ class TransformerBasis:
         >>> # Example input
         >>> X = np.random.normal(size=(100, 2))
 
-        >>> # Define, setup and fit transformer basis
-        >>> basis = MSplineEval(10)
-        >>> transformer = TransformerBasis(basis).set_input_shape(2)
+        >>> # Define and fit tranformation basis
+        >>> basis = MSplineEval(10).set_input_shape(2)
+        >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
         self._check_initialized(self._basis)
@@ -200,12 +198,12 @@ class TransformerBasis:
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
 
-        >>> basis = MSplineConv(10, window_size=200)
+        >>> basis = MSplineConv(10, window_size=200).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
 
-        >>> transformer_fitted = transformer.set_input_shape(2).fit(X)
+        >>> transformer_fitted = transformer.fit(X)
         >>> # Now the convolution kernel is initialized and has shape (window_size, n_basis_funcs)
         >>> transformer_fitted.kernel_.shape
         (200, 10)
@@ -244,15 +242,10 @@ class TransformerBasis:
         >>> from nemos.basis import MSplineEval, TransformerBasis
 
         >>> # Example input
-        >>> n_inputs = 2
-        >>> X = np.random.normal(size=(100, 2))
+        >>> X = np.random.normal(size=(100, 1))
 
         >>> # Define tranformation basis
-        >>> basis = MSplineEval(10)
-        >>> # Prepare basis to process 2 inputs
-        >>> # This step must be done before
-        >>> basis = basis.set_input_shape(n_inputs)
-
+        >>> basis = MSplineEval(10).set_input_shape(1)
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
@@ -346,10 +339,10 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
         >>> try:
-        ...     trans_bas.rand_attr = "some value"
+        ...     trans_bas.random_attribute_name = "some value"
         ... except ValueError as e:
         ...     print(repr(e))
-        ValueError('Only setting _basis or existing attributes of _basis is allowed. Attempt to set `rand_attr`.')
+        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
         """
         # allow self._basis = basis and other attrs of self to be retrievable
         if name in ["_basis", "basis", "_wrapped_methods"]:

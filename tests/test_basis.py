@@ -1327,6 +1327,20 @@ class TestSharedMethods:
         with expectation:
             bas.set_input_shape(inp_shape)
 
+    @pytest.mark.parametrize(
+        "mode, kwargs", [("eval", {}), ("conv", {"window_size": 6})]
+    )
+    def test_list_component(self, mode, kwargs, cls):
+        basis_obj = cls[mode](
+            n_basis_funcs=5,
+            **kwargs,
+            **extra_decay_rates(cls[mode], 5),
+        )
+
+        out = basis_obj._list_components()
+        assert len(out) == 1
+        assert id(out[0]) == id(basis_obj)
+
 
 class TestRaisedCosineLogBasis(BasisFuncsTesting):
     cls = {"eval": basis.RaisedCosineLogEval, "conv": basis.RaisedCosineLogConv}
@@ -1956,6 +1970,33 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_list_component(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+        out = add._list_components()
+
+        assert len(out) == add._n_input_dimensionality
+
+        def get_ids(bas):
+
+            if hasattr(bas, "basis1"):
+                ids = get_ids(bas.basis1)
+                ids += get_ids(bas.basis2)
+            else:
+                ids = [id(bas)]
+            return ids
+
+        id_list = get_ids(add)
+
+        assert tuple(id(o) for o in out) == tuple(id_list)
 
     @pytest.mark.parametrize("samples", [[[0], []], [[], [0]], [[0, 0], [0, 0]]])
     @pytest.mark.parametrize("base_cls", [basis.BSplineEval, basis.BSplineConv])

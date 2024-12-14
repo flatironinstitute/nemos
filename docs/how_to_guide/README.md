@@ -14,7 +14,7 @@ pip install nemos[examples]
 :::
 
 
-::::{grid} 1 2 3 3
+::::{grid} 1 2 3 4
 
 :::{grid-item-card}
 
@@ -58,27 +58,42 @@ plot_04_batch_glm.md
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_05_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="Pipelining and cross-validation."/>
+<img src="../_static/nemos_sklearn.svg" style="height: 100px", alt="NeMoS vs sklearn."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-plot_05_sklearn_pipeline_cv_demo.md
+plot_05_transformer_basis.md
 ```
 :::
 
 :::{grid-item-card}
 
 <figure>
-<img src="../_static/thumbnails/how_to_guide/plot_06_glm_pytree.svg" style="height: 100px", alt="PyTrees."/>
+<img src="../_static/thumbnails/how_to_guide/plot_06_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="PyTrees."/>
 </figure>
 
 ```{toctree}
 :maxdepth: 2
 
-plot_06_glm_pytree.md
+plot_06_sklearn_pipeline_cv_demo.md
 ```
+
+:::
+
+:::{grid-item-card}
+
+<figure>
+<img src="../_static/thumbnails/how_to_guide/plot_07_glm_pytree.svg" style="height: 100px", alt="PyTrees."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+plot_07_glm_pytree.md
+```
+
 :::
 
 ::::

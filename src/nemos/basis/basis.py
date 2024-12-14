@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis import add_docstring
-from ._basis_mixin import ConvBasisMixin, EvalBasisMixin
+from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._decaying_exponential import OrthExponentialBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
@@ -83,13 +83,15 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "BSplineEval",
     ):
-        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
+
         BSplineBasis.__init__(
             self,
+            n_basis_funcs,
             mode="eval",
             order=order,
             label=label,
         )
+        EvalBasisMixin.__init__(self, bounds=bounds)
 
     @add_docstring("split_by_feature", BSplineBasis)
     def split_by_feature(
@@ -156,7 +158,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
-    @add_docstring("set_input_shape", BSplineBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -164,25 +166,22 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.BSplineEval(5)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class BSplineConv(ConvBasisMixin, BSplineBasis):
@@ -236,14 +235,10 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         label: Optional[str] = "BSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(
-            self,
-            n_basis_funcs=n_basis_funcs,
-            window_size=window_size,
-            conv_kwargs=conv_kwargs,
-        )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         BSplineBasis.__init__(
             self,
+            n_basis_funcs,
             mode="conv",
             order=order,
             label=label,
@@ -314,7 +309,7 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
-    @add_docstring("set_input_shape", BSplineBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -322,25 +317,22 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.BSplineConv(5, 10)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
@@ -381,9 +373,10 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "CyclicBSplineEval",
     ):
-        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds)
         CyclicBSplineBasis.__init__(
             self,
+            n_basis_funcs,
             mode="eval",
             order=order,
             label=label,
@@ -454,7 +447,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
-    @add_docstring("set_input_shape", CyclicBSplineBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -462,25 +455,22 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.CyclicBSplineEval(5)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
@@ -526,14 +516,10 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         label: Optional[str] = "CyclicBSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(
-            self,
-            n_basis_funcs=n_basis_funcs,
-            window_size=window_size,
-            conv_kwargs=conv_kwargs,
-        )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         CyclicBSplineBasis.__init__(
             self,
+            n_basis_funcs,
             mode="conv",
             order=order,
             label=label,
@@ -604,7 +590,7 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
-    @add_docstring("set_input_shape", CyclicBSplineBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -612,25 +598,22 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.CyclicBSplineConv(5, 10)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class MSplineEval(EvalBasisMixin, MSplineBasis):
@@ -695,9 +678,10 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "MSplineEval",
     ):
-        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds)
         MSplineBasis.__init__(
             self,
+            n_basis_funcs,
             mode="eval",
             order=order,
             label=label,
@@ -768,7 +752,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
-    @add_docstring("set_input_shape", MSplineBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -776,25 +760,22 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.MSplineEval(5)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class MSplineConv(ConvBasisMixin, MSplineBasis):
@@ -864,14 +845,10 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         label: Optional[str] = "MSplineConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(
-            self,
-            n_basis_funcs=n_basis_funcs,
-            window_size=window_size,
-            conv_kwargs=conv_kwargs,
-        )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         MSplineBasis.__init__(
             self,
+            n_basis_funcs,
             mode="conv",
             order=order,
             label=label,
@@ -942,7 +919,7 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         """
         return super().evaluate_on_grid(n_samples)
 
-    @add_docstring("set_input_shape", MSplineBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -950,25 +927,22 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.MSplineConv(5, 10)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
@@ -1017,9 +991,10 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "RaisedCosineLinearEval",
     ):
-        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLinear.__init__(
             self,
+            n_basis_funcs,
             width=width,
             mode="eval",
             label=label,
@@ -1083,7 +1058,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", RaisedCosineBasisLinear)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -1091,25 +1066,22 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.RaisedCosineLinearEval(5)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
@@ -1163,14 +1135,10 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         label: Optional[str] = "RaisedCosineLinearConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(
-            self,
-            n_basis_funcs=n_basis_funcs,
-            window_size=window_size,
-            conv_kwargs=conv_kwargs,
-        )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLinear.__init__(
             self,
+            n_basis_funcs,
             mode="conv",
             width=width,
             label=label,
@@ -1234,7 +1202,7 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", RaisedCosineBasisLinear)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -1242,25 +1210,22 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.RaisedCosineLinearConv(5, 10)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
@@ -1323,9 +1288,10 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "RaisedCosineLogEval",
     ):
-        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds)
         RaisedCosineBasisLog.__init__(
             self,
+            n_basis_funcs,
             width=width,
             time_scaling=time_scaling,
             enforce_decay_to_zero=enforce_decay_to_zero,
@@ -1391,7 +1357,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", RaisedCosineBasisLog)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -1399,25 +1365,22 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.RaisedCosineLogEval(5)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
@@ -1481,14 +1444,10 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         label: Optional[str] = "RaisedCosineLogConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(
-            self,
-            n_basis_funcs=n_basis_funcs,
-            window_size=window_size,
-            conv_kwargs=conv_kwargs,
-        )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         RaisedCosineBasisLog.__init__(
             self,
+            n_basis_funcs,
             mode="conv",
             width=width,
             time_scaling=time_scaling,
@@ -1554,7 +1513,7 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", RaisedCosineBasisLog)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -1562,25 +1521,22 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.RaisedCosineLogConv(5, 10)
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
@@ -1623,9 +1579,10 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         bounds: Optional[Tuple[float, float]] = None,
         label: Optional[str] = "OrthExponentialEval",
     ):
-        EvalBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, bounds=bounds)
+        EvalBasisMixin.__init__(self, bounds=bounds)
         OrthExponentialBasis.__init__(
             self,
+            n_basis_funcs,
             decay_rates=decay_rates,
             mode="eval",
             label=label,
@@ -1693,7 +1650,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", OrthExponentialBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -1701,25 +1658,22 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.OrthExponentialEval(5, decay_rates=np.arange(1, 6))
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
 
 class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
@@ -1765,14 +1719,10 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         label: Optional[str] = "OrthExponentialConv",
         conv_kwargs: Optional[dict] = None,
     ):
-        ConvBasisMixin.__init__(
-            self,
-            n_basis_funcs=n_basis_funcs,
-            window_size=window_size,
-            conv_kwargs=conv_kwargs,
-        )
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
         OrthExponentialBasis.__init__(
             self,
+            n_basis_funcs,
             mode="conv",
             decay_rates=decay_rates,
             label=label,
@@ -1844,7 +1794,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         """
         return super().split_by_feature(x, axis=axis)
 
-    @add_docstring("set_input_shape", OrthExponentialBasis)
+    @add_docstring("set_input_shape", AtomicBasisMixin)
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Examples
@@ -1852,25 +1802,22 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         >>> import nemos as nmo
         >>> import numpy as np
         >>> basis = nmo.basis.OrthExponentialConv(5, window_size=10, decay_rates=np.arange(1, 6))
-
-        Configure with an integer input:
+        >>> # Configure with an integer input:
         >>> _ = basis.set_input_shape(3)
         >>> basis.n_output_features
         15
-
-        Configure with a tuple:
+        >>> # Configure with a tuple:
         >>> _ = basis.set_input_shape((4, 5))
         >>> basis.n_output_features
         100
-
-        Configure with an array:
+        >>> # Configure with an array:
         >>> x = np.ones((10, 4, 5))
         >>> _ = basis.set_input_shape(x)
         >>> basis.n_output_features
         100
 
         """
-        return super().set_input_shape(xi)
+        return AtomicBasisMixin.set_input_shape(self, xi)
 
     def _check_window_size(self, window_size: int):
         """OrthExponentialBasis specific window size check."""
