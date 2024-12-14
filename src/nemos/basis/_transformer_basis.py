@@ -339,10 +339,10 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
         >>> try:
-        ...     trans_bas.random_attribute_name = "some value"
+        ...     trans_bas.rand_atrr = "some value"
         ... except ValueError as e:
         ...     print(repr(e))
-        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
+        ValueError('Only setting _basis or existing attributes of _basis is allowed. Attempt to set `rand_atrr`.')
         """
         # allow self._basis = basis and other attrs of self to be retrievable
         if name in ["_basis", "basis", "_wrapped_methods"]:
