@@ -215,7 +215,7 @@ class EvalBasisMixin:
         Set all basis states.
 
         This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
-        it must set all basis states, i.e. kernel_ and all the states relative to the input shape.
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
         The difference between this method and the transformer ``fit`` is in the expected input structure,
         where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
         each input is provided as a separate time series for each basis element.
@@ -323,7 +323,7 @@ class ConvBasisMixin:
         Set all basis states.
 
         This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
-        it must set all basis states, i.e. kernel_ and all the states relative to the input shape.
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
         The difference between this method and the transformer ``fit`` is in the expected input structure,
         where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
         each input is provided as a separate time series for each basis element.
@@ -539,7 +539,7 @@ class CompositeBasisMixin:
         Set all basis states.
 
         This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
-        it must set all basis states, i.e. kernel_ and all the states relative to the input shape.
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
         The difference between this method and the transformer ``fit`` is in the expected input structure,
         where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
         each input is provided as a separate time series for each basis element.

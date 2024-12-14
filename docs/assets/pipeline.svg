@@ -24,12 +24,12 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="1.4142136"
-     inkscape:cx="289.20667"
-     inkscape:cy="-54.800776"
-     inkscape:window-width="2488"
-     inkscape:window-height="1262"
+     inkscape:cx="206.82873"
+     inkscape:cy="8.4852811"
+     inkscape:window-width="1800"
+     inkscape:window-height="1035"
      inkscape:window-x="0"
-     inkscape:window-y="25"
+     inkscape:window-y="44"
      inkscape:window-maximized="0"
      inkscape:current-layer="layer1" />
   <defs
@@ -157,7 +157,7 @@
          id="tspan3"
          style="stroke-width:0.9"
          x="65.684929"
-         y="49.623287"></tspan></text>
+         y="49.623287" /></text>
     <rect
        style="fill:#6bbcb7;fill-opacity:0.792157;stroke:#6e9177;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:0.794163;paint-order:stroke markers fill"
        id="rect3"
@@ -255,14 +255,14 @@
     <text
        xml:space="preserve"
        style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;text-anchor:middle;fill:#1f6e7f;fill-opacity:1;stroke:none;stroke-width:0.899999;stroke-linejoin:round;stroke-miterlimit:7.3;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke markers fill"
-       x="24.882795"
-       y="82.88028"
+       x="26.058722"
+       y="84.056198"
        id="text7"><tspan
          sodipodi:role="line"
          id="tspan7"
          style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:7.05556px;font-family:Arial;-inkscape-font-specification:'Arial, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#1f6e7f;fill-opacity:1;stroke:none;stroke-width:0.9"
-         x="24.882795"
-         y="82.88028">Pipeline</tspan></text>
+         x="26.058722"
+         y="84.056198">Pipeline</tspan></text>
     <text
        xml:space="preserve"
        transform="matrix(0.26458333,0,0,0.26458333,6.9815062,77.829766)"
