@@ -1,5 +1,19 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Converting NeMoS Bases To scikit-learn Transformers
 
+(tansformer-vs-nemos-basis)=
 ## scikit-learn Transformers and NeMoS Basis
 
 `scikit-learn` is a great machine learning package that provides advanced tooling for creating data analysis pipelines, from input transformations to model fitting and cross-validation.
@@ -24,7 +38,7 @@ Wouldn't it be great if one could combine them? Well, this is what NeMoS `Transf
 
 With NeMoS, you can easily create a basis accepting two inputs. Let's assume that we want to process the neural activity as a 2-dimensional spike count array of shape `(n_samples, n_neurons)` and a second array with the speed of an animal of shape `(n_samples,)`.
 
-```{code-block} ipython3
+```{code-cell} ipython3
 import numpy as np
 import nemos as nmo
 
@@ -46,9 +60,9 @@ X = composite_basis.compute_features(counts, speed)
 ### Converting NeMoS `Basis` to a transformer
 
 Now, imagine that we want to use this basis as a step in a `scikit-learn` pipeline. 
-In this standard (for NeMoS) form, it would not be possible the `composite_basis` object requires two inputs. We need to convert it first into a compliant scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) wrapper class.
+In this standard (for NeMoS) form, it would not be possible the `composite_basis` object requires two inputs. We need to convert it first into a compliant scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) wrapper class.
 
-Instantiating a [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) can be done either using by the constructor directly or with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
+Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) can be done either using by the constructor directly or with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
 
 
 ```{code-cell} ipython3
@@ -62,14 +76,14 @@ trans_bas = bas.to_transformer()
 
 ```
 
-[`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis._basis.Basis) object's attributes:
+[`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis._basis.Basis) object's attributes:
 
 
 ```{code-cell} ipython3
 print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
 ```
 
-We can also set attributes of the underlying [`Basis`](nemos.basis._basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis._basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis._basis.Basis), and neither does changing the original [`Basis`](nemos.basis._basis.Basis) change [`TransformerBasis`](nemos.basis._trans_basis.TransformerBasis) we created:
+We can also set attributes of the underlying [`Basis`](nemos.basis._basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis._basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis._basis.Basis), and neither does changing the original [`Basis`](nemos.basis._basis.Basis) change [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) we created:
 
 
 ```{code-cell} ipython3
@@ -118,7 +132,7 @@ out = composite_basis.to_transformer().fit_transform(inp)
 If the input is 1D or 2D, the number of columns,
 ```{code-cell} ipython3
 
-trans_bas = composite_basis.set_input_shape(5, 1).transformer()
+composite_basis.set_input_shape(5, 1)
 out = composite_basis.to_transformer().fit_transform(inp)
 ```
 

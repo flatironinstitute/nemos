@@ -265,7 +265,7 @@ if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
-  fig.savefig(path / "plot_06_glm_pytree.svg")
+  fig.savefig(path / "plot_07_glm_pytree.svg")
 ```
 
 

@@ -312,7 +312,7 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(copy.deepcopy(self._basis))
+        cloned_obj = TransformerBasis(self._basis.__sklearn_clone__())
         cloned_obj._basis.kernel_ = None
         return cloned_obj
 
