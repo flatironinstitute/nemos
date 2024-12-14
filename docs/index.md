@@ -20,7 +20,7 @@ For Developers <developers_notes/README>
 ```
 
 
-## __Neural ModelS__
+# __Neural ModelS__
 
 
 NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 

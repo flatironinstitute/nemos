@@ -154,7 +154,6 @@ class AtomicBasisMixin:
         self._n_basis_input_ = n_inputs
         return self
 
-
     def _check_input_shape_consistency(self, x: NDArray):
         """Check input consistency across calls."""
         # remove sample axis and squeeze
@@ -175,6 +174,7 @@ class AtomicBasisMixin:
                 "but all other dimensions must remain the same. If you need to process inputs with a "
                 "different shape, please create a new basis instance."
             )
+
 
 class EvalBasisMixin:
     """Mixin class for evaluational basis."""

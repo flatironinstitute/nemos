@@ -91,7 +91,7 @@ plot_06_sklearn_pipeline_cv_demo.md
 ```{toctree}
 :maxdepth: 2
 
-plot_06_glm_pytree.md
+plot_07_glm_pytree.md
 ```
 
 :::
