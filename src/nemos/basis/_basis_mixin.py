@@ -96,7 +96,7 @@ class AtomicBasisMixin:
 
         Returns
         -------
-            A generator returning self, it will be chained for composite bases.
+            A generator returning self, it will be chained in composite bases.
 
         """
         return (x for x in [self])
