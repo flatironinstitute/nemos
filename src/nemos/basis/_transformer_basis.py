@@ -116,7 +116,7 @@ class TransformerBasis:
         Returns
         -------
         :
-            A list of each individual input.
+            A generator looping on each individual input.
 
         """
         n_samples = X.shape[0]
