@@ -1331,14 +1331,14 @@ class TestSharedMethods:
     @pytest.mark.parametrize(
         "mode, kwargs", [("eval", {}), ("conv", {"window_size": 6})]
     )
-    def test_list_component(self, mode, kwargs, cls):
+    def test_iterate_over_component(self, mode, kwargs, cls):
         basis_obj = cls[mode](
             n_basis_funcs=5,
             **kwargs,
             **extra_decay_rates(cls[mode], 5),
         )
 
-        out = basis_obj._list_components()
+        out = tuple(basis_obj._iterate_over_components())
         assert len(out) == 1
         assert id(out[0]) == id(basis_obj)
 
@@ -1974,7 +1974,9 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    def test_list_component(self, basis_a, basis_b, basis_class_specific_params):
+    def test_iterate_over_component(
+        self, basis_a, basis_b, basis_class_specific_params
+    ):
         basis_a_obj = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
@@ -1982,8 +1984,7 @@ class TestAdditiveBasis(CombinedBasis):
             6, basis_b, basis_class_specific_params, window_size=10
         )
         add = basis_a_obj + basis_b_obj
-        out = add._list_components()
-
+        out = tuple(add._iterate_over_components())
         assert len(out) == add._n_input_dimensionality
 
         def get_ids(bas):
