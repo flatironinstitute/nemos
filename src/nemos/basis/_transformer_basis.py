@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from functools import wraps
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Generator
 
 import numpy as np
 
@@ -102,7 +102,7 @@ class TransformerBasis:
     def basis(self, basis):
         self._basis = basis
 
-    def _unpack_inputs(self, X: FeatureMatrix) -> List:
+    def _unpack_inputs(self, X: FeatureMatrix) -> Generator:
         """Unpack inputs.
 
         Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
@@ -120,13 +120,13 @@ class TransformerBasis:
 
         """
         n_samples = X.shape[0]
-        out = [
+        out = (
             np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
             for i, (bas, n_input) in enumerate(
                 zip(self._list_components(), self._n_basis_input_)
             )
             for cc in [sum(self._n_basis_input_[:i])]
-        ]
+        )
         return out
 
     def fit(self, X: FeatureMatrix, y=None):
