@@ -7,7 +7,8 @@ import copy
 import inspect
 import warnings
 from functools import wraps
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from itertools import chain
+from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -88,8 +89,8 @@ class AtomicBasisMixin:
             setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
-    def _list_components(self):
-        """List all basis components.
+    def _iterate_over_components(self) -> Generator:
+        """Return a generator that iterates over all basis components.
 
         For atomic bases, the list is just [self].
 
@@ -98,7 +99,7 @@ class AtomicBasisMixin:
             A list with the basis components.
 
         """
-        return [self]
+        return (x for x in [self])
 
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
@@ -512,8 +513,8 @@ class CompositeBasisMixin:
         self.basis2._parent = self
 
         shapes = (
-            *(bas1._input_shape_ for bas1 in basis1._list_components()),
-            *(bas2._input_shape_ for bas2 in basis2._list_components()),
+            *(bas1._input_shape_ for bas1 in basis1._iterate_over_components()),
+            *(bas2._input_shape_ for bas2 in basis2._iterate_over_components()),
         )
         # if all bases where set, then set input for composition.
         set_bases = (s is not None for s in shapes)
@@ -599,17 +600,20 @@ class CompositeBasisMixin:
     def basis2(self, bas: Basis):
         self._basis2 = bas
 
-    def _list_components(self):
-        """List all basis components.
+    def _iterate_over_components(self):
+        """Return a generator that iterates over all basis components.
 
-        Reimplements the default behavior by iteratively calling _list_components of the
+        Reimplements the default behavior by iteratively calling _iterate_over_components of the
         elements.
 
         Returns
         -------
             A list with all 1d basis components.
         """
-        return self._basis1._list_components() + self._basis2._list_components()
+        return chain(
+            self._basis1._iterate_over_components(),
+            self._basis2._iterate_over_components(),
+        )
 
     @set_input_shape_state
     def __sklearn_clone__(self) -> Basis:
