@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Generator
 
 import numpy as np
 
@@ -81,7 +81,7 @@ class TransformerBasis:
     def basis(self, basis):
         self._basis = basis
 
-    def _unpack_inputs(self, X: FeatureMatrix) -> List:
+    def _unpack_inputs(self, X: FeatureMatrix) -> Generator:
         """Unpack inputs.
 
         Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
