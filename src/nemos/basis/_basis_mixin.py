@@ -96,7 +96,7 @@ class AtomicBasisMixin:
 
         Returns
         -------
-            A list with the basis components.
+            A generator returning self, it will be chained for composite bases.
 
         """
         return (x for x in [self])
@@ -608,7 +608,7 @@ class CompositeBasisMixin:
 
         Returns
         -------
-            A list with all 1d basis components.
+            A generator looping on each individual input.
         """
         return chain(
             self._basis1._iterate_over_components(),
