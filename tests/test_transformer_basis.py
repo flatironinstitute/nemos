@@ -220,7 +220,7 @@ def test_transformerbasis_setattr_basis_attribute(
     "basis_cls",
     list_all_basis_classes("Conv") + list_all_basis_classes("Eval"),
 )
-def test_transformerbasis_copy_basis_on_contsruct(
+def test_transformerbasis_copy_basis_on_construct(
     basis_cls, basis_class_specific_params
 ):
     # modifying the transformerbasis's attributes shouldn't
