@@ -153,6 +153,15 @@ def test_add_docstring():
             pass
 
     assert CustomSubClass().method.__doc__ == "My extra text.\nMy custom method."
+    with pytest.raises(AttributeError, match="CustomClass has no attribute"):
+
+        class CustomSubClass2(CustomClass):
+            @custom_add_docstring("unknown", cls=CustomClass)
+            def method(self):
+                """My custom method."""
+                pass
+
+        CustomSubClass2()
 
 
 @pytest.mark.parametrize(
@@ -242,18 +251,34 @@ def test_expected_output_compute_features(basis_instance, super_class):
             ),
             OrthExponentialBasis,
         ),
+        (
+            basis.OrthExponentialConv(
+                10, decay_rates=np.arange(1, 11), window_size=12, label="a"
+            )
+            * basis.RaisedCosineLogConv(10, window_size=11, label="b"),
+            OrthExponentialBasis,
+        ),
+        (
+            basis.OrthExponentialConv(
+                10, decay_rates=np.arange(1, 11), window_size=12, label="a"
+            )
+            + basis.RaisedCosineLogConv(10, window_size=11, label="b"),
+            OrthExponentialBasis,
+        ),
     ],
 )
 def test_expected_output_split_by_feature(basis_instance, super_class):
-    x = super_class.compute_features(basis_instance, np.linspace(0, 1, 100))
+    inp = [np.linspace(0, 1, 100)] * basis_instance._n_input_dimensionality
+    x = super_class.compute_features(basis_instance, *inp)
     xdict = super_class.split_by_feature(basis_instance, x)
     xxdict = basis_instance.split_by_feature(x)
     assert xdict.keys() == xxdict.keys()
-    xx = xxdict["label"]
-    x = xdict["label"]
-    nans = np.isnan(x.sum(axis=(1, 2)))
-    assert np.all(np.isnan(xx[nans]))
-    np.testing.assert_array_equal(xx[~nans], x[~nans])
+    for k in xdict.keys():
+        xx = xxdict[k]
+        x = xdict[k]
+        nans = np.isnan(x.sum(axis=(1, 2)))
+        assert np.all(np.isnan(xx[nans]))
+        np.testing.assert_array_equal(xx[~nans], x[~nans])
 
 
 @pytest.mark.parametrize(
@@ -1580,6 +1605,15 @@ class TestMSplineBasis(BasisFuncsTesting):
                     n_basis_funcs=n_basis_funcs, order=order, **kwargs
                 )
                 basis_obj.compute_features(np.linspace(0, 1, 10))
+
+            # test the setter valuerror
+            if (order > 1) & (n_basis_funcs > 1):
+                basis_obj = self.cls[mode](n_basis_funcs=20, order=order, **kwargs)
+                with pytest.raises(
+                    ValueError,
+                    match=rf"{self.cls[mode].__name__} `order` parameter cannot be larger than",
+                ):
+                    basis_obj.n_basis_funcs = n_basis_funcs
         else:
             basis_obj = self.cls[mode](
                 n_basis_funcs=n_basis_funcs, order=order, **kwargs
