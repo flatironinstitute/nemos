@@ -1714,6 +1714,16 @@ class TestOrthExponentialBasis(BasisFuncsTesting):
         with expectation:
             self.cls["conv"](n_basis, decay_rates=decay_rates, window_size=window_size)
 
+    def test_check_window_size_after_init(self):
+        decay_rates = np.asarray(np.arange(1, 5 + 1), dtype=float)
+        expectation = pytest.raises(
+            ValueError,
+            match="OrthExponentialConv basis requires at least a window_size",
+        )
+        bas = self.cls["conv"](5, decay_rates=decay_rates, window_size=10)
+        with expectation:
+            bas.window_size = 4
+
     @pytest.mark.parametrize(
         "window_size, n_basis, expectation",
         [
