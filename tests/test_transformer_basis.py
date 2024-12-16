@@ -3,12 +3,15 @@ from contextlib import nullcontext as does_not_raise
 
 import numpy as np
 import pytest
+
 from conftest import CombinedBasis, list_all_basis_classes
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
 
 import nemos as nmo
 from nemos import basis
+from nemos._inspect_utils import list_abstract_methods, get_subclass_methods
+from nemos.basis import AdditiveBasis, MultiplicativeBasis
 
 
 @pytest.mark.parametrize(
@@ -752,3 +755,125 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     pipe.fit(x, y)
     model.fit(X, y)
     np.testing.assert_allclose(pipe["glm"].coef_, model.coef_)
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+def test_initialization(basis_cls, basis_class_specific_params):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    transformer = bas.to_transformer()
+    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
+        transformer.fit(np.ones((100, )))
+
+    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
+        transformer.transform(np.ones((100,)))
+
+    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
+        transformer.fit_transform(np.ones((100,)))
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+def test_basis_setter(basis_cls, basis_class_specific_params):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+
+    bas2 = CombinedBasis().instantiate_basis(7, basis_cls, basis_class_specific_params, window_size=10)
+    transformer = bas.to_transformer()
+    transformer.basis = bas2
+    assert transformer.basis.n_basis_funcs == bas2.n_basis_funcs
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+def test_getstate(basis_cls, basis_class_specific_params):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    transformer = bas.to_transformer()
+    state = transformer.__getstate__()
+    assert {"_basis": transformer.basis} == state
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+def test_eetstate(basis_cls, basis_class_specific_params):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    bas2 = CombinedBasis().instantiate_basis(7, basis_cls, basis_class_specific_params, window_size=10)
+    transformer = bas.to_transformer()
+    state = {"_basis": bas2}
+    transformer.__setstate__(state)
+    assert  transformer.basis == bas2
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+def test_eetstate(basis_cls, basis_class_specific_params):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    transformer = bas.to_transformer()
+    lst = transformer.__dir__()
+    dict_abst_method = list_abstract_methods(nmo.basis._basis.Basis)
+
+    # check it finds all abc basis methods
+    for meth in dict_abst_method:
+        assert meth[0] in lst
+
+    # check all reimplemented methods
+    dict_reimplemented_method = get_subclass_methods(basis_cls)
+    for meth in dict_abst_method:
+        assert meth[0] in lst
+
+    # check that it is a trnasformer
+    for meth in ["fit", "transform", "fit_transform"]:
+        assert meth in lst
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+@pytest.mark.parametrize(
+    "inp, expectation",
+    [
+        (np.random.randn(10, 2), pytest.raises(ValueError, match="Input mismatch: expected \d inputs")),
+        (np.random.randn(10, 3, 1), pytest.raises(ValueError, match="X must be 2-dimensional")),
+        ({1: np.random.randn(10, 3)}, pytest.raises(ValueError, match="The input must be a 2-dimensional array")),
+        (np.random.randn(10, 3), does_not_raise()),
+    ]
+)
+@pytest.mark.parametrize("method", ["fit", "transform", "fit_transform"])
+def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, method):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    # set kernels
+    bas._set_input_independent_states()
+    # set input shape
+    transformer = bas.to_transformer().set_input_shape(*([3] * bas._n_input_dimensionality))
+    if isinstance(bas, (AdditiveBasis, MultiplicativeBasis)):
+        if hasattr(inp, "ndim"):
+            ndim = inp.ndim
+            inp = np.concatenate([inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1)
+            if ndim == 3:
+                inp = inp[..., np.newaxis]
+
+    meth = getattr(transformer, method)
+
+    with expectation:
+        meth(inp)
+        with pytest.raises(ValueError, match="X and y must have the same"):
+            meth(inp, np.ones(11))

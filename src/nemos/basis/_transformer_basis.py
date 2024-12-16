@@ -211,6 +211,7 @@ class TransformerBasis:
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X)
         """
+        self._check_input(X, y)
         self._check_initialized(self._basis)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
@@ -413,7 +414,7 @@ class TransformerBasis:
 
     def __dir__(self) -> list[str]:
         """Extend the list of properties of methods with the ones from the underlying Basis."""
-        return list(super().__dir__()) + list(self._basis.__dir__())
+        return list(set(list(super().__dir__()) + list(self._basis.__dir__())))
 
     def __add__(self, other: TransformerBasis) -> TransformerBasis:
         """
@@ -508,5 +509,5 @@ class TransformerBasis:
         if y is not None and y.shape[0] != X.shape[0]:
             raise ValueError(
                 "X and y must have the same number of samples. "
-                f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples."
+                f"X has {X.shape[0]} samples, while y has {y.shape[0]} samples."
             )
