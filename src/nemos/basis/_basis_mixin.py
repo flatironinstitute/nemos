@@ -307,11 +307,7 @@ class ConvBasisMixin:
         structure: a single (X, y) pair for the transformer, a number of time series for the Basis.
 
         """
-        if self.kernel_ is None:
-            raise ValueError(
-                "You must call `setup_basis` before `_compute_features`! "
-                "Convolution kernel is not set."
-            )
+        self._check_has_kernel()
         # before calling the convolve, check that the input matches
         # the expectation. We can check xi[0] only, since convolution
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
@@ -457,8 +453,8 @@ class ConvBasisMixin:
     def _check_has_kernel(self) -> None:
         """Check that the kernel is pre-computed."""
         if self.kernel_ is None:
-            raise ValueError(
-                "You must call `_set_kernel` before `_compute_features` for Conv basis."
+            raise RuntimeError(
+                "You must call `setup_basis` before `_compute_features` for Conv basis."
             )
 
 
@@ -517,7 +513,7 @@ class CompositeBasisMixin:
             *(bas2._input_shape_ for bas2 in basis2._iterate_over_components()),
         )
         # if all bases where set, then set input for composition.
-        set_bases = (s is not None for s in shapes)
+        set_bases = [s is not None for s in shapes]
 
         if all(set_bases):
             # pass down the input shapes
