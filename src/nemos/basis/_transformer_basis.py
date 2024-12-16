@@ -211,8 +211,8 @@ class TransformerBasis:
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X)
         """
-        self._check_input(X, y)
         self._check_initialized(self._basis)
+        self._check_input(X, y)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
         return self._basis._compute_features(*self._unpack_inputs(X))
