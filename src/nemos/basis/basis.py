@@ -5,17 +5,21 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
+import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis import add_docstring
 from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._decaying_exponential import OrthExponentialBasis
+from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from ._transformer_basis import TransformerBasis
 
 __all__ = [
+    "IdentityEval",
+    "HistoryConv",
     "MSplineEval",
     "MSplineConv",
     "BSplineEval",
@@ -1846,3 +1850,239 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
             else:
                 raise e
         return self
+
+
+class IdentityEval(EvalBasisMixin, IdentityBasis):
+    """
+    Identity basis function.
+
+    This function includes the samples themselves as predictor reshaped as
+    a 2D array. It is intended to be used for including a task variable directly as
+    a predictor.
+
+    Parameters
+    ----------
+    bounds :
+        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    """
+
+    def __init__(
+        self,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "IdentityEval",
+    ):
+        EvalBasisMixin.__init__(self, bounds=bounds)
+        IdentityBasis.__init__(
+            self,
+            n_basis_funcs=1,
+            mode="eval",
+            label=label,
+        )
+
+    @add_docstring("evaluate_on_grid", OrthExponentialBasis)
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import IdentityEval
+        >>> basis = IdentityEval()
+        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
+
+        """
+        return super().evaluate_on_grid(n_samples=n_samples)
+
+    @add_docstring("_compute_features", EvalBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import IdentityEval
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = IdentityEval()
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 1)
+
+        """
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", IdentityBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import IdentityEval
+        >>> from nemos.glm import GLM
+        >>> # Define an additive basis
+        >>> basis = IdentityEval(label="feature")
+        >>> # Generate a sample input array and compute features
+        >>> x = np.random.randn(20)
+        >>> X = basis.compute_features(x)
+        >>> # Split the feature matrix along axis 1
+        >>> split_features = basis.split_by_feature(X, axis=1)
+        >>> for feature, arr in split_features.items():
+        ...     print(f"{feature}: shape {arr.shape}")
+        feature: shape (20, 1, 1)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.IdentityEval()
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        3
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        20
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        20
+
+        """
+        return AtomicBasisMixin.set_input_shape(self, xi)
+
+
+class HistoryConv(ConvBasisMixin, HistoryBasis):
+    """Identity basis function.
+
+    This function includes the history of the samples as predictor reshaped as
+    a 2D array. It is intended to be used for including a raw history as predictor.
+
+    Parameters
+    ----------
+    window_size:
+        History window as the number of samples.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+    conv_kwargs:
+        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
+        These arguments are used to change the default behavior of the convolution.
+        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
+        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
+        that the convolution axis is ``axis=0``.
+    """
+
+    def __init__(
+        self,
+        window_size: int,
+        label: Optional[str] = "IdentityEval",
+        conv_kwargs: Optional[dict] = None,
+    ):
+        ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)
+        HistoryBasis.__init__(
+            self,
+            n_basis_funcs=window_size,
+            label=label,
+        )
+
+    @add_docstring("evaluate_on_grid", HistoryBasis)
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import HistoryConv
+        >>> window_size=100
+        >>> basis = HistoryConv(window_size=window_size)
+        >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
+
+        """
+        return np.linspace(0, 1, n_samples), np.eye(self.window_size, n_samples)
+
+    @add_docstring("_compute_features", ConvBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import HistoryConv
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = HistoryConv(10)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 10)
+
+        """
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", IdentityBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import HistoryConv
+        >>> from nemos.glm import GLM
+        >>> # Define an additive basis
+        >>> basis = HistoryConv(5, label="feature")
+        >>> # Generate a sample input array and compute features
+        >>> x = np.random.randn(20)
+        >>> X = basis.compute_features(x)
+        >>> # Split the feature matrix along axis 1
+        >>> split_features = basis.split_by_feature(X, axis=1)
+        >>> for feature, arr in split_features.items():
+        ...     print(f"{feature}: shape {arr.shape}")
+        feature: shape (20, 1, 5)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.HistoryConv(5)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        15
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        100
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        100
+
+        """
+        return AtomicBasisMixin.set_input_shape(self, xi)
