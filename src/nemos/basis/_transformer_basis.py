@@ -285,8 +285,8 @@ class TransformerBasis:
         """
         Enable easy access to attributes of the underlying Basis object.
 
-        This method chaces all chainable methods (methods returning self) in a dicitonary.
-        These mehtods are created the first time they are accessed by decorating the `self._basis.name`
+        This method caches all chainable methods (methods returning self) in a dicitonary.
+        These methods are created the first time they are accessed by decorating the `self._basis.name`
         and cached for future use.
 
         Examples
