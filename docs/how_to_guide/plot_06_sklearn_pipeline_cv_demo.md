@@ -169,7 +169,7 @@ trans_bas.set_input_shape(1)
 ```
 
 :::{admonition} Learn More about `TransformerBasis`
-:note:
+:class: note
 
 To learn more about `sklearn` transformers and `TransforerBasis`, check out [this note](tansformer-vs-nemos-basis).
 :::
