@@ -218,6 +218,8 @@ def apply_identifiability_constraints(
     >>> from nemos.identifiability_constraints import apply_identifiability_constraints
     >>> from nemos.basis import BSplineEval
     >>> from nemos.glm import GLM
+    >>> import jax
+    >>> jax.config.update('jax_enable_x64', True)
     >>> # define a feature matrix
     >>> bas = BSplineEval(5) + BSplineEval(6)
     >>> feature_matrix = bas.compute_features(np.random.randn(100), np.random.randn(100))
@@ -280,9 +282,11 @@ def apply_identifiability_constraints_by_basis_component(
     Examples
     --------
     >>> import numpy as np
+    >>> import jax
     >>> from nemos.identifiability_constraints import apply_identifiability_constraints_by_basis_component
     >>> from nemos.basis import BSplineEval
     >>> from nemos.glm import GLM
+    >>> jax.config.update('jax_enable_x64', True)
     >>> # define a feature matrix
     >>> bas = BSplineEval(5) + BSplineEval(6)
     >>> feature_matrix = bas.compute_features(np.random.randn(100), np.random.randn(100))

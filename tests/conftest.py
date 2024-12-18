@@ -9,6 +9,8 @@ Note:
     and loading predefined parameters for testing various functionalities of the NeMoS library.
 """
 
+import abc
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -16,9 +18,110 @@ import pynapple as nap
 import pytest
 
 import nemos as nmo
+import nemos._inspect_utils as inspect_utils
+import nemos.basis.basis as basis
+from nemos.basis import AdditiveBasis, MultiplicativeBasis
+from nemos.basis._basis import Basis
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
+
+
+@pytest.fixture()
+def basis_class_specific_params():
+    """Returns all the params for each class."""
+    all_cls = list_all_basis_classes("Conv") + list_all_basis_classes("Eval")
+    return {cls.__name__: cls._get_param_names() for cls in all_cls}
+
+
+class BasisFuncsTesting(abc.ABC):
+    """
+    An abstract base class that sets the foundation for individual basis function testing.
+    This class requires an implementation of a 'cls' method, which is utilized by the meta-test
+    that verifies if all basis functions are properly tested.
+    """
+
+    @abc.abstractmethod
+    def cls(self):
+        pass
+
+
+class CombinedBasis(BasisFuncsTesting):
+    """
+    This class is used to run tests on combination operations (e.g., addition, multiplication) among Basis functions.
+
+    Properties:
+    - cls: Class (default = None)
+    """
+
+    cls = None
+
+    @staticmethod
+    def instantiate_basis(
+        n_basis, basis_class, class_specific_params, window_size=10, **kwargs
+    ):
+        """Instantiate and return two basis of the type specified."""
+
+        # Set non-optional args
+        default_kwargs = {
+            "n_basis_funcs": n_basis,
+            "window_size": window_size,
+            "decay_rates": np.arange(1, 1 + n_basis),
+        }
+        repeated_keys = set(default_kwargs.keys()).intersection(kwargs.keys())
+        if repeated_keys:
+            raise ValueError(
+                "Cannot set `n_basis_funcs, window_size, decay_rates` with kwargs"
+            )
+
+        # Merge with provided  extra kwargs
+        kwargs = {**default_kwargs, **kwargs}
+
+        if basis_class == AdditiveBasis:
+            kwargs_mspline = inspect_utils.trim_kwargs(
+                basis.MSplineEval, kwargs, class_specific_params
+            )
+            kwargs_raised_cosine = inspect_utils.trim_kwargs(
+                basis.RaisedCosineLinearConv, kwargs, class_specific_params
+            )
+            b1 = basis.MSplineEval(**kwargs_mspline)
+            b2 = basis.RaisedCosineLinearConv(**kwargs_raised_cosine)
+            basis_obj = b1 + b2
+        elif basis_class == MultiplicativeBasis:
+            kwargs_mspline = inspect_utils.trim_kwargs(
+                basis.MSplineEval, kwargs, class_specific_params
+            )
+            kwargs_raised_cosine = inspect_utils.trim_kwargs(
+                basis.RaisedCosineLinearConv, kwargs, class_specific_params
+            )
+            b1 = basis.MSplineEval(**kwargs_mspline)
+            b2 = basis.RaisedCosineLinearConv(**kwargs_raised_cosine)
+            basis_obj = b1 * b2
+        else:
+            basis_obj = basis_class(
+                **inspect_utils.trim_kwargs(basis_class, kwargs, class_specific_params)
+            )
+        return basis_obj
+
+
+# automatic define user accessible basis and check the methods
+def list_all_basis_classes(filter_basis="all") -> list[type]:
+    """
+    Return all the classes in nemos.basis which are a subclass of Basis,
+    which should be all concrete classes except TransformerBasis.
+    """
+    all_basis = [
+        class_obj
+        for _, class_obj in inspect_utils.get_non_abstract_classes(basis)
+        if issubclass(class_obj, Basis)
+    ] + [
+        bas
+        for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
+        if bas != basis.TransformerBasis
+    ]
+    if filter_basis != "all":
+        all_basis = [a for a in all_basis if filter_basis in a.__name__]
+    return all_basis
 
 
 # Sample subclass to test instantiation and methods

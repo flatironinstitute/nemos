@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import abc
 import copy
 import inspect
-from typing import Optional, Tuple, Union
+from functools import wraps
+from itertools import chain
+from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -12,6 +15,166 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ._transformer_basis import TransformerBasis
+
+if TYPE_CHECKING:
+    from ._basis import Basis
+
+
+def set_input_shape_state(
+    method, states: Tuple[str] = ("_n_basis_input_", "_input_shape_")
+):
+    """
+    Decorator to preserve input shape-related attributes during method execution.
+
+    This decorator ensures that the attributes `_n_basis_input_` and `_input_shape_`
+    are copied from the original object (`self`) to the returned object (`klass`)
+    after the wrapped method executes. It is intended to be used with methods that
+    clone or create a new instance of the class, ensuring these critical attributes
+    are retained for functionality such as cross-validation.
+
+    Parameters
+    ----------
+    method :
+        The method to be wrapped. This method is expected to return an object
+        (`klass`) that requires the `_n_basis_input_` and `_input_shape_` attributes.
+    attr_list
+
+    Returns
+    -------
+    :
+        The wrapped method that copies `_n_basis_input_` and `_input_shape_` from
+        the original object (`self`) to the new object (`klass`).
+
+    Examples
+    --------
+    Applying the decorator to a method:
+
+    >>> from functools import wraps
+    >>> @set_input_shape_state
+    ... def __sklearn_clone__(self):
+    ...     klass = self.__class__(**self.get_params())
+    ...     return klass
+
+    The `_n_basis_input_` and `_input_shape_` attributes of `self` will be
+    copied to `klass` after the method executes.
+    """
+
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        klass: Basis = method(self, *args, **kwargs)
+        for attr_name in states:
+            setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
+
+    return wrapper
+
+
+class AtomicBasisMixin:
+    """Mixin class for atomic bases (i.e. non-composite)."""
+
+    def __init__(self, n_basis_funcs: int):
+        self._n_basis_funcs = n_basis_funcs
+        self._check_n_basis_min()
+
+    @set_input_shape_state
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        """
+        klass = self.__class__(**self.get_params())
+        return klass
+
+    def _iterate_over_components(self) -> Generator:
+        """Return a generator that iterates over all basis components.
+
+        For atomic bases, the list is just [self].
+
+        Returns
+        -------
+            A generator returning self, it will be chained in composite bases.
+
+        """
+        return (x for x in [self])
+
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Set the expected input shape for the basis object.
+
+        This method configures the shape of the input data that the basis object expects.
+        ``xi`` can be specified as an integer, a tuple of integers, or derived
+        from an array. The method also calculates the total number of input
+        features and output features based on the number of basis functions.
+
+        Parameters
+        ----------
+        xi :
+            The input shape specification.
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided and it contains non-integer elements.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+
+        Notes
+        -----
+        All state attributes that depends on the input must be set in this method in order for
+        the API of basis to work correctly. In particular, this method is called by ``setup_basis``,
+        which is equivalent to ``fit`` for a transformer. If any input dependent state
+        is not set in this method, then ``compute_features`` (equivalent to ``fit_transform``) will break.
+
+        """
+        if isinstance(xi, tuple):
+            if not all(isinstance(i, int) for i in xi):
+                raise ValueError(
+                    f"The tuple provided contains non integer values. Tuple: {xi}."
+                )
+            shape = xi
+        elif isinstance(xi, int):
+            shape = () if xi == 1 else (xi,)
+        else:
+            shape = xi.shape[1:]
+
+        n_inputs = (int(np.prod(shape)),)
+
+        self._input_shape_ = shape
+
+        self._n_basis_input_ = n_inputs
+        return self
+
+    def _check_input_shape_consistency(self, x: NDArray):
+        """Check input consistency across calls."""
+        # remove sample axis and squeeze
+        shape = x.shape[1:]
+
+        initialized = self._input_shape_ is not None
+        is_shape_match = self._input_shape_ == shape
+        if initialized and not is_shape_match:
+            expected_shape_str = "(n_samples, " + f"{self._input_shape_}"[1:]
+            expected_shape_str = expected_shape_str.replace(",)", ")")
+            raise ValueError(
+                f"Input shape mismatch detected.\n\n"
+                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
+                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
+                f"  Expected: {expected_shape_str}\n"
+                f"  But got:  {x.shape}.\n\n"
+                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
+                "but all other dimensions must remain the same. If you need to process inputs with a "
+                "different shape, please create a new basis instance, or set a new input shape by calling "
+                "`set_input_shape`."
+            )
 
 
 class EvalBasisMixin:
@@ -48,9 +211,32 @@ class EvalBasisMixin:
         out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
 
-    def set_kernel(self) -> "EvalBasisMixin":
+    def setup_basis(self, *xi: NDArray) -> Basis:
         """
-        Prepare or compute the convolutional kernel for the basis functions.
+        Set all basis states.
+
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
+
+        Parameters
+        ----------
+        xi:
+            Input arrays.
+
+        Returns
+        -------
+        :
+            The basis with ready for evaluation.
+        """
+        self.set_input_shape(*xi)
+        return self
+
+    def _set_input_independent_states(self) -> "EvalBasisMixin":
+        """
+        Compute all the basis states that do not depend on the input.
 
         For EvalBasisMixin, this method might not perform any operation but simply return the
         instance itself, as no kernel preparation is necessary.
@@ -92,6 +278,7 @@ class ConvBasisMixin:
     """Mixin class for convolutional basis."""
 
     def __init__(self, window_size: int, conv_kwargs: Optional[dict] = None):
+        self.kernel_ = None
         self.window_size = window_size
         self.conv_kwargs = {} if conv_kwargs is None else conv_kwargs
 
@@ -111,18 +298,54 @@ class ConvBasisMixin:
             The input data over which to apply the basis transformation. The samples can be passed
             as multiple arguments, each representing a different dimension for multivariate inputs.
 
+        Notes
+        -----
+        This method is intended to be 1-to-1 mappable to sklearn ``transform`` method of transformer. This
+        means that for the method to be callable, all the state attributes have to be pre-computed in a
+        method that is mappable to ``fit``, which for us is ``_fit_basis``. It is fundamental that both
+        methods behaves like the corresponding transformer method, with the only difference being the input
+        structure: a single (X, y) pair for the transformer, a number of time series for the Basis.
+
         """
-        if self.kernel_ is None:
-            raise ValueError(
-                "You must call `_set_kernel` before `_compute_features`! "
-                "Convolution kernel is not set."
-            )
+        self._check_has_kernel()
         # before calling the convolve, check that the input matches
         # the expectation. We can check xi[0] only, since convolution
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
         conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
         return np.reshape(conv, newshape=(conv.shape[0], -1))
+
+    def setup_basis(self, *xi: NDArray) -> Basis:
+        """
+        Set all basis states.
+
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
+
+        Parameters
+        ----------
+        xi:
+            Input arrays.
+
+        Returns
+        -------
+        :
+            The basis with ready for evaluation.
+        """
+        self.set_kernel()
+        self.set_input_shape(*xi)
+        return self
+
+    def _set_input_independent_states(self):
+        """
+        Compute all the basis states that do not depend on the input.
+
+        For Conv mixin the only attribute is the kernel.
+        """
+        return self.set_kernel()
 
     def set_kernel(self) -> "ConvBasisMixin":
         """
@@ -157,6 +380,11 @@ class ConvBasisMixin:
     @window_size.setter
     def window_size(self, window_size):
         """Setter for the window size parameter."""
+        self._check_window_size(window_size)
+
+        self._window_size = window_size
+
+    def _check_window_size(self, window_size):
         if window_size is None:
             raise ValueError("You must provide a window_size!")
 
@@ -164,8 +392,6 @@ class ConvBasisMixin:
             raise ValueError(
                 f"`window_size` must be a positive integer. {window_size} provided instead!"
             )
-
-        self._window_size = window_size
 
     @property
     def conv_kwargs(self):
@@ -224,6 +450,13 @@ class ConvBasisMixin:
                 f"Allowed convolution keyword arguments are: {convolve_configs}."
             )
 
+    def _check_has_kernel(self) -> None:
+        """Check that the kernel is pre-computed."""
+        if self.kernel_ is None:
+            raise RuntimeError(
+                "You must call `setup_basis` before `_compute_features` for Conv basis."
+            )
+
 
 class BasisTransformerMixin:
     """Mixin class for constructing a transformer."""
@@ -241,7 +474,7 @@ class BasisTransformerMixin:
         >>> from sklearn.model_selection import GridSearchCV
         >>> # load some data
         >>> X, y = np.random.normal(size=(30, 1)), np.random.poisson(size=30)
-        >>> basis = nmo.basis.RaisedCosineLinearEval(10).to_transformer()
+        >>> basis = nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1).to_transformer()
         >>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=1.)
         >>> pipeline = Pipeline([("basis", basis), ("glm", glm)])
         >>> param_grid = dict(
@@ -255,4 +488,160 @@ class BasisTransformerMixin:
         ... )
         >>> gridsearch = gridsearch.fit(X, y)
         """
-        return TransformerBasis(copy.deepcopy(self))
+        return TransformerBasis(self)
+
+
+class CompositeBasisMixin:
+    """Mixin class for composite basis.
+
+    Add overwrites concrete methods or defines abstract methods for composite basis
+    (AdditiveBasis and MultiplicativeBasis).
+    """
+
+    def __init__(self, basis1: Basis, basis2: Basis):
+        # deep copy to avoid changes directly to the 1d basis to be reflected
+        # in the composite basis.
+        self.basis1 = copy.deepcopy(basis1)
+        self.basis2 = copy.deepcopy(basis2)
+
+        # set parents
+        self.basis1._parent = self
+        self.basis2._parent = self
+
+        shapes = (
+            *(bas1._input_shape_ for bas1 in basis1._iterate_over_components()),
+            *(bas2._input_shape_ for bas2 in basis2._iterate_over_components()),
+        )
+        # if all bases where set, then set input for composition.
+        set_bases = [s is not None for s in shapes]
+
+        if all(set_bases):
+            # pass down the input shapes
+            self.set_input_shape(*shapes)
+
+    @property
+    @abc.abstractmethod
+    def n_basis_funcs(self):
+        """Read only property for composite bases."""
+        pass
+
+    def setup_basis(self, *xi: NDArray) -> Basis:
+        """
+        Set all basis states.
+
+        This method corresponds sklearn transformer ``fit``. As fit, it must receive the input and
+        it must set all basis states, i.e. ``kernel_`` and all the states relative to the input shape.
+        The difference between this method and the transformer ``fit`` is in the expected input structure,
+        where the transformer ``fit`` method requires the inputs to be concatenated in a 2D array, while here
+        each input is provided as a separate time series for each basis element.
+
+        Parameters
+        ----------
+        xi:
+            Input arrays.
+
+        Returns
+        -------
+        :
+            The basis with ready for evaluation.
+        """
+        # setup both input independent
+        self._set_input_independent_states()
+
+        # and input dependent states
+        self.set_input_shape(*xi)
+
+        return self
+
+    def _set_input_independent_states(self):
+        """
+        Compute the input dependent states for traversing the composite basis.
+
+        Returns
+        -------
+        :
+            The basis with the states stored as attributes of each component.
+        """
+        self.basis1._set_input_independent_states()
+        self.basis2._set_input_independent_states()
+
+    def _check_input_shape_consistency(self, *xi: NDArray):
+        """Check the input shape consistency for all basis elements."""
+        self.basis1._check_input_shape_consistency(
+            *xi[: self.basis1._n_input_dimensionality]
+        )
+        self.basis2._check_input_shape_consistency(
+            *xi[self.basis1._n_input_dimensionality :]
+        )
+
+    def _iterate_over_components(self):
+        """Return a generator that iterates over all basis components.
+
+        Reimplements the default behavior by iteratively calling _iterate_over_components of the
+        elements.
+
+        Returns
+        -------
+            A generator looping on each individual input.
+        """
+        return chain(
+            self.basis1._iterate_over_components(),
+            self.basis2._iterate_over_components(),
+        )
+
+    @set_input_shape_state
+    def __sklearn_clone__(self) -> Basis:
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        The method also handles recursive cloning for composite basis structures.
+        """
+        # clone recursively
+        basis1 = self.basis1.__sklearn_clone__()
+        basis2 = self.basis2.__sklearn_clone__()
+        klass = self.__class__(basis1, basis2)
+
+        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+            setattr(klass, attr_name, getattr(self, attr_name))
+        return klass
+
+    def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
+        """
+        Set the expected input shape for the basis object.
+
+        This method sets the input shape for each component basis in the basis.
+        One ``xi`` must be provided for each basis component, specified as an integer,
+        a tuple of integers, or an array. The method calculates and stores the total number of output features
+        based on the number of basis functions in each component and the provided input shapes.
+
+        Parameters
+        ----------
+        *xi :
+            The input shape specifications. For every k,``xi[k]`` can be:
+            - An integer: Represents the dimensionality of the input. A value of ``1`` is treated as scalar input.
+            - A tuple: Represents the exact input shape excluding the first axis (sample axis).
+              All elements must be integers.
+            - An array: The shape is extracted, excluding the first axis (assumed to be the sample axis).
+
+        Raises
+        ------
+        ValueError
+            If a tuple is provided and it contains non-integer elements.
+
+        Returns
+        -------
+        self :
+            Returns the instance itself to allow method chaining.
+        """
+        self._n_basis_input_ = (
+            *self.basis1.set_input_shape(
+                *xi[: self.basis1._n_input_dimensionality]
+            )._n_basis_input_,
+            *self.basis2.set_input_shape(
+                *xi[self.basis1._n_input_dimensionality :]
+            )._n_basis_input_,
+        )
+        return self

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generator
+
+import numpy as np
 
 from ..typing import FeatureMatrix
 
@@ -63,12 +65,27 @@ class TransformerBasis:
         self._basis = copy.deepcopy(basis)
 
     @staticmethod
-    def _unpack_inputs(X: FeatureMatrix):
-        """Unpack inputs without using transpose.
+    def _check_initialized(basis):
+        if basis._n_basis_input_ is None:
+            raise RuntimeError(
+                "Cannot apply TransformerBasis: the provided basis has no defined input shape. "
+                "Please call `set_input_shape` before calling `fit`, `transform`, or "
+                "`fit_transform`."
+            )
+
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis):
+        self._basis = basis
+
+    def _unpack_inputs(self, X: FeatureMatrix) -> Generator:
+        """Unpack inputs.
 
         Unpack horizontally stacked inputs using slicing. This works gracefully with ``pynapple``,
-        returning a list of Tsd objects. Attempt to unpack using *X.T will raise a ``pynapple``
-        exception since ``pynapple`` assumes that the time axis is the first axis.
+        returning a list of Tsd objects.
 
         Parameters
         ----------
@@ -78,10 +95,18 @@ class TransformerBasis:
         Returns
         -------
         :
-            A tuple of each individual input.
+            A list of each individual input.
 
         """
-        return (X[:, k] for k in range(X.shape[1]))
+        n_samples = X.shape[0]
+        out = (
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
+            for i, (bas, n_input) in enumerate(
+                zip(self._iterate_over_components(), self._n_basis_input_)
+            )
+            for cc in [sum(self._n_basis_input_[:i])]
+        )
+        return out
 
     def fit(self, X: FeatureMatrix, y=None):
         """
@@ -110,11 +135,13 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 2))
 
         >>> # Define and fit tranformation basis
-        >>> basis = MSplineEval(10)
+        >>> basis = MSplineEval(10).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
-        self._basis.set_kernel()
+        self._check_initialized(self._basis)
+        self._check_input(X, y)
+        self._basis.setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
@@ -141,7 +168,7 @@ class TransformerBasis:
         >>> # Example input
         >>> X = np.random.normal(size=(10000, 2))
 
-        >>> basis = MSplineConv(10, window_size=200)
+        >>> basis = MSplineConv(10, window_size=200).set_input_shape(2)
         >>> transformer = TransformerBasis(basis)
         >>> # Before calling `fit` the convolution kernel is not set
         >>> transformer.kernel_
@@ -152,8 +179,9 @@ class TransformerBasis:
         (200, 10)
 
         >>> # Transform basis
-        >>> feature_transformed = transformer.transform(X[:, 0:1])
+        >>> feature_transformed = transformer.transform(X)
         """
+        self._check_initialized(self._basis)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
         return self._basis._compute_features(*self._unpack_inputs(X))
@@ -187,13 +215,14 @@ class TransformerBasis:
         >>> X = np.random.normal(size=(100, 1))
 
         >>> # Define tranformation basis
-        >>> basis = MSplineEval(10)
+        >>> basis = MSplineEval(10).set_input_shape(1)
         >>> transformer = TransformerBasis(basis)
 
         >>> # Fit and transform basis
         >>> feature_transformed = transformer.fit_transform(X)
         """
-        return self._basis.compute_features(*self._unpack_inputs(X))
+        self.fit(X, y=y)
+        return self.transform(X)
 
     def __getstate__(self):
         """
@@ -283,7 +312,7 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(copy.deepcopy(self._basis))
+        cloned_obj = TransformerBasis(self._basis.__sklearn_clone__())
         cloned_obj._basis.kernel_ = None
         return cloned_obj
 
@@ -390,3 +419,41 @@ class TransformerBasis:
         """
         # errors are handled by Basis.__pow__
         return TransformerBasis(self._basis**exponent)
+
+    def _check_input(self, X: FeatureMatrix, y=None):
+        """Check that the input structure.
+
+        TransformerBasis expects a 2-d array as an input. The number of columns should match the number of inputs
+        the basis expects. This number can be set before the TransformerBasis is initialized, by calling
+        ``Basis.set_input_shape``.
+
+        Parameters
+        ----------
+        X:
+            The input FeatureMatrix.
+
+        Raises
+        ------
+        ValueError:
+            If the input is not a 2-d array or if the number of columns does not match the expected number of inputs.
+        """
+        ndim = getattr(X, "ndim", None)
+        if ndim is None:
+            raise ValueError("The input must be a 2-dimensional array.")
+
+        elif ndim != 2:
+            raise ValueError(
+                f"X must be 2-dimensional, shape (n_samples, n_features). The provided X has shape {X.shape} instead."
+            )
+
+        if X.shape[1] != sum(self.n_basis_input_):
+            raise ValueError(
+                f"Input mismatch: expected {sum(self.n_basis_input_)} inputs, but got {X.shape[1]} columns in X.\n"
+                "To modify the required number of inputs, call `set_input_shape` before using `fit` or `fit_transform`."
+            )
+
+        if y is not None and y.shape[0] != X.shape[0]:
+            raise ValueError(
+                "X and y must have the same number of samples. "
+                f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples."
+            )

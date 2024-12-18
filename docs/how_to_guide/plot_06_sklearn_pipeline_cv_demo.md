@@ -71,7 +71,8 @@ To set up a scikit-learn [`Pipeline`](https://scikit-learn.org/1.5/modules/gener
 Each transformation step takes a 2D array `X` of shape `(num_samples, num_original_features)` as input and outputs another 2D array of shape `(num_samples, num_transformed_features)`. The final step takes a pair `(X, y)`, where `X` is as before, and `y` is a 1D array of shape `(n_samples,)` containing the observations to be modeled.
 
 You can define a pipeline as follows:
-```python
+
+```{code} ipython3
 from sklearn.pipeline import Pipeline
 
 # Assume transformer_i/predictor is a transformer/model object
@@ -92,7 +93,7 @@ Here we used a placeholder `"label_i"` for demonstration; you should choose a mo
 :::
 
 Calling `pipe.fit(X, y)` will perform the following computations:
-```python
+```{code} ipython3
 # Chain of transformations
 X1 = transformer_1.fit_transform(X)
 X2 = transformer_2.fit_transform(X1)
@@ -111,6 +112,7 @@ Pipelines not only streamline and simplify your code but also offer several othe
 In the following sections, we will showcase this approach with a concrete example: selecting the appropriate basis type and number of bases for a GLM regression in NeMoS.
 
 ## Combining basis transformations and GLM in a pipeline
+
 Let's start by creating some toy data.
 
 
@@ -150,9 +152,7 @@ sns.despine(ax=ax)
 ```
 
 ### Converting NeMoS `Basis` to a transformer
-In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. This can be achieved through the [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) wrapper class.
-
-Instantiating a [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) can be done either using by the constructor directly or with [`Basis.to_transformer()`](nemos.basis._basis.Basis.to_transformer):
+In order to use NeMoS [`Basis`](nemos.basis._basis.Basis) in a pipeline, we need to convert it into a scikit-learn transformer. 
 
 
 ```{code-cell} ipython3
@@ -164,24 +164,15 @@ trans_bas = nmo.basis.TransformerBasis(bas)
 # equivalent initialization via "to_transformer"
 trans_bas = bas.to_transformer()
 
+# setup the transformer
+trans_bas.set_input_shape(1)
 ```
 
-[`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) provides convenient access to the underlying [`Basis`](nemos.basis._basis.Basis) object's attributes:
+:::{admonition} Learn More about `TransformerBasis`
+:class: note
 
-
-```{code-cell} ipython3
-print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
-```
-
-We can also set attributes of the underlying [`Basis`](nemos.basis._basis.Basis). Note that -- because [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) is created with a copy of the [`Basis`](nemos.basis._basis.Basis) object passed to it -- this does not change the original [`Basis`](nemos.basis._basis.Basis), and neither does changing the original [`Basis`](nemos.basis._basis.Basis) change [`TransformerBasis`](nemos.basis._transformer_basis.TransformerBasis) we created:
-
-
-```{code-cell} ipython3
-trans_bas.n_basis_funcs = 10
-bas.n_basis_funcs = 100
-
-print(bas.n_basis_funcs, trans_bas.n_basis_funcs)
-```
+To learn more about `sklearn` transformers and `TransforerBasis`, check out [this note](tansformer-vs-nemos-basis).
+:::
 
 ### Creating and fitting a pipeline
 We might want to combine first transforming the input data with our basis functions, then fitting a GLM on the transformed data.
@@ -194,7 +185,7 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
+            nmo.basis.RaisedCosineLinearEval(6).set_input_shape(1).to_transformer(),
         ),
         (
             "glm",
@@ -311,7 +302,7 @@ gridsearch.fit(X, y)
 To appreciate how much boiler-plate code we are saving by calling scikit-learn cross-validation, below
 we can see how this cross-validation will look like in a manual loop.
 
-```python
+```{code} ipython
 from itertools import product
 from copy import deepcopy
 
@@ -439,7 +430,7 @@ if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
 
 if path.exists():
-  fig.savefig(path / "plot_05_sklearn_pipeline_cv_demo.svg")
+  fig.savefig(path / "plot_06_sklearn_pipeline_cv_demo.svg")
 ```
 
 &#x1F680;&#x1F680;&#x1F680; **Success!** &#x1F680;&#x1F680;&#x1F680;
@@ -457,12 +448,12 @@ Here we include `transformerbasis___basis` in the parameter grid to try differen
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineLinearEval(5),
-        nmo.basis.RaisedCosineLinearEval(10),
-        nmo.basis.RaisedCosineLogEval(5),
-        nmo.basis.RaisedCosineLogEval(10),
-        nmo.basis.MSplineEval(5),
-        nmo.basis.MSplineEval(10),
+        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
+        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
+        nmo.basis.MSplineEval(5).set_input_shape(1),
+        nmo.basis.MSplineEval(10).set_input_shape(1),
     ),
 )
 ```
@@ -538,17 +529,21 @@ The plot confirms that the firing rate distribution is accurately captured by ou
 :::{warning}
 Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
 
-```python
+
+<!-- we don't want to run this, just use syntax highlighting -->
+
+```{code} ipython
+
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineLinearEval(5),
-        nmo.basis.RaisedCosineLinearEval(10),
-        nmo.basis.RaisedCosineLogEval(5),
-        nmo.basis.RaisedCosineLogEval(10),
-        nmo.basis.MSplineEval(5),
-        nmo.basis.MSplineEval(10),
+        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
+        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
+        nmo.basis.MSplineEval(5).set_input_shape(1),
+        nmo.basis.MSplineEval(10).set_input_shape(1),
     ),
 )
 ```
