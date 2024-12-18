@@ -2255,41 +2255,6 @@ class TestAdditiveBasis(CombinedBasis):
         with expectation:
             basis_obj.compute_features(*inputs)
 
-    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
-    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    @pytest.mark.parametrize("n_basis_a", [5])
-    @pytest.mark.parametrize("n_basis_b", [6])
-    @pytest.mark.parametrize("window_size", [10])
-    def test_warn_partial_setup(
-        self,
-        n_basis_a,
-        n_basis_b,
-        basis_a,
-        basis_b,
-        window_size,
-        basis_class_specific_params,
-    ):
-        basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
-        )
-        basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, window_size=window_size
-        )
-
-        basis_a_obj.set_input_shape(*([1] * basis_a_obj._n_input_dimensionality))
-        with pytest.warns(UserWarning, match="Only some of the basis where"):
-            basis_a_obj + basis_b_obj
-
-        # check that if both set addition is fine
-        basis_b_obj.set_input_shape(*([1] * basis_b_obj._n_input_dimensionality))
-        basis_a_obj + basis_b_obj
-
-        basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
-        )
-        with pytest.warns(UserWarning, match="Only some of the basis where"):
-            basis_a_obj + basis_b_obj
-
     @pytest.mark.parametrize("sample_size", [11, 20])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())

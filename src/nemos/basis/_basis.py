@@ -133,10 +133,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __init__(
         self,
-        mode: Literal["eval", "conv"] = "eval",
+        mode: Literal["eval", "conv", "composite"] = "eval",
         label: Optional[str] = None,
     ) -> None:
-        self._n_basis_funcs = getattr(self, "_n_basis_funcs", None)
         self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
 
         self._mode = mode
@@ -147,8 +146,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._label = str(label)
 
         # specified only after inputs/input shapes are provided
-        self._n_basis_input_ = getattr(self, "_n_basis_input_", None)
-        self._input_shape_ = getattr(self, "_input_shape_", None)
+        self._n_basis_input_ = None
+        self._input_shape_ = None
 
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init
@@ -743,7 +742,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2)
-        Basis.__init__(self, mode="eval")
+        Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
 
         self._n_input_dimensionality = (
@@ -1154,7 +1153,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2)
-        Basis.__init__(self, mode="eval")
+        Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality

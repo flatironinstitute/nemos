@@ -5,7 +5,6 @@ from __future__ import annotations
 import abc
 import copy
 import inspect
-import warnings
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
@@ -21,7 +20,9 @@ if TYPE_CHECKING:
     from ._basis import Basis
 
 
-def set_input_shape_state(method):
+def set_input_shape_state(
+    method, states: Tuple[str] = ("_n_basis_input_", "_input_shape_")
+):
     """
     Decorator to preserve input shape-related attributes during method execution.
 
@@ -36,6 +37,7 @@ def set_input_shape_state(method):
     method :
         The method to be wrapped. This method is expected to return an object
         (`klass`) that requires the `_n_basis_input_` and `_input_shape_` attributes.
+    attr_list
 
     Returns
     -------
@@ -60,7 +62,7 @@ def set_input_shape_state(method):
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         klass: Basis = method(self, *args, **kwargs)
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+        for attr_name in states:
             setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
@@ -84,9 +86,6 @@ class AtomicBasisMixin:
         cross-validation unusable.
         """
         klass = self.__class__(**self.get_params())
-
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
     def _iterate_over_components(self) -> Generator:
@@ -519,12 +518,6 @@ class CompositeBasisMixin:
         if all(set_bases):
             # pass down the input shapes
             self.set_input_shape(*shapes)
-        elif any(set_bases):
-            warnings.warn(
-                "Only some of the basis where initialized with `set_input_shape`, "
-                "please initialize the composite basis before computing features.",
-                category=UserWarning,
-            )
 
     @property
     @abc.abstractmethod
