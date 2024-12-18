@@ -14,7 +14,7 @@ pip install nemos[examples]
 :::
 
 
-::::{grid} 1 2 3 4
+::::{grid} 1 2 3 3
 
 :::{grid-item-card}
 
