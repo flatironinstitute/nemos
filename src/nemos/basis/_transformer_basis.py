@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from functools import wraps
 from typing import TYPE_CHECKING, Generator
 
 import numpy as np
@@ -9,6 +10,18 @@ from ..typing import FeatureMatrix
 
 if TYPE_CHECKING:
     from ._basis import Basis
+
+
+def transformer_chaining(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        # Call the wrapped function and capture its return value
+        result = func(*args, **kwargs)
+
+        # If the method returns the inner `self`, replace it with the outer `self` (no deepcopy here).
+        return self if result is self._basis else result
+
+    return wrapper
 
 
 class TransformerBasis:
@@ -61,8 +74,16 @@ class TransformerBasis:
     Cross-validated number of basis: {'compute_features__n_basis_funcs': 10}
     """
 
+    _chainable_methods = (
+        "set_kernel",
+        "set_input_shape",
+        "_set_input_independent_states",
+        "setup_basis",
+    )
+
     def __init__(self, basis: Basis):
         self._basis = copy.deepcopy(basis)
+        self._wrapped_methods = {}  # Cache for wrapped methods
 
     @staticmethod
     def _check_initialized(basis):
@@ -95,7 +116,7 @@ class TransformerBasis:
         Returns
         -------
         :
-            A list of each individual input.
+            A generator looping on each individual input.
 
         """
         n_samples = X.shape[0]
@@ -112,7 +133,11 @@ class TransformerBasis:
         """
         Compute the convolutional kernels.
 
-        If any of the 1D basis in self._basis is in "conv" mode, it computes the convolutional kernels.
+        Checks the input structure and, if any of the 1D basis in self._basis is in "conv" mode,
+        it computes the convolutional kernels.
+
+        Note that the input must be 2-dimensional, and the number of column must match the number of inputs
+        that the basis expect. The number of input can be reset by calling the ``set_input_shape`` method.
 
         Parameters
         ----------
@@ -125,6 +150,11 @@ class TransformerBasis:
         -------
         self :
             The transformer object.
+
+        Raises
+        ------
+        ValueError:
+            If the number of columns in X do not match the number of inputs that the basis expects.
 
         Examples
         --------
@@ -182,6 +212,7 @@ class TransformerBasis:
         >>> feature_transformed = transformer.transform(X)
         """
         self._check_initialized(self._basis)
+        self._check_input(X, y)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
         return self._basis._compute_features(*self._unpack_inputs(X))
@@ -231,6 +262,10 @@ class TransformerBasis:
         See https://docs.python.org/3/library/pickle.html#object.__getstate__
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
+        # this is the only state needed at initalization
+        # returning the cached wrapped methods would create
+        # a circular binding of the state to self (i.e. infinite recursion when
+        # unpickling).
         return {"_basis": self._basis}
 
     def __setstate__(self, state):
@@ -244,10 +279,15 @@ class TransformerBasis:
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
         self._basis = state["_basis"]
+        self._wrapped_methods = {}  # Reinitialize the cache
 
     def __getattr__(self, name: str):
         """
         Enable easy access to attributes of the underlying Basis object.
+
+        This method caches all chainable methods (methods returning self) in a dicitonary.
+        These methods are created the first time they are accessed by decorating the `self._basis.name`
+        and cached for future use.
 
         Examples
         --------
@@ -259,7 +299,21 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs
         5
         """
-        return getattr(self._basis, name)
+        # Check if the method has already been wrapped
+        if name in self._wrapped_methods:
+            return self._wrapped_methods[name]
+
+        # Get the original attribute from the basis
+        attr = getattr(self._basis, name)
+
+        # If the attribute is a callable method, wrap it dynamically
+        if name in self._chainable_methods:
+            wrapped = transformer_chaining(attr).__get__(self)
+            self._wrapped_methods[name] = wrapped  # Cache the wrapped method
+            return wrapped
+
+        # For non-callable attributes, return them directly
+        return attr
 
     def __setattr__(self, name: str, value) -> None:
         r"""
@@ -286,13 +340,13 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
         >>> try:
-        ...     trans_bas.random_attribute_name = "some value"
+        ...     trans_bas.rand_atrr = "some value"
         ... except ValueError as e:
         ...     print(repr(e))
-        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
+        ValueError('Only setting _basis or existing attributes of _basis is allowed. Attempt to set `rand_atrr`.')
         """
-        # allow self._basis = basis
-        if name == "_basis":
+        # allow self._basis = basis and other attrs of self to be retrievable
+        if name in ["_basis", "basis", "_wrapped_methods"]:
             super().__setattr__(name, value)
         # allow changing existing attributes of self._basis
         elif hasattr(self._basis, name):
@@ -300,7 +354,7 @@ class TransformerBasis:
         # don't allow setting any other attribute
         else:
             raise ValueError(
-                "Only setting _basis or existing attributes of _basis is allowed."
+                f"Only setting _basis or existing attributes of _basis is allowed. Attempt to set `{name}`."
             )
 
     def __sklearn_clone__(self) -> TransformerBasis:
@@ -360,7 +414,7 @@ class TransformerBasis:
 
     def __dir__(self) -> list[str]:
         """Extend the list of properties of methods with the ones from the underlying Basis."""
-        return list(super().__dir__()) + list(self._basis.__dir__())
+        return list(set(list(super().__dir__()) + list(self._basis.__dir__())))
 
     def __add__(self, other: TransformerBasis) -> TransformerBasis:
         """
@@ -455,5 +509,5 @@ class TransformerBasis:
         if y is not None and y.shape[0] != X.shape[0]:
             raise ValueError(
                 "X and y must have the same number of samples. "
-                f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples."
+                f"X has {X.shape[0]} samples, while y has {y.shape[0]} samples."
             )

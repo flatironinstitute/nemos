@@ -21,7 +21,7 @@ from nemos.basis._transformer_basis import TransformerBasis
 )
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = TransformerBasis(bas.set_input_shape(*([1] * bas._n_input_dimensionality)))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
     pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
@@ -39,7 +39,7 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 )
 def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = TransformerBasis(bas.set_input_shape(*([1] * bas._n_input_dimensionality)))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -60,7 +60,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     bas, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = TransformerBasis(bas.set_input_shape(*([1] * bas._n_input_dimensionality)))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(
@@ -173,8 +173,8 @@ def test_sklearn_transformer_pipeline_pynapple(
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
     y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
-    bas = bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    bas = TransformerBasis(bas)
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+
     # fit a pipeline & predict from pynapple
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
     pipe.fit(X_nap[:, : bas._basis._n_input_dimensionality] ** 2, y_nap)

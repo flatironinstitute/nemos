@@ -1,6 +1,5 @@
 import inspect
 import itertools
-import pickle
 import re
 from contextlib import nullcontext as does_not_raise
 from functools import partial
