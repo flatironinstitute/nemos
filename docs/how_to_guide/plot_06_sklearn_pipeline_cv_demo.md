@@ -529,7 +529,11 @@ The plot confirms that the firing rate distribution is accurately captured by ou
 :::{warning}
 Please note that because it would lead to unexpected behavior, mixing the two ways of defining values for the parameter grid is not allowed. The following would lead to an error:
 
+
+<!-- we don't want to run this, just use syntax highlighting -->
+
 ```{code} ipython
+
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
