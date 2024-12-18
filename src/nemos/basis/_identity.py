@@ -7,7 +7,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import Basis, check_transform_input, min_max_rescale_samples
+from ._basis import Basis, check_transform_input, check_fraction_valid_samples
 from ._basis_mixin import AtomicBasisMixin
 
 
@@ -56,13 +56,18 @@ class IdentityBasis(Basis, AtomicBasisMixin):
         Returns
         -------
         :
-            The samples reshaped into a 2D array.
+            The samples with an extra axis, the n_basis_funcs axis which is = 1.
 
         """
-        sample_pts, _ = min_max_rescale_samples(
-            np.copy(sample_pts), getattr(self, "bounds", None)
+        vmin = np.nanmin(sample_pts, axis=0) if self.bounds is None else self.bounds[0]
+        vmax = np.nanmax(sample_pts, axis=0) if self.bounds is None else self.bounds[1]
+        sample_pts[(sample_pts < vmin) | (sample_pts > vmax)] = np.nan
+        check_fraction_valid_samples(
+            sample_pts,
+            err_msg="All the samples lie outside the [vmin, vmax] range.",
+            warn_msg="More than 90% of the samples lie outside the [vmin, vmax] range.",
         )
-        return sample_pts.reshape(sample_pts.shape[0], -1)
+        return sample_pts[..., np.newaxis]
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -86,6 +91,12 @@ class IdentityBasis(Basis, AtomicBasisMixin):
     def _check_n_basis_min(self):
         """No checks are necessary."""
         pass
+
+    @property
+    def n_basis_funcs(self) -> tuple | None:
+        """Read-only property for identity."""
+        return super().n_basis_funcs
+
 
 
 class HistoryBasis(Basis, AtomicBasisMixin):
@@ -134,11 +145,14 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         Returns
         -------
         :
-            The identity matrix of size len(samples).
+            np.eye(*samples.shape, n_basis_funcs).
 
         """
+        sample_pts = np.squeeze(np.asarray(sample_pts))
+        if sample_pts.ndim != 1:
+            raise ValueError("`_evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.
-        return np.eye(len(sample_pts))
+        return np.eye(np.asarray(sample_pts).shape[0], self.n_basis_funcs)
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -146,7 +160,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         Parameters
         ----------
         n_samples :
-            The number of sample points used to construct the identity matrix.
+            The number of points used to construct the identity matrix.
 
         Returns
         -------
@@ -155,8 +169,13 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         basis_funcs :
             The identity matrix of shape, i.e. ``np.eye(window_size, n_samples)``.
         """
-        pass
+        return super().evaluate_on_grid(n_samples)
 
     def _check_n_basis_min(self):
         """No checks are necessary."""
         pass
+
+    @property
+    def n_basis_funcs(self) -> tuple | None:
+        """Read-only property for history basis."""
+        return super().n_basis_funcs

@@ -1880,7 +1880,6 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         IdentityBasis.__init__(
             self,
             n_basis_funcs=1,
-            mode="eval",
             label=label,
         )
 
@@ -2015,7 +2014,10 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
 
         """
-        return np.linspace(0, 1, n_samples), np.eye(self.window_size, n_samples)
+        self._check_input_dimensionality((n_samples,))
+        if self._has_zero_samples((n_samples,)):
+            raise ValueError("All sample counts provided must be greater than zero.")
+        return np.linspace(0, 1, n_samples), np.eye(n_samples, self.window_size)
 
     @add_docstring("_compute_features", ConvBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -2086,3 +2088,13 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
 
         """
         return AtomicBasisMixin.set_input_shape(self, xi)
+
+    @property
+    def window_size(self):
+        return self._window_size
+
+    @window_size.setter
+    def window_size(self, window_size: int) -> None:
+        self._check_window_size(window_size)
+        self._window_size = window_size
+        self._n_basis_funcs = window_size
