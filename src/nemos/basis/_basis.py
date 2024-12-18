@@ -761,8 +761,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
-        out1 = getattr(self._basis1, "n_output_features", None)
-        out2 = getattr(self._basis2, "n_output_features", None)
+        out1 = getattr(self.basis1, "n_output_features", None)
+        out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
             return None
         return out1 + out2
@@ -829,8 +829,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         """
         X = np.hstack(
             (
-                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
+                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
             )
         )
         return X
@@ -878,11 +878,11 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
         X = hstack_pynapple(
             (
-                self._basis1._compute_features(
-                    *xi[: self._basis1._n_input_dimensionality]
+                self.basis1._compute_features(
+                    *xi[: self.basis1._n_input_dimensionality]
                 ),
-                self._basis2._compute_features(
-                    *xi[self._basis1._n_input_dimensionality :]
+                self.basis2._compute_features(
+                    *xi[self.basis1._n_input_dimensionality :]
                 ),
             ),
         )
@@ -1098,13 +1098,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
 
         # If the instance is of AdditiveBasis type, handle slicing for the additive components
 
-        split_dict, start_slice = self._basis1._get_feature_slicing(
-            n_inputs[: len(self._basis1._n_basis_input_)],
+        split_dict, start_slice = self.basis1._get_feature_slicing(
+            n_inputs[: len(self.basis1._n_basis_input_)],
             start_slice,
             split_by_input=split_by_input,
         )
-        sp2, start_slice = self._basis2._get_feature_slicing(
-            n_inputs[len(self._basis1._n_basis_input_) :],
+        sp2, start_slice = self.basis2._get_feature_slicing(
+            n_inputs[len(self.basis1._n_basis_input_) :],
             start_slice,
             split_by_input=split_by_input,
         )
@@ -1171,8 +1171,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
 
     @property
     def n_output_features(self):
-        out1 = getattr(self._basis1, "n_output_features", None)
-        out2 = getattr(self._basis2, "n_output_features", None)
+        out1 = getattr(self.basis1, "n_output_features", None)
+        out2 = getattr(self.basis2, "n_output_features", None)
         if out1 is None or out2 is None:
             return None
         return out1 * out2
@@ -1205,8 +1205,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         X = np.asarray(
             row_wise_kron(
-                self._basis1._evaluate(*xi[: self._basis1._n_input_dimensionality]),
-                self._basis2._evaluate(*xi[self._basis1._n_input_dimensionality :]),
+                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )
@@ -1239,8 +1239,8 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
         X = kron(
-            self._basis1._compute_features(*xi[: self._basis1._n_input_dimensionality]),
-            self._basis2._compute_features(*xi[self._basis1._n_input_dimensionality :]),
+            self.basis1._compute_features(*xi[: self.basis1._n_input_dimensionality]),
+            self.basis2._compute_features(*xi[self.basis1._n_input_dimensionality :]),
             transpose=False,
         )
         return X

@@ -2120,13 +2120,9 @@ class TestAdditiveBasis(CombinedBasis):
             if hasattr(b1, "basis1"):
                 compare(b1.basis1, b2.basis1)
                 compare(b1.basis2, b2.basis2)
-                # add all params that are not parent or _basis1,_basis2
-                d1 = filter_attributes(
-                    b1, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
-                d2 = filter_attributes(
-                    b2, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
+                # add all params that are not parent or basis1,basis2
+                d1 = filter_attributes(b1, exclude_keys=["basis1", "basis2", "_parent"])
+                d2 = filter_attributes(b2, exclude_keys=["basis1", "basis2", "_parent"])
                 assert d1 == d2
             else:
                 decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
@@ -2677,9 +2673,9 @@ class TestAdditiveBasis(CombinedBasis):
 
         def check_kernel(basis_obj):
             has_kern = []
-            if hasattr(basis_obj, "_basis1"):
-                has_kern += check_kernel(basis_obj._basis1)
-                has_kern += check_kernel(basis_obj._basis2)
+            if hasattr(basis_obj, "basis1"):
+                has_kern += check_kernel(basis_obj.basis1)
+                has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
                     basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
@@ -3605,9 +3601,9 @@ class TestMultiplicativeBasis(CombinedBasis):
 
         def check_kernel(basis_obj):
             has_kern = []
-            if hasattr(basis_obj, "_basis1"):
-                has_kern += check_kernel(basis_obj._basis1)
-                has_kern += check_kernel(basis_obj._basis2)
+            if hasattr(basis_obj, "basis1"):
+                has_kern += check_kernel(basis_obj.basis1)
+                has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
                     basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True

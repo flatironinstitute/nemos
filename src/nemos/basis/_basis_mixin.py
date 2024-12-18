@@ -567,28 +567,12 @@ class CompositeBasisMixin:
 
     def _check_input_shape_consistency(self, *xi: NDArray):
         """Check the input shape consistency for all basis elements."""
-        self._basis1._check_input_shape_consistency(
-            *xi[: self._basis1._n_input_dimensionality]
+        self.basis1._check_input_shape_consistency(
+            *xi[: self.basis1._n_input_dimensionality]
         )
-        self._basis2._check_input_shape_consistency(
-            *xi[self._basis1._n_input_dimensionality :]
+        self.basis2._check_input_shape_consistency(
+            *xi[self.basis1._n_input_dimensionality :]
         )
-
-    @property
-    def basis1(self):
-        return self._basis1
-
-    @basis1.setter
-    def basis1(self, bas: Basis):
-        self._basis1 = bas
-
-    @property
-    def basis2(self):
-        return self._basis2
-
-    @basis2.setter
-    def basis2(self, bas: Basis):
-        self._basis2 = bas
 
     def _iterate_over_components(self):
         """Return a generator that iterates over all basis components.
@@ -601,8 +585,8 @@ class CompositeBasisMixin:
             A generator looping on each individual input.
         """
         return chain(
-            self._basis1._iterate_over_components(),
-            self._basis2._iterate_over_components(),
+            self.basis1._iterate_over_components(),
+            self.basis2._iterate_over_components(),
         )
 
     @set_input_shape_state
@@ -616,8 +600,8 @@ class CompositeBasisMixin:
         The method also handles recursive cloning for composite basis structures.
         """
         # clone recursively
-        basis1 = self._basis1.__sklearn_clone__()
-        basis2 = self._basis2.__sklearn_clone__()
+        basis1 = self.basis1.__sklearn_clone__()
+        basis2 = self.basis2.__sklearn_clone__()
         klass = self.__class__(basis1, basis2)
 
         for attr_name in ["_n_basis_input_", "_input_shape_"]:
@@ -653,11 +637,11 @@ class CompositeBasisMixin:
             Returns the instance itself to allow method chaining.
         """
         self._n_basis_input_ = (
-            *self._basis1.set_input_shape(
-                *xi[: self._basis1._n_input_dimensionality]
+            *self.basis1.set_input_shape(
+                *xi[: self.basis1._n_input_dimensionality]
             )._n_basis_input_,
-            *self._basis2.set_input_shape(
-                *xi[self._basis1._n_input_dimensionality :]
+            *self.basis2.set_input_shape(
+                *xi[self.basis1._n_input_dimensionality :]
             )._n_basis_input_,
         )
         return self
