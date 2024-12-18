@@ -7,7 +7,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ._basis import Basis, check_transform_input, check_fraction_valid_samples
+from ._basis import Basis, check_fraction_valid_samples, check_transform_input
 from ._basis_mixin import AtomicBasisMixin
 
 
@@ -96,7 +96,6 @@ class IdentityBasis(Basis, AtomicBasisMixin):
     def n_basis_funcs(self) -> tuple | None:
         """Read-only property for identity."""
         return super().n_basis_funcs
-
 
 
 class HistoryBasis(Basis, AtomicBasisMixin):
