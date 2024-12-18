@@ -173,7 +173,8 @@ class AtomicBasisMixin:
                 f"  But got:  {x.shape}.\n\n"
                 "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
                 "but all other dimensions must remain the same. If you need to process inputs with a "
-                "different shape, please create a new basis instance, or set a new input shape by calling `set_input_shape`."
+                "different shape, please create a new basis instance, or set a new input shape by calling "
+                "`set_input_shape`."
             )
 
 
