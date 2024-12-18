@@ -163,7 +163,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         -----
         The number of output features can be determined only when the number of inputs
         provided to the basis is known. Therefore, before the first call to ``compute_features``,
-        this property will return ``None``. After that call, ``n_output_features`` will be available.
+        this property will return ``None``. After that call, or after setting the input shape with ``set_input_shape``, ``n_output_features`` will be available.
         """
         if self._n_basis_input_ is not None:
             return self.n_basis_funcs * self._n_basis_input_[0]

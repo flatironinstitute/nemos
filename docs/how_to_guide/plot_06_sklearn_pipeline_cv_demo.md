@@ -534,12 +534,12 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis___basis=(
-        nmo.basis.RaisedCosineLinearEval(5),
-        nmo.basis.RaisedCosineLinearEval(10),
-        nmo.basis.RaisedCosineLogEval(5),
-        nmo.basis.RaisedCosineLogEval(10),
-        nmo.basis.MSplineEval(5),
-        nmo.basis.MSplineEval(10),
+        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
+        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
+        nmo.basis.MSplineEval(5).set_input_shape(1),
+        nmo.basis.MSplineEval(10).set_input_shape(1),
     ),
 )
 ```
