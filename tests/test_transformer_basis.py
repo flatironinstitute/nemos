@@ -714,7 +714,8 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
-
+    if isinstance(bas, AdditiveBasis):
+        xxx=1
     # fit outside pipeline
     X = bas.compute_features(*([inp] * bas._n_input_dimensionality))
     log_mu = X.dot(0.005 * np.ones(X.shape[1]))
@@ -739,7 +740,7 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
 
     # set basis & refit
     if isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis)):
-        pipe.set_params(bas_basis2__n_basis_funcs=4)
+        pipe.set_params(bas__basis2__n_basis_funcs=4)
         assert (
             bas.basis2.n_basis_funcs == 5
         )  # make sure that the change did not affect bas
