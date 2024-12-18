@@ -81,6 +81,7 @@ docs = [
     "pooch",
     "ipywidgets",
     "ipykernel",
+    "patsy",
 ]
 examples = [
     "scikit-learn",
@@ -89,6 +90,7 @@ examples = [
     "seaborn",
     "pooch",
     "fsspec",
+    "patsy",
 ]
 
 
