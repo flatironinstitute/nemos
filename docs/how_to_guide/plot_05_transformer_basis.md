@@ -102,7 +102,6 @@ As with any `sckit-learn` transformer, the `TransformerBasis` implements `fit`, 
 At this point we have an object equipped with the correct methods, so now, all we have to do is concatenate the inputs into a unique array and call `fit_transform`, right? 
 
 ```{code-cell} ipython3
-:tags: [raises-exception]
 
 # reinstantiate the basis transformer for illustration porpuses
 composite_basis = counts_basis + speed_basis
@@ -110,7 +109,12 @@ trans_bas = (composite_basis).to_transformer()
 # concatenate the inputs
 inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
 print(inp.shape)
-trans_bas.fit_transform(inp)
+
+try:
+    trans_bas.fit_transform(inp)
+except RuntimeError as e:
+    print(repr(e))
+    
 ```
 
 ...Unfortunately, not yet. The problem is that the basis doesn't know which columns of `inp` should be processed by `count_basis` and which by `speed_basis`.
