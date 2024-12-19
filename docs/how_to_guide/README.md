@@ -96,4 +96,21 @@ plot_07_glm_pytree.md
 
 :::
 
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/categorical_predictor_heatmap.py plot_categorical_var_design_matrix
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+categorical_predictors.md
+```
+
+:::
+
 ::::
