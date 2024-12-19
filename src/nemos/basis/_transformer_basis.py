@@ -153,8 +153,10 @@ class TransformerBasis:
 
         Raises
         ------
+        RuntimeError
+            If ``self.n_basis_input`` is None. Call ``self.set_input_shape`` before calling ``fit`` to avoid this.
         ValueError:
-            If the number of columns in X do not match the number of inputs that the basis expects.
+            If the number of columns in X do not ``self.n_basis_input_``.
 
         Examples
         --------
