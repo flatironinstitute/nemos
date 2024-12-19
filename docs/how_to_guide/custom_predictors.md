@@ -11,6 +11,7 @@ kernelspec:
   name: python3
 ---
 
+(custom-features)=
 # Custom Features
 
 ## Incorporating Custom Features into GLM Design

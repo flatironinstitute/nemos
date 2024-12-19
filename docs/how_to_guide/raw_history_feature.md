@@ -20,7 +20,7 @@ GLMs can be used to capture pairwise interactions (couplings) between simultaneo
 You can learn more about GLMs for pairwise interactions by following our [head direction](head-direction-tutorial) tutorial.
 :::
 
-
+(fully_coupled_glm_how_to)=
 ## Setting up a Fully Coupled GLM
 
 ### Raw Spike History as a Feature
