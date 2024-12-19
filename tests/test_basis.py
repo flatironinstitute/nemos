@@ -2381,13 +2381,9 @@ class TestAdditiveBasis(CombinedBasis):
             if hasattr(b1, "basis1"):
                 compare(b1.basis1, b2.basis1)
                 compare(b1.basis2, b2.basis2)
-                # add all params that are not parent or _basis1,_basis2
-                d1 = filter_attributes(
-                    b1, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
-                d2 = filter_attributes(
-                    b2, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
+                # add all params that are not parent or basis1,basis2
+                d1 = filter_attributes(b1, exclude_keys=["basis1", "basis2", "_parent"])
+                d2 = filter_attributes(b2, exclude_keys=["basis1", "basis2", "_parent"])
                 assert d1 == d2
             else:
                 decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
@@ -2515,41 +2511,6 @@ class TestAdditiveBasis(CombinedBasis):
             expectation = does_not_raise()
         with expectation:
             basis_obj.compute_features(*inputs)
-
-    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
-    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
-    @pytest.mark.parametrize("n_basis_a", [5])
-    @pytest.mark.parametrize("n_basis_b", [6])
-    @pytest.mark.parametrize("window_size", [10])
-    def test_warn_partial_setup(
-        self,
-        n_basis_a,
-        n_basis_b,
-        basis_a,
-        basis_b,
-        window_size,
-        basis_class_specific_params,
-    ):
-        basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
-        )
-        basis_b_obj = self.instantiate_basis(
-            n_basis_b, basis_b, basis_class_specific_params, window_size=window_size
-        )
-
-        basis_a_obj.set_input_shape(*([1] * basis_a_obj._n_input_dimensionality))
-        with pytest.warns(UserWarning, match="Only some of the basis where"):
-            basis_a_obj + basis_b_obj
-
-        # check that if both set addition is fine
-        basis_b_obj.set_input_shape(*([1] * basis_b_obj._n_input_dimensionality))
-        basis_a_obj + basis_b_obj
-
-        basis_a_obj = self.instantiate_basis(
-            n_basis_a, basis_a, basis_class_specific_params, window_size=window_size
-        )
-        with pytest.warns(UserWarning, match="Only some of the basis where"):
-            basis_a_obj + basis_b_obj
 
     @pytest.mark.parametrize("sample_size", [11, 20])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
@@ -2984,9 +2945,9 @@ class TestAdditiveBasis(CombinedBasis):
 
         def check_kernel(basis_obj):
             has_kern = []
-            if hasattr(basis_obj, "_basis1"):
-                has_kern += check_kernel(basis_obj._basis1)
-                has_kern += check_kernel(basis_obj._basis2)
+            if hasattr(basis_obj, "basis1"):
+                has_kern += check_kernel(basis_obj.basis1)
+                has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
                     basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
@@ -3950,9 +3911,9 @@ class TestMultiplicativeBasis(CombinedBasis):
 
         def check_kernel(basis_obj):
             has_kern = []
-            if hasattr(basis_obj, "_basis1"):
-                has_kern += check_kernel(basis_obj._basis1)
-                has_kern += check_kernel(basis_obj._basis2)
+            if hasattr(basis_obj, "basis1"):
+                has_kern += check_kernel(basis_obj.basis1)
+                has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
                     basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True

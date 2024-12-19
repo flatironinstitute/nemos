@@ -81,7 +81,7 @@ def initialize_intercept_matching_mean_rate(
     # return inverse if analytical solution is available
     analytical_inv = INVERSE_FUNCS.get(inverse_link_function, None)
 
-    means = jnp.atleast_1d(jnp.mean(y, axis=0))
+    means = jnp.atleast_1d(jnp.nanmean(y, axis=0))
     if analytical_inv:
         out = analytical_inv(means)
         if jnp.any(jnp.isnan(out)):

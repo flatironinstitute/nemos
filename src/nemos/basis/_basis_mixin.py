@@ -5,7 +5,6 @@ from __future__ import annotations
 import abc
 import copy
 import inspect
-import warnings
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
@@ -21,7 +20,9 @@ if TYPE_CHECKING:
     from ._basis import Basis
 
 
-def set_input_shape_state(method):
+def set_input_shape_state(
+    method, states: Tuple[str] = ("_n_basis_input_", "_input_shape_")
+):
     """
     Decorator to preserve input shape-related attributes during method execution.
 
@@ -36,6 +37,7 @@ def set_input_shape_state(method):
     method :
         The method to be wrapped. This method is expected to return an object
         (`klass`) that requires the `_n_basis_input_` and `_input_shape_` attributes.
+    attr_list
 
     Returns
     -------
@@ -60,7 +62,7 @@ def set_input_shape_state(method):
     @wraps(method)
     def wrapper(self, *args, **kwargs):
         klass: Basis = method(self, *args, **kwargs)
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+        for attr_name in states:
             setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
@@ -84,9 +86,6 @@ class AtomicBasisMixin:
         cross-validation unusable.
         """
         klass = self.__class__(**self.get_params())
-
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
     def _iterate_over_components(self) -> Generator:
@@ -518,12 +517,6 @@ class CompositeBasisMixin:
         if all(set_bases):
             # pass down the input shapes
             self.set_input_shape(*shapes)
-        elif any(set_bases):
-            warnings.warn(
-                "Only some of the basis where initialized with `set_input_shape`, "
-                "please initialize the composite basis before computing features.",
-                category=UserWarning,
-            )
 
     @property
     @abc.abstractmethod
@@ -573,28 +566,12 @@ class CompositeBasisMixin:
 
     def _check_input_shape_consistency(self, *xi: NDArray):
         """Check the input shape consistency for all basis elements."""
-        self._basis1._check_input_shape_consistency(
-            *xi[: self._basis1._n_input_dimensionality]
+        self.basis1._check_input_shape_consistency(
+            *xi[: self.basis1._n_input_dimensionality]
         )
-        self._basis2._check_input_shape_consistency(
-            *xi[self._basis1._n_input_dimensionality :]
+        self.basis2._check_input_shape_consistency(
+            *xi[self.basis1._n_input_dimensionality :]
         )
-
-    @property
-    def basis1(self):
-        return self._basis1
-
-    @basis1.setter
-    def basis1(self, bas: Basis):
-        self._basis1 = bas
-
-    @property
-    def basis2(self):
-        return self._basis2
-
-    @basis2.setter
-    def basis2(self, bas: Basis):
-        self._basis2 = bas
 
     def _iterate_over_components(self):
         """Return a generator that iterates over all basis components.
@@ -607,8 +584,8 @@ class CompositeBasisMixin:
             A generator looping on each individual input.
         """
         return chain(
-            self._basis1._iterate_over_components(),
-            self._basis2._iterate_over_components(),
+            self.basis1._iterate_over_components(),
+            self.basis2._iterate_over_components(),
         )
 
     @set_input_shape_state
@@ -622,8 +599,8 @@ class CompositeBasisMixin:
         The method also handles recursive cloning for composite basis structures.
         """
         # clone recursively
-        basis1 = self._basis1.__sklearn_clone__()
-        basis2 = self._basis2.__sklearn_clone__()
+        basis1 = self.basis1.__sklearn_clone__()
+        basis2 = self.basis2.__sklearn_clone__()
         klass = self.__class__(basis1, basis2)
 
         for attr_name in ["_n_basis_input_", "_input_shape_"]:
@@ -659,11 +636,11 @@ class CompositeBasisMixin:
             Returns the instance itself to allow method chaining.
         """
         self._n_basis_input_ = (
-            *self._basis1.set_input_shape(
-                *xi[: self._basis1._n_input_dimensionality]
+            *self.basis1.set_input_shape(
+                *xi[: self.basis1._n_input_dimensionality]
             )._n_basis_input_,
-            *self._basis2.set_input_shape(
-                *xi[self._basis1._n_input_dimensionality :]
+            *self.basis2.set_input_shape(
+                *xi[self.basis1._n_input_dimensionality :]
             )._n_basis_input_,
         )
         return self

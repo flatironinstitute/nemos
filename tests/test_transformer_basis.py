@@ -102,8 +102,8 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
 
     # changing an attribute in bas should not change trans_bas
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        bas_a._basis1.n_basis_funcs = 10
-        assert trans_bas_a._basis._basis1.n_basis_funcs == 5
+        bas_a.basis1.n_basis_funcs = 10
+        assert trans_bas_a._basis.basis1.n_basis_funcs == 5
 
         # changing an attribute in the transformer basis should not change the original
         bas_b = CombinedBasis().instantiate_basis(
@@ -111,8 +111,8 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
         )
         bas_b.set_input_shape(*([1] * bas_b._n_input_dimensionality))
         trans_bas_b = bas_b.to_transformer()
-        trans_bas_b._basis._basis1.n_basis_funcs = 100
-        assert bas_b._basis1.n_basis_funcs == 5
+        trans_bas_b._basis.basis1.n_basis_funcs = 100
+        assert bas_b.basis1.n_basis_funcs == 5
     else:
         bas_a.n_basis_funcs = 10
         assert trans_bas_a.n_basis_funcs == 5
@@ -143,9 +143,7 @@ def test_transformerbasis_getattr(
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     )
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        for bas in [
-            getattr(trans_basis._basis, attr) for attr in ("_basis1", "_basis2")
-        ]:
+        for bas in [getattr(trans_basis._basis, attr) for attr in ("basis1", "basis2")]:
             assert bas.n_basis_funcs == n_basis_funcs
     else:
         assert trans_basis.n_basis_funcs == n_basis_funcs
@@ -292,8 +290,8 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
         == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
     )
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        assert trans_bas_sum._basis1.n_basis_funcs == n_basis_funcs_a
-        assert trans_bas_sum._basis2.n_basis_funcs == n_basis_funcs_b
+        assert trans_bas_sum.basis1.n_basis_funcs == n_basis_funcs_a
+        assert trans_bas_sum.basis2.n_basis_funcs == n_basis_funcs_b
 
 
 @pytest.mark.parametrize(
@@ -327,8 +325,8 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
         == trans_bas_a._n_input_dimensionality + trans_bas_b._n_input_dimensionality
     )
     if basis_cls not in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        assert trans_bas_prod._basis1.n_basis_funcs == n_basis_funcs_a
-        assert trans_bas_prod._basis2.n_basis_funcs == n_basis_funcs_b
+        assert trans_bas_prod.basis1.n_basis_funcs == n_basis_funcs_a
+        assert trans_bas_prod.basis2.n_basis_funcs == n_basis_funcs_b
 
 
 @pytest.mark.parametrize(
@@ -435,9 +433,7 @@ def test_transformerbasis_pickle(
 
     assert isinstance(trans_bas2, basis.TransformerBasis)
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        for bas in [
-            getattr(trans_bas2._basis, attr) for attr in ("_basis1", "_basis2")
-        ]:
+        for bas in [getattr(trans_bas2._basis, attr) for attr in ("basis1", "basis2")]:
             assert bas.n_basis_funcs == n_basis_funcs
     else:
         assert trans_bas2.n_basis_funcs == n_basis_funcs
@@ -714,7 +710,6 @@ def test_transformer_in_pipeline(basis_cls, inp, basis_class_specific_params):
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
-
     # fit outside pipeline
     X = bas.compute_features(*([inp] * bas._n_input_dimensionality))
     log_mu = X.dot(0.005 * np.ones(X.shape[1]))
