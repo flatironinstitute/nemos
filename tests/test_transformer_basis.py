@@ -63,29 +63,29 @@ def test_to_transformer_and_constructor_are_equivalent(
     assert (
         list(trans_bas_a.__dict__.keys())
         == list(trans_bas_b.__dict__.keys())
-        == ["_basis", "_wrapped_methods"]
+        == ["basis", "_wrapped_methods"]
     )
     # and those bases are the same
     assert np.all(
-        trans_bas_a._basis.__dict__.pop("_decay_rates", 1)
-        == trans_bas_b._basis.__dict__.pop("_decay_rates", 1)
+        trans_bas_a.basis.__dict__.pop("_decay_rates", 1)
+        == trans_bas_b.basis.__dict__.pop("_decay_rates", 1)
     )
 
     # extract the wrapped func for these methods
     wrapped_methods_a = {}
     for method in trans_bas_a._chainable_methods:
-        out = trans_bas_a._basis.__dict__.pop(method, False)
+        out = trans_bas_a.basis.__dict__.pop(method, False)
         val = out if out is False else out.__func__.__qualname__
         wrapped_methods_a.update({method: val})
 
     wrapped_methods_b = {}
     for method in trans_bas_b._chainable_methods:
-        out = trans_bas_b._basis.__dict__.pop(method, False)
+        out = trans_bas_b.basis.__dict__.pop(method, False)
         val = out if out is False else out.__func__.__qualname__
         wrapped_methods_b.update({method: val})
 
     assert wrapped_methods_a == wrapped_methods_b
-    assert trans_bas_a._basis.__dict__ == trans_bas_b._basis.__dict__
+    assert trans_bas_a.basis.__dict__ == trans_bas_b.basis.__dict__
 
 
 @pytest.mark.parametrize(
@@ -103,7 +103,7 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
     # changing an attribute in bas should not change trans_bas
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
         bas_a.basis1.n_basis_funcs = 10
-        assert trans_bas_a._basis.basis1.n_basis_funcs == 5
+        assert trans_bas_a.basis.basis1.n_basis_funcs == 5
 
         # changing an attribute in the transformer basis should not change the original
         bas_b = CombinedBasis().instantiate_basis(
@@ -111,7 +111,7 @@ def test_basis_to_transformer_makes_a_copy(basis_cls, basis_class_specific_param
         )
         bas_b.set_input_shape(*([1] * bas_b._n_input_dimensionality))
         trans_bas_b = bas_b.to_transformer()
-        trans_bas_b._basis.basis1.n_basis_funcs = 100
+        trans_bas_b.basis.basis1.n_basis_funcs = 100
         assert bas_b.basis1.n_basis_funcs == 5
     else:
         bas_a.n_basis_funcs = 10
@@ -143,9 +143,7 @@ def test_transformerbasis_getattr(
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     )
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        for bas in [
-            getattr(trans_basis._basis, attr) for attr in ("basis1", "basis2")
-        ]:
+        for bas in [getattr(trans_basis.basis, attr) for attr in ("basis1", "basis2")]:
             assert bas.n_basis_funcs == n_basis_funcs
     else:
         assert trans_basis.n_basis_funcs == n_basis_funcs
@@ -169,7 +167,7 @@ def test_transformerbasis_set_params(
     trans_basis.set_params(n_basis_funcs=n_basis_funcs_new)
 
     assert trans_basis.n_basis_funcs == n_basis_funcs_new
-    assert trans_basis._basis.n_basis_funcs == n_basis_funcs_new
+    assert trans_basis.basis.n_basis_funcs == n_basis_funcs_new
 
 
 @pytest.mark.parametrize(
@@ -192,8 +190,8 @@ def test_transformerbasis_setattr_basis(basis_cls, basis_class_specific_params):
     trans_bas.basis = bas.set_input_shape(*([1] * bas._n_input_dimensionality))
 
     assert trans_bas.n_basis_funcs == 20
-    assert trans_bas._basis.n_basis_funcs == 20
-    assert isinstance(trans_bas._basis, basis_cls)
+    assert trans_bas.basis.n_basis_funcs == 20
+    assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(
@@ -214,8 +212,8 @@ def test_transformerbasis_setattr_basis_attribute(
     trans_bas.n_basis_funcs = 20
 
     assert trans_bas.n_basis_funcs == 20
-    assert trans_bas._basis.n_basis_funcs == 20
-    assert isinstance(trans_bas._basis, basis_cls)
+    assert trans_bas.basis.n_basis_funcs == 20
+    assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(
@@ -235,9 +233,9 @@ def test_transformerbasis_copy_basis_on_construct(
     trans_bas.n_basis_funcs = 20
 
     assert orig_bas.n_basis_funcs == 10
-    assert trans_bas._basis.n_basis_funcs == 20
-    assert trans_bas._basis.n_basis_funcs == 20
-    assert isinstance(trans_bas._basis, basis_cls)
+    assert trans_bas.basis.n_basis_funcs == 20
+    assert trans_bas.basis.n_basis_funcs == 20
+    assert isinstance(trans_bas.basis, basis_cls)
 
 
 @pytest.mark.parametrize(
@@ -258,7 +256,7 @@ def test_transformerbasis_setattr_illegal_attribute(
 
     with pytest.raises(
         ValueError,
-        match="Only setting _basis or existing attributes of _basis is allowed.",
+        match="Only setting basis or existing attributes of basis is allowed.",
     ):
         trans_bas.random_attr = "random value"
 
@@ -282,7 +280,7 @@ def test_transformerbasis_addition(basis_cls, basis_class_specific_params):
     trans_bas_b = basis.TransformerBasis(bas_b)
     trans_bas_sum = trans_bas_a + trans_bas_b
     assert isinstance(trans_bas_sum, basis.TransformerBasis)
-    assert isinstance(trans_bas_sum._basis, basis.AdditiveBasis)
+    assert isinstance(trans_bas_sum.basis, basis.AdditiveBasis)
     assert (
         trans_bas_sum.n_basis_funcs
         == trans_bas_a.n_basis_funcs + trans_bas_b.n_basis_funcs
@@ -317,7 +315,7 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
     )
     trans_bas_prod = trans_bas_a * trans_bas_b
     assert isinstance(trans_bas_prod, basis.TransformerBasis)
-    assert isinstance(trans_bas_prod._basis, basis.MultiplicativeBasis)
+    assert isinstance(trans_bas_prod.basis, basis.MultiplicativeBasis)
     assert (
         trans_bas_prod.n_basis_funcs
         == trans_bas_a.n_basis_funcs * trans_bas_b.n_basis_funcs
@@ -358,7 +356,7 @@ def test_transformerbasis_exponentiation(
         with pytest.raises(error_type, match=error_message):
             trans_bas_exp = trans_bas**exponent
             assert isinstance(trans_bas_exp, basis.TransformerBasis)
-            assert isinstance(trans_bas_exp._basis, basis.MultiplicativeBasis)
+            assert isinstance(trans_bas_exp.basis, basis.MultiplicativeBasis)
 
 
 @pytest.mark.parametrize(
@@ -382,7 +380,7 @@ def test_transformerbasis_dir(basis_cls, basis_class_specific_params):
     ):
         if (
             attr_name == "window_size"
-            and "Conv" not in trans_bas._basis.__class__.__name__
+            and "Conv" not in trans_bas.basis.__class__.__name__
         ):
             continue
         assert attr_name in dir(trans_bas)
@@ -435,9 +433,7 @@ def test_transformerbasis_pickle(
 
     assert isinstance(trans_bas2, basis.TransformerBasis)
     if basis_cls in [basis.AdditiveBasis, basis.MultiplicativeBasis]:
-        for bas in [
-            getattr(trans_bas2._basis, attr) for attr in ("basis1", "basis2")
-        ]:
+        for bas in [getattr(trans_bas2.basis, attr) for attr in ("basis1", "basis2")]:
             assert bas.n_basis_funcs == n_basis_funcs
     else:
         assert trans_bas2.n_basis_funcs == n_basis_funcs
@@ -817,9 +813,29 @@ def test_eetstate(basis_cls, basis_class_specific_params):
         7, basis_cls, basis_class_specific_params, window_size=10
     )
     transformer = bas.to_transformer()
-    state = {"_basis": bas2}
+    state = {"basis": bas2}
     transformer.__setstate__(state)
     assert transformer.basis == bas2
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+def test_to_transformer_not_an_attribute_of_transformer_basis(
+    basis_cls, basis_class_specific_params
+):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    bas = bas.to_transformer()
+    assert "to_transformer" not in bas.__dir__()
+
+    with pytest.raises(
+        AttributeError,
+        match="'TransformerBasis' object has no attribute 'to_transformer'",
+    ):
+        bas.to_transformer()
 
 
 @pytest.mark.parametrize(

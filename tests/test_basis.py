@@ -1270,7 +1270,7 @@ class TestSharedMethods:
         bas.set_input_shape(*([1] * bas._n_input_dimensionality))
         bas_transformer = bas.to_transformer()
         params_transf = bas_transformer.get_params()
-        params_transf.pop("_basis")
+        params_transf.pop("basis")
         params_basis = bas.get_params()
         rates_1 = params_basis.pop("decay_rates", 1)
         rates_2 = params_transf.pop("decay_rates", 1)
