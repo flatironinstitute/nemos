@@ -100,7 +100,7 @@ plot_07_glm_pytree.md
 
 ```{eval-rst}
 
-.. plot:: scripts/categorical_predictor_heatmap.py plot_categorical_var_design_matrix
+.. plot:: scripts/glm_predictors.py plot_categorical_var_design_matrix
    :show-source-link: False
    :height: 100px
 ```
@@ -109,6 +109,37 @@ plot_07_glm_pytree.md
 :maxdepth: 2
 
 categorical_predictors.md
+```
+
+:::
+
+:::{grid-item-card}
+
+```{eval-rst}
+
+.. plot:: scripts/glm_predictors.py plot_custom_features
+   :show-source-link: False
+   :height: 100px
+```
+
+```{toctree}
+:maxdepth: 2
+
+custom_predictors.md
+```
+
+:::
+
+:::{grid-item-card}
+
+<figure>
+<img src="../_static/glm_population_scheme.svg" style="height: 100px", alt="Coupled GLM."/>
+</figure>
+
+```{toctree}
+:maxdepth: 2
+
+raw_history_feature.md
 ```
 
 :::
