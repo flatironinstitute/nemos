@@ -111,7 +111,7 @@ model = nmo.glm.GLM().fit(design_df, counts)
 :::{note}
 
 You can directly pass a [`pandas.DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html) to the 
-`fit` method, as long as it can be internally converted to a floating-point array. The conversion is handled automatically, 
+`fit` method, as long as it can be internally converted to a floating-point array (that means, for example, that you can't have a column whose values are strings). The conversion is handled automatically, by calling `design_df.values`,
 so no additional steps are required on your part.
 :::
 
