@@ -291,11 +291,11 @@ class TransformerBasis:
         if name in self._wrapped_methods:
             return self._wrapped_methods[name]
 
-        # Get the original attribute from the basis
-        attr = getattr(self.basis, name, None)
-
-        if attr is None or name == "to_transformer":
+        if not hasattr(self.basis, name) or name == "to_transformer":
             raise AttributeError(f"'TransformerBasis' object has no attribute '{name}'")
+
+        # Get the original attribute from the basis
+        attr = getattr(self.basis, name)
 
         # If the attribute is a callable method, wrap it dynamically
         if name in self._chainable_methods:

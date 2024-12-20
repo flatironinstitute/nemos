@@ -41,7 +41,7 @@ def test_transformer_has_the_same_public_attributes_as_basis(
         "basis",
     }
 
-    assert public_attrs_basis - public_attrs_transformerbasis == set()
+    assert public_attrs_basis - public_attrs_transformerbasis == {"to_transformer"}
 
 
 @pytest.mark.parametrize(
@@ -857,6 +857,8 @@ def test_getstate(basis_cls, basis_class_specific_params):
     # check all reimplemented methods
     dict_reimplemented_method = get_subclass_methods(basis_cls)
     for meth in dict_reimplemented_method:
+        if meth[0] == "to_transformer":
+            continue
         assert meth[0] in lst
 
     # check that it is a trnasformer
