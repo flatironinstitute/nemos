@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from functools import wraps
 from typing import TYPE_CHECKING, Generator
 
 import numpy as np
@@ -9,6 +10,18 @@ from ..typing import FeatureMatrix
 
 if TYPE_CHECKING:
     from ._basis import Basis
+
+
+def transformer_chaining(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        # Call the wrapped function and capture its return value
+        result = func(*args, **kwargs)
+
+        # If the method returns the inner `self`, replace it with the outer `self` (no deepcopy here).
+        return self if result is self.basis else result
+
+    return wrapper
 
 
 class TransformerBasis:
@@ -61,8 +74,16 @@ class TransformerBasis:
     Cross-validated number of basis: {'compute_features__n_basis_funcs': 10}
     """
 
+    _chainable_methods = (
+        "set_kernel",
+        "set_input_shape",
+        "_set_input_independent_states",
+        "setup_basis",
+    )
+
     def __init__(self, basis: Basis):
-        self._basis = copy.deepcopy(basis)
+        self.basis = copy.deepcopy(basis)
+        self._wrapped_methods = {}  # Cache for wrapped methods
 
     @staticmethod
     def _check_initialized(basis):
@@ -72,14 +93,6 @@ class TransformerBasis:
                 "Please call `set_input_shape` before calling `fit`, `transform`, or "
                 "`fit_transform`."
             )
-
-    @property
-    def basis(self):
-        return self._basis
-
-    @basis.setter
-    def basis(self, basis):
-        self._basis = basis
 
     def _unpack_inputs(self, X: FeatureMatrix) -> Generator:
         """Unpack inputs.
@@ -95,7 +108,7 @@ class TransformerBasis:
         Returns
         -------
         :
-            A list of each individual input.
+            A generator looping on each individual input.
 
         """
         n_samples = X.shape[0]
@@ -110,9 +123,7 @@ class TransformerBasis:
 
     def fit(self, X: FeatureMatrix, y=None):
         """
-        Compute the convolutional kernels.
-
-        If any of the 1D basis in self._basis is in "conv" mode, it computes the convolutional kernels.
+        Check the input structure and, if necessary, compute the convolutional kernels.
 
         Parameters
         ----------
@@ -125,6 +136,13 @@ class TransformerBasis:
         -------
         self :
             The transformer object.
+
+        Raises
+        ------
+        RuntimeError
+            If ``self.n_basis_input`` is None. Call ``self.set_input_shape`` before calling ``fit`` to avoid this.
+        ValueError:
+            If the number of columns in X do not ``self.n_basis_input_``.
 
         Examples
         --------
@@ -139,9 +157,9 @@ class TransformerBasis:
         >>> transformer = TransformerBasis(basis)
         >>> transformer_fitted = transformer.fit(X)
         """
-        self._check_initialized(self._basis)
+        self._check_initialized(self.basis)
         self._check_input(X, y)
-        self._basis.setup_basis(*self._unpack_inputs(X))
+        self.basis.setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
@@ -181,10 +199,11 @@ class TransformerBasis:
         >>> # Transform basis
         >>> feature_transformed = transformer.transform(X)
         """
-        self._check_initialized(self._basis)
+        self._check_initialized(self.basis)
+        self._check_input(X, y)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
-        return self._basis._compute_features(*self._unpack_inputs(X))
+        return self.basis._compute_features(*self._unpack_inputs(X))
 
     def fit_transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
         """
@@ -231,7 +250,11 @@ class TransformerBasis:
         See https://docs.python.org/3/library/pickle.html#object.__getstate__
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
-        return {"_basis": self._basis}
+        # this is the only state needed at initalization
+        # returning the cached wrapped methods would create
+        # a circular binding of the state to self (i.e. infinite recursion when
+        # unpickling).
+        return {"basis": self.basis}
 
     def __setstate__(self, state):
         """
@@ -243,11 +266,16 @@ class TransformerBasis:
         See https://docs.python.org/3/library/pickle.html#object.__setstate__
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
-        self._basis = state["_basis"]
+        self.basis = state["basis"]
+        self._wrapped_methods = {}  # Reinitialize the cache
 
     def __getattr__(self, name: str):
         """
         Enable easy access to attributes of the underlying Basis object.
+
+        This method caches all chainable methods (methods returning self) in a dicitonary.
+        These methods are created the first time they are accessed by decorating the `self.basis.name`
+        and cached for future use.
 
         Examples
         --------
@@ -259,11 +287,28 @@ class TransformerBasis:
         >>> trans_bas.n_basis_funcs
         5
         """
-        return getattr(self._basis, name)
+        # Check if the method has already been wrapped
+        if name in self._wrapped_methods:
+            return self._wrapped_methods[name]
+
+        if not hasattr(self.basis, name) or name == "to_transformer":
+            raise AttributeError(f"'TransformerBasis' object has no attribute '{name}'")
+
+        # Get the original attribute from the basis
+        attr = getattr(self.basis, name)
+
+        # If the attribute is a callable method, wrap it dynamically
+        if name in self._chainable_methods:
+            wrapped = transformer_chaining(attr).__get__(self)
+            self._wrapped_methods[name] = wrapped  # Cache the wrapped method
+            return wrapped
+
+        # For non-callable attributes, return them directly
+        return attr
 
     def __setattr__(self, name: str, value) -> None:
         r"""
-        Allow setting _basis or the attributes of _basis with a convenient dot assignment syntax.
+        Allow setting basis or the attributes of basis with a convenient dot assignment syntax.
 
         Setting any other attribute is not allowed.
 
@@ -274,33 +319,33 @@ class TransformerBasis:
         Raises
         ------
         ValueError
-            If the attribute being set is not ``_basis`` or an attribute of ``_basis``.
+            If the attribute being set is not ``basis`` or an attribute of ``basis``.
 
         Examples
         --------
         >>> import nemos as nmo
         >>> trans_bas = nmo.basis.TransformerBasis(nmo.basis.MSplineEval(10))
         >>> # allowed
-        >>> trans_bas._basis = nmo.basis.BSplineEval(10)
+        >>> trans_bas.basis = nmo.basis.BSplineEval(10)
         >>> # allowed
         >>> trans_bas.n_basis_funcs = 20
         >>> # not allowed
         >>> try:
-        ...     trans_bas.random_attribute_name = "some value"
+        ...     trans_bas.rand_atrr = "some value"
         ... except ValueError as e:
         ...     print(repr(e))
-        ValueError('Only setting _basis or existing attributes of _basis is allowed.')
+        ValueError('Only setting basis or existing attributes of basis is allowed. Attempt to set `rand_atrr`.')
         """
-        # allow self._basis = basis
-        if name == "_basis":
+        # allow self.basis = basis and other attrs of self to be retrievable
+        if name in ["basis", "_wrapped_methods"]:
             super().__setattr__(name, value)
-        # allow changing existing attributes of self._basis
-        elif hasattr(self._basis, name):
-            setattr(self._basis, name, value)
+        # allow changing existing attributes of self.basis
+        elif hasattr(self.basis, name):
+            setattr(self.basis, name, value)
         # don't allow setting any other attribute
         else:
             raise ValueError(
-                "Only setting _basis or existing attributes of _basis is allowed."
+                f"Only setting basis or existing attributes of basis is allowed. Attempt to set `{name}`."
             )
 
     def __sklearn_clone__(self) -> TransformerBasis:
@@ -312,15 +357,15 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(self._basis.__sklearn_clone__())
-        cloned_obj._basis.kernel_ = None
+        cloned_obj = TransformerBasis(self.basis.__sklearn_clone__())
+        cloned_obj.basis.kernel_ = None
         return cloned_obj
 
     def set_params(self, **parameters) -> TransformerBasis:
         """
         Set TransformerBasis parameters.
 
-        When used with ``sklearn.model_selection``, users can set either the ``_basis`` attribute directly
+        When used with ``sklearn.model_selection``, users can set either the ``basis`` attribute directly
         or the parameters of the underlying Basis, but not both.
 
         Examples
@@ -329,38 +374,41 @@ class TransformerBasis:
         >>> basis = MSplineEval(10)
         >>> transformer_basis = TransformerBasis(basis=basis)
 
-        >>> # setting parameters of _basis is allowed
+        >>> # setting parameters of basis is allowed
         >>> print(transformer_basis.set_params(n_basis_funcs=8).n_basis_funcs)
         8
-        >>> # setting _basis directly is allowed
-        >>> print(type(transformer_basis.set_params(_basis=BSplineEval(10))._basis))
+        >>> # setting basis directly is allowed
+        >>> print(type(transformer_basis.set_params(basis=BSplineEval(10)).basis))
         <class 'nemos.basis.basis.BSplineEval'>
         >>> # mixing is not allowed, this will raise an exception
         >>> try:
-        ...     transformer_basis.set_params(_basis=BSplineEval(10), n_basis_funcs=2)
+        ...     transformer_basis.set_params(basis=BSplineEval(10), n_basis_funcs=2)
         ... except ValueError as e:
         ...     print(repr(e))
-        ValueError('Set either new _basis object or parameters for existing _basis, not both.')
+        ValueError('Set either new basis object or parameters for existing basis, not both.')
         """
-        new_basis = parameters.pop("_basis", None)
+        new_basis = parameters.pop("basis", None)
         if new_basis is not None:
-            self._basis = new_basis
+            self.basis = new_basis
             if len(parameters) > 0:
                 raise ValueError(
-                    "Set either new _basis object or parameters for existing _basis, not both."
+                    "Set either new basis object or parameters for existing basis, not both."
                 )
         else:
-            self._basis = self._basis.set_params(**parameters)
+            self.basis = self.basis.set_params(**parameters)
 
         return self
 
     def get_params(self, deep: bool = True) -> dict:
-        """Extend the dict of parameters from the underlying Basis with _basis."""
-        return {"_basis": self._basis, **self._basis.get_params(deep)}
+        """Extend the dict of parameters from the underlying Basis with basis."""
+        return {"basis": self.basis, **self.basis.get_params(deep)}
 
     def __dir__(self) -> list[str]:
         """Extend the list of properties of methods with the ones from the underlying Basis."""
-        return list(super().__dir__()) + list(self._basis.__dir__())
+        unique_attrs = set(list(super().__dir__()) + list(self.basis.__dir__()))
+        # discard without raising errors if not present
+        unique_attrs.discard("to_transformer")
+        return list(unique_attrs)
 
     def __add__(self, other: TransformerBasis) -> TransformerBasis:
         """
@@ -376,7 +424,7 @@ class TransformerBasis:
         : TransformerBasis
             The resulting Basis object.
         """
-        return TransformerBasis(self._basis + other._basis)
+        return TransformerBasis(self.basis + other.basis)
 
     def __mul__(self, other: TransformerBasis) -> TransformerBasis:
         """
@@ -392,7 +440,7 @@ class TransformerBasis:
         :
             The resulting Basis object.
         """
-        return TransformerBasis(self._basis * other._basis)
+        return TransformerBasis(self.basis * other.basis)
 
     def __pow__(self, exponent: int) -> TransformerBasis:
         """Exponentiation of a TransformerBasis object.
@@ -418,7 +466,7 @@ class TransformerBasis:
             If the integer is zero or negative.
         """
         # errors are handled by Basis.__pow__
-        return TransformerBasis(self._basis**exponent)
+        return TransformerBasis(self.basis**exponent)
 
     def _check_input(self, X: FeatureMatrix, y=None):
         """Check that the input structure.
@@ -455,5 +503,5 @@ class TransformerBasis:
         if y is not None and y.shape[0] != X.shape[0]:
             raise ValueError(
                 "X and y must have the same number of samples. "
-                f"X has {X.shpae[0]} samples, while y has {y.shape[0]} samples."
+                f"X has {X.shape[0]} samples, while y has {y.shape[0]} samples."
             )
