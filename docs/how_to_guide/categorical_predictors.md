@@ -61,7 +61,7 @@ Note that `patsy` adds an intercept and drops the reference `s1`. This is done b
 In the design matrix:
 - `T.` indicates **treatment coding**, which is used to encode categorical variables. For example, `stimulus[T.s2]` represents the presence (`1`) or absence (`0`) of the category `s2` compared to the reference category `s1`.
 - The reference category (`s1`) is dropped to avoid collinearity, as including all categories would result in redundancy.
-- Similarly, for `context`, columns `context[c1]` and `T.context[c2]` represent the presence of each category. 
+- Similarly, for `context`, columns `context[c1]` and `T.context[c2]` represent the presence of each category, and `context[T.c2]` is dropped to avoid collinearity. 
 - The interaction term `stimulus[T.s2]:context[T.c2]` represents the combined effect of `stimulus = s2` and `context = c2`. Only one column is needed for the interaction, as the other combinations are implicitly represented by the reference categories (`s1` and `c1`).
 :::
 - 
