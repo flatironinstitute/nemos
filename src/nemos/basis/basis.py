@@ -1944,7 +1944,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
 
 
 class HistoryConv(ConvBasisMixin, HistoryBasis):
-    """Identity basis function.
+    """Basis for history effects.
 
     This function includes the history of the samples as predictor reshaped as
     a 2D array. It is intended to be used for including a raw history as predictor.

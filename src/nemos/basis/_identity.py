@@ -69,7 +69,7 @@ class IdentityBasis(Basis, AtomicBasisMixin):
         )
         return sample_pts[..., np.newaxis]
 
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
         Parameters
