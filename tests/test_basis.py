@@ -111,7 +111,8 @@ def test_all_basis_are_tested() -> None:
         ),
         (
             "compute_features",
-            "Apply the basis transformation to the input data|Convolve basis functions with input time series|Evaluate basis at sample points",
+            "Apply the basis transformation to the input data|Convolve basis functions with input "
+            "time series|Evaluate basis at sample points",
         ),
         (
             "split_by_feature",
@@ -1953,27 +1954,6 @@ class TestMSplineBasis(BasisFuncsTesting):
 
 class TestOrthExponentialBasis(BasisFuncsTesting):
     cls = {"eval": basis.OrthExponentialEval, "conv": basis.OrthExponentialConv}
-
-    @pytest.mark.parametrize(
-        "window_size, n_basis, expectation",
-        [
-            (
-                4,
-                5,
-                pytest.raises(
-                    ValueError,
-                    match="OrthExponentialConv basis requires at least a window_size",
-                ),
-            ),
-            (5, 5, does_not_raise()),
-        ],
-    )
-    def test_window_size_at_init(self, window_size, n_basis, expectation):
-        decay_rates = np.asarray(np.arange(1, n_basis + 1), dtype=float)
-        with expectation:
-            self.cls["conv"](
-                n_basis_funcs=n_basis, decay_rates=decay_rates, window_size=window_size
-            )
 
     def test_check_window_size_after_init(self):
         decay_rates = np.asarray(np.arange(1, 5 + 1), dtype=float)

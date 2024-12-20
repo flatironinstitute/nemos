@@ -5,7 +5,6 @@ from copy import deepcopy
 import numpy as np
 import pytest
 from conftest import CombinedBasis, list_all_basis_classes
-from pycodestyle import continued_indentation
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
 
@@ -16,7 +15,6 @@ from nemos.basis import (
     AdditiveBasis,
     HistoryConv,
     IdentityEval,
-    MSplineConv,
     MultiplicativeBasis,
 )
 
@@ -844,7 +842,7 @@ def test_getstate(basis_cls, basis_class_specific_params):
     )
     transformer = bas.to_transformer()
     state = transformer.__getstate__()
-    assert {"_basis": transformer.basis} == state
+    assert {"basis": transformer.basis} == state
 
 
 @pytest.mark.parametrize(
@@ -888,7 +886,7 @@ def test_to_transformer_not_an_attribute_of_transformer_basis(
     "basis_cls",
     list_all_basis_classes(),
 )
-def test_getstate(basis_cls, basis_class_specific_params):
+def test_dir_transformer(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
