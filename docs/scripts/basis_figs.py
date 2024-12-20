@@ -109,3 +109,34 @@ def plot_1d_basis_thumbnail():
     plt.figure(figsize=(5, 3))
     plt.plot(x, y, lw=2)
     plt.title("B-Spline Basis")
+
+
+def plot_identity_basis():
+    plt.figure()
+    ax = plt.subplot(111, aspect="equal")
+    plt.plot([-1, 1], [-1, 1], lw=6, color="tomato", label="f(x) = x")
+    ax.axhline(0, -1, 1, color="k")
+    ax.axvline(0, -1, 1, color="k")
+    for side in ["left", "right", "top", "bottom"]:
+        ax.spines[side].set_visible(False)
+    plt.xticks([])
+    plt.yticks([])
+    plt.tight_layout()
+    plt.legend(fontsize=30)
+    plt.show()
+
+
+def plot_history_basis():
+    n_basis = KWARGS["n_basis_funcs"]
+    fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+    for i in np.linspace(0, 1, n_basis):
+        plt.plot([i, i], [0, 1], lw=4)
+    for side in ["right", "top"]:
+        ax.spines[side].set_visible(False)
+    plt.gca().spines["bottom"].set_linewidth(2)
+    plt.gca().spines["left"].set_linewidth(2)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.ylim(0, 1.2)
+    plt.xlabel("lag", fontsize=20)
+    plt.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.15)

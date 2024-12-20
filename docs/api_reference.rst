@@ -66,6 +66,7 @@ These classes are the building blocks for the concrete basis classes.
     RaisedCosineLinearConv
     RaisedCosineLogConv
     OrthExponentialConv
+    HistoryConv
 
 .. check for a config that prints only nemos.basis.Name
 
@@ -84,6 +85,7 @@ These classes are the building blocks for the concrete basis classes.
     RaisedCosineLinearEval
     RaisedCosineLogEval
     OrthExponentialEval
+    IdentityEval
 
 **Composite Bases:**
 

@@ -39,8 +39,7 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 ```
-
-
+(head-direction-tutorial)=
 # Fit head-direction population
 
 ## Learning objectives
