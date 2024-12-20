@@ -21,10 +21,10 @@ from nemos.basis._transformer_basis import TransformerBasis
 )
 def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = TransformerBasis(bas.set_input_shape(*([1] * bas._n_input_dimensionality)))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
-    pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+    pipe.fit(X[:, : bas.basis._n_input_dimensionality] ** 2, y)
 
 
 @pytest.mark.parametrize(
@@ -39,7 +39,7 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
 )
 def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = TransformerBasis(bas.set_input_shape(*([1] * bas._n_input_dimensionality)))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
@@ -60,7 +60,7 @@ def test_sklearn_transformer_pipeline_cv_multiprocess(
     bas, poissonGLM_model_instantiation
 ):
     X, y, model, _, _ = poissonGLM_model_instantiation
-    bas = TransformerBasis(bas.set_input_shape(*([1] * bas._n_input_dimensionality)))
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
     param_grid = dict(basis__n_basis_funcs=(4, 5, 10))
     gridsearch = GridSearchCV(
@@ -89,7 +89,7 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
     bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
-        transformerbasis___basis=(
+        transformerbasis__basis=(
             bas_cls(5).set_input_shape(*([1] * bas._n_input_dimensionality)),
             bas_cls(10).set_input_shape(*([1] * bas._n_input_dimensionality)),
             bas_cls(20).set_input_shape(*([1] * bas._n_input_dimensionality)),
@@ -117,13 +117,13 @@ def test_sklearn_transformer_pipeline_cv_illegal_combination(
     bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
-        transformerbasis___basis=(bas_cls(5), bas_cls(10), bas_cls(20)),
+        transformerbasis__basis=(bas_cls(5), bas_cls(10), bas_cls(20)),
         transformerbasis__n_basis_funcs=(4, 5, 10),
     )
     gridsearch = GridSearchCV(pipe, param_grid=param_grid, cv=3, error_score="raise")
     with pytest.raises(
         ValueError,
-        match="Set either new _basis object or parameters for existing _basis, not both.",
+        match="Set either new basis object or parameters for existing basis, not both.",
     ):
         gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
@@ -173,14 +173,14 @@ def test_sklearn_transformer_pipeline_pynapple(
     ep = nap.IntervalSet(start=[0, 20.5], end=[20, X.shape[0]])
     X_nap = nap.TsdFrame(t=np.arange(X.shape[0]), d=X, time_support=ep)
     y_nap = nap.Tsd(t=np.arange(X.shape[0]), d=y, time_support=ep)
-    bas = bas.set_input_shape(*([1] * bas._n_input_dimensionality))
-    bas = TransformerBasis(bas)
+    bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
+
     # fit a pipeline & predict from pynapple
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
-    pipe.fit(X_nap[:, : bas._basis._n_input_dimensionality] ** 2, y_nap)
+    pipe.fit(X_nap[:, : bas.basis._n_input_dimensionality] ** 2, y_nap)
 
     # get rate
-    rate = pipe.predict(X_nap[:, : bas._basis._n_input_dimensionality] ** 2)
+    rate = pipe.predict(X_nap[:, : bas.basis._n_input_dimensionality] ** 2)
     # check rate is Tsd with same time info
     assert isinstance(rate, nap.Tsd)
     assert np.all(rate.t == X_nap.t)
