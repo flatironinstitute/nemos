@@ -24,7 +24,7 @@ def test_sklearn_transformer_pipeline(bas, poissonGLM_model_instantiation):
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("eval", bas), ("fit", model)])
 
-    pipe.fit(X[:, : bas._basis._n_input_dimensionality] ** 2, y)
+    pipe.fit(X[:, : bas.basis._n_input_dimensionality] ** 2, y)
 
 
 @pytest.mark.parametrize(
@@ -89,7 +89,7 @@ def test_sklearn_transformer_pipeline_cv_directly_over_basis(
     bas.set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("transformerbasis", bas), ("fit", model)])
     param_grid = dict(
-        transformerbasis___basis=(
+        transformerbasis__basis=(
             bas_cls(5).set_input_shape(*([1] * bas._n_input_dimensionality)),
             bas_cls(10).set_input_shape(*([1] * bas._n_input_dimensionality)),
             bas_cls(20).set_input_shape(*([1] * bas._n_input_dimensionality)),
