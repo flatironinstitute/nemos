@@ -66,6 +66,8 @@ This is all you need to fit a fully coupled GLM.
 ```{code-cell} ipython3
 
 model = nmo.glm.PopulationGLM().fit(X, counts)
+
+model.coef_
 ```
 
 ### Reducing Dimensionality With Basis
@@ -90,7 +92,7 @@ plt.ylabel("Samples", fontsize=12)
 plt.show()
 ```
 
-This model can be fit with the usual `model_reduced = nmo.glm.GLM().fit(X2, counts)`.
+This model can be fit with the usual `model_reduced = nmo.glm.PopulationGLM().fit(X2, counts)`.
 
 ## Interpreting the coefficients
 
@@ -113,6 +115,7 @@ receiver_neuron_j = 2
 
 coeff_ij = split_coef["spike-history"][sender_neuron_i, :, receiver_neuron_j]
 
+coeff_ij
 ```
 
 
@@ -139,7 +142,7 @@ mask[2, 3] = 0
 mask = np.repeat(mask, basis.n_basis_funcs, axis=0)
 ```
 
-We are now readi to fit the GLM masking the coefficients.
+We are now ready to fit the GLM masking the coefficients.
 
 ```{code-cell} ipython3
 

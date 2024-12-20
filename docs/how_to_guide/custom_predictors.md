@@ -12,17 +12,17 @@ kernelspec:
 ---
 
 (custom-features)=
-# Custom Features
+# Precomputed Features
 
-## Incorporating Custom Features into GLM Design
+## Incorporating Precomputed Features into GLM Design
 
 In some cases, your data may contain features that are not directly computable through the available bases in NeMoS, for instance a Principal Component Analysis (PCA) of high-dimensional signals. 
 The `IdentityEval` basis allows you to incorporate these precomputed features into the model design, and combine them with other predictors through basis composition.
 
 For example, let's assume that you want to compute a Principal Component Analysis (PCA) of some signals, and use 
-the first 2 Principal Components (PCs) as GLM features. 
+the first 2 Principal Components as GLM features. 
 
-Currently, NeMoS doesn't provide a PCA basis, but you can compute the PCs in `sklearn`.
+Currently, NeMoS doesn't provide a PCA basis, but you can compute the Principal Components in `sklearn`.
 
 ```{code-cell}
 import numpy as np
@@ -54,6 +54,8 @@ composite_basis = pc_basis + history_basis
 
 # create the model design
 X = composite_basis.compute_features(pcs, counts)
+
+print(f"Design matrix shape: {X.shape}")
 
 # fit the glm
 model = nmo.glm.GLM().fit(X, counts)
