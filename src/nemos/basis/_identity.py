@@ -94,7 +94,7 @@ class IdentityBasis(Basis, AtomicBasisMixin):
 
     @property
     def n_basis_funcs(self) -> tuple | None:
-        """Read-only property for identity."""
+        """Number of basis functions (read-only)."""
         return super().n_basis_funcs
 
 
