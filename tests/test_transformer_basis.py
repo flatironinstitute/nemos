@@ -4,16 +4,21 @@ from copy import deepcopy
 
 import numpy as np
 import pytest
-from pycodestyle import continued_indentation
-
 from conftest import CombinedBasis, list_all_basis_classes
+from pycodestyle import continued_indentation
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
 
 import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
-from nemos.basis import AdditiveBasis, MSplineConv, MultiplicativeBasis, IdentityEval, HistoryConv
+from nemos.basis import (
+    AdditiveBasis,
+    HistoryConv,
+    IdentityEval,
+    MSplineConv,
+    MultiplicativeBasis,
+)
 
 
 @pytest.mark.parametrize(
@@ -166,7 +171,7 @@ def test_transformerbasis_set_params(
     basis_cls, n_basis_funcs_init, n_basis_funcs_new, basis_class_specific_params
 ):
     if basis_cls in [nmo.basis.IdentityEval]:
-        return # no settable params
+        return  # no settable params
 
     bas = CombinedBasis().instantiate_basis(
         n_basis_funcs_init, basis_cls, basis_class_specific_params, window_size=10
@@ -182,6 +187,7 @@ def test_transformerbasis_set_params(
         trans_basis.set_params(window_size=n_basis_funcs_new)
         assert trans_basis.window_size == n_basis_funcs_new
         assert trans_basis.basis.window_size == n_basis_funcs_new
+
 
 @pytest.mark.parametrize(
     "basis_cls",

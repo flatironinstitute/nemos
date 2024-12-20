@@ -125,6 +125,7 @@ def plot_identity_basis():
     plt.legend(fontsize=30)
     plt.show()
 
+
 def plot_history_basis():
     n_basis = KWARGS["n_basis_funcs"]
     fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
@@ -132,8 +133,8 @@ def plot_history_basis():
         plt.plot([i, i], [0, 1], lw=4)
     for side in ["right", "top"]:
         ax.spines[side].set_visible(False)
-    plt.gca().spines['bottom'].set_linewidth(2)
-    plt.gca().spines['left'].set_linewidth(2)
+    plt.gca().spines["bottom"].set_linewidth(2)
+    plt.gca().spines["left"].set_linewidth(2)
     ax.set_xticks([])
     ax.set_yticks([])
     plt.ylim(0, 1.2)
