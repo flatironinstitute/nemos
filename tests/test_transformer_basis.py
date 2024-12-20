@@ -921,7 +921,7 @@ def test_getstate(basis_cls, basis_class_specific_params):
     [
         (
             np.random.randn(10, 2),
-            pytest.raises(ValueError, match="Input mismatch: expected \d inputs"),
+            pytest.raises(ValueError, match=r"Input mismatch: expected \d inputs"),
         ),
         (
             np.random.randn(10, 3, 1),
