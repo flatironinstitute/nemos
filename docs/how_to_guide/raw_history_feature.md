@@ -119,33 +119,33 @@ coeff_ij = split_coef["spike-history"][sender_neuron_i, :, receiver_neuron_j]
 ## Selecting The Connectivity Map
 
 It is also possible select which couplings we want to learn by specifying a boolean mask (a mask of 0s and 1s) of shape `(n_features, n_neurons)`. The mask will be elementwise multiplied to the coefficients, selecting which will be included in the GLM.
-For instance, if `mask[i, j] == 0`, that means that i-th feature won't be included in the GLM fit of the `j-th` neuron.
+For instance, if `mask[i, j] == 0`, the i-th feature won't be included in the GLM fit of the `j-th` neuron.
 
-For example, let's exclude the coupling coefficients between neuron 0 and 1, and the directional couplings from neuron 2 (sender) to neuron 3 (receiver).
+For example, we can exclude the bi-directional coupling between neuron 0 and 1, and the directional coupling between neuron 2 (sender) and neuron 3 (receiver).
 
 ```{code-cell} ipython3
 
-# define a neuron x neuron mask
-mask = np.ones((n_neurons, n_neurons))  # initialize as fully connected
+# initialize a neuron x neuron mask
+mask = np.ones((n_neurons, n_neurons))
 
-# zero-out the reciprocal coupling between 0 and 1
+# remove the bi-directional coupling between 0 and 1
 mask[0, 1] = 0
 mask[1, 0] = 0
 
-# zero-out directional coupling
+# remove the directional coupling from 2 to 3
 mask[2, 3] = 0
 
-# repeat over the raws by the number of basis functions
+# repeat over the rows by the number of basis functions
 mask = np.repeat(mask, basis.n_basis_funcs, axis=0)
 ```
 
-Fit the masked GLM.
+We are now readi to fit the GLM masking the coefficients.
 
 ```{code-cell} ipython3
 
-model_masked = nmo.glm.PopulationGLM(feature_mask=mask).fit(X, counts)
+model_with_mask = nmo.glm.PopulationGLM(feature_mask=mask).fit(X, counts)
 
-print(model_masked.coef_)
+print(model_with_mask.coef_)
 
 ```
 
@@ -153,7 +153,7 @@ Check that the coefficient for the connection we removed, are actually null.
 
 ```{code-cell} ipython3
 
-split_coef = basis.split_by_feature(model_masked.coef_, axis=0)["spike-history"]
+split_coef = basis.split_by_feature(model_with_mask.coef_, axis=0)["spike-history"]
 
 # check sender=2 receiver=3
 print("Coupling 2 -> 3: ", split_coef[2, :, 3], "\n")

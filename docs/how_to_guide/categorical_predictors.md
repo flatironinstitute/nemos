@@ -108,7 +108,7 @@ X = bas.compute_features(design_df, speed)
 
 ### Interaction with Basis algebra
 
-To model the interaction between two variable, you can take advantage of the basis multiplication:
+To model the interaction between two variables, you can take advantage of the basis multiplication:
 
 ```{code-cell} ipython3
 # Interaction basis

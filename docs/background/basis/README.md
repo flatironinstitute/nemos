@@ -72,7 +72,7 @@
      - :class:`~nemos.basis.IdentityEval`  :raw-html:`<br />`
      - 🟢 Eval
      
-   * - **Spike History**
+   * - **History Effects**
      - .. plot:: scripts/basis_figs.py plot_history_basis
           :show-source-link: False
           :height: 80px
