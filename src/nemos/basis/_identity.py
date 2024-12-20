@@ -15,8 +15,8 @@ class IdentityBasis(Basis, AtomicBasisMixin):
     """
     Base class for the Identity basis.
 
-    This basis should be used when one wants to use input samples
-    as they are as predictors (IndentityEval).
+    This basis should be used when one wants to incorporate raw inputs
+    as part of a composite basis.
 
     Parameters
     ----------
@@ -84,12 +84,12 @@ class IdentityBasis(Basis, AtomicBasisMixin):
             Array of shape (n_samples,) containing the equi-spaced sample
             points where we've evaluated the basis.
         basis_funcs :
-            The linspace as a 2D array (n_samples, 1).
+            The equi-spaced sample points X as a 2D array (n_samples, 1).
         """
         return super().evaluate_on_grid(n_samples)
 
     def _check_n_basis_min(self):
-        """No checks are necessary."""
+        """No checks necessary."""
         pass
 
     @property
@@ -102,8 +102,8 @@ class HistoryBasis(Basis, AtomicBasisMixin):
     """
     Base class for history effects.
 
-    This basis should be used when one wants to use input samples history
-    as a predictors.
+    This basis should be used when one wants to use input history
+    as a predictor.
 
     Parameters
     ----------
@@ -153,7 +153,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         # this is called by set kernel.
         return np.eye(np.asarray(sample_pts).shape[0], self.n_basis_funcs)
 
-    def evaluate_on_grid(self, n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
 
         Parameters
@@ -164,14 +164,17 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         Returns
         -------
         X :
-            Array of shape (n_samples,) containing a equispaced samples between 0 and 1.
+            Array of shape (n_samples,) containing a equi-spaced samples between 0 and 1.
         basis_funcs :
             The identity matrix of shape, i.e. ``np.eye(window_size, n_samples)``.
         """
-        return super().evaluate_on_grid(n_samples)
+        self._check_input_dimensionality((n_samples,))
+        if self._has_zero_samples((n_samples,)):
+            raise ValueError("All sample counts provided must be greater than zero.")
+        return np.linspace(0, 1, n_samples), np.eye(n_samples, self.n_basis_funcs)
 
     def _check_n_basis_min(self):
-        """No checks are necessary."""
+        """No checks necessary."""
         pass
 
     @property

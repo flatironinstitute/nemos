@@ -379,7 +379,7 @@ class ConvBasisMixin:
 
     @window_size.setter
     def window_size(self, window_size):
-        """Setter over-write default setter the window size parameter."""
+        """Setter overwrite default setter the window size parameter."""
         self._check_window_size(window_size)
         self._window_size = window_size
 

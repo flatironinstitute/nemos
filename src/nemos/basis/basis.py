@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
@@ -1253,17 +1252,9 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         If set to True, the algorithm first constructs a basis with ``n_basis_funcs + ceil(width)`` elements
         and subsequently trims off the extra basis elements. This ensures that the final basis element
         decays to 0.
-    window_size :
-        The window size for convolution. Required if mode is 'conv'.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
-    conv_kwargs:
-        Additional keyword arguments passed to :func:`nemos.convolve.create_convolutional_predictor`;
-        These arguments are used to change the default behavior of the convolution.
-        For example, changing the ``predictor_causality``, which by default is set to ``"causal"``.
-        Note that one cannot change the default value for the ``axis`` parameter. Basis assumes
-        that the convolution axis is ``axis=0``.
 
     References
     ----------
@@ -1643,8 +1634,8 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         >>> # Define an additive basis
         >>> basis = OrthExponentialEval(n_basis_funcs=5, decay_rates=np.arange(1, 6), label="feature")
         >>> # Generate a sample input array and compute features
-        >>> x = np.random.randn(20)
-        >>> X = basis.compute_features(x)
+        >>> inp = np.random.randn(20)
+        >>> X = basis.compute_features(inp)
         >>> # Split the feature matrix along axis 1
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
@@ -1915,8 +1906,8 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         >>> # Define an additive basis
         >>> basis = IdentityEval(label="feature")
         >>> # Generate a sample input array and compute features
-        >>> x = np.random.randn(20)
-        >>> X = basis.compute_features(x)
+        >>> inp = np.random.randn(20)
+        >>> X = basis.compute_features(inp)
         >>> # Split the feature matrix along axis 1
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
@@ -1998,10 +1989,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> sample_points, basis_values = basis.evaluate_on_grid(window_size)
 
         """
-        self._check_input_dimensionality((n_samples,))
-        if self._has_zero_samples((n_samples,)):
-            raise ValueError("All sample counts provided must be greater than zero.")
-        return np.linspace(0, 1, n_samples), np.eye(n_samples, self.window_size)
+        return super().evaluate_on_grid(n_samples)
 
     @add_docstring("_compute_features", ConvBasisMixin)
     def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
@@ -2037,8 +2025,8 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> # Define an additive basis
         >>> basis = HistoryConv(5, label="feature")
         >>> # Generate a sample input array and compute features
-        >>> x = np.random.randn(20)
-        >>> X = basis.compute_features(x)
+        >>> inp = np.random.randn(20)
+        >>> X = basis.compute_features(inp)
         >>> # Split the feature matrix along axis 1
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
