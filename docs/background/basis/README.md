@@ -64,6 +64,21 @@
      - :class:`~nemos.basis.OrthExponentialEval`  :raw-html:`<br />`
        :class:`~nemos.basis.OrthExponentialConv`
      - 🟢 Eval
+   * - **Identity Function**
+     - .. plot:: scripts/basis_figs.py plot_identity_basis
+          :show-source-link: False
+          :height: 80px
+     - :ref:`Custom Features <custom-features>`
+     - :class:`~nemos.basis.IdentityEval`  :raw-html:`<br />`
+     - 🟢 Eval
+     
+   * - **History Effects**
+     - .. plot:: scripts/basis_figs.py plot_history_basis
+          :show-source-link: False
+          :height: 80px
+     - :ref:`Coupled GLM <fully_coupled_glm_how_to>`
+     - :class:`~nemos.basis.HistoryConv`  :raw-html:`<br />`
+     - 🔵 Conv
 ```
 
 ## Overview

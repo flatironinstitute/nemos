@@ -358,7 +358,6 @@ class TransformerBasis:
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
         cloned_obj = TransformerBasis(self.basis.__sklearn_clone__())
-        cloned_obj.basis.kernel_ = None
         return cloned_obj
 
     def set_params(self, **parameters) -> TransformerBasis:
