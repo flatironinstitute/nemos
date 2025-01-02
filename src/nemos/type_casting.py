@@ -126,8 +126,8 @@ def _has_same_time_axis(*args, **kwargs) -> bool:
         return True
 
     # get first pynapple
-    is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
-    time = [x.t for i, x in enumerate(flat_tree) if is_nap[i]]
+    is_nap = (is_pynapple_tsd(x) for x in flat_tree)
+    time = [x.t for x, bl in zip(flat_tree, is_nap) if bl]
 
     # check time samples are close (using pynapple precision)
     return _check_all_close(time)
@@ -158,8 +158,8 @@ def _has_same_support(*args, **kwargs):
         return True
 
     # get first pynapple
-    is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
-    time_support = [x.time_support.values for i, x in enumerate(flat_tree) if is_nap[i]]
+    is_nap = (is_pynapple_tsd(x) for x in flat_tree)
+    time_support = [x.time_support.values for x, bl in zip(flat_tree, is_nap) if bl]
 
     # check starts and ends are close (using pynapple precision)
     return _check_all_close(time_support)

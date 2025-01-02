@@ -11,12 +11,7 @@ from sklearn.pipeline import Pipeline
 import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
-from nemos.basis import (
-    AdditiveBasis,
-    HistoryConv,
-    IdentityEval,
-    MultiplicativeBasis,
-)
+from nemos.basis import AdditiveBasis, HistoryConv, IdentityEval, MultiplicativeBasis
 
 
 @pytest.mark.parametrize(
