@@ -45,6 +45,9 @@ class Observations(Base, abc.ABC):
         self.inverse_link_function = inverse_link_function
         self.scale = 1.0
 
+    def __repr__(self):
+        return utils.format_repr(self, use_name=["inverse_link_function"])
+
     @property
     def inverse_link_function(self):
         """Getter for the inverse link function for the model."""

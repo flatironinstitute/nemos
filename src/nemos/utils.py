@@ -1,5 +1,6 @@
 """Utility functions for data pre-processing."""
 
+import inspect
 import warnings
 from typing import Any, Callable, List, Literal, Union
 
@@ -457,6 +458,32 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
             f"The `{func_name}` should return a scalar! "
             f"Array of shape {array_out.shape} returned instead!"
         )
+
+
+def format_repr(
+    obj: object, exclude_keys: List[str] = [], use_name_keys: List[str] = []
+):
+    """Format object representation string (__repr__).
+
+    - The returned string includes the output of ``obj.get_params(deep=False)`` if value
+      (that is, if it's not False, None, empty, etc.).
+
+    - Any key in ``exclude_keys`` are excluded.
+
+    - If the key is in ``use_name_keys``, we use ``value.__name__``. Else we use
+      ``value.__repr__``
+
+    """
+    init_params = list(inspect.signature(obj.__init__).parameters.keys())
+    disp_params = []
+    for k, v in obj.get_params(deep=False).items():
+        if k not in exclude_keys and v:
+            if k in use_name_keys:
+                v = v.__name__
+            disp_params.append(f"{k}={v}")
+    disp_params = sorted(disp_params, key=lambda x: init_params.index(x.split("=")[0]))
+    disp_params = ", ".join(disp_params)
+    return f"{obj.__class__.__name__}({disp_params})"
 
 
 # enable concatenation for pynapple objects.

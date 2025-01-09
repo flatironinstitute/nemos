@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import abc
 import copy
-import inspect
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
@@ -15,7 +14,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ..utils import row_wise_kron
+from ..utils import row_wise_kron, format_repr
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 
@@ -531,17 +530,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return result
 
     def __repr__(self):
-        init_params = list(inspect.signature(self.__init__).parameters.keys())
-        disp_params = [
-            f"{k}={v}"
-            for k, v in self.get_params(deep=False).items()
-            if v and k not in ["label"]
-        ]
-        disp_params = sorted(
-            disp_params, key=lambda x: init_params.index(x.split("=")[0])
-        )
-        disp_params = ", ".join(disp_params)
-        return f"{self.__class__.__name__}({disp_params})"
+        return format_repr(self, ["label"])
 
     def _get_feature_slicing(
         self,

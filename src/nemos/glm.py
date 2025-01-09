@@ -22,6 +22,7 @@ from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
+from .utils import format_repr
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -1114,6 +1115,9 @@ class GLM(BaseRegressor):
     def _get_optimal_solver_params_config(self):
         """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
+
+    def __repr__(self):
+        return format_repr(self, ["feature_mask"])
 
 
 class PopulationGLM(GLM):
