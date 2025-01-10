@@ -648,7 +648,7 @@ class CompositeBasisMixin:
     def __repr__(self, n=0):
         # number of nested composite bases
         n += 1
-        tab = "\t"
+        tab = "    "
         try:
             basis1 = self.basis1.__repr__(n=n)
         except TypeError:

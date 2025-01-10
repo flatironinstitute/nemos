@@ -736,11 +736,23 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> basis_1 = nmo.basis.BSplineEval(10)
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> additive_basis = basis_1 + basis_2
-
+    >>> additive_basis
+    AdditiveBasis(
+        basis1=BSplineEval(n_basis_funcs=10, order=4),
+        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+    )
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> additive_basis_2 = additive_basis + basis_3
+    >>> additive_basis_2
+    AdditiveBasis(
+        basis1=AdditiveBasis(
+            basis1=BSplineEval(n_basis_funcs=10, order=4),
+            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+        ),
+        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+    )
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
@@ -1147,11 +1159,23 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> basis_1 = nmo.basis.BSplineEval(10)
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> multiplicative_basis = basis_1 * basis_2
-
+    >>> multiplicative_basis
+    MultiplicativeBasis(
+        basis1=BSplineEval(n_basis_funcs=10, order=4),
+        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+    )
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
+    >>> multiplicative_basis_2
+    MultiplicativeBasis(
+        basis1=MultiplicativeBasis(
+            basis1=BSplineEval(n_basis_funcs=10, order=4),
+            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+        ),
+        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+    )
     """
 
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
