@@ -3316,9 +3316,9 @@ class TestAdditiveBasis(CombinedBasis):
         "expected_out",
         [
             {
-                basis.BSplineEval: "AdditiveBasis(\n\tbasis1=BSplineEval(n_basis_funcs=5, order=4),\n\tbasis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                AdditiveBasis: "AdditiveBasis(\n\tbasis1=AdditiveBasis(\n\t\tbasis1=MSplineEval(n_basis_funcs=5, order=4),\n\t\tbasis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n\t),\n\tbasis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                MultiplicativeBasis: "AdditiveBasis(\n\tbasis1=MultiplicativeBasis(\n\t\tbasis1=MSplineEval(n_basis_funcs=5, order=4),\n\t\tbasis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n\t),\n\tbasis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                basis.BSplineEval: "AdditiveBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                AdditiveBasis: "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                MultiplicativeBasis: "AdditiveBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
             }
         ],
     )
@@ -3377,9 +3377,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         "expected_out",
         [
             {
-                basis.BSplineEval: "MultiplicativeBasis(\n\tbasis1=BSplineEval(n_basis_funcs=5, order=4),\n\tbasis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                AdditiveBasis: "MultiplicativeBasis(\n\tbasis1=AdditiveBasis(\n\t\tbasis1=MSplineEval(n_basis_funcs=5, order=4),\n\t\tbasis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n\t),\n\tbasis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                MultiplicativeBasis: "MultiplicativeBasis(\n\tbasis1=MultiplicativeBasis(\n\t\tbasis1=MSplineEval(n_basis_funcs=5, order=4),\n\t\tbasis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n\t),\n\tbasis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                basis.BSplineEval: "MultiplicativeBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                AdditiveBasis: "MultiplicativeBasis(\n    basis1=AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                MultiplicativeBasis: "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
             }
         ],
     )
