@@ -9,6 +9,7 @@ import pytest
 from scipy.interpolate import splev
 
 from nemos import utils
+from nemos.base_class import Base
 
 
 @pytest.mark.parametrize(
@@ -547,3 +548,69 @@ def test_assert_scalar_func():
         utils.assert_scalar_func(
             correct_function, [jnp.array([1.0])], "correct_function"
         )
+
+
+# Mock classes inheriting Base
+class Example(Base):
+    # break alphabetical order in init params
+    def __init__(self, c, a, b=None):
+        self.a = a
+        self.b = b
+        self.c = c
+
+
+class ComplexParam(Base):
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return f"ComplexParam({self.name})"
+
+
+@pytest.mark.parametrize(
+    "obj, exclude_keys, use_name_keys, expected",
+    [
+        # Test basic functionality
+        (Example(a=1, b="text", c=None), None, [], "Example(a=1, b=text)"),
+        # Exclude keys
+        (Example(a=1, b="text", c=None), ["b"], [], "Example(a=1)"),
+        # Use __name__ for specified keys
+        (Example(a=1, b=str, c=None), None, ["b"], "Example(a=1, b=str)"),
+        # Exclude and use __name__ together
+        (Example(a=1, b=str, c=None), ["a"], ["b"], "Example(b=str)"),
+        # No parameters in get_params
+        (Base(), None, [], "Base()"),
+        # Parameters with shape (e.g., numpy arrays)
+        (Example(a=None, b=np.array([0]), c=None), None, [], "Example()"),
+        # Complex object values
+        (
+            Example(a=ComplexParam("x"), b="value", c=None),
+            None,
+            [],
+            "Example(a=ComplexParam(x), b=value)",
+        ),
+        # Falsey values excluded
+        (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False)"),
+    ],
+)
+def test_format_repr(obj, exclude_keys, use_name_keys, expected):
+    assert utils.format_repr(obj, exclude_keys, use_name_keys) == expected
+
+
+def test_order_preservation():
+    """Ensure parameter order matches the __init__ method."""
+    obj = Example(a=1, b="text", c=None)
+    assert utils.format_repr(obj, exclude_keys=["c"]) == "Example(a=1, b=text)"
+
+
+def test_missing_init_param():
+    """Test with keys in get_params not present in __init__."""
+    obj = Example(a=1, c="text")
+    assert utils.format_repr(obj) == "Example(c=text, a=1)"
+
+
+def test_shape_param_exclusion():
+    """Test exclusion of parameters with a shape attribute."""
+
+    obj = Example(a=np.arange(3), b=1, c=None)
+    assert utils.format_repr(obj) == "Example(b=1)"

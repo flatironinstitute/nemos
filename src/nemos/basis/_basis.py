@@ -14,7 +14,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ..utils import row_wise_kron, format_repr
+from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 

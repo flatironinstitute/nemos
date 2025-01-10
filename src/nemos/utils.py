@@ -491,7 +491,7 @@ def format_repr(
 
     Notes
     -----
-    - The function includes only non-empty, non-false parameter values in the
+    - The function includes only non-empty values in the
       representation.
     - Parameters are displayed in the order defined in the `obj.__init__`
       method.
@@ -507,7 +507,7 @@ def format_repr(
     ...         self.a = a
     ...         self.b = b
     ...         self.c = c
-    >>> obj = Example(1, "text", c=None)
+    >>> obj = Example(1, Ridge, c=None)
     >>> format_repr(obj, exclude_keys=["c"], use_name_keys=["b"])
     'Example(a=1, b=Ridge)'
     """
@@ -516,7 +516,9 @@ def format_repr(
     disp_params = []
 
     for k, v in obj.get_params(deep=False).items():
-        repr_param = k not in exclude_keys and not hasattr(v, "shape") and v
+        repr_param = (
+            k not in exclude_keys and not hasattr(v, "shape") and (v is not None)
+        )
         if repr_param:
             if k in use_name_keys:
                 v = v.__name__
