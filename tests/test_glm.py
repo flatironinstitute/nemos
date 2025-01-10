@@ -4225,6 +4225,10 @@ class TestPopulationGLM:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
 
+    def test_repr_out(self, poisson_population_GLM_model):
+        model = poisson_population_GLM_model[2]
+        assert repr(model) == "PopulationGLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+
 
 @pytest.mark.parametrize(
     "regularizer, expected_type_convexity",
