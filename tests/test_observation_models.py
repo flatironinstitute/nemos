@@ -301,8 +301,13 @@ class TestPoissonObservations:
 
     @pytest.mark.parametrize("link_func", [jnp.exp, jax.nn.softplus])
     def test_repr_out(self, link_func):
-        obs = nmo.observation_models.PoissonObservations(inverse_link_function=link_func)
-        assert repr(obs) == f"PoissonObservations(inverse_link_function={link_func.__name__})"
+        obs = nmo.observation_models.PoissonObservations(
+            inverse_link_function=link_func
+        )
+        assert (
+            repr(obs)
+            == f"PoissonObservations(inverse_link_function={link_func.__name__})"
+        )
 
 
 class TestGammaObservations:
@@ -596,4 +601,7 @@ class TestGammaObservations:
     @pytest.mark.parametrize("link_func", [jnp.exp, jax.nn.softplus])
     def test_repr_out(self, link_func):
         obs = nmo.observation_models.GammaObservations(inverse_link_function=link_func)
-        assert repr(obs) == f"GammaObservations(inverse_link_function={link_func.__name__})"
+        assert (
+            repr(obs)
+            == f"GammaObservations(inverse_link_function={link_func.__name__})"
+        )

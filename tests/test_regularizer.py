@@ -41,15 +41,16 @@ def test_regularizer_builder(reg_str, reg_type):
 
 @pytest.mark.parametrize(
     "expected, reg",
-        [
-            ("UnRegularized()", nmo.regularizer.UnRegularized()),
-            ("Ridge()", nmo.regularizer.Ridge()),
-            ("Lasso()", nmo.regularizer.Lasso()),
-            ("GroupLasso()", nmo.regularizer.GroupLasso(mask=np.eye(4))),
-        ]
+    [
+        ("UnRegularized()", nmo.regularizer.UnRegularized()),
+        ("Ridge()", nmo.regularizer.Ridge()),
+        ("Lasso()", nmo.regularizer.Lasso()),
+        ("GroupLasso()", nmo.regularizer.GroupLasso(mask=np.eye(4))),
+    ],
 )
 def test_regularizer_repr(reg, expected):
     assert repr(reg) == expected
+
 
 def test_regularizer_available():
     for regularizer in nmo._regularizer_builder.AVAILABLE_REGULARIZERS:

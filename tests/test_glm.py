@@ -2100,7 +2100,10 @@ class TestGLM:
 
     def test_repr_out(self, poissonGLM_model_instantiation):
         model = poissonGLM_model_instantiation[2]
-        assert repr(model) == "GLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+        assert (
+            repr(model)
+            == "GLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+        )
 
 
 class TestPopulationGLM:
@@ -4227,7 +4230,10 @@ class TestPopulationGLM:
 
     def test_repr_out(self, poisson_population_GLM_model):
         model = poisson_population_GLM_model[2]
-        assert repr(model) == "PopulationGLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+        assert (
+            repr(model)
+            == "PopulationGLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+        )
 
 
 @pytest.mark.parametrize(
