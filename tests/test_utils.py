@@ -577,7 +577,7 @@ class ComplexParam(Base):
         # Use __name__ for specified keys
         (Example(a=1, b=str, c=None), None, ["b"], "Example(a=1, b=str)"),
         # Exclude and use __name__ together
-        (Example(a=1, b=str, c=None), ["a"], ["b"], "Example(b=str)"),
+        (Example(a=1, b=Base, c=None), ["a"], ["b"], "Example(b=Base)"),
         # No parameters in get_params
         (Base(), None, [], "Base()"),
         # Parameters with shape (e.g., numpy arrays)
@@ -591,6 +591,8 @@ class ComplexParam(Base):
         ),
         # Falsey values excluded
         (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False)"),
+        # Falsey values excluded2
+        (Example(a=0, b=[], c={}), None, [], "Example(a=0)"),
     ],
 )
 def test_format_repr(obj, exclude_keys, use_name_keys, expected):
