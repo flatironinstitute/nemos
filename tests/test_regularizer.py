@@ -39,6 +39,18 @@ def test_regularizer_builder(reg_str, reg_type):
         assert regularizer.__dict__ == regularizer2.__dict__
 
 
+@pytest.mark.parametrize(
+    "expected, reg",
+        [
+            ("UnRegularized()", nmo.regularizer.UnRegularized()),
+            ("Ridge()", nmo.regularizer.Ridge()),
+            ("Lasso()", nmo.regularizer.Lasso()),
+            ("GroupLasso()", nmo.regularizer.GroupLasso(mask=np.eye(4))),
+        ]
+)
+def test_regularizer_repr(reg, expected):
+    assert repr(reg) == expected
+
 def test_regularizer_available():
     for regularizer in nmo._regularizer_builder.AVAILABLE_REGULARIZERS:
         reg = nmo._regularizer_builder.create_regularizer(regularizer)
