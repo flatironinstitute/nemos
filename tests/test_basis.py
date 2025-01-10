@@ -318,6 +318,38 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
 )
 class TestSharedMethods:
 
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize(
+        "expected_out", [
+            {
+                basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
+                basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
+                basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
+                basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
+                basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, conv_kwargs={})",
+                basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0, conv_kwargs={})",
+                basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4, conv_kwargs={})",
+                basis.CyclicBSplineConv: "CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4, conv_kwargs={})",
+                basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4, conv_kwargs={})",
+                basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10, conv_kwargs={})",
+                basis.HistoryConv: "HistoryConv(window_size=10, conv_kwargs={})",
+            }
+        ]
+    )
+    def test_repr_out(self, cls, mode, expected_out):
+        bas = instantiate_atomic_basis(
+            cls[mode],
+            n_basis_funcs=5,
+            bounds=(1, 2),
+            window_size=10,
+            **extra_decay_rates(cls[mode], 5),
+        )
+        out = repr(bas)
+        assert out == expected_out.get(cls[mode], "")
+
     @pytest.mark.parametrize(
         "samples, vmin, vmax, expectation",
         [
