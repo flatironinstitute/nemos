@@ -571,7 +571,7 @@ class ComplexParam(Base):
     "obj, exclude_keys, use_name_keys, expected",
     [
         # Test basic functionality
-        (Example(a=1, b="text", c=None), None, [], "Example(a=1, b=text)"),
+        (Example(a=1, b="text", c=None), None, [], "Example(a=1, b='text')"),
         # Exclude keys
         (Example(a=1, b="text", c=None), ["b"], [], "Example(a=1)"),
         # Use __name__ for specified keys
@@ -587,7 +587,7 @@ class ComplexParam(Base):
             Example(a=ComplexParam("x"), b="value", c=None),
             None,
             [],
-            "Example(a=ComplexParam(x), b=value)",
+            "Example(a=ComplexParam(x), b='value')",
         ),
         # Falsey values excluded
         (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False)"),
@@ -602,13 +602,13 @@ def test_format_repr(obj, exclude_keys, use_name_keys, expected):
 def test_order_preservation():
     """Ensure parameter order matches the __init__ method."""
     obj = Example(a=1, b="text", c=None)
-    assert utils.format_repr(obj, exclude_keys=["c"]) == "Example(a=1, b=text)"
+    assert utils.format_repr(obj, exclude_keys=["c"]) == "Example(a=1, b='text')"
 
 
 def test_missing_init_param():
     """Test with keys in get_params not present in __init__."""
     obj = Example(a=1, c="text")
-    assert utils.format_repr(obj) == "Example(c=text, a=1)"
+    assert utils.format_repr(obj) == "Example(c='text', a=1)"
 
 
 def test_shape_param_exclusion():

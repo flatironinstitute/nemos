@@ -522,6 +522,8 @@ def format_repr(
         if repr_param:
             if k in use_name_keys:
                 v = v.__name__
+            elif isinstance(v, str):
+                v = repr(v)
             disp_params.append(f"{k}={v}")
     disp_params = sorted(disp_params, key=lambda x: init_params.index(x.split("=")[0]))
     disp_params = ", ".join(disp_params)

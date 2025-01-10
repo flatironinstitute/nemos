@@ -2098,6 +2098,10 @@ class TestGLM:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
 
+    def test_repr_out(self, poissonGLM_model_instantiation):
+        model = poissonGLM_model_instantiation[2]
+        assert repr(model) == "GLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+
 
 class TestPopulationGLM:
     """
