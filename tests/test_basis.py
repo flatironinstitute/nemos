@@ -304,6 +304,20 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
         np.testing.assert_array_equal(xx[~nans], x[~nans])
 
 
+@pytest.mark.parametrize("composite_op", ["add", "multiply"])
+def test_composite_split_by_feature(composite_op):
+    # by default, jax was sorting the dict we use in split_by_feature for the labels to
+    # be alphabetical. thus, if the additive basis was made up of basis objects whose
+    # n_basis_input values were different AND whose alphabetical sorting was the
+    # different from their order in initialization, it would fail
+    if composite_op == "add":
+        comp_basis = basis.RaisedCosineLogEval(10) + basis.CyclicBSplineEval(5)
+    elif composite_op == "multiply":
+        comp_basis = basis.RaisedCosineLogEval(10) * basis.CyclicBSplineEval(5)
+    X = comp_basis.compute_features(np.random.rand(100, 10), np.random.rand(100, 1))
+    comp_basis.split_by_feature(X)
+
+
 @pytest.mark.parametrize(
     "cls",
     [

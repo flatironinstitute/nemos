@@ -4,6 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
+from collections import OrderedDict
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
@@ -534,7 +535,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
         split_by_input: bool = True,
-    ) -> Tuple[dict, int]:
+    ) -> Tuple[OrderedDict, int]:
         """
         Calculate and return the slicing for features based on the input structure.
 
@@ -586,7 +587,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def _get_default_slicing(
         self, split_by_input: bool, start_slice: int
-    ) -> Tuple[dict, int]:
+    ) -> Tuple[OrderedDict, int]:
         """Handle default slicing logic."""
         if split_by_input:
             # should we remove this option?
@@ -609,7 +610,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 self.label: slice(start_slice, start_slice + self.n_output_features)
             }
         start_slice += self.n_output_features
-        return split_dict, start_slice
+        return OrderedDict(split_dict), start_slice
 
     def split_by_feature(
         self,
