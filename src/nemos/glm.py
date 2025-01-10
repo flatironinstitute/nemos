@@ -760,6 +760,7 @@ class GLM(BaseRegressor):
         self.coef_: DESIGN_INPUT_TYPE = params[0]
         self.intercept_: jnp.ndarray = params[1]
 
+    @support_pynapple(conv_type="jax")
     def simulate(
         self,
         random_key: jax.Array,
