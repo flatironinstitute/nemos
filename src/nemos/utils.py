@@ -2,13 +2,14 @@
 
 import inspect
 import warnings
-from typing import Any, Callable, List, Literal, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
+from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
@@ -461,23 +462,62 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
 
 
 def format_repr(
-    obj: object, exclude_keys: List[str] = [], use_name_keys: List[str] = []
+    obj: Base, exclude_keys: Optional[List[str]] = None, use_name_keys: List[str] = []
 ):
-    """Format object representation string (__repr__).
-
-    - The returned string includes the output of ``obj.get_params(deep=False)`` if value
-      (that is, if it's not False, None, empty, etc.).
-
-    - Any key in ``exclude_keys`` are excluded.
-
-    - If the key is in ``use_name_keys``, we use ``value.__name__``. Else we use
-      ``value.__repr__``
-
     """
+    Format the representation string of an object (`__repr__`).
+
+    This function generates a string representation of an object, including
+    the parameters returned by `obj.get_params(deep=False)`. The output excludes
+    specified keys and formats certain keys using their class names instead of
+    their default string representations.
+
+    Parameters
+    ----------
+    obj :
+        The object inheriting from  Base whose representation string is being formatted.
+    exclude_keys :
+        List of parameter keys to exclude from the representation. If `None`, no
+        keys are excluded. Defaults to `None`.
+    use_name_keys :
+        List of keys for which the value's `__name__` attribute is used instead
+        of the default `__repr__` output. Defaults to an empty list.
+
+    Returns
+    -------
+    :
+        A formatted representation string for the object, including its class
+        name and relevant parameters.
+
+    Notes
+    -----
+    - The function includes only non-empty, non-false parameter values in the
+      representation.
+    - Parameters are displayed in the order defined in the `obj.__init__`
+      method.
+    - Parameters with a `shape` attribute (arrays) are excluded from the representation.
+
+    Examples
+    --------
+    >>> from nemos.base_class import Base
+    >>> from nemos.regularizer import Ridge
+    >>> from nemos.utils import format_repr
+    >>> class Example(Base):
+    ...     def __init__(self, a, b, c=None):
+    ...         self.a = a
+    ...         self.b = b
+    ...         self.c = c
+    >>> obj = Example(1, "text", c=None)
+    >>> format_repr(obj, exclude_keys=["c"], use_name_keys=["b"])
+    'Example(a=1, b=Ridge)'
+    """
+    exclude_keys = [] if exclude_keys is None else exclude_keys
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
     disp_params = []
+
     for k, v in obj.get_params(deep=False).items():
-        if k not in exclude_keys and v:
+        repr_param = k not in exclude_keys and not hasattr(v, "shape") and v
+        if repr_param:
             if k in use_name_keys:
                 v = v.__name__
             disp_params.append(f"{k}={v}")
