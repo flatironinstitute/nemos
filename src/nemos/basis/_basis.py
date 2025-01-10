@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import abc
 import copy
-from functools import wraps
 from collections import OrderedDict
+from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
 
 import jax
