@@ -491,8 +491,8 @@ def format_repr(
 
     Notes
     -----
-    - The function includes only non-empty values in the
-      representation.
+    - The function includes only non-empty or falsey values (except 0 and False) in the
+      representation. The falsey values include empty list or dict, or similar.
     - Parameters are displayed in the order defined in the `obj.__init__`
       method.
     - Parameters with a `shape` attribute (arrays) are excluded from the representation.
@@ -517,7 +517,7 @@ def format_repr(
 
     for k, v in obj.get_params(deep=False).items():
         repr_param = (
-            k not in exclude_keys and not hasattr(v, "shape") and (v is not None)
+            k not in exclude_keys and not hasattr(v, "shape") and (v or v in (0, False))
         )
         if repr_param:
             if k in use_name_keys:
