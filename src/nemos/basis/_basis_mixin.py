@@ -10,6 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
 
 import numpy as np
+from decorator import decorator
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
@@ -21,12 +22,12 @@ if TYPE_CHECKING:
 
 
 def set_input_shape_state(
-    method, states: Tuple[str] = ("_n_basis_input_", "_input_shape_")
+    states: Tuple[str] = ("_input_shape_product", )
 ):
     """
     Decorator to preserve input shape-related attributes during method execution.
 
-    This decorator ensures that the attributes `_n_basis_input_` and `_input_shape_`
+    This decorator ensures that the attributes `_n_basis_input_` and `_input_shape_product`
     are copied from the original object (`self`) to the returned object (`klass`)
     after the wrapped method executes. It is intended to be used with methods that
     clone or create a new instance of the class, ensuring these critical attributes
@@ -42,7 +43,7 @@ def set_input_shape_state(
     Returns
     -------
     :
-        The wrapped method that copies `_n_basis_input_` and `_input_shape_` from
+        The wrapped method that copies `_input_shape_product` and `_input_shape_` from
         the original object (`self`) to the new object (`klass`).
 
     Examples
@@ -55,18 +56,23 @@ def set_input_shape_state(
     ...     klass = self.__class__(**self.get_params())
     ...     return klass
 
-    The `_n_basis_input_` and `_input_shape_` attributes of `self` will be
+    The `_input_shape_product` and `_input_shape_` attributes of `self` will be
     copied to `klass` after the method executes.
     """
 
-    @wraps(method)
-    def wrapper(self, *args, **kwargs):
-        klass: Basis = method(self, *args, **kwargs)
-        for attr_name in states:
-            setattr(klass, attr_name, getattr(self, attr_name))
-        return klass
+    def decorator(method):
+        @wraps(method)
+        def wrapper(self, *args, **kwargs):
+            # Call the original method
+            klass = method(self, *args, **kwargs)
+            # Copy the specified attributes
+            for attr_name in states:
+                setattr(klass, attr_name, getattr(self, attr_name, None))
+            return klass
 
-    return wrapper
+        return wrapper
+
+    return decorator
 
 
 class AtomicBasisMixin:
@@ -74,14 +80,15 @@ class AtomicBasisMixin:
 
     def __init__(self, n_basis_funcs: int):
         self._n_basis_funcs = n_basis_funcs
+        self._input_shape_ = None
         self._check_n_basis_min()
 
-    @set_input_shape_state
+    @set_input_shape_state(states=("_input_shape_product", "_input_shape_"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
-        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
-        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        This method ensures that input shape attributes (e.g., `_input_shape_product`,
+        `_input_shape_product`) are preserved during cloning. Reinitializing the class
         as in the regular sklearn clone would drop these attributes, rendering
         cross-validation unusable.
         """
@@ -149,9 +156,10 @@ class AtomicBasisMixin:
 
         n_inputs = (int(np.prod(shape)),)
 
-        self._input_shape_ = shape
-
-        self._n_basis_input_ = n_inputs
+        self._input_shape_ = [shape]
+        
+        # total number of input time series. Used  for slicing and reshaping
+        self._input_shape_product = n_inputs
         return self
 
     def _check_input_shape_consistency(self, x: NDArray):
@@ -160,9 +168,9 @@ class AtomicBasisMixin:
         shape = x.shape[1:]
 
         initialized = self._input_shape_ is not None
-        is_shape_match = self._input_shape_ == shape
+        is_shape_match = self._input_shape_[0] == shape
         if initialized and not is_shape_match:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape_}"[1:]
+            expected_shape_str = "(n_samples, " + f"{self._input_shape_[0]}"[1:]
             expected_shape_str = expected_shape_str.replace(",)", ")")
             raise ValueError(
                 f"Input shape mismatch detected.\n\n"
@@ -175,6 +183,10 @@ class AtomicBasisMixin:
                 "different shape, please create a new basis instance, or set a new input shape by calling "
                 "`set_input_shape`."
             )
+
+    @property
+    def input_shape(self) -> NDArray:
+        return self._input_shape_[0] if self._input_shape_ else None
 
 
 class EvalBasisMixin:
@@ -507,16 +519,24 @@ class CompositeBasisMixin:
         self.basis1._parent = self
         self.basis2._parent = self
 
-        shapes = (
-            *(bas1._input_shape_ for bas1 in basis1._iterate_over_components()),
-            *(bas2._input_shape_ for bas2 in basis2._iterate_over_components()),
-        )
         # if all bases where set, then set input for composition.
-        set_bases = [s is not None for s in shapes]
+        set_bases = [s is not None for s in self.input_shape]
 
         if all(set_bases):
             # pass down the input shapes
-            self.set_input_shape(*shapes)
+            self.set_input_shape(*self.input_shape)
+
+    @property
+    def input_shape(self):
+        shapes = [
+            *(bas1.input_shape for bas1 in self.basis1._iterate_over_components()),
+            *(bas2.input_shape for bas2 in self.basis2._iterate_over_components()),
+        ]
+        return shapes
+
+    @property
+    def _input_shape_(self):
+        return self.input_shape
 
     @property
     @abc.abstractmethod
@@ -588,11 +608,11 @@ class CompositeBasisMixin:
             self.basis2._iterate_over_components(),
         )
 
-    @set_input_shape_state
+    @set_input_shape_state(states=("_input_shape_product", ))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
-        This method ensures that input shape attributes (e.g., `_n_basis_input_`,
+        This method ensures that input shape attributes (e.g., `_input_shape_product`,
         `_input_shape_`) are preserved during cloning. Reinitializing the class
         as in the regular sklearn clone would drop these attributes, rendering
         cross-validation unusable.
@@ -603,7 +623,7 @@ class CompositeBasisMixin:
         basis2 = self.basis2.__sklearn_clone__()
         klass = self.__class__(basis1, basis2)
 
-        for attr_name in ["_n_basis_input_", "_input_shape_"]:
+        for attr_name in ["_input_shape_product"]:
             setattr(klass, attr_name, getattr(self, attr_name))
         return klass
 
@@ -635,12 +655,12 @@ class CompositeBasisMixin:
         self :
             Returns the instance itself to allow method chaining.
         """
-        self._n_basis_input_ = (
+        self._input_shape_product = (
             *self.basis1.set_input_shape(
                 *xi[: self.basis1._n_input_dimensionality]
-            )._n_basis_input_,
+            )._input_shape_product,
             *self.basis2.set_input_shape(
                 *xi[self.basis1._n_input_dimensionality :]
-            )._n_basis_input_,
+            )._input_shape_product,
         )
         return self

@@ -87,7 +87,7 @@ class TransformerBasis:
 
     @staticmethod
     def _check_initialized(basis):
-        if basis._n_basis_input_ is None:
+        if basis._input_shape_product is None:
             raise RuntimeError(
                 "Cannot apply TransformerBasis: the provided basis has no defined input shape. "
                 "Please call `set_input_shape` before calling `fit`, `transform`, or "
@@ -113,11 +113,11 @@ class TransformerBasis:
         """
         n_samples = X.shape[0]
         out = (
-            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas.input_shape))
             for i, (bas, n_input) in enumerate(
-                zip(self._iterate_over_components(), self._n_basis_input_)
+                zip(self._iterate_over_components(), self._input_shape_product)
             )
-            for cc in [sum(self._n_basis_input_[:i])]
+            for cc in [sum(self._input_shape_product[:i])]
         )
         return out
 

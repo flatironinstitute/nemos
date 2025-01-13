@@ -569,7 +569,7 @@ def test_transformer_fit_input_shape_mismatch(
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
-    X = np.random.randn(10, int(sum(bas._n_basis_input_) + delta_input))
+    X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
     with expectation:
         transformer.fit(X)
 
@@ -667,7 +667,7 @@ def test_transformer_fit_transform_input_shape_mismatch(
     transformer = bas.set_input_shape(
         *([inp] * bas._n_input_dimensionality)
     ).to_transformer()
-    X = np.random.randn(10, int(sum(bas._n_basis_input_) + delta_input))
+    X = np.random.randn(10, int(sum(bas._input_shape_product) + delta_input))
     with expectation:
         transformer.fit_transform(X)
 
