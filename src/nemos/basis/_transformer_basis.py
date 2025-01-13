@@ -493,7 +493,7 @@ class TransformerBasis:
                 f"X must be 2-dimensional, shape (n_samples, n_features). The provided X has shape {X.shape} instead."
             )
 
-        if X.shape[1] != sum(self.n_basis_input_):
+        if X.shape[1] != sum(self._input_shape_product):
             raise ValueError(
                 f"Input mismatch: expected {sum(self._input_shape_product)} inputs, but got {X.shape[1]} columns in X.\n"
                 "To modify the required number of inputs, call `set_input_shape` before using `fit` or `fit_transform`."
