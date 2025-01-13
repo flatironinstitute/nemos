@@ -320,9 +320,7 @@ def apply_identifiability_constraints_by_basis_component(
     split_x = [x.reshape(x.shape[0], -1, x.shape[-1]) for x in split_x]
     # list leaves and unwrap over input dimension. Additive components have shapes:
     # (n_samples, n_inputs, n_basis_funcs)
-    split_by_input_x = [
-        x[:, k] for x in split_x for k in range(x.shape[1])
-    ]
+    split_by_input_x = [x[:, k] for x in split_x for k in range(x.shape[1])]
 
     apply_identifiability = partial(
         apply_identifiability_constraints,
