@@ -305,7 +305,9 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
 
 
 @pytest.mark.parametrize("composite_op", ["add", "multiply"])
-def test_composite_split_by_feature(composite_op):
+@pytest.mark.parametrize("input_shape_1", [(100,), (100, 10), (100, 10, 1), (100, 1, 10),])
+@pytest.mark.parametrize("input_shape_2", [(100,), (100, 1), (100, 1, 2), (100, 2, 1)])
+def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
     # by default, jax was sorting the dict we use in split_by_feature for the labels to
     # be alphabetical. thus, if the additive basis was made up of basis objects whose
     # n_basis_input values were different AND whose alphabetical sorting was the
@@ -314,8 +316,24 @@ def test_composite_split_by_feature(composite_op):
         comp_basis = basis.RaisedCosineLogEval(10) + basis.CyclicBSplineEval(5)
     elif composite_op == "multiply":
         comp_basis = basis.RaisedCosineLogEval(10) * basis.CyclicBSplineEval(5)
-    X = comp_basis.compute_features(np.random.rand(100, 10), np.random.rand(100, 1))
-    comp_basis.split_by_feature(X)
+    X = comp_basis.compute_features(np.random.rand(*input_shape_1),
+                                    np.random.rand(*input_shape_2))
+    features = comp_basis.split_by_feature(X)
+    # if the user only passes a 1d input, we append the second dim (number of inputs)
+    if len(input_shape_1) == 1:
+        input_shape_1 = input_shape_1 + (1, )
+    if len(input_shape_2) == 1:
+        input_shape_2 = input_shape_2 + (1, )
+    split_shape_1 = [i for i in input_shape_1 + (comp_basis.basis1.n_basis_funcs, )]
+    split_shape_2 = [i for i in input_shape_2 + (comp_basis.basis2.n_basis_funcs, )]
+    if composite_op == "add":
+        np.testing.assert_equal(features["RaisedCosineLogEval"].shape, split_shape_1)
+        np.testing.assert_equal(features["CyclicBSplineEval"].shape, split_shape_1)
+    elif composite_op == "multiply":
+        np.testing.assert_equal(features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape,
+                                # concatenation of the two expected shapes, dropping the
+                                # samples axis from the second one.
+                                split_shape_1 + split_shape_2[1:])
 
 
 @pytest.mark.parametrize(
