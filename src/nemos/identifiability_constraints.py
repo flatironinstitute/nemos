@@ -312,10 +312,16 @@ def apply_identifiability_constraints_by_basis_component(
     # convolutions on multiple signals (as for counts TsdFrames)
     splits_x = basis.split_by_feature(feature_matrix)
 
+    # list the arrays
+    split_x = jax.tree_util.tree_leaves(splits_x)
+    # add dim if needed (the dim is at least 2, (n_samples, n_basis)
+    split_x = [x if x.ndim > 2 else x[:, None] for x in split_x]
+    # flatten over inputs
+    split_x = [x.reshape(x.shape[0], -1, x.shape[-1]) for x in split_x]
     # list leaves and unwrap over input dimension. Additive components have shapes:
     # (n_samples, n_inputs, n_basis_funcs)
     split_by_input_x = [
-        x[:, k] for x in jax.tree_util.tree_leaves(splits_x) for k in range(x.shape[1])
+        x[:, k] for x in split_x for k in range(x.shape[1])
     ]
 
     apply_identifiability = partial(

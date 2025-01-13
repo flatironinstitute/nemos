@@ -299,13 +299,21 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
     for k in xdict.keys():
         xx = xxdict[k]
         x = xdict[k]
-        nans = np.isnan(x.sum(axis=(1, 2)))
+        nans = np.isnan(x.sum(axis=(1,)))
         assert np.all(np.isnan(xx[nans]))
         np.testing.assert_array_equal(xx[~nans], x[~nans])
 
 
 @pytest.mark.parametrize("composite_op", ["add", "multiply"])
-@pytest.mark.parametrize("input_shape_1", [(100,), (100, 10), (100, 10, 1), (100, 1, 10),])
+@pytest.mark.parametrize(
+    "input_shape_1",
+    [
+        (100,),
+        (100, 10),
+        (100, 10, 1),
+        (100, 1, 10),
+    ],
+)
 @pytest.mark.parametrize("input_shape_2", [(100,), (100, 1), (100, 1, 2), (100, 2, 1)])
 def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
     # by default, jax was sorting the dict we use in split_by_feature for the labels to
@@ -316,24 +324,24 @@ def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
         comp_basis = basis.RaisedCosineLogEval(10) + basis.CyclicBSplineEval(5)
     elif composite_op == "multiply":
         comp_basis = basis.RaisedCosineLogEval(10) * basis.CyclicBSplineEval(5)
-    X = comp_basis.compute_features(np.random.rand(*input_shape_1),
-                                    np.random.rand(*input_shape_2))
+    X = comp_basis.compute_features(
+        np.random.rand(*input_shape_1), np.random.rand(*input_shape_2)
+    )
     features = comp_basis.split_by_feature(X)
     # if the user only passes a 1d input, we append the second dim (number of inputs)
-    if len(input_shape_1) == 1:
-        input_shape_1 = input_shape_1 + (1, )
-    if len(input_shape_2) == 1:
-        input_shape_2 = input_shape_2 + (1, )
-    split_shape_1 = [i for i in input_shape_1 + (comp_basis.basis1.n_basis_funcs, )]
-    split_shape_2 = [i for i in input_shape_2 + (comp_basis.basis2.n_basis_funcs, )]
+
+    split_shape_1 = tuple(i for i in input_shape_1 + (comp_basis.basis1.n_basis_funcs,))
+    split_shape_2 = tuple(i for i in input_shape_2 + (comp_basis.basis2.n_basis_funcs,))
     if composite_op == "add":
-        np.testing.assert_equal(features["RaisedCosineLogEval"].shape, split_shape_1)
-        np.testing.assert_equal(features["CyclicBSplineEval"].shape, split_shape_1)
+        assert features["RaisedCosineLogEval"].shape == split_shape_1
+        assert features["CyclicBSplineEval"].shape == split_shape_2
     elif composite_op == "multiply":
-        np.testing.assert_equal(features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape,
-                                # concatenation of the two expected shapes, dropping the
-                                # samples axis from the second one.
-                                split_shape_1 + split_shape_2[1:])
+        # concatenation of shapes except for the last term which is the product of the num bases
+        assert features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape == (
+            *split_shape_1[:-1],
+            *split_shape_2[1:-1],
+            split_shape_1[-1] * split_shape_2[-1],
+        )
 
 
 @pytest.mark.parametrize(
@@ -4677,7 +4685,10 @@ def test__get_splitter(
             1,
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
-                    0, bas1._input_shape_product[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
+                    0,
+                    bas1._input_shape_product[0]
+                    * bas1.n_basis_funcs
+                    * bas2.n_basis_funcs,
                 )
             },
         ),
@@ -4704,7 +4715,10 @@ def test__get_splitter(
             2,
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
-                    0, bas2._input_shape_product[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
+                    0,
+                    bas2._input_shape_product[0]
+                    * bas1.n_basis_funcs
+                    * bas2.n_basis_funcs,
                 )
             },
         ),

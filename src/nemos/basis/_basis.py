@@ -590,7 +590,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """Handle default slicing logic."""
         if split_by_input:
             # should we remove this option?
-            if self._input_shape_product[0] == 1 or isinstance(self, MultiplicativeBasis):
+            if self._input_shape_product[0] == 1 or isinstance(
+                self, MultiplicativeBasis
+            ):
                 split_dict = {
                     self.label: slice(start_slice, start_slice + self.n_output_features)
                 }
@@ -702,17 +704,22 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # reshape the arrays to spilt by n_basis_input_
         reshaped_out = dict()
-        for i, vals in enumerate(out.items()):
-            key, val = vals
+        for items, bas in zip(out.items(), self):
+            key, val = items
             shape = list(val.shape)
             reshaped_out[key] = val.reshape(
-                shape[:axis] + [self._input_shape_product[i], -1] + shape[axis + 1 :]
+                shape[:axis]
+                + [*(b for sh in bas._input_shape_ for b in sh), -1]
+                + shape[axis + 1 :]
             )
         return reshaped_out
 
     def __iter__(self):
         """Makes basis iterable. Re-implemented for additive."""
         yield self
+
+    def __len__(self):
+        return 1
 
 
 class AdditiveBasis(CompositeBasisMixin, Basis):
@@ -748,7 +755,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         CompositeBasisMixin.__init__(self, basis1, basis2)
         Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
-        
+
         # number of input arrays that the basis receives
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
@@ -1134,7 +1141,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         for bas in self.basis2:
             yield bas
 
-
+    def __len__(self):
+        return len(self.basis1) + len(self.basis2)
 
 
 class MultiplicativeBasis(CompositeBasisMixin, Basis):

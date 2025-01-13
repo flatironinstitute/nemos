@@ -10,7 +10,6 @@ from itertools import chain
 from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
 
 import numpy as np
-from decorator import decorator
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
@@ -21,9 +20,7 @@ if TYPE_CHECKING:
     from ._basis import Basis
 
 
-def set_input_shape_state(
-    states: Tuple[str] = ("_input_shape_product", )
-):
+def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     """
     Decorator to preserve input shape-related attributes during method execution.
 
@@ -157,7 +154,7 @@ class AtomicBasisMixin:
         n_inputs = (int(np.prod(shape)),)
 
         self._input_shape_ = [shape]
-        
+
         # total number of input time series. Used  for slicing and reshaping
         self._input_shape_product = n_inputs
         return self
@@ -608,7 +605,7 @@ class CompositeBasisMixin:
             self.basis2._iterate_over_components(),
         )
 
-    @set_input_shape_state(states=("_input_shape_product", ))
+    @set_input_shape_state(states=("_input_shape_product",))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
