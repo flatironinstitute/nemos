@@ -495,8 +495,9 @@ class TransformerBasis:
 
         if X.shape[1] != sum(self._input_shape_product):
             raise ValueError(
-                f"Input mismatch: expected {sum(self._input_shape_product)} inputs, but got {X.shape[1]} columns in X.\n"
-                "To modify the required number of inputs, call `set_input_shape` before using `fit` or `fit_transform`."
+                f"Input mismatch: expected {sum(self._input_shape_product)} inputs, but got {X.shape[1]} "
+                f"columns in X.\nTo modify the required number of inputs, call `set_input_shape` before using "
+                f"`fit` or `fit_transform`."
             )
 
         if y is not None and y.shape[0] != X.shape[0]:
