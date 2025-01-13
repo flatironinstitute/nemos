@@ -694,7 +694,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # Apply the slicing using the custom leaf function
         out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
 
-        # reshape the arrays to spilt by n_basis_input_
+        # reshape the arrays to match input shapes
         reshaped_out = dict()
         for items, bas in zip(out.items(), self):
             key, val = items
