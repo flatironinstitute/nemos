@@ -1010,8 +1010,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> split_coef = basis.split_by_feature(model.coef_, axis=0)
         >>> for feature, coef in split_coef.items():
         ...     print(f"{feature}: shape {coef.shape}")
-        feature_1: shape (1, 5)
-        feature_2: shape (1, 6)
+        feature_1: shape (5,)
+        feature_2: shape (6,)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -1358,7 +1358,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> split_features = basis_mul.split_by_feature(X_multi, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
-        (one_input * two_inputs): shape (20, 2, 60)
+        (one_input * two_inputs): shape (20, 2, 30)
 
         """
         return super().split_by_feature(x, axis=axis)
