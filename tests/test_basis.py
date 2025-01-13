@@ -433,6 +433,33 @@ class TestSharedMethods:
         )
         assert bas.__dict__ == bas2.__dict__
 
+    @pytest.mark.parametrize("n_basis", [5])
+    @pytest.mark.parametrize("ws", [10])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_len(self, cls, n_basis, ws, inp_num, mode):
+        bas = instantiate_atomic_basis(
+            cls[mode],
+            n_basis_funcs=n_basis,
+            window_size=ws,
+            **extra_decay_rates(cls["eval"], n_basis),
+        )
+        assert len(bas) == 1
+
+    @pytest.mark.parametrize("n_basis", [5])
+    @pytest.mark.parametrize("ws", [10])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_iter(self, cls, n_basis, ws, inp_num, mode):
+        bas = instantiate_atomic_basis(
+            cls[mode],
+            n_basis_funcs=n_basis,
+            window_size=ws,
+            **extra_decay_rates(cls["eval"], n_basis),
+        )
+        for b in bas:
+            assert id(bas) == id(b)
+
     @pytest.mark.parametrize(
         "attribute, value",
         [
@@ -2299,6 +2326,48 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_len(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+        expected_len = (
+            2
+            + isinstance(basis_a_obj, AdditiveBasis)
+            + isinstance(basis_b_obj, AdditiveBasis)
+        )
+        assert len(add) == expected_len
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_iter(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+        # manually unpack basis
+        bas_list = []
+        if isinstance(add.basis1, AdditiveBasis):
+            bas_list += [add.basis1.basis1, add.basis1.basis2]
+        else:
+            bas_list += [add.basis1]
+        if isinstance(add.basis2, AdditiveBasis):
+            bas_list += [add.basis2.basis1, add.basis2.basis2]
+        else:
+            bas_list += [add.basis2]
+
+        for b, b1 in zip(add, bas_list):
+            assert not isinstance(b, AdditiveBasis)
+            assert id(b) == id(b1)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_iterate_over_component(
         self, basis_a, basis_b, basis_class_specific_params
     ):
@@ -3318,6 +3387,31 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_len(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        mul = basis_a_obj * basis_b_obj
+        assert len(mul) == 1
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_iter(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        mul = basis_a_obj * basis_b_obj
+        for b in mul:
+            assert id(b) == id(mul)
 
     @pytest.mark.parametrize(
         "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
