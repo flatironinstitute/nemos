@@ -994,8 +994,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
-        feature_1: shape (20, 1, 5)
-        feature_2: shape (20, 1, 6)
+        feature_1: shape (20, 5)
+        feature_2: shape (20, 6)
         >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
         >>> multi_input_basis = BSplineConv(n_basis_funcs=6, window_size=10,
         ... label="multi_input")
@@ -1358,7 +1358,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> split_features = basis_mul.split_by_feature(X_multi, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
-        (one_input * two_inputs): shape (20, 1, 60)
+        (one_input * two_inputs): shape (20, 2, 60)
 
         """
         return super().split_by_feature(x, axis=axis)

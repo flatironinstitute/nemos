@@ -113,7 +113,7 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 1, 6)
+        one_input, shape (20, 6)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -402,7 +402,7 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 1, 6)
+        one_input, shape (20, 6)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -707,7 +707,7 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 1, 6)
+        one_input, shape (20, 6)
 
         """
         return MSplineBasis.split_by_feature(self, x, axis=axis)
@@ -1056,7 +1056,7 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 1, 6)
+        one_input, shape (20, 6)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -1347,7 +1347,7 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         >>> split_features_multi = basis.split_by_feature(X, axis=1)
         >>> for feature, sub_dict in split_features_multi.items():
         ...        print(f"{feature}, shape {sub_dict.shape}")
-        one_input, shape (20, 1, 6)
+        one_input, shape (20, 6)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -1640,7 +1640,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
-        feature: shape (20, 1, 5)
+        feature: shape (20, 5)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -1912,7 +1912,7 @@ class IdentityEval(EvalBasisMixin, IdentityBasis):
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
-        feature: shape (20, 1, 1)
+        feature: shape (20, 1)
 
         """
         return super().split_by_feature(x, axis=axis)
@@ -2031,7 +2031,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         >>> split_features = basis.split_by_feature(X, axis=1)
         >>> for feature, arr in split_features.items():
         ...     print(f"{feature}: shape {arr.shape}")
-        feature: shape (20, 1, 5)
+        feature: shape (20, 5)
 
         """
         return super().split_by_feature(x, axis=axis)
