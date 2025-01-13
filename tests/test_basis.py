@@ -465,7 +465,6 @@ class TestSharedMethods:
         [
             ("label", None),
             ("label", "label"),
-            ("n_basis_input_", 1),
             ("n_output_features", 5),
         ],
     )
@@ -574,9 +573,9 @@ class TestSharedMethods:
             window_size=10,
             **extra_decay_rates(cls["conv"], 5),
         )
-        assert bas.n_basis_input_ is None
+        assert bas._input_shape_product is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input_ == (n_input,)
+        assert bas._input_shape_product == (n_input,)
         assert bas._input_shape_product == (n_input,)
 
     @pytest.mark.parametrize(
@@ -3088,11 +3087,11 @@ class TestAdditiveBasis(CombinedBasis):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_add = bas1 + bas2
-        assert bas_add.n_basis_input_ is None
+        assert bas_add._input_shape_product is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_basis_input_ == (n_basis_input1, n_basis_input2)
+        assert bas_add._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -4079,11 +4078,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_add = bas1 * bas2
-        assert bas_add.n_basis_input_ is None
+        assert bas_add._input_shape_product is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_basis_input_ == (n_basis_input1, n_basis_input2)
+        assert bas_add._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -4112,7 +4111,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas_prod.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_prod.n_basis_input_ == (n_basis_input1, n_basis_input2)
+        assert bas_prod._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")

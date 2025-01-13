@@ -175,14 +175,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._label
 
     @property
-    def n_basis_input_(self) -> tuple | None:
-        """Number of expected inputs.
-
-        The number of inputs ``compute_feature`` expects.
-        """
-        return self._input_shape_product
-
-    @property
     def n_basis_funcs(self):
         """Number of basis functions."""
         return self._n_basis_funcs
