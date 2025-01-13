@@ -75,6 +75,8 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
     >>> n_basis_funcs = 5
     >>> order = 3
     >>> bspline_basis = BSplineEval(n_basis_funcs, order=order)
+    >>> bspline_basis
+    BSplineEval(n_basis_funcs=5, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> basis_functions = bspline_basis.compute_features(sample_points)
     """
@@ -226,6 +228,8 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
     >>> n_basis_funcs = 5
     >>> order = 3
     >>> bspline_basis = BSplineConv(n_basis_funcs, order=order, window_size=10)
+    >>> bspline_basis
+    BSplineConv(n_basis_funcs=5, window_size=10, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> features = bspline_basis.compute_features(sample_points)
     """
@@ -365,6 +369,8 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
     >>> n_basis_funcs = 5
     >>> order = 3
     >>> cyclic_bspline_basis = CyclicBSplineEval(n_basis_funcs, order=order)
+    >>> cyclic_bspline_basis
+    CyclicBSplineEval(n_basis_funcs=5, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> features = cyclic_bspline_basis.compute_features(sample_points)
     """
@@ -507,6 +513,8 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
     >>> n_basis_funcs = 5
     >>> order = 3
     >>> cyclic_bspline_basis = CyclicBSplineConv(n_basis_funcs, order=order, window_size=10)
+    >>> cyclic_bspline_basis
+    CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> features = cyclic_bspline_basis.compute_features(sample_points)
     """
@@ -670,6 +678,8 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
     >>> n_basis_funcs = 5
     >>> order = 3
     >>> mspline_basis = MSplineEval(n_basis_funcs, order=order)
+    >>> mspline_basis
+    MSplineEval(n_basis_funcs=5, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> features = mspline_basis.compute_features(sample_points)
     """
@@ -836,6 +846,8 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
     >>> n_basis_funcs = 5
     >>> order = 3
     >>> mspline_basis = MSplineConv(n_basis_funcs, order=order, window_size=10)
+    >>> mspline_basis
+    MSplineConv(n_basis_funcs=5, window_size=10, order=3)
     >>> sample_points = linspace(0, 1, 100)
     >>> features = mspline_basis.compute_features(sample_points)
     """
@@ -982,6 +994,8 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
     >>> from nemos.basis import RaisedCosineLinearEval
     >>> n_basis_funcs = 5
     >>> raised_cosine_basis = RaisedCosineLinearEval(n_basis_funcs)
+    >>> raised_cosine_basis
+    RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = raised_cosine_basis.compute_features(sample_points)
@@ -1125,6 +1139,8 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
     >>> from nemos.basis import RaisedCosineLinearConv
     >>> n_basis_funcs = 5
     >>> raised_cosine_basis = RaisedCosineLinearConv(n_basis_funcs, window_size=10)
+    >>> raised_cosine_basis
+    RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = raised_cosine_basis.compute_features(sample_points)
@@ -1269,6 +1285,8 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
     >>> from nemos.basis import RaisedCosineLogEval
     >>> n_basis_funcs = 5
     >>> raised_cosine_basis = RaisedCosineLogEval(n_basis_funcs)
+    >>> raised_cosine_basis
+    RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = raised_cosine_basis.compute_features(sample_points)
@@ -1424,6 +1442,8 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
     >>> from nemos.basis import RaisedCosineLogConv
     >>> n_basis_funcs = 5
     >>> raised_cosine_basis = RaisedCosineLogConv(n_basis_funcs, window_size=10)
+    >>> raised_cosine_basis
+    RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = raised_cosine_basis.compute_features(sample_points)
@@ -1561,6 +1581,8 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
     >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05])  # sample decay rates
     >>> window_size = 10
     >>> ortho_basis = OrthExponentialEval(n_basis_funcs, decay_rates)
+    >>> ortho_basis
+    OrthExponentialEval(n_basis_funcs=5)
     >>> sample_points = linspace(0, 1, 100)
     >>> # evaluate the basis
     >>> features = ortho_basis.compute_features(sample_points)
@@ -1701,6 +1723,8 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
     >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05])  # sample decay rates
     >>> window_size = 10
     >>> ortho_basis = OrthExponentialConv(n_basis_funcs, window_size, decay_rates)
+    >>> ortho_basis
+    OrthExponentialConv(n_basis_funcs=5, window_size=10)
     >>> sample_points = np.random.randn(100)
     >>> # convolve the basis
     >>> features = ortho_basis.compute_features(sample_points)

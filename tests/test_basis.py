@@ -318,6 +318,39 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
 )
 class TestSharedMethods:
 
+    @pytest.mark.parametrize("mode", ["eval", "conv"])
+    @pytest.mark.parametrize(
+        "expected_out",
+        [
+            {
+                basis.RaisedCosineLogEval: "RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True, bounds=(1.0, 2.0))",
+                basis.RaisedCosineLinearEval: "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0, bounds=(1.0, 2.0))",
+                basis.BSplineEval: "BSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.CyclicBSplineEval: "CyclicBSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.MSplineEval: "MSplineEval(n_basis_funcs=5, order=4, bounds=(1.0, 2.0))",
+                basis.OrthExponentialEval: "OrthExponentialEval(n_basis_funcs=5, bounds=(1.0, 2.0))",
+                basis.IdentityEval: "IdentityEval(bounds=(1.0, 2.0))",
+                basis.RaisedCosineLogConv: "RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True)",
+                basis.RaisedCosineLinearConv: "RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0)",
+                basis.BSplineConv: "BSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.CyclicBSplineConv: "CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.MSplineConv: "MSplineConv(n_basis_funcs=5, window_size=10, order=4)",
+                basis.OrthExponentialConv: "OrthExponentialConv(n_basis_funcs=5, window_size=10)",
+                basis.HistoryConv: "HistoryConv(window_size=10)",
+            }
+        ],
+    )
+    def test_repr_out(self, cls, mode, expected_out):
+        bas = instantiate_atomic_basis(
+            cls[mode],
+            n_basis_funcs=5,
+            bounds=(1, 2),
+            window_size=10,
+            **extra_decay_rates(cls[mode], 5),
+        )
+        out = repr(bas)
+        assert out == expected_out.get(cls[mode], "")
+
     @pytest.mark.parametrize(
         "samples, vmin, vmax, expectation",
         [
@@ -3275,6 +3308,32 @@ class TestAdditiveBasis(CombinedBasis):
         add.basis2.set_input_shape(*inps_b)
         assert add.n_output_features == new_out_num + new_out_num_b
 
+    @pytest.mark.parametrize(
+        "basis_a", [basis.BSplineEval, AdditiveBasis, MultiplicativeBasis]
+    )
+    @pytest.mark.parametrize("basis_b", [basis.MSplineEval])
+    @pytest.mark.parametrize(
+        "expected_out",
+        [
+            {
+                basis.BSplineEval: "AdditiveBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                AdditiveBasis: "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                MultiplicativeBasis: "AdditiveBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+            }
+        ],
+    )
+    def test_repr_out(
+        self, basis_a, basis_b, basis_class_specific_params, expected_out
+    ):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        basis_obj = basis_a_obj + basis_b_obj
+        assert repr(basis_obj) == expected_out[basis_a]
+
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
@@ -3309,6 +3368,32 @@ class TestMultiplicativeBasis(CombinedBasis):
         """
         basis_obj = basis.MSplineEval(5) * basis.MSplineEval(5)
         basis_obj.compute_features(*eval_input)
+
+    @pytest.mark.parametrize(
+        "basis_a", [basis.BSplineEval, AdditiveBasis, MultiplicativeBasis]
+    )
+    @pytest.mark.parametrize("basis_b", [basis.MSplineEval])
+    @pytest.mark.parametrize(
+        "expected_out",
+        [
+            {
+                basis.BSplineEval: "MultiplicativeBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                AdditiveBasis: "MultiplicativeBasis(\n    basis1=AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                MultiplicativeBasis: "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+            }
+        ],
+    )
+    def test_repr_out(
+        self, basis_a, basis_b, basis_class_specific_params, expected_out
+    ):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        basis_obj = basis_a_obj * basis_b_obj
+        assert repr(basis_obj) == expected_out[basis_a]
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])

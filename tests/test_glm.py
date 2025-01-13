@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import statsmodels.api as sm
+from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
 
@@ -1333,6 +1334,33 @@ class TestGLM:
             )
 
     @pytest.mark.parametrize(
+        "input_type, expected_out_type",
+        [
+            (TsdFrame, Tsd),
+            (np.ndarray, jnp.ndarray),
+            (jnp.ndarray, jnp.ndarray),
+        ],
+    )
+    def test_simulate_pynapple(
+        self, input_type, expected_out_type, poissonGLM_model_instantiation
+    ):
+        """
+        Test that the `simulate` method retturns the expected data type for different allowed inputs.
+        """
+        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+
+        if input_type == TsdFrame:
+            X = TsdFrame(t=np.arange(X.shape[0]), d=X)
+        count, rate = model.simulate(
+            random_key=jax.random.key(123),
+            feedforward_input=X,
+        )
+        assert isinstance(count, expected_out_type)
+        assert isinstance(rate, expected_out_type)
+
+    @pytest.mark.parametrize(
         "is_fit, expectation",
         [
             (True, does_not_raise()),
@@ -2069,6 +2097,13 @@ class TestGLM:
         else:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
+
+    def test_repr_out(self, poissonGLM_model_instantiation):
+        model = poissonGLM_model_instantiation[2]
+        assert (
+            repr(model)
+            == "GLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+        )
 
 
 class TestPopulationGLM:
@@ -3388,6 +3423,34 @@ class TestPopulationGLM:
             )
 
     @pytest.mark.parametrize(
+        "input_type, expected_out_type",
+        [
+            (TsdFrame, TsdFrame),
+            (np.ndarray, jnp.ndarray),
+            (jnp.ndarray, jnp.ndarray),
+        ],
+    )
+    def test_simulate_pynapple(
+        self, input_type, expected_out_type, poisson_population_GLM_model
+    ):
+        """
+        Test that the `simulate` method retturns the expected data type for different allowed inputs.
+        """
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model._initialize_feature_mask(X, y)
+        if input_type == TsdFrame:
+            X = TsdFrame(t=np.arange(X.shape[0]), d=X)
+
+        count, rate = model.simulate(
+            random_key=jax.random.key(123),
+            feedforward_input=X,
+        )
+        assert isinstance(count, expected_out_type)
+        assert isinstance(rate, expected_out_type)
+
+    @pytest.mark.parametrize(
         "is_fit, expectation",
         [
             (True, does_not_raise()),
@@ -4164,6 +4227,13 @@ class TestPopulationGLM:
         else:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
+
+    def test_repr_out(self, poisson_population_GLM_model):
+        model = poisson_population_GLM_model[2]
+        assert (
+            repr(model)
+            == "PopulationGLM(observation_model=PoissonObservations(inverse_link_function=exp), regularizer=UnRegularized(), solver_name='GradientDescent')"
+        )
 
 
 @pytest.mark.parametrize(
