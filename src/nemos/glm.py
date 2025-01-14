@@ -1616,3 +1616,10 @@ class PopulationGLM(GLM):
             )
             + bs
         )
+
+    def __sklearn_clone__(self) -> GLM:
+        """Clone the PopulationGLM, dropping feature_mask"""
+        params = self.get_params(deep=False)
+        params.pop("feature_mask")
+        klass = self.__class__(**params)
+        return klass
