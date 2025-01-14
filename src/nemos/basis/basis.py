@@ -1991,7 +1991,7 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
     def __init__(
         self,
         window_size: int,
-        label: Optional[str] = "IdentityEval",
+        label: Optional[str] = "HistoryConv",
         conv_kwargs: Optional[dict] = None,
     ):
         ConvBasisMixin.__init__(self, window_size=window_size, conv_kwargs=conv_kwargs)

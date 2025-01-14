@@ -531,13 +531,18 @@ def format_repr(
     cls_name = obj.__class__.__name__
     # if label doesn't exist or is the same as the class name (as is the default for
     # basis), then don't use it
-    if (label is not None) and (label != cls_name):
-        # else, label should replace the class name as being outside the parentheses and
-        # class name should come first within the parens
-        disp_params.insert(0, cls_name)
-        cls_name = label
+    # if (label is not None) and (label != cls_name):
+    #     # else, label should replace the class name as being outside the parentheses and
+    #     # class name should come first within the parens
+    #     disp_params.insert(0, cls_name)
+    #     cls_name = label
     disp_params = ", ".join(disp_params)
-    return f"{cls_name}({disp_params})"
+    disp_label = (label is not None) and (label != cls_name)
+    return (
+        f"{repr(label)}: {cls_name}({disp_params})"
+        if disp_label
+        else f"{cls_name}({disp_params})"
+    )
 
 
 # enable concatenation for pynapple objects.
