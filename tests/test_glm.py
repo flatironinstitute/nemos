@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import sklearn
 import statsmodels.api as sm
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
@@ -3576,6 +3577,13 @@ class TestPopulationGLM:
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
         GridSearchCV(model, param_grid).fit(X, y)
+
+    def test_sklearn_clone(self, poisson_population_GLM_model):
+        X, y, model, true_params, firing_rate = poisson_population_GLM_model
+        model.fit(X, y)
+        cloned = sklearn.clone(model)
+        assert cloned.feature_mask is None, "cloned GLM shouldn't have feature mask!"
+        assert model.feature_mask is not None, "fit GLM should have feature mask!"
 
     @pytest.mark.parametrize(
         "mask, expectation",

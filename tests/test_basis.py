@@ -299,7 +299,7 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
     for k in xdict.keys():
         xx = xxdict[k]
         x = xdict[k]
-        nans = np.isnan(x.sum(axis=(1, 2)))
+        nans = np.isnan(x.sum(axis=(1,)))
         assert np.all(np.isnan(xx[nans]))
         np.testing.assert_array_equal(xx[~nans], x[~nans])
 
@@ -316,6 +316,46 @@ def test_repr_label(label):
         expected = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
     out = repr(bas)
     assert out == expected
+
+
+@pytest.mark.parametrize("composite_op", ["add", "multiply"])
+@pytest.mark.parametrize(
+    "input_shape_1",
+    [
+        (100,),
+        (100, 10),
+        (100, 10, 1),
+        (100, 1, 10),
+    ],
+)
+@pytest.mark.parametrize("input_shape_2", [(100,), (100, 1), (100, 1, 2), (100, 2, 1)])
+def test_composite_split_by_feature(composite_op, input_shape_1, input_shape_2):
+    # by default, jax was sorting the dict we use in split_by_feature for the labels to
+    # be alphabetical. thus, if the additive basis was made up of basis objects whose
+    # n_basis_input values were different AND whose alphabetical sorting was the
+    # different from their order in initialization, it would fail
+    if composite_op == "add":
+        comp_basis = basis.RaisedCosineLogEval(10) + basis.CyclicBSplineEval(5)
+    elif composite_op == "multiply":
+        comp_basis = basis.RaisedCosineLogEval(10) * basis.CyclicBSplineEval(5)
+    X = comp_basis.compute_features(
+        np.random.rand(*input_shape_1), np.random.rand(*input_shape_2)
+    )
+    features = comp_basis.split_by_feature(X)
+    # if the user only passes a 1d input, we append the second dim (number of inputs)
+
+    split_shape_1 = tuple(i for i in input_shape_1 + (comp_basis.basis1.n_basis_funcs,))
+    split_shape_2 = tuple(i for i in input_shape_2 + (comp_basis.basis2.n_basis_funcs,))
+    if composite_op == "add":
+        assert features["RaisedCosineLogEval"].shape == split_shape_1
+        assert features["CyclicBSplineEval"].shape == split_shape_2
+    elif composite_op == "multiply":
+        # concatenation of shapes except for the last term which is the product of the num bases
+        assert features["(RaisedCosineLogEval * CyclicBSplineEval)"].shape == (
+            *split_shape_1[:-1],
+            *split_shape_2[1:-1],
+            split_shape_1[-1] * split_shape_2[-1],
+        )
 
 
 @pytest.mark.parametrize(
@@ -440,12 +480,38 @@ class TestSharedMethods:
         )
         assert bas.__dict__ == bas2.__dict__
 
+    @pytest.mark.parametrize("n_basis", [5])
+    @pytest.mark.parametrize("ws", [10])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_len(self, cls, n_basis, ws, inp_num, mode):
+        bas = instantiate_atomic_basis(
+            cls[mode],
+            n_basis_funcs=n_basis,
+            window_size=ws,
+            **extra_decay_rates(cls["eval"], n_basis),
+        )
+        assert len(bas) == 1
+
+    @pytest.mark.parametrize("n_basis", [5])
+    @pytest.mark.parametrize("ws", [10])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_iter(self, cls, n_basis, ws, inp_num, mode):
+        bas = instantiate_atomic_basis(
+            cls[mode],
+            n_basis_funcs=n_basis,
+            window_size=ws,
+            **extra_decay_rates(cls["eval"], n_basis),
+        )
+        for b in bas:
+            assert id(bas) == id(b)
+
     @pytest.mark.parametrize(
         "attribute, value",
         [
             ("label", None),
             ("label", "label"),
-            ("n_basis_input_", 1),
             ("n_output_features", 5),
         ],
     )
@@ -554,10 +620,10 @@ class TestSharedMethods:
             window_size=10,
             **extra_decay_rates(cls["conv"], 5),
         )
-        assert bas.n_basis_input_ is None
+        assert bas._input_shape_product is None
         bas.compute_features(np.random.randn(20, n_input))
-        assert bas.n_basis_input_ == (n_input,)
-        assert bas._n_basis_input_ == (n_input,)
+        assert bas._input_shape_product == (n_input,)
+        assert bas._input_shape_product == (n_input,)
 
     @pytest.mark.parametrize(
         "bounds, samples, nan_idx, mn, mx",
@@ -2306,6 +2372,48 @@ class TestAdditiveBasis(CombinedBasis):
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_len(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+        expected_len = (
+            2
+            + isinstance(basis_a_obj, AdditiveBasis)
+            + isinstance(basis_b_obj, AdditiveBasis)
+        )
+        assert len(add) == expected_len
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_iter(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+        # manually unpack basis
+        bas_list = []
+        if isinstance(add.basis1, AdditiveBasis):
+            bas_list += [add.basis1.basis1, add.basis1.basis2]
+        else:
+            bas_list += [add.basis1]
+        if isinstance(add.basis2, AdditiveBasis):
+            bas_list += [add.basis2.basis1, add.basis2.basis2]
+        else:
+            bas_list += [add.basis2]
+
+        for b, b1 in zip(add, bas_list):
+            assert not isinstance(b, AdditiveBasis)
+            assert id(b) == id(b1)
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_iterate_over_component(
         self, basis_a, basis_b, basis_class_specific_params
     ):
@@ -3026,11 +3134,11 @@ class TestAdditiveBasis(CombinedBasis):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_add = bas1 + bas2
-        assert bas_add.n_basis_input_ is None
+        assert bas_add._input_shape_product is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_basis_input_ == (n_basis_input1, n_basis_input2)
+        assert bas_add._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -3358,7 +3466,9 @@ class TestAdditiveBasis(CombinedBasis):
             expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
         else:
             expected_a = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
-        bas = bas + self.instantiate_basis(6, basis.MSplineEval, basis_class_specific_params)
+        bas = bas + self.instantiate_basis(
+            6, basis.MSplineEval, basis_class_specific_params
+        )
         expected = f"AdditiveBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
         out = repr(bas)
         assert out == expected
@@ -3366,6 +3476,31 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_len(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        mul = basis_a_obj * basis_b_obj
+        assert len(mul) == 1
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes())
+    @pytest.mark.parametrize("basis_b", list_all_basis_classes())
+    def test_iter(self, basis_a, basis_b, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        mul = basis_a_obj * basis_b_obj
+        for b in mul:
+            assert id(b) == id(mul)
 
     @pytest.mark.parametrize(
         "samples", [[[0], []], [[], [0]], [[0], [0]], [[0, 0], [0, 0]]]
@@ -3434,7 +3569,9 @@ class TestMultiplicativeBasis(CombinedBasis):
             expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
         else:
             expected_a = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
-        bas = bas * self.instantiate_basis(6, basis.MSplineEval, basis_class_specific_params)
+        bas = bas * self.instantiate_basis(
+            6, basis.MSplineEval, basis_class_specific_params
+        )
         expected = f"MultiplicativeBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
         out = repr(bas)
         assert out == expected
@@ -4074,11 +4211,11 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_add = bas1 * bas2
-        assert bas_add.n_basis_input_ is None
+        assert bas_add._input_shape_product is None
         bas_add.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_add.n_basis_input_ == (n_basis_input1, n_basis_input2)
+        assert bas_add._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -4100,14 +4237,14 @@ class TestMultiplicativeBasis(CombinedBasis):
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
-    def test_n_basis_input_(self, n_basis_input1, n_basis_input2):
+    def test_input_shape_product(self, n_basis_input1, n_basis_input2):
         bas1 = basis.RaisedCosineLinearConv(10, window_size=10)
         bas2 = basis.BSplineConv(10, window_size=10)
         bas_prod = bas1 * bas2
         bas_prod.compute_features(
             np.ones((20, n_basis_input1)), np.ones((20, n_basis_input2))
         )
-        assert bas_prod.n_basis_input_ == (n_basis_input1, n_basis_input2)
+        assert bas_prod._input_shape_product == (n_basis_input1, n_basis_input2)
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4613,18 +4750,18 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             "__add__",
             lambda bas1, bas2, bas3: {
-                "1": slice(0, bas1._n_basis_input_[0] * bas1.n_basis_funcs),
+                "1": slice(0, bas1._input_shape_product[0] * bas1.n_basis_funcs),
                 "2": slice(
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs,
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs
+                    + bas2._input_shape_product[0] * bas2.n_basis_funcs,
                 ),
                 "3": slice(
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs,
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs
-                    + bas3._n_basis_input_[0] * bas3.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs
+                    + bas2._input_shape_product[0] * bas2.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs
+                    + bas2._input_shape_product[0] * bas2.n_basis_funcs
+                    + bas3._input_shape_product[0] * bas3.n_basis_funcs,
                 ),
             },
         ),
@@ -4632,13 +4769,13 @@ def test_multi_epoch_pynapple_basis_transformer(
             "__add__",
             "__mul__",
             lambda bas1, bas2, bas3: {
-                "1": slice(0, bas1._n_basis_input_[0] * bas1.n_basis_funcs),
+                "1": slice(0, bas1._input_shape_product[0] * bas1.n_basis_funcs),
                 "(2 * 3)": slice(
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs,
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input_[0]
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs
+                    + bas2._input_shape_product[0]
                     * bas2.n_basis_funcs
-                    * bas3._n_basis_input_[0]
+                    * bas3._input_shape_product[0]
                     * bas3.n_basis_funcs,
                 ),
             },
@@ -4650,11 +4787,11 @@ def test_multi_epoch_pynapple_basis_transformer(
                 # note that it doesn't respect algebra order but execute right to left (first add then multiplies)
                 "(1 * (2 + 3))": slice(
                     0,
-                    bas1._n_basis_input_[0]
+                    bas1._input_shape_product[0]
                     * bas1.n_basis_funcs
                     * (
-                        bas2._n_basis_input_[0] * bas2.n_basis_funcs
-                        + bas3._n_basis_input_[0] * bas3.n_basis_funcs
+                        bas2._input_shape_product[0] * bas2.n_basis_funcs
+                        + bas3._input_shape_product[0] * bas3.n_basis_funcs
                     ),
                 ),
             },
@@ -4665,11 +4802,11 @@ def test_multi_epoch_pynapple_basis_transformer(
             lambda bas1, bas2, bas3: {
                 "(1 * (2 * 3))": slice(
                     0,
-                    bas1._n_basis_input_[0]
+                    bas1._input_shape_product[0]
                     * bas1.n_basis_funcs
-                    * bas2._n_basis_input_[0]
+                    * bas2._input_shape_product[0]
                     * bas2.n_basis_funcs
-                    * bas3._n_basis_input_[0]
+                    * bas3._input_shape_product[0]
                     * bas3.n_basis_funcs,
                 ),
             },
@@ -4732,11 +4869,11 @@ def test__get_splitter(
             1,
             1,
             lambda bas1, bas2: {
-                "1": slice(0, bas1._n_basis_input_[0] * bas1.n_basis_funcs),
+                "1": slice(0, bas1._input_shape_product[0] * bas1.n_basis_funcs),
                 "2": slice(
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs,
-                    bas1._n_basis_input_[0] * bas1.n_basis_funcs
-                    + bas2._n_basis_input_[0] * bas2.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs,
+                    bas1._input_shape_product[0] * bas1.n_basis_funcs
+                    + bas2._input_shape_product[0] * bas2.n_basis_funcs,
                 ),
             },
         ),
@@ -4747,9 +4884,9 @@ def test__get_splitter(
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
                     0,
-                    bas1._n_basis_input_[0]
+                    bas1._input_shape_product[0]
                     * bas1.n_basis_funcs
-                    * bas2._n_basis_input_[0]
+                    * bas2._input_shape_product[0]
                     * bas2.n_basis_funcs,
                 )
             },
@@ -4774,7 +4911,10 @@ def test__get_splitter(
             1,
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
-                    0, bas1._n_basis_input_[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
+                    0,
+                    bas1._input_shape_product[0]
+                    * bas1.n_basis_funcs
+                    * bas2.n_basis_funcs,
                 )
             },
         ),
@@ -4801,7 +4941,10 @@ def test__get_splitter(
             2,
             lambda bas1, bas2: {
                 "(1 * 2)": slice(
-                    0, bas2._n_basis_input_[0] * bas1.n_basis_funcs * bas2.n_basis_funcs
+                    0,
+                    bas2._input_shape_product[0]
+                    * bas1.n_basis_funcs
+                    * bas2.n_basis_funcs,
                 )
             },
         ),

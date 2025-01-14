@@ -559,6 +559,7 @@ class Example(Base):
         self.c = c
         self.d = d
 
+
 class ComplexParam(Base):
     def __init__(self, name):
         self.name = name
