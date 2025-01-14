@@ -553,11 +553,11 @@ def test_assert_scalar_func():
 # Mock classes inheriting Base
 class Example(Base):
     # break alphabetical order in init params
-    def __init__(self, c, a, b=None):
+    def __init__(self, c, a, b=None, d=1):
         self.a = a
         self.b = b
         self.c = c
-
+        self.d = d
 
 class ComplexParam(Base):
     def __init__(self, name):
@@ -571,28 +571,28 @@ class ComplexParam(Base):
     "obj, exclude_keys, use_name_keys, expected",
     [
         # Test basic functionality
-        (Example(a=1, b="text", c=None), None, [], "Example(a=1, b='text')"),
+        (Example(a=1, b="text", c=None), None, [], "Example(a=1, b='text', d=1)"),
         # Exclude keys
-        (Example(a=1, b="text", c=None), ["b"], [], "Example(a=1)"),
+        (Example(a=1, b="text", c=None), ["b"], [], "Example(a=1, d=1)"),
         # Use __name__ for specified keys
-        (Example(a=1, b=str, c=None), None, ["b"], "Example(a=1, b=str)"),
+        (Example(a=1, b=str, c=None), None, ["b"], "Example(a=1, b=str, d=1)"),
         # Exclude and use __name__ together
-        (Example(a=1, b=Base, c=None), ["a"], ["b"], "Example(b=Base)"),
+        (Example(a=1, b=Base, c=None), ["a"], ["b"], "Example(b=Base, d=1)"),
         # No parameters in get_params
         (Base(), None, [], "Base()"),
         # Parameters with shape (e.g., numpy arrays)
-        (Example(a=None, b=np.array([0]), c=None), None, [], "Example()"),
+        (Example(a=None, b=np.array([0]), c=None), None, [], "Example(d=1)"),
         # Complex object values
         (
             Example(a=ComplexParam("x"), b="value", c=None),
             None,
             [],
-            "Example(a=ComplexParam(x), b='value')",
+            "Example(a=ComplexParam(x), b='value', d=1)",
         ),
         # Falsey values excluded
-        (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False)"),
+        (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False, d=1)"),
         # Falsey values excluded2
-        (Example(a=0, b=[], c={}), None, [], "Example(a=0)"),
+        (Example(a=0, b=[], c={}), None, [], "Example(a=0, d=1)"),
     ],
 )
 def test_format_repr(obj, exclude_keys, use_name_keys, expected):
@@ -601,18 +601,12 @@ def test_format_repr(obj, exclude_keys, use_name_keys, expected):
 
 def test_order_preservation():
     """Ensure parameter order matches the __init__ method."""
-    obj = Example(a=1, b="text", c=None)
-    assert utils.format_repr(obj, exclude_keys=["c"]) == "Example(a=1, b='text')"
-
-
-def test_missing_init_param():
-    """Test with keys in get_params not present in __init__."""
-    obj = Example(a=1, c="text")
-    assert utils.format_repr(obj) == "Example(c='text', a=1)"
+    obj = Example(a=1, b="text", c=1)
+    assert utils.format_repr(obj) == "Example(c=1, a=1, b='text', d=1)"
 
 
 def test_shape_param_exclusion():
     """Test exclusion of parameters with a shape attribute."""
 
     obj = Example(a=np.arange(3), b=1, c=None)
-    assert utils.format_repr(obj) == "Example(b=1)"
+    assert utils.format_repr(obj) == "Example(b=1, d=1)"
