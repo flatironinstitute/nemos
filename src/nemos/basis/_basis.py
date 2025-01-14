@@ -530,7 +530,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return result
 
     def __repr__(self):
-        return format_repr(self, ["label"])
+        return format_repr(self)
 
     def _get_feature_slicing(
         self,

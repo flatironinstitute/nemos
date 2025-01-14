@@ -304,6 +304,20 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
         np.testing.assert_array_equal(xx[~nans], x[~nans])
 
 
+@pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
+def test_repr_label(label):
+    if label == "default-behavior":
+        bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
+    else:
+        bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+    if label in [None, "default-behavior"]:
+        expected = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+    else:
+        expected = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
+    out = repr(bas)
+    assert out == expected
+
+
 @pytest.mark.parametrize(
     "cls",
     [
@@ -3334,6 +3348,21 @@ class TestAdditiveBasis(CombinedBasis):
         basis_obj = basis_a_obj + basis_b_obj
         assert repr(basis_obj) == expected_out[basis_a]
 
+    @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
+    def test_repr_label(self, label, basis_class_specific_params):
+        if label == "default-behavior":
+            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
+        else:
+            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+        if label in [None, "default-behavior"]:
+            expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+        else:
+            expected_a = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
+        bas = bas + self.instantiate_basis(6, basis.MSplineEval, basis_class_specific_params)
+        expected = f"AdditiveBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
+        out = repr(bas)
+        assert out == expected
+
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
@@ -3394,6 +3423,21 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj * basis_b_obj
         assert repr(basis_obj) == expected_out[basis_a]
+
+    @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
+    def test_repr_label(self, label, basis_class_specific_params):
+        if label == "default-behavior":
+            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
+        else:
+            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+        if label in [None, "default-behavior"]:
+            expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+        else:
+            expected_a = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
+        bas = bas * self.instantiate_basis(6, basis.MSplineEval, basis_class_specific_params)
+        expected = f"MultiplicativeBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
+        out = repr(bas)
+        assert out == expected
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])

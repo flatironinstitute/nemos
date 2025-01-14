@@ -515,7 +515,9 @@ def format_repr(
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
     disp_params = []
 
-    for k, v in obj.get_params(deep=False).items():
+    all_params = obj.get_params(deep=False)
+    label = all_params.pop("label", None)
+    for k, v in all_params.items():
         repr_param = (
             k not in exclude_keys and not hasattr(v, "shape") and (v or v in (0, False))
         )
@@ -526,8 +528,16 @@ def format_repr(
                 v = repr(v)
             disp_params.append(f"{k}={v}")
     disp_params = sorted(disp_params, key=lambda x: init_params.index(x.split("=")[0]))
+    cls_name = obj.__class__.__name__
+    # if label doesn't exist or is the same as the class name (as is the default for
+    # basis), then don't use it
+    if (label is not None) and (label != cls_name):
+        # else, label should replace the class name as being outside the parentheses and
+        # class name should come first within the parens
+        disp_params.insert(0, cls_name)
+        cls_name = label
     disp_params = ", ".join(disp_params)
-    return f"{obj.__class__.__name__}({disp_params})"
+    return f"{cls_name}({disp_params})"
 
 
 # enable concatenation for pynapple objects.
