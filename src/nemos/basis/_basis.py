@@ -963,7 +963,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
                 (..., n_i, b_i, ...)
 
             - ``n_i``: The number of inputs processed by the i-th basis component.
-            - ``n_i``: The number of inputs processed by the i-th basis component.
             - ``b_i``: The number of basis functions for the i-th basis component.
 
             These sub-arrays are reshaped along the specified axis, with all other dimensions
