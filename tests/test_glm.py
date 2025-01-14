@@ -7,9 +7,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import sklearn
 import statsmodels.api as sm
 from pynapple import Tsd, TsdFrame
-import sklearn
 from sklearn.linear_model import GammaRegressor, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
 
