@@ -960,10 +960,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             - **Values**: Sub-arrays corresponding to each component. Each sub-array has the shape:
 
             .. math::
-                (..., n_i, b_i, ...)
+                (..., n_i1, n_i2,..,n_im, b_i, ...)
 
-            - ``n_i``: The number of inputs processed by the i-th basis component.
-            - ``n_i``: The number of inputs processed by the i-th basis component.
+            - ``(n_samples, n_i1, n_i2,..,n_im)``: is the shape of the input to the i-th basis.
             - ``b_i``: The number of basis functions for the i-th basis component.
 
             These sub-arrays are reshaped along the specified axis, with all other dimensions
