@@ -87,7 +87,7 @@ class TransformerBasis:
 
     @staticmethod
     def _check_initialized(basis):
-        if basis._n_basis_input_ is None:
+        if basis._input_shape_product is None:
             raise RuntimeError(
                 "Cannot apply TransformerBasis: the provided basis has no defined input shape. "
                 "Please call `set_input_shape` before calling `fit`, `transform`, or "
@@ -113,11 +113,11 @@ class TransformerBasis:
         """
         n_samples = X.shape[0]
         out = (
-            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas._input_shape_))
+            np.reshape(X[:, cc : cc + n_input], (n_samples, *bas.input_shape))
             for i, (bas, n_input) in enumerate(
-                zip(self._iterate_over_components(), self._n_basis_input_)
+                zip(self._iterate_over_components(), self._input_shape_product)
             )
-            for cc in [sum(self._n_basis_input_[:i])]
+            for cc in [sum(self._input_shape_product[:i])]
         )
         return out
 
@@ -493,10 +493,11 @@ class TransformerBasis:
                 f"X must be 2-dimensional, shape (n_samples, n_features). The provided X has shape {X.shape} instead."
             )
 
-        if X.shape[1] != sum(self.n_basis_input_):
+        if X.shape[1] != sum(self._input_shape_product):
             raise ValueError(
-                f"Input mismatch: expected {sum(self.n_basis_input_)} inputs, but got {X.shape[1]} columns in X.\n"
-                "To modify the required number of inputs, call `set_input_shape` before using `fit` or `fit_transform`."
+                f"Input mismatch: expected {sum(self._input_shape_product)} inputs, but got {X.shape[1]} "
+                f"columns in X.\nTo modify the required number of inputs, call `set_input_shape` before using "
+                f"`fit` or `fit_transform`."
             )
 
         if y is not None and y.shape[0] != X.shape[0]:
