@@ -85,7 +85,7 @@ class AtomicBasisMixin:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
-        `_input_shape_product`) are preserved during cloning. Reinitializing the class
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
         as in the regular sklearn clone would drop these attributes, rendering
         cross-validation unusable.
         """
