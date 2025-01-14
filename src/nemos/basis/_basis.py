@@ -988,7 +988,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         ...     print(f"{feature}: shape {arr.shape}")
         feature_1: shape (20, 5)
         feature_2: shape (20, 6)
-        >>> # If one of the basis components accepts multiple inputs, the resulting dictionary will be nested:
+        >>> # split_by_features can handle multiple inputs as well
         >>> multi_input_basis = BSplineConv(n_basis_funcs=6, window_size=10,
         ... label="multi_input")
         >>> X_multi = multi_input_basis.compute_features(np.random.randn(20, 2))
