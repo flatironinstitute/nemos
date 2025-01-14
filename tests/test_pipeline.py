@@ -46,8 +46,8 @@ def test_sklearn_transformer_pipeline_cv(bas, poissonGLM_model_instantiation):
     gridsearch.fit(X[:, : bas._n_input_dimensionality] ** 2, y)
 
 
-def test_sklearn_cv_clone(poissonGLM_model_instantiation):
-    X, y, model, _, _ = poissonGLM_model_instantiation
+def test_sklearn_cv_clone(poisson_population_GLM_model):
+    X, y, model, _, _ = poisson_population_GLM_model
     bas = basis.CyclicBSplineEval(5)
     bas = TransformerBasis(bas).set_input_shape(*([1] * bas._n_input_dimensionality))
     pipe = pipeline.Pipeline([("basis", bas), ("fit", model)])
