@@ -170,12 +170,14 @@ First, let's examine `trial_interval_set`:
 trial_interval_set
 ```
 
-`trial_interval_set` is an
-[`IntervalSets`](https://pynapple.org/generated/pynapple.IntervalSet.html)
-object, containing the start and end time for each stimulation, and the "tag" metadata which identifies the protocol.
+`trial_interval_set` is a dictionary with strings for keys and
+[`IntervalSets`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html)
+for values. Each key defines the stimulus protocol, with the value defining
+the beginning and end of that stimulation protocol.
+
 
 ```{code-cell} ipython3
-noise_interval = trial_interval_set[trial_interval_set.tags == "Noise 1"]
+noise_interval = trial_interval_set["Noise 1"]
 noise_interval
 ```
 
