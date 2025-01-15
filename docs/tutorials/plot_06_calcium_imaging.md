@@ -224,7 +224,7 @@ print(selected_neurons)
 ```
 
 We need to bring the head-direction of the animal to the same size as the transients matrix.
-We can use the function [`bin_average`](https://pynapple.org/generated/pynapple.Tsd.bin_average.html#pynapple.core.time_series.Tsd.bin_average) of pynapple. Notice how we pass the parameter `ep`
+We can use the function [`bin_average`](https://pynapple.org/generated/pynapple.Tsd.bin_average.html) of pynapple. Notice how we pass the parameter `ep`
 that is the `time_support` of the transients.
 
 

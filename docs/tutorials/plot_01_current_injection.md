@@ -325,7 +325,7 @@ firing_rate = count.smooth(std=0.05, size_factor=20)
 firing_rate = firing_rate / bin_size
 ```
 
-Note that firing_rate is a [`TsdFrame`](https://pynapple.org/generated/pynapple.core.time_series.TsdFrame.html)!
+Note that firing_rate is a [`TsdFrame`](https://pynapple.org/generated/pynapple.TsdFrame.html)!
 
 ```{code-cell} ipython3
 print(type(firing_rate))
@@ -441,7 +441,7 @@ overhead!), as well as the collection of optimizers present in
 First, we require that our predictors and our spike counts have the same
 number of time bins. We can achieve this by down-sampling our current to the
 spike counts to the proper resolution using the
-[`bin_average`](https://pynapple.org/generated/pynapple.Tsd.bin_average.html#pynapple.core.time_series.Tsd.bin_average)
+[`bin_average`](https://pynapple.org/generated/pynapple.Tsd.bin_average.html)
 method from pynapple:
 
 ```{code-cell} ipython3
