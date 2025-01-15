@@ -94,7 +94,7 @@ transients = data['RoiResponseSeries']
 print(transients)
 ```
 
-`transients` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html). Each column contains the activity of one neuron.
+`transients` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.TsdFrame.html). Each column contains the activity of one neuron.
 
 The mouse was recorded for a 20 minute recording epoch as we can see from the `time_support` property of the `transients` object.
 
@@ -125,7 +125,7 @@ You can see that the calcium signals are both nonnegative, and noisy. One (neuro
 
 
 We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous).
-Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
+Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
 
 
 ```{code-cell} ipython3
@@ -224,7 +224,7 @@ print(selected_neurons)
 ```
 
 We need to bring the head-direction of the animal to the same size as the transients matrix.
-We can use the function [`bin_average`](https://pynapple.org/generated/pynapple.core.time_series.Tsd.bin_average.html#pynapple.core.time_series.Tsd.bin_average) of pynapple. Notice how we pass the parameter `ep`
+We can use the function [`bin_average`](https://pynapple.org/generated/pynapple.Tsd.bin_average.html) of pynapple. Notice how we pass the parameter `ep`
 that is the `time_support` of the transients.
 
 
@@ -252,7 +252,7 @@ X = basis.compute_features(head_direction, Y[:, selected_neurons])
 
 ## Train & test set
 
-Let's create a train epoch and a test epoch to fit and test the models. Since `X` is a pynapple time series, we can create [`IntervalSet`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html) objects to restrict them into a train set and test set.
+Let's create a train epoch and a test epoch to fit and test the models. Since `X` is a pynapple time series, we can create [`IntervalSet`](https://pynapple.org/generated/pynapple.IntervalSet.html) objects to restrict them into a train set and test set.
 
 
 ```{code-cell} ipython3

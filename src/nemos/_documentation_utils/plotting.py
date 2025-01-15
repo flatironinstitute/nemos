@@ -1114,7 +1114,7 @@ def plot_features(
     time = np.arange(0, window_size) / sampling_rate
     for k in range(n_rows):
         ax = plt.subplot(n_rows, 1, k + 1)
-        plt.step(time, input_feature[k], where="post")
+        plt.step(time, np.squeeze(input_feature[k]), where="post")
 
         ax.spines["bottom"].set_visible(False)
         ax.spines["left"].set_visible(False)
