@@ -5145,3 +5145,30 @@ def test_split_feature_axis(
         for i, itm in enumerate(out.items()):
             _, val = itm
             assert val.shape == exp_shapes[i]
+
+
+def test_composite_basis_repr_wrapping():
+    # check multi
+    bas = basis.BSplineEval(10) ** 100
+    out = repr(bas)
+    assert out.startswith(
+        "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
+    )
+    assert out.endswith(
+        "basis2=BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=BSplineEval(n_basis_funcs=10, order=4),\n)"
+    )
+    assert "    ...\n" in out
+
+    bas = basis.MSplineEval(10)
+    for k in range(99):
+        bas = bas + basis.MSplineEval(10)
+
+    # large additive basis
+    out = repr(bas)
+    assert out.startswith(
+        "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
+    )
+    assert out.endswith(
+        "basis2=MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=MSplineEval(n_basis_funcs=10, order=4),\n)"
+    )
+    assert "    ...\n" in out

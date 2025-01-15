@@ -678,9 +678,9 @@ class CompositeBasisMixin:
         except TypeError:
             basis2 = self.basis2
         if n < rows:
-             rep = f"{self.__class__.__name__}(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
-        elif n==rows:
-             rep = f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+            rep = f"{self.__class__.__name__}(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+        elif n == rows:
+            rep = f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
         else:
-             rep = None
+            rep = None
         return rep
