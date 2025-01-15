@@ -171,7 +171,7 @@ trial_interval_set
 ```
 
 `trial_interval_set` is a dictionary with strings for keys and
-[`IntervalSets`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html)
+[`IntervalSets`](https://pynapple.org/generated/pynapple.IntervalSet.html)
 for values. Each key defines the stimulus protocol, with the value defining
 the beginning and end of that stimulation protocol.
 
