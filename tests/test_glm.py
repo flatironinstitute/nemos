@@ -4241,7 +4241,7 @@ class TestPopulationGLM:
         model = poisson_population_GLM_model[2]
         assert (
             repr(model)
-            == "PopulationGLM(\n\tobservation_model=PoissonObservations(inverse_link_function=exp),\n\tregularizer=UnRegularized(),\n\tsolver_name='GradientDescent'\n)"
+            == "PopulationGLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
         )
 
 

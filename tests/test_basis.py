@@ -313,7 +313,7 @@ def test_repr_label(label):
     if label in [None, "default-behavior"]:
         expected = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
     else:
-        expected = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
+        expected = f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
     out = repr(bas)
     assert out == expected
 
@@ -3499,7 +3499,9 @@ class TestAdditiveBasis(CombinedBasis):
         if label in [None, "default-behavior"]:
             expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
         else:
-            expected_a = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
+            expected_a = (
+                f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+            )
         bas = bas + self.instantiate_basis(
             6, basis.MSplineEval, basis_class_specific_params
         )
@@ -3602,7 +3604,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         if label in [None, "default-behavior"]:
             expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
         else:
-            expected_a = f"{label}(RaisedCosineLinearEval, n_basis_funcs=5, width=2.0)"
+            expected_a = (
+                f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+            )
         bas = bas * self.instantiate_basis(
             6, basis.MSplineEval, basis_class_specific_params
         )
