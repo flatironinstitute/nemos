@@ -147,7 +147,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._label = str(label)
 
         # specified only after inputs/input shapes are provided
-        self._input_shape_product = None
+        self._input_shape_product = getattr(self, "_input_shape_product", None)
 
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init

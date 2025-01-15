@@ -2404,6 +2404,33 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_input_shape_product_init(
+        self, basis_a, basis_b, basis_class_specific_params
+    ):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_b_obj
+        assert add._input_shape_product is None
+        basis_a_obj.set_input_shape(())
+        add = basis_a_obj + basis_b_obj
+        assert add._input_shape_product is None
+        basis_b_obj.set_input_shape(())
+        add = basis_a_obj + basis_b_obj
+        assert add._input_shape_product == (1, 1)
+        basis_b_obj.set_input_shape((1, 2, 3))
+        add = basis_a_obj + basis_b_obj
+        assert add._input_shape_product == (1, 6)
+
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_len(self, basis_a, basis_b, basis_class_specific_params):
@@ -3512,6 +3539,33 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_input_shape_product_init(
+        self, basis_a, basis_b, basis_class_specific_params
+    ):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        mul = basis_a_obj * basis_b_obj
+        assert mul._input_shape_product is None
+        basis_a_obj.set_input_shape(())
+        mul = basis_a_obj * basis_b_obj
+        assert mul._input_shape_product is None
+        basis_b_obj.set_input_shape(())
+        mul = basis_a_obj * basis_b_obj
+        assert mul._input_shape_product == (1, 1)
+        basis_b_obj.set_input_shape((1, 2, 3))
+        mul = basis_a_obj * basis_b_obj
+        assert mul._input_shape_product == (1, 6)
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
