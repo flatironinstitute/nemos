@@ -2430,6 +2430,7 @@ class TestAdditiveBasis(CombinedBasis):
         basis_b_obj.set_input_shape((1, 2, 3))
         add = basis_a_obj + basis_b_obj
         assert add._input_shape_product == (1, 6)
+        assert (add + add)._input_shape_product == (1, 6, 1, 6)
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -3566,6 +3567,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_b_obj.set_input_shape((1, 2, 3))
         mul = basis_a_obj * basis_b_obj
         assert mul._input_shape_product == (1, 6)
+        assert (mul * mul)._input_shape_product == (1, 6, 1, 6)
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
