@@ -598,10 +598,11 @@ class TestGammaObservations:
         )
         assert np.allclose(sm, mn)
 
-    @pytest.mark.parametrize("link_func", [jnp.exp, jax.nn.softplus])
-    def test_repr_out(self, link_func):
+    @pytest.mark.parametrize("link_func, link_func_name",
+                             [(jnp.exp, "exp"), (jax.nn.softplus, "softplus")])
+    def test_repr_out(self, link_func_name):
         obs = nmo.observation_models.GammaObservations(inverse_link_function=link_func)
         assert (
             repr(obs)
-            == f"GammaObservations(inverse_link_function={link_func.__name__})"
+            == f"GammaObservations(inverse_link_function={link_func_name})"
         )
