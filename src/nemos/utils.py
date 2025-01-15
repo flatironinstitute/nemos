@@ -499,17 +499,19 @@ def format_repr(
 
     Examples
     --------
+    >>> import jax
     >>> from nemos.base_class import Base
     >>> from nemos.regularizer import Ridge
     >>> from nemos.utils import format_repr
     >>> class Example(Base):
-    ...     def __init__(self, a, b, c=None):
+    ...     def __init__(self, a, b, c, d):
     ...         self.a = a
     ...         self.b = b
     ...         self.c = c
-    >>> obj = Example(1, Ridge, c=None)
+    ...         self.d = d
+    >>> obj = Example(1, jax.numpy.exp, c="hi", d=None)
     >>> format_repr(obj, exclude_keys=["c"], use_name_keys=["b"])
-    'Example(a=1, b=Ridge)'
+    'Example(a=1, b=exp)'
     """
     exclude_keys = [] if exclude_keys is None else exclude_keys
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
