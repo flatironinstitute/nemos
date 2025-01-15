@@ -6,6 +6,7 @@ from __future__ import annotations
 import abc
 import inspect
 import warnings
+from abc import abstractmethod
 from copy import deepcopy
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
@@ -228,7 +229,7 @@ class BaseRegressor(Base, abc.ABC):
         if solver_name not in self._regularizer.allowed_solvers:
             raise ValueError(
                 f"The solver: {solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
         self._solver_name = solver_name
@@ -270,7 +271,9 @@ class BaseRegressor(Base, abc.ABC):
                 f"kwargs {undefined_kwargs} in solver_kwargs not a kwarg for {solver_class.__name__}!"
             )
 
-    def instantiate_solver(self, *args) -> BaseRegressor:
+    def instantiate_solver(
+        self, *args, solver_kwargs: Optional[dict] = None
+    ) -> BaseRegressor:
         """
         Instantiate the solver with the provided loss function.
 
@@ -289,6 +292,9 @@ class BaseRegressor(Base, abc.ABC):
         *args:
             Positional arguments for the jaxopt `solver.run` method, e.g. the regularizing
             strength for proximal gradient methods.
+        solver_kwargs:
+            Optional dictionary with the solver kwargs.
+            If nothing is provided, it defaults to self.solver_kwargs.
 
         Returns
         -------
@@ -299,7 +305,7 @@ class BaseRegressor(Base, abc.ABC):
         if self.solver_name not in self.regularizer.allowed_solvers:
             raise ValueError(
                 f"The solver: {self.solver_name} is not allowed for "
-                f"{self._regularizer.__class__.__name__} regularizaration. Allowed solvers are "
+                f"{self._regularizer.__class__.__name__} regularization. Allowed solvers are "
                 f"{self._regularizer.allowed_solvers}."
             )
 
@@ -313,8 +319,9 @@ class BaseRegressor(Base, abc.ABC):
         else:
             loss = self._predict_and_compute_loss
 
-        # copy dictionary of kwargs to avoid modifying user settings
-        solver_kwargs = deepcopy(self.solver_kwargs)
+        if solver_kwargs is None:
+            # copy dictionary of kwargs to avoid modifying user settings
+            solver_kwargs = deepcopy(self.solver_kwargs)
 
         # check that the loss is Callable
         utils.assert_is_callable(loss, "loss")
@@ -600,3 +607,57 @@ class BaseRegressor(Base, abc.ABC):
                 )
 
         return solver_class
+
+    def _optimize_solver_params(self, X: DESIGN_INPUT_TYPE, y: jnp.ndarray) -> dict:
+        """
+        Compute and update solver parameters with optimal defaults if available.
+
+        This method checks the current solver configuration and, if an optimal
+        configuration is known for the given model parameters, computes the optimal
+        batch size, step size, and other hyperparameters to ensure faster convergence.
+
+        Parameters
+        ----------
+        X :
+            Input data used to compute smoothness and strong convexity constants.
+        y :
+            Target values used in conjunction with X for the same purpose.
+
+        Returns
+        -------
+        :
+            A dictionary containing the solver parameters, updated with optimal defaults
+            where applicable.
+
+        """
+        # Start with a copy of the existing solver parameters
+        new_solver_kwargs = self.solver_kwargs.copy()
+
+        # get the model specific configs
+        compute_defaults, compute_l_smooth, strong_convexity = (
+            self._get_optimal_solver_params_config()
+        )
+        if compute_defaults and compute_l_smooth:
+            # Check if the user has provided batch size or stepsize, or else use None
+            batch_size = new_solver_kwargs.get("batch_size", None)
+            stepsize = new_solver_kwargs.get("stepsize", None)
+
+            # Compute the optimal batch size and stepsize based on smoothness, strong convexity, etc.
+            new_params = compute_defaults(
+                compute_l_smooth,
+                X,
+                y,
+                batch_size=batch_size,
+                stepsize=stepsize,
+                strong_convexity=strong_convexity,
+            )
+
+            # Update the solver parameters with the computed optimal values
+            new_solver_kwargs.update(new_params)
+
+        return new_solver_kwargs
+
+    @abstractmethod
+    def _get_optimal_solver_params_config(self):
+        """Return the functions for computing default step and batch size for the solver."""
+        pass

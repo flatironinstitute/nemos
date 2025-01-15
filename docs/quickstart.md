@@ -1,7 +1,20 @@
 ---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
 hide:
   - navigation
 ---
+
+# Quickstart
+
 ## **Overview**
 
 NeMoS is a neural modeling software package designed to model neural spiking activity and other time-series data
@@ -27,58 +40,56 @@ NeMoS provides two implementations of the GLM: one for fitting a single neuron, 
 
 You can define a single neuron GLM by instantiating an `GLM` object.
 
-```python
+```{code-cell} ipython3
 
->>> import nemos as nmo
+import nemos as nmo
 
->>> # Instantiate the single model
->>> model = nmo.glm.GLM()
+# Instantiate the single model
+model = nmo.glm.GLM()
 
 ```
 
 The coefficients can be learned by invoking the `fit` method of `GLM`. The method requires a design 
 matrix of shape `(num_samples, num_features)`, and the output neural activity of shape `(num_samples, )`.
 
-```python
+```{code-cell} ipython3
 
->>> import numpy as np
->>> num_samples, num_features = 100, 3
+import numpy as np
+num_samples, num_features = 100, 3
 
->>> # Generate a design matrix
->>> X = np.random.normal(size=(num_samples, num_features))
->>> # generate some counts
->>> spike_counts = np.random.poisson(size=num_samples)
+# Generate a design matrix
+X = np.random.normal(size=(num_samples, num_features))
+# generate some counts
+spike_counts = np.random.poisson(size=num_samples)
 
->>> # define fit the model
->>> model = model.fit(X, spike_counts)
+# define fit the model
+model = model.fit(X, spike_counts)
 
 ```
 
 Once the model is fit, you can retrieve the model parameters as shown below.
 
-```python
->>> # model coefficients shape is (num_features, )
->>> print(f"Model coefficients shape: {model.coef_.shape}")
-Model coefficients shape: (3,)
+```{code-cell} ipython3
+# model coefficients shape is (num_features, )
+print(f"Model coefficients shape: {model.coef_.shape}")
 
->>> # model intercept, shape (1,) since there is only one neuron.
->>> print(f"Model intercept shape: {model.intercept_.shape}")
-Model intercept shape: (1,)
+# model intercept, shape (1,) since there is only one neuron.
+print(f"Model intercept shape: {model.intercept_.shape}")
 
 ```
 
 Additionally, you can predict the firing rate and call the compute the model log-likelihood by calling the `predict` and the `score` method respectively.
 
-```python
+```{code-cell} ipython3
 
->>> # predict the rate
->>> predicted_rate = model.predict(X)
->>> # firing rate has shape: (num_samples,)
->>> predicted_rate.shape
-(100,)
+# predict the rate
+predicted_rate = model.predict(X)
+# firing rate has shape: (num_samples,)
+predicted_rate.shape
 
->>> # compute the log-likelihood of the model
->>> log_likelihood = model.score(X, spike_counts)
+
+# compute the log-likelihood of the model
+log_likelihood = model.score(X, spike_counts)
 
 ```
 
@@ -86,49 +97,47 @@ Additionally, you can predict the firing rate and call the compute the model log
 
 You can set up a population GLM by instantiating a `PopulationGLM`. The API for the `PopulationGLM` is the same as for the single-neuron `GLM`; the only difference you'll notice is that some of the methods' inputs and outputs have an additional dimension for the different neurons.
 
-```python
+```{code-cell}
 
->>> import nemos as nmo
->>> population_model = nmo.glm.PopulationGLM()
+import nemos as nmo
+population_model = nmo.glm.PopulationGLM()
 
 ```
 
 As for the single neuron GLM, you can learn the model parameters by invoking the `fit` method: the input of `fit` are the design matrix (with shape `(num_samples, num_features)` ), and the population activity (with shape `(num_samples, num_neurons)`).
 Once the model is fit, you can use `predict` and `score` to predict the firing rate and the log-likelihood.
 
-```python
+```{code-cell}
 
->>> import numpy as np
->>> num_samples, num_features, num_neurons = 100, 3, 5
+import numpy as np
+num_samples, num_features, num_neurons = 100, 3, 5
 
->>> # simulate a design matrix
->>> X = np.random.normal(size=(num_samples, num_features))
->>> # simulate some counts
->>> spike_counts = np.random.poisson(size=(num_samples, num_neurons))
+# simulate a design matrix
+X = np.random.normal(size=(num_samples, num_features))
+# simulate some counts
+spike_counts = np.random.poisson(size=(num_samples, num_neurons))
 
->>> # fit the model
->>> population_model = population_model.fit(X, spike_counts)
+# fit the model
+population_model = population_model.fit(X, spike_counts)
 
->>> # predict the rate of each neuron in the population
->>> predicted_rate = population_model.predict(X)
->>> predicted_rate.shape  # expected shape: (num_samples, num_neurons)
-(100, 5)
+# predict the rate of each neuron in the population
+predicted_rate = population_model.predict(X)
+predicted_rate.shape  # expected shape: (num_samples, num_neurons)
 
->>> # compute the log-likelihood of the model
->>> log_likelihood = population_model.score(X, spike_counts)
+
+# compute the log-likelihood of the model
+log_likelihood = population_model.score(X, spike_counts)
 
 ```
 
 The learned coefficient and intercept will have shape `(num_features, num_neurons)` and `(num_neurons, )` respectively.
 
-```python
->>> # model coefficients shape is (num_features, num_neurons)
->>> print(f"Model coefficients shape: {population_model.coef_.shape}")
-Model coefficients shape: (3, 5)
+```{code-cell}
+# model coefficients shape is (num_features, num_neurons)
+print(f"Model coefficients shape: {population_model.coef_.shape}")
 
->>> # model intercept, (num_neurons,)
->>> print(f"Model intercept shape: {population_model.intercept_.shape}")
-Model intercept shape: (5,)
+# model intercept, (num_neurons,)
+print(f"Model intercept shape: {population_model.intercept_.shape}")
 
 ```
 
@@ -151,19 +160,19 @@ The `basis` module includes objects that perform two types of transformations on
 ### **Non-linear Mapping**
 
 <figure class="custom-figure">
-    <img src="../assets/glm_features_scheme.svg" width="100%">
+    <img src="_static/glm_features_scheme.svg" alt="GLM Feature Scheme" width="100%">
     <figcaption><strong>Figure 1:</strong> Basis as non-linear mappings. The figure demonstrate the use of basis functions to create complex non-linear features for a GLM.</figcaption>
 </figure>
 
 Non-linear mapping is the default mode of operation of any `basis` object. To instantiate a basis for non-linear mapping, 
-you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Guide](../reference/nemos/basis) for detailed information).
+you need to specify the number of basis functions. For some `basis` objects, additional arguments may be required (see the [API Reference](nemos_basis) for detailed information).
 
-```python
+```{code-cell}
 
->>> import nemos as nmo
+import nemos as nmo
 
->>> n_basis_funcs = 10
->>> basis = nmo.basis.RaisedCosineBasisLinear(n_basis_funcs)
+n_basis_funcs = 10
+basis = nmo.basis.RaisedCosineLinearEval(n_basis_funcs)
 
 ```
 
@@ -171,24 +180,23 @@ Once the basis is instantiated, you can apply it to your input data using the `c
 This method takes an input array of shape `(n_samples, )` and transforms it into a two-dimensional array of 
 shape `(n_samples, n_basis_funcs)`, where each column represents a feature generated by the non-linear mapping.
 
-```python
+```{code-cell}
 
->>> import numpy as np
+import numpy as np
 
->>> # generate an input
->>> x = np.arange(100)
+# generate an input
+x = np.arange(100)
 
->>> # evaluate the basis
->>> X = basis.compute_features(x)
->>> X.shape
-(100, 10)
+# evaluate the basis
+X = basis.compute_features(x)
+X.shape
 
 ```
 
 ### **Convolution**
 
 <figure class="custom-figure">
-    <img src="../assets/glm_population_scheme.svg" alt="GLM Population Scheme">
+    <img src="_static/glm_population_scheme.svg" alt="GLM Population Scheme">
     <figcaption><strong>Figure 2:</strong> Basis as a bank of convolutional filters. The figure shows a population GLM for functional connectivity analysis, a classical use-case for basis functions in convolutional mode.</figcaption>
 
 </figure>
@@ -197,13 +205,13 @@ If you want to convolve a bank of basis functions with an input you must set the
 `"conv"` and you must provide an integer `window_size` parameter, which defines the length of the filter bank in 
 number of sample points.
 
-```python
+```{code-cell} ipython3
 
->>> import nemos as nmo
+import nemos as nmo
 
->>> n_basis_funcs = 10
->>> # define a filter bank of 10 basis function, 200 samples long.
->>> basis = nmo.basis.BSplineBasis(n_basis_funcs, mode="conv", window_size=200)
+n_basis_funcs = 10
+# define a filter bank of 10 basis function, 200 samples long.
+basis = nmo.basis.BSplineConv(n_basis_funcs, window_size=200)
 
 ```
 
@@ -211,66 +219,67 @@ Once the basis is initialized, you can call `compute_features` on an input of sh
 `(n_samples, n_signals)` to perform the convolution. The output will be a 2-dimensional array of shape 
 `(n_samples, n_basis_funcs)` or `(n_samples, n_basis_funcs * n_signals)` respectively.
 
-!!! warning "Signal length and window size"
-    The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+:::{admonition} Signal length and window size
+:class: warning
 
-```python
+The `window_size` must be shorter than the number of samples in the signal(s) being convolved.
+:::
 
->>> import numpy as np
+```{code-cell} ipython3
 
->>> x = np.ones(500)
+import numpy as np
 
->>> # convolve a single signal
->>> X = basis.compute_features(x)
->>> X.shape
-(500, 10)
+x = np.ones(500)
 
->>> x_multi = np.ones((500, 3))
+# convolve a single signal
+X = basis.compute_features(x)
+X.shape
 
->>> # convolve a multiple signals
->>> X_multi = basis.compute_features(x_multi)
->>> X_multi.shape
-(500, 30)
+x_multi = np.ones((500, 3))
+
+# convolve a multiple signals
+X_multi = basis.set_input_shape(3).compute_features(x_multi)
+X_multi.shape
 
 ```
 
-For additional information on one-dimensional convolutions, see [here](../generated/background/plot_03_1D_convolution).
+For additional information on one-dimensional convolutions, see [here](convolution_background).
 
 ## **Continuous Observations**
 
 
-By default, NeMoS' GLM uses [Poisson observations](../reference/nemos/observation_models/#nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](../reference/nemos/observation_models/#nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
+By default, NeMoS' GLM uses [Poisson observations](nemos.observation_models.PoissonObservations), which are a natural choice for spike counts. However, the package also supports a [Gamma](nemos.observation_models.GammaObservations) GLM, which is more appropriate for modeling continuous, non-negative observations such as calcium transients.
 
 To change the default observation model, set the `observation_model` argument during initialization:
 
 
-```python
+```{code-cell} ipython3
 
->>> import nemos as nmo
+import nemos as nmo
 
->>> # set up a Gamma GLM for modeling continuous non-negative data
->>> glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+# set up a Gamma GLM for modeling continuous non-negative data
+glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 
 ```
 
 
-Take a look at our [tutorial](../generated/tutorials/plot_06_calcium_imaging) for a detailed example.
+Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
 
 ## **Regularization**
 
 
-NeMoS supports various regularization schemes, including [Ridge](../reference/nemos/regularizer/#nemos.regularizer.Ridge) ($L_2$), [Lasso](../reference/nemos/regularizer/#nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](../reference/nemos/regularizer/#nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
+NeMoS supports various regularization schemes, including [Ridge](nemos.regularizer.Ridge) ($L_2$), [Lasso](nemos.regularizer.Lasso) ($L_1$), and [Group Lasso](nemos.regularizer.GroupLasso), to prevent overfitting and improve model generalization.
 
 You can specify the regularization scheme and its strength when initializing the GLM model:
 
 
-```python
+```{code-cell} ipython3
 
->>> import nemos as nmo
+import nemos as nmo
 
->>> # Instantiate a GLM with Ridge (L2) regularization
->>> glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
+# Instantiate a GLM with Ridge (L2) regularization
+glm = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 
 ```
 
@@ -279,11 +288,11 @@ You can specify the regularization scheme and its strength when initializing the
 ## **Pre-processing with `pynapple`**
 
 
-!!! warning
+:::{note}
 
-    This section assumes some familiarity with the `pynapple` package for time series manipulation and data
-    exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
-
+This section assumes some familiarity with the `pynapple` package for time series manipulation and data
+exploration. If you'd like to learn more about it, take a look at the [`pynapple` documentation](https://pynapple-org.github.io/pynapple/).
+:::
 
 `pynapple` is an extremely helpful tool when working with time series data. You can easily perform operations such
 as restricting your time series to specific epochs (sleep/wake, context A vs. context B, etc.), as well as common
@@ -296,58 +305,60 @@ also be a `pynapple` time series.
 A canonical example of this behavior is the `predict` method of `GLM`.
 
 
-```python
+```{code-cell} ipython3
 
->>> import numpy as np
->>> import pynapple as nap
+import numpy as np
+import pynapple as nap
 
->>> # create a TsdFrame with the features and a Tsd with the counts
->>> X = nap.TsdFrame(t=np.arange(100), d=np.random.normal(size=(100, 2)))
->>> y = nap.Tsd(t=np.arange(100), d=np.random.poisson(size=(100, )))
+# suppress jax to numpy conversion warning
+nap.nap_config.suppress_conversion_warnings = True
 
->>> print(type(X))  # shape (num samples, num features)
-<class 'pynapple.core.time_series.TsdFrame'>
+# create a TsdFrame with the features and a Tsd with the counts
+X = nap.TsdFrame(t=np.arange(100), d=np.random.normal(size=(100, 2)))
+y = nap.Tsd(t=np.arange(100), d=np.random.poisson(size=(100, )))
 
->>> model = model.fit(X, y)  # the following works
+print(type(X))  # shape (num samples, num features)
 
->>> firing_rate = model.predict(X)  # predict the firing rate of the neuron
+model = model.fit(X, y)  # the following works
 
->>>  # this will still be a pynapple time series
->>> print(type(firing_rate))  # shape (num_samples, )
-<class 'pynapple.core.time_series.Tsd'>
+firing_rate = model.predict(X)  # predict the firing rate of the neuron
+
+# this will still be a pynapple time series
+print(type(firing_rate))  # shape (num_samples, )
 
 ```
 
 Let's see how you can greatly streamline your analysis pipeline by integrating `pynapple` and NeMoS.
 
 
-!!! note
-    You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+:::{note}
 
+You can download this dataset by clicking [here](https://www.dropbox.com/s/su4oaje57g3kit9/A2929-200711.zip?dl=1).
+:::
 
-```python
+```{code-cell} ipython3
 
->>> import nemos as nmo
->>> import pynapple as nap
+import nemos as nmo
+import pynapple as nap
 
->>> path = nmo.fetch.fetch_data("A2929-200711.nwb")
->>> data = nap.load_file(path)
+path = nmo.fetch.fetch_data("A2929-200711.nwb")
+data = nap.load_file(path)
 
->>> # load spikes and head direction
->>> spikes = data["units"]
->>> head_dir = data["ry"]
+# load spikes and head direction
+spikes = data["units"]
+head_dir = data["ry"]
 
->>> # restrict and bin
->>> counts = spikes[6].count(0.01, ep=head_dir.time_support)
+# restrict and bin
+counts = spikes[6].count(0.01, ep=head_dir.time_support)
 
->>> # down-sample head direction
->>> upsampled_head_dir = head_dir.bin_average(0.01)  
+# down-sample head direction
+upsampled_head_dir = head_dir.bin_average(0.01)  
 
->>> # create your features
->>> X = nmo.basis.CyclicBSplineBasis(10).compute_features(upsampled_head_dir)
+# create your features
+X = nmo.basis.CyclicBSplineEval(10).compute_features(upsampled_head_dir)
 
->>> # add a neuron axis and fit model
->>> model = nmo.glm.GLM().fit(X, counts) 
+# add a neuron axis and fit model
+model = nmo.glm.GLM().fit(X, counts) 
 
 ```
 
@@ -355,34 +366,30 @@ Let's see how you can greatly streamline your analysis pipeline by integrating `
 Finally, let's compare the tuning curves
 
 
-```python
+```{code-cell} ipython3
 
->>> import numpy as np
->>> import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.pyplot as plt
 
->>> # tuning curves
->>> raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
+# tuning curves
+raw_tuning = nap.compute_1d_tuning_curves(spikes, head_dir, nb_bins=100)[6]
 
->>> # model based tuning curve
->>> model_tuning = nap.compute_1d_tuning_curves_continuous(
-...     model.predict(X)[:, np.newaxis] * X.rate,  # scale by the sampling rate
-...     head_dir,
-...     nb_bins=100
-...  )[0]
+# model based tuning curve
+model_tuning = nap.compute_1d_tuning_curves_continuous(
+    model.predict(X)[:, np.newaxis] * X.rate,  # scale by the sampling rate
+    head_dir,
+    nb_bins=100
+ )[0]
 
 
->>> # plot results
->>> sub = plt.subplot(111, projection="polar")
->>> plt1 = plt.plot(raw_tuning.index, raw_tuning.values, label="raw")
->>> plt2 = plt.plot(model_tuning.index, model_tuning.values, label="glm")
->>> legend = plt.yticks([])
->>> xlab = plt.xlabel("heading angle")
+# plot results
+sub = plt.subplot(111, projection="polar")
+plt1 = plt.plot(raw_tuning.index, raw_tuning.values, label="raw")
+plt2 = plt.plot(model_tuning.index, model_tuning.values, label="glm")
+legend = plt.yticks([])
+xlab = plt.xlabel("heading angle")
 
 ```
-
-
-<img src="../head_dir_tuning.jpg" width="40%">
-
 
 ## **Compatibility with `scikit-learn`**
 
@@ -394,49 +401,50 @@ For example, if we would like to tune the critical hyper-parameter `regularizer_
 
 [^1]: For a detailed explanation and practical examples, refer to the [cross-validation page](https://scikit-learn.org/stable/modules/cross_validation.html) in the `scikit-learn` documentation.
 
-```python
+```{code-cell} ipython3
 
->>> # set up the model
->>> import nemos as nmo
->>> import numpy as np
+# set up the model
+import nemos as nmo
+import numpy as np
 
->>> # generate data
->>> X, counts = np.random.normal(size=(100, 3)), np.random.poisson(size=100)
+# generate data
+X, counts = np.random.normal(size=(100, 3)), np.random.poisson(size=100)
 
->>> # model definition
->>> model = nmo.glm.GLM(regularizer="Ridge")
+# model definition
+model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
 
 ```
 
 Fit a 5-fold cross-validation scheme for comparing two different regularizer strengths:
 
-```python
+```{code-cell} ipython3
 
->>> from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV
 
->>> # define the parameter grid
->>> param_grid = dict(regularizer_strength=(0.01, 0.001))
+# define the parameter grid
+param_grid = dict(regularizer_strength=(0.01, 0.001))
 
->>> # define the 5-fold cross-validation grid search from sklearn
->>> cls = GridSearchCV(model, param_grid=param_grid, cv=5)
+# define the 5-fold cross-validation grid search from sklearn
+cls = GridSearchCV(model, param_grid=param_grid, cv=5)
 
->>> # run the 5-fold cross-validation grid search
->>> cls = cls.fit(X, counts)
+# run the 5-fold cross-validation grid search
+cls = cls.fit(X, counts)
 
 ```
 
 
-!!! info "Cross-Validation in NeMoS"
+:::{admonition} Cross-Validation in NeMoS
+:class: info
 
-    For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](../generated/how_to_guide/plot_06_sklearn_pipeline_cv_demo).
+For more information and a practical example on how to construct a parameter grid and cross-validate hyperparameters across an entire pipeline, please refer to the [tutorial on pipelining and cross-validation](sklearn-how-to).
+:::
 
 Finally, we can print the regularizer strength with the best cross-validated performance:
 
-```python
+```{code-cell} ipython3
 
->>> # print best regularizer strength
->>> print(cls.best_params_)
-{'regularizer_strength': 0.01}
+# print best regularizer strength
+print(cls.best_params_)
 
 ```
 

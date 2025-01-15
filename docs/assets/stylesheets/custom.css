@@ -1,0 +1,122 @@
+.bd-main .bd-content .bd-article-container{
+  max-width:100%;
+  flex-grow: 1;
+}
+
+html[data-theme=light]{
+  --pst-color-primary: rgb(52, 54, 99);
+  --pst-color-secondary: rgb(107, 161, 174);
+  --pst-color-link: rgb(74, 105, 145);
+  --pst-color-inline-code: rgb(96, 141, 130);
+}
+
+:root {
+  --pst-font-size-h1: 38px;
+  --pst-font-size-h2: 32px;
+  --pst-font-size-h3: 27px;
+  --pst-font-size-h4: 22px;
+  --pst-font-size-h5: 18px;
+  --pst-font-size-h6: 15px;
+}
+
+.iconify {
+    display: inline-block;
+    width: 2em;
+    height: 2em;
+    vertical-align: middle;
+}
+
+.cards {
+    display: grid;
+    gap: 2rem; /* Adjust as needed */
+}
+
+@media (min-width: 1024px) {
+    .cards {
+        grid-template-columns: repeat(3, 1fr); /* 3 columns on large screens */
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .cards {
+        grid-template-columns: repeat(2, 1fr); /* 2 columns on medium screens */
+    }
+}
+
+@media (max-width: 767px) {
+    .cards {
+        grid-template-columns: 1fr; /* 1 column on small screens */
+    }
+}
+
+.sd-card-title {
+    height: 2.5rem; /* Adjust to a height that fits your content */
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem; /* Spacing between title and separator */
+}
+
+.sd-card-body hr {
+    width: 100%;
+    border: 0;
+    border-top: 2px solid #ddd; /* Light gray for a subtle line */
+    margin: 5%; /* Remove any default margin around the <hr> */
+}
+
+.sd-card-body {
+    padding-top: .5rem; /* Adjust padding for consistent layout */
+}
+
+.card-footer-content {
+    margin-top: auto; /* Pushes the footer content to the bottom */
+}
+
+
+.sphinxsidebar .globaltoc {
+    display: none;
+}
+
+
+/* Add vertical spacing between cards */
+.sd-col {
+    margin-bottom: 20px; /* Adjust this value as needed for desired spacing */
+}
+
+/* Style level-1 ToC entries */
+.toctree-l1 {
+    font-weight: bold;
+}
+
+/* Keep level-2 and deeper ToC entries unbolded */
+.toctree-l2,
+.toctree-l3,
+.toctree-l4 {
+    font-weight: normal;
+}
+
+table.table-center{
+    text-align: center;
+}
+
+ #table-basis {
+    table-layout: auto;
+    width: 100%;
+}
+
+#table-basis th:nth-child(1), #table-basis td:nth-child(1) {
+    width: 22%;
+}
+
+#table-basis th:nth-child(2), #table-basis td:nth-child(2) {
+    width: 22%;
+}
+#table-basis th:nth-child(3), #table-basis td:nth-child(3) {
+    width: 10%;
+}
+
+#table-basis th:nth-child(4), #table-basis td:nth-child(4) {
+    width: 20%;
+}
+#table-basis th:nth-child(5), #table-basis td:nth-child(5) {
+    width: 10%;
+}

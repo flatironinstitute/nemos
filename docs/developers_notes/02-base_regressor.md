@@ -1,21 +1,24 @@
 # The Abstract Class `BaseRegressor`
 
-`BaseRegressor` is an abstract class that inherits from `Base`, stipulating the implementation of number of abstract methods such as `fit`, `predict`, `score`. This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
+`BaseRegressor` is an abstract class that inherits from `Base`, stipulating the implementation of number of abstract methods such as [`fit`](nemos.glm.GLM.fit), [`predict`](nemos.glm.GLM.predict), [`score`](nemos.glm.GLM.score). This ensures seamless assimilation with `scikit-learn` pipelines and cross-validation procedures.
 
 
-!!! Example
-    The current package version includes a concrete class named `nemos.glm.GLM`. This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the "GLM regression" category. 
-    As a `BaseRegressor`, it **must** implement the `fit`, `score`, `predict` and the other abstract methods of this class, see below.
+:::{admonition} Example
+:class: note
+
+The current package version includes a concrete class named [`nemos.glm.GLM`](nemos.glm.GLM). This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the "GLM regression" category. 
+As a `BaseRegressor`, it **must** implement the [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`predict`](nemos.glm.GLM.predict) and the other abstract methods of this class, see below.
+:::
 
 ### Abstract Methods
 
 For subclasses derived from `BaseRegressor` to function correctly, they must implement the following:
 
-1. `fit`: Adapt the model using input data `X` and corresponding observations `y`.
-2. `predict`: Provide predictions based on the trained model and input data `X`.
-3. `score`: Score the accuracy of model predictions using input data `X` against the actual observations `y`.
-4. `simulate`: Simulate data based on the trained regression model.
-5. `update`: Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
+1. [`fit`](nemos.glm.GLM.fit): Adapt the model using input data `X` and corresponding observations `y`.
+2. [`predict`](nemos.glm.GLM.predict): Provide predictions based on the trained model and input data `X`.
+3. [`score`](nemos.glm.GLM.score): Score the accuracy of model predictions using input data `X` against the actual observations `y`.
+4. [`simulate`](nemos.glm.GLM.simulate): Simulate data based on the trained regression model.
+5. [`update`](nemos.glm.GLM.update): Run a single optimization step, and stores the updated parameter and solver state. Used by stochastic optimization schemes.
 6. `_predict_and_compute_loss`: Compute prediction and evaluates the loss function prvided the parameters and `X` and `y`. This is used by the `instantiate_solver` method which sets up the solver.
 7. `_check_params`: Check the parameter structure.
 8. `_check_input_dimensionality`: Check the input dimensionality matches model expectation.
@@ -29,7 +32,7 @@ input and parameters conform with the model requirements.
 
 Public attributes are stored as properties:
 
-- `regularizer`: An instance of the `nemos.regularizer.Regularizer` class. The setter for this property accepts either the instance directly or a string that is used to instantiate the appropriate regularizer.
+- `regularizer`: An instance of the [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) class. The setter for this property accepts either the instance directly or a string that is used to instantiate the appropriate regularizer.
 - `regularizer_strength`: A float quantifying the amount of regularization.
 - `solver_name`: One of the `jaxopt` solver supported solvers, currently "GradientDescent", "BFGS", "LBFGS", "ProximalGradient" and, "NonlinearCG".
 - `solver_kwargs`: Extra keyword arguments to be passed at solver initialization.
@@ -37,11 +40,14 @@ Public attributes are stored as properties:
 
 When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in `fit`, and `self.solver_update` in `update`. 
+Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update). 
 
-!!! note "Solvers"
-    Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and `update` method with the appropriate input/output types).
-    We rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we may provide a number of custom solvers optimized for convex stochastic optimization.
+:::{admonition} Solvers
+:class: note 
+
+Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and [`update`](nemos.glm.GLM.update) method with the appropriate input/output types).
+We rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we may provide a number of custom solvers optimized for convex stochastic optimization.
+:::
 
 ## Contributor Guidelines
 

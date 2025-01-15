@@ -27,7 +27,7 @@ def is_numpy_array_like(obj) -> bool:
     """
     Check if an object is array-like of at least 1-dimension.
 
-    This function determines if an object has array-like properties but isn't an _AstractTsd.
+    This function determines if an object has array-like properties but isn't an _BaseTsd.
     An object is considered array-like if it has attributes typically associated with arrays
     (such as `.shape`, `.dtype`, and `.ndim`), supports indexing, and is iterable.
 
@@ -51,6 +51,14 @@ def is_numpy_array_like(obj) -> bool:
     numerical operations.
 
     """
+    # if pandas check obj.value
+    obj = (
+        obj.values
+        if all(hasattr(obj, name) for name in ("values", "index"))
+        and not is_pynapple_tsd(obj)
+        else obj
+    )
+
     # Check for array-like attributes
     has_shape = hasattr(obj, "shape")
     has_dtype = hasattr(obj, "dtype")
@@ -118,8 +126,8 @@ def _has_same_time_axis(*args, **kwargs) -> bool:
         return True
 
     # get first pynapple
-    is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
-    time = [x.t for i, x in enumerate(flat_tree) if is_nap[i]]
+    is_nap = (is_pynapple_tsd(x) for x in flat_tree)
+    time = [x.t for x, bl in zip(flat_tree, is_nap) if bl]
 
     # check time samples are close (using pynapple precision)
     return _check_all_close(time)
@@ -150,8 +158,8 @@ def _has_same_support(*args, **kwargs):
         return True
 
     # get first pynapple
-    is_nap = list(is_pynapple_tsd(x) for x in flat_tree)
-    time_support = [x.time_support.values for i, x in enumerate(flat_tree) if is_nap[i]]
+    is_nap = (is_pynapple_tsd(x) for x in flat_tree)
+    time_support = [x.time_support.values for x, bl in zip(flat_tree, is_nap) if bl]
 
     # check starts and ends are close (using pynapple precision)
     return _check_all_close(time_support)
@@ -267,7 +275,9 @@ def cast_to_pynapple(
     """
     # keep time on CPU, pynapple numba operations on time are more efficient
     time = np.asarray(time)
-    if array.ndim == 1:
+    if time.shape[0] != array.shape[0]:
+        return array
+    elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
         return nap.TsdFrame(t=time, d=array, time_support=time_support)

@@ -1,13 +1,16 @@
 """Utility functions for data pre-processing."""
 
+import inspect
+import os
 import warnings
-from typing import Any, Callable, List, Literal, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
+from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
@@ -53,10 +56,11 @@ def validate_axis(tree: Any, axis: int):
     Raises
     ------
     ValueError
-        - If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
+        If the specified axis is equal to or greater than the number of dimensions (`ndim`) of any array
         within the tree. This ensures that operations intended for a specific axis can be safely performed
         on every array in the tree.
-        - If the axis is negative or non-integer.
+    ValueError
+        If the axis is negative or non-integer.
     """
     if not isinstance(axis, int) or axis < 0:
         raise ValueError("`axis` must be a non negative integer.")
@@ -458,6 +462,132 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
         )
 
 
+def format_repr(
+    obj: Base,
+    exclude_keys: Optional[List[str]] = None,
+    use_name_keys: Optional[List[str]] = None,
+    multiline=False,
+):
+    """
+    Format the representation string of an object (`__repr__`).
+
+    This function generates a string representation of an object, including
+    the parameters returned by `obj.get_params(deep=False)`. The output excludes
+    specified keys and formats certain keys using their class names instead of
+    their default string representations.
+
+    Parameters
+    ----------
+    obj :
+        The object inheriting from  Base whose representation string is being formatted.
+    exclude_keys :
+        List of parameter keys to exclude from the representation. If `None`, no
+        keys are excluded. Defaults to `None`.
+    use_name_keys :
+        List of keys for which the value's `__name__` attribute is used instead
+        of the default `__repr__` output. Defaults to an empty list.
+    multiline:
+        If True, add each parameter on a new line, if False (default), list all parameters
+        in a single line.
+
+    Returns
+    -------
+    :
+        A formatted representation string for the object, including its class
+        name and relevant parameters.
+
+    Notes
+    -----
+    - The function includes only non-empty or falsey values (except 0 and False) in the
+      representation. The falsey values include empty list or dict, or similar.
+    - Parameters are displayed in the order defined in the `obj.__init__`
+      method.
+    - Parameters with a `shape` attribute (arrays) are excluded from the representation.
+
+    Examples
+    --------
+    >>> import jax
+    >>> from nemos.base_class import Base
+    >>> from nemos.regularizer import Ridge
+    >>> from nemos.utils import format_repr
+    >>> class Example(Base):
+    ...     def __init__(self, a, b, c, d):
+    ...         self.a = a
+    ...         self.b = b
+    ...         self.c = c
+    ...         self.d = d
+    >>> obj = Example(1, jax.numpy.exp, c="hi", d=None)
+    >>> format_repr(obj, exclude_keys=["c"], use_name_keys=["b"])
+    'Example(a=1, b=exp)'
+    """
+    exclude_keys = [] if exclude_keys is None else exclude_keys
+    use_name_keys = [] if use_name_keys is None else use_name_keys
+
+    init_params = list(inspect.signature(obj.__init__).parameters.keys())
+    disp_params = []
+
+    all_params = obj.get_params(deep=False)
+    label = all_params.pop("label", None)
+    for k, v in all_params.items():
+        repr_param = (
+            k not in exclude_keys and not hasattr(v, "shape") and (v or v in (0, False))
+        )
+        if repr_param:
+            if k in use_name_keys:
+                v = v.__name__
+            elif isinstance(v, str):
+                v = repr(v)
+            disp_params.append(f"{k}={v}")
+    disp_params = sorted(disp_params, key=lambda x: init_params.index(x.split("=")[0]))
+    cls_name = obj.__class__.__name__
+    # if label doesn't exist or is the same as the class name (as is the default for
+    # basis), then don't use it
+    disp_label = (label is not None) and (label != cls_name)
+    if multiline:
+        if disp_label:
+            # cannot use tab directly since IDE converts to spaces, and doctests fail
+            tab = "        "
+        else:
+            tab = "    "
+        disp_params = "\n" + tab + f",\n{tab}".join(disp_params) + "\n" + tab[:-4]
+        repr_str = (
+            f"{repr(label)}:\n    {cls_name}({disp_params})"
+            if disp_label
+            else f"{cls_name}({disp_params})"
+        )
+    else:
+        disp_params = ", ".join(disp_params)
+        repr_str = (
+            f"{repr(label)}: {cls_name}({disp_params})"
+            if disp_label
+            else f"{cls_name}({disp_params})"
+        )
+    return repr_str
+
+
 # enable concatenation for pynapple objects.
 pynapple_concatenate_jax = support_pynapple(conv_type="jax")(jnp.concatenate)
 pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
+
+
+def _get_terminal_size():
+    """Helper to get terminal size for __repr__
+
+    Returns
+    -------
+    rows:
+        Number of rows in the terminal window.
+    cols:
+        Number of columns in the terminal window.
+
+    """
+    cols = 100  # Default
+    rows = 2
+    try:
+        cols, rows = os.get_terminal_size()
+    except Exception:
+        import shutil
+
+        cols, rows = shutil.get_terminal_size()
+
+    return cols, rows

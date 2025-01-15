@@ -1,5 +1,7 @@
 """Utility functions for coupling filter definition."""
 
+from __future__ import annotations
+
 from typing import Callable, Tuple, Union
 
 import jax
@@ -20,7 +22,8 @@ def difference_of_gammas(
     inhib_b: float = 1.0,
     excit_b: float = 2.0,
 ) -> NDArray:
-    r"""Generate coupling filter as a Gamma pdf difference.
+    r"""
+    Generate coupling filter as a Gamma pdf difference.
 
     Parameters
     ----------
@@ -30,22 +33,24 @@ def difference_of_gammas(
         Upper bound of the gamma range as a percentile. The gamma function
         will be evaluated over the range [0, ppf(upper_percentile)].
     inhib_a:
-        The `a` constant for the gamma pdf of the inhibitory part of the filter.
+        The ``a`` constant for the gamma pdf of the inhibitory part of the filter.
     excit_a:
-        The `a` constant for the gamma pdf of the excitatory part of the filter.
+        The ``a`` constant for the gamma pdf of the excitatory part of the filter.
     inhib_b:
-        The `b` constant for the gamma pdf of the inhibitory part of the filter.
+        The ``b`` constant for the gamma pdf of the inhibitory part of the filter.
     excit_b:
-        The `a` constant for the gamma pdf of the excitatory part of the filter.
+        The ``a`` constant for the gamma pdf of the excitatory part of the filter.
 
     Notes
     -----
     The probability density function of a gamma distribution is parametrized as
-    follows[$^{[1]}$](#references):,
-    $$
+    follows [1]_ :,
+
+    .. math::
+
         p(x;\; a, b) = \frac{b^a x^{a-1} e^{-x}}{\Gamma(a)},
-    $$
-    where $\Gamma(a)$ refers to the gamma function, see [[1]](#references):.
+
+    where :math:`\Gamma(a)` refers to the gamma function, see [1]_.
 
     Returns
     -------
@@ -55,12 +60,33 @@ def difference_of_gammas(
     Raises
     ------
     ValueError:
-        - If any of the Gamma parameters is lesser or equal to 0.
-        - If the upper_percentile is not in [0, 1).
+        If any of the Gamma parameters is lesser or equal to 0.
+    ValueError:
+        If the upper_percentile is not in [0, 1).
 
-    # References
-    ------------
-    SciPy Docs - ["scipy.stats.gamma"](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html)
+    References
+    ----------
+    .. [1] SciPy Docs -
+       :meth:`scipy.stats.gamma <https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gamma.html>`
+
+    Examples
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> from nemos.simulation import difference_of_gammas
+    >>> coupling_duration = 100
+    >>> inhib_a, inhib_b = 1.0, 1.0
+    >>> excit_a, excit_b = 2.0, 2.0
+    >>> coupling_filter = difference_of_gammas(
+    ...     ws=coupling_duration,
+    ...     inhib_a=inhib_a,
+    ...     inhib_b=inhib_b,
+    ...     excit_a=excit_a,
+    ...     excit_b=excit_b
+    ... )
+    >>> _ = plt.plot(coupling_filter)
+    >>> _ = plt.title("Coupling filter from difference of gammas")
+    >>> _ = plt.show()
+
     """
     # check that the gamma parameters are positive (scipy returns
     # nans otherwise but no exception is raised)
@@ -102,21 +128,43 @@ def regress_filter(coupling_filters: NDArray, eval_basis: NDArray) -> NDArray:
     Parameters
     ----------
     coupling_filters:
-        The coupling filters. Shape (window_size, n_neurons_receiver, n_neurons_sender)
+        The coupling filters. Shape ``(window_size, n_neurons_receiver, n_neurons_sender)``
     eval_basis:
-        The evaluated basis function, shape (window_size, n_basis_funcs)
+        The evaluated basis function, shape ``(window_size, n_basis_funcs)``
 
     Returns
     -------
     weights:
-        The weights for each neuron. Shape (n_neurons_receiver, n_neurons_sender, n_basis_funcs)
+        The weights for each neuron. Shape ``(n_basis_funcs, n_neurons_receiver, n_neurons_sender)``
 
     Raises
     ------
     ValueError
-        - If eval_basis is not two-dimensional
-        - If coupling_filters is not three-dimensional
-        - If window_size differs between eval_basis and coupling_filters
+        If eval_basis is not two-dimensional.
+    ValueError
+        If coupling_filters is not three-dimensional.
+    ValueError
+        If window_size differs between eval_basis and coupling_filters.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> from nemos.simulation import regress_filter, difference_of_gammas
+    >>> from nemos.basis import RaisedCosineLogEval
+    >>> filter_duration = 100
+    >>> n_basis_funcs = 20
+    >>> filter_bank = difference_of_gammas(filter_duration).reshape(filter_duration, 1, 1)
+    >>> _, basis = RaisedCosineLogEval(10).evaluate_on_grid(filter_duration)
+    >>> weights = regress_filter(filter_bank, basis)[0, 0]
+    >>> print("Weights shape:", weights.shape)
+    Weights shape: (10,)
+    >>> _ = plt.plot(filter_bank[:, 0, 0], label=f"True filter")
+    >>> _ = plt.plot(basis.dot(weights), "--", label=f"Approx. filter")
+    >>> _ = plt.legend()
+    >>> _ = plt.title("True vs. Approximated Filters")
+    >>> _ = plt.show()
+
     """
     # check shapes
     if eval_basis.ndim != 2:
@@ -182,36 +230,69 @@ def simulate_recurrent(
         Expected shape: (n_neurons (receiver), n_neurons (sender), n_basis_coupling).
     feedforward_coef :
         Coefficients for the feedforward inputs to each neuron.
-        Expected shape: (n_neurons, n_basis_input).
+        Expected shape: ``(n_neurons, n_basis_input)``.
     intercepts :
-        Bias term for each neuron. Expected shape: (n_neurons,).
+        Bias term for each neuron. Expected shape: ``(n_neurons,)``.
     random_key :
         jax.random.key for seeding the simulation.
     feedforward_input :
         External input matrix to the model, representing factors like convolved currents,
         light intensities, etc. When not provided, the simulation is done with coupling-only.
-        Expected shape: (n_time_bins, n_neurons, n_basis_input).
+        Expected shape: ``(n_time_bins, n_neurons, n_basis_input)``.
     init_y :
         Initial observation (spike counts for PoissonGLM) matrix that kickstarts the simulation.
-        Expected shape: (window_size, n_neurons).
+        Expected shape: ``(window_size, n_neurons)``.
     coupling_basis_matrix :
         Basis matrix for coupling, representing between-neuron couplings
-        and auto-correlations. Expected shape: (window_size, n_basis_coupling).
-
+        and auto-correlations. Expected shape: ``(window_size, n_basis_coupling)``.
+    inverse_link_function :
+        The inverse link function for the observation model.
 
     Returns
     -------
     simulated_activity :
         Simulated activity (spike counts for PoissonGLMs) for each neuron over time.
-        Shape, (n_time_bins, n_neurons).
+        Shape, ``(n_time_bins, n_neurons)``.
     firing_rates :
-        Simulated rates for each neuron over time. Shape, (n_time_bins, n_neurons,).
+        Simulated rates for each neuron over time. Shape, ``(n_time_bins, n_neurons,)``.
 
     Raises
     ------
     ValueError
-        - If there's an inconsistency between the number of neurons in model parameters.
-        - If the number of neurons in input arguments doesn't match with model parameters.
+        If there's an inconsistency between the number of neurons in model parameters.
+    ValueError
+        If the number of neurons in input arguments doesn't match with model parameters.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import jax
+    >>> import matplotlib.pyplot as plt
+    >>> from nemos.simulation import simulate_recurrent
+    >>>
+    >>> n_neurons = 2
+    >>> coupling_duration = 100
+    >>> feedforward_input = np.random.normal(size=(1000, n_neurons, 1))
+    >>> coupling_basis = np.random.normal(size=(coupling_duration, 10))
+    >>> coupling_coef = np.random.normal(size=(n_neurons, n_neurons, 10))
+    >>> intercept = -9 * np.ones(n_neurons)
+    >>> init_spikes = np.zeros((coupling_duration, n_neurons))
+    >>> random_key = jax.random.key(123)
+    >>> spikes, rates = simulate_recurrent(
+    ...     coupling_coef=coupling_coef,
+    ...     feedforward_coef=np.ones((n_neurons, 1)),
+    ...     intercepts=intercept,
+    ...     random_key=random_key,
+    ...     feedforward_input=feedforward_input,
+    ...     coupling_basis_matrix=coupling_basis,
+    ...     init_y=init_spikes
+    ... )
+    >>> _ = plt.figure()
+    >>> _ = plt.plot(rates[:, 0], label="Neuron 0 rate")
+    >>> _ = plt.plot(rates[:, 1], label="Neuron 1 rate")
+    >>> _ = plt.legend()
+    >>> _ = plt.title("Simulated firing rates")
+    >>> _ = plt.show()
     """
     if isinstance(feedforward_input, FeaturePytree):
         raise ValueError(
@@ -303,7 +384,7 @@ def simulate_recurrent(
         # 1. The first dimension is time, and 1 is by construction since we are simulating 1
         #    sample
         # 2. Flatten to shape (n_neuron * n_basis_coupling, )
-        conv_act = convolve.reshape_convolve(activity, coupling_basis_matrix).reshape(
+        conv_act = convolve.tensor_convolve(activity, coupling_basis_matrix).reshape(
             -1,
         )
 

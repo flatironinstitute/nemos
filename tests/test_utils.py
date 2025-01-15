@@ -8,7 +8,9 @@ import pynapple as nap
 import pytest
 from scipy.interpolate import splev
 
+import nemos as nmo
 from nemos import utils
+from nemos.base_class import Base
 
 
 @pytest.mark.parametrize(
@@ -109,8 +111,11 @@ class TestPadding:
                 utils.nan_pad(iterable, 3, predictor_causality)
         else:
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning,
-                                        message="With acausal filter, pad_size should probably be even")
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="With acausal filter, pad_size should probably be even",
+                )
                 utils.nan_pad(iterable, 3, predictor_causality)
 
     @pytest.mark.parametrize("iterable", [[np.zeros([2, 4, 5]), np.zeros([2, 4, 6])]])
@@ -175,8 +180,11 @@ class TestPadding:
         else:
             init_nan, end_nan = pad_size // 2, pad_size - pad_size // 2
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=UserWarning,
-                                        message="With acausal filter, pad_size should probably be even")
+                warnings.filterwarnings(
+                    "ignore",
+                    category=UserWarning,
+                    message="With acausal filter, pad_size should probably be even",
+                )
                 padded = utils.nan_pad(iterable, pad_size, "acausal")
             for trial in padded:
                 print(trial.shape, pad_size)
@@ -260,8 +268,11 @@ class TestPadding:
     )
     def test_axis_compatibility(self, pad_size, array, causality, axis, expectation):
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning,
-                                    message="With acausal filter, pad_size should probably be even")
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message="With acausal filter, pad_size should probably be even",
+            )
             with expectation:
                 utils.nan_pad(array, pad_size, causality, axis=axis)
 
@@ -284,8 +295,11 @@ class TestPadding:
     @pytest.mark.parametrize("array", [jnp.zeros((10,)), np.zeros((10, 11))])
     def test_pad_size_type(self, pad_size, array, causality, expectation):
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=UserWarning,
-                                    message="With acausal filter, pad_size should probably be even")
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message="With acausal filter, pad_size should probably be even",
+            )
             with expectation:
                 utils.nan_pad(array, pad_size, causality, axis=0)
 
@@ -535,3 +549,81 @@ def test_assert_scalar_func():
         utils.assert_scalar_func(
             correct_function, [jnp.array([1.0])], "correct_function"
         )
+
+
+# Mock classes inheriting Base
+class Example(Base):
+    # break alphabetical order in init params
+    def __init__(self, c, a, b=None, d=1):
+        self.a = a
+        self.b = b
+        self.c = c
+        self.d = d
+
+
+class ComplexParam(Base):
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return f"ComplexParam({self.name})"
+
+
+@pytest.mark.parametrize(
+    "obj, exclude_keys, use_name_keys, expected",
+    [
+        # Test basic functionality
+        (Example(a=1, b="text", c=None), None, [], "Example(a=1, b='text', d=1)"),
+        # Exclude keys
+        (Example(a=1, b="text", c=None), ["b"], [], "Example(a=1, d=1)"),
+        # Use __name__ for specified keys
+        (Example(a=1, b=str, c=None), None, ["b"], "Example(a=1, b=str, d=1)"),
+        # Exclude and use __name__ together
+        (Example(a=1, b=Base, c=None), ["a"], ["b"], "Example(b=Base, d=1)"),
+        # No parameters in get_params
+        (Base(), None, [], "Base()"),
+        # Parameters with shape (e.g., numpy arrays)
+        (Example(a=None, b=np.array([0]), c=None), None, [], "Example(d=1)"),
+        # Complex object values
+        (
+            Example(a=ComplexParam("x"), b="value", c=None),
+            None,
+            [],
+            "Example(a=ComplexParam(x), b='value', d=1)",
+        ),
+        # Falsey values excluded
+        (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False, d=1)"),
+        # Falsey values excluded2
+        (Example(a=0, b=[], c={}), None, [], "Example(a=0, d=1)"),
+    ],
+)
+def test_format_repr(obj, exclude_keys, use_name_keys, expected):
+    assert utils.format_repr(obj, exclude_keys, use_name_keys) == expected
+
+
+def test_repr_multiline():
+    # test with label
+    bas = nmo.basis.MSplineEval(10, label="mylabel")
+    assert (
+        utils.format_repr(bas, multiline=True)
+        == "'mylabel':\n    MSplineEval(\n        n_basis_funcs=10,\n        order=4\n    )"
+    )
+    # test without label
+    bas = nmo.basis.MSplineEval(10)
+    assert (
+        utils.format_repr(bas, multiline=True)
+        == "MSplineEval(\n    n_basis_funcs=10,\n    order=4\n)"
+    )
+
+
+def test_order_preservation():
+    """Ensure parameter order matches the __init__ method."""
+    obj = Example(a=1, b="text", c=1)
+    assert utils.format_repr(obj) == "Example(c=1, a=1, b='text', d=1)"
+
+
+def test_shape_param_exclusion():
+    """Test exclusion of parameters with a shape attribute."""
+
+    obj = Example(a=np.arange(3), b=1, c=None)
+    assert utils.format_repr(obj) == "Example(b=1, d=1)"

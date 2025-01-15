@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import nemos as nmo
-from nemos.solvers import SVRG, ProxSVRG, SVRGState
+from nemos.solvers._svrg import SVRG, ProxSVRG, SVRGState
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
@@ -128,7 +128,11 @@ def test_svrg_glm_instantiate_solver(regularizer_name, solver_class, mask):
     if mask is not None:
         kwargs["mask"] = mask
 
-    glm = nmo.glm.GLM(regularizer=regularizer_name, solver_name=solver_name, regularizer_strength=None if regularizer_name == "UnRegularized" else 1,)
+    glm = nmo.glm.GLM(
+        regularizer=regularizer_name,
+        solver_name=solver_name,
+        regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
+    )
     glm.instantiate_solver()
 
     solver = inspect.getclosurevars(glm._solver_run).nonlocals["solver"]
@@ -178,9 +182,9 @@ def test_svrg_glm_passes_solver_kwargs(regularizer_name, solver_name, mask, glm_
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0.], [0.], [1.]]),
+            np.array([[0.0], [0.0], [1.0]]),
         ),
-        ("GroupLasso", ProxSVRG, np.array([[1.], [0.], [0.]])),
+        ("GroupLasso", ProxSVRG, np.array([[1.0], [0.0], [0.0]])),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
     ],
@@ -233,7 +237,7 @@ def test_svrg_glm_initialize_state(
         (
             "GroupLasso",
             ProxSVRG,
-            np.array([[0.], [0.], [1.]]),
+            np.array([[0.0], [0.0], [1.0]]),
         ),
         ("Ridge", SVRG, None),
         ("UnRegularized", SVRG, None),
@@ -345,7 +349,7 @@ def test_svrg_glm_fit(
         observation_model=nmo.observation_models.PoissonObservations(jax.nn.softplus),
         solver_kwargs=solver_kwargs,
         regularizer_strength=None if regularizer_name == "UnRegularized" else 1,
-        **kwargs
+        **kwargs,
     )
 
     if isinstance(glm, nmo.glm.PopulationGLM):

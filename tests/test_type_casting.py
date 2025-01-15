@@ -370,7 +370,9 @@ def test_equal_time_axis_nap_types(t1, t2, data, cls, expectation):
         (
             [
                 nap.Tsd(t=np.arange(10), d=np.arange(10)),
-                nap.Tsd(t=np.arange(1), d=np.arange(1), time_support=nap.IntervalSet(0, 10)),
+                nap.Tsd(
+                    t=np.arange(1), d=np.arange(1), time_support=nap.IntervalSet(0, 10)
+                ),
                 nap.Tsd(t=np.arange(10), d=np.arange(10)),
             ],
             pytest.raises(
@@ -410,3 +412,20 @@ def test_conv_type(conv_type, expectation):
 
     with expectation:
         func(nap.Tsd(t=np.arange(10), d=np.arange(10)))
+
+
+@pytest.mark.parametrize("conv_type", ["jax", "numpy"])
+def test_time_axis_change_len(conv_type):
+    @nmo.type_casting.support_pynapple(conv_type=conv_type)
+    def change_shape(x):
+        return x[:-1]
+
+    out = change_shape(nap.Tsd(t=np.arange(10), d=np.arange(10)))
+    assert isinstance(out, (np.ndarray, jnp.ndarray))
+
+    @nmo.type_casting.support_pynapple(conv_type=conv_type)
+    def same_shape(x):
+        return x
+
+    out = same_shape(nap.Tsd(t=np.arange(10), d=np.arange(10)))
+    assert isinstance(out, nap.Tsd)

@@ -55,22 +55,33 @@ dev = [
     "pooch",                        # Required by doctest for fetch module
     "dandi",                        # Required by doctest for fetch module
     "seaborn",                      # Required by doctest for _documentation_utils module
+    "myst-nb",                      # Test myst_nb utils for glue
 ]
 docs = [
-    "mkdocs",                       # Documentation generator
-    "mkdocstrings[python]",         # Python-specific plugin for mkdocs
-    "mkdocs-section-index",         # Plugin for generating a section index in mkdocs
-    "mkdocs-gen-files",             # Plugin for generating additional files in mkdocs
-    "mkdocs-literate-nav>=0.6.1",   # Plugin for literate-style navigation in mkdocs
-    "mkdocs-gallery",               # Plugin for adding image galleries to mkdocs
-    "mkdocs-material",              # Material theme for mkdocs
-    "mkdocs-autorefs>=0.5",
-    "mkdocs-linkcheck",             # Check relative links
+    "numpydoc",
+    "sphinx",
+    "pydata-sphinx-theme",
+    "sphinx-autodoc-typehints",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-issues",
+    "sphinxcontrib-apidoc",
+    "sphinx-togglebutton",
+    "sphinx_code_tabs",
+    "sphinxemoji",
+    "myst-parser",
+    "myst-nb",
+    "dandi",
+    "sphinx-autobuild",
+    "sphinx-contributors",
     "scikit-learn",
     "dandi",
     "matplotlib>=3.7",
     "seaborn",
     "pooch",
+    "ipywidgets",
+    "ipykernel",
+    "patsy",
 ]
 examples = [
     "scikit-learn",
@@ -79,6 +90,7 @@ examples = [
     "seaborn",
     "pooch",
     "fsspec",
+    "patsy",
 ]
 
 
@@ -113,7 +125,15 @@ profile = "black"
 # Configure pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]             # Specify the directory where test files are located
-addopts = "-n auto"
+filterwarnings = [
+    # note the use of single quote below to denote "raw" strings in TOML
+    # this is raised whenever one imports the plotting utils
+    'ignore:plotting functions contained within:UserWarning',
+    # numerical inversion test reaches tolerance...
+    'ignore:Tolerance of -?\d\.\d+e-\d\d reached:RuntimeWarning',
+    # mpl must be non-interctive for testing otherwise doctests will freeze
+    'ignore:FigureCanvasAgg is non-interactive, and thus cannot be shown:UserWarning',
+]
 
 [tool.coverage.run]
 omit = [
