@@ -1,8 +1,9 @@
 """Utility functions for data pre-processing."""
 
+import os
 import inspect
 import warnings
-from typing import Any, Callable, List, Literal, Optional, Union
+from typing import Any, Callable, List, Literal, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -462,7 +463,7 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
 
 
 def format_repr(
-    obj: Base, exclude_keys: Optional[List[str]] = None, use_name_keys: List[str] = []
+    obj: Base, exclude_keys: Optional[List[str]] = None, use_name_keys: Optional[List[str]] = None, one_parameter_per_line=False
 ):
     """
     Format the representation string of an object (`__repr__`).
@@ -482,6 +483,9 @@ def format_repr(
     use_name_keys :
         List of keys for which the value's `__name__` attribute is used instead
         of the default `__repr__` output. Defaults to an empty list.
+    one_parameter_per_line:
+        If True, add each parameter on a new line, if False (default), list all parameters
+        in a single line.
 
     Returns
     -------
@@ -512,6 +516,8 @@ def format_repr(
     'Example(a=1, b=Ridge)'
     """
     exclude_keys = [] if exclude_keys is None else exclude_keys
+    use_name_keys = [] if use_name_keys is None else use_name_keys
+
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
     disp_params = []
 
@@ -531,20 +537,21 @@ def format_repr(
     cls_name = obj.__class__.__name__
     # if label doesn't exist or is the same as the class name (as is the default for
     # basis), then don't use it
-    # if (label is not None) and (label != cls_name):
-    #     # else, label should replace the class name as being outside the parentheses and
-    #     # class name should come first within the parens
-    #     disp_params.insert(0, cls_name)
-    #     cls_name = label
-    disp_params = ", ".join(disp_params)
     disp_label = (label is not None) and (label != cls_name)
-    return (
-        f"{repr(label)}: {cls_name}({disp_params})"
-        if disp_label
-        else f"{cls_name}({disp_params})"
-    )
+    if one_parameter_per_line:
+        if disp_label:
+            tab = "\t\t"
+        else:
+            tab = "\t"
+        disp_params = "\n" + tab + f",\n{tab}".join(disp_params) + "\n" + tab[:-1]
+        repr_str = f"{repr(label)}:\n\t{cls_name}({disp_params})" if disp_label else f"{cls_name}({disp_params})"
+    else:
+        disp_params = ", ".join(disp_params)
+        repr_str = f"{repr(label)}: {cls_name}({disp_params})" if disp_label else f"{cls_name}({disp_params})"
+    return repr_str
 
 
 # enable concatenation for pynapple objects.
 pynapple_concatenate_jax = support_pynapple(conv_type="jax")(jnp.concatenate)
 pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
+
