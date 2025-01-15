@@ -2,7 +2,7 @@ import inspect
 import itertools
 import re
 from contextlib import nullcontext as does_not_raise
-from functools import partial
+from functools import partial, reduce
 from typing import Literal
 
 import jax.numpy
@@ -5160,8 +5160,7 @@ def test_composite_basis_repr_wrapping():
     assert "    ...\n" in out
 
     bas = basis.MSplineEval(10)
-    for k in range(99):
-        bas = bas + basis.MSplineEval(10)
+    bas = reduce(sum, [bas]*100)
 
     # large additive basis
     out = repr(bas)
