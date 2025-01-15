@@ -1,9 +1,8 @@
 """Utility functions for data pre-processing."""
 
-import os
 import inspect
 import warnings
-from typing import Any, Callable, List, Literal, Optional, Tuple, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -463,7 +462,10 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
 
 
 def format_repr(
-    obj: Base, exclude_keys: Optional[List[str]] = None, use_name_keys: Optional[List[str]] = None, multiline=False
+    obj: Base,
+    exclude_keys: Optional[List[str]] = None,
+    use_name_keys: Optional[List[str]] = None,
+    multiline=False,
 ):
     """
     Format the representation string of an object (`__repr__`).
@@ -542,18 +544,26 @@ def format_repr(
     disp_label = (label is not None) and (label != cls_name)
     if multiline:
         if disp_label:
-            tab = "\t\t"
+            # cannot use tab directly since IDE converts to spaces, and doctests fail
+            tab = "        "
         else:
-            tab = "\t"
-        disp_params = "\n" + tab + f",\n{tab}".join(disp_params) + "\n" + tab[:-1]
-        repr_str = f"{repr(label)}:\n\t{cls_name}({disp_params})" if disp_label else f"{cls_name}({disp_params})"
+            tab = "    "
+        disp_params = "\n" + tab + f",\n{tab}".join(disp_params) + "\n" + tab[:-4]
+        repr_str = (
+            f"{repr(label)}:\n    {cls_name}({disp_params})"
+            if disp_label
+            else f"{cls_name}({disp_params})"
+        )
     else:
         disp_params = ", ".join(disp_params)
-        repr_str = f"{repr(label)}: {cls_name}({disp_params})" if disp_label else f"{cls_name}({disp_params})"
+        repr_str = (
+            f"{repr(label)}: {cls_name}({disp_params})"
+            if disp_label
+            else f"{cls_name}({disp_params})"
+        )
     return repr_str
 
 
 # enable concatenation for pynapple objects.
 pynapple_concatenate_jax = support_pynapple(conv_type="jax")(jnp.concatenate)
 pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
-

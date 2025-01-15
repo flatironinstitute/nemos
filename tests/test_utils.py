@@ -8,6 +8,7 @@ import pynapple as nap
 import pytest
 from scipy.interpolate import splev
 
+import nemos as nmo
 from nemos import utils
 from nemos.base_class import Base
 
@@ -598,6 +599,21 @@ class ComplexParam(Base):
 )
 def test_format_repr(obj, exclude_keys, use_name_keys, expected):
     assert utils.format_repr(obj, exclude_keys, use_name_keys) == expected
+
+
+def test_repr_multiline():
+    # test with label
+    bas = nmo.basis.MSplineEval(10, label="mylabel")
+    assert (
+        utils.format_repr(bas, multiline=True)
+        == "'mylabel':\n    MSplineEval(\n        n_basis_funcs=10,\n        order=4\n    )"
+    )
+    # test without label
+    bas = nmo.basis.MSplineEval(10)
+    assert (
+        utils.format_repr(bas, multiline=True)
+        == "MSplineEval(\n    n_basis_funcs=10,\n    order=4\n)"
+    )
 
 
 def test_order_preservation():

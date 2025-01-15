@@ -146,6 +146,12 @@ class GLM(BaseRegressor):
     >>> import nemos as nmo
     >>> # define single neuron GLM model
     >>> model = nmo.glm.GLM()
+    >>> model
+    GLM(
+        observation_model=PoissonObservations(inverse_link_function=exp),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
@@ -1237,6 +1243,12 @@ class PopulationGLM(GLM):
            [0, 1]], dtype=int32)
     >>> # Create and fit the model
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model
+    PopulationGLM(
+        observation_model=PoissonObservations(inverse_link_function=exp),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
     >>> # Check the fitted coefficients
     >>> print(model.coef_.shape)
     (3, 2)
