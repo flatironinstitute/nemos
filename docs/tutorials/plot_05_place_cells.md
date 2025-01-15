@@ -192,7 +192,7 @@ data = nap.TsdFrame(
 print(data)
 ```
 
-`data` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html) that contains the position and phase. Before calling [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
+`data` is a [`TsdFrame`](https://pynapple.org/generated/pynapple.TsdTensor.html) that contains the position and phase. Before calling [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) from pynapple to observe the theta phase precession, we will restrict the analysis to the place field of one neuron.
 
 There are a lot of neurons but for this analysis, we will focus on one neuron only.
 
@@ -213,7 +213,7 @@ This neurons place field is between 0 and 60 cm within the linear track. Here we
 within_ep = position.threshold(60.0, method="below").time_support
 ```
 
-`within_ep` is an [`IntervalSet`](https://pynapple.org/generated/pynapple.core.interval_set.IntervalSet.html). We can now give it to [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) along with the spiking activity and the position-phase features.
+`within_ep` is an [`IntervalSet`](https://pynapple.org/generated/pynapple.IntervalSet.html). We can now give it to [`compute_2d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_2d_tuning_curves) along with the spiking activity and the position-phase features.
 
 
 ```{code-cell} ipython3

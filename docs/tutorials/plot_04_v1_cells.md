@@ -191,7 +191,7 @@ sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
                                         windowsize=(-0.15, 0.0))
 ```
 
-sta is a [`TsdTensor`](https://pynapple.org/generated/pynapple.core.time_series.TsdTensor.html), which gives us the 2d receptive field at each of the
+sta is a [`TsdTensor`](https://pynapple.org/generated/pynapple.TsdTensor.html), which gives us the 2d receptive field at each of the
 time points.
 
 
