@@ -5160,7 +5160,7 @@ def test_composite_basis_repr_wrapping():
     assert "    ...\n" in out
 
     bas = basis.MSplineEval(10)
-    bas = reduce(sum, [bas]*100)
+    bas = reduce(sum, (bas for _ in range(100)))
 
     # large additive basis
     out = repr(bas)
