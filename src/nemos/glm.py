@@ -1118,7 +1118,7 @@ class GLM(BaseRegressor):
         return glm_compute_optimal_stepsize_configs(self)
 
     def __repr__(self):
-        return format_repr(self)
+        return format_repr(self, multiline=True)
 
 
 class PopulationGLM(GLM):

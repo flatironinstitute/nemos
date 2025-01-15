@@ -463,7 +463,7 @@ def assert_scalar_func(func: Callable, inputs: List[jnp.ndarray], func_name: str
 
 
 def format_repr(
-    obj: Base, exclude_keys: Optional[List[str]] = None, use_name_keys: Optional[List[str]] = None, one_parameter_per_line=False
+    obj: Base, exclude_keys: Optional[List[str]] = None, use_name_keys: Optional[List[str]] = None, multiline=False
 ):
     """
     Format the representation string of an object (`__repr__`).
@@ -483,7 +483,7 @@ def format_repr(
     use_name_keys :
         List of keys for which the value's `__name__` attribute is used instead
         of the default `__repr__` output. Defaults to an empty list.
-    one_parameter_per_line:
+    multiline:
         If True, add each parameter on a new line, if False (default), list all parameters
         in a single line.
 
@@ -540,7 +540,7 @@ def format_repr(
     # if label doesn't exist or is the same as the class name (as is the default for
     # basis), then don't use it
     disp_label = (label is not None) and (label != cls_name)
-    if one_parameter_per_line:
+    if multiline:
         if disp_label:
             tab = "\t\t"
         else:
