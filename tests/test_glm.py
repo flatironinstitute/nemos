@@ -2099,6 +2099,14 @@ class TestGLM:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
 
+    def test_repr_out(self, poissonGLM_model_instantiation):
+        model = poissonGLM_model_instantiation[2]
+        assert (
+            repr(model)
+            == "GLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),"
+            "\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+        )
+
 
 class TestPopulationGLM:
     """
@@ -4228,6 +4236,13 @@ class TestPopulationGLM:
         else:
             # return None otherwise
             assert isinstance(kwargs["stepsize"], type(None))
+
+    def test_repr_out(self, poisson_population_GLM_model):
+        model = poisson_population_GLM_model[2]
+        assert (
+            repr(model)
+            == "PopulationGLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+        )
 
 
 @pytest.mark.parametrize(

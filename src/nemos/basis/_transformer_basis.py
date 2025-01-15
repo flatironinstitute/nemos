@@ -360,6 +360,9 @@ class TransformerBasis:
         cloned_obj = TransformerBasis(self.basis.__sklearn_clone__())
         return cloned_obj
 
+    def __repr__(self):
+        return f"Transformer({self.basis})"
+
     def set_params(self, **parameters) -> TransformerBasis:
         """
         Set TransformerBasis parameters.

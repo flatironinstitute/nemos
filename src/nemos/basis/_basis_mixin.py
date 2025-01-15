@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
+from ..utils import _get_terminal_size
 from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
@@ -661,3 +662,25 @@ class CompositeBasisMixin:
             )._input_shape_product,
         )
         return self
+
+    def __repr__(self, n=0):
+        _, rows = _get_terminal_size()
+        rows = rows // 4
+        # number of nested composite bases
+        n += 1
+        tab = "    "
+        try:
+            basis1 = self.basis1.__repr__(n=n)
+        except TypeError:
+            basis1 = self.basis1
+        try:
+            basis2 = self.basis2.__repr__(n=n)
+        except TypeError:
+            basis2 = self.basis2
+        if n < rows:
+            rep = f"{self.__class__.__name__}(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+        elif n == rows:
+            rep = f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+        else:
+            rep = None
+        return rep

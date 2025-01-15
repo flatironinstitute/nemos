@@ -22,6 +22,7 @@ from .regularizer import GroupLasso, Lasso, Regularizer, Ridge
 from .solvers._compute_defaults import glm_compute_optimal_stepsize_configs
 from .type_casting import jnp_asarray_if, support_pynapple
 from .typing import DESIGN_INPUT_TYPE
+from .utils import format_repr
 
 ModelParams = Tuple[jnp.ndarray, jnp.ndarray]
 
@@ -145,6 +146,12 @@ class GLM(BaseRegressor):
     >>> import nemos as nmo
     >>> # define single neuron GLM model
     >>> model = nmo.glm.GLM()
+    >>> model
+    GLM(
+        observation_model=PoissonObservations(inverse_link_function=exp),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
     >>> print("Regularizer type: ", type(model.regularizer))
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
@@ -1116,6 +1123,9 @@ class GLM(BaseRegressor):
         """Return the functions for computing default step and batch size for the solver."""
         return glm_compute_optimal_stepsize_configs(self)
 
+    def __repr__(self):
+        return format_repr(self, multiline=True)
+
 
 class PopulationGLM(GLM):
     """
@@ -1233,6 +1243,12 @@ class PopulationGLM(GLM):
            [0, 1]], dtype=int32)
     >>> # Create and fit the model
     >>> model = PopulationGLM(feature_mask=feature_mask).fit(X, y)
+    >>> model
+    PopulationGLM(
+        observation_model=PoissonObservations(inverse_link_function=exp),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
     >>> # Check the fitted coefficients
     >>> print(model.coef_.shape)
     (3, 2)

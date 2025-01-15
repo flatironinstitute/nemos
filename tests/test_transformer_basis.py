@@ -953,3 +953,41 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
         meth(inp)
         with pytest.raises(ValueError, match="X and y must have the same"):
             meth(inp, np.ones(11))
+
+
+@pytest.mark.parametrize(
+    "basis_cls",
+    list_all_basis_classes(),
+)
+@pytest.mark.parametrize(
+    "expected_out",
+    [
+        {
+            basis.BSplineConv: "Transformer(BSplineConv(n_basis_funcs=5, window_size=10, order=4))",
+            basis.BSplineEval: "Transformer(BSplineEval(n_basis_funcs=5, order=4))",
+            basis.CyclicBSplineConv: "Transformer(CyclicBSplineConv(n_basis_funcs=5, window_size=10, order=4))",
+            basis.CyclicBSplineEval: "Transformer(CyclicBSplineEval(n_basis_funcs=5, order=4))",
+            basis.HistoryConv: "Transformer(HistoryConv(window_size=10))",
+            basis.IdentityEval: "Transformer(IdentityEval())",
+            basis.MSplineConv: "Transformer(MSplineConv(n_basis_funcs=5, window_size=10, order=4))",
+            basis.MSplineEval: "Transformer(MSplineEval(n_basis_funcs=5, order=4))",
+            basis.OrthExponentialConv: "Transformer(OrthExponentialConv(n_basis_funcs=5, window_size=10))",
+            basis.OrthExponentialEval: "Transformer(OrthExponentialEval(n_basis_funcs=5))",
+            basis.RaisedCosineLinearConv: "Transformer(RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0))",
+            basis.RaisedCosineLinearEval: "Transformer(RaisedCosineLinearEval(n_basis_funcs=5, width=2.0))",
+            basis.RaisedCosineLogConv: "Transformer(RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
+            basis.RaisedCosineLogEval: "Transformer(RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
+            basis.AdditiveBasis: "Transformer(AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+            basis.MultiplicativeBasis: "Transformer(MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+        }
+    ],
+)
+def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
+    bas = CombinedBasis().instantiate_basis(
+        5, basis_cls, basis_class_specific_params, window_size=10
+    )
+    bas = bas.set_input_shape(*([10] * bas._n_input_dimensionality)).to_transformer()
+    out = expected_out.get(basis_cls, "")
+    if out == "":
+        raise ValueError(f"Missing test case for {basis_cls}!")
+    assert repr(bas) == out

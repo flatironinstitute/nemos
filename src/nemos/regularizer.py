@@ -18,6 +18,7 @@ from . import tree_utils
 from .base_class import Base
 from .proximal_operator import prox_group_lasso
 from .typing import DESIGN_INPUT_TYPE, ProximalOperator
+from .utils import format_repr
 
 __all__ = ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
 
@@ -92,6 +93,9 @@ class Regularizer(Base, abc.ABC):
             The proximal operator, which typically applies a form of regularization.
         """
         pass
+
+    def __repr__(self):
+        return format_repr(self)
 
 
 class UnRegularized(Regularizer):
