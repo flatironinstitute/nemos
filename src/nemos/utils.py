@@ -1,5 +1,6 @@
 """Utility functions for data pre-processing."""
 
+import os
 import inspect
 import warnings
 from typing import Any, Callable, List, Literal, Optional, Union
@@ -567,3 +568,25 @@ def format_repr(
 # enable concatenation for pynapple objects.
 pynapple_concatenate_jax = support_pynapple(conv_type="jax")(jnp.concatenate)
 pynapple_concatenate_numpy = support_pynapple(conv_type="numpy")(np.concatenate)
+
+def _get_terminal_size():
+    """Helper to get terminal size for __repr__
+
+    Returns
+    -------
+    rows:
+        Number of rows in the terminal window.
+    cols:
+        Number of columns in the terminal window.
+
+    """
+    cols = 100  # Default
+    rows = 2
+    try:
+        cols, rows = os.get_terminal_size()
+    except Exception:
+        import shutil
+
+        cols, rows = shutil.get_terminal_size()
+
+    return cols, rows

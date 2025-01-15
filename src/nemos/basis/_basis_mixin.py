@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
+from ..utils import _get_terminal_size
 from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
@@ -663,6 +664,8 @@ class CompositeBasisMixin:
         return self
 
     def __repr__(self, n=0):
+        _, rows = _get_terminal_size()
+        rows = rows // 4
         # number of nested composite bases
         n += 1
         tab = "    "
