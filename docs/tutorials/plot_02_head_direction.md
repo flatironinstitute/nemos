@@ -95,7 +95,7 @@ Get the behavioural epochs (in this case, sleep and wakefulness)
 
 ```{code-cell} ipython3
 epochs = data["epochs"]
-wake_ep = data["epochs"]["wake"]
+wake_ep = epochs[epochs.tags == "wake"]
 ```
 
 Get the tracked orientation of the animal
