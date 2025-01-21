@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from . import (
     basis,
