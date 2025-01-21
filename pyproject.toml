@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemos"
-version = "0.1.6"
+version = "0.2.0"
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
@@ -95,7 +95,7 @@ examples = [
 
 
 [tool.black]
-target-version = ['py38', 'py39', 'py310']
+target-version = ['py310', 'py311', 'py312']
 skip-string-normalization = false
 exclude = '''
 (
