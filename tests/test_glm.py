@@ -1478,12 +1478,17 @@ class TestGLM:
     def test_compatibility_with_sklearn_cv(self, poissonGLM_model_instantiation):
         X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        GridSearchCV(model, param_grid).fit(X, y)
+        cls = GridSearchCV(model, param_grid).fit(X, y)
+        # check that the repr works after cloning
+        repr(cls)
+
 
     def test_compatibility_with_sklearn_cv_gamma(self, gammaGLM_model_instantiation):
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        GridSearchCV(model, param_grid).fit(X, y)
+        cls = GridSearchCV(model, param_grid).fit(X, y)
+        # check that the repr works after cloning
+        repr(cls)
 
     @pytest.mark.parametrize(
         "regr_setup, glm_class",
@@ -3572,12 +3577,16 @@ class TestPopulationGLM:
     def test_compatibility_with_sklearn_cv(self, poisson_population_GLM_model):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        GridSearchCV(model, param_grid).fit(X, y)
+        cls = GridSearchCV(model, param_grid).fit(X, y)
+        # check that the repr works after cloning
+        repr(cls)
 
     def test_compatibility_with_sklearn_cv_gamma(self, gamma_population_GLM_model):
         X, y, model, true_params, firing_rate = gamma_population_GLM_model
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
-        GridSearchCV(model, param_grid).fit(X, y)
+        cls = GridSearchCV(model, param_grid).fit(X, y)
+        # check that the repr works after cloning
+        repr(cls)
 
     def test_sklearn_clone(self, poisson_population_GLM_model):
         X, y, model, true_params, firing_rate = poisson_population_GLM_model
