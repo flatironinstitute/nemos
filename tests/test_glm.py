@@ -1482,7 +1482,6 @@ class TestGLM:
         # check that the repr works after cloning
         repr(cls)
 
-
     def test_compatibility_with_sklearn_cv_gamma(self, gammaGLM_model_instantiation):
         X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
         param_grid = {"solver_name": ["BFGS", "GradientDescent"]}
