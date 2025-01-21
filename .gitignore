@@ -153,4 +153,5 @@ docs/data/
 # rst generated files
 docs/stubs
 
-
+# created automatically by setuptools.scm, don't track
+src/nemos/version.py
