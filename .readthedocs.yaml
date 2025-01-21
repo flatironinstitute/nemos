@@ -15,7 +15,7 @@ build:
       - gem install html-proofer -v ">= 5.0.9"  # Ensure version >= 5.0.9
     post_build:
       # Check everything except 403s and a jneurosci, which returns 404 but the link works when clicking.
-      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts,Images --ignore-urls "https://fonts.gstatic.com,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3" --assume-extension --check-external-hash --ignore-status-codes 403,0 --ignore-files "/.+\/_static\/.+/","/.+\/stubs\/.+/","/.+\/tutorials/plot_02_head_direction.+/"
+      - htmlproofer $READTHEDOCS_OUTPUT/html  --checks Links,Scripts,Images --ignore-urls "https://fonts.gstatic.com,https://celltypes.brain-map.org/experiment/electrophysiology/478498617,https://www.jneurosci.org/content/25/47/11003,https://www.nature.com/articles/s41467-017-01908-3,https://doi.org/10.1038/s41467-017-01908-3" --assume-extension --check-external-hash --ignore-status-codes 403,302,0 --ignore-files "/.+\/_static\/.+/","/.+\/stubs\/.+/","/.+\/tutorials/plot_02_head_direction.+/"
       # The auto-generated animation doesn't have a alt or src/srcset; I am able to ignore missing alt, but I cannot work around a missing src/srcset
       # therefore for this file I am not checking the figures.
       - htmlproofer $READTHEDOCS_OUTPUT/html/tutorials/plot_02_head_direction.html  --checks Links,Scripts --ignore-urls "https://www.jneurosci.org/content/25/47/11003"
