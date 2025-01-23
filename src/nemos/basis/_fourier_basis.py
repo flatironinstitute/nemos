@@ -1,15 +1,14 @@
-from toolz import frequencies
-
-from ._basis import Basis, check_transform_input, min_max_rescale_samples
-from ._basis_mixin import AtomicBasisMixin
 import abc
 from typing import Optional, Tuple
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-
 from pynapple import Tsd, TsdFrame, TsdTensor
+
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
+from ._basis import Basis, check_transform_input, min_max_rescale_samples
+from ._basis_mixin import AtomicBasisMixin
 
 
 class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
@@ -50,8 +49,6 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
             label=label,
         )
 
-
-
     @property
     def include_constant(self):
         return bool(self._include_constant)
@@ -59,10 +56,11 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
     @include_constant.setter
     def include_constant(self, value):
         if not isinstance(value, bool):
-            raise TypeError(f"`include_constant` must be a boolean. {value} provided instead!")
+            raise TypeError(
+                f"`include_constant` must be a boolean. {value} provided instead!"
+            )
         # store as int (used in slicing)
         self._include_constant = int(value)
-
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
@@ -86,7 +84,6 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
 
         """
 
-
         # scale to 0, 1
         sample_pts: NDArray = min_max_rescale_samples(
             np.copy(sample_pts), getattr(self, "bounds", None)
@@ -102,9 +99,10 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
 
         # compute angles
         angles = np.outer(sample_pts, self._frequencies)
-        out = np.concatenate([np.cos(angles), -np.sin(angles[:, int(self._include_constant):])], axis=1)
+        out = np.concatenate(
+            [np.cos(angles), -np.sin(angles[:, int(self._include_constant) :])], axis=1
+        )
         return out.reshape(*shape, out.shape[1])
-
 
     def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -140,9 +138,13 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
         if not isinstance(value, int):
             raise TypeError(f"`value` must be an integer. {value} provided instead!")
         if value <= 0:
-            raise ValueError(f"`value` must be a positive integer. {value} provided instead!")
+            raise ValueError(
+                f"`value` must be a positive integer. {value} provided instead!"
+            )
         self._n_basis_funcs = 2 * value + self._include_constant
-        self._frequencies = np.arange(1 - self._include_constant, value + 1, dtype=float)
+        self._frequencies = np.arange(
+            1 - self._include_constant, value + 1, dtype=float
+        )
 
     def _check_n_basis_min(self) -> None:
         """Check that the user required enough basis elements.
@@ -158,4 +160,3 @@ class FourierBasis(Basis, AtomicBasisMixin, abc.ABC):
                 f"Object class {self.__class__.__name__} requires >= 1 basis elements. "
                 f"{self.n_basis_funcs} basis elements specified instead"
             )
-

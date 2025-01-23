@@ -11,11 +11,11 @@ from ..typing import FeatureMatrix
 from ._basis import add_docstring
 from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._decaying_exponential import OrthExponentialBasis
+from ._fourier_basis import FourierBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from ._transformer_basis import TransformerBasis
-from ._fourier_basis import FourierBasis
 
 __all__ = [
     "IdentityEval",
