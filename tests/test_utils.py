@@ -597,7 +597,12 @@ class ComplexParam(Base):
         # Falsey values excluded2
         (Example(a=0, b=[], c={}), None, [], "Example(a=0, d=1)"),
         # function without the __name__
-        (nmo.observation_models.PoissonObservations(deepcopy(jax.numpy.exp)),None, [], "PoissonObservations(inverse_link_function=<PjitFunction>)")
+        (
+            nmo.observation_models.PoissonObservations(deepcopy(jax.numpy.exp)),
+            None,
+            [],
+            "PoissonObservations(inverse_link_function=<PjitFunction>)",
+        ),
     ],
 )
 def test_format_repr(obj, exclude_keys, use_name_keys, expected):

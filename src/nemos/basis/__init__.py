@@ -5,6 +5,7 @@ from .basis import (
     BSplineEval,
     CyclicBSplineConv,
     CyclicBSplineEval,
+    FourierEval,
     HistoryConv,
     IdentityEval,
     MSplineConv,
