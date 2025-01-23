@@ -15,4 +15,5 @@ from .basis import (
     RaisedCosineLinearEval,
     RaisedCosineLogConv,
     RaisedCosineLogEval,
+    FourierEval
 )

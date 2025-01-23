@@ -15,6 +15,7 @@ from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from ._transformer_basis import TransformerBasis
+from ._fourier_basis import FourierBasis
 
 __all__ = [
     "IdentityEval",
@@ -32,6 +33,7 @@ __all__ = [
     "OrthExponentialEval",
     "OrthExponentialConv",
     "TransformerBasis",
+    "FourierEval",
 ]
 
 
@@ -1026,10 +1028,8 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
         >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import RaisedCosineLinearEval
         >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = RaisedCosineLinearEval(n_basis_funcs)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        >>> basis = RaisedCosineLinearEval(n_basis_funcs)
+        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1172,10 +1172,9 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import RaisedCosineLinearConv
         >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
         >>> window_size=10
-        >>> ortho_basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        >>> basis = RaisedCosineLinearConv(n_basis_funcs, window_size)
+        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1321,10 +1320,8 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
         >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import RaisedCosineLogEval
         >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
-        >>> window_size=10
-        >>> ortho_basis = RaisedCosineLogEval(n_basis_funcs)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        >>> basis = RaisedCosineLogEval(n_basis_funcs)
+        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -1479,10 +1476,9 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         >>> import matplotlib.pyplot as plt
         >>> from nemos.basis import RaisedCosineLogConv
         >>> n_basis_funcs = 5
-        >>> decay_rates = np.array([0.01, 0.02, 0.03, 0.04, 0.05]) # sample decay rates
         >>> window_size=10
-        >>> ortho_basis = RaisedCosineLogConv(n_basis_funcs, window_size)
-        >>> sample_points, basis_values = ortho_basis.evaluate_on_grid(100)
+        >>> basis = RaisedCosineLogConv(n_basis_funcs, window_size)
+        >>> sample_points, basis_values = basis.evaluate_on_grid(100)
 
         """
         return super().evaluate_on_grid(n_samples)
@@ -2094,3 +2090,131 @@ class HistoryConv(ConvBasisMixin, HistoryBasis):
         self._check_window_size(window_size)
         self._window_size = window_size
         self._n_basis_funcs = window_size
+
+
+class FourierEval(EvalBasisMixin, FourierBasis):
+    """Fourier basis.
+
+    Parameters
+    ----------
+    n_frequencies :
+        The number of frequency in the basis.
+    include_constant :
+        Include the constant (0 frequency) term or not. Default is False.
+    bounds :
+        The bounds for the basis domain. The default ``bounds[0]`` and ``bounds[1]`` are the
+        minimum and the maximum of the samples provided when evaluating the basis.
+        If a sample is outside the bounds, the basis will return NaN.
+    label :
+        The label of the basis, intended to be descriptive of the task variable being processed.
+        For example: velocity, position, spike_counts.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from nemos.basis import FourierEval
+    >>> n_freq = 5
+    >>> fourier_basis = FourierEval(n_freq)
+    >>> fourier_basis
+    FourierEval(n_frequencies=5, include_constant=False)
+    >>> sample_points = np.random.randn(100)
+    >>> # convolve the basis
+    >>> features = fourier_basis.compute_features(sample_points)
+    """
+
+    def __init__(
+        self,
+        n_frequencies: int,
+        include_constant: bool = False,
+        bounds: Optional[Tuple[float, float]] = None,
+        label: Optional[str] = "FourierEval",
+    ):
+        EvalBasisMixin.__init__(self, bounds=bounds)
+        FourierBasis.__init__(
+            self,
+            n_frequencies,
+            include_constant=include_constant,
+            mode="eval",
+            label=label,
+        )
+
+    @add_docstring("evaluate_on_grid", FourierBasis)
+    def evaluate_on_grid(self, n_samples: int) -> Tuple[NDArray, NDArray]:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import matplotlib.pyplot as plt
+        >>> from nemos.basis import FourierEval
+        >>> n_frequencies = 5
+        >>> fourier_basis = FourierEval(n_frequencies)
+        >>> sample_points, basis_values = fourier_basis.evaluate_on_grid(100)
+
+        """
+        return super().evaluate_on_grid(n_samples)
+
+    @add_docstring("_compute_features", EvalBasisMixin)
+    def compute_features(self, xi: ArrayLike) -> FeatureMatrix:
+        """
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+
+        >>> # Generate data
+        >>> num_samples = 1000
+        >>> X = np.random.normal(size=(num_samples, ))  # raw time series
+        >>> basis = FourierEval(n_frequencies=10)
+        >>> features = basis.compute_features(X)  # basis transformed time series
+        >>> features.shape
+        (1000, 20)
+
+        """
+        return super().compute_features(xi)
+
+    @add_docstring("split_by_feature", FourierBasis)
+    def split_by_feature(
+        self,
+        x: NDArray,
+        axis: int = 1,
+    ):
+        r"""
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from nemos.basis import FourierEval
+        >>> from nemos.glm import GLM
+        >>> basis = FourierEval(n_frequencies=6, label="one_input")
+        >>> X = basis.compute_features(np.random.randn(20,))
+        >>> split_features_multi = basis.split_by_feature(X, axis=1)
+        >>> for feature, sub_dict in split_features_multi.items():
+        ...        print(f"{feature}, shape {sub_dict.shape}")
+        one_input, shape (20, 12)
+
+        """
+        return super().split_by_feature(x, axis=axis)
+
+    @add_docstring("set_input_shape", AtomicBasisMixin)
+    def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
+        """
+        Examples
+        --------
+        >>> import nemos as nmo
+        >>> import numpy as np
+        >>> basis = nmo.basis.FourierEval(5)
+        >>> # Configure with an integer input:
+        >>> _ = basis.set_input_shape(3)
+        >>> basis.n_output_features
+        30
+        >>> # Configure with a tuple:
+        >>> _ = basis.set_input_shape((4, 5))
+        >>> basis.n_output_features
+        200
+        >>> # Configure with an array:
+        >>> x = np.ones((10, 4, 5))
+        >>> _ = basis.set_input_shape(x)
+        >>> basis.n_output_features
+        200
+
+        """
+        return AtomicBasisMixin.set_input_shape(self, xi)
