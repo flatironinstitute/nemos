@@ -5156,6 +5156,8 @@ def test_duplicate_keys(bas1, bas2, bas3, basis_class_specific_params):
     "x, axis, expectation, exp_shapes",  # num output is 5*2 + 6*3 = 28
     [
         (np.ones((1, 28)), 1, does_not_raise(), [(1, 2, 5), (1, 3, 6)]),
+        (np.ones((1, 28)), -1, does_not_raise(), [(1, 2, 5), (1, 3, 6)]),
+        (np.ones((1, 28, 2)), -2, does_not_raise(), [(1, 2, 5, 2), (1, 3, 6, 2)]),
         (np.ones((28,)), 0, does_not_raise(), [(2, 5), (3, 6)]),
         (np.ones((2, 2, 28)), 2, does_not_raise(), [(2, 2, 2, 5), (2, 2, 3, 6)]),
         (

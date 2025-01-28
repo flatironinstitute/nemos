@@ -665,6 +665,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             - **Key**: Label of the basis.
             - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
         """
+        # convert axis to positive ints
+        axis = axis if axis >= 0 else x.ndim + axis
+
         if x.shape[axis] != self.n_output_features:
             raise ValueError(
                 "`x.shape[axis]` does not match the expected number of features."
