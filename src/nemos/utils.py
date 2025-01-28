@@ -156,6 +156,8 @@ def _pad_dimension(
         "acausal": ((pad_size) // 2, pad_size - (pad_size) // 2),
         "anti-causal": (0, pad_size),
     }
+    # convert negative axis in jax jit compilable way
+    axis = axis * (axis >= 0) + (array.ndim + axis) * (axis < 0)
 
     pad_width = (
         ((0, 0),) * axis
