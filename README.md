@@ -65,9 +65,9 @@ In this example, we'll construct a time-series of features using the basis objec
 import nemos as nmo
 
 # Instantiate the basis
-basis_1 = nmo.basis.MSplineBasis(n_basis_funcs=5)
-basis_2 = nmo.basis.CyclicBSplineBasis(n_basis_funcs=6)
-basis_3 = nmo.basis.MSplineBasis(n_basis_funcs=7)
+basis_1 = nmo.basis.MSplineEval(n_basis_funcs=5)
+basis_2 = nmo.basis.CyclicBSplineEval(n_basis_funcs=6)
+basis_3 = nmo.basis.MSplineEval(n_basis_funcs=7)
 
 basis = basis_1 * basis_2 + basis_3
 
@@ -111,7 +111,7 @@ import nemos as nmo
 
 # generate 5 basis functions of 100 time-bins, 
 # and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineBasisLog(5, mode="conv", window_size=100
+X = nmo.basis.RaisedCosineLogConv(5, mode="conv", window_size=100
     ).compute_features(spike_counts)
 ```
 #### Population GLM
