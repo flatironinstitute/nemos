@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 def glm_compute_optimal_stepsize_configs(
-    model: Union[GLM, PopulationGLM]
+    model: Union[GLM, PopulationGLM],
 ) -> Tuple[Optional[Callable], Optional[Callable], Optional[float]]:
     """
     Compute configuration functions for optimal step size selection based on the model.

@@ -5,7 +5,8 @@ import abc
 import copy
 from collections import OrderedDict
 from functools import wraps
-from typing import Callable, Generator, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
+import re
 
 import jax
 import numpy as np
@@ -18,6 +19,24 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+
+
+
+def remap_parameters(method):
+
+    @wraps(method)
+    def wrapper(self, **params):
+        map_params, _ = self.rename_param()
+        new_params = dict()
+        for key, val in params.items():
+            if key in map_params:
+                new_params[map_params[key]] = val
+            else:
+                new_params[key] = val
+        return method(self, **new_params)
+
+    return wrapper
+
 
 
 def add_docstring(method_name, cls):
@@ -102,6 +121,48 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
+def find_basis_tree_from_param_name(param_name: str):
+    """
+    Extracts the hierarchical structure of basis terms from a parameter name.
+
+    Parameters:
+    -----------
+    param_name :
+        The full parameter name containing 'basis[12]' patterns.
+
+    Returns:
+    --------
+    tuple:
+        - outer (str): The part of param_name before the first 'basis[12]'.
+        - basis_tree (str): The substring containing all consecutive '__basis[12]' occurrences.
+        - inner (str): The remaining part of the string after the last '__basis[12]'.
+    """
+    pattern_first = "basis[12]"  # Matches the first occurrence of 'basis1' or 'basis2'
+    pattern_consecutive = "__basis[12]"  # Matches consecutive occurrences prefixed by '__'
+
+    # Find the first occurrence of 'basis[12]'
+    match = re.search(pattern_first, param_name)
+    if match is None:
+        return param_name, None, ""  # If no match is found, return original param_name with None and empty string
+
+    start = match.start()  # Get start index of the first match
+    basis_tree = param_name[start + 6:]  # Extract everything after the matched 'basis[12]'
+
+    # Find all subsequent occurrences of '__basis[12]'
+    matches = list(re.finditer(pattern_consecutive, basis_tree))
+    if matches:
+        end = 6 + matches[-1].end()  # End of the last '__basis[12]' occurrence
+    else:
+        end = 6  # If no additional '__basis[12]' exists, set end to just after the first match
+
+    # Extract parts of the parameter name
+    basis_tree = param_name[start:end]  # The hierarchical part of the name
+    outer = param_name[:start]  # Everything before the first 'basis[12]'
+    inner = param_name[end:]  # Everything after the last '__basis[12]'
+
+    return outer, basis_tree, inner
+
+
 class Basis(Base, abc.ABC, BasisTransformerMixin):
     """
     Abstract base class for defining basis functions for feature transformation.
@@ -152,6 +213,82 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
+
+    def rename_param(self, deep=True):
+        """
+        Renames parameters in a given object by replacing 'basis[12]' patterns with unique labels.
+
+        Parameters:
+        -----------
+        bas : object
+            An object that contains a `get_params()` method returning a dictionary of parameters.
+
+        Returns:
+        --------
+        tuple:
+            - parameter_map (dict): A mapping of new parameter names to original names.
+            - new_param_dict (dict): A dictionary with renamed parameters.
+        """
+        param_dict = self._basis_tree_get_params(deep=deep)  # Retrieve the parameter dictionary
+        new_param_dict = param_dict.copy()  # Make a copy to modify
+        parameter_map = dict()  # Store mapping from new names to old names
+
+        # Iterate over all parameter names
+        for param_name in param_dict:
+            outer, basis_tree, inner = find_basis_tree_from_param_name(param_name)  # Extract components
+            new_param_name = outer  # Initialize new parameter name with the outer prefix
+
+            # Process the basis tree hierarchy
+            while basis_tree:
+                label = param_dict[outer + basis_tree].label  # Retrieve label from the parameter dictionary
+
+                # Ensure label uniqueness
+                if label in parameter_map:
+                    label = self._generate_unique_key(parameter_map, label)  # Generate unique label if needed
+
+                new_param_name += label  # Append label to the new parameter name
+                outer, basis_tree, inner = find_basis_tree_from_param_name(inner)  # Continue parsing inner components
+
+            new_param_name += outer  # Append the final outer part
+            parameter_map[new_param_name] = param_name  # Store mapping from new name to original
+
+            # Rename the parameter in the new dictionary
+            val = new_param_dict.pop(param_name)  # Remove the old key-value pair
+            new_param_dict[new_param_name] = val  # Add new key-value pair
+
+        return parameter_map, new_param_dict
+
+    def _basis_tree_get_params(self, deep=True) -> dict:
+        """
+        From scikit-learn, get parameters by inspecting init.
+
+        Parameters
+        ----------
+        deep
+
+        Returns
+        -------
+            out:
+                A dictionary containing the parameters. Key is the parameter
+                name, value is the parameter value.
+        """
+        out = dict()
+        for key in self._get_param_names():
+            value = getattr(self, key)
+            if deep and hasattr(value, "_get_params") and not isinstance(value, type):
+                deep_items = value._basis_tree_get_params().items()
+                out.update((key + "__" + k, val) for k, val in deep_items)
+            out[key] = value
+        return out
+
+
+    def get_params(self, deep=True) -> dict:
+        _, new_param_dict = self.rename_param(deep=deep)
+        return new_param_dict
+
+    @remap_parameters
+    def set_params(self, **params: Any):
+        return super().set_params(**params)
 
     @property
     def n_output_features(self) -> int | None:
@@ -570,7 +707,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return split_dict, start_slice
 
     @staticmethod
-    def _generate_unique_key(existing_dict: dict, key: str) -> str:
+    def _generate_unique_key(existing_dict: dict | List | Tuple, key: str) -> str:
         """Generate a unique key if there is a conflict."""
         extra = 1
         new_key = f"{key}-{extra}"
