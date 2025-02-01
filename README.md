@@ -111,7 +111,7 @@ import nemos as nmo
 
 # generate 5 basis functions of 100 time-bins, 
 # and convolve the counts with the basis.
-X = nmo.basis.RaisedCosineLogConv(5, mode="conv", window_size=100
+X = nmo.basis.RaisedCosineLogConv(5, window_size=100
     ).compute_features(spike_counts)
 ```
 #### Population GLM
