@@ -105,6 +105,10 @@ class AtomicBasisMixin:
         """
         return (x for x in [self])
 
+    def _list_all_labels(self):
+        label_list = [self._label] if hasattr(self, "_label") else []
+        return label_list
+
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Set the expected input shape for the basis object.
@@ -541,6 +545,10 @@ class CompositeBasisMixin:
     def n_basis_funcs(self):
         """Read only property for composite bases."""
         pass
+
+    def _list_all_labels(self):
+        label_list = [self._label] if hasattr(self, "_label") else []
+        return label_list + self.basis1._list_all_labels() + self.basis2._list_all_labels()
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """

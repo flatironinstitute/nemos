@@ -23,10 +23,11 @@ from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 
 
 def remap_parameters(method):
-
+    """Remap parameter names to original.
+    """
     @wraps(method)
     def wrapper(self, **params):
-        map_params, _ = self.remap_parameters()
+        map_params, _ = self.map_parameters()
         new_params = dict()
         for key, val in params.items():
             if key in map_params:
@@ -36,7 +37,6 @@ def remap_parameters(method):
         return method(self, **new_params)
 
     return wrapper
-
 
 
 def add_docstring(method_name, cls):
@@ -203,9 +203,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self._mode = mode
 
         if label is None:
-            self._label = self.__class__.__name__
+            self.label = self.__class__.__name__
         else:
-            self._label = str(label)
+            self.label = str(label)
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -214,7 +214,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
 
-    def remap_parameters(self, deep=True):
+    def map_parameters(self, deep=True):
         """
         Remap parameters in a given object by replacing 'basis[12]' patterns with unique labels.
 
@@ -284,7 +284,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
 
     def get_params(self, deep=True) -> dict:
-        _, new_param_dict = self.remap_parameters(deep=deep)
+        _, new_param_dict = self.map_parameters(deep=deep)
         return new_param_dict
 
     @remap_parameters
@@ -311,6 +311,15 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def label(self) -> str:
         """Label for the basis."""
         return self._label
+
+    @label.setter
+    def label(self, label: str) -> None:
+        try:
+            label = str(label)
+        except:
+            raise TypeError("Label must be convertible to a string.")
+        self._label = label
+
 
     @property
     def n_basis_funcs(self):
@@ -902,7 +911,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2)
         Basis.__init__(self, mode="composite")
-        self._label = "(" + basis1.label + " + " + basis2.label + ")"
+        self.label = "(" + basis1.label + " + " + basis2.label + ")"
 
         # number of input arrays that the basis receives
         self._n_input_dimensionality = (
@@ -1336,7 +1345,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2)
         Basis.__init__(self, mode="composite")
-        self._label = "(" + basis1.label + " * " + basis2.label + ")"
+        self.label = "(" + basis1.label + " * " + basis2.label + ")"
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
