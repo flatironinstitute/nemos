@@ -26,7 +26,7 @@ def remap_parameters(method):
 
     @wraps(method)
     def wrapper(self, **params):
-        map_params, _ = self.rename_param()
+        map_params, _ = self.remap_parameters()
         new_params = dict()
         for key, val in params.items():
             if key in map_params:
@@ -214,9 +214,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
 
-    def rename_param(self, deep=True):
+    def remap_parameters(self, deep=True):
         """
-        Renames parameters in a given object by replacing 'basis[12]' patterns with unique labels.
+        Remap parameters in a given object by replacing 'basis[12]' patterns with unique labels.
 
         Parameters:
         -----------
@@ -225,9 +225,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         Returns:
         --------
-        tuple:
-            - parameter_map (dict): A mapping of new parameter names to original names.
-            - new_param_dict (dict): A dictionary with renamed parameters.
+        parameter_map:
+            A mapping of new parameter names to original names.
+        new_param_dict:
+            A dictionary with renamed parameters.
         """
         param_dict = self._basis_tree_get_params(deep=deep)  # Retrieve the parameter dictionary
         new_param_dict = param_dict.copy()  # Make a copy to modify
@@ -275,7 +276,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         out = dict()
         for key in self._get_param_names():
             value = getattr(self, key)
-            if deep and hasattr(value, "_get_params") and not isinstance(value, type):
+            if deep and hasattr(value, "_basis_tree_get_params") and not isinstance(value, type):
                 deep_items = value._basis_tree_get_params().items()
                 out.update((key + "__" + k, val) for k, val in deep_items)
             out[key] = value
@@ -283,7 +284,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
 
     def get_params(self, deep=True) -> dict:
-        _, new_param_dict = self.rename_param(deep=deep)
+        _, new_param_dict = self.remap_parameters(deep=deep)
         return new_param_dict
 
     @remap_parameters
