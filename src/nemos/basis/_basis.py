@@ -736,6 +736,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __repr__(self):
         return format_repr(self)
 
+    def __getitem__(self, index: str) -> Basis:
+        try:
+            return self.get_params(deep=True)[index]
+        except:
+            raise ValueError(f"Item {index} not found.")
+
     def _get_feature_slicing(
         self,
         n_inputs: Optional[tuple] = None,
