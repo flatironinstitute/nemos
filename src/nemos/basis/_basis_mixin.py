@@ -7,7 +7,7 @@ import copy
 import inspect
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Generator, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -105,7 +105,7 @@ class AtomicBasisMixin:
         """
         return (x for x in [self])
 
-    def _list_all_labels(self):
+    def _list_subtree_labels(self):
         label_list = [self._label] if hasattr(self, "_label") else []
         return label_list
 
@@ -189,6 +189,17 @@ class AtomicBasisMixin:
     @property
     def input_shape(self) -> NDArray:
         return self._input_shape_[0] if self._input_shape_ else None
+
+    def _sub_tree_update_labels(self, label_list: List) -> List:
+        current_label = getattr(self, "_label", None)
+        if current_label in label_list and not current_label.startswith(self.__class__.__name__):
+            raise ValueError(f'Label "{current_label}" already in use. When provided, label must be unique.')
+        elif current_label in label_list:
+            self._label = self._generate_unique_key(label_list, current_label)
+            label_list += [self._label]
+        else:
+            label_list += [self._label]
+        return label_list
 
 
 class EvalBasisMixin:
@@ -546,9 +557,15 @@ class CompositeBasisMixin:
         """Read only property for composite bases."""
         pass
 
-    def _list_all_labels(self):
+    def _list_subtree_labels(self):
         label_list = [self._label] if hasattr(self, "_label") else []
-        return label_list + self.basis1._list_all_labels() + self.basis2._list_all_labels()
+        return label_list + self.basis1._list_subtree_labels() + self.basis2._list_subtree_labels()
+
+    def _sub_tree_update_labels(self, label_list: List) -> List:
+        """Traverse tree upwards to the root, and list all labels."""
+        label_list = self.basis1._sub_tree_update_labels(label_list)
+        label_list = self.basis2._sub_tree_update_labels(label_list)
+        return label_list
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
