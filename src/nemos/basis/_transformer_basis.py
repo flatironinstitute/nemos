@@ -348,6 +348,9 @@ class TransformerBasis:
                 f"Only setting basis or existing attributes of basis is allowed. Attempt to set `{name}`."
             )
 
+    def __getitem__(self, name: str):
+        return self.basis.__getitem__(name)
+
     def __sklearn_clone__(self) -> TransformerBasis:
         """
         Customize how TransformerBasis objects are cloned when used with sklearn.model_selection.
