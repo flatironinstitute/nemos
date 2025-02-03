@@ -302,7 +302,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 self_params = self._basis_tree_get_params(deep=True)
                 value.label = self_params[key].label
 
-        super().set_params(**params)
+        return super().set_params(**params)
 
 
     @property
@@ -706,9 +706,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             out = self.get_params(deep=True)[index]
         except:
             avail_index = ",".join("'{}'".format(b) for b in self._list_subtree_labels())
-            raise ValueError(f"Basis label {index} not found. Avalilable labels: {avail_index}")
+            raise IndexError(f"Basis label {index} not found. Available labels: {avail_index}")
         if not isinstance(out, Basis):
-            raise TypeError(f"Invalid index {index}. Only basis object labels can be indexed directly.")
+            raise IndexError(f"Invalid index {index}. Only basis object labels can be indexed directly.")
         return out
 
     def _get_feature_slicing(
