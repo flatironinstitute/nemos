@@ -27,7 +27,7 @@ def remap_parameters(method):
     """
     @wraps(method)
     def wrapper(self, **params):
-        map_params, _ = self.map_parameters()
+        map_params, _ = self._map_parameters()
         # use mapped key if exists, or original key
         new_params = {map_params.get(key, key): val for key, val in params.items()}
         return method(self, **new_params)
@@ -209,7 +209,36 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
 
-    def map_parameters(self, deep=True):
+    def _process_parameter_name(self, param_name: str, param_dict: dict, parameter_map: dict[str], new_param_dict: dict):
+        outer, basis_tree, inner = find_basis_tree_from_param_name(param_name)  # Extract components
+        new_param_name = outer  # Initialize new parameter name with the outer prefix
+        base_name = outer  # Initialize parameter string
+        # Process the basis tree hierarchy
+        while basis_tree:
+            label = param_dict[base_name + basis_tree].label  # Retrieve label from the parameter dictionary
+
+            # update base_name
+            base_name = base_name + basis_tree
+
+            # Ensure label uniqueness
+            if label in parameter_map:
+                label = self._generate_unique_key(parameter_map, label)  # Generate unique label if needed
+
+            new_param_name += "__" + label if new_param_name != "" else label  # Append label to the new parameter name
+            outer, basis_tree, inner = find_basis_tree_from_param_name(inner)  # Continue parsing inner components
+
+            new_param_name += outer  # Append the final outer part
+            base_name += outer
+
+        parameter_map[new_param_name] = param_name  # Store mapping from new name to original
+
+        # Rename the parameter in the new dictionary
+        val = new_param_dict.pop(param_name)  # Remove the old key-value pair
+        new_param_dict[new_param_name] = val  # Add new key-value pair
+        return parameter_map, new_param_dict
+
+
+    def _map_parameters(self, deep=True):
         """
         Remap parameters in a given object by replacing 'basis[12]' patterns with unique labels.
 
@@ -231,32 +260,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # Iterate over all parameter names
         for param_name in param_dict:
-            outer, basis_tree, inner = find_basis_tree_from_param_name(param_name)  # Extract components
-            new_param_name = outer # Initialize new parameter name with the outer prefix
-            base_name = outer  # initalize parameter string
-            # Process the basis tree hierarchy
-            while basis_tree:
-                label = param_dict[base_name + basis_tree].label  # Retrieve label from the parameter dictionary
-
-                # update base_name
-                base_name = base_name + basis_tree
-
-                # Ensure label uniqueness
-                if label in parameter_map:
-                    label = self._generate_unique_key(parameter_map, label)  # Generate unique label if needed
-
-                new_param_name += "__" + label if new_param_name != "" else label # Append label to the new parameter name
-                outer, basis_tree, inner = find_basis_tree_from_param_name(inner)  # Continue parsing inner components
-
-                new_param_name += outer  # Append the final outer part
-                base_name += outer
-
-            parameter_map[new_param_name] = param_name  # Store mapping from new name to original
-
-            # Rename the parameter in the new dictionary
-            val = new_param_dict.pop(param_name)  # Remove the old key-value pair
-            new_param_dict[new_param_name] = val  # Add new key-value pair
-
+            parameter_map, new_param_dict = self._process_parameter_name(
+                param_name,
+                param_dict,
+                parameter_map,
+                new_param_dict,
+            )
         return parameter_map, new_param_dict
 
     def _basis_tree_get_params(self, deep=True) -> dict:
@@ -284,7 +293,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
 
     def get_params(self, deep=True) -> dict:
-        _, new_param_dict = self.map_parameters(deep=deep)
+        _, new_param_dict = self._map_parameters(deep=deep)
         return new_param_dict
 
     @remap_parameters
