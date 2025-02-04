@@ -71,7 +71,9 @@ plot_05_transformer_basis.md
 :::{grid-item-card}
 
 <figure>
+<a href="plot_06_sklearn_pipeline_cv_demo.html">
 <img src="../_static/thumbnails/how_to_guide/plot_06_sklearn_pipeline_cv_demo.svg" style="height: 100px", alt="PyTrees."/>
+</a>
 </figure>
 
 ```{toctree}
@@ -85,7 +87,9 @@ plot_06_sklearn_pipeline_cv_demo.md
 :::{grid-item-card}
 
 <figure>
+<a href="plot_07_glm_pytree.html">
 <img src="../_static/thumbnails/how_to_guide/plot_07_glm_pytree.svg" style="height: 100px", alt="PyTrees."/>
+</a>
 </figure>
 
 ```{toctree}
@@ -99,10 +103,11 @@ plot_07_glm_pytree.md
 :::{grid-item-card}
 
 ```{eval-rst}
-
+ 
 .. plot:: scripts/glm_predictors.py plot_categorical_var_design_matrix
    :show-source-link: False
    :height: 100px
+
 ```
 
 ```{toctree}
@@ -133,7 +138,9 @@ custom_predictors.md
 :::{grid-item-card}
 
 <figure>
+<a href="raw_history_feature.html">
 <img src="../_static/glm_population_scheme.svg" style="height: 100px", alt="Coupled GLM."/>
+</a>
 </figure>
 
 ```{toctree}

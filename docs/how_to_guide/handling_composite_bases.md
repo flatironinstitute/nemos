@@ -83,6 +83,15 @@ nmo.basis.AdditiveBasis(
 )
 ```
 
+And if you are asking yourself what happens when two bases with the same label are composed, well, this results in an error.
+This guarantees that the labels are always unique and you can always retrieve a basis using its label.
+
+```{code-cell} ipython3
+:tags: [raises-exception]
+
+nmo.basis.BSplineEval(5, label="x") + nmo.basis.MSplineEval(5, label="x")
+```
+
 ## Get and Set Composite Basis Parameters
 
 When working with composite bases, often times one wants to re-configurate specific components. Again, the easiest way to achieve this is labeling each element and using the label to retrieve the basis.
