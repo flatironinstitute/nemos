@@ -87,10 +87,15 @@ jobs:
         - name: Checkout repository
           uses: actions/checkout@v4
 
-        - name: Check Markdown links (Root Folder Only)
-          uses: gaurav-nelson/github-action-markdown-link-check@v1
-          with:
-            file-path: "README.md CONTRIBUTING.md CODE_OF_CONDUCT.md"
+        - name: Install markdown-link-check
+          run: npm install -g markdown-link-check
+
+        - name: Check links in root Markdown files
+          run: |
+            set -o pipefail  # Ensure failures propagate in pipes
+            find . -maxdepth 1 -name "*.md" | while read file; do
+              markdown-link-check "$file" || exit 1  # Exit if any file has dead links
+            done
 
   check:
     if: ${{ !github.event.pull_request.draft }}
