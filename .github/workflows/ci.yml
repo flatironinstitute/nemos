@@ -87,12 +87,11 @@ jobs:
         - name: Checkout repository
           uses: actions/checkout@v4
 
-        - name: Install markdown-link-check
-          run: npm install -g markdown-link-check
-
-        - name: Check links in root Markdown files
-          run: |
-            find . -maxdepth 1 -name "*.md" | xargs -n1 markdown-link-check || exit 1
+        - name: Check Markdown links (Root Folder Only)
+          uses: gaurav-nelson/github-action-markdown-link-check@v1
+          with:
+            folder-path: "./"  # Only checks Markdown files in the root folder
+            use-verbose-mode: yes  # Provides detailed output
 
   check:
     if: ${{ !github.event.pull_request.draft }}
