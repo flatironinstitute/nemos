@@ -91,7 +91,10 @@ jobs:
           run: npm install -g markdown-link-check
 
         - name: Check links in README.md
-          run: markdown-link-check README.md --config .markdown-link-check.json
+          run: markdown-link-check README.md
+
+        - name: Check links in CONTRIBUTING.md
+          run: markdown-link-check CONTRIBUTING.md
 
   check:
     if: ${{ !github.event.pull_request.draft }}
