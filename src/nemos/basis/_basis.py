@@ -4,7 +4,6 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
-from copy import deepcopy
 from functools import wraps
 from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
 import re
@@ -29,12 +28,7 @@ def remap_parameters(method):
     @wraps(method)
     def wrapper(self, **params):
         map_params, _ = self.map_parameters()
-        new_params = dict()
-        for key, val in params.items():
-            if key in map_params:
-                new_params[map_params[key]] = val
-            else:
-                new_params[key] = val
+        new_params = {map_params[key]: val for key, val in params.items() if key in map_params}
         return method(self, **new_params)
 
     return wrapper
@@ -133,33 +127,29 @@ def find_basis_tree_from_param_name(param_name: str):
 
     Returns:
     --------
-    tuple:
-        - outer (str): The part of param_name before the first 'basis[12]'.
-        - basis_tree (str): The substring containing all consecutive '__basis[12]' occurrences.
-        - inner (str): The remaining part of the string after the last '__basis[12]'.
+    outer:
+        The part of param_name before the first 'basis[12]'.
+    basis_tree:
+        The substring containing all consecutive '__basis[12]' occurrences.
+    inner:
+        The remaining part of the string after the last '__basis[12]'.
     """
-    pattern_first = "basis[12]"  # Matches the first occurrence of 'basis1' or 'basis2'
-    pattern_consecutive = "__basis[12]"  # Matches consecutive occurrences prefixed by '__'
+    # first capturing group (i.e. pattern within round parenthesis):
+    #  - string that start with basis1 or basis2
+    #  - first occurrence of __basis1 or __basis2
+    # second capture group:
+    #  - (?:__basis[12]) non-capturing group that keeps scanning whenever new __basis1 or __basis2 are found
+    #  - (...*) : capture 0 or more occurrence of the group above.
+    pattern = re.compile(r"(^basis[12]|__basis[12])((?:__basis[12])*)")
 
-    # Find the first occurrence of 'basis[12]'
-    match = re.search(pattern_first, param_name)
-    if match is None:
-        return param_name, None, ""  # If no match is found, return original param_name with None and empty string
+    match = pattern.search(param_name)
+    if not match:
+        return param_name, None, ""  # No match found
 
-    start = match.start()  # Get start index of the first match
-    basis_tree = param_name[start + 6:]  # Extract everything after the matched 'basis[12]'
-
-    # Find all subsequent occurrences of '__basis[12]'
-    matches = list(re.finditer(pattern_consecutive, basis_tree))
-    if matches:
-        end = 6 + matches[-1].end()  # End of the last '__basis[12]' occurrence
-    else:
-        end = 6  # If no additional '__basis[12]' exists, set end to just after the first match
-
-    # Extract parts of the parameter name
-    basis_tree = param_name[start:end]  # The hierarchical part of the name
-    outer = param_name[:start]  # Everything before the first 'basis[12]'
-    inner = param_name[end:]  # Everything after the last '__basis[12]'
+    start, end = match.span()  # Get the full match range
+    outer = param_name[:start]  # Everything before the first match
+    basis_tree = param_name[start:end]  # The full matched hierarchical part
+    inner = param_name[end:]  # Everything after the last match
 
     return outer, basis_tree, inner
 
