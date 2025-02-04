@@ -90,14 +90,11 @@ jobs:
         - name: Install markdown-link-check
           run: npm install -g markdown-link-check
 
+        - name: Make .sh executable
+          run: chmod +x bash_scripts/check_markdown_links.sh
+
         - name: Check links in root Markdown files
-          run: |
-            set -o pipefail  # Ensure failure propagates properly
-            ERROR=0  # Initialize error flag
-            for file in $(find . -maxdepth 1 -name "*.md"); do
-              markdown-link-check "$file" || ERROR=1  # If any file fails, set ERROR=1
-            done
-            exit $ERROR  # Exit with failure status if any file had dead links
+          run: ./bash_scripts/check_markdown_links.sh
 
   check:
     if: ${{ !github.event.pull_request.draft }}
