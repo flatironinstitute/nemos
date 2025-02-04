@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -45,7 +45,6 @@ warnings.filterwarnings(
 
 ## Generate synthetic data
 Generate some simulated spike counts.
-
 
 ```{code-cell} ipython3
 import matplotlib.patches as patches
@@ -109,7 +108,6 @@ and anti-causal effects one should use the acausal filters.
 Below we provide the function [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) that runs the convolution in "valid" mode and pads the convolution output
 for the different filter types.
 
-
 ```{code-cell} ipython3
 # pad according to the causal direction of the filter, after squeeze,
 # the dimension is (n_filters, n_samples)
@@ -125,7 +123,6 @@ spk_acausal_conv = nmo.convolve.create_convolutional_predictor(
 ```
 
 Plot the results
-
 
 ```{code-cell} ipython3
 # NaN padded area
@@ -161,7 +158,6 @@ plt.vlines(np.arange(spk.shape[0]), 0, shift_spk, color='k')
 plt.plot(np.arange(spk.shape[0]), spk_acausal_conv)
 plt.ylabel('acausal')
 plt.tight_layout()
-
 ```
 
 ```{code-cell} ipython3
@@ -194,7 +190,6 @@ convolution.
 
 All the parameters of [`create_convolutional_predictor`](nemos.convolve.create_convolutional_predictor) can be passed to the object directly at initialization. 
 Let's see how we can get the same results through [`Basis`](nemos.basis._basis.Basis).
-
 
 ```{code-cell} ipython3
 # define basis with different predictor causality
