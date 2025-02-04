@@ -90,11 +90,9 @@ jobs:
         - name: Install markdown-link-check
           run: npm install -g markdown-link-check
 
-        - name: Check links in README.md
-          run: markdown-link-check README.md
-
-        - name: Check links in CONTRIBUTING.md
-          run: markdown-link-check CONTRIBUTING.md
+        - name: Check links in root Markdown files
+          run: |
+            find . -maxdepth 1 -name "*.md" | xargs -n1 markdown-link-check || exit 1
 
   check:
     if: ${{ !github.event.pull_request.draft }}
