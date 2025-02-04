@@ -81,14 +81,17 @@ jobs:
       - name: Check links
         run: ./bash_scripts/prevent_absolute_links_to_docs.sh
 
-      - name: Install markdown-link-check
-        run: npm install -g markdown-link-check
+  check-links:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
 
-      - name: Check links in README.md
-        run: markdown-link-check README.md --config .markdown-link-check.json
+        - name: Install markdown-link-check
+          run: npm install -g markdown-link-check
 
-      - name: Check links in CONTRIBUTING.md
-        run: markdown-link-check CONTRIBUTING.md --config .markdown-link-check.json
+        - name: Check links in README.md
+          run: markdown-link-check README.md --config .markdown-link-check.json
 
   check:
     if: ${{ !github.event.pull_request.draft }}
@@ -96,6 +99,7 @@ jobs:
       - tox_tests
       - prevent_docs_absolute_links
       - tox_check
+      - check-links
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
