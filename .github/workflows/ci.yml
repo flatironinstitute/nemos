@@ -69,7 +69,7 @@ jobs:
       - name: Run tox
         run: tox -e check
 
-  prevent_docs_absolute_links:
+  prevent_docs_absolute_links_and_check_readme:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -80,6 +80,15 @@ jobs:
 
       - name: Check links
         run: ./bash_scripts/prevent_absolute_links_to_docs.sh
+
+      - name: Install markdown-link-check
+        run: npm install -g markdown-link-check
+
+      - name: Check links in README.md
+        run: markdown-link-check README.md --config .markdown-link-check.json
+
+      - name: Check links in CONTRIBUTING.md
+        run: markdown-link-check CONTRIBUTING.md --config .markdown-link-check.json
 
   check:
     if: ${{ !github.event.pull_request.draft }}
