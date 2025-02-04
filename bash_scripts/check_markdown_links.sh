@@ -19,7 +19,7 @@ ERROR=0
 LOG_FILE=$(mktemp)  # Temporary file to store output
 
 # Find all Markdown files in the root directory and check links
-for file in $(find .. -maxdepth 1 -name "*.md"); do
+for file in $(find . -maxdepth 1 -name "*.md"); do
     echo "📂 Checking $file..."
 
     # Run markdown-link-check and capture output
