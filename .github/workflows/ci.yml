@@ -92,10 +92,12 @@ jobs:
 
         - name: Check links in root Markdown files
           run: |
-            set -o pipefail  # Ensure failures propagate in pipes
-            find . -maxdepth 1 -name "*.md" | while read file; do
-              markdown-link-check "$file" || exit 1  # Exit if any file has dead links
+            set -o pipefail  # Ensure failure propagates properly
+            ERROR=0  # Initialize error flag
+            for file in $(find . -maxdepth 1 -name "*.md"); do
+              markdown-link-check "$file" || ERROR=1  # If any file fails, set ERROR=1
             done
+            exit $ERROR  # Exit with failure status if any file had dead links
 
   check:
     if: ${{ !github.event.pull_request.draft }}
