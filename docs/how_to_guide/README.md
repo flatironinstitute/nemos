@@ -144,4 +144,15 @@ raw_history_feature.md
 
 :::
 
+:::{grid-item-card}
+
+
+```{toctree}
+:maxdepth: 2
+
+handling_composite_bases.md
+```
+
+:::
+
 ::::
