@@ -28,7 +28,8 @@ def remap_parameters(method):
     @wraps(method)
     def wrapper(self, **params):
         map_params, _ = self.map_parameters()
-        new_params = {map_params[key]: val for key, val in params.items() if key in map_params}
+        # use mapped key if exists, or original key
+        new_params = {map_params.get(key, key): val for key, val in params.items()}
         return method(self, **new_params)
 
     return wrapper
@@ -231,20 +232,25 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # Iterate over all parameter names
         for param_name in param_dict:
             outer, basis_tree, inner = find_basis_tree_from_param_name(param_name)  # Extract components
-            new_param_name = "" if basis_tree is None  else outer # Initialize new parameter name with the outer prefix
-
+            new_param_name = outer # Initialize new parameter name with the outer prefix
+            base_name = outer  # initalize parameter string
             # Process the basis tree hierarchy
             while basis_tree:
-                label = param_dict[outer + basis_tree].label  # Retrieve label from the parameter dictionary
+                label = param_dict[base_name + basis_tree].label  # Retrieve label from the parameter dictionary
+
+                # update base_name
+                base_name = base_name + basis_tree
 
                 # Ensure label uniqueness
                 if label in parameter_map:
                     label = self._generate_unique_key(parameter_map, label)  # Generate unique label if needed
 
-                new_param_name += label  # Append label to the new parameter name
+                new_param_name += "__" + label if new_param_name != "" else label # Append label to the new parameter name
                 outer, basis_tree, inner = find_basis_tree_from_param_name(inner)  # Continue parsing inner components
 
-            new_param_name += outer  # Append the final outer part
+                new_param_name += outer  # Append the final outer part
+                base_name += outer
+
             parameter_map[new_param_name] = param_name  # Store mapping from new name to original
 
             # Rename the parameter in the new dictionary
