@@ -738,11 +738,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return format_repr(self)
 
     def __getitem__(self, index: str) -> Basis:
+        if index == self.label:
+            return self
         try:
             out = self.get_params(deep=True)[index]
         except Exception:
             avail_index = ",".join(
-                "'{}'".format(b) for b in self._list_subtree_labels()
+                "'{}'".format(b) for b in self._list_subtree_labels("all")
             )
             raise IndexError(
                 f"Basis label {index} not found. Available labels: {avail_index}"
