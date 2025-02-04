@@ -744,7 +744,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             out = self.get_params(deep=True)[index]
         except Exception:
             avail_index = ",".join(
-                "'{}'".format(b) for b in self._list_subtree_labels("all")
+                f"'{b}'" for b in self._list_subtree_labels("all")
             )
             raise IndexError(
                 f"Basis label {index} not found. Available labels: {avail_index}"
