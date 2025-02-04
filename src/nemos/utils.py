@@ -528,8 +528,8 @@ def format_repr(
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
     disp_params = []
     # use special method for basis
-    method = getattr(obj, "_basis_tree_get_params", obj.get_params)
-    all_params = method(deep=False)
+    get_params = getattr(obj, "_basis_tree_get_params", obj.get_params)
+    all_params = get_params(deep=False)
     label = all_params.pop("label", None)
     for k, v in all_params.items():
         repr_param = (
