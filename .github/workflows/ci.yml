@@ -90,8 +90,7 @@ jobs:
         - name: Check Markdown links (Root Folder Only)
           uses: gaurav-nelson/github-action-markdown-link-check@v1
           with:
-            config-file: .markdown-link-check.json
-            use-verbose-mode: yes  # Provides detailed output
+            file-path: "README.md CONTRIBUTING.md CODE_OF_CONDUCT.md"
 
   check:
     if: ${{ !github.event.pull_request.draft }}
