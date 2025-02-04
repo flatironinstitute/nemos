@@ -381,7 +381,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         if label in update_labels and not label == self.__class__.__name__:
             raise ValueError(
-                f"Label {label} is already in use. When user-provided, label must be unique."
+                f"Label '{label}' is already in use. When user-provided, label must be unique."
             )
         else:
             self._label = label
