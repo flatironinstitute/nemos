@@ -365,6 +365,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._label
 
     def _generate_label(self) -> str:
+        """Generate an unambiguous label."""
         root = self._root()
         current = getattr(self, "_label", None)
         label_map = {
