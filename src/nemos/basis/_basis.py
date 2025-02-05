@@ -385,12 +385,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # else disambiguate
         sub_list = [current]
+        new = current
         for key in keys[1:]:
             new = root._generate_unique_key(sub_list, current)
             sub_list.append(new)
             if key == id(self):
                 break
-
         return new
 
     def _root(self):
