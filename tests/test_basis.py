@@ -3503,9 +3503,9 @@ class TestAdditiveBasis(CombinedBasis):
         "expected_out",
         [
             {
-                basis.BSplineEval: "AdditiveBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                AdditiveBasis: "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                MultiplicativeBasis: "AdditiveBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                basis.BSplineEval: "'(BSplineEval + MSplineEval)': AdditiveBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                AdditiveBasis: "'((MSplineEval + RaisedCosineLinearConv) + MSplineEval_1)': AdditiveBasis(\n    basis1='(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2='MSplineEval_1': MSplineEval(n_basis_funcs=6, order=4),\n)",
+                MultiplicativeBasis: "'((MSplineEval * RaisedCosineLinearConv) + MSplineEval_1)': AdditiveBasis(\n    basis1='(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2='MSplineEval_1': MSplineEval(n_basis_funcs=6, order=4),\n)",
             }
         ],
     )
@@ -3527,16 +3527,19 @@ class TestAdditiveBasis(CombinedBasis):
             bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
         else:
             bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+
         if label in [None, "default-behavior"]:
             expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+            exp_name = "RaisedCosineLinearEval"
         else:
             expected_a = (
                 f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
             )
+            exp_name = label
         bas = bas + self.instantiate_basis(
             6, basis.MSplineEval, basis_class_specific_params
         )
-        expected = f"AdditiveBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
+        expected = f"'({exp_name} + MSplineEval)': AdditiveBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
         out = repr(bas)
         assert out == expected
 
