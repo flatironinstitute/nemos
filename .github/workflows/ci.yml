@@ -81,12 +81,28 @@ jobs:
       - name: Check links
         run: ./bash_scripts/prevent_absolute_links_to_docs.sh
 
+  check-links:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Install markdown-link-check
+          run: npm install -g markdown-link-check
+
+        - name: Make .sh executable
+          run: chmod +x bash_scripts/check_markdown_links.sh
+
+        - name: Check links in root Markdown files
+          run: ./bash_scripts/check_markdown_links.sh
+
   check:
     if: ${{ !github.event.pull_request.draft }}
     needs:
       - tox_tests
       - prevent_docs_absolute_links
       - tox_check
+      - check-links
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether all tests and notebooks succeeded
