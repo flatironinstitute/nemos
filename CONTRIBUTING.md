@@ -9,7 +9,7 @@ Developers are encouraged to contribute to various areas of development. This co
 
 Feel free to work on any section of code that you believe you can improve. More importantly, remember to thoroughly test all your classes and functions, and to provide clear, detailed comments within your code. This not only aids others in using the library, but also facilitates future maintenance and further development.
 
-For more detailed information about NeMoS modules, including design choices and implementation details, visit the [`For Developers`](https://nemos.readthedocs.io/en/latest/developers_notes/) section of the package documentation.
+For more detailed information about NeMoS modules, including design choices and implementation details, visit the [`For Developers`](https://nemos.readthedocs.io/en/latest/developers_notes/README.html) section of the package documentation.
 
 ## Contributing to the code
 
@@ -46,7 +46,7 @@ pip install -e .[dev]
 ```
 
 > [!NOTE]
-> In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation/) that provides guidance on how to create and activate a virtual environment.
+> In order to install `nemos` in editable mode you will need a Python virtual environment. Please see our documentation [here](https://nemos.readthedocs.io/en/latest/installation.html) that provides guidance on how to create and activate a virtual environment.
 
 3) Add the upstream branch:
 
@@ -184,7 +184,7 @@ it must have an `.py` extension, and it must be contained within the `tests` dir
 add it to the tests-to-run.
 
 > [!NOTE]
-> If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html) and NeMoS [`test_error_invalid_entry`](https://github.com/flatironinstitute/nemos/blob/main/tests/test_vallidation.py#L27) for a concrete implementation.
+> If you have many variants on a test you wish to run, you should make use of pytest's `parameterize` mark. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/parametrize.html) and NeMoS [`test_error_invalid_entry`](https://github.com/flatironinstitute/nemos/blob/main/tests/test_validation.py) for a concrete implementation.
 
 > [!NOTE]
 > If you are using an object that gets used in multiple tests (such as a model with certain data, regularizer, or solver), you should use pytest's `fixtures` to avoid having to load or instantiate the object multiple times. Look at our `conftest.py` to see already available fixtures for your tests. See the official documentation [here](https://docs.pytest.org/en/stable/how-to/fixtures.html).
