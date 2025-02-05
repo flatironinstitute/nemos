@@ -542,21 +542,24 @@ class TestSharedMethods:
             assert id(bas) == id(b)
 
     @pytest.mark.parametrize(
-        "attribute, value",
+        "attribute, value, expectation",
         [
-            ("label", None),
-            ("label", "label"),
-            ("n_output_features", 5),
+            ("label", None, does_not_raise()),
+            ("label", "label", does_not_raise()),
+            ("n_output_features", 5, pytest.raises(AttributeError, match="can't set attribute 'n_output_features'")),
         ],
     )
-    def test_attr_setter(self, attribute, value, cls):
+    def test_attr_setter(self, attribute, value, cls, expectation):
         bas = instantiate_atomic_basis(
             cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
         )
-        with pytest.raises(
-            AttributeError, match=rf"can't set attribute|property '{attribute}' of"
-        ):
+        with expectation:
             setattr(bas, attribute, value)
+
+        if expectation is does_not_raise():
+            if value is not None:
+                assert getattr(bas, attribute) == value
+
 
     @pytest.mark.parametrize(
         "n_input, expectation",

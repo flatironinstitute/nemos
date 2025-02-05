@@ -401,8 +401,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._label
 
     @label.setter
-    def label(self, label: str) -> None:
+    def label(self, label: str | None) -> None:
         try:
+            if label is None:
+                label = self.__class__.__name__
             label = str(label)
         except Exception:
             raise TypeError("Label must be convertible to a string.")
