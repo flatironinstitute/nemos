@@ -376,7 +376,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # if a single lab is found or lab is None
         if len(label_map) <= 1:
-            return self._label
+            return current
 
         # if self is the first in the dict
         keys = list(label_map.keys())
