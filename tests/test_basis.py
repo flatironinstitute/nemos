@@ -5118,11 +5118,37 @@ def test__get_splitter_split_by_input(
     assert exp_slices == splitter_dict
 
 
+@pytest.mark.parametrize("bas1",list_all_basis_classes())
+def test_duplicate_keys(bas1, basis_class_specific_params):
+    # skip nested
+    if bas1 in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+        return
+
+    combine_basis = CombinedBasis()
+    bas1_instance = combine_basis.instantiate_basis(
+        5, bas1, basis_class_specific_params, window_size=10
+    )
+    bas2_instance = combine_basis.instantiate_basis(
+        5, bas1, basis_class_specific_params, window_size=10
+    )
+    bas3_instance = combine_basis.instantiate_basis(
+        5, bas1, basis_class_specific_params, window_size=10
+    )
+    bas_obj = bas1_instance + bas2_instance + bas3_instance
+
+    inps = [np.zeros((1,)) for _ in range(3)]
+    bas_obj.set_input_shape(*inps)
+    slice_dict = bas_obj._get_feature_slicing()[0]
+    expected_label = bas1_instance.__class__.__name__
+    assert tuple(slice_dict.keys()) == (expected_label, expected_label + "_1", expected_label + "_2")
+
+
 @pytest.mark.parametrize(
     "bas1, bas2, bas3",
     list(itertools.product(*[list_all_basis_classes()] * 3)),
 )
-def test_duplicate_keys(bas1, bas2, bas3, basis_class_specific_params):
+def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_params):
+
     # skip nested
     if any(
         bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
@@ -5132,20 +5158,106 @@ def test_duplicate_keys(bas1, bas2, bas3, basis_class_specific_params):
 
     combine_basis = CombinedBasis()
     bas1_instance = combine_basis.instantiate_basis(
-        5, bas1, basis_class_specific_params, window_size=10, label="label"
+        5, bas1, basis_class_specific_params, window_size=10, label="x"
     )
     bas2_instance = combine_basis.instantiate_basis(
-        5, bas2, basis_class_specific_params, window_size=10, label="label"
+        5, bas1, basis_class_specific_params, window_size=10, label="x"
     )
-    bas3_instance = combine_basis.instantiate_basis(
-        5, bas3, basis_class_specific_params, window_size=10, label="label"
-    )
-    bas_obj = bas1_instance + bas2_instance + bas3_instance
 
-    inps = [np.zeros((1,)) for n in range(3)]
-    bas_obj.set_input_shape(*inps)
-    slice_dict = bas_obj._get_feature_slicing()[0]
-    assert tuple(slice_dict.keys()) == ("label", "label-1", "label-2")
+    err_msg = "All user-provided labels of basis elements must be distinct"
+    with pytest.raises(ValueError, match=err_msg):
+        bas1_instance + bas2_instance
+
+    with pytest.raises(ValueError, match=err_msg):
+        AdditiveBasis(bas1_instance, bas2_instance)
+
+    with pytest.raises(ValueError, match=err_msg):
+       bas1_instance * bas2_instance
+
+    with pytest.raises(ValueError, match=err_msg):
+        MultiplicativeBasis(bas1_instance, bas2_instance)
+
+    bas2_instance.label = "y"
+    add = bas1_instance + bas2_instance
+    mul = bas1_instance * bas2_instance
+
+    # check error when setting attr directly
+    setter_error_msg = r"Label '[xyz]' is already in use. When user-provided"
+    with pytest.raises(ValueError, match=setter_error_msg):
+        add.basis1.label = "y"
+    with pytest.raises(ValueError, match=setter_error_msg):
+        add.basis2.label = "x"
+    with pytest.raises(ValueError, match=setter_error_msg):
+        mul.basis1.label = "y"
+    with pytest.raises(ValueError, match=setter_error_msg):
+        mul.basis2.label = "x"
+
+    # check error when using set_params
+    with pytest.raises(ValueError, match=setter_error_msg):
+        add.set_params(x__label="y")
+    with pytest.raises(ValueError, match=setter_error_msg):
+        add.set_params(y__label="x")
+    with pytest.raises(ValueError, match=setter_error_msg):
+        mul.set_params(x__label="y")
+    with pytest.raises(ValueError, match=setter_error_msg):
+        mul.set_params(y__label="x")
+
+    # add more nesting
+    bas3_instance = combine_basis.instantiate_basis(
+        5, bas1, basis_class_specific_params, window_size=10, label="x"
+    )
+    # add
+    with pytest.raises(ValueError, match=err_msg):
+        add + bas3_instance
+
+    with pytest.raises(ValueError, match=err_msg):
+        AdditiveBasis(add, bas3_instance)
+
+    with pytest.raises(ValueError, match=err_msg):
+        add * bas3_instance
+
+    with pytest.raises(ValueError, match=err_msg):
+        MultiplicativeBasis(add, bas3_instance)
+
+    # mul
+    with pytest.raises(ValueError, match=err_msg):
+        mul + bas3_instance
+
+    with pytest.raises(ValueError, match=err_msg):
+        AdditiveBasis(mul, bas3_instance)
+
+    with pytest.raises(ValueError, match=err_msg):
+        mul * bas3_instance
+
+    with pytest.raises(ValueError, match=err_msg):
+        MultiplicativeBasis(mul, bas3_instance)
+
+    bas3_instance.label = "z"
+    for bas in [add, mul]:
+        for meth in ["__add__", "__mul__"]:
+            meth = getattr(bas, meth)
+            comb = meth(bas3_instance)
+            for lab1 in ["x", "y", "z"]:
+                for lab2 in ["x", "y", "z"]:
+                    if lab1 == lab2:
+                        continue
+                    with pytest.raises(ValueError, match=setter_error_msg):
+                        comb.set_params(**{f'{lab1}__label': lab2})
+
+                    with pytest.raises(ValueError, match=setter_error_msg):
+                        comb[lab1].label = lab2
+
+                with pytest.raises(ValueError, match=setter_error_msg):
+                    comb.label = lab1
+                with pytest.raises(ValueError, match=setter_error_msg):
+                    comb.basis1.label = "z"
+                with pytest.raises(ValueError, match=setter_error_msg):
+                    comb[comb.basis1.label].label = lab2
+                with pytest.raises(ValueError, match=setter_error_msg):
+                    comb.set_params(**{f'{comb.basis1.label}__label': lab2})
+
+
+
 
 
 @pytest.mark.parametrize(
