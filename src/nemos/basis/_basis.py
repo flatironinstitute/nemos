@@ -756,21 +756,15 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if index == self.label:
             return self
 
-        bas = None
-        found = False
-        for lab, bas in generate_basis_label_pair(self):
-            if lab == index:
-                found = True
-                break
-
-        if not found:
+        search = [bas for lab, bas in generate_basis_label_pair(self) if lab == index]
+        if not search:
             avail_index = ",".join(
                 f"'{b}'" for b in self._list_subtree_labels("all")
             )
             raise IndexError(
                 f"Basis label {index} not found. Available labels: {avail_index}"
             )
-        return bas
+        return search[0]
 
     def _get_feature_slicing(
         self,
