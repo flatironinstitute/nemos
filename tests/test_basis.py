@@ -5118,7 +5118,7 @@ def test__get_splitter_split_by_input(
     assert exp_slices == splitter_dict
 
 
-@pytest.mark.parametrize("bas1",list_all_basis_classes())
+@pytest.mark.parametrize("bas1", list_all_basis_classes())
 def test_duplicate_keys(bas1, basis_class_specific_params):
     # skip nested
     if bas1 in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
@@ -5140,7 +5140,11 @@ def test_duplicate_keys(bas1, basis_class_specific_params):
     bas_obj.set_input_shape(*inps)
     slice_dict = bas_obj._get_feature_slicing()[0]
     expected_label = bas1_instance.__class__.__name__
-    assert tuple(slice_dict.keys()) == (expected_label, expected_label + "_1", expected_label + "_2")
+    assert tuple(slice_dict.keys()) == (
+        expected_label,
+        expected_label + "_1",
+        expected_label + "_2",
+    )
 
 
 @pytest.mark.parametrize(
@@ -5172,7 +5176,7 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
         AdditiveBasis(bas1_instance, bas2_instance)
 
     with pytest.raises(ValueError, match=err_msg):
-       bas1_instance * bas2_instance
+        bas1_instance * bas2_instance
 
     with pytest.raises(ValueError, match=err_msg):
         MultiplicativeBasis(bas1_instance, bas2_instance)
@@ -5242,7 +5246,7 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
                     if lab1 == lab2:
                         continue
                     with pytest.raises(ValueError, match=setter_error_msg):
-                        comb.set_params(**{f'{lab1}__label': lab2})
+                        comb.set_params(**{f"{lab1}__label": lab2})
 
                     with pytest.raises(ValueError, match=setter_error_msg):
                         comb[lab1].label = lab2
@@ -5254,17 +5258,20 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
                 with pytest.raises(ValueError, match=setter_error_msg):
                     comb[comb.basis1.label].label = lab2
                 with pytest.raises(ValueError, match=setter_error_msg):
-                    comb.set_params(**{f'{comb.basis1.label}__label': lab2})
+                    comb.set_params(**{f"{comb.basis1.label}__label": lab2})
 
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
-def test_dynamic_disambiguate_label(bas, basis_class_specific_params):
+def test_dynamic_set_label(bas, basis_class_specific_params):
     if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
         return
 
     combine_basis = CombinedBasis()
     bas_instance = combine_basis.instantiate_basis(
-        5, bas, basis_class_specific_params, window_size=10,
+        5,
+        bas,
+        basis_class_specific_params,
+        window_size=10,
     )
     assert bas_instance.label == bas_instance.__class__.__name__
     add_12 = bas_instance + bas_instance
@@ -5290,9 +5297,30 @@ def test_dynamic_disambiguate_label(bas, basis_class_specific_params):
     assert mix_123.basis1.basis2.label == (bas_instance.__class__.__name__ + "_1")
     assert mix_123.basis2.label == (bas_instance.__class__.__name__ + "_2")
 
-    assert add_123.basis1.label == "(" + bas_instance.__class__.__name__ + " + " +  bas_instance.__class__.__name__ + "_1)"
-    assert mul_123.basis1.label == "(" + bas_instance.__class__.__name__ + " * " +  bas_instance.__class__.__name__ + "_1)"
-    assert mix_123.basis1.label == "(" + bas_instance.__class__.__name__ + " + " +  bas_instance.__class__.__name__ + "_1)"
+    assert (
+        add_123.basis1.label
+        == "("
+        + bas_instance.__class__.__name__
+        + " + "
+        + bas_instance.__class__.__name__
+        + "_1)"
+    )
+    assert (
+        mul_123.basis1.label
+        == "("
+        + bas_instance.__class__.__name__
+        + " * "
+        + bas_instance.__class__.__name__
+        + "_1)"
+    )
+    assert (
+        mix_123.basis1.label
+        == "("
+        + bas_instance.__class__.__name__
+        + " + "
+        + bas_instance.__class__.__name__
+        + "_1)"
+    )
 
     # change label leaves
     add_123.basis1.basis1.label = "x"
@@ -5310,13 +5338,31 @@ def test_dynamic_disambiguate_label(bas, basis_class_specific_params):
     assert mix_123.basis1.basis2.label == bas_instance.__class__.__name__
     assert mix_123.basis2.label == (bas_instance.__class__.__name__ + "_1")
 
-    assert add_123.basis1.label == "(" + "x" + " + " + bas_instance.__class__.__name__ + ")"
-    assert mul_123.basis1.label == "(" + "x" + " * " + bas_instance.__class__.__name__ + ")"
-    assert mix_123.basis1.label == "(" + "x" + " + " + bas_instance.__class__.__name__ + ")"
+    assert (
+        add_123.basis1.label
+        == "(" + "x" + " + " + bas_instance.__class__.__name__ + ")"
+    )
+    assert (
+        mul_123.basis1.label
+        == "(" + "x" + " * " + bas_instance.__class__.__name__ + ")"
+    )
+    assert (
+        mix_123.basis1.label
+        == "(" + "x" + " + " + bas_instance.__class__.__name__ + ")"
+    )
 
-    assert add_123.label == f"((x + {bas_instance.__class__.__name__}) + {bas_instance.__class__.__name__}_1)"
-    assert mul_123.label == f"((x * {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
-    assert mix_123.label == f"((x + {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
+    assert (
+        add_123.label
+        == f"((x + {bas_instance.__class__.__name__}) + {bas_instance.__class__.__name__}_1)"
+    )
+    assert (
+        mul_123.label
+        == f"((x * {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
+    )
+    assert (
+        mix_123.label
+        == f"((x + {bas_instance.__class__.__name__}) * {bas_instance.__class__.__name__}_1)"
+    )
 
     # change composite label
     add_123.basis1.label = "y"
@@ -5343,6 +5389,68 @@ def test_dynamic_disambiguate_label(bas, basis_class_specific_params):
     assert mul_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
     assert mix_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
 
+
+@pytest.mark.parametrize("bas1", list_all_basis_classes())
+@pytest.mark.parametrize("bas2", list_all_basis_classes())
+def test_getitem(bas1, bas2, basis_class_specific_params):
+    if any(
+        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        for bas in (bas1, bas2)
+    ):
+        return
+
+    combine_basis = CombinedBasis()
+    bas1_instance = combine_basis.instantiate_basis(
+        5,
+        bas1,
+        basis_class_specific_params,
+        window_size=10,
+    )
+    bas2_instance = combine_basis.instantiate_basis(
+        6,
+        bas2,
+        basis_class_specific_params,
+        window_size=10,
+    )
+    add_12 = bas1_instance + bas2_instance
+    mul_12 = bas1_instance * bas2_instance
+    add_123 = add_12 + bas1_instance
+    mul_123 = mul_12 * bas1_instance
+    mix_123 = add_12 * bas1_instance
+
+    add_123.basis1.basis1.label = "x"
+    add_123.basis1.basis2.label = "y"
+    add_123.basis2.label = "z"
+    mul_123.basis1.basis1.label = "x"
+    mul_123.basis1.basis2.label = "y"
+    mul_123.basis2.label = "z"
+    mix_123.basis1.basis1.label = "x"
+    mix_123.basis1.basis2.label = "y"
+    mix_123.basis2.label = "z"
+
+    list_all_label = add_123._list_subtree_labels("all")
+    assert tuple(list_all_label) == ("((x + y) + z)", "(x + y)", "x", "y", "z")
+    assert add_123["((x + y) + z)"] is add_123
+    assert add_123["(x + y)"] is add_123.basis1
+    assert add_123["x"] is add_123.basis1.basis1
+    assert add_123["y"] is add_123.basis1.basis2
+    assert add_123["z"] is add_123.basis2
+
+    list_all_label = mul_123._list_subtree_labels("all")
+    assert tuple(list_all_label) == ("((x * y) * z)", "(x * y)", "x", "y", "z")
+    assert mul_123["((x * y) * z)"] is mul_123
+    assert mul_123["(x * y)"] is mul_123.basis1
+    assert mul_123["x"] is mul_123.basis1.basis1
+    assert mul_123["y"] is mul_123.basis1.basis2
+    assert mul_123["z"] is mul_123.basis2
+
+    list_all_label = mix_123._list_subtree_labels("all")
+    assert tuple(list_all_label) == ("((x + y) * z)", "(x + y)", "x", "y", "z")
+    assert mix_123["((x + y) * z)"] is mix_123
+    assert mix_123["(x + y)"] is mix_123.basis1
+    assert mix_123["x"] is mix_123.basis1.basis1
+    assert mix_123["y"] is mix_123.basis1.basis2
+    assert mix_123["z"] is mix_123.basis2
 
 
 @pytest.mark.parametrize(
