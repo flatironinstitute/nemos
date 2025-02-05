@@ -155,6 +155,15 @@ def find_basis_tree_from_param_name(param_name: str):
     return outer, basis_tree, inner
 
 
+def generate_basis_label_pair(bas: Basis):
+    if hasattr(bas, "basis1"):
+        for label, sub_bas in generate_basis_label_pair(bas.basis1):
+            yield label, sub_bas
+        for label, sub_bas in generate_basis_label_pair(bas.basis2):
+            yield label, sub_bas
+    yield bas.label, bas
+
+
 class Basis(Base, abc.ABC, BasisTransformerMixin):
     """
     Abstract base class for defining basis functions for feature transformation.
@@ -746,20 +755,22 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __getitem__(self, index: str) -> Basis:
         if index == self.label:
             return self
-        try:
-            out = self.get_params(deep=True)[index]
-        except Exception:
+
+        bas = None
+        found = False
+        for lab, bas in generate_basis_label_pair(self):
+            if lab == index:
+                found = True
+                break
+
+        if not found:
             avail_index = ",".join(
                 f"'{b}'" for b in self._list_subtree_labels("all")
             )
             raise IndexError(
                 f"Basis label {index} not found. Available labels: {avail_index}"
             )
-        if not isinstance(out, Basis):
-            raise IndexError(
-                f"Invalid index {index}. Only basis object labels can be indexed directly."
-            )
-        return out
+        return bas
 
     def _get_feature_slicing(
         self,
