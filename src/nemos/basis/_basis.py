@@ -365,8 +365,27 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return self._label
 
     def _generate_label(self) -> str:
-        # default simpy return label
-        return self._label
+        root = self._root()
+        current = getattr(self, "_label", None)
+        label_map = {id(comp): getattr(comp, "_label", None) for comp in root._iterate_over_components() if getattr(comp, "_label", None) == current}
+
+        # if a single lab is found or lab is None
+        if len(label_map) <= 1:
+            return self._label
+
+        # if self is the first in the dict
+        keys = list(label_map.keys())
+        if keys[0] == id(self):
+            return current
+
+        # else disambiguate
+        sub_dict = {keys[0]: label_map[keys[0]]}
+        for key in keys[1:]:
+            new = root._generate_unique_key(sub_dict, current)
+            sub_dict.update({key: new})
+            if key == id(self):
+                break
+        return new
 
     def _root(self):
         """Get the basis root"""
@@ -757,6 +776,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             return self
 
         search = [bas for lab, bas in generate_basis_label_pair(self) if lab == index]
+        if len(search) > 1:
+            raise IndexError(f"More than one basis with default label '{index}'. Assign unique labels to bases:\n"
+                             f"{search}")
+
         if not search:
             avail_index = ",".join(
                 f"'{b}'" for b in self._list_subtree_labels("all")
