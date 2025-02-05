@@ -782,11 +782,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             return self
 
         search = [bas for lab, bas in generate_basis_label_pair(self) if lab == index]
-        if len(search) > 1:
-            raise IndexError(
-                f"More than one basis with default label '{index}'. Assign unique labels to bases:\n"
-                f"{search}"
-            )
 
         if not search:
             avail_index = ",".join(f"'{b}'" for b in self._list_subtree_labels("all"))

@@ -5418,6 +5418,51 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     mul_123 = mul_12 * bas1_instance
     mix_123 = add_12 * bas1_instance
 
+    name1, name2 = bas1.__name__, bas2.__name__
+    if name1 == name2:
+        name2 += "_1"
+        name3 = name1 + "_2"
+    else:
+        name3 = name1 + "_1"
+
+
+    list_all_label = add_123._list_subtree_labels("all")
+    assert tuple(list_all_label) == (
+        f"(({name1} + {name2}) + {name3})",
+        f"({name1} + {name2})",
+        f"{name1}", f"{name2}", f"{name3}",
+    )
+    assert add_123[f"(({name1} + {name2}) + {name3})"] is add_123
+    assert add_123[f"({name1} + {name2})"] is add_123.basis1
+    assert add_123[f"{name1}"] is add_123.basis1.basis1
+    assert add_123[f"{name2}"] is add_123.basis1.basis2
+    assert add_123[f"{name3}"] is add_123.basis2
+
+    list_all_label = mul_123._list_subtree_labels("all")
+    assert tuple(list_all_label) == (
+        f"(({name1} * {name2}) * {name3})",
+        f"({name1} * {name2})",
+        f"{name1}", f"{name2}", f"{name3}",
+    )
+    assert mul_123[f"(({name1} * {name2}) * {name3})"] is mul_123
+    assert mul_123[f"({name1} * {name2})"] is mul_123.basis1
+    assert mul_123[f"{name1}"] is mul_123.basis1.basis1
+    assert mul_123[f"{name2}"] is mul_123.basis1.basis2
+    assert mul_123[f"{name3}"] is mul_123.basis2
+
+    list_all_label = mix_123._list_subtree_labels("all")
+    assert tuple(list_all_label) == (
+        f"(({name1} + {name2}) * {name3})",
+        f"({name1} + {name2})",
+        f"{name1}", f"{name2}", f"{name3}",
+    )
+    assert mix_123[f"(({name1} + {name2}) * {name3})"] is mix_123
+    assert mix_123[f"({name1} + {name2})"] is mix_123.basis1
+    assert mix_123[f"{name1}"] is mix_123.basis1.basis1
+    assert mix_123[f"{name2}"] is mix_123.basis1.basis2
+    assert mix_123[f"{name3}"] is mix_123.basis2
+
+
     add_123.basis1.basis1.label = "x"
     add_123.basis1.basis2.label = "y"
     add_123.basis2.label = "z"
@@ -5451,6 +5496,13 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert mix_123["x"] is mix_123.basis1.basis1
     assert mix_123["y"] is mix_123.basis1.basis2
     assert mix_123["z"] is mix_123.basis2
+
+    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+        add_123["BSplineEval"]
+    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+        mul_123["BSplineEval"]
+    with pytest.raises(IndexError, match=f"Basis label BSplineEval not found"):
+        mix_123["BSplineEval"]
 
 
 @pytest.mark.parametrize(
