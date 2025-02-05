@@ -367,7 +367,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def _generate_label(self) -> str:
         root = self._root()
         current = getattr(self, "_label", None)
-        label_map = {id(comp): getattr(comp, "_label", None) for comp in root._iterate_over_components() if getattr(comp, "_label", None) == current}
+        label_map = {
+            id(comp): getattr(comp, "_label", None)
+            for comp in root._iterate_over_components()
+            if getattr(comp, "_label", None) == current
+        }
 
         # if a single lab is found or lab is None
         if len(label_map) <= 1:
@@ -379,10 +383,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             return current
 
         # else disambiguate
-        sub_dict = {keys[0]: label_map[keys[0]]}
+        sub_list = [keys[0]]
         for key in keys[1:]:
-            new = root._generate_unique_key(sub_dict, current)
-            sub_dict.update({key: new})
+            new = root._generate_unique_key(sub_list, current)
+            sub_list.append(new)
             if key == id(self):
                 break
         return new
