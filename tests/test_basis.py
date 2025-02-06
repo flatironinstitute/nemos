@@ -3639,9 +3639,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         "expected_out",
         [
             {
-                basis.BSplineEval: "MultiplicativeBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                AdditiveBasis: "MultiplicativeBasis(\n    basis1=AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
-                MultiplicativeBasis: "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                basis.BSplineEval: "'(BSplineEval * MSplineEval)': MultiplicativeBasis(\n    basis1=BSplineEval(n_basis_funcs=5, order=4),\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)",
+                AdditiveBasis: "'((MSplineEval + RaisedCosineLinearConv) * MSplineEval_1)': MultiplicativeBasis(\n    basis1='(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2='MSplineEval_1': MSplineEval(n_basis_funcs=6, order=4),\n)",
+                MultiplicativeBasis: "'((MSplineEval * RaisedCosineLinearConv) * MSplineEval_1)': MultiplicativeBasis(\n    basis1='(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n        basis1=MSplineEval(n_basis_funcs=5, order=4),\n        basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n    ),\n    basis2='MSplineEval_1': MSplineEval(n_basis_funcs=6, order=4),\n)",
             }
         ],
     )
@@ -3663,16 +3663,19 @@ class TestMultiplicativeBasis(CombinedBasis):
             bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
         else:
             bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+
         if label in [None, "default-behavior"]:
             expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+            exp_name = "RaisedCosineLinearEval"
         else:
             expected_a = (
                 f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
             )
+            exp_name = label
         bas = bas * self.instantiate_basis(
             6, basis.MSplineEval, basis_class_specific_params
         )
-        expected = f"MultiplicativeBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
+        expected = f"'({exp_name} * MSplineEval)': MultiplicativeBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
         out = repr(bas)
         assert out == expected
 
@@ -5576,12 +5579,14 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "basis2=BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=BSplineEval(n_basis_funcs=10, order=4),\n)"
+        "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n            basis1=MultiplicativeBasis(\n                basis1=MultiplicativeBasis(\n                    basis1=MultiplicativeBasis(\n                        ...\n                    ),\n                    basis2='BSplineEval_95': BSplineEval(n_basis_funcs=10, order=4),\n                ),\n                basis2='BSplineEval_96': BSplineEval(n_basis_funcs=10, order=4),\n            ),\n            basis2='BSplineEval_97': BSplineEval(n_basis_funcs=10, order=4),\n        ),\n        basis2='BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 
-    bas = basis.MSplineEval(10)
-    bas = reduce(sum, (bas for _ in range(100)))
+    bas = basis.MSplineEval(10, label="0")
+    for k in range(1, 100):
+        bas = bas + basis.MSplineEval(10, label=str(k))
+
 
     # large additive basis
     out = repr(bas)
@@ -5589,6 +5594,6 @@ def test_composite_basis_repr_wrapping():
         "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
     )
     assert out.endswith(
-        "basis2=MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=MSplineEval(n_basis_funcs=10, order=4),\n)"
+        "        basis2='98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='99': MSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out

@@ -10,6 +10,7 @@ from itertools import chain
 from typing import TYPE_CHECKING, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
+from IPython.core.display import display_pdf
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
@@ -700,8 +701,15 @@ class CompositeBasisMixin:
         return self
 
     def __repr__(self, n=0):
-        _, rows = _get_terminal_size()
+        cols, rows = _get_terminal_size()
         rows = rows // 4
+        cols = cols // 4
+        disp_label = len(str(self.label)) < cols
+        if disp_label:
+            start_str = f"'{self.label}': "
+        else:
+            start_str = ""
+
         # number of nested composite bases
         n += 1
         tab = "    "
@@ -715,11 +723,11 @@ class CompositeBasisMixin:
             basis2 = self.basis2
         if n < rows:
             rep = (
-                f"'{self.label}': {self.__class__.__name__}"
+                start_str + f"{self.__class__.__name__}"
                 f"(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
             )
         elif n == rows:
-            rep = f"{self.label}': {self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+            rep = start_str + f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
         else:
             rep = None
         return rep
