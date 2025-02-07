@@ -671,7 +671,7 @@ class CompositeBasisMixin:
         """
         List all user-specified labels.
         """
-        label_list = [self.label]
+        label_list = [self._label] if (type_label == "all" or self._label) else []
         return (
             label_list
             + self.basis1._list_subtree_labels(type_label)
