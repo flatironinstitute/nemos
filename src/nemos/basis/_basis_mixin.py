@@ -107,6 +107,32 @@ class AtomicBasisMixin:
             self._label = self.__class__.__name__
             self._recompute_all_labels()
             return
+        else:
+            # unsure how to avoid circular imports here
+            # so I listed all bases
+            basis_names = (
+                "IdentityEval",
+                "HistoryConv",
+                "MSplineEval",
+                "MSplineConv",
+                "BSplineEval",
+                "BSplineConv",
+                "CyclicBSplineEval",
+                "CyclicBSplineConv",
+                "RaisedCosineLinearEval",
+                "RaisedCosineLinearConv",
+                "RaisedCosineLogEval",
+                "RaisedCosineLogConv",
+                "OrthExponentialEval",
+                "OrthExponentialConv",
+                "TransformerBasis",
+            )
+            match = re.match(r"(.+)?_\d+$", label)
+            check_string = match.group(1) if match else None
+            check_string = check_string if check_string in basis_names else label
+            if check_string == self.__class__.__name__:
+                self._recompute_all_labels()
+                return
 
         # convert to string (in case label is not string).
         if not isinstance(label, str):
@@ -114,10 +140,13 @@ class AtomicBasisMixin:
 
         # get the current available labels
         current_labels = self._root()._list_subtree_labels()
-        if label in current_labels:
-            raise ValueError(
-                f"Label '{label}' is already in use. When user-provided, label must be unique."
-            )
+        # if check_string is one of the other classes drop
+        if (check_string in current_labels) or (check_string in basis_names):
+            if check_string in basis_names:
+                msg = f"Cannot assign '{label}' to a basis of class {self.__class__.__name__}."
+            else:
+                msg = f"Label '{label}' is already in use. When user-provided, label must be unique."
+            raise ValueError(msg)
         else:
             # match if it was a default
             self._update_label_from_root()

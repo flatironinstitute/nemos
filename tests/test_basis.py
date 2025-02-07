@@ -5399,6 +5399,87 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
     assert mix_123.basis2.label == f"{bas_instance.__class__.__name__}_1"
 
 
+@pytest.mark.parametrize("bas", list_all_basis_classes())
+def test_add_left_and_right(bas, basis_class_specific_params):
+    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+        return
+
+    combine_basis = CombinedBasis()
+    bas_instance = combine_basis.instantiate_basis(
+        5,
+        bas,
+        basis_class_specific_params,
+        window_size=10,
+    )
+    bas_instance.label = "x"
+    bas2_instance = bas_instance.__sklearn_clone__()
+    bas3_instance = bas_instance.__sklearn_clone__()
+    bas2_instance.label = "y"
+    bas3_instance.label = "z"
+    add_left = (bas_instance + bas2_instance) + bas3_instance
+    assert add_left.label == "((x + y) + z)"
+    add_right = bas_instance + (bas2_instance + bas3_instance)
+    assert add_right.label == "(x + (y + z))"
+
+@pytest.mark.parametrize("bas", list_all_basis_classes())
+def test_multiply_left_and_right(bas, basis_class_specific_params):
+    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+        return
+
+    combine_basis = CombinedBasis()
+    bas_instance = combine_basis.instantiate_basis(
+        5,
+        bas,
+        basis_class_specific_params,
+        window_size=10,
+    )
+    bas_instance.label = "x"
+    bas2_instance = bas_instance.__sklearn_clone__()
+    bas3_instance = bas_instance.__sklearn_clone__()
+    bas2_instance.label = "y"
+    bas3_instance.label = "z"
+    add_left = (bas_instance * bas2_instance) * bas3_instance
+    assert add_left.label == "((x * y) * z)"
+    add_right = bas_instance * (bas2_instance * bas3_instance)
+    assert add_right.label == "(x * (y * z))"
+
+
+@pytest.mark.parametrize("bas", list_all_basis_classes())
+def test_basis_protected_name(bas, basis_class_specific_params):
+    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+        return
+
+    combine_basis = CombinedBasis()
+    bas_instance = combine_basis.instantiate_basis(
+        5,
+        bas,
+        basis_class_specific_params,
+        window_size=10,
+    )
+    name = bas.__name__
+    # does not raise because the basis name is the same as the current.
+    with does_not_raise():
+        bas_instance.label = name
+    name += "_1"
+    with does_not_raise():
+        bas_instance.label = name
+
+    # if stripping the last number is not a basis name, no error
+    name += "_1"
+    with does_not_raise():
+        bas_instance.label = name
+
+    invalid_label = "MSplineEval" if bas.__name__ != "MSplineEval" else "MSplineConv"
+    with pytest.raises(ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"):
+        bas_instance.label = invalid_label
+    invalid_label += "_1"
+    with pytest.raises(ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"):
+        bas_instance.label = invalid_label
+    invalid_label += "_1"
+    with does_not_raise():
+        bas_instance.label = invalid_label
+
+
 @pytest.mark.parametrize("bas1", list_all_basis_classes())
 @pytest.mark.parametrize("bas2", list_all_basis_classes())
 def test_getitem(bas1, bas2, basis_class_specific_params):
