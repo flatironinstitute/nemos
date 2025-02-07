@@ -5482,7 +5482,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     mix_123.basis1.basis2.label = "y"
     mix_123.basis2.label = "z"
 
-    list_all_label = add_123._list_subtree_labels("all")
+    list_all_label = add_123._list_subtree_labels()
     assert tuple(list_all_label) == ("((x + y) + z)", "(x + y)", "x", "y", "z")
     assert add_123["((x + y) + z)"] is add_123
     assert add_123["(x + y)"] is add_123.basis1

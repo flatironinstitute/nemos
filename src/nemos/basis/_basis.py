@@ -710,7 +710,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         search = [bas for lab, bas in generate_basis_label_pair(self) if lab == index]
 
         if not search:
-            avail_index = ",".join(f"'{b}'" for b in self._list_subtree_labels("all"))
+            avail_index = ",".join(f"'{b}'" for b in self._list_subtree_labels())
             raise IndexError(
                 f"Basis label {index} not found. Available labels: {avail_index}"
             )
