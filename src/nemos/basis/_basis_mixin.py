@@ -117,6 +117,7 @@ class AtomicBasisMixin:
             check_string = match.group(1) if match else None
             check_string = check_string if check_string in basis_names else label
             if check_string == self.__class__.__name__:
+                self._label = check_string
                 self._recompute_all_labels()
                 return
 
