@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import copy
 import inspect
+import sys
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Generator, List, Optional, Tuple, Union, Literal
@@ -108,25 +109,10 @@ class AtomicBasisMixin:
             self._recompute_all_labels()
             return
         else:
-            # unsure how to avoid circular imports here
-            # so I listed all bases
-            basis_names = (
-                "IdentityEval",
-                "HistoryConv",
-                "MSplineEval",
-                "MSplineConv",
-                "BSplineEval",
-                "BSplineConv",
-                "CyclicBSplineEval",
-                "CyclicBSplineConv",
-                "RaisedCosineLinearEval",
-                "RaisedCosineLinearConv",
-                "RaisedCosineLogEval",
-                "RaisedCosineLogConv",
-                "OrthExponentialEval",
-                "OrthExponentialConv",
-                "TransformerBasis",
-            )
+            # unsure how to avoid circular imports here so I get the module namespace runtime
+            # and listed all bases
+            basis_module = sys.modules.get("nemos.basis.basis")
+            basis_names = getattr(basis_module, "__all__")
             match = re.match(r"(.+)?_\d+$", label)
             check_string = match.group(1) if match else None
             check_string = check_string if check_string in basis_names else label
