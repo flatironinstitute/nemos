@@ -2413,18 +2413,26 @@ class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
     def test_redundant_label_in_nested_basis(self):
-        bas = basis.BSplineEval(4) + basis.BSplineEval(5) + basis.BSplineEval(6) + basis.BSplineEval(7)
-        with pytest.raises(ValueError, match="All user-provided labels of basis elements must be distinct"):
+        bas = (
+            basis.BSplineEval(4)
+            + basis.BSplineEval(5)
+            + basis.BSplineEval(6)
+            + basis.BSplineEval(7)
+        )
+        with pytest.raises(
+            ValueError,
+            match="All user-provided labels of basis elements must be distinct",
+        ):
             bas.set_params(
                 **{
-                    "(BSplineEval + BSplineEval_1)": AdditiveBasis(basis.BSplineEval(9),
-                                                                         basis.BSplineEval(10), label="ciao"),
-                    "((BSplineEval + BSplineEval_1) + BSplineEval_2)": AdditiveBasis(basis.BSplineEval(9),
-                                                                                           basis.BSplineEval(10),
-                                                                                           label="ciao")
+                    "(BSplineEval + BSplineEval_1)": AdditiveBasis(
+                        basis.BSplineEval(9), basis.BSplineEval(10), label="ciao"
+                    ),
+                    "((BSplineEval + BSplineEval_1) + BSplineEval_2)": AdditiveBasis(
+                        basis.BSplineEval(9), basis.BSplineEval(10), label="ciao"
+                    ),
                 }
             )
-
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval"))
     def test_set_params_basis(self, basis_a, basis_class_specific_params):
@@ -3652,15 +3660,23 @@ class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
 
     def test_redundant_label_in_nested_basis(self):
-        bas = basis.BSplineEval(4) * basis.BSplineEval(5) + basis.BSplineEval(6) + basis.BSplineEval(7)
-        with pytest.raises(ValueError, match="All user-provided labels of basis elements must be distinct"):
+        bas = (
+            basis.BSplineEval(4) * basis.BSplineEval(5)
+            + basis.BSplineEval(6)
+            + basis.BSplineEval(7)
+        )
+        with pytest.raises(
+            ValueError,
+            match="All user-provided labels of basis elements must be distinct",
+        ):
             bas.set_params(
                 **{
-                    "(BSplineEval * BSplineEval_1)": AdditiveBasis(basis.BSplineEval(9),
-                                                                         basis.BSplineEval(10), label="ciao"),
-                    "((BSplineEval * BSplineEval_1) + BSplineEval_2)": AdditiveBasis(basis.BSplineEval(9),
-                                                                                           basis.BSplineEval(10),
-                                                                                           label="ciao")
+                    "(BSplineEval * BSplineEval_1)": AdditiveBasis(
+                        basis.BSplineEval(9), basis.BSplineEval(10), label="ciao"
+                    ),
+                    "((BSplineEval * BSplineEval_1) + BSplineEval_2)": AdditiveBasis(
+                        basis.BSplineEval(9), basis.BSplineEval(10), label="ciao"
+                    ),
                 }
             )
 
@@ -5637,7 +5653,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     else:
         name3 = name1 + "_1"
 
-    list_all_label = add_123._list_subtree_labels("all")
+    list_all_label = add_123._generate_subtree_labels("all")
     assert tuple(list_all_label) == (
         f"(({name1} + {name2}) + {name3})",
         f"({name1} + {name2})",
@@ -5651,7 +5667,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert add_123[f"{name2}"] is add_123.basis1.basis2
     assert add_123[f"{name3}"] is add_123.basis2
 
-    list_all_label = mul_123._list_subtree_labels("all")
+    list_all_label = mul_123._generate_subtree_labels("all")
     assert tuple(list_all_label) == (
         f"(({name1} * {name2}) * {name3})",
         f"({name1} * {name2})",
@@ -5665,7 +5681,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert mul_123[f"{name2}"] is mul_123.basis1.basis2
     assert mul_123[f"{name3}"] is mul_123.basis2
 
-    list_all_label = mix_123._list_subtree_labels("all")
+    list_all_label = mix_123._generate_subtree_labels("all")
     assert tuple(list_all_label) == (
         f"(({name1} + {name2}) * {name3})",
         f"({name1} + {name2})",
@@ -5689,7 +5705,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     mix_123.basis1.basis2.label = "y"
     mix_123.basis2.label = "z"
 
-    list_all_label = add_123._list_subtree_labels()
+    list_all_label = add_123._generate_subtree_labels()
     assert tuple(list_all_label) == ("((x + y) + z)", "(x + y)", "x", "y", "z")
     assert add_123["((x + y) + z)"] is add_123
     assert add_123["(x + y)"] is add_123.basis1
@@ -5697,7 +5713,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert add_123["y"] is add_123.basis1.basis2
     assert add_123["z"] is add_123.basis2
 
-    list_all_label = mul_123._list_subtree_labels("all")
+    list_all_label = mul_123._generate_subtree_labels("all")
     assert tuple(list_all_label) == ("((x * y) * z)", "(x * y)", "x", "y", "z")
     assert mul_123["((x * y) * z)"] is mul_123
     assert mul_123["(x * y)"] is mul_123.basis1
@@ -5705,7 +5721,7 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert mul_123["y"] is mul_123.basis1.basis2
     assert mul_123["z"] is mul_123.basis2
 
-    list_all_label = mix_123._list_subtree_labels("all")
+    list_all_label = mix_123._generate_subtree_labels("all")
     assert tuple(list_all_label) == ("((x + y) * z)", "(x + y)", "x", "y", "z")
     assert mix_123["((x + y) * z)"] is mix_123
     assert mix_123["(x + y)"] is mix_123.basis1

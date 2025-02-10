@@ -73,7 +73,9 @@ def remap_parameters(method):
         # basis.set_params(basis1=bas, basis2=bas)
         new_params = {
             map_params.get(key, key): (
-                copy.deepcopy(val) if isinstance(val, (Basis, TransformerBasis)) else val
+                copy.deepcopy(val)
+                if isinstance(val, (Basis, TransformerBasis))
+                else val
             )
             for key, val in params.items()
         }
@@ -88,10 +90,8 @@ def remap_parameters(method):
 
         # re-assign ordered ids to all default labels of atomic components
         # note that the recursion always run until parent.
-        print(f"Update: {new_params.keys()}")
         if self._parent is None:
             _recompute_all_default_labels(self)
-            print("IS ROOT")
 
         return self
 
@@ -784,14 +784,16 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if index == self.label:
             return self
 
-        search = [bas for lab, bas in generate_basis_label_pair(self) if lab == index]
+        search = next(
+            (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None
+        )
 
-        if not search:
-            avail_index = ",".join(f"'{b}'" for b in self._list_subtree_labels())
+        if search is None:
+            avail_index = ",".join(f"'{b}'" for b in self._generate_subtree_labels())
             raise IndexError(
                 f"Basis label {index} not found. Available labels: {avail_index}"
             )
-        return search[0]
+        return search
 
     def _get_feature_slicing(
         self,

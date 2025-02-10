@@ -148,7 +148,7 @@ class AtomicBasisMixin:
             )
 
         # get the current available labels
-        current_labels = self._root()._list_subtree_labels()
+        current_labels = self._root()._generate_subtree_labels()
         # if check_string is one of the other classes drop
         if (check_string in current_labels) or (check_string in __PUBLIC_BASES__):
             if check_string in __PUBLIC_BASES__:
@@ -224,15 +224,16 @@ class AtomicBasisMixin:
         """
         return (x for x in [self])
 
-    def _list_subtree_labels(
+    def _generate_subtree_labels(
         self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> List[str]:
+    ) -> Generator[str]:
         """
         List all user-specified labels.
         """
         lab = self._label
         is_default = re.match(rf"^{self.__class__.__name__}(_\d+)?$", lab) is not None
-        return [lab] if (type_label == "all" or (not is_default)) else []
+        if type_label == "all" or (not is_default):
+            yield lab
 
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
@@ -693,30 +694,31 @@ class CompositeBasisMixin:
     def _check_unique_labels(self, basis1, basis2):
         """Check that all user-defined labels in the given basis objects are unique."""
 
-        # Retrieve user-defined labels from basis1 and basis2
-        set_basis1 = set(basis1._list_subtree_labels("user-defined"))
-        set_basis2 = set(basis2._list_subtree_labels("user-defined"))
-
         # Include self's label in uniqueness check (if applicable)
         self_label = getattr(self, "_label", None)
-        self_label_set = {self_label} if self_label else set()
 
-        # Find shared labels
-        shared_labels = (set_basis1 & set_basis2) | (set_basis1 & self_label_set) | (set_basis2 & self_label_set)
+        # Store basis2 labels as we iterate through basis1
+        seen_labels = set(basis1._generate_subtree_labels("user-defined"))
+        if self_label in seen_labels:
+            err_msg = (
+                f"All user-provided labels of basis elements must be distinct.\n"
+                f"The basis you are composing share the following labels: '{self_label}'.\n"
+                "Please change the labels for one of the elements before composition."
+            )
+            return True, err_msg
 
-        # Check uniqueness
-        have_shared = bool(shared_labels)
+        # Check for duplicates in basis2 without storing in set for efficiency
+        for label in basis2._generate_subtree_labels("user-defined"):
+            if label == self_label or label in seen_labels:
+                err_msg = (
+                    f"All user-provided labels of basis elements must be distinct.\n"
+                    f"The basis you are composing share the following labels: '{label}'.\n"
+                    "Please change the labels for one of the elements before composition."
+                )
+                return True, err_msg
+            seen_labels.add(label)
 
-        # Construct error message only if needed
-        if have_shared:
-            err_msg = ("All user-provided labels of basis elements must be distinct."
-                       f"\nThe basis you are composing share the following labels: {shared_labels}.\n"
-                       "Please change the labels for one of the elements before composition."
-                       )
-
-            return have_shared, err_msg
-
-        return have_shared, ""
+        return False, ""
 
     def _set_labels(self, basis1, basis2):
         # check labels
@@ -725,7 +727,6 @@ class CompositeBasisMixin:
             raise ValueError(err_msg)
 
         self.update_default_label_id(basis1, basis2)
-
 
     def _input_shape_update(self):
         # if all bases where set, then set input for composition.
@@ -749,7 +750,7 @@ class CompositeBasisMixin:
             self._label = None
         else:
             label = str(label)
-            if label in self._root()._list_subtree_labels():
+            if label in self._root()._generate_subtree_labels():
                 raise ValueError(
                     f"Label '{label}' is already in use. When user-provided, label must be unique."
                 )
@@ -787,18 +788,18 @@ class CompositeBasisMixin:
         """Read only property for composite bases."""
         pass
 
-    def _list_subtree_labels(
+    def _generate_subtree_labels(
         self, type_label: Literal["all", "user-defined"] = "all"
-    ) -> List[str]:
+    ) -> Generator[str]:
         """
         List all user-specified labels.
         """
-        label_list = [self.label] if (type_label == "all" or self._label) else []
-        return (
-            label_list
-            + self.basis1._list_subtree_labels(type_label)
-            + self.basis2._list_subtree_labels(type_label)
-        )
+        if type_label == "all" or self._label:
+            yield self.label
+        for lab in self.basis1._generate_subtree_labels(type_label):
+            yield lab
+        for lab in self.basis2._generate_subtree_labels(type_label):
+            yield lab
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """

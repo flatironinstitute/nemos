@@ -977,8 +977,8 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.RaisedCosineLinearEval: "Transformer(RaisedCosineLinearEval(n_basis_funcs=5, width=2.0))",
             basis.RaisedCosineLogConv: "Transformer(RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
             basis.RaisedCosineLogEval: "Transformer(RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
-            basis.AdditiveBasis: "Transformer(AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
-            basis.MultiplicativeBasis: "Transformer(MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+            basis.AdditiveBasis: "Transformer('(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+            basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
         }
     ],
 )
