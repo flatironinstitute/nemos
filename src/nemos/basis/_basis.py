@@ -951,7 +951,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> additive_basis = basis_1 + basis_2
     >>> additive_basis
-    AdditiveBasis(
+    '(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
         basis1=BSplineEval(n_basis_funcs=10, order=4),
         basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
     )
@@ -960,8 +960,8 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> additive_basis_2 = additive_basis + basis_3
     >>> additive_basis_2
-    AdditiveBasis(
-        basis1=AdditiveBasis(
+    '((BSplineEval + RaisedCosineLinearEval) + RaisedCosineLogEval)': AdditiveBasis(
+        basis1='(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
             basis1=BSplineEval(n_basis_funcs=10, order=4),
             basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
         ),
@@ -1389,17 +1389,18 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> multiplicative_basis = basis_1 * basis_2
     >>> multiplicative_basis
-    MultiplicativeBasis(
+    '(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
         basis1=BSplineEval(n_basis_funcs=10, order=4),
         basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
     )
+
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     >>> multiplicative_basis_2
-    MultiplicativeBasis(
-        basis1=MultiplicativeBasis(
+    '((BSplineEval * RaisedCosineLinearEval) * RaisedCosineLogEval)': MultiplicativeBasis(
+        basis1='(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
             basis1=BSplineEval(n_basis_funcs=10, order=4),
             basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
         ),
