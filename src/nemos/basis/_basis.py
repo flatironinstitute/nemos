@@ -30,22 +30,33 @@ def remap_parameters(method):
         map_params, _ = self._map_parameters()
 
         # use mapped key if exists, or original key
-        new_params = {map_params.get(key, key): val for key, val in params.items()}
+        # deepcopy basis to avoid matching labels when assigning twice the same basis
+        # to two different components:
+        # basis.set_params(basis1=bas, basis2=bas)
+        new_params = {
+            map_params.get(key, key): (copy.deepcopy(val) if isinstance(val, Basis) else val)
+            for key, val in params.items()
+        }
 
         # for any new basis that doesn't have a user defined label
         # try to assign the current label (this my fail if label is in use)
+        # assign parent as well
         current_params = self.__sklearn_get_params__()
         for key, new in new_params.items():
             current = current_params.get(key, None)
-            if (
-                isinstance(new, Basis)
-                and new._has_default_label
-                and not current._has_default_label
-            ):
-                try:
-                    new.label = current.label
-                except ValueError:
-                    pass
+            if isinstance(new, Basis) and current:
+                # update label
+                if new._has_default_label and not current._has_default_label:
+                    try:
+                        new.label = current.label
+                    except ValueError:
+                        pass
+                # update parent
+                new._parent = current._parent
+                # update expected input shape if input dim matches.
+                for inp_shape_attrs in ("_input_shape_product", "_input_shape_"):
+                    if getattr(new, inp_shape_attrs, None) is None and new._n_input_dimensionality == current._n_input_dimensionality:
+                        setattr(new, inp_shape_attrs, getattr(current, inp_shape_attrs, None))
 
         # apply set_params
         self = method(self, **new_params)

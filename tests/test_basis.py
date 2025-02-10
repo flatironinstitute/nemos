@@ -2413,6 +2413,64 @@ class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
     @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval")
+    )
+    def test_set_params_basis(self, basis_a, basis_class_specific_params):
+        basis_b = basis_a.__name__.replace("Eval", "Conv")
+        if not hasattr(basis, basis_b):
+            return
+        else:
+            basis_b = getattr(basis, basis_b)
+        cls_b_name = basis_b.__name__
+        cls_a_name = basis_a.__name__
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        # check update label tag
+        add_a_twice = basis_a_obj + basis_a_obj
+        assert add_a_twice.basis2.label == f"{cls_a_name}_1"
+
+        # set different classs and check refreshing labels
+        add_a_twice.set_params(**{cls_a_name: basis_b_obj})
+        assert add_a_twice.basis2.label == cls_a_name
+        assert add_a_twice.basis1.label == cls_b_name
+
+        # set basis label with tag
+        add_a_twice.set_params(**{cls_b_name: basis_a_obj})
+        add_a_twice.basis1.label = f"{cls_a_name}_1"
+        assert add_a_twice.basis1.label == cls_a_name
+        assert add_a_twice.basis2.label == f"{cls_a_name}_1"
+
+        # assign both the same basis
+        add_a_twice.set_params(**{f"{cls_a_name}_1": basis_b_obj, cls_a_name: basis_b_obj})
+        assert add_a_twice.basis1.label == f"{cls_b_name}"
+        assert add_a_twice.basis2.label == f"{cls_b_name}_1"
+        # revert order of basis
+        add_a_twice.set_params(**{cls_b_name: basis_a_obj, f"{cls_b_name}_1": basis_a_obj})
+        assert add_a_twice.basis1.label == f"{cls_a_name}"
+        assert add_a_twice.basis2.label == f"{cls_a_name}_1"
+
+        # add a label and check that it is passed down correctly
+        # and the other label is updated
+        add_a_twice.basis1.label = "x"
+        add_a_twice.set_params(x=basis_b_obj)
+        assert add_a_twice.basis1.label == "x"
+        assert add_a_twice.basis2.label == f"{cls_a_name}"
+
+        # add a label and set a basis with a modified label
+        add_a_twice.basis1.label = "x"
+        new_basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        add_a_twice.set_params(**{"x": basis_b_obj.set_params(label="z"), cls_a_name: new_basis_b_obj})
+        assert add_a_twice.basis1.label == "z"
+        assert add_a_twice.basis2.label == f"{cls_b_name}"
+
+
+    @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
     )
     @pytest.mark.parametrize(
