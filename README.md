@@ -20,7 +20,7 @@ We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for
 The package is under active development and more methods will be added in the future.
 
 For those looking to get a better grasp of the Generalized Linear Model, we recommend checking out the 
-Neuromatch Academy's lesson [here](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.htmls) and Jonathan Pillow's tutorial 
+Neuromatch Academy's lesson [here](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) and Jonathan Pillow's tutorial 
 from Cosyne 2018 [here](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s).
 
 ## Overview
@@ -99,7 +99,7 @@ ll = glm.score(X, y)
 <img src="docs/assets/glm_population_scheme.svg" width="84%">
 
 This second example demonstrates feature construction by convolving the simultaneously recorded population spike counts with a bank of filters, utilizing the basis in `conv` mode.
-The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/generated/how_to_guide/plot_04_population_glm/) object.
+The figure above show the GLM scheme for a single neuron, however in NeMoS you can fit jointly the whole population with the [`PopulationGLM`](https://nemos.readthedocs.io/en/latest/how_to_guide/plot_03_population_glm.html) object.
 
 #### Feature Representation
 
@@ -127,8 +127,8 @@ firing_rate = glm.predict(X)
 ll = glm.score(X, spike_counts)
 ```
 
-For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart/)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
-model](https://nemos.readthedocs.io/en/latest/reference/nemos/observation_models/) and a [regularizer](https://nemos.readthedocs.io/en/latest/reference/nemos/regularizer/).
+For a deeper dive, see our [Quickstart](https://nemos.readthedocs.io/en/latest/quickstart.html)  guide and consider using [pynapple](https://github.com/pynapple-org/pynapple) for data exploration and preprocessing. When initializing the GLM object, you may optionally specify an [observation
+model](https://nemos.readthedocs.io/en/latest/api_reference.html#the-nemos-observation-models-module) and a [regularizer](https://nemos.readthedocs.io/en/latest/api_reference.html#the-nemos-regularizer-module).
 
 > **Note: Multi-epoch Convolution**
 >
@@ -149,7 +149,7 @@ Run the following `pip` command in your virtual environment.
  python -m pip install nemos
  ```
 
-For more details, including specifics for GPU users and developers, refer to NeMoS [docs](https://nemos.readthedocs.io/en/latest/installation/).
+For more details, including specifics for GPU users and developers, refer to NeMoS [docs](https://nemos.readthedocs.io/en/latest/installation.html).
 
 
 ## Disclaimer
