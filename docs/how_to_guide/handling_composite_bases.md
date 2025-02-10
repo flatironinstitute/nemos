@@ -34,6 +34,7 @@ Composing even more, will result in more nesting of attributes.
 
 ```{code-cell} ipython3
 add = add + nmo.basis.MSplineEval(4, label="input3")
+print(add)
 print(add.basis1.basis1)
 print(add.basis1.basis2)
 print(add.basis2)
@@ -148,8 +149,8 @@ basis = nmo.basis.BSplineEval(10) + nmo.basis.BSplineEval(5)
 basis.get_params()
 ```
 
-Setting the parameters is still possible but we recommend to always provide informative labels in order to improve code readability.
+Setting the parameters is still possible, but we recommend to always provide informative labels in order to improve code readability.
 
 ```{code-cell} ipython3
-basis.set_params(**{"BSplineEval_1__n_basis_funcs": 12})
+basis.set_params(BSplineEval_1__n_basis_funcs=12)
 ```
