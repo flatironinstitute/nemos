@@ -6,7 +6,6 @@ import abc
 import copy
 import inspect
 import re
-import sys
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Generator, List, Literal, Optional, Tuple, Union
@@ -39,7 +38,7 @@ __PUBLIC_BASES__ = [
     "OrthExponentialEval",
     "OrthExponentialConv",
     "AdditiveBasis",
-    "MultiplicativeBasis"
+    "MultiplicativeBasis",
 ]
 
 
@@ -164,7 +163,6 @@ class AtomicBasisMixin:
     @property
     def _has_default_label(self):
         return re.match(rf"^{self.__class__.__name__}(_\d+)?$", self._label) is not None
-
 
     def _recompute_all_labels(self):
         """

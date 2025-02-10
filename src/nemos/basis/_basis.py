@@ -37,7 +37,11 @@ def remap_parameters(method):
         current_params = self.__sklearn_get_params__()
         for key, val in new_params.items():
             current = current_params[key]
-            if isinstance(val, Basis) and val._has_default_label and not current._has_default_label:
+            if (
+                isinstance(val, Basis)
+                and val._has_default_label
+                and not current._has_default_label
+            ):
                 try:
                     val.label = current.label
                 except ValueError:
@@ -366,7 +370,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     @remap_parameters
     def set_params(self, **params: Any):
         return super().set_params(**params)
-
 
     @property
     def n_output_features(self) -> int | None:

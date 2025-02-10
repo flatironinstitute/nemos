@@ -9,7 +9,12 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis import add_docstring
-from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin, __PUBLIC_BASES__
+from ._basis_mixin import (
+    __PUBLIC_BASES__,
+    AtomicBasisMixin,
+    ConvBasisMixin,
+    EvalBasisMixin,
+)
 from ._decaying_exponential import OrthExponentialBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
