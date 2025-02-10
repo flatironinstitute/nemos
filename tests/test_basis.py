@@ -2607,8 +2607,8 @@ class TestAdditiveBasis(CombinedBasis):
                 compare(b1.basis1, b2.basis1)
                 compare(b1.basis2, b2.basis2)
                 # add all params that are not parent or basis1,basis2
-                d1 = filter_attributes(b1, exclude_keys=["basis1", "basis2", "_parent"])
-                d2 = filter_attributes(b2, exclude_keys=["basis1", "basis2", "_parent"])
+                d1 = filter_attributes(b1, exclude_keys=["_basis1", "_basis2", "_parent"])
+                d2 = filter_attributes(b2, exclude_keys=["_basis1", "_basis2", "_parent"])
                 assert d1 == d2
             else:
                 decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)

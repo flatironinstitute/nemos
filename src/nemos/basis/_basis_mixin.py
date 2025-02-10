@@ -668,6 +668,7 @@ class CompositeBasisMixin:
         if self._basis2:
             self._set_labels(basis, self._basis2)
         self._basis1 = basis
+        self._input_shape_update()
 
     @property
     def basis2(self):
@@ -682,6 +683,7 @@ class CompositeBasisMixin:
         if self._basis1:
             self._set_labels(self._basis1, basis)
         self._basis2 = basis
+        self._input_shape_update()
 
     @property
     def _has_default_label(self):
@@ -732,9 +734,17 @@ class CompositeBasisMixin:
 
     @property
     def input_shape(self):
+        basis1 = getattr(self, "_basis1", None)
+        basis2 = getattr(self, "_basis2", None)
+        if basis1 is None and basis2 is not None:
+            return [None , *(bas2.input_shape for bas2 in basis2._iterate_over_components())]
+        elif basis2 is None and basis1 is not None:
+            return [*(bas1.input_shape for bas1 in basis1._iterate_over_components()), None]
+        elif basis1 is None and basis2 is None:
+            return [None, None]
         shapes = [
-            *(bas1.input_shape for bas1 in self.basis1._iterate_over_components()),
-            *(bas2.input_shape for bas2 in self.basis2._iterate_over_components()),
+            *(bas1.input_shape for bas1 in basis1._iterate_over_components()),
+            *(bas2.input_shape for bas2 in basis2._iterate_over_components()),
         ]
         return shapes
 

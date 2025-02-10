@@ -36,7 +36,7 @@ def remap_parameters(method):
         # try to assign the current label (this my fail if label is in use)
         current_params = self.__sklearn_get_params__()
         for key, new in new_params.items():
-            current = current_params[key]
+            current = current_params.get(key, None)
             if (
                 isinstance(new, Basis)
                 and new._has_default_label
