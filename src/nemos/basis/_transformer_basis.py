@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
+from ..base_class import Base
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -82,6 +83,9 @@ class TransformerBasis:
     )
 
     def __init__(self, basis: Basis):
+        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+            raise TypeError("Provide an object of type `Basis` to initialize a TransformerBasis. "
+                            f"Object of type {type(basis)} provided instead!")
         self.basis = copy.deepcopy(basis)
         self._wrapped_methods = {}  # Cache for wrapped methods
 

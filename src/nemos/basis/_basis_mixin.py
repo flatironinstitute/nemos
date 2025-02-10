@@ -14,6 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
+from ..base_class import Base
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size
 from ._transformer_basis import TransformerBasis
@@ -660,6 +661,9 @@ class CompositeBasisMixin:
 
     @basis1.setter
     def basis1(self, basis):
+        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+            raise TypeError(f"`basis1` must be an object of type `Basis`. Type {type(basis)} provided instead.")
+
         if self._basis2:
             self._set_labels(basis, self._basis2)
         self._basis1 = basis
@@ -670,6 +674,8 @@ class CompositeBasisMixin:
 
     @basis2.setter
     def basis2(self, basis):
+        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+            raise TypeError(f"`basis2` must be an object of type `Basis`. Type {type(basis)} provided instead.")
         if self._basis1:
             self._set_labels(self._basis1, basis)
         self._basis2 = basis
