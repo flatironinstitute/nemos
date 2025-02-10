@@ -2412,9 +2412,21 @@ class TestCyclicBSplineBasis(BasisFuncsTesting):
 class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
-    @pytest.mark.parametrize(
-        "basis_a", list_all_basis_classes("Eval")
-    )
+    def test_redundant_label_in_nested_basis(self):
+        bas = basis.BSplineEval(4) + basis.BSplineEval(5) + basis.BSplineEval(6) + basis.BSplineEval(7)
+        with pytest.raises(ValueError, match="All user-provided labels of basis elements must be distinct"):
+            bas.set_params(
+                **{
+                    "(BSplineEval + BSplineEval_1)": AdditiveBasis(basis.BSplineEval(9),
+                                                                         basis.BSplineEval(10), label="ciao"),
+                    "((BSplineEval + BSplineEval_1) + BSplineEval_2)": AdditiveBasis(basis.BSplineEval(9),
+                                                                                           basis.BSplineEval(10),
+                                                                                           label="ciao")
+                }
+            )
+
+
+    @pytest.mark.parametrize("basis_a", list_all_basis_classes("Eval"))
     def test_set_params_basis(self, basis_a, basis_class_specific_params):
         basis_b = basis_a.__name__.replace("Eval", "Conv")
         if not hasattr(basis, basis_b):
@@ -2445,11 +2457,15 @@ class TestAdditiveBasis(CombinedBasis):
         assert add_a_twice.basis2.label == f"{cls_a_name}_1"
 
         # assign both the same basis
-        add_a_twice.set_params(**{f"{cls_a_name}_1": basis_b_obj, cls_a_name: basis_b_obj})
+        add_a_twice.set_params(
+            **{f"{cls_a_name}_1": basis_b_obj, cls_a_name: basis_b_obj}
+        )
         assert add_a_twice.basis1.label == f"{cls_b_name}"
         assert add_a_twice.basis2.label == f"{cls_b_name}_1"
         # revert order of basis
-        add_a_twice.set_params(**{cls_b_name: basis_a_obj, f"{cls_b_name}_1": basis_a_obj})
+        add_a_twice.set_params(
+            **{cls_b_name: basis_a_obj, f"{cls_b_name}_1": basis_a_obj}
+        )
         assert add_a_twice.basis1.label == f"{cls_a_name}"
         assert add_a_twice.basis2.label == f"{cls_a_name}_1"
 
@@ -2465,10 +2481,11 @@ class TestAdditiveBasis(CombinedBasis):
         new_basis_b_obj = self.instantiate_basis(
             6, basis_b, basis_class_specific_params, window_size=10
         )
-        add_a_twice.set_params(**{"x": basis_b_obj.set_params(label="z"), cls_a_name: new_basis_b_obj})
+        add_a_twice.set_params(
+            **{"x": basis_b_obj.set_params(label="z"), cls_a_name: new_basis_b_obj}
+        )
         assert add_a_twice.basis1.label == "z"
         assert add_a_twice.basis2.label == f"{cls_b_name}"
-
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -2665,8 +2682,12 @@ class TestAdditiveBasis(CombinedBasis):
                 compare(b1.basis1, b2.basis1)
                 compare(b1.basis2, b2.basis2)
                 # add all params that are not parent or basis1,basis2
-                d1 = filter_attributes(b1, exclude_keys=["_basis1", "_basis2", "_parent"])
-                d2 = filter_attributes(b2, exclude_keys=["_basis1", "_basis2", "_parent"])
+                d1 = filter_attributes(
+                    b1, exclude_keys=["_basis1", "_basis2", "_parent"]
+                )
+                d2 = filter_attributes(
+                    b2, exclude_keys=["_basis1", "_basis2", "_parent"]
+                )
                 assert d1 == d2
             else:
                 decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
@@ -3629,6 +3650,19 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    def test_redundant_label_in_nested_basis(self):
+        bas = basis.BSplineEval(4) * basis.BSplineEval(5) + basis.BSplineEval(6) + basis.BSplineEval(7)
+        with pytest.raises(ValueError, match="All user-provided labels of basis elements must be distinct"):
+            bas.set_params(
+                **{
+                    "(BSplineEval * BSplineEval_1)": AdditiveBasis(basis.BSplineEval(9),
+                                                                         basis.BSplineEval(10), label="ciao"),
+                    "((BSplineEval * BSplineEval_1) + BSplineEval_2)": AdditiveBasis(basis.BSplineEval(9),
+                                                                                           basis.BSplineEval(10),
+                                                                                           label="ciao")
+                }
+            )
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")

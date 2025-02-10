@@ -997,9 +997,19 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
     "bas, expectation",
     [
         (nmo.basis.BSplineEval(5), does_not_raise()),
-        (3, pytest.raises(TypeError, match=r"Provide an object of type `Basis` to initialize")),
-        (nmo.regularizer.Ridge(), pytest.raises(TypeError, match=r"Provide an object of type `Basis` to initialize")),
-    ]
+        (
+            3,
+            pytest.raises(
+                TypeError, match=r"Provide an object of type `Basis` to initialize"
+            ),
+        ),
+        (
+            nmo.regularizer.Ridge(),
+            pytest.raises(
+                TypeError, match=r"Provide an object of type `Basis` to initialize"
+            ),
+        ),
+    ],
 )
 def test_transformer_init_type(bas, expectation):
     with expectation:

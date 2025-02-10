@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Generator, List, Literal, Optional, Tuple, Uni
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
+from sklearn.utils.multiclass import unique_labels
 
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size
@@ -689,20 +690,42 @@ class CompositeBasisMixin:
     def _has_default_label(self):
         return self._label is None
 
+    def _check_unique_labels(self, basis1, basis2):
+        """Check that all user-defined labels in the given basis objects are unique."""
+
+        # Retrieve user-defined labels from basis1 and basis2
+        set_basis1 = set(basis1._list_subtree_labels("user-defined"))
+        set_basis2 = set(basis2._list_subtree_labels("user-defined"))
+
+        # Include self's label in uniqueness check (if applicable)
+        self_label = getattr(self, "_label", None)
+        self_label_set = {self_label} if self_label else set()
+
+        # Find shared labels
+        shared_labels = (set_basis1 & set_basis2) | (set_basis1 & self_label_set) | (set_basis2 & self_label_set)
+
+        # Check uniqueness
+        have_shared = bool(shared_labels)
+
+        # Construct error message only if needed
+        if have_shared:
+            err_msg = ("All user-provided labels of basis elements must be distinct."
+                       f"\nThe basis you are composing share the following labels: {shared_labels}.\n"
+                       "Please change the labels for one of the elements before composition."
+                       )
+
+            return have_shared, err_msg
+
+        return have_shared, ""
+
     def _set_labels(self, basis1, basis2):
         # check labels
-        shared_labels = set(basis1._list_subtree_labels("user-defined")) & set(
-            basis2._list_subtree_labels("user-defined")
-        )
-
-        if bool(shared_labels):
-            raise ValueError(
-                "All user-provided labels of basis elements must be distinct.\n"
-                f"The basis you are composing share the following labels: {list(shared_labels)}.\n"
-                f"Please, change the labels for one of the element before composition."
-            )
+        non_unique, err_msg = self._check_unique_labels(basis1, basis2)
+        if non_unique:
+            raise ValueError(err_msg)
 
         self.update_default_label_id(basis1, basis2)
+
 
     def _input_shape_update(self):
         # if all bases where set, then set input for composition.
@@ -737,9 +760,15 @@ class CompositeBasisMixin:
         basis1 = getattr(self, "_basis1", None)
         basis2 = getattr(self, "_basis2", None)
         if basis1 is None and basis2 is not None:
-            return [None , *(bas2.input_shape for bas2 in basis2._iterate_over_components())]
+            return [
+                None,
+                *(bas2.input_shape for bas2 in basis2._iterate_over_components()),
+            ]
         elif basis2 is None and basis1 is not None:
-            return [*(bas1.input_shape for bas1 in basis1._iterate_over_components()), None]
+            return [
+                *(bas1.input_shape for bas1 in basis1._iterate_over_components()),
+                None,
+            ]
         elif basis1 is None and basis2 is None:
             return [None, None]
         shapes = [

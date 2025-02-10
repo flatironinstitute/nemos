@@ -19,6 +19,44 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+from ._transformer_basis import TransformerBasis
+
+
+def _update_basis_attributes(current_params: dict, new_params: dict) -> dict:
+    """Update labels, parent references, and input shapes for Basis objects."""
+
+    for key, new in new_params.items():
+        current = current_params.get(key, None)
+
+        if isinstance(new, (Basis, TransformerBasis)) and current:
+            # Update label if new has default and current has a user-defined label
+            if new._has_default_label and not current._has_default_label:
+                try:
+                    new.label = current.label
+                except ValueError:
+                    pass  # If label is in use, ignore
+
+            # Update parent reference
+            new._parent = current._parent
+
+            # Update expected input shape if dimensions match
+            for attr in ("_input_shape_product", "_input_shape_"):
+                if (
+                    getattr(new, attr, None) is None
+                    and new._n_input_dimensionality == current._n_input_dimensionality
+                ):
+                    setattr(new, attr, getattr(current, attr, None))
+    return new_params
+
+
+def _recompute_all_default_labels(root: Basis) -> Basis:
+    """Recompute default all labels."""
+    updated = []
+    for bas in root._iterate_over_components():
+        if bas._has_default_label and bas.__class__.__name__ not in updated:
+            bas._recompute_all_labels()
+            updated.append(bas.__class__.__name__)
+    return root
 
 
 def remap_parameters(method):
@@ -34,39 +72,26 @@ def remap_parameters(method):
         # to two different components:
         # basis.set_params(basis1=bas, basis2=bas)
         new_params = {
-            map_params.get(key, key): (copy.deepcopy(val) if isinstance(val, Basis) else val)
+            map_params.get(key, key): (
+                copy.deepcopy(val) if isinstance(val, (Basis, TransformerBasis)) else val
+            )
             for key, val in params.items()
         }
 
         # for any new basis that doesn't have a user defined label
         # try to assign the current label (this my fail if label is in use)
         # assign parent as well
-        current_params = self.__sklearn_get_params__()
-        for key, new in new_params.items():
-            current = current_params.get(key, None)
-            if isinstance(new, Basis) and current:
-                # update label
-                if new._has_default_label and not current._has_default_label:
-                    try:
-                        new.label = current.label
-                    except ValueError:
-                        pass
-                # update parent
-                new._parent = current._parent
-                # update expected input shape if input dim matches.
-                for inp_shape_attrs in ("_input_shape_product", "_input_shape_"):
-                    if getattr(new, inp_shape_attrs, None) is None and new._n_input_dimensionality == current._n_input_dimensionality:
-                        setattr(new, inp_shape_attrs, getattr(current, inp_shape_attrs, None))
+        new_params = _update_basis_attributes(self.__sklearn_get_params__(), new_params)
 
         # apply set_params
         self = method(self, **new_params)
 
         # re-assign ordered ids to all default labels of atomic components
-        updated = []
-        for bas in self._iterate_over_components():
-            if bas._has_default_label and bas.__class__.__name__ not in updated:
-                bas._recompute_all_labels()
-                updated.append(bas.__class__.__name__)
+        # note that the recursion always run until parent.
+        print(f"Update: {new_params.keys()}")
+        if self._parent is None:
+            _recompute_all_default_labels(self)
+            print("IS ROOT")
 
         return self
 
