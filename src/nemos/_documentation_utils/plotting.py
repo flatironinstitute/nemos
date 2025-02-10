@@ -204,7 +204,7 @@ def current_injection_plot(
     # define plotting parameters
     # colormap, color levels and transparency level
     # for the current injection epochs
-    cmap = plt.get_cmap("autumn")
+    cmap = plt.colormaps["autumn"]
     color_levs = [0.8, 0.5, 0.2]
     alpha = 0.4
 
@@ -508,7 +508,7 @@ def plot_coupling(
     cmap_label="hsv",
 ):
     pref_ang = tuning.idxmax()
-    cmap_tun = plt.get_cmap(cmap_label)
+    cmap_tun = plt.colormaps[cmap_label]
     color_tun = (pref_ang.values - pref_ang.values.min()) / (
         pref_ang.values.max() - pref_ang.values.min()
     )
@@ -522,7 +522,7 @@ def plot_coupling(
     # scale to 0,1
     color = -0.5 * (sum_resp_n - sum_resp_n.min()) / sum_resp_n.min()
 
-    cmap = plt.get_cmap(cmap_name)
+    cmap = plt.colormaps[cmap_name]
     n_row, n_col, n_tp = responses.shape
     time = np.arange(n_tp)
     fig, axs = plt.subplots(n_row + 1, n_col + 1, figsize=figsize, sharey="row")
@@ -825,7 +825,7 @@ def plot_head_direction_tuning(
     )
 
     # plot raster and heading
-    cmap = plt.get_cmap(cmap_label)
+    cmap = plt.colormaps[cmap_label]
     unq_angles = np.unique(pref_ang.values)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (
@@ -930,7 +930,7 @@ def plot_head_direction_tuning_model(
     )
 
     # plot raster and heading
-    cmap = plt.get_cmap(cmap_label)
+    cmap = plt.colormaps[cmap_label]
     unq_angles = np.unique(pref_ang.values)
     n_subplots = len(unq_angles)
     relative_color_levs = (unq_angles - unq_angles[0]) / (

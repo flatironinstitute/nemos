@@ -184,7 +184,7 @@ corresponding position. Let's plot 5 time steps.
 fig = plt.figure(figsize=(12, 4))
 gs = plt.GridSpec(2, 5)
 xt = np.arange(0, 1000, 200)
-cmap = plt.get_cmap("rainbow")
+cmap = plt.colormaps["rainbow"]
 colors = np.linspace(0, 1, len(xt))
 for cnt, i in enumerate(xt):
     ax = plt.subplot(gs[0, i // 200])
