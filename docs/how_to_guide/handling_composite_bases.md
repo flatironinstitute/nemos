@@ -151,5 +151,5 @@ basis.get_params()
 Setting the parameters is still possible but we recommend to always provide informative labels in order to improve code readability.
 
 ```{code-cell} ipython3
-basis.set_params(**{"BSplineEval-1__n_basis_funcs": 12})
+basis.set_params(**{"BSplineEval_1__n_basis_funcs": 12})
 ```

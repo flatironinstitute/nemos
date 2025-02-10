@@ -20,6 +20,23 @@ from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 
+__PUBLIC_BASES__ = [
+    "IdentityEval",
+    "HistoryConv",
+    "MSplineEval",
+    "MSplineConv",
+    "BSplineEval",
+    "BSplineConv",
+    "CyclicBSplineEval",
+    "CyclicBSplineConv",
+    "RaisedCosineLinearEval",
+    "RaisedCosineLinearConv",
+    "RaisedCosineLogEval",
+    "RaisedCosineLogConv",
+    "OrthExponentialEval",
+    "OrthExponentialConv",
+]
+
 
 def remap_parameters(method):
     """Remap parameter names to original."""

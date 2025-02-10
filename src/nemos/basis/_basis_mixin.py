@@ -5,10 +5,11 @@ from __future__ import annotations
 import abc
 import copy
 import inspect
+import re
 import sys
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Generator, List, Optional, Tuple, Union, Literal
+from typing import TYPE_CHECKING, Generator, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -17,7 +18,6 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size
 from ._transformer_basis import TransformerBasis
-import re
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -103,13 +103,15 @@ class AtomicBasisMixin:
         # check default cases
         if label == self._label:
             return
+
         elif label is None:
             # check if already default
             self._label = self.__class__.__name__
             self._recompute_all_labels()
             return
+
         else:
-            # unsure how to avoid circular imports here so I get the module namespace runtime
+            # unsure how to avoid circular imports here so I get the module namespace
             # and listed all bases
             basis_module = sys.modules.get("nemos.basis.basis")
             basis_names = getattr(basis_module, "__all__")
@@ -123,7 +125,9 @@ class AtomicBasisMixin:
 
         # convert to string (in case label is not string).
         if not isinstance(label, str):
-            raise TypeError(f"'label' must be a string. Type {type(label)} was provided instead.")
+            raise TypeError(
+                f"'label' must be a string. Type {type(label)} was provided instead."
+            )
 
         # get the current available labels
         current_labels = self._root()._list_subtree_labels()
@@ -174,7 +178,6 @@ class AtomicBasisMixin:
                     bas_id = bas_id - 1 if bas_id > current_id else bas_id
                     bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
 
-
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
@@ -199,7 +202,9 @@ class AtomicBasisMixin:
         """
         return (x for x in [self])
 
-    def _list_subtree_labels(self, type_label: Literal["all", "user-defined"] = "all") -> List[str]:
+    def _list_subtree_labels(
+        self, type_label: Literal["all", "user-defined"] = "all"
+    ) -> List[str]:
         """
         List all user-specified labels.
         """
@@ -642,6 +647,10 @@ class CompositeBasisMixin:
         if label is None:
             # update labels
             self.update_default_label_id(self.basis1, self.basis2)
+
+        # initialize attribute
+        self._label = None
+        # use setter to check & set provided label
         self.label = label
 
     @property
@@ -664,7 +673,6 @@ class CompositeBasisMixin:
                 )
             self._label = label
 
-
     @property
     def input_shape(self):
         shapes = [
@@ -683,7 +691,9 @@ class CompositeBasisMixin:
         """Read only property for composite bases."""
         pass
 
-    def _list_subtree_labels(self, type_label: Literal["all", "user-defined"] = "all") -> List[str]:
+    def _list_subtree_labels(
+        self, type_label: Literal["all", "user-defined"] = "all"
+    ) -> List[str]:
         """
         List all user-specified labels.
         """
@@ -879,7 +889,8 @@ class CompositeBasisMixin:
                 pattern = re.compile(rf"^{cls_name}(_\d+)?$")
                 delta_labels[cls_name] = sum(
                     (
-                        1 for b in basis1._iterate_over_components()
+                        1
+                        for b in basis1._iterate_over_components()
                         if re.match(pattern, b._label)
                     )
                 )
@@ -892,8 +903,12 @@ class CompositeBasisMixin:
                 continue
             match = re.match(rf"^{cls_name}(_\d+)?$", bas._label)
             if match:
-                current =  count_labels.get(cls_name, 0)
-                bas._label = f"{cls_name}_{current + delta_labels[cls_name]}" if current + delta_labels[cls_name] else cls_name
+                current = count_labels.get(cls_name, 0)
+                bas._label = (
+                    f"{cls_name}_{current + delta_labels[cls_name]}"
+                    if current + delta_labels[cls_name]
+                    else cls_name
+                )
                 count_labels[cls_name] = 1 + current
 
         return

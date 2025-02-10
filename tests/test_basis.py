@@ -546,7 +546,13 @@ class TestSharedMethods:
         [
             ("label", None, does_not_raise()),
             ("label", "label", does_not_raise()),
-            ("n_output_features", 5, pytest.raises(AttributeError, match="can't set attribute 'n_output_features'")),
+            (
+                "n_output_features",
+                5,
+                pytest.raises(
+                    AttributeError, match="can't set attribute 'n_output_features'"
+                ),
+            ),
         ],
     )
     def test_attr_setter(self, attribute, value, cls, expectation):
@@ -559,7 +565,6 @@ class TestSharedMethods:
         if expectation is does_not_raise():
             if value is not None:
                 assert getattr(bas, attribute) == value
-
 
     @pytest.mark.parametrize(
         "n_input, expectation",
@@ -2434,6 +2439,28 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a_obj + basis_b_obj
         assert add._input_shape_product == (1, 6)
         assert (add + add)._input_shape_product == (1, 6, 1, 6)
+
+    @pytest.mark.parametrize(
+        "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    @pytest.mark.parametrize(
+        "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_provide_label_at_init(
+        self, basis_a, basis_b, basis_class_specific_params
+    ):
+        basis_a_obj = self.instantiate_basis(
+            5, basis_a, basis_class_specific_params, window_size=10
+        )
+        basis_b_obj = self.instantiate_basis(
+            6, basis_b, basis_class_specific_params, window_size=10
+        )
+        basis_a_obj.label = "a"
+        basis_b_obj.label = "b"
+        add = AdditiveBasis(basis_a_obj, basis_b_obj, label="newlabel")
+        assert add.label == "newlabel"
+        add.label = None
+        assert add.label == "(a + b)"
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -5421,6 +5448,7 @@ def test_add_left_and_right(bas, basis_class_specific_params):
     add_right = bas_instance + (bas2_instance + bas3_instance)
     assert add_right.label == "(x + (y + z))"
 
+
 @pytest.mark.parametrize("bas", list_all_basis_classes())
 def test_multiply_left_and_right(bas, basis_class_specific_params):
     if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
@@ -5470,10 +5498,14 @@ def test_basis_protected_name(bas, basis_class_specific_params):
         bas_instance.label = name
 
     invalid_label = "MSplineEval" if bas.__name__ != "MSplineEval" else "MSplineConv"
-    with pytest.raises(ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"):
+    with pytest.raises(
+        ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"
+    ):
         bas_instance.label = invalid_label
     invalid_label += "_1"
-    with pytest.raises(ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"):
+    with pytest.raises(
+        ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"
+    ):
         bas_instance.label = invalid_label
     invalid_label += "_1"
     with does_not_raise():
@@ -5515,12 +5547,13 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     else:
         name3 = name1 + "_1"
 
-
     list_all_label = add_123._list_subtree_labels("all")
     assert tuple(list_all_label) == (
         f"(({name1} + {name2}) + {name3})",
         f"({name1} + {name2})",
-        f"{name1}", f"{name2}", f"{name3}",
+        f"{name1}",
+        f"{name2}",
+        f"{name3}",
     )
     assert add_123[f"(({name1} + {name2}) + {name3})"] is add_123
     assert add_123[f"({name1} + {name2})"] is add_123.basis1
@@ -5532,7 +5565,9 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert tuple(list_all_label) == (
         f"(({name1} * {name2}) * {name3})",
         f"({name1} * {name2})",
-        f"{name1}", f"{name2}", f"{name3}",
+        f"{name1}",
+        f"{name2}",
+        f"{name3}",
     )
     assert mul_123[f"(({name1} * {name2}) * {name3})"] is mul_123
     assert mul_123[f"({name1} * {name2})"] is mul_123.basis1
@@ -5544,14 +5579,15 @@ def test_getitem(bas1, bas2, basis_class_specific_params):
     assert tuple(list_all_label) == (
         f"(({name1} + {name2}) * {name3})",
         f"({name1} + {name2})",
-        f"{name1}", f"{name2}", f"{name3}",
+        f"{name1}",
+        f"{name2}",
+        f"{name3}",
     )
     assert mix_123[f"(({name1} + {name2}) * {name3})"] is mix_123
     assert mix_123[f"({name1} + {name2})"] is mix_123.basis1
     assert mix_123[f"{name1}"] is mix_123.basis1.basis1
     assert mix_123[f"{name2}"] is mix_123.basis1.basis2
     assert mix_123[f"{name3}"] is mix_123.basis2
-
 
     add_123.basis1.basis1.label = "x"
     add_123.basis1.basis2.label = "y"
@@ -5667,7 +5703,6 @@ def test_composite_basis_repr_wrapping():
     bas = basis.MSplineEval(10, label="0")
     for k in range(1, 100):
         bas = bas + basis.MSplineEval(10, label=str(k))
-
 
     # large additive basis
     out = repr(bas)
