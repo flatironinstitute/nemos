@@ -2446,9 +2446,7 @@ class TestAdditiveBasis(CombinedBasis):
     @pytest.mark.parametrize(
         "basis_b", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
     )
-    def test_provide_label_at_init(
-        self, basis_a, basis_b, basis_class_specific_params
-    ):
+    def test_provide_label_at_init(self, basis_a, basis_b, basis_class_specific_params):
         basis_a_obj = self.instantiate_basis(
             5, basis_a, basis_class_specific_params, window_size=10
         )
