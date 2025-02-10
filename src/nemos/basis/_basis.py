@@ -35,15 +35,15 @@ def remap_parameters(method):
         # for any new basis that doesn't have a user defined label
         # try to assign the current label (this my fail if label is in use)
         current_params = self.__sklearn_get_params__()
-        for key, val in new_params.items():
+        for key, new in new_params.items():
             current = current_params[key]
             if (
-                isinstance(val, Basis)
-                and val._has_default_label
+                isinstance(new, Basis)
+                and new._has_default_label
                 and not current._has_default_label
             ):
                 try:
-                    val.label = current.label
+                    new.label = current.label
                 except ValueError:
                     pass
 
