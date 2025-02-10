@@ -23,6 +23,26 @@ if TYPE_CHECKING:
     from ._basis import Basis
 
 
+__PUBLIC_BASES__ = [
+    "IdentityEval",
+    "HistoryConv",
+    "MSplineEval",
+    "MSplineConv",
+    "BSplineEval",
+    "BSplineConv",
+    "CyclicBSplineEval",
+    "CyclicBSplineConv",
+    "RaisedCosineLinearEval",
+    "RaisedCosineLinearConv",
+    "RaisedCosineLogEval",
+    "RaisedCosineLogConv",
+    "OrthExponentialEval",
+    "OrthExponentialConv",
+    "AdditiveBasis",
+    "MultiplicativeBasis"
+]
+
+
 def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     """
     Decorator to preserve input shape-related attributes during method execution.
@@ -113,11 +133,9 @@ class AtomicBasisMixin:
         else:
             # unsure how to avoid circular imports here so I get the module namespace
             # and listed all bases
-            basis_module = sys.modules.get("nemos.basis.basis")
-            basis_names = getattr(basis_module, "__all__")
             match = re.match(r"(.+)?_\d+$", label)
             check_string = match.group(1) if match else None
-            check_string = check_string if check_string in basis_names else label
+            check_string = check_string if check_string in __PUBLIC_BASES__ else label
             if check_string == self.__class__.__name__:
                 self._label = check_string
                 self._recompute_all_labels()
@@ -132,8 +150,8 @@ class AtomicBasisMixin:
         # get the current available labels
         current_labels = self._root()._list_subtree_labels()
         # if check_string is one of the other classes drop
-        if (check_string in current_labels) or (check_string in basis_names):
-            if check_string in basis_names:
+        if (check_string in current_labels) or (check_string in __PUBLIC_BASES__):
+            if check_string in __PUBLIC_BASES__:
                 msg = f"Cannot assign '{label}' to a basis of class {self.__class__.__name__}."
             else:
                 msg = f"Label '{label}' is already in use. When user-provided, label must be unique."
@@ -142,6 +160,11 @@ class AtomicBasisMixin:
             # match if it was a default
             self._update_label_from_root()
             self._label = label
+
+    @property
+    def _has_default_label(self):
+        return re.match(rf"^{self.__class__.__name__}(_\d+)?$", self._label) is not None
+
 
     def _recompute_all_labels(self):
         """
@@ -618,9 +641,46 @@ class CompositeBasisMixin:
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
         # This step is slow if you add a very large number of bases
+        self._basis1 = None
+        self._basis2 = None
+
         self.basis1 = copy.deepcopy(basis1)
         self.basis2 = copy.deepcopy(basis2)
 
+        # set parents
+        self.basis1._parent = self
+        self.basis2._parent = self
+
+        # initialize attribute
+        self._label = None
+        # use setter to check & set provided label
+        self.label = label
+
+    @property
+    def basis1(self):
+        return self._basis1
+
+    @basis1.setter
+    def basis1(self, basis):
+        if self._basis2:
+            self._set_labels(basis, self._basis2)
+        self._basis1 = basis
+
+    @property
+    def basis2(self):
+        return self._basis2
+
+    @basis2.setter
+    def basis2(self, basis):
+        if self._basis1:
+            self._set_labels(self._basis1, basis)
+        self._basis2 = basis
+
+    @property
+    def _has_default_label(self):
+        return self._label is None
+
+    def _set_labels(self, basis1, basis2):
         # check labels
         shared_labels = set(basis1._list_subtree_labels("user-defined")) & set(
             basis2._list_subtree_labels("user-defined")
@@ -633,25 +693,15 @@ class CompositeBasisMixin:
                 f"Please, change the labels for one of the element before composition."
             )
 
-        # set parents
-        self.basis1._parent = self
-        self.basis2._parent = self
+        self.update_default_label_id(basis1, basis2)
 
+    def _input_shape_update(self):
         # if all bases where set, then set input for composition.
         set_bases = [s is not None for s in self.input_shape]
 
         if all(set_bases):
             # pass down the input shapes
             self.set_input_shape(*self.input_shape)
-
-        if label is None:
-            # update labels
-            self.update_default_label_id(self.basis1, self.basis2)
-
-        # initialize attribute
-        self._label = None
-        # use setter to check & set provided label
-        self.label = label
 
     @property
     def label(self) -> str:
