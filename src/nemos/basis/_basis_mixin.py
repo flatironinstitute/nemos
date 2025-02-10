@@ -8,12 +8,11 @@ import inspect
 import re
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Generator, List, Literal, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
-from sklearn.utils.multiclass import unique_labels
 
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size
