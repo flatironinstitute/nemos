@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import abc
 import copy
-import re
 from collections import OrderedDict
 from functools import wraps
 from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
@@ -180,44 +179,6 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
-def find_basis_tree_from_param_name(param_name: str):
-    """
-    Extracts the hierarchical structure of basis terms from a parameter name.
-
-    Parameters:
-    -----------
-    param_name :
-        The full parameter name containing 'basis[12]' patterns.
-
-    Returns:
-    --------
-    outer:
-        The part of param_name before the first 'basis[12]'.
-    basis_tree:
-        The substring containing all consecutive '__basis[12]' occurrences.
-    inner:
-        The remaining part of the string after the last '__basis[12]'.
-    """
-    # first capturing group (i.e. pattern within round parenthesis):
-    #  - string that start with basis1 or basis2
-    #  - first occurrence of __basis1 or __basis2
-    # second capture group:
-    #  - (?:__basis[12]) non-capturing group that keeps scanning whenever new __basis1 or __basis2 are found
-    #  - (...*) : capture 0 or more occurrence of the group above.
-    pattern = re.compile(r"(^basis[12]|__basis[12])((?:__basis[12])*)")
-
-    match = pattern.search(param_name)
-    if not match:
-        return param_name, None, ""  # No match found
-
-    start, end = match.span()  # Get the full match range
-    outer = param_name[:start]  # Everything before the first match
-    basis_tree = param_name[start:end]  # The full matched hierarchical part
-    inner = param_name[end:]  # Everything after the last match
-
-    return outer, basis_tree, inner
-
-
 def generate_basis_label_pair(bas: Basis):
     if hasattr(bas, "basis1"):
         for label, sub_bas in generate_basis_label_pair(bas.basis1):
@@ -269,77 +230,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
 
-    def _process_parameter_name(
-        self,
-        param_name: str,
-        param_dict: dict,
-        parameter_map: dict[str],
-        new_param_dict: dict,
-    ):
-        """
-        Generate a new, unique parameter name based on basis labels.
-
-        Find any pattern `basis_[12]...__basis[12]` in the parameter name and replace it with
-        corresponding basis label.
-
-        Parameters
-        ----------
-        param_name :
-            The original parameter name, potentially containing basis hierarchy.
-        param_dict :
-            The dictionary output of `__sklearn_get_params__`.
-        parameter_map :
-            A dictionary mapping transformed parameter names to their original names.
-        new_param_dict :
-            A dictionary containing parameter values, which will be updated
-            to use the new parameter names.
-
-        Returns
-        -------
-        parameter_map:
-            Map between original and new names.
-        new_param_dict:
-            Parameter dictionary containing the same parameter value and the new parameter name as key.
-        """
-        outer, basis_tree, inner = find_basis_tree_from_param_name(
-            param_name
-        )  # Extract components
-        new_param_name = outer  # Initialize new parameter name with the outer prefix
-        base_name = outer  # Initialize parameter string
-        # Process the basis tree hierarchy
-        while basis_tree:
-            label = param_dict[
-                base_name + basis_tree
-            ].label  # Retrieve label from the parameter dictionary
-
-            # update base_name
-            base_name = base_name + basis_tree
-
-            # Ensure label uniqueness (should not happen with new basis logic)
-            if label in parameter_map:
-                label = self._generate_unique_key(
-                    parameter_map, label
-                )  # Generate unique label if needed
-
-            new_param_name += (
-                "__" + label if new_param_name != "" else label
-            )  # Append label to the new parameter name
-            outer, basis_tree, inner = find_basis_tree_from_param_name(
-                inner
-            )  # Continue parsing inner components
-
-            new_param_name += outer  # Append the final outer part
-            base_name += outer
-
-        parameter_map[new_param_name] = (
-            param_name  # Store mapping from new name to original
-        )
-
-        # Rename the parameter in the new dictionary
-        val = new_param_dict.pop(param_name)  # Remove the old key-value pair
-        new_param_dict[new_param_name] = val  # Add new key-value pair
-        return parameter_map, new_param_dict
-
     def _map_parameters(self, deep=True):
         """
         Remap parameters in a given object by replacing 'basis[12]' patterns with unique labels.
@@ -356,23 +246,47 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         new_param_dict:
             A dictionary with renamed parameters.
         """
-        param_dict = self.__sklearn_get_params__(
-            deep=deep
+        _, param_dict_map, key_map = self._get_params_and_key_map(
+            deep=deep,
         )  # Retrieve the parameter dictionary
-        new_param_dict = param_dict.copy()  # Make a copy to modify
-        parameter_map = dict()  # Store mapping from new names to old names
+        # strip higher level label
+        param_dict_map = self._remove_self_label_from_key(param_dict_map)
+        key_map = self._remove_self_label_from_key(key_map)
+        return key_map, param_dict_map
 
-        # Iterate over all parameter names
-        for param_name in param_dict:
-            parameter_map, new_param_dict = self._process_parameter_name(
-                param_name,
-                param_dict,
-                parameter_map,
-                new_param_dict,
-            )
-        return parameter_map, new_param_dict
+    def __sklearn_get_params__(self, deep=True):
+        """
+        Implements standard scikit-learn, get parameters by inspecting init.
 
-    def __sklearn_get_params__(self, deep=True) -> dict:
+        This function will be called by Base.get_params() to get the actual param
+        structure.
+
+        Parameters
+        ----------
+        deep:
+            If true, call itself recursively on basis implementing the method.
+
+        Returns
+        -------
+        out:
+            A dictionary containing the parameters. Key is the parameter
+            name, value is the parameter value.
+        """
+        out = dict()
+        for key in self._get_param_names():
+            value = getattr(self, key)
+            if (
+                deep
+                and hasattr(value, "__sklearn_get_params__")
+                and not isinstance(value, type)
+            ):
+                item_orig = value.__sklearn_get_params__()
+                deep_items = item_orig.items()
+                out.update((key + "__" + k, val) for k, val in deep_items)
+            out[key] = value
+        return out
+
+    def _get_params_and_key_map(self, deep=True) -> Tuple[dict, dict, dict]:
         """
         From scikit-learn, get parameters by inspecting init.
 
@@ -387,17 +301,57 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 name, value is the parameter value.
         """
         out = dict()
+        out_map = dict()
+        key_map = dict()
         for key in self._get_param_names():
             value = getattr(self, key)
             if (
                 deep
-                and hasattr(value, "__sklearn_get_params__")
+                and hasattr(value, "_get_params_and_key_map")
                 and not isinstance(value, type)
             ):
-                deep_items = value.__sklearn_get_params__().items()
+                item_orig, item_map, key_mapping = value._get_params_and_key_map()
+                deep_items = item_orig.items()
+                map_deep_items = item_map.items()
                 out.update((key + "__" + k, val) for k, val in deep_items)
+                # only keep the last basis label (the leaf of the tree)
+                out_map.update(
+                    (
+                        (
+                            "__".join(k.split("__")[-2:])
+                            if not isinstance(val, Basis)
+                            else val.label
+                        ),
+                        val,
+                    )
+                    for k, val in map_deep_items
+                )
+                key_map.update(
+                    {
+                        (
+                            "__".join(im[0].split("__")[-2:])
+                            if not isinstance(io[1], Basis)
+                            else io[1].label
+                        ): key
+                        + "__"
+                        + io[0]
+                        for io, im in zip(item_orig.items(), key_mapping.items())
+                    }
+                )
             out[key] = value
-        return out
+            if isinstance(value, Basis):
+                out_map[value.label] = value
+                key_map[value.label] = key
+            else:
+                out_map[self.label + "__" + key] = value
+                key_map[self.label + "__" + key] = key
+        return out, out_map, key_map
+
+    def _remove_self_label_from_key(self, map_dict: dict) -> dict:
+        return {
+            k.split("__")[-1] if k.startswith(self.label + "__") else k: val
+            for k, val in map_dict.items()
+        }
 
     def get_params(self, deep=True) -> dict:
         _, new_param_dict = self._map_parameters(deep=deep)
