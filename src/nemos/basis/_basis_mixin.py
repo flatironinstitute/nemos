@@ -754,7 +754,7 @@ class CompositeBasisMixin:
                 )
             elif label in __PUBLIC_BASES__ and label != self.__class__.__name__:
                 raise ValueError(
-                    f"Cannot set basis nane {label} for basis of type {type(self)}."
+                    f"Cannot set basis label '{label}' for basis of type {type(self)}."
                 )
             self._label = label
 
