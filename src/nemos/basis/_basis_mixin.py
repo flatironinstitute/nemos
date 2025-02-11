@@ -94,6 +94,28 @@ def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     return decorator
 
 
+def _composite_basis_setter_logic(new: Basis, current: Basis):
+
+    # Carry-on label if possible
+    if new._has_default_label and not current._has_default_label:
+        try:
+            new.label = current.label
+        except ValueError:
+            pass  # If label is in use, ignore
+
+    # add a parent to the new basis
+    new._parent = getattr(current, "_parent", None)
+
+    # Carry-on input shape info if dimensions match
+    for attr in ("_input_shape_product", "_input_shape_"):
+        if (
+            getattr(new, attr, None) is None
+            and new._n_input_dimensionality == current._n_input_dimensionality
+        ):
+            setattr(new, attr, getattr(current, attr, None))
+    return new
+
+
 class AtomicBasisMixin:
     """Mixin class for atomic bases (i.e. non-composite)."""
 
@@ -667,6 +689,8 @@ class CompositeBasisMixin:
 
         if self._basis2:
             self._set_labels(basis, self._basis2)
+        if self._basis1:
+            basis = _composite_basis_setter_logic(basis, self._basis1)
         self._basis1 = basis
         self._input_shape_update()
 
@@ -682,6 +706,8 @@ class CompositeBasisMixin:
             )
         if self._basis1:
             self._set_labels(self._basis1, basis)
+        if self._basis2:
+            basis = _composite_basis_setter_logic(basis, self._basis2)
         self._basis2 = basis
         self._input_shape_update()
 

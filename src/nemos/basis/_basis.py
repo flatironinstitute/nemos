@@ -21,33 +21,6 @@ from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 from ._transformer_basis import TransformerBasis
 
 
-def _update_basis_attributes(current_params: dict, new_params: dict) -> dict:
-    """Update labels, parent references, and input shapes for Basis objects."""
-
-    for key, new in new_params.items():
-        current = current_params.get(key, None)
-
-        if isinstance(new, (Basis, TransformerBasis)) and current:
-            # Update label if new has default and current has a user-defined label
-            if new._has_default_label and not current._has_default_label:
-                try:
-                    new.label = current.label
-                except ValueError:
-                    pass  # If label is in use, ignore
-
-            # Update parent reference
-            new._parent = current._parent
-
-            # Update expected input shape if dimensions match
-            for attr in ("_input_shape_product", "_input_shape_"):
-                if (
-                    getattr(new, attr, None) is None
-                    and new._n_input_dimensionality == current._n_input_dimensionality
-                ):
-                    setattr(new, attr, getattr(current, attr, None))
-    return new_params
-
-
 def _recompute_all_default_labels(root: Basis) -> Basis:
     """Recompute default all labels."""
     updated = []
@@ -78,11 +51,6 @@ def remap_parameters(method):
             )
             for key, val in params.items()
         }
-
-        # for any new basis that doesn't have a user defined label
-        # try to assign the current label (this my fail if label is in use)
-        # assign parent as well
-        new_params = _update_basis_attributes(self.__sklearn_get_params__(), new_params)
 
         # apply set_params
         self = method(self, **new_params)
