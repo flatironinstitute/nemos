@@ -485,6 +485,15 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         :
             The resulting Basis object.
         """
+        if isinstance(other, int):
+            def add(base, mul):
+                if mul == 1:
+                    return base  # Base case
+                half = add(base, mul // 2)
+                sum = half + half  # Less deep copying
+                return sum + base if mul % 2 else sum
+            return add(self, other)
+
         return MultiplicativeBasis(self, other)
 
     def __pow__(self, exponent: int) -> MultiplicativeBasis:
