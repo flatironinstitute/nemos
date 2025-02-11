@@ -259,7 +259,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Implements standard scikit-learn, get parameters by inspecting init.
 
         This function will be called by Base.get_params() to get the actual param
-        structure.
+        structure, overwring the inheritance.
 
         Parameters
         ----------
