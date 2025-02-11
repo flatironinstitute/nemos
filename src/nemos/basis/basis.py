@@ -19,7 +19,6 @@ from ._decaying_exponential import OrthExponentialBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
-from ._transformer_basis import TransformerBasis
 
 # add transformer basis here to avoid flake8 complaining
 __all__ = __PUBLIC_BASES__ + ["TransformerBasis"]
