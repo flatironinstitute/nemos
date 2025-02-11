@@ -2,7 +2,7 @@ import inspect
 import itertools
 import re
 from contextlib import nullcontext as does_not_raise
-from functools import partial, reduce
+from functools import partial
 from typing import Literal
 
 import jax.numpy
@@ -14,7 +14,7 @@ from conftest import BasisFuncsTesting, CombinedBasis, list_all_basis_classes
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
-from nemos.basis import HistoryConv, IdentityEval
+from nemos.basis import HistoryConv, IdentityEval, TransformerBasis
 from nemos.basis._basis import AdditiveBasis, MultiplicativeBasis, add_docstring
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
@@ -2426,6 +2426,25 @@ class TestAdditiveBasis(CombinedBasis):
         add.label = "AdditiveBasis"
         with pytest.raises(ValueError, match="Label 'AdditiveBasis' is already in use"):
             add.label = "AdditiveBasis"
+
+    @pytest.mark.parametrize("bas", list_all_basis_classes())
+    def test_inherit_setting(self, bas, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas, basis_class_specific_params, window_size=10
+        )
+        comp_bases = basis_obj + basis_obj.__sklearn_clone__().set_params(label="z")
+        basis_update = basis.BSplineEval(5) + basis.BSplineEval(5, label="z")
+        basis_update.set_params(z=comp_bases)
+        assert basis_update.basis2.label != "z"
+
+    @pytest.mark.parametrize("bas", list_all_basis_classes())
+    def test_class_method_gen_key(self, bas, basis_class_specific_params):
+        basis_a_obj = self.instantiate_basis(
+            5, bas, basis_class_specific_params, window_size=10
+        )
+        add = basis_a_obj + basis_a_obj
+        out = add._merge_slicing_dicts({"1": 1, "2": 2, "3": 3}, {"1": 11, "2": 12})
+        assert out == {"1": 1, "2": 2, "3": 3, "1_1": 11, "2_1": 12}
 
     def test_redundant_label_in_nested_basis(self):
         bas = (
@@ -4846,7 +4865,7 @@ def test_basis_to_transformer(basis_cls, basis_class_specific_params):
         *([1] * bas._n_input_dimensionality)
     ).to_transformer()
 
-    assert isinstance(trans_bas, basis.TransformerBasis)
+    assert isinstance(trans_bas, TransformerBasis)
 
     # check that things like n_basis_funcs are the same as the original basis
     for k in bas.__dict__.keys():
@@ -4994,7 +5013,7 @@ def test_multi_epoch_pynapple_basis_transformer(
     # run convolutions
     # pass through transformer
     bas.set_input_shape(X)
-    bas = basis.TransformerBasis(bas)
+    bas = TransformerBasis(bas)
     res = bas.fit_transform(X)
 
     # check nans
@@ -5085,7 +5104,7 @@ def test__get_splitter(
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
@@ -5257,7 +5276,7 @@ def test__get_splitter_split_by_input(
 ):
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2]
     ):
         return
@@ -5294,7 +5313,7 @@ def test__get_splitter_split_by_input(
 @pytest.mark.parametrize("bas1", list_all_basis_classes())
 def test_duplicate_keys(bas1, basis_class_specific_params):
     # skip nested
-    if bas1 in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+    if bas1 in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
         return
 
     combine_basis = CombinedBasis()
@@ -5328,7 +5347,7 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
 
     # skip nested
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in [bas1, bas2, bas3]
     ):
         return
@@ -5436,7 +5455,7 @@ def test_label_uniqueness_enforcing(bas1, bas2, bas3, basis_class_specific_param
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
 def test_dynamic_set_label(bas, basis_class_specific_params):
-    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+    if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
         return
 
     combine_basis = CombinedBasis()
@@ -5565,7 +5584,7 @@ def test_dynamic_set_label(bas, basis_class_specific_params):
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
 def test_add_left_and_right(bas, basis_class_specific_params):
-    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+    if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
         return
 
     combine_basis = CombinedBasis()
@@ -5588,7 +5607,7 @@ def test_add_left_and_right(bas, basis_class_specific_params):
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
 def test_multiply_left_and_right(bas, basis_class_specific_params):
-    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+    if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
         return
 
     combine_basis = CombinedBasis()
@@ -5611,7 +5630,7 @@ def test_multiply_left_and_right(bas, basis_class_specific_params):
 
 @pytest.mark.parametrize("bas", list_all_basis_classes())
 def test_basis_protected_name(bas, basis_class_specific_params):
-    if bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis):
+    if bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis):
         return
 
     combine_basis = CombinedBasis()
@@ -5653,7 +5672,7 @@ def test_basis_protected_name(bas, basis_class_specific_params):
 @pytest.mark.parametrize("bas2", list_all_basis_classes())
 def test_getitem(bas1, bas2, basis_class_specific_params):
     if any(
-        bas in (AdditiveBasis, MultiplicativeBasis, basis.TransformerBasis)
+        bas in (AdditiveBasis, MultiplicativeBasis, TransformerBasis)
         for bas in (bas1, bas2)
     ):
         return
@@ -5799,7 +5818,7 @@ def test_split_feature_axis(
         in (
             AdditiveBasis,
             MultiplicativeBasis,
-            basis.TransformerBasis,
+            TransformerBasis,
             IdentityEval,
             HistoryConv,
         )

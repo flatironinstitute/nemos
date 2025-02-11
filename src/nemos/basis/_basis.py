@@ -1355,11 +1355,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         split_dict = self._merge_slicing_dicts(split_dict, sp2)
         return split_dict, start_slice
 
-    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
+    @classmethod
+    def _merge_slicing_dicts(cls, dict1: dict, dict2: dict) -> dict:
         """Merge two slicing dictionaries, handling key conflicts."""
         for key, val in dict2.items():
             if key in dict1:
-                new_key = self._generate_unique_key(dict1, key)
+                new_key = cls._generate_unique_key(dict1, key)
                 dict1[new_key] = val
             else:
                 dict1[key] = val
