@@ -64,7 +64,7 @@ def remap_parameters(method):
     @wraps(method)
     def wrapper(self, **params):
         # get key/param map
-        map_params, _ = self._map_parameters()
+        _, map_params = self._map_parameters()
 
         # use mapped key if exists, or original key
         # deepcopy basis to avoid matching labels when assigning twice the same basis
@@ -241,10 +241,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         Returns:
         --------
-        parameter_map:
-            A mapping of new parameter names to original names.
-        new_param_dict:
+        param_dict_map:
             A dictionary with renamed parameters.
+        key_map:
+            A mapping of new parameter names to original names.
+
         """
         param_dict_map, key_map = self._get_params_and_key_map(
             deep=deep,
@@ -252,7 +253,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # strip higher level label
         param_dict_map = self._remove_self_label_from_key(param_dict_map)
         key_map = self._remove_self_label_from_key(key_map)
-        return key_map, param_dict_map
+        return param_dict_map, key_map
 
     def __sklearn_get_params__(self, deep=True):
         """
@@ -299,6 +300,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         out_map:
             A dictionary containing the parameters. Key is the ``basis_label "__" + parameter_name``,
             value is the parameter value.
+        key_map:
+            Dictionary that maps the keys of out_map onto the keys based on attribute nesting.
         """
         out_map = dict()
         key_map = dict()
@@ -344,7 +347,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         }
 
     def get_params(self, deep=True) -> dict:
-        _, new_param_dict = self._map_parameters(deep=deep)
+        new_param_dict, _ = self._map_parameters(deep=deep)
         return new_param_dict
 
     @remap_parameters
