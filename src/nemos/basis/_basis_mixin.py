@@ -752,6 +752,10 @@ class CompositeBasisMixin:
                 raise ValueError(
                     f"Label '{label}' is already in use. When user-provided, label must be unique."
                 )
+            elif label in __PUBLIC_BASES__ and label != self.__class__.__name__:
+                raise ValueError(
+                    f"Cannot set basis nane {label} for basis of type {type(self)}."
+                )
             self._label = label
 
     @property
