@@ -714,7 +714,6 @@ class CompositeBasisMixin:
                     "Please change the labels for one of the elements before composition."
                 )
                 return True, err_msg
-            seen_labels.add(label)
 
         return False, ""
 
