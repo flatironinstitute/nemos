@@ -130,8 +130,7 @@ class AtomicBasisMixin:
             return
 
         else:
-            # unsure how to avoid circular imports here so I get the module namespace
-            # and listed all bases
+            # check if label matches class-name plus identifier
             match = re.match(r"(.+)?_\d+$", label)
             check_string = match.group(1) if match else None
             check_string = check_string if check_string in __PUBLIC_BASES__ else label
