@@ -246,7 +246,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         new_param_dict:
             A dictionary with renamed parameters.
         """
-        _, param_dict_map, key_map = self._get_params_and_key_map(
+        param_dict_map, key_map = self._get_params_and_key_map(
             deep=deep,
         )  # Retrieve the parameter dictionary
         # strip higher level label
@@ -286,7 +286,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             out[key] = value
         return out
 
-    def _get_params_and_key_map(self, deep=True) -> Tuple[dict, dict, dict]:
+    def _get_params_and_key_map(self, deep=True) -> Tuple[dict, dict]:
         """
         From scikit-learn, get parameters by inspecting init.
 
@@ -296,14 +296,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         Returns
         -------
-            out:
-                A dictionary containing the parameters. Key is the parameter
-                name, value is the parameter value.
+        out_map:
+            A dictionary containing the parameters. Key is the ``basis_label "__" + parameter_name``,
+            value is the parameter value.
         """
-        out = dict()
         out_map = dict()
         key_map = dict()
-        key_map2 = dict()
         for key in self._get_param_names():
             value = getattr(self, key)
             if (
@@ -311,10 +309,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 and hasattr(value, "_get_params_and_key_map")
                 and not isinstance(value, type)
             ):
-                item_orig, item_map, key_mapping = value._get_params_and_key_map()
-                deep_items = item_orig.items()
+                item_map, key_mapping = value._get_params_and_key_map()
                 map_deep_items = item_map.items()
-                out.update((key + "__" + k, val) for k, val in deep_items)
                 # only keep the last basis label (the leaf of the tree)
                 out_map.update(
                     (
@@ -329,24 +325,17 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 )
                 key_map.update(
                     {
-                        (
-                            "__".join(im[0].split("__")[-2:])
-                            if not isinstance(io[1], Basis)
-                            else io[1].label
-                        ): key
-                        + "__"
-                        + io[0]
-                        for io, im in zip(item_orig.items(), key_mapping.items())
+                        k: key + "__" + v
+                        for k, v in zip(item_map.keys(), key_mapping.values())
                     }
                 )
-            out[key] = value
             if isinstance(value, Basis):
                 out_map[value.label] = value
                 key_map[value.label] = key
             else:
                 out_map[self.label + "__" + key] = value
                 key_map[self.label + "__" + key] = key
-        return out, out_map, key_map
+        return out_map, key_map
 
     def _remove_self_label_from_key(self, map_dict: dict) -> dict:
         return {
