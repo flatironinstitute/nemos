@@ -471,10 +471,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         return AdditiveBasis(self, other)
 
-    def __rmul__(self, other):
+    def __rmul__(self, other: Basis | int):
         return self.__mul__(other)
 
-    def __mul__(self, other: Basis) -> MultiplicativeBasis:
+    def __mul__(self, other: Basis | int) -> MultiplicativeBasis:
         """
         Multiply two Basis objects together.
 

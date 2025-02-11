@@ -2432,6 +2432,21 @@ class TestAdditiveBasis(CombinedBasis):
         assert add._input_shape_product == (1, 6)
         assert (add + add)._input_shape_product == (1, 6, 1, 6)
 
+
+    @pytest.mark.parametrize(
+        "bas", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_rmul_lmul(self, bas, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas, basis_class_specific_params, window_size=10
+        )
+        out = 10*basis_obj
+        assert isinstance(out, AdditiveBasis)
+        assert sum((1 for _ in out._iterate_over_components())) == 10
+        out = basis_obj * 10
+        assert isinstance(out, AdditiveBasis)
+        assert sum((1 for _ in out._iterate_over_components())) == 10
+
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
     def test_len(self, basis_a, basis_b, basis_class_specific_params):
@@ -5205,6 +5220,7 @@ def test_split_feature_axis(
             assert val.shape == exp_shapes[i]
 
 
+
 def test_composite_basis_repr_wrapping():
     # check multi
     bas = basis.BSplineEval(10) ** 100
@@ -5213,12 +5229,12 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "basis2=BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=BSplineEval(n_basis_funcs=10, order=4),\n)"
+        '         basis2=MultiplicativeBasis(\n                        ...\n                    ),\n                ),\n            ),\n            basis2=BSplineEval(n_basis_funcs=10, order=4),\n        ),\n    ),\n)'
     )
     assert "    ...\n" in out
 
     bas = basis.MSplineEval(10)
-    bas = reduce(sum, (bas for _ in range(100)))
+    bas = bas * 100
 
     # large additive basis
     out = repr(bas)
@@ -5226,6 +5242,6 @@ def test_composite_basis_repr_wrapping():
         "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
     )
     assert out.endswith(
-        "basis2=MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=MSplineEval(n_basis_funcs=10, order=4),\n)"
+        '               basis2=AdditiveBasis(\n                        ...\n                    ),\n                ),\n            ),\n            basis2=MSplineEval(n_basis_funcs=10, order=4),\n        ),\n    ),\n)'
     )
     assert "    ...\n" in out
