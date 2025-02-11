@@ -516,10 +516,14 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if exponent <= 0:
             raise ValueError("Exponent should be a non-negative integer!")
 
-        result = self
-        for _ in range(exponent - 1):
-            result = result * self
-        return result
+        def power(base, exp):
+            if exp == 1:
+                return base  # Base case
+            half = power(base, exp // 2)
+            squared = half * half  # Less deep copying
+            return squared * base if exp % 2 else squared
+
+        return power(self, exponent)
 
     def __repr__(self):
         return format_repr(self)
