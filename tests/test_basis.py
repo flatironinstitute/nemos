@@ -550,7 +550,7 @@ class TestSharedMethods:
                 "n_output_features",
                 5,
                 pytest.raises(
-                    AttributeError, match="can't set attribute 'n_output_features'"
+                    AttributeError, match=r"can't set attribute 'n_output_features'|property 'n_output_features' of '.+' object"
                 ),
             ),
         ],
