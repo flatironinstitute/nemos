@@ -303,6 +303,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         out = dict()
         out_map = dict()
         key_map = dict()
+        key_map2 = dict()
         for key in self._get_param_names():
             value = getattr(self, key)
             if (
