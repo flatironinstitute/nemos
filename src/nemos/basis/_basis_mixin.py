@@ -507,11 +507,15 @@ class CompositeBasisMixin:
     (AdditiveBasis and MultiplicativeBasis).
     """
 
-    def __init__(self, basis1: Basis, basis2: Basis):
+    def __init__(self, basis1: Basis, basis2: Basis, shallow_copy: bool = False):
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
-        self.basis1 = copy.deepcopy(basis1)
-        self.basis2 = copy.deepcopy(basis2)
+        if not shallow_copy:
+            self.basis1 = copy.deepcopy(basis1)
+            self.basis2 = copy.deepcopy(basis2)
+        else:
+            self.basis1 = basis1
+            self.basis2 = basis2
 
         # set parents
         self.basis1._parent = self
@@ -615,14 +619,26 @@ class CompositeBasisMixin:
         as in the regular sklearn clone would drop these attributes, rendering
         cross-validation unusable.
         The method also handles recursive cloning for composite basis structures.
+
+        Notes
+        -----
+        The ``_shallow_copy`` attribute is set to True, forcing a shallow copy, at
+        before the klass definition, and reset to False after cloning.
         """
+        # shallow copy private attribute to avoid costly deep-copying
+        # of newly initialized objects.
+        self._shallow_copy = True
+
         # clone recursively
         basis1 = self.basis1.__sklearn_clone__()
         basis2 = self.basis2.__sklearn_clone__()
+
+        # shallow copy init
         klass = self.__class__(basis1, basis2)
 
-        for attr_name in ["_input_shape_product"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
+        # restore the deep copy default behavior.
+        self._shallow_copy = False
+        klass._shallow_copy = False
         return klass
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:

@@ -366,8 +366,8 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
     [
         (2, does_not_raise, None),
         (5, does_not_raise, None),
-        (0.5, TypeError, "Exponent should be an integer"),
-        (-1, ValueError, "Exponent should be a non-negative integer"),
+        (0.5, TypeError, "Basis exponent should be an integer"),
+        (-1, ValueError, "Basis exponent should be a non-negative integer"),
     ],
 )
 def test_transformerbasis_exponentiation(

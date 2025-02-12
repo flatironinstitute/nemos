@@ -508,7 +508,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if isinstance(other, int):
             if other <= 0:
                 raise ValueError(
-                    f"Basis multiplication error. Integer multiplicative factor must be positive, {other} provided instead."
+                    "Basis multiplication error. Integer multiplicative factor must be positive, "
+                    f"{other} provided instead."
                 )
             return _bisect_mul(self, other)
         if not isinstance(other, Basis):
@@ -788,8 +789,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     )
     """
 
+    _shallow_copy: bool = False
+
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        CompositeBasisMixin.__init__(self, basis1, basis2)
+        CompositeBasisMixin.__init__(
+            self, basis1, basis2, shallow_copy=self._shallow_copy
+        )
         Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
 
@@ -1222,8 +1227,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     )
     """
 
+    _shallow_copy: bool = False
+
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        CompositeBasisMixin.__init__(self, basis1, basis2)
+        CompositeBasisMixin.__init__(
+            self, basis1, basis2, shallow_copy=self._shallow_copy
+        )
         Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._n_input_dimensionality = (
