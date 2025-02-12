@@ -642,7 +642,7 @@ class CompositeBasisMixin:
         # shallow copy init
         klass = self.__class__(basis1, basis2)
 
-        # restore the deep copy default behavior.
+        # restore the deep copy default behavior only at the top level call
         self.__class__._shallow_copy = shallow_copy
         klass.__class__._shallow_copy = shallow_copy
         return klass
