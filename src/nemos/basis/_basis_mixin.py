@@ -148,6 +148,7 @@ class AtomicBasisMixin:
         elif label is None:
             # check if already default
             self._label = self.__class__.__name__
+            # re-order the default labels if self is part of a composite basis.
             self._recompute_all_labels()
             return
 
@@ -161,7 +162,7 @@ class AtomicBasisMixin:
                 self._recompute_all_labels()
                 return
 
-        # convert to string (in case label is not string).
+        # raise error in case label is not string.
         if not isinstance(label, str):
             raise TypeError(
                 f"'label' must be a string. Type {type(label)} was provided instead."
@@ -177,7 +178,9 @@ class AtomicBasisMixin:
                 msg = f"Label '{label}' is already in use. When user-provided, label must be unique."
             raise ValueError(msg)
         else:
-            # match if it was a default
+            # check if current is the default label
+            # if that's true, since the new label is not a default label
+            # update all other default label names.
             self._update_label_from_root()
             self._label = label
 
@@ -250,10 +253,8 @@ class AtomicBasisMixin:
         """
         List all user-specified labels.
         """
-        lab = self._label
-        is_default = re.match(rf"^{self.__class__.__name__}(_\d+)?$", lab) is not None
-        if type_label == "all" or (not is_default):
-            yield lab
+        if type_label == "all" or (not self._has_default_label):
+            yield self._label
 
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
