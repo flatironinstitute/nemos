@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from .version import version as __version__
-
 from . import (
     basis,
     convolve,
@@ -17,3 +15,4 @@ from . import (
     type_casting,
     utils,
 )
+from .version import version as __version__
