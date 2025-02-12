@@ -4,8 +4,10 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
+from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
+from contextlib import nullcontext
 
 import jax
 import numpy as np
@@ -18,23 +20,82 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+from ._transformer_basis import TransformerBasis
+
+
+def _recompute_all_default_labels(root: Basis) -> Basis:
+    """Recompute default all labels."""
+    updated = []
+    for bas in root._iterate_over_components():
+        if bas._has_default_label and bas.__class__.__name__ not in updated:
+            bas._recompute_all_labels()
+            updated.append(bas.__class__.__name__)
+    return root
+
+
+def remap_parameters(method):
+    """Remap parameter names to original."""
+
+    @wraps(method)
+    def wrapper(self, **params):
+        # get key/param map
+        _, map_params = self._map_parameters()
+
+        # use mapped key if exists, or original key
+        # deepcopy basis to avoid matching labels when assigning twice the same basis
+        # to two different components:
+        # basis.set_params(basis1=bas, basis2=bas)
+        new_params = {
+            map_params.get(key, key): (
+                copy.deepcopy(val)
+                if isinstance(val, (Basis, TransformerBasis))
+                else val
+            )
+            for key, val in params.items()
+        }
+
+        # apply set_params
+        self = method(self, **new_params)
+
+        # re-assign ordered ids to all default labels of atomic components
+        # note that the recursion always run until parent.
+        if self._parent is None:
+            _recompute_all_default_labels(self)
+
+        return self
+
+    return wrapper
 
 
 def _bisect_mul(base: Basis, mul: int):
     """Speed up adding n basis of the same type"""
     if mul == 1:
-        return base  # Base case
+        return deepcopy(base)  # Base case
     half = _bisect_mul(base, mul // 2)
-    sum = half.__sklearn_clone__() + half.__sklearn_clone__()  # Less deep copying
-    return sum + base.__sklearn_clone__() if mul % 2 else sum
+    context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
+    with context(True):
+        if context is nullcontext:
+            addition = half + deepcopy(half)
+        else:
+            addition = half + deepcopy(half)
+    with addition._set_shallow_copy_temporarily(True):
+        addition = addition + deepcopy(base) if mul % 2 else addition
+    return addition
 
 
 def _bisect_power(base: Basis, expon: int):
     if expon == 1:
-        return base  # Base case
-    half = _bisect_power(base, expon // 2)
-    squared = half.__sklearn_clone__() * half.__sklearn_clone__()  # Less deep copying
-    return squared * base.__sklearn_clone__() if expon % 2 else squared
+        return deepcopy(base)  # Base case
+    squared = _bisect_power(base, expon // 2)
+    context = getattr(squared, "_set_shallow_copy_temporarily", nullcontext)
+    with context(True):
+        if context is nullcontext:
+            squared = squared * deepcopy(squared)
+        else:
+            squared = squared * deepcopy(squared)
+    with squared._set_shallow_copy_temporarily(True):
+        squared = squared * deepcopy(base) if expon % 2 else squared
+    return squared
 
 
 def add_docstring(method_name, cls):
@@ -119,6 +180,15 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
+def generate_basis_label_pair(bas: Basis):
+    if hasattr(bas, "basis1"):
+        for label, sub_bas in generate_basis_label_pair(bas.basis1):
+            yield label, sub_bas
+        for label, sub_bas in generate_basis_label_pair(bas.basis2):
+            yield label, sub_bas
+    yield bas.label, bas
+
+
 class Basis(Base, abc.ABC, BasisTransformerMixin):
     """
     Abstract base class for defining basis functions for feature transformation.
@@ -132,9 +202,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     mode :
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
-    label :
-        The label of the basis, intended to be descriptive of the task variable being processed.
-        For example: velocity, position, spike_counts.
 
     Raises
     ------
@@ -152,16 +219,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __init__(
         self,
         mode: Literal["eval", "conv", "composite"] = "eval",
-        label: Optional[str] = None,
     ) -> None:
         self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
 
         self._mode = mode
-
-        if label is None:
-            self._label = self.__class__.__name__
-        else:
-            self._label = str(label)
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -169,6 +230,132 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # initialize parent to None. This should not end in "_" because it is
         # a permanent property of a basis, defined at composite basis init
         self._parent = None
+
+    def _map_parameters(self, deep=True):
+        """
+        Remap parameters in a given object by replacing 'basis[12]' patterns with unique labels.
+
+        Parameters:
+        -----------
+        bas : object
+            An object that contains a `get_params()` method returning a dictionary of parameters.
+
+        Returns:
+        --------
+        param_dict_map:
+            A dictionary with renamed parameters.
+        key_map:
+            A mapping of new parameter names to original names.
+
+        """
+        param_dict_map, key_map = self._get_params_and_key_map(
+            deep=deep,
+        )  # Retrieve the parameter dictionary
+        # strip higher level label
+        param_dict_map = self._remove_self_label_from_key(param_dict_map)
+        key_map = self._remove_self_label_from_key(key_map)
+        return param_dict_map, key_map
+
+    def __sklearn_get_params__(self, deep=True):
+        """
+        Implements standard scikit-learn get parameters by inspecting init.
+
+        This function will be called by Base.set_params() to get the actual param
+        structure, since the inherited``get_params`` is overridden to use basis labels
+        instead of the nested structure.
+
+        Parameters
+        ----------
+        deep:
+            If true, call itself recursively on basis implementing the method.
+
+        Returns
+        -------
+        out:
+            A dictionary containing the parameters. Key is the parameter
+            name, value is the parameter value.
+        """
+        out = dict()
+        for key in self._get_param_names():
+            value = getattr(self, key)
+            if (
+                deep
+                and hasattr(value, "__sklearn_get_params__")
+                and not isinstance(value, type)
+            ):
+                item_orig = value.__sklearn_get_params__()
+                deep_items = item_orig.items()
+                out.update((key + "__" + k, val) for k, val in deep_items)
+            out[key] = value
+        return out
+
+    def _get_params_and_key_map(self, deep=True) -> Tuple[dict, dict]:
+        """
+        From scikit-learn, get parameters by inspecting init.
+
+        Parameters
+        ----------
+        deep
+
+        Returns
+        -------
+        parameter_dict:
+            A dictionary containing the parameters. Key is the ``basis_label "__" + parameter_name``,
+            value is the parameter value.
+        key_map:
+            Dictionary that maps the keys of parameter_dict onto the keys based on attribute nesting.
+        """
+        parameter_dict = dict()
+        key_map = dict()
+        for key in self._get_param_names():
+            value = getattr(self, key)
+            if (
+                deep
+                and hasattr(value, "_get_params_and_key_map")
+                and not isinstance(value, type)
+            ):
+                item_map, key_mapping = value._get_params_and_key_map()
+                map_deep_items = item_map.items()
+                # only keep the last basis label (the leaf of the tree)
+                parameter_dict.update(
+                    (
+                        (
+                            "__".join(k.split("__")[-2:])
+                            if not isinstance(val, Basis)
+                            else val.label
+                        ),
+                        val,
+                    )
+                    for k, val in map_deep_items
+                )
+                key_map.update(
+                    {
+                        k: key + "__" + v
+                        for k, v in zip(item_map.keys(), key_mapping.values())
+                    }
+                )
+            if isinstance(value, Basis):
+                parameter_dict[value.label] = value
+                key_map[value.label] = key
+            else:
+                parameter_dict[self.label + "__" + key] = value
+                key_map[self.label + "__" + key] = key
+        return parameter_dict, key_map
+
+    def _remove_self_label_from_key(self, map_dict: dict) -> dict:
+        initial_string = self.label + "__"
+        return {
+            k[len(initial_string) :] if k.startswith(initial_string) else k: val
+            for k, val in map_dict.items()
+        }
+
+    def get_params(self, deep=True) -> dict:
+        new_param_dict, _ = self._map_parameters(deep=deep)
+        return new_param_dict
+
+    @remap_parameters
+    def set_params(self, **params: Any):
+        return super().set_params(**params)
 
     @property
     def n_output_features(self) -> int | None:
@@ -186,10 +373,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             return self.n_basis_funcs * self._input_shape_product[0]
         return None
 
-    @property
-    def label(self) -> str:
-        """Label for the basis."""
-        return self._label
+    def _root(self):
+        """Get the basis root"""
+        parent = self
+        while hasattr(parent, "_parent") and parent._parent is not None:
+            parent = parent._parent
+        return parent
 
     @property
     def n_basis_funcs(self):
@@ -552,6 +741,19 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __repr__(self):
         return format_repr(self)
 
+    def __getitem__(self, index: str) -> Basis:
+
+        search = next(
+            (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None
+        )
+
+        if search is None:
+            avail_index = ",".join(f"'{b}'" for b in self._generate_subtree_labels())
+            raise IndexError(
+                f"Basis label {index} not found. Available labels: {avail_index}"
+            )
+        return search
+
     def _get_feature_slicing(
         self,
         n_inputs: Optional[tuple] = None,
@@ -598,13 +800,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return split_dict, start_slice
 
     @staticmethod
-    def _generate_unique_key(existing_dict: dict, key: str) -> str:
+    def _generate_unique_key(existing_dict: dict | List | Tuple, key: str) -> str:
         """Generate a unique key if there is a conflict."""
         extra = 1
-        new_key = f"{key}-{extra}"
+        new_key = f"{key}_{extra}"
         while new_key in existing_dict:
             extra += 1
-            new_key = f"{key}-{extra}"
+            new_key = f"{key}_{extra}"
         return new_key
 
     def _get_default_slicing(
@@ -771,7 +973,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> additive_basis = basis_1 + basis_2
     >>> additive_basis
-    AdditiveBasis(
+    '(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
         basis1=BSplineEval(n_basis_funcs=10, order=4),
         basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
     )
@@ -780,26 +982,27 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> additive_basis_2 = additive_basis + basis_3
     >>> additive_basis_2
-    AdditiveBasis(
-        basis1=AdditiveBasis(
+    '((BSplineEval + RaisedCosineLinearEval) + RaisedCosineLogEval)': AdditiveBasis(
+        basis1='(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
             basis1=BSplineEval(n_basis_funcs=10, order=4),
             basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
         ),
         basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
     )
     """
-
-    def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        CompositeBasisMixin.__init__(
-            self, basis1, basis2,
-        )
+    def __init__(
+        self, basis1: Basis, basis2: Basis, label: Optional[str] = None
+    ) -> None:
+        CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self, mode="composite")
-        self._label = "(" + basis1.label + " + " + basis2.label + ")"
 
         # number of input arrays that the basis receives
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+
+    def _generate_label(self) -> str:
+        return "(" + self.basis1.label + " + " + self.basis2.label + ")"
 
     @property
     def n_basis_funcs(self):
@@ -1163,11 +1366,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         split_dict = self._merge_slicing_dicts(split_dict, sp2)
         return split_dict, start_slice
 
-    def _merge_slicing_dicts(self, dict1: dict, dict2: dict) -> dict:
+    @classmethod
+    def _merge_slicing_dicts(cls, dict1: dict, dict2: dict) -> dict:
         """Merge two slicing dictionaries, handling key conflicts."""
         for key, val in dict2.items():
             if key in dict1:
-                new_key = self._generate_unique_key(dict1, key)
+                new_key = cls._generate_unique_key(dict1, key)
                 dict1[new_key] = val
             else:
                 dict1[key] = val
@@ -1207,33 +1411,36 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> basis_2 = nmo.basis.RaisedCosineLinearEval(15)
     >>> multiplicative_basis = basis_1 * basis_2
     >>> multiplicative_basis
-    MultiplicativeBasis(
+    '(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
         basis1=BSplineEval(n_basis_funcs=10, order=4),
         basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
     )
+
     >>> # Can multiply or add another basis to the AdditiveBasis object
     >>> # This will cause the number of output features of the result basis to grow accordingly
     >>> basis_3 = nmo.basis.RaisedCosineLogEval(100)
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     >>> multiplicative_basis_2
-    MultiplicativeBasis(
-        basis1=MultiplicativeBasis(
+    '((BSplineEval * RaisedCosineLinearEval) * RaisedCosineLogEval)': MultiplicativeBasis(
+        basis1='(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
             basis1=BSplineEval(n_basis_funcs=10, order=4),
             basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
         ),
         basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
     )
     """
+    def __init__(
+        self, basis1: Basis, basis2: Basis, label: Optional[str] = None
+    ) -> None:
+        CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
 
-    def __init__(self, basis1: Basis, basis2: Basis) -> None:
-        CompositeBasisMixin.__init__(
-            self, basis1, basis2,
-        )
         Basis.__init__(self, mode="composite")
-        self._label = "(" + basis1.label + " * " + basis2.label + ")"
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )
+
+    def _generate_label(self) -> str:
+        return "(" + self.basis1.label + " * " + self.basis2.label + ")"
 
     @property
     def n_basis_funcs(self):

@@ -6,9 +6,10 @@ import abc
 from contextlib import contextmanager
 import copy
 import inspect
+import re
 from functools import wraps
 from itertools import chain
-from typing import TYPE_CHECKING, Generator, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -20,6 +21,26 @@ from ._transformer_basis import TransformerBasis
 
 if TYPE_CHECKING:
     from ._basis import Basis
+
+
+__PUBLIC_BASES__ = [
+    "IdentityEval",
+    "HistoryConv",
+    "MSplineEval",
+    "MSplineConv",
+    "BSplineEval",
+    "BSplineConv",
+    "CyclicBSplineEval",
+    "CyclicBSplineConv",
+    "RaisedCosineLinearEval",
+    "RaisedCosineLinearConv",
+    "RaisedCosineLogEval",
+    "RaisedCosineLogConv",
+    "OrthExponentialEval",
+    "OrthExponentialConv",
+    "AdditiveBasis",
+    "MultiplicativeBasis",
+]
 
 
 def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
@@ -74,15 +95,136 @@ def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     return decorator
 
 
+def _composite_basis_setter_logic(new: Basis, current: Basis):
+
+    # Carry-on label if possible
+    if new._has_default_label and not current._has_default_label:
+        try:
+            new.label = current.label
+        except ValueError:
+            pass  # If label is in use, ignore
+
+    # add a parent to the new basis
+    new._parent = getattr(current, "_parent", None)
+
+    # Carry-on input shape info if dimensions match
+    for attr in ("_input_shape_product", "_input_shape_"):
+        if (
+            getattr(new, attr, None) is None
+            and new._n_input_dimensionality == current._n_input_dimensionality
+        ):
+            setattr(new, attr, getattr(current, attr, None))
+    return new
+
+
 class AtomicBasisMixin:
     """Mixin class for atomic bases (i.e. non-composite)."""
 
-    def __init__(self, n_basis_funcs: int):
+    def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
         self._n_basis_funcs = n_basis_funcs
         self._input_shape_ = None
         self._check_n_basis_min()
 
-    @set_input_shape_state(states=("_input_shape_product", "_input_shape_"))
+        if label is None:
+            self._label = self.__class__.__name__
+
+        else:
+            self._label = str(label)
+
+    def _generate_label(self) -> str:
+        """Return label"""
+        return self._label
+
+    @property
+    def label(self) -> str:
+        """Label for the basis."""
+        return self._label
+
+    @label.setter
+    def label(self, label: str | None) -> None:
+        # check default cases
+        if label == self._label:
+            return
+
+        elif label is None:
+            # check if already default
+            self._label = self.__class__.__name__
+            # re-order the default labels if self is part of a composite basis.
+            self._recompute_all_labels()
+            return
+
+        else:
+            # check if label matches class-name plus identifier
+            match = re.match(r"(.+)?_\d+$", label)
+            check_string = match.group(1) if match else None
+            check_string = check_string if check_string in __PUBLIC_BASES__ else label
+            if check_string == self.__class__.__name__:
+                self._label = check_string
+                self._recompute_all_labels()
+                return
+
+        # raise error in case label is not string.
+        if not isinstance(label, str):
+            raise TypeError(
+                f"'label' must be a string. Type {type(label)} was provided instead."
+            )
+
+        # get the current available labels
+        current_labels = self._root()._generate_subtree_labels()
+        # if check_string is one of the other classes drop
+        if (check_string in current_labels) or (check_string in __PUBLIC_BASES__):
+            if check_string in __PUBLIC_BASES__:
+                msg = f"Cannot assign '{label}' to a basis of class {self.__class__.__name__}."
+            else:
+                msg = f"Label '{label}' is already in use. When user-provided, label must be unique."
+            raise ValueError(msg)
+        else:
+            # check if current is the default label
+            # if that's true, since the new label is not a default label
+            # update all other default label names.
+            self._update_label_from_root()
+            self._label = label
+
+    @property
+    def _has_default_label(self):
+        return re.match(rf"^{self.__class__.__name__}(_\d+)?$", self._label) is not None
+
+    def _recompute_all_labels(self):
+        """
+        Recompute all labels matching default for self.
+        """
+        cls_name = self.__class__.__name__
+        pattern = re.compile(rf"^{cls_name}(_\d+)?$")
+        root = self._root()
+        if root:
+            bas_id = 0
+            for bas in root._iterate_over_components():
+                if re.match(pattern, bas._label):
+                    bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
+                    bas_id += 1
+
+    def _update_label_from_root(self):
+        """
+        Subtract 1 to each matching default label with higher ID then current.
+        """
+        cls_name = self.__class__.__name__
+        pattern = re.compile(rf"^{cls_name}(_\d+)?$")
+        match = re.match(pattern, self._label)
+        if match is None:
+            return
+        # get the "ID" of the label
+        current_id = int(match.group(1)[1:]) if match.group(1) else 0
+        # subtract one to the ID of any other default label with ID > current_id
+        root = self._root()
+        if root:
+            for bas in root._iterate_over_components():
+                match = re.match(pattern, bas._label)
+                if match:
+                    bas_id = int(match.group(1)[1:]) if match.group(1) else 0
+                    bas_id = bas_id - 1 if bas_id > current_id else bas_id
+                    bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
+
+    @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
@@ -105,6 +247,15 @@ class AtomicBasisMixin:
 
         """
         return (x for x in [self])
+
+    def _generate_subtree_labels(
+        self, type_label: Literal["all", "user-defined"] = "all"
+    ) -> Generator[str]:
+        """
+        List all user-specified labels.
+        """
+        if type_label == "all" or (not self._has_default_label):
+            yield self._label
 
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
@@ -324,7 +475,7 @@ class ConvBasisMixin:
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
         conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
-        return np.reshape(conv, newshape=(conv.shape[0], -1))
+        return np.reshape(conv, shape=(conv.shape[0], -1))
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
@@ -509,9 +660,13 @@ class CompositeBasisMixin:
     """
     _shallow_copy: bool = False
 
-    def __init__(self, basis1: Basis, basis2: Basis):
+    def __init__(self, basis1: Basis, basis2: Basis, label: Optional[str] = None):
+        # This step is slow if you add a very large number of bases
+        self._basis1 = None
+        self._basis2 = None
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
+
         if not self._shallow_copy:
             self.basis1 = copy.deepcopy(basis1)
             self.basis2 = copy.deepcopy(basis2)
@@ -523,6 +678,87 @@ class CompositeBasisMixin:
         self.basis1._parent = self
         self.basis2._parent = self
 
+        # initialize attribute
+        self._label = None
+        # use setter to check & set provided label
+        self.label = label
+
+    @property
+    def basis1(self):
+        return self._basis1
+
+    @basis1.setter
+    def basis1(self, basis):
+        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+            raise TypeError(
+                f"`basis1` must be an object of type `Basis`. Type {type(basis)} provided instead."
+            )
+
+        if self._basis2:
+            self._set_labels(basis, self._basis2)
+        if self._basis1:
+            basis = _composite_basis_setter_logic(basis, self._basis1)
+        self._basis1 = basis
+        self._input_shape_update()
+
+    @property
+    def basis2(self):
+        return self._basis2
+
+    @basis2.setter
+    def basis2(self, basis):
+        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+            raise TypeError(
+                f"`basis2` must be an object of type `Basis`. Type {type(basis)} provided instead."
+            )
+        if self._basis1:
+            self._set_labels(self._basis1, basis)
+        if self._basis2:
+            basis = _composite_basis_setter_logic(basis, self._basis2)
+        self._basis2 = basis
+        self._input_shape_update()
+
+    @property
+    def _has_default_label(self):
+        return self._label is None
+
+    def _check_unique_labels(self, basis1, basis2):
+        """Check that all user-defined labels in the given basis objects are unique."""
+
+        # Include self's label in uniqueness check (if applicable)
+        self_label = getattr(self, "_label", None)
+
+        # Store basis1 labels
+        seen_labels = set(basis1._generate_subtree_labels("user-defined"))
+        if self_label in seen_labels:
+            err_msg = (
+                f"All user-provided labels of basis elements must be distinct.\n"
+                f"The basis you are composing share the following labels: '{self_label}'.\n"
+                "Please change the labels for one of the elements before composition."
+            )
+            return True, err_msg
+
+        # Check for duplicates in basis2 without storing in set for efficiency
+        for label in basis2._generate_subtree_labels("user-defined"):
+            if label == self_label or label in seen_labels:
+                err_msg = (
+                    f"All user-provided labels of basis elements must be distinct.\n"
+                    f"The basis you are composing share the following labels: '{label}'.\n"
+                    "Please change the labels for one of the elements before composition."
+                )
+                return True, err_msg
+
+        return False, ""
+
+    def _set_labels(self, basis1, basis2):
+        # check labels
+        non_unique, err_msg = self._check_unique_labels(basis1, basis2)
+        if non_unique:
+            raise ValueError(err_msg)
+
+        self.update_default_label_id(basis1, basis2)
+
+    def _input_shape_update(self):
         # if all bases where set, then set input for composition.
         set_bases = [s is not None for s in self.input_shape]
 
@@ -531,10 +767,48 @@ class CompositeBasisMixin:
             self.set_input_shape(*self.input_shape)
 
     @property
+    def label(self) -> str:
+        """Label for the basis."""
+        if self._label is None:
+            return self._generate_label()
+        return self._label
+
+    @label.setter
+    def label(self, label: str | None) -> None:
+        reset = (label is None) or (label == self._generate_label())
+        if reset:
+            self._label = None
+        else:
+            label = str(label)
+            if label in self._root()._generate_subtree_labels():
+                raise ValueError(
+                    f"Label '{label}' is already in use. When user-provided, label must be unique."
+                )
+            elif label in __PUBLIC_BASES__ and label != self.__class__.__name__:
+                raise ValueError(
+                    f"Cannot set basis label '{label}' for basis of type {type(self)}."
+                )
+            self._label = label
+
+    @property
     def input_shape(self):
+        basis1 = getattr(self, "_basis1", None)
+        basis2 = getattr(self, "_basis2", None)
+        if basis1 is None and basis2 is not None:
+            return [
+                None,
+                *(bas2.input_shape for bas2 in basis2._iterate_over_components()),
+            ]
+        elif basis2 is None and basis1 is not None:
+            return [
+                *(bas1.input_shape for bas1 in basis1._iterate_over_components()),
+                None,
+            ]
+        elif basis1 is None and basis2 is None:
+            return [None, None]
         shapes = [
-            *(bas1.input_shape for bas1 in self.basis1._iterate_over_components()),
-            *(bas2.input_shape for bas2 in self.basis2._iterate_over_components()),
+            *(bas1.input_shape for bas1 in basis1._iterate_over_components()),
+            *(bas2.input_shape for bas2 in basis2._iterate_over_components()),
         ]
         return shapes
 
@@ -547,6 +821,19 @@ class CompositeBasisMixin:
     def n_basis_funcs(self):
         """Read only property for composite bases."""
         pass
+
+    def _generate_subtree_labels(
+        self, type_label: Literal["all", "user-defined"] = "all"
+    ) -> Generator[str]:
+        """
+        List all user-specified labels.
+        """
+        if type_label == "all" or self._label:
+            yield self.label
+        for lab in self.basis1._generate_subtree_labels(type_label):
+            yield lab
+        for lab in self.basis2._generate_subtree_labels(type_label):
+            yield lab
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
@@ -622,7 +909,7 @@ class CompositeBasisMixin:
         finally:
             self.__class__._shallow_copy = old_value
 
-    @set_input_shape_state(states=("_input_shape_product",))
+    @set_input_shape_state(states=("_input_shape_product", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
@@ -687,8 +974,15 @@ class CompositeBasisMixin:
         return self
 
     def __repr__(self, n=0):
-        _, rows = _get_terminal_size()
+        cols, rows = _get_terminal_size()
         rows = rows // 4
+        cols = cols
+        disp_label = len(str(self.label)) < cols
+        if disp_label:
+            start_str = f"'{self.label}': "
+        else:
+            start_str = ""
+
         # number of nested composite bases
         n += 1
         tab = "    "
@@ -701,9 +995,68 @@ class CompositeBasisMixin:
         except TypeError:
             basis2 = self.basis2
         if n < rows:
-            rep = f"{self.__class__.__name__}(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+            rep = (
+                start_str + f"{self.__class__.__name__}"
+                f"(\n{n*tab}basis1={basis1},\n{n*tab}basis2={basis2},\n{(n-1)*tab})"
+            )
         elif n == rows:
-            rep = f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
+            rep = start_str + f"{self.__class__.__name__}(\n{n*tab}...\n{(n-1)*tab})"
         else:
             rep = None
         return rep
+
+    @staticmethod
+    def update_default_label_id(basis1: Basis, basis2: Basis):
+        """
+        Update basis2 atomic element labels.
+
+        When composing bases, update basis2 labels in order to disambiguate them with respect to basis1 labels.
+        Here we assume that each tree (basis1 and basis2) have unique basis labels if taken separately, while
+        they may have overlapping labels between them.
+        This function updates the label of basis2 to avoid overlaps with basis1.
+
+
+        Parameters
+        ----------
+        basis1:
+            The first basis object.
+        basis2:
+            The second basis object.
+
+        Notes
+        -----
+        The method only operates on default labels (i.e. class names).
+        User-defined labels will not be edited, and overlaps will result in `ValueError` at composite basis
+        initialization.
+
+        """
+        delta_labels = dict()
+        for bas in basis1._iterate_over_components():
+            cls_name = bas.__class__.__name__
+            if cls_name not in delta_labels:
+                pattern = re.compile(rf"^{cls_name}(_\d+)?$")
+                delta_labels[cls_name] = sum(
+                    (
+                        1
+                        for b in basis1._iterate_over_components()
+                        if re.match(pattern, b._label)
+                    )
+                )
+
+        # update the label
+        count_labels = dict()
+        for bas in basis2._iterate_over_components():
+            cls_name = bas.__class__.__name__
+            if cls_name not in delta_labels:
+                continue
+            match = re.match(rf"^{cls_name}(_\d+)?$", bas._label)
+            if match:
+                current = count_labels.get(cls_name, 0)
+                bas._label = (
+                    f"{cls_name}_{current + delta_labels[cls_name]}"
+                    if current + delta_labels[cls_name]
+                    else cls_name
+                )
+                count_labels[cls_name] = 1 + current
+
+        return
