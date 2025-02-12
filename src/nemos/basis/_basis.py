@@ -310,8 +310,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return parameter_dict, key_map
 
     def _remove_self_label_from_key(self, map_dict: dict) -> dict:
+        initial_string = self.label + "__"
         return {
-            k.split("__")[-1] if k.startswith(self.label + "__") else k: val
+            "__".join(k.split(initial_string)[1:]) if k.startswith(initial_string) else k: val
             for k, val in map_dict.items()
         }
 
