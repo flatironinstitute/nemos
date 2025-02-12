@@ -82,7 +82,7 @@ class AtomicBasisMixin:
         self._check_n_basis_min()
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_"))
-    def __sklearn_clone__(self) -> Basis:
+    def __sklearn_clone__(self, **kwargs) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -506,11 +506,12 @@ class CompositeBasisMixin:
     Add overwrites concrete methods or defines abstract methods for composite basis
     (AdditiveBasis and MultiplicativeBasis).
     """
+    _shallow_copy: bool = False
 
-    def __init__(self, basis1: Basis, basis2: Basis, shallow_copy: bool = False):
+    def __init__(self, basis1: Basis, basis2: Basis):
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
-        if not shallow_copy:
+        if not self._shallow_copy:
             self.basis1 = copy.deepcopy(basis1)
             self.basis2 = copy.deepcopy(basis2)
         else:
@@ -611,7 +612,7 @@ class CompositeBasisMixin:
         )
 
     @set_input_shape_state(states=("_input_shape_product",))
-    def __sklearn_clone__(self) -> Basis:
+    def __sklearn_clone__(self, shallow_copy: bool=False) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -620,6 +621,11 @@ class CompositeBasisMixin:
         cross-validation unusable.
         The method also handles recursive cloning for composite basis structures.
 
+        Parameters
+        ----------
+        shallow_copy:
+            Flag that is used to enforce a shallow copy within the recursion.
+
         Notes
         -----
         The ``_shallow_copy`` attribute is set to True, forcing a shallow copy, at
@@ -627,18 +633,18 @@ class CompositeBasisMixin:
         """
         # shallow copy private attribute to avoid costly deep-copying
         # of newly initialized objects.
-        self._shallow_copy = True
+        self.__class__._shallow_copy = True
 
         # clone recursively
-        basis1 = self.basis1.__sklearn_clone__()
-        basis2 = self.basis2.__sklearn_clone__()
+        basis1 = self.basis1.__sklearn_clone__(shallow_copy=True)
+        basis2 = self.basis2.__sklearn_clone__(shallow_copy=True)
 
         # shallow copy init
         klass = self.__class__(basis1, basis2)
 
         # restore the deep copy default behavior.
-        self._shallow_copy = False
-        klass._shallow_copy = False
+        self.__class__._shallow_copy = shallow_copy
+        klass.__class__._shallow_copy = shallow_copy
         return klass
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:

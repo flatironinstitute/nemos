@@ -789,11 +789,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     )
     """
 
-    _shallow_copy: bool = False
-
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         CompositeBasisMixin.__init__(
-            self, basis1, basis2, shallow_copy=self._shallow_copy
+            self, basis1, basis2,
         )
         Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " + " + basis2.label + ")"
@@ -1227,11 +1225,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     )
     """
 
-    _shallow_copy: bool = False
-
     def __init__(self, basis1: Basis, basis2: Basis) -> None:
         CompositeBasisMixin.__init__(
-            self, basis1, basis2, shallow_copy=self._shallow_copy
+            self, basis1, basis2,
         )
         Basis.__init__(self, mode="composite")
         self._label = "(" + basis1.label + " * " + basis2.label + ")"
