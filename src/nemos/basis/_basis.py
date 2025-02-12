@@ -4,10 +4,8 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
-from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, Literal, Optional, Tuple, Union
-from contextlib import nullcontext
 
 import jax
 import numpy as np
@@ -27,25 +25,16 @@ def _bisect_mul(base: Basis, mul: int):
     if mul == 1:
         return base  # Base case
     half = _bisect_mul(base, mul // 2)
-    context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
-    with context(True):
-        sum = half + half  # Less deep copying
-    with sum._set_shallow_copy_temporarily(True):
-        sum =  sum + base if mul % 2 else sum
-    return sum
+    sum = half.__sklearn_clone__() + half.__sklearn_clone__()  # Less deep copying
+    return sum + base.__sklearn_clone__() if mul % 2 else sum
 
 
-def _bisect_power(base: Basis, exp: int):
-    if exp == 1:
+def _bisect_power(base: Basis, expon: int):
+    if expon == 1:
         return base  # Base case
-    half = _bisect_power(base, exp // 2)
-    context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
-
-    with context(True):
-        squared = half * half  # Less deep copying
-    with squared._set_shallow_copy_temporarily(True):
-        squared = squared * base if exp % 2 else squared
-    return squared
+    half = _bisect_power(base, expon // 2)
+    squared = half.__sklearn_clone__() * half.__sklearn_clone__()  # Less deep copying
+    return squared * base.__sklearn_clone__() if expon % 2 else squared
 
 
 def add_docstring(method_name, cls):
@@ -522,7 +511,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                     "Basis multiplication error. Integer multiplicative factor must be positive, "
                     f"{other} provided instead."
                 )
-            return _bisect_mul(self.__sklearn_clone__(), other)
+            return _bisect_mul(self, other)
         if not isinstance(other, Basis):
             raise TypeError(
                 "Basis multiplicative factor should be a Basis object or a positive integer!"
@@ -558,7 +547,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if exponent <= 0:
             raise ValueError("Basis exponent should be a non-negative integer!")
 
-        return _bisect_power(self.__sklearn_clone__(), exponent)
+        return _bisect_power(self, exponent)
 
     def __repr__(self):
         return format_repr(self)
