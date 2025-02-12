@@ -225,10 +225,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __sklearn_get_params__(self, deep=True):
         """
-        Implements standard scikit-learn, get parameters by inspecting init.
+        Implements standard scikit-learn get parameters by inspecting init.
 
-        This function will be called by Base.get_params() to get the actual param
-        structure, overwring the inheritance.
+        This function will be called by Base.set_params() to get the actual param
+        structure, since the inherited``get_params`` is overridden to use basis labels
+        instead of the nested structure.
 
         Parameters
         ----------
@@ -265,13 +266,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         Returns
         -------
-        out_map:
+        parameter_dict:
             A dictionary containing the parameters. Key is the ``basis_label "__" + parameter_name``,
             value is the parameter value.
         key_map:
-            Dictionary that maps the keys of out_map onto the keys based on attribute nesting.
+            Dictionary that maps the keys of parameter_dict onto the keys based on attribute nesting.
         """
-        out_map = dict()
+        parameter_dict = dict()
         key_map = dict()
         for key in self._get_param_names():
             value = getattr(self, key)
@@ -283,7 +284,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 item_map, key_mapping = value._get_params_and_key_map()
                 map_deep_items = item_map.items()
                 # only keep the last basis label (the leaf of the tree)
-                out_map.update(
+                parameter_dict.update(
                     (
                         (
                             "__".join(k.split("__")[-2:])
@@ -301,12 +302,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                     }
                 )
             if isinstance(value, Basis):
-                out_map[value.label] = value
+                parameter_dict[value.label] = value
                 key_map[value.label] = key
             else:
-                out_map[self.label + "__" + key] = value
+                parameter_dict[self.label + "__" + key] = value
                 key_map[self.label + "__" + key] = key
-        return out_map, key_map
+        return parameter_dict, key_map
 
     def _remove_self_label_from_key(self, map_dict: dict) -> dict:
         return {
