@@ -118,6 +118,7 @@ exclude = '''
     | buck-out
     | build
     | dist
+    | version.py
     | examples))'''
 
 # Configure isort
