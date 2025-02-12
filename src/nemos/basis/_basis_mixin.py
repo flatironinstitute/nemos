@@ -124,7 +124,7 @@ class AtomicBasisMixin:
         self._input_shape_ = None
         self._check_n_basis_min()
 
-        if (label is None) or (label == self.__class__.__name__):
+        if label is None:
             self._label = self.__class__.__name__
 
         else:
