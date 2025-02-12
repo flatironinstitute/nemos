@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+from contextlib import contextmanager
 import copy
 import inspect
 from functools import wraps
@@ -82,7 +83,7 @@ class AtomicBasisMixin:
         self._check_n_basis_min()
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_"))
-    def __sklearn_clone__(self, **kwargs) -> Basis:
+    def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -611,8 +612,18 @@ class CompositeBasisMixin:
             self.basis2._iterate_over_components(),
         )
 
+    @contextmanager
+    def _set_shallow_copy_temporarily(self, value):
+        """Context manger for setting the shallow copy flag in a thread safe way."""
+        old_value = self.__class__._shallow_copy
+        self.__class__._shallow_copy = value
+        try:
+            yield
+        finally:
+            self.__class__._shallow_copy = old_value
+
     @set_input_shape_state(states=("_input_shape_product",))
-    def __sklearn_clone__(self, shallow_copy: bool=False) -> Basis:
+    def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
 
         This method ensures that input shape attributes (e.g., `_input_shape_product`,
@@ -621,30 +632,20 @@ class CompositeBasisMixin:
         cross-validation unusable.
         The method also handles recursive cloning for composite basis structures.
 
-        Parameters
-        ----------
-        shallow_copy:
-            Flag that is used to enforce a shallow copy within the recursion.
-
         Notes
         -----
-        The ``_shallow_copy`` attribute is set to True, forcing a shallow copy, at
+        The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
         before the klass definition, and reset to False after cloning.
         """
-        # shallow copy private attribute to avoid costly deep-copying
-        # of newly initialized objects.
-        self.__class__._shallow_copy = True
 
-        # clone recursively
-        basis1 = self.basis1.__sklearn_clone__(shallow_copy=True)
-        basis2 = self.basis2.__sklearn_clone__(shallow_copy=True)
+        with self._set_shallow_copy_temporarily(True):
+            # clone recursively
+            basis1 = self.basis1.__sklearn_clone__()
+            basis2 = self.basis2.__sklearn_clone__()
 
-        # shallow copy init
-        klass = self.__class__(basis1, basis2)
+            # shallow copy init
+            klass = self.__class__(basis1, basis2)
 
-        # restore the deep copy default behavior only at the top level call
-        self.__class__._shallow_copy = shallow_copy
-        klass.__class__._shallow_copy = shallow_copy
         return klass
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:
