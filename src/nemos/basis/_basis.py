@@ -20,6 +20,23 @@ from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 
 
+def _bisect_mul(base: Basis, mul: int):
+    """Speed up adding n basis of the same type"""
+    if mul == 1:
+        return base  # Base case
+    half = _bisect_mul(base, mul // 2)
+    sum = half + half  # Less deep copying
+    return sum + base if mul % 2 else sum
+
+
+def _bisect_power(base: Basis, exp: int):
+    if exp == 1:
+        return base  # Base case
+    half = _bisect_power(base, exp // 2)
+    squared = half * half  # Less deep copying
+    return squared * base if exp % 2 else squared
+
+
 def add_docstring(method_name, cls):
     """Prepend super-class docstrings."""
     attr = getattr(cls, method_name, None)
@@ -489,14 +506,15 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             The resulting Basis object.
         """
         if isinstance(other, int):
-            def add(base, mul):
-                if mul == 1:
-                    return base  # Base case
-                half = add(base, mul // 2)
-                sum = half + half  # Less deep copying
-                return sum + base if mul % 2 else sum
-            return add(self, other)
-
+            if other <= 0:
+                raise ValueError(
+                    f"Basis multiplication error. Integer multiplicative factor must be positive, {other} provided instead."
+                )
+            return _bisect_mul(self, other)
+        if not isinstance(other, Basis):
+            raise TypeError(
+                "Basis multiplicative factor should be a Basis object or a positive integer!"
+            )
         return MultiplicativeBasis(self, other)
 
     def __pow__(self, exponent: int) -> MultiplicativeBasis:
@@ -523,19 +541,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             If the integer is zero or negative.
         """
         if not isinstance(exponent, int):
-            raise TypeError("Exponent should be an integer!")
+            raise TypeError("Basis exponent should be an integer!")
 
         if exponent <= 0:
-            raise ValueError("Exponent should be a non-negative integer!")
+            raise ValueError("Basis exponent should be a non-negative integer!")
 
-        def power(base, exp):
-            if exp == 1:
-                return base  # Base case
-            half = power(base, exp // 2)
-            squared = half * half  # Less deep copying
-            return squared * base if exp % 2 else squared
-
-        return power(self, exponent)
+        return _bisect_power(self, exponent)
 
     def __repr__(self):
         return format_repr(self)
