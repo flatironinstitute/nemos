@@ -722,7 +722,7 @@ class CompositeBasisMixin:
         # Include self's label in uniqueness check (if applicable)
         self_label = getattr(self, "_label", None)
 
-        # Store basis2 labels as we iterate through basis1
+        # Store basis1 labels
         seen_labels = set(basis1._generate_subtree_labels("user-defined"))
         if self_label in seen_labels:
             err_msg = (
