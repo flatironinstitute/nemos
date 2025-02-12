@@ -8,7 +8,7 @@ jobs:
     name: Build and test package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         # this is necessary for setuptools_scm to work properly with github
         # actions, see https://github.com/pypa/setuptools_scm/issues/480 and
         # https://stackoverflow.com/a/68959339
@@ -53,7 +53,7 @@ jobs:
         # modify the following as necessary to e.g., run notebooks
         run: |
           pytest
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: dist/*
 
@@ -65,7 +65,7 @@ jobs:
     permissions:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: artifact
           path: dist

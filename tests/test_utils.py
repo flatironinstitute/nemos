@@ -1,5 +1,6 @@
 import warnings
 from contextlib import nullcontext as does_not_raise
+from copy import deepcopy
 
 import jax
 import jax.numpy as jnp
@@ -595,6 +596,13 @@ class ComplexParam(Base):
         (Example(a=0, b=False, c=None), None, [], "Example(a=0, b=False, d=1)"),
         # Falsey values excluded2
         (Example(a=0, b=[], c={}), None, [], "Example(a=0, d=1)"),
+        # function without the __name__
+        (
+            nmo.observation_models.PoissonObservations(deepcopy(jax.numpy.exp)),
+            None,
+            [],
+            "PoissonObservations(inverse_link_function=<PjitFunction>)",
+        ),
     ],
 )
 def test_format_repr(obj, exclude_keys, use_name_keys, expected):

@@ -534,7 +534,7 @@ def format_repr(
         )
         if repr_param:
             if k in use_name_keys:
-                v = v.__name__
+                v = getattr(v, "__name__", repr(v))
             elif isinstance(v, str):
                 v = repr(v)
             disp_params.append(f"{k}={v}")

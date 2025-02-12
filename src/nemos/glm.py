@@ -1126,6 +1126,12 @@ class GLM(BaseRegressor):
     def __repr__(self):
         return format_repr(self, multiline=True)
 
+    def __sklearn_clone__(self) -> GLM:
+        """Clone the PopulationGLM, dropping feature_mask"""
+        params = self.get_params(deep=False)
+        klass = self.__class__(**params)
+        return klass
+
 
 class PopulationGLM(GLM):
     """
@@ -1633,7 +1639,7 @@ class PopulationGLM(GLM):
             + bs
         )
 
-    def __sklearn_clone__(self) -> GLM:
+    def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask"""
         params = self.get_params(deep=False)
         params.pop("feature_mask")
