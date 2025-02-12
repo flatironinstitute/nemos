@@ -697,8 +697,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return format_repr(self)
 
     def __getitem__(self, index: str) -> Basis:
-        if index == self.label:
-            return self
 
         search = next(
             (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None
