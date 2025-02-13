@@ -79,8 +79,9 @@ def _bisect_mul(base: Basis, mul: int):
     context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
     with context(True):
         addition = half + deepcopy(half)
-    with addition._set_shallow_copy_temporarily(True):
-        addition = addition + deepcopy(base) if mul % 2 else addition
+    if mul % 2:
+        with addition._set_shallow_copy_temporarily(True):
+            addition = addition + deepcopy(base)
     return addition
 
 
@@ -93,11 +94,14 @@ def _bisect_power(base: Basis, expon: int):
     if expon == 1:
         return deepcopy(base)  # Base case
     squared = _bisect_power(base, expon // 2)
+
     context = getattr(squared, "_set_shallow_copy_temporarily", nullcontext)
+
     with context(True):
         squared = squared * deepcopy(squared)
-    with squared._set_shallow_copy_temporarily(True):
-        squared = squared * deepcopy(base) if expon % 2 else squared
+    if expon % 2:
+        with squared._set_shallow_copy_temporarily(True):
+            squared = squared * deepcopy(base)
     return squared
 
 
