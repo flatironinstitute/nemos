@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nemos"
-version = "0.2.1"
+dynamic = ["version"]
 authors = [{name = "nemos authors"}]
 description = "NEural MOdelS, a statistical modeling framework for neuroscience."
 readme = "README.md"
@@ -37,6 +37,9 @@ dependencies = [
 where = ["src"]     # The directory where package modules are located
 include = ["nemos"] # The specific package(s) to include in the distribution
 
+[tool.setuptools_scm]
+version_scheme = 'python-simplified-semver'
+local_scheme = 'no-local-version'
 
 # Define optional dependencies for the project
 [project.optional-dependencies]
