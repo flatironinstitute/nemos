@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _get_version
+
 from . import (
     basis,
     convolve,
@@ -15,4 +18,9 @@ from . import (
     type_casting,
     utils,
 )
-from .version import version as __version__
+
+try:
+    __version__ = _get_version("pynapple")
+except _PackageNotFoundError:
+    # package is not installed
+    pass
