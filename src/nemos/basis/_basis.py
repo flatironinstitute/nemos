@@ -68,31 +68,34 @@ def remap_parameters(method):
 
 
 def _bisect_mul(base: Basis, mul: int):
-    """Speed up adding n basis of the same type"""
+    """Speed up adding n basis of the same type
+
+    Achieve substantial speed-up minimizing the additions and
+    deep-copy operations.
+    """
     if mul == 1:
         return deepcopy(base)  # Base case
     half = _bisect_mul(base, mul // 2)
     context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
     with context(True):
-        if context is nullcontext:
-            addition = half + deepcopy(half)
-        else:
-            addition = half + deepcopy(half)
+        addition = half + deepcopy(half)
     with addition._set_shallow_copy_temporarily(True):
         addition = addition + deepcopy(base) if mul % 2 else addition
     return addition
 
 
 def _bisect_power(base: Basis, expon: int):
+    """Speed up multiplying n basis of the same type.
+
+    Achieve substantial speed-up minimizing the multiplication and
+    deep-copy operations.
+    """
     if expon == 1:
         return deepcopy(base)  # Base case
     squared = _bisect_power(base, expon // 2)
     context = getattr(squared, "_set_shallow_copy_temporarily", nullcontext)
     with context(True):
-        if context is nullcontext:
-            squared = squared * deepcopy(squared)
-        else:
-            squared = squared * deepcopy(squared)
+        squared = squared * deepcopy(squared)
     with squared._set_shallow_copy_temporarily(True):
         squared = squared * deepcopy(base) if expon % 2 else squared
     return squared
