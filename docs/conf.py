@@ -6,9 +6,14 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import nemos
 import sys, os
 from pathlib import Path
+
+from importlib.metadata import version
+release: str = version("nemos")
+# this will grab major.minor.patch (excluding any .devN afterwards, which should only
+# show up when building locally during development)
+version: str = ".".join(release.split('.')[:3])
 
 sys.path.insert(0, str(Path('..', 'src').resolve()))
 sys.path.insert(0, os.path.abspath('sphinxext'))
@@ -17,7 +22,6 @@ sys.path.insert(0, os.path.abspath('sphinxext'))
 project = 'nemos'
 copyright = '2024'
 author = 'E Balzani'
-version = release = nemos.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
