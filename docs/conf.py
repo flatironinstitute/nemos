@@ -12,7 +12,8 @@ from pathlib import Path
 
 from importlib.metadata import version as get_version
 release: str = get_version("nemos")
-# for example take major/minor
+# this will grab major.minor.patch (excluding any .devN afterwards, which should only
+# show up when building locally during development)
 version: str = ".".join(release.split('.')[:3])
 
 sys.path.insert(0, str(Path('..', 'src').resolve()))
