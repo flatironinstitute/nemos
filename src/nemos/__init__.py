@@ -20,7 +20,7 @@ from . import (
 )
 
 try:
-    __version__ = _get_version("pynapple")
+    __version__ = _get_version("nemos")
 except _PackageNotFoundError:
     # package is not installed
     pass
