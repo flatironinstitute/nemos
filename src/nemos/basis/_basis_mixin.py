@@ -671,8 +671,9 @@ class CompositeBasisMixin:
             self.basis1 = copy.deepcopy(basis1)
             self.basis2 = copy.deepcopy(basis2)
         else:
-            self.basis1 = basis1
-            self.basis2 = basis2
+            # skip checks and shallow copy
+            self._basis1 = basis1
+            self._basis2 = basis2
 
         # set parents
         self.basis1._parent = self
@@ -760,7 +761,7 @@ class CompositeBasisMixin:
 
     def _input_shape_update(self):
         # if all bases where set, then set input for composition.
-        set_bases = [s is not None for s in self.input_shape]
+        set_bases = (s is not None for s in self.input_shape)
 
         if all(set_bases):
             # pass down the input shapes
