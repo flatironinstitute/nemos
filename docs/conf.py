@@ -9,8 +9,8 @@
 import sys, os
 from pathlib import Path
 
-from importlib.metadata import version as get_version
-release: str = get_version("nemos")
+from importlib.metadata import version
+release: str = version("nemos")
 # this will grab major.minor.patch (excluding any .devN afterwards, which should only
 # show up when building locally during development)
 version: str = ".".join(release.split('.')[:3])
