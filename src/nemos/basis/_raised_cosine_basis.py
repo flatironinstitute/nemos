@@ -28,7 +28,8 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
     width :
-        Width of the raised cosine. By default, it's set to 2.0.
+        Width of the raised cosine. Must be $x/2$ for any integer $x\geq 3$ (e.g., 1.5,
+        2, 2.5, 3, etc.)
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -39,6 +40,14 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         C. E. (2005). Prediction and decoding of retinal ganglion cell responses
         with a probabilistic spiking model. Journal of Neuroscience, 25(47),
         11003–11013.
+
+    Raises
+    ------
+    ValueError
+        If width <= 1 or 2*width is not a positive integer. Values that do not match
+        this constraint will result in:
+        - No overlap between bumps (width < 1).
+        - Oscillatory behavior when summing the basis elements (2*width not integer).
     """
 
     def __init__(
@@ -89,8 +98,8 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         """
         if width <= 1 or (not np.isclose(width * 2, round(2 * width))):
             raise ValueError(
-                f"Invalid raised cosine width. "
-                f"2*width must be a positive integer, 2*width = {2 * width} instead!"
+                f"Invalid raised cosine width. Width must be strictly greater than 1 and "
+                f"2*width must be a integer, but got {width} instead!"
             )
 
     @support_pynapple(conv_type="numpy")
@@ -212,7 +221,8 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         The mode of operation. 'eval' for evaluation at sample points,
         'conv' for convolutional operation.
     width :
-        Width of the raised cosine.
+        Width of the raised cosine. Must be $x/2$ for any integer $x\geq 3$ (e.g., 1.5,
+        2, 2.5, 3, etc.)
     time_scaling :
         Non-negative hyper-parameter controlling the logarithmic stretch magnitude, with
         larger values resulting in more stretching. As this approaches 0, the
@@ -231,6 +241,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
        C. E. (2005). Prediction and decoding of retinal ganglion cell responses
        with a probabilistic spiking model. Journal of Neuroscience, 25(47),
        11003–11013.
+
     """
 
     def __init__(
