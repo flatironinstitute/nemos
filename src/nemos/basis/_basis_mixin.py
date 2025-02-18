@@ -124,11 +124,10 @@ class AtomicBasisMixin:
         self._input_shape_ = None
         self._check_n_basis_min()
 
-        if label is None:
-            self._label = self.__class__.__name__
-
-        else:
-            self._label = str(label)
+        # initialize as default
+        self._label = self.__class__.__name__
+        # pass through the checker
+        self.label = str(label)
 
     def _generate_label(self) -> str:
         """Return label"""
