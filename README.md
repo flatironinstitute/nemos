@@ -179,6 +179,9 @@ conduct](CODE_OF_CONDUCT.md).
 
 ## Support
 
-This package is supported by the Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation.  
+This package is supported by:
+
+- The Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation
+- The NIH BRAIN Initiative (1RF1MH133778).
 
 <img src="docs/assets/CCN-logo-wText.png" width="20%" alt="Flatiron Center for Computational Neuroscience logo."> 
