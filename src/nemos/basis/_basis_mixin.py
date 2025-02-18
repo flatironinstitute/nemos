@@ -127,7 +127,7 @@ class AtomicBasisMixin:
         # initialize as default
         self._label = self.__class__.__name__
         # pass through the checker
-        self.label = str(label)
+        self.label = label
 
     def _generate_label(self) -> str:
         """Return label"""
