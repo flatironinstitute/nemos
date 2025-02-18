@@ -132,7 +132,7 @@ Open source, [licensed under MIT](https://github.com/flatironinstitute/nemos/blo
 
 This package is supported by:
 
-- The Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation
+- The Center for Computational Neuroscience, in the Flatiron Institute of the Simons Foundation.
 - The NIH BRAIN Initiative (1RF1MH133778).
 
 ```{image} assets/logo_flatiron_white.svg
