@@ -151,6 +151,12 @@ class AtomicBasisMixin:
             self._recompute_all_labels()
             return
 
+        # raise error in case label is not string.
+        elif not isinstance(label, str):
+            raise TypeError(
+                f"'label' must be a string. Type {type(label)} was provided instead."
+            )
+
         else:
             # check if label matches class-name plus identifier
             match = re.match(r"(.+)?_\d+$", label)
@@ -160,12 +166,6 @@ class AtomicBasisMixin:
                 self._label = check_string
                 self._recompute_all_labels()
                 return
-
-        # raise error in case label is not string.
-        if not isinstance(label, str):
-            raise TypeError(
-                f"'label' must be a string. Type {type(label)} was provided instead."
-            )
 
         # get the current available labels
         current_labels = self._root()._generate_subtree_labels()
