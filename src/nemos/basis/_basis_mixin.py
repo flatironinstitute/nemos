@@ -1164,31 +1164,41 @@ class CompositeBasisMixin:
         key_map = dict()
         for key in self._get_param_names():
             value = getattr(self, key)
-            if (
-                deep
-                and hasattr(value, "_get_params_and_key_map")
-                and not isinstance(value, type)
-            ):
-                item_map, key_mapping = value._get_params_and_key_map()
-                map_deep_items = item_map.items()
-                # only keep the last basis label (the leaf of the tree)
-                parameter_dict.update(
-                    (
+            if deep and not isinstance(value, type):
+                if hasattr(value, "_get_params_and_key_map"):
+                    item_map, key_mapping = value._get_params_and_key_map()
+                    map_deep_items = item_map.items()
+                    # only keep the last basis label (the leaf of the tree)
+                    parameter_dict.update(
                         (
-                            "__".join(k.split("__")[-2:])
-                            if not _is_basis(val)
-                            else val.label
-                        ),
-                        val,
+                            (
+                                "__".join(k.split("__")[-2:])
+                                if not _is_basis(val)
+                                else val.label
+                            ),
+                            val,
+                        )
+                        for k, val in map_deep_items
                     )
-                    for k, val in map_deep_items
-                )
-                key_map.update(
-                    {
-                        k: key + "__" + v
-                        for k, v in zip(item_map.keys(), key_mapping.values())
-                    }
-                )
+                    key_map.update(
+                        {
+                            k: key + "__" + v
+                            for k, v in zip(item_map.keys(), key_mapping.values())
+                        }
+                    )
+                elif hasattr(value, "get_params"):
+                    # hit this on atomic bases
+                    deep_items = value.get_params().items()
+                    parameter_dict.update({f"{value.label}__{k}": val for k, val in deep_items})
+                    # assume that the basis is either 1 or 2
+                    lab = "basis1" if value is self.basis1 else "basis2"
+                    key_map.update(
+                        {
+                            f"{value.label}__{k}": lab + "__" + k
+                            for k, _ in deep_items
+                        }
+                    )
+
             if _is_basis(value):
                 parameter_dict[value.label] = value
                 key_map[value.label] = key
