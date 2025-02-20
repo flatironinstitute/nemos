@@ -208,7 +208,7 @@ class TransformerBasis:
         self._check_input(X, y)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
-        return self.basis._compute_features(*self._unpack_inputs(X))
+        return self.basis.compute_features(*self._unpack_inputs(X))
 
     def fit_transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
         """
@@ -365,7 +365,8 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(self.basis.__sklearn_clone__())
+        clone = getattr(self.basis, "__sklearn_clone__", copy.deepcopy)
+        cloned_obj = TransformerBasis(clone(self.basis))
         return cloned_obj
 
     def __repr__(self):

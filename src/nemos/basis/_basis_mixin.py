@@ -42,6 +42,11 @@ __PUBLIC_BASES__ = [
 ]
 
 
+def _is_basis(object: Any):
+    """Minimal checks for attributes."""
+    return all(hasattr(object, attrname) for attrname in ("compute_features", "get_params"))
+
+
 def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     """
     Decorator to preserve input shape-related attributes during method execution.
@@ -141,9 +146,7 @@ def remap_parameters(method):
         new_params = {
             map_params.get(key, key): (
                 copy.deepcopy(val)
-                if isinstance(
-                    val, (AtomicBasisMixin, CompositeBasisMixin, TransformerBasis)
-                )
+                if _is_basis(val)
                 else val
             )
             for key, val in params.items()
@@ -1173,9 +1176,7 @@ class CompositeBasisMixin:
                     (
                         (
                             "__".join(k.split("__")[-2:])
-                            if not isinstance(
-                                val, (AtomicBasisMixin, CompositeBasisMixin)
-                            )
+                            if not _is_basis(val)
                             else val.label
                         ),
                         val,
@@ -1188,7 +1189,7 @@ class CompositeBasisMixin:
                         for k, v in zip(item_map.keys(), key_mapping.values())
                     }
                 )
-            if isinstance(value, (AtomicBasisMixin, CompositeBasisMixin)):
+            if _is_basis(value):
                 parameter_dict[value.label] = value
                 key_map[value.label] = key
             else:
