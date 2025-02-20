@@ -365,8 +365,12 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        clone = getattr(self.basis, "__sklearn_clone__", copy.deepcopy)
-        cloned_obj = TransformerBasis(clone(self.basis))
+        cloned = (
+            self.basis.__sklearn_clone__()
+            if hasattr(self.basis, "__sklearn_clone__")
+            else copy.deepcopy(self.basis)
+        )
+        cloned_obj = TransformerBasis(cloned)
         return cloned_obj
 
     def __repr__(self):

@@ -44,7 +44,9 @@ __PUBLIC_BASES__ = [
 
 def _is_basis(object: Any):
     """Minimal checks for attributes."""
-    return all(hasattr(object, attrname) for attrname in ("compute_features", "get_params"))
+    return all(
+        hasattr(object, attrname) for attrname in ("compute_features", "get_params")
+    )
 
 
 def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
@@ -144,11 +146,7 @@ def remap_parameters(method):
         # to two different components:
         # basis.set_params(basis1=bas, basis2=bas)
         new_params = {
-            map_params.get(key, key): (
-                copy.deepcopy(val)
-                if _is_basis(val)
-                else val
-            )
+            map_params.get(key, key): (copy.deepcopy(val) if _is_basis(val) else val)
             for key, val in params.items()
         }
 
@@ -1189,14 +1187,13 @@ class CompositeBasisMixin:
                 elif hasattr(value, "get_params"):
                     # hit this on atomic bases
                     deep_items = value.get_params().items()
-                    parameter_dict.update({f"{value.label}__{k}": val for k, val in deep_items})
+                    parameter_dict.update(
+                        {f"{value.label}__{k}": val for k, val in deep_items}
+                    )
                     # assume that the basis is either 1 or 2
                     lab = "basis1" if value is self.basis1 else "basis2"
                     key_map.update(
-                        {
-                            f"{value.label}__{k}": lab + "__" + k
-                            for k, _ in deep_items
-                        }
+                        {f"{value.label}__{k}": lab + "__" + k for k, _ in deep_items}
                     )
 
             if _is_basis(value):

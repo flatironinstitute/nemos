@@ -5,7 +5,7 @@ import abc
 import copy
 from collections import OrderedDict
 from functools import wraps
-from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -18,7 +18,6 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
-from ._transformer_basis import TransformerBasis
 
 
 def add_docstring(method_name, cls):
