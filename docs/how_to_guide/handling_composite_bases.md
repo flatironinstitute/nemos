@@ -112,6 +112,11 @@ This change is reflected on the composite basis.
 # check that the input2 basis has now 8 basis funcs
 add
 ```
+Note that if you don't provide a label, basis class name is used to construct the keys. If the same basis is repeated, the key is disambiguated by appending an extra numerical identifier.
+
+```{code-cell} ipython3
+nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
+```
 
 ### Cross-validating Composite Basis Parameters
 Another way to get and set the basis parameter is via the `get_params` and `set_params` methods.
@@ -135,17 +140,10 @@ The parameter keys retrieved by `get_params` are the one needed to define a para
 :::
 
 
-Note that if you don't provide a label, basis class name is used to construct the keys.
+With when labels are not provided, `get_params` retrieves the auto-generated ones.
 
 ```{code-cell} ipython3
 basis = nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
-basis.get_params()
-```
-
-If the same basis is repeated, the key is disambiguated by appending an extra numerical identifier.
-
-```{code-cell} ipython3
-basis = nmo.basis.BSplineEval(10) + nmo.basis.BSplineEval(5)
 basis.get_params()
 ```
 
