@@ -37,7 +37,8 @@ def _has_default_label(bas: "Basis"):
     if hasattr(bas, "_has_default_label"):
         return bas._has_default_label
     else:
-        return getattr(bas, "label", bas.__class__.__name__) == bas.__class__.__name__
+        label = getattr(bas, "label", bas.__class__.__name__)
+        return re.match(rf"^{bas.__class__.__name__}(_\d+)?$", label)
 
 
 def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin"):

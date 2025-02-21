@@ -102,9 +102,6 @@ def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     return decorator
 
 
-
-
-
 def remap_parameters(method):
     """Remap parameter names to original."""
 
@@ -778,20 +775,24 @@ class CompositeBasisMixin:
         basis1 = getattr(self, "_basis1", None)
         basis2 = getattr(self, "_basis2", None)
         if basis1 is None and basis2 is not None:
+            components = basis2._iterate_over_components() if hasattr(basis2, "_iterate_over_components") else [basis2]
             return [
                 None,
-                *(bas2.input_shape for bas2 in basis2._iterate_over_components()),
+                *(getattr(bas2, "input_shape", None) for bas2 in components),
             ]
         elif basis2 is None and basis1 is not None:
+            components = basis1._iterate_over_components() if hasattr(basis1, "_iterate_over_components") else [basis1]
             return [
-                *(bas1.input_shape for bas1 in basis1._iterate_over_components()),
+                *(getattr(bas1, "input_shape", None) for bas1 in components),
                 None,
             ]
         elif basis1 is None and basis2 is None:
             return [None, None]
+        components1 = basis1._iterate_over_components() if hasattr(basis1, "_iterate_over_components") else [basis1]
+        components2 = basis2._iterate_over_components() if hasattr(basis2, "_iterate_over_components") else [basis2]
         shapes = [
-            *(bas1.input_shape for bas1 in basis1._iterate_over_components()),
-            *(bas2.input_shape for bas2 in basis2._iterate_over_components()),
+            *(getattr(bas1, "input_shape", None) for bas1 in components1),
+            *(getattr(bas2, "input_shape", None) for bas2 in components2),
         ]
         return shapes
 
@@ -877,9 +878,11 @@ class CompositeBasisMixin:
         -------
             A generator looping on each individual input.
         """
+        components1 = self.basis1._iterate_over_components() if hasattr(self.basis1, "_iterate_over_components") else [self.basis1]
+        components2 = self.basis2._iterate_over_components() if hasattr(self.basis2, "_iterate_over_components") else [self.basis2]
         return chain(
-            self.basis1._iterate_over_components(),
-            self.basis2._iterate_over_components(),
+            components1,
+            components2,
         )
 
     @set_input_shape_state(states=("_input_shape_product", "_label"))
