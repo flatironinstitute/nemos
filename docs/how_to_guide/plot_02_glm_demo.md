@@ -445,6 +445,3 @@ if path.exists():
 (ref-1)=
 [1] [Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.](https://arxiv.org/abs/2010.12362)
 
-```{code-cell} ipython3
-
-```
