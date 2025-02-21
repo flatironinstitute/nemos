@@ -118,8 +118,8 @@ Note that if you don't provide a label, basis class name is used to construct th
 nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
 ```
 
-### Cross-validating Composite Basis Parameters
-Another way to get and set the basis parameter is via the `get_params` and `set_params` methods.
+### Modifying Basis Parameters with `get_params` and `set_params`
+Another way to get and set the basis parameter is via the `get_params` and `set_params` methods. This is how `scikit-learn` interacts with basis objects, and so enables cross-validation,.
 
 The `get_params` method returns a dictionary, containing all the parameters. The dictionary keys start with the basis label, followed by a double underscore and the name of the parameter.
 
