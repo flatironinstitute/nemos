@@ -1000,13 +1000,13 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
         (
             3,
             pytest.raises(
-                TypeError, match=r"Provide an object of type `Basis` to initialize"
+                TypeError, match=r"TransformerBasis accepts only object implementing"
             ),
         ),
         (
             nmo.regularizer.Ridge(),
             pytest.raises(
-                TypeError, match=r"Provide an object of type `Basis` to initialize"
+                TypeError, match=r"TransformerBasis accepts only object implementing"
             ),
         ),
     ],
