@@ -16,31 +16,17 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size
+from ._composition_utils import (
+    __PUBLIC_BASES__,
+    _atomic_basis_label_setter_logic,
+    _composite_basis_setter_logic,
+    _get_root,
+    _recompute_all_default_labels,
+)
 from ._transformer_basis import TransformerBasis
-from ._composition_utils import _recompute_class_default_labels, _recompute_all_default_labels, _update_label_from_root, _get_root, _composite_basis_setter_logic
 
 if TYPE_CHECKING:
     from ._basis import Basis
-
-
-__PUBLIC_BASES__ = [
-    "IdentityEval",
-    "HistoryConv",
-    "MSplineEval",
-    "MSplineConv",
-    "BSplineEval",
-    "BSplineConv",
-    "CyclicBSplineEval",
-    "CyclicBSplineConv",
-    "RaisedCosineLinearEval",
-    "RaisedCosineLinearConv",
-    "RaisedCosineLogEval",
-    "RaisedCosineLogConv",
-    "OrthExponentialEval",
-    "OrthExponentialConv",
-    "AdditiveBasis",
-    "MultiplicativeBasis",
-]
 
 
 def _is_basis(object: Any):
@@ -130,51 +116,6 @@ def remap_parameters(method):
         return self
 
     return wrapper
-
-
-def _atomic_basis_label_setter_logic(bas: AtomicBasisMixin, new_label: str) -> Exception | None:
-    # check default cases
-    current_label = getattr(bas, "_label", None)
-    if new_label == current_label:
-        return
-
-    elif new_label is None:
-        # check if already default
-        bas._label = bas.__class__.__name__
-        _recompute_class_default_labels(bas)
-        return
-
-            # raise error in case label is not string.
-    elif not isinstance(new_label, str):
-        return TypeError(
-            f"'label' must be a string. Type {type(new_label)} was provided instead."
-        )
-
-    else:
-        # check if label matches class-name plus identifier
-        match = re.match(r"(.+)?_\d+$", new_label)
-        check_string = match.group(1) if match else None
-        check_string = check_string if check_string in __PUBLIC_BASES__ else new_label
-        if check_string == bas.__class__.__name__:
-            bas._label = check_string
-            _recompute_class_default_labels(bas)
-            return
-
-    root = _get_root(bas)
-    current_labels = root._generate_subtree_labels() if root is not bas else [current_label]
-    if (check_string in current_labels) or (check_string in __PUBLIC_BASES__):
-        if check_string in __PUBLIC_BASES__:
-            msg = f"Cannot assign '{new_label}' to a basis of class {bas.__class__.__name__}."
-        else:
-            msg = f"Label '{new_label}' is already in use. When user-provided, label must be unique."
-        return ValueError(msg)
-    else:
-        # check if current is the default label
-        # if that's true, since the new label is not a default label
-        # update all other default label names.
-        _update_label_from_root(bas,  bas.__class__.__name__, getattr(bas, "_label", bas.label))
-        bas._label = new_label
-    return
 
 
 class AtomicBasisMixin:
@@ -775,21 +716,37 @@ class CompositeBasisMixin:
         basis1 = getattr(self, "_basis1", None)
         basis2 = getattr(self, "_basis2", None)
         if basis1 is None and basis2 is not None:
-            components = basis2._iterate_over_components() if hasattr(basis2, "_iterate_over_components") else [basis2]
+            components = (
+                basis2._iterate_over_components()
+                if hasattr(basis2, "_iterate_over_components")
+                else [basis2]
+            )
             return [
                 None,
                 *(getattr(bas2, "input_shape", None) for bas2 in components),
             ]
         elif basis2 is None and basis1 is not None:
-            components = basis1._iterate_over_components() if hasattr(basis1, "_iterate_over_components") else [basis1]
+            components = (
+                basis1._iterate_over_components()
+                if hasattr(basis1, "_iterate_over_components")
+                else [basis1]
+            )
             return [
                 *(getattr(bas1, "input_shape", None) for bas1 in components),
                 None,
             ]
         elif basis1 is None and basis2 is None:
             return [None, None]
-        components1 = basis1._iterate_over_components() if hasattr(basis1, "_iterate_over_components") else [basis1]
-        components2 = basis2._iterate_over_components() if hasattr(basis2, "_iterate_over_components") else [basis2]
+        components1 = (
+            basis1._iterate_over_components()
+            if hasattr(basis1, "_iterate_over_components")
+            else [basis1]
+        )
+        components2 = (
+            basis2._iterate_over_components()
+            if hasattr(basis2, "_iterate_over_components")
+            else [basis2]
+        )
         shapes = [
             *(getattr(bas1, "input_shape", None) for bas1 in components1),
             *(getattr(bas2, "input_shape", None) for bas2 in components2),
@@ -878,8 +835,16 @@ class CompositeBasisMixin:
         -------
             A generator looping on each individual input.
         """
-        components1 = self.basis1._iterate_over_components() if hasattr(self.basis1, "_iterate_over_components") else [self.basis1]
-        components2 = self.basis2._iterate_over_components() if hasattr(self.basis2, "_iterate_over_components") else [self.basis2]
+        components1 = (
+            self.basis1._iterate_over_components()
+            if hasattr(self.basis1, "_iterate_over_components")
+            else [self.basis1]
+        )
+        components2 = (
+            self.basis2._iterate_over_components()
+            if hasattr(self.basis2, "_iterate_over_components")
+            else [self.basis2]
+        )
         return chain(
             components1,
             components2,
