@@ -143,7 +143,7 @@ The parameter keys retrieved by `get_params` are the one needed to define a para
 With when labels are not provided, `get_params` retrieves the auto-generated ones.
 
 ```{code-cell} ipython3
-basis = nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
+basis = nmo.basis.BSplineEval(10) + nmo.basis.BSplineEval(5)
 basis.get_params()
 ```
 
