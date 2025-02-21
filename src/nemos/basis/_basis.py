@@ -521,6 +521,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __getitem__(self, index: str) -> Basis:
 
+        if isinstance(index, (int, slice)):
+            string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
+            raise ValueError(f"You can index basis only using labels. {string} is invalid.")
+
         search = next(
             (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None
         )
