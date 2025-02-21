@@ -17,6 +17,7 @@ from pynapple import Tsd, TsdFrame, TsdTensor
 from ..convolve import create_convolutional_predictor
 from ..utils import _get_terminal_size
 from ._transformer_basis import TransformerBasis
+from ._composition_utils import _recompute_class_default_labels, _recompute_all_default_labels, _update_label_from_root, _get_root, _composite_basis_setter_logic
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -101,36 +102,7 @@ def set_input_shape_state(states: Tuple[str] = ("_input_shape_product",)):
     return decorator
 
 
-def _composite_basis_setter_logic(new: Basis, current: Basis):
 
-    # Carry-on label if possible
-    if new._has_default_label and not current._has_default_label:
-        try:
-            new.label = current.label
-        except ValueError:
-            pass  # If label is in use, ignore
-
-    # add a parent to the new basis
-    new._parent = getattr(current, "_parent", None)
-
-    # Carry-on input shape info if dimensions match
-    for attr in ("_input_shape_product", "_input_shape_"):
-        if (
-            getattr(new, attr, None) is None
-            and new._n_input_dimensionality == current._n_input_dimensionality
-        ):
-            setattr(new, attr, getattr(current, attr, None))
-    return new
-
-
-def _recompute_all_default_labels(root: Basis) -> Basis:
-    """Recompute default all labels."""
-    updated = []
-    for bas in root._iterate_over_components():
-        if bas._has_default_label and bas.__class__.__name__ not in updated:
-            bas._recompute_all_labels()
-            updated.append(bas.__class__.__name__)
-    return root
 
 
 def remap_parameters(method):
@@ -163,6 +135,51 @@ def remap_parameters(method):
     return wrapper
 
 
+def _atomic_basis_label_setter_logic(bas: AtomicBasisMixin, new_label: str) -> Exception | None:
+    # check default cases
+    current_label = getattr(bas, "_label", None)
+    if new_label == current_label:
+        return
+
+    elif new_label is None:
+        # check if already default
+        bas._label = bas.__class__.__name__
+        _recompute_class_default_labels(bas)
+        return
+
+            # raise error in case label is not string.
+    elif not isinstance(new_label, str):
+        return TypeError(
+            f"'label' must be a string. Type {type(new_label)} was provided instead."
+        )
+
+    else:
+        # check if label matches class-name plus identifier
+        match = re.match(r"(.+)?_\d+$", new_label)
+        check_string = match.group(1) if match else None
+        check_string = check_string if check_string in __PUBLIC_BASES__ else new_label
+        if check_string == bas.__class__.__name__:
+            bas._label = check_string
+            _recompute_class_default_labels(bas)
+            return
+
+    root = _get_root(bas)
+    current_labels = root._generate_subtree_labels() if root is not bas else [current_label]
+    if (check_string in current_labels) or (check_string in __PUBLIC_BASES__):
+        if check_string in __PUBLIC_BASES__:
+            msg = f"Cannot assign '{new_label}' to a basis of class {bas.__class__.__name__}."
+        else:
+            msg = f"Label '{new_label}' is already in use. When user-provided, label must be unique."
+        return ValueError(msg)
+    else:
+        # check if current is the default label
+        # if that's true, since the new label is not a default label
+        # update all other default label names.
+        _update_label_from_root(bas,  bas.__class__.__name__, getattr(bas, "_label", bas.label))
+        bas._label = new_label
+    return
+
+
 class AtomicBasisMixin:
     """Mixin class for atomic bases (i.e. non-composite)."""
 
@@ -187,87 +204,13 @@ class AtomicBasisMixin:
 
     @label.setter
     def label(self, label: str | None) -> None:
-        # check default cases
-        if label == self._label:
-            return
-
-        elif label is None:
-            # check if already default
-            self._label = self.__class__.__name__
-            # re-order the default labels if self is part of a composite basis.
-            self._recompute_all_labels()
-            return
-
-        # raise error in case label is not string.
-        elif not isinstance(label, str):
-            raise TypeError(
-                f"'label' must be a string. Type {type(label)} was provided instead."
-            )
-
-        else:
-            # check if label matches class-name plus identifier
-            match = re.match(r"(.+)?_\d+$", label)
-            check_string = match.group(1) if match else None
-            check_string = check_string if check_string in __PUBLIC_BASES__ else label
-            if check_string == self.__class__.__name__:
-                self._label = check_string
-                self._recompute_all_labels()
-                return
-
-        # get the current available labels
-        current_labels = self._root()._generate_subtree_labels()
-        # if check_string is one of the other classes drop
-        if (check_string in current_labels) or (check_string in __PUBLIC_BASES__):
-            if check_string in __PUBLIC_BASES__:
-                msg = f"Cannot assign '{label}' to a basis of class {self.__class__.__name__}."
-            else:
-                msg = f"Label '{label}' is already in use. When user-provided, label must be unique."
-            raise ValueError(msg)
-        else:
-            # check if current is the default label
-            # if that's true, since the new label is not a default label
-            # update all other default label names.
-            self._update_label_from_root()
-            self._label = label
+        error = _atomic_basis_label_setter_logic(self, label)
+        if error:
+            raise error
 
     @property
     def _has_default_label(self):
         return re.match(rf"^{self.__class__.__name__}(_\d+)?$", self._label) is not None
-
-    def _recompute_all_labels(self):
-        """
-        Recompute all labels matching default for self.
-        """
-        cls_name = self.__class__.__name__
-        pattern = re.compile(rf"^{cls_name}(_\d+)?$")
-        root = self._root()
-        if root:
-            bas_id = 0
-            for bas in root._iterate_over_components():
-                if re.match(pattern, bas._label):
-                    bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
-                    bas_id += 1
-
-    def _update_label_from_root(self):
-        """
-        Subtract 1 to each matching default label with higher ID then current.
-        """
-        cls_name = self.__class__.__name__
-        pattern = re.compile(rf"^{cls_name}(_\d+)?$")
-        match = re.match(pattern, self._label)
-        if match is None:
-            return
-        # get the "ID" of the label
-        current_id = int(match.group(1)[1:]) if match.group(1) else 0
-        # subtract one to the ID of any other default label with ID > current_id
-        root = self._root()
-        if root:
-            for bas in root._iterate_over_components():
-                match = re.match(pattern, bas._label)
-                if match:
-                    bas_id = int(match.group(1)[1:]) if match.group(1) else 0
-                    bas_id = bas_id - 1 if bas_id > current_id else bas_id
-                    bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
 
     @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label"))
     def __sklearn_clone__(self) -> Basis:
@@ -820,7 +763,7 @@ class CompositeBasisMixin:
             self._label = None
         else:
             label = str(label)
-            if label in self._root()._generate_subtree_labels():
+            if label in _get_root(self)._generate_subtree_labels():
                 raise ValueError(
                     f"Label '{label}' is already in use. When user-provided, label must be unique."
                 )

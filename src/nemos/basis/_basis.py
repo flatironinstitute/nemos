@@ -169,13 +169,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             return self.n_basis_funcs * self._input_shape_product[0]
         return None
 
-    def _root(self):
-        """Get the basis root"""
-        parent = self
-        while hasattr(parent, "_parent") and parent._parent is not None:
-            parent = parent._parent
-        return parent
-
     @property
     def n_basis_funcs(self):
         """Number of basis functions."""
