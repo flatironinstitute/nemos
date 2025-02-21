@@ -161,7 +161,7 @@ def _composite_basis_setter_logic(new: "Basis", current: "Basis"):
 
 
 def _atomic_basis_label_setter_logic(
-    bas: AtomicBasisMixin, new_label: str
+    bas: "AtomicBasisMixin", new_label: str
 ) -> Exception | None:
     # check default cases
     current_label = getattr(bas, "_label", None)
