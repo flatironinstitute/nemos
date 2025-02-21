@@ -5928,7 +5928,7 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n            basis1=MultiplicativeBasis(\n                basis1=MultiplicativeBasis(\n                    basis1=MultiplicativeBasis(\n                        ...\n                    ),\n                    basis2='BSplineEval_95': BSplineEval(n_basis_funcs=10, order=4),\n                ),\n                basis2='BSplineEval_96': BSplineEval(n_basis_funcs=10, order=4),\n            ),\n            basis2='BSplineEval_97': BSplineEval(n_basis_funcs=10, order=4),\n        ),\n        basis2='BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
+        "basis2='BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 
