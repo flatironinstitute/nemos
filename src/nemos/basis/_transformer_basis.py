@@ -82,9 +82,15 @@ class TransformerBasis:
     )
 
     def __init__(self, basis: Basis):
-        if not hasattr(basis, "get_params") or not hasattr(basis, "set_params") or not hasattr(basis, "compute_features"):
+        if (
+            not hasattr(basis, "get_params")
+            or not hasattr(basis, "set_params")
+            or not hasattr(basis, "compute_features")
+        ):
             missing_attrs = [
-                attr for attr in ("get_params", "set_params", "compute_features") if not hasattr(basis, attr)
+                attr
+                for attr in ("get_params", "set_params", "compute_features")
+                if not hasattr(basis, attr)
             ]
             raise TypeError(
                 "TransformerBasis accepts only object implementing `get_params`, `set_params`, and `compute_features`."

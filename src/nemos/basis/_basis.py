@@ -523,7 +523,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         if isinstance(index, (int, slice)):
             string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
-            raise IndexError(f"You can index basis only using labels. {string} is invalid.")
+            raise IndexError(
+                f"You can index basis only using labels. {string} is invalid."
+            )
 
         search = next(
             (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None

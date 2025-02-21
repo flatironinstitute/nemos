@@ -630,8 +630,10 @@ class CompositeBasisMixin:
     @basis2.setter
     def basis2(self, basis):
         if not hasattr(basis, "compute_features"):
-            raise TypeError("`basis2` does not implement `compute_features`. "
-                            "The method is required for the correct behavior of the basis." )
+            raise TypeError(
+                "`basis2` does not implement `compute_features`. "
+                "The method is required for the correct behavior of the basis."
+            )
         if self._basis1:
             self._set_labels(self._basis1, basis)
         if self._basis2:
