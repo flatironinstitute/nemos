@@ -258,7 +258,3 @@ model_tree.fit(pytree_features, spikes)
 # print the coefficients
 print(model_tree.coef_)
 ```
-
-```{code-cell} ipython3
-
-```
