@@ -82,6 +82,11 @@ class TransformerBasis:
     )
 
     def __init__(self, basis: Basis):
+        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+            raise TypeError(
+                "Provide an object of type `Basis` to initialize a TransformerBasis. "
+                f"Object of type {type(basis)} provided instead!"
+            )
         self.basis = copy.deepcopy(basis)
         self._wrapped_methods = {}  # Cache for wrapped methods
 
@@ -347,6 +352,9 @@ class TransformerBasis:
             raise ValueError(
                 f"Only setting basis or existing attributes of basis is allowed. Attempt to set `{name}`."
             )
+
+    def __getitem__(self, name: str):
+        return self.basis.__getitem__(name)
 
     def __sklearn_clone__(self) -> TransformerBasis:
         """

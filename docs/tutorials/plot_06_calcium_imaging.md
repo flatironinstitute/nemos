@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -61,7 +61,6 @@ import nemos as nmo
 
 configure plots
 
-
 ```{code-cell} ipython3
 plt.style.use(nmo.styles.plot_style)
 ```
@@ -69,7 +68,6 @@ plt.style.use(nmo.styles.plot_style)
 ## Data Streaming
 
 Here we load the data from OSF. The data is a NWB file.
-
 
 ```{code-cell} ipython3
 path = nmo.fetch.fetch_data("A0670-221213.nwb")
@@ -80,14 +78,12 @@ path = nmo.fetch.fetch_data("A0670-221213.nwb")
 
 Now that we have the file, let's load the data. The NWB file contains multiple entries.
 
-
 ```{code-cell} ipython3
 data = nap.load_file(path)
 print(data)
 ```
 
 In the NWB file, the calcium traces are saved the RoiResponseSeries field. Let's save them in a variable called 'transients' and print it.
-
 
 ```{code-cell} ipython3
 transients = data['RoiResponseSeries']
@@ -98,14 +94,12 @@ print(transients)
 
 The mouse was recorded for a 20 minute recording epoch as we can see from the `time_support` property of the `transients` object.
 
-
 ```{code-cell} ipython3
 ep = transients.time_support
 print(ep)
 ```
 
 There are a few different ways we can explore the data. First, let's inspect the raw calcium traces for neurons 4 and 35 for the first 250 seconds of the experiment.
-
 
 ```{code-cell} ipython3
 fig, ax = plt.subplots(1, 2, figsize=(12, 4))
@@ -127,13 +121,11 @@ You can see that the calcium signals are both nonnegative, and noisy. One (neuro
 We can also plot tuning curves, plotting mean calcium activity as a function of head direction, using the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous).
 Here `data['ry']` is a [`Tsd`](https://pynapple.org/generated/pynapple.Tsd.html) that contains the angular head-direction of the animal between 0 and 2$\pi$.
 
-
 ```{code-cell} ipython3
 tcurves = nap.compute_1d_tuning_curves_continuous(transients, data['ry'], 120)
 ```
 
 The function returns a pandas DataFrame. Let's plot the tuning curves for neurons 4 and 35.
-
 
 ```{code-cell} ipython3
 fig, ax = plt.subplots(1, 2, figsize=(12, 4))
@@ -149,13 +141,11 @@ plt.tight_layout()
 
 As a first processing step, let's bin the calcium traces to a 100ms resolution.
 
-
 ```{code-cell} ipython3
 Y = transients.bin_average(0.1, ep)
 ```
 
 We can visualize the downsampled transients for the first 50 seconds of data.
-
 
 ```{code-cell} ipython3
 plt.figure()
@@ -178,18 +168,16 @@ We can define a cyclic-BSpline for capturing the encoding of the heading angle, 
 
 We can combine the two bases.
 
-
 ```{code-cell} ipython3
-heading_basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=12)
-coupling_basis = nmo.basis.RaisedCosineLogConv(3, window_size=10)
+heading_basis = nmo.basis.CyclicBSplineEval(n_basis_funcs=12, label="heading")
+coupling_basis = nmo.basis.RaisedCosineLogConv(3, window_size=10, label="coupling")
 ```
 
-We need to make sure the design matrix will be full-rank by applying identifiability constraints to the Cyclic Bspline, and then combine the bases (the resturned object will be an [`AdditiveBasis`](nemos.basis._basis.AdditiveBasis) object).
-
+Let's combine both basis into a single additive element.
 
 ```{code-cell} ipython3
-heading_basis.identifiability_constraints = True
 basis = heading_basis + coupling_basis
+basis
 ```
 
 ## Gamma GLM
@@ -201,7 +189,6 @@ Until now, we have been modeling spike trains, and have used a Poisson distribut
 Different option are possible. With a soft-plus we are assuming an "additive" effect of the predictors, while an exponential non-linearity assumes multiplicative effects. Deciding which firing rate model works best is an empirical question. You can fit different configurations to see which one capture best the neural activity.
 :::
 
-
 ```{code-cell} ipython3
 model = nmo.glm.GLM(
     solver_kwargs=dict(tol=10**-13),
@@ -212,7 +199,6 @@ model = nmo.glm.GLM(
 ```
 
 We select one neuron to fit later, so remove it from the list of predictors
-
 
 ```{code-cell} ipython3
 neu = 4
@@ -227,13 +213,11 @@ We need to bring the head-direction of the animal to the same size as the transi
 We can use the function [`bin_average`](https://pynapple.org/generated/pynapple.Tsd.bin_average.html) of pynapple. Notice how we pass the parameter `ep`
 that is the `time_support` of the transients.
 
-
 ```{code-cell} ipython3
 head_direction = data['ry'].bin_average(0.1, ep)
 ```
 
 Let's check that `head_direction` and `Y` are of the same size.
-
 
 ```{code-cell} ipython3
 print(head_direction.shape)
@@ -244,16 +228,20 @@ print(Y.shape)
 
 We can now create the design matrix by combining the head-direction of the animal and the activity of all other neurons.
 
-
-
 ```{code-cell} ipython3
 X = basis.compute_features(head_direction, Y[:, selected_neurons])
 ```
 
+```{info}
+
+In the absence of regularization, a GLM with an intercept term would be non identifiable, since the Cyclic-BSpline always sums to one over the basis functions. You can enforce a full rank by dropping the liearly dependent columns. We provide the [`identifiability_constraint` module](~nemos.identifiability_constraints.apply_identifiability_constraints) to automate the procedure. 
+```
+
++++
+
 ## Train & test set
 
 Let's create a train epoch and a test epoch to fit and test the models. Since `X` is a pynapple time series, we can create [`IntervalSet`](https://pynapple.org/generated/pynapple.IntervalSet.html) objects to restrict them into a train set and test set.
-
 
 ```{code-cell} ipython3
 train_ep = nap.IntervalSet(start=X.time_support.start, end=X.time_support.get_intervals_center().t)
@@ -264,7 +252,6 @@ print(test_ep)
 ```
 
 We can now restrict the `X` and `Y` to create our train set and test set.
-
 
 ```{code-cell} ipython3
 Xtrain = X.restrict(train_ep)
@@ -278,7 +265,6 @@ Ytest = Y.restrict(test_ep)
 
 It's time to fit the model on the data from the neuron we left out.
 
-
 ```{code-cell} ipython3
 model.fit(Xtrain, Ytrain[:, neu])
 ```
@@ -290,7 +276,6 @@ model.fit(Xtrain, Ytrain[:, neu])
 
 We can compare this to scikit-learn [linear regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LinearRegression.html).
 
-
 ```{code-cell} ipython3
 mdl = LinearRegression()
 valid = ~jnp.isnan(Xtrain.d.sum(axis=1)) # Scikit learn does not like nans.
@@ -299,7 +284,6 @@ mdl.fit(Xtrain[valid], Ytrain[valid, neu])
 
 We now have 2 models we can compare. Let's predict the activity of the neuron during the test epoch.
 
-
 ```{code-cell} ipython3
 yp = model.predict(Xtest)
 ylreg = mdl.predict(Xtest) # Notice that this is not a pynapple object.
@@ -307,13 +291,11 @@ ylreg = mdl.predict(Xtest) # Notice that this is not a pynapple object.
 
 Unfortunately scikit-learn has not adopted pynapple yet. Let's convert `ylreg` to a pynapple object to make our life easier.
 
-
 ```{code-cell} ipython3
 ylreg = nap.Tsd(t=yp.t, d=ylreg, time_support = yp.time_support)
 ```
 
 Let's plot the predicted activity for the first 60 seconds of data.
-
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 3
@@ -335,7 +317,6 @@ While there is some variability in the fit for both models, one advantage of the
 
 Another way to compare models is to compute tuning curves. Here we use the function [`compute_1d_tuning_curves_continuous`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves_continuous) from pynapple.
 
-
 ```{code-cell} ipython3
 real_tcurves = nap.compute_1d_tuning_curves_continuous(transients, data['ry'], 120, ep=test_ep)
 gamma_tcurves = nap.compute_1d_tuning_curves_continuous(yp, data['ry'], 120, ep=test_ep)
@@ -343,7 +324,6 @@ linreg_tcurves = nap.compute_1d_tuning_curves_continuous(ylreg, data['ry'], 120,
 ```
 
 Let's plot them.
-
 
 ```{code-cell} ipython3
 fig = plt.figure()
@@ -377,7 +357,6 @@ if root or Path("../assets/stylesheets").exists():
 if path.exists():
   fig.savefig(path / "plot_06_calcium_imaging.svg")
 ```
-
 
 :::{admonition} Gamma-GLM for Calcium Imaging Analysis
 :class: note
