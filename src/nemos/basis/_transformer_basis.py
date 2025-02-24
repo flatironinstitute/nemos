@@ -82,10 +82,19 @@ class TransformerBasis:
     )
 
     def __init__(self, basis: Basis):
-        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
+        if (
+            not hasattr(basis, "get_params")
+            or not hasattr(basis, "set_params")
+            or not hasattr(basis, "compute_features")
+        ):
+            missing_attrs = [
+                attr
+                for attr in ("get_params", "set_params", "compute_features")
+                if not hasattr(basis, attr)
+            ]
             raise TypeError(
-                "Provide an object of type `Basis` to initialize a TransformerBasis. "
-                f"Object of type {type(basis)} provided instead!"
+                "TransformerBasis accepts only object implementing `get_params`, `set_params`, and `compute_features`."
+                f"\nMissing methods: {missing_attrs}."
             )
         self.basis = copy.deepcopy(basis)
         self._wrapped_methods = {}  # Cache for wrapped methods
@@ -208,7 +217,7 @@ class TransformerBasis:
         self._check_input(X, y)
         # transpose does not work with pynapple
         # can't use func(*X.T) to unwrap
-        return self.basis._compute_features(*self._unpack_inputs(X))
+        return self.basis.compute_features(*self._unpack_inputs(X))
 
     def fit_transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
         """
@@ -365,7 +374,12 @@ class TransformerBasis:
 
         For more info: https://scikit-learn.org/stable/developers/develop.html#cloning
         """
-        cloned_obj = TransformerBasis(self.basis.__sklearn_clone__())
+        cloned = (
+            self.basis.__sklearn_clone__()
+            if hasattr(self.basis, "__sklearn_clone__")
+            else copy.deepcopy(self.basis)
+        )
+        cloned_obj = TransformerBasis(cloned)
         return cloned_obj
 
     def __repr__(self):

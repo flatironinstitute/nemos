@@ -42,7 +42,7 @@ cd nemos
 2) Install `nemos` in editable mode with developer dependencies  
 
 ```bash
-pip install -e .[dev]
+pip install -e ".[dev]"
 ```
 
 > [!NOTE]

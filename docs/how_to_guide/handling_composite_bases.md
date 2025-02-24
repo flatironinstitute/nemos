@@ -112,9 +112,14 @@ This change is reflected on the composite basis.
 # check that the input2 basis has now 8 basis funcs
 add
 ```
+Note that if you don't provide a label, basis class name is used to construct the keys. If the same basis is repeated, the key is disambiguated by appending an extra numerical identifier.
 
-### Cross-validating Composite Basis Parameters
-Another way to get and set the basis parameter is via the `get_params` and `set_params` methods.
+```{code-cell} ipython3
+nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
+```
+
+### Modifying Basis Parameters with `get_params` and `set_params`
+Another way to get and set the basis parameter is via the `get_params` and `set_params` methods. This is how `scikit-learn` interacts with basis objects, and so enables cross-validation,.
 
 The `get_params` method returns a dictionary, containing all the parameters. The dictionary keys start with the basis label, followed by a double underscore and the name of the parameter.
 
@@ -135,14 +140,7 @@ The parameter keys retrieved by `get_params` are the one needed to define a para
 :::
 
 
-Note that if you don't provide a label, basis class name is used to construct the keys.
-
-```{code-cell} ipython3
-basis = nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
-basis.get_params()
-```
-
-If the same basis is repeated, the key is disambiguated by appending an extra numerical identifier.
+With when labels are not provided, `get_params` retrieves the auto-generated ones.
 
 ```{code-cell} ipython3
 basis = nmo.basis.BSplineEval(10) + nmo.basis.BSplineEval(5)

@@ -5705,28 +5705,104 @@ def test_basis_protected_name(bas, basis_class_specific_params):
     # does not raise because the basis name is the same as the current.
     with does_not_raise():
         bas_instance.label = name
+    # same behavior at initialization
+    with does_not_raise():
+        combine_basis.instantiate_basis(
+            5,
+            bas,
+            basis_class_specific_params,
+            window_size=10,
+            label=name,
+        )
+
     name += "_1"
     with does_not_raise():
         bas_instance.label = name
+        # assert that name is not updated / "_1" is stripped
+        assert bas_instance.label == bas.__name__
+    # same behavior at initialization
+    with does_not_raise():
+        bas_instance_init = combine_basis.instantiate_basis(
+            5,
+            bas,
+            basis_class_specific_params,
+            window_size=10,
+            label=name,
+        )
+        # assert that name is the default / "_1" is stripped
+        assert bas_instance_init.label == bas.__name__
 
     # if stripping the last number is not a basis name, no error
     name += "_1"
     with does_not_raise():
         bas_instance.label = name
+        # assert that name is updated
+        assert bas_instance.label == name
+    # same behavior at initialization
+    with does_not_raise():
+        bas_instance_init = combine_basis.instantiate_basis(
+            5,
+            bas,
+            basis_class_specific_params,
+            window_size=10,
+            label=name,
+        )
+        # assert that name is correct
+        assert bas_instance_init.label == name
 
+    # cannot assign the name of a different basis
     invalid_label = "MSplineEval" if bas.__name__ != "MSplineEval" else "MSplineConv"
     with pytest.raises(
         ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"
     ):
         bas_instance.label = invalid_label
+    # same behavior at initialization
+    with pytest.raises(
+        ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"
+    ):
+        combine_basis.instantiate_basis(
+            5,
+            bas,
+            basis_class_specific_params,
+            window_size=10,
+            label=invalid_label,
+        )
+
+    # cannot assign the name of a different basis with number
     invalid_label += "_1"
     with pytest.raises(
         ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"
     ):
         bas_instance.label = invalid_label
+    # same behavior at initialization
+    with pytest.raises(
+        ValueError, match=f"Cannot assign '{invalid_label}' to a basis of class"
+    ):
+        combine_basis.instantiate_basis(
+            5,
+            bas,
+            basis_class_specific_params,
+            window_size=10,
+            label=invalid_label,
+        )
+
+    # no longer a protected name
     invalid_label += "_1"
     with does_not_raise():
         bas_instance.label = invalid_label
+        # assert that name is updated
+        assert bas_instance.label == invalid_label
+    # same behavior at initialization
+    with does_not_raise():
+        bas_instance_init = combine_basis.instantiate_basis(
+            5,
+            bas,
+            basis_class_specific_params,
+            window_size=10,
+            label=invalid_label,
+        )
+        # assert that name is correct
+        assert bas_instance_init.label == invalid_label
 
 
 @pytest.mark.parametrize("bas1", list_all_basis_classes())
