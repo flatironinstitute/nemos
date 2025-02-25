@@ -14,9 +14,11 @@ class TestShiftTimeAxisAndConvolve:
         "time_series, check_func, axis",
         [
             (np.zeros((1, 20)), lambda x: x.ndim == 3, 1),
+            (np.zeros((1, 20)), lambda x: x.ndim == 3, -1),
             (np.zeros((20,)), lambda x: x.ndim == 2, 0),
             (np.zeros((20, 1)), lambda x: x.ndim == 3, 0),
             (np.zeros((1, 20, 1)), lambda x: x.ndim == 4, 0),
+            (np.zeros((1, 20, 1)), lambda x: x.ndim == 4, -3),
         ],
     )
     def test_output_ndim(self, time_series, check_func, axis):

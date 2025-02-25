@@ -90,6 +90,8 @@ def _shift_time_axis_and_convolve(array: NDArray, eval_basis: NDArray, axis: int
     -----
     This function supports arrays of any dimensionality greater or equal than 1.
     """
+    # convert axis
+    axis = axis if axis >= 0 else array.ndim + axis
     # move time axis to first
     new_axis = (jnp.arange(array.ndim) + axis) % array.ndim
     array = jnp.transpose(array, new_axis)
