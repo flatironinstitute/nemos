@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -57,7 +57,6 @@ counts = np.array([10, 5, 2, 0])
 You can use a `patsy` formula to structure the design matrix:
 
 ```{code-cell} ipython3
-
 # (a:b) indicates interaction between a and b
 formula = "stimulus + context + stimulus:context"
 ```
@@ -99,8 +98,7 @@ See [`patsy` docs](https://patsy.readthedocs.io/en/latest/formulas.html#the-form
 ### Fit the GLM
 
 We are now ready to fit a GLM model using the 1-hot encoded categories as predictor. The model will learn a different 
-firing rate for each condition. 
-
+firing rate for each condition.
 
 ```{code-cell} ipython3
 import nemos as nmo
@@ -108,6 +106,7 @@ import nemos as nmo
 # Fit the GLM model
 model = nmo.glm.GLM().fit(design_df, counts)
 ```
+
 :::{note}
 
 You can directly pass a [`pandas.DataFrame`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.html) to the 
@@ -128,8 +127,16 @@ You can create a composite basis to combine predictors:
 
 ```{code-cell} ipython3
 # Identity basis combined with a B-spline basis
-bas = nmo.basis.IdentityEval() + nmo.basis.RaisedCosineLinearEval(3)
+bas = (
+    nmo.basis.IdentityEval(label="context") + 
+    nmo.basis.RaisedCosineLinearEval(3, label="speed")
+)
+bas
+```
 
+And you can compute a design matrix including both predictors.
+
+```{code-cell} ipython3
 # Compute features
 X = bas.compute_features(design_df, speed)
 
@@ -152,7 +159,10 @@ To add the interaction To add the interaction between the `S` context and speed 
 
 ```{code-cell} ipython3
 # Interaction basis
-bas = nmo.basis.IdentityEval() * nmo.basis.RaisedCosineLinearEval(3)
+bas = (
+    nmo.basis.IdentityEval(label="context") * 
+    nmo.basis.RaisedCosineLinearEval(3, label="speed")
+)
 
 # Compute features for interaction
 X2 = bas.compute_features(design_df["context[T.S]"], speed)
@@ -160,4 +170,5 @@ X2 = bas.compute_features(design_df["context[T.S]"], speed)
 # convert to DataFrame for readability
 pd.DataFrame(X2, columns=[f"context[T.S] * b{i}(speed)" for i in range(3)])
 ```
+
 

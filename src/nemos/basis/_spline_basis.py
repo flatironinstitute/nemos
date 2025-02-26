@@ -47,9 +47,9 @@ class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
         mode: Literal["conv", "eval"] = "eval",
     ) -> None:
         self.order = order
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
-        super().__init__(
-            label=label,
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
+        Basis.__init__(
+            self,
             mode=mode,
         )
 

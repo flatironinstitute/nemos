@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -24,7 +24,7 @@ the first 2 Principal Components as GLM features.
 
 Currently, NeMoS doesn't provide a PCA basis, but you can compute the Principal Components in `sklearn`.
 
-```{code-cell}
+```{code-cell} ipython3
 import numpy as np
 from sklearn.decomposition import PCA
 
@@ -39,17 +39,16 @@ counts = np.random.poisson(size=n_samples)
 
 # compute the first 2 pcs
 pcs = PCA(2).fit_transform(high_dim_singals)
-
 ```
 
 Now, let's see how to use the `IdentityEval` basis to model jointly the PCs and a spike history filter.
 
-```{code-cell}
+```{code-cell} ipython3
 import nemos as nmo
 
 # create a composite basis 
-pc_basis = nmo.basis.IdentityEval()
-history_basis = nmo.basis.RaisedCosineLogConv(3, window_size=10)
+pc_basis = nmo.basis.IdentityEval(label="pca")
+history_basis = nmo.basis.RaisedCosineLogConv(3, window_size=10, label="spike_history")
 composite_basis = pc_basis + history_basis
 
 # create the model design
@@ -59,5 +58,8 @@ print(f"Design matrix shape: {X.shape}")
 
 # fit the glm
 model = nmo.glm.GLM().fit(X, counts)
+```
+
+```{code-cell} ipython3
 
 ```

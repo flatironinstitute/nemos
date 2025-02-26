@@ -393,8 +393,9 @@ the cost of adding additional parameters.
 ```{code-cell} ipython3
 # a basis object can be instantiated in "conv" mode for convolving  the input.
 basis = nmo.basis.RaisedCosineLogConv(
-    n_basis_funcs=8, window_size=window_size
+    n_basis_funcs=8, window_size=window_size, label="count_history"
 )
+print(basis)
 
 # `basis.evaluate_on_grid` is a convenience method to view all basis functions
 # across their whole domain:
@@ -564,7 +565,7 @@ to get an array of predictors of shape, `(num_time_points, num_neurons * num_bas
 ```{code-cell} ipython3
 # re-initialize basis
 basis = nmo.basis.RaisedCosineLogConv(
-    n_basis_funcs=8, window_size=window_size
+    n_basis_funcs=8, window_size=window_size, label="population_history"
 )
 
 # convolve all the neurons
@@ -637,7 +638,12 @@ tuning = nap.compute_1d_tuning_curves_continuous(predicted_firing_rate,
 Extract the weights and store it in a `(n_neurons, n_neurons, n_basis_funcs)` array.
 
 ```{code-cell} ipython3
-weights = model.coef_.reshape(count.shape[1], basis.n_basis_funcs, count.shape[1])
+# use split_by_feature to reshape the coefficients
+weights_dict = basis.split_by_feature(model.coef_, axis=0)
+
+# get the component weights indexing with the basis label.
+weights = weights_dict["population_history"]
+print(weights.shape)
 ```
 
 Multiply the weights by the basis, to get the history filters.

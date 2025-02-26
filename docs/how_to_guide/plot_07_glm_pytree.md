@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -73,7 +73,6 @@ same number of elements along the first dimension, which represents the time
 points, but can have different numbers of elements along the other dimensions
 (and even different numbers of dimensions).
 
-
 ```{code-cell} ipython3
 example_pytree = nmo.pytrees.FeaturePytree(feature_0=np.random.normal(size=(100, 1, 2)),
                                            feature_1=np.random.normal(size=(100, 2)),
@@ -84,14 +83,12 @@ example_pytree
 FeaturePytrees can be indexed into like dictionary, so we can grab a
 single one of their features:
 
-
 ```{code-cell} ipython3
 example_pytree['feature_0'].shape
 ```
 
 We can grab the number of time points by getting the length or using the
 `shape` attribute
-
 
 ```{code-cell} ipython3
 print(len(example_pytree))
@@ -100,7 +97,6 @@ print(example_pytree.shape)
 
 We can also jointly index into the FeaturePytree's leaves:
 
-
 ```{code-cell} ipython3
 example_pytree[:10]
 ```
@@ -108,14 +104,12 @@ example_pytree[:10]
 We can add new features after initialization, as long as they have the same
 number of time points.
 
-
 ```{code-cell} ipython3
 example_pytree['feature_3'] = np.zeros((100, 2, 4))
 ```
 
 However, if we try to add a new feature with the wrong number of time points,
 we'll get an exception:
-
 
 ```{code-cell} ipython3
 try:
@@ -125,7 +119,6 @@ except ValueError as e:
 ```
 
 Similarly, if we try to add a feature that's not an array:
-
 
 ```{code-cell} ipython3
 try:
@@ -144,7 +137,6 @@ preserving their structure.
 
 We can map lambda functions:
 
-
 ```{code-cell} ipython3
 mapped = jax.tree_util.tree_map(lambda x: x**2, example_pytree)
 print(mapped)
@@ -152,7 +144,6 @@ mapped['feature_1']
 ```
 
 Or functions from jax or numpy that operate on arrays:
-
 
 ```{code-cell} ipython3
 mapped = jax.tree_util.tree_map(jnp.exp, example_pytree)
@@ -162,7 +153,6 @@ mapped['feature_1']
 
 We can change the dimensionality of our pytree:
 
-
 ```{code-cell} ipython3
 mapped = jax.tree_util.tree_map(lambda x: jnp.mean(x, axis=-1), example_pytree)
 print(mapped)
@@ -170,7 +160,6 @@ mapped['feature_1']
 ```
 
 Or the number of time points:
-
 
 ```{code-cell} ipython3
 mapped = jax.tree_util.tree_map(lambda x: x[::10], example_pytree)
@@ -180,7 +169,6 @@ mapped['feature_1']
 
 If we map something whose output cannot be a FeaturePytree (because its
 values are scalars or non-arrays), we return a dictionary of arrays instead:
-
 
 ```{code-cell} ipython3
 print(jax.tree_util.tree_map(jnp.mean, example_pytree))
@@ -221,7 +209,6 @@ print(nwb)
 This data set has cells that are tuned for head direction and 2d position.
 Let's compute some simple tuning curves to see if we can find a cell that
 looks tuned for both.
-
 
 ```{code-cell} ipython3
 tc, binsxy = nap.compute_2d_tuning_curves(nwb['units'], nwb['SpatialSeriesLED1'].dropna(), 20)
@@ -268,7 +255,6 @@ if path.exists():
   fig.savefig(path / "plot_07_glm_pytree.svg")
 ```
 
-
 Okay, let's use unit number 7.
 
 Now let's set up our design matrix. First, let's fit the head direction by
@@ -277,7 +263,6 @@ each other), so we need to use a basis that has this property as well.
 [`CyclicBSplineEval`](nemos.basis.CyclicBSplineEval) is one such basis.
 
 Let's create our basis and then arrange our data properly.
-
 
 ```{code-cell} ipython3
 unit_no = 7
@@ -305,7 +290,6 @@ X = nmo.pytrees.FeaturePytree(head_direction=basis.compute_features(head_dir))
 
 Now we'll fit our GLM and then see what our head direction tuning looks like:
 
-
 ```{code-cell} ipython3
 model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.001)
 model.fit(X, spikes)
@@ -321,7 +305,6 @@ This looks like a smoothed version of our tuning curve, like we'd expect!
 
 For a more direct comparison, we can plot the tuning function based on the model predicted
 firing rates with that estimated from the counts.
-
 
 ```{code-cell} ipython3
 # predict rates and convert back to pynapple
@@ -349,7 +332,6 @@ helpful. Let's add a feature for the animal's position in space. For this
 feature, we need a 2d basis. Let's use some raised cosine bumps and organize
 our data similarly.
 
-
 ```{code-cell} ipython3
 pos_basis = nmo.basis.RaisedCosineLinearEval(10) * nmo.basis.RaisedCosineLinearEval(10)
 spatial_pos = nwb['SpatialSeriesLED1'].restrict(valid_data)
@@ -360,7 +342,6 @@ X['spatial_position'] = pos_basis.compute_features(*spatial_pos.values.T)
 Running the GLM is identical to before, but we can see that our coef_
 FeaturePytree now has two separate keys, one for each feature type.
 
-
 ```{code-cell} ipython3
 model = nmo.glm.GLM(solver_name="LBFGS")
 model.fit(X, spikes)
@@ -370,7 +351,6 @@ model.coef_
 Let's visualize our tuning. Head direction looks pretty much the same (though
 the values are slightly different, as we can see when printing out the
 coefficients).
-
 
 ```{code-cell} ipython3
 bs_vis = basis.compute_features(x)
@@ -383,7 +363,6 @@ plt.polar(x, tuning.T)
 And the spatial tuning again looks like a smoothed version of our earlier
 tuning curves.
 
-
 ```{code-cell} ipython3
 _, _, pos_bs_vis = pos_basis.evaluate_on_grid(50, 50)
 pos_tuning = jnp.einsum('b,ijb->ij', model.coef_['spatial_position'], pos_bs_vis)
@@ -393,7 +372,6 @@ plt.imshow(pos_tuning)
 
 We could do all this with matrices as well, but we have to pay attention to
 indices in a way that is annoying:
-
 
 ```{code-cell} ipython3
 X_mat = nmo.utils.pynapple_concatenate_jax([X['head_direction'], X['spatial_position']], -1)
