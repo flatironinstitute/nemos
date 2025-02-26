@@ -1,3 +1,4 @@
+from ._composition_utils import __PUBLIC_BASES__
 from ._basis import AdditiveBasis, MultiplicativeBasis
 from ._transformer_basis import TransformerBasis
 from .basis import (
@@ -15,9 +16,9 @@ from .basis import (
     RaisedCosineLinearEval,
     RaisedCosineLogConv,
     RaisedCosineLogEval,
-    __all__,
 )
 
+__all__ = __PUBLIC_BASES__
 
 def __dir__():
     return __all__
