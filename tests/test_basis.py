@@ -5947,7 +5947,7 @@ def test_composite_basis_repr_wrapping():
     assert "    ...\n" in out
 
 
-def test_all_imported_basis_public():
+def test_all_public_importable_bases_equal():
     import nemos.basis
     # this is the list of publicly available bases
     public_bases = set(dir(nemos.basis))
@@ -5955,16 +5955,8 @@ def test_all_imported_basis_public():
     imported_bases = set([k for k, v in nemos.basis.__dict__.items() if inspect.isclass(v)
                           and issubclass(v, nemos.basis._basis.Basis)])
     if public_bases != imported_bases:
-        raise ValueError("nemos/basis/__init__.py imports a basis object that is not included in"
-                         " nemos/basis/_composition_utils.py's __PUBLIC_BASES__ list: "
-                         f"{imported_bases - public_bases}")
-
-
-def test_all_public_basis_importable():
-    # this fails if there's any entry in basis/__init__.py's __all__ (which comes from
-    # __PUBLIC_BASES__) that is not defined and thus not imported in basis/__init__.py
-    try:
-        from nemos.basis import *
-    except AttributeError as e:
-        raise AttributeError("__PUBLIC_BASES__ includes a basis that is not imported by "
-                             f"nemos/basis/__init__.py! {e.args[0]}")
+        raise ValueError("nemos/basis/__init__.py imported basis objects does not match"
+                         " nemos/basis/_composition_utils.py's __PUBLIC_BASES__ list:\n"
+                         f"imported but not public: {imported_bases - public_bases}\n",
+                         f"public but not imported: {public_bases - imported_bases}",
+                         )
