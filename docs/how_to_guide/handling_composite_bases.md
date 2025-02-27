@@ -115,7 +115,7 @@ add
 Note that if you don't provide a label, basis class name is used to construct the keys. If the same basis is repeated, the key is disambiguated by appending an extra numerical identifier.
 
 ```{code-cell} ipython3
-nmo.basis.BSplineEval(10) + nmo.basis.MSplineEval(5)
+nmo.basis.BSplineEval(10) + nmo.basis.BSplineEval(5)
 ```
 
 ### Modifying Basis Parameters with `get_params` and `set_params`
