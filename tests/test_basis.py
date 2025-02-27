@@ -5953,13 +5953,12 @@ def test_all_public_importable_bases_equal():
     # this is the list of publicly available bases
     public_bases = set(dir(nemos.basis))
     # these are all the bases that are imported in the init file
-    imported_bases = set(
-        [
-            k
-            for k, v in nemos.basis.__dict__.items()
-            if inspect.isclass(v) and issubclass(v, nemos.basis._basis.Basis)
-        ]
-    )
+    # Get all classes that are explicitly defined or imported into nemos.basis
+    imported_bases = {
+        name for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
+        if issubclass(obj, nemos.basis._basis.Basis)
+    }
+
     if public_bases != imported_bases:
         raise ValueError(
             "nemos/basis/__init__.py imported basis objects does not match"
