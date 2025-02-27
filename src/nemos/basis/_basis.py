@@ -4,10 +4,10 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
+from contextlib import nullcontext
 from copy import deepcopy
 from functools import wraps
-from contextlib import nullcontext
-from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -529,7 +529,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                     "Basis multiplication error. Integer multiplicative factor must be positive, "
                     f"{other} provided instead."
                 )
-            elif not all(b._has_default_label for _, b in generate_basis_label_pair(self)):
+            elif not all(
+                b._has_default_label for _, b in generate_basis_label_pair(self)
+            ):
                 raise ValueError(
                     "Cannot multiply by an integer a basis including a user-defined labels."
                 )
@@ -829,6 +831,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
     )
     """
+
     def __init__(
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
@@ -1268,6 +1271,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
     )
     """
+
     def __init__(
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:

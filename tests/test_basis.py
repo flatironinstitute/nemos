@@ -16,7 +16,6 @@ import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import HistoryConv, IdentityEval, TransformerBasis
 from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
-
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -6004,7 +6003,6 @@ def test_composite_basis_repr_wrapping():
     )
     assert out.endswith(
         "        basis2='98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='99': MSplineEval(n_basis_funcs=10, order=4),\n)"
-
     )
     assert "    ...\n" in out
 
@@ -6018,6 +6016,7 @@ def test_composite_basis_repr_wrapping():
     )
     assert "    ...\n" in out
 
+
 def test_all_public_importable_bases_equal():
     import nemos.basis
 
@@ -6026,7 +6025,8 @@ def test_all_public_importable_bases_equal():
     # these are all the bases that are imported in the init file
     # Get all classes that are explicitly defined or imported into nemos.basis
     imported_bases = {
-        name for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
+        name
+        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
         if issubclass(obj, nemos.basis._basis.Basis)
     }
 

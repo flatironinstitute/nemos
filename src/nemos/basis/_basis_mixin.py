@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import abc
-from contextlib import contextmanager
 import copy
 import inspect
 import re
+from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
@@ -585,6 +585,7 @@ class CompositeBasisMixin:
     Add overwrites concrete methods or defines abstract methods for composite basis
     (AdditiveBasis and MultiplicativeBasis).
     """
+
     _shallow_copy: bool = False
 
     def __init__(self, basis1: Basis, basis2: Basis, label: Optional[str] = None):
