@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -40,7 +40,6 @@ warnings.filterwarnings(
 )
 ```
 
-
 # Fit grid cell
 
 ```{code-cell} ipython3
@@ -56,7 +55,6 @@ import nemos as nmo
 
 Here we load the data from OSF. The data is a NWB file.
 
-
 ```{code-cell} ipython3
 io = nmo.fetch.download_dandi_data(
     "000582",
@@ -67,7 +65,6 @@ io = nmo.fetch.download_dandi_data(
 ## Pynapple
 
 Let's load the dataset and see what's inside
-
 
 ```{code-cell} ipython3
 dataset = nap.NWBFile(io.read(), lazy_loading=False)
@@ -80,14 +77,12 @@ We thus expect to find neurons tuned to position and head-direction of the anima
 Let's verify that with pynapple.
 First, extract the spike times and the position of the animal.
 
-
 ```{code-cell} ipython3
 spikes = dataset["units"]  # Get spike timings
 position = dataset["SpatialSeriesLED1"]  # Get the tracked orientation of the animal
 ```
 
 Here we compute quickly the head-direction of the animal from the position of the LEDs.
-
 
 ```{code-cell} ipython3
 diff = dataset["SpatialSeriesLED1"].values - dataset["SpatialSeriesLED2"].values
@@ -96,7 +91,6 @@ head_dir = nap.Tsd(dataset["SpatialSeriesLED1"].index, head_dir).dropna()
 ```
 
 Let's quickly compute some tuning curves for head-direction and spatial position.
-
 
 ```{code-cell} ipython3
 hd_tuning = nap.compute_1d_tuning_curves(
@@ -110,7 +104,6 @@ pos_tuning, binsxy = nap.compute_2d_tuning_curves(
 
 Let's plot the tuning curves for each neuron.
 
-
 ```{code-cell} ipython3
 fig = plt.figure(figsize=(12, 4))
 gs = plt.GridSpec(2, len(spikes))
@@ -123,13 +116,11 @@ for i in range(len(spikes)):
 plt.tight_layout()
 ```
 
-
 (grid_cells_nemos)=
 ## NeMoS
 It's time to use NeMoS.
 Let's try to predict the spikes as a function of position and see if we can generate better tuning curves
 First we start by binning the spike trains in 10 ms bins.
-
 
 ```{code-cell} ipython3
 bin_size = 0.01  # second
@@ -138,7 +129,6 @@ counts = spikes.count(bin_size, ep=position.time_support)
 
 We need to interpolate the position to the same time resolution.
 We can still use pynapple for this.
-
 
 ```{code-cell} ipython3
 position = position.interpolate(counts)
@@ -149,19 +139,21 @@ see [here](composing_basis_function) for more details.
 
 ```{code-cell} ipython3
 basis_2d = nmo.basis.BSplineEval(
-    n_basis_funcs=10
-) * nmo.basis.BSplineEval(n_basis_funcs=10)
+    n_basis_funcs=10, label="x"
+) * nmo.basis.BSplineEval(n_basis_funcs=10, label="y")
+
+# add a label for the multiplicative basis
+basis_2d.label = "position"
+basis_2d
 ```
 
 Let's see what a few basis look like. Here we evaluate it on a 100 x 100 grid.
-
 
 ```{code-cell} ipython3
 X, Y, Z = basis_2d.evaluate_on_grid(100, 100)
 ```
 
 We can visualize the basis.
-
 
 ```{code-cell} ipython3
 fig, axs = plt.subplots(2, 5, figsize=(10, 4))
@@ -175,13 +167,11 @@ plt.tight_layout()
 Each basis element represent a possible position of the animal in an arena.
 Now we can "evaluate" the basis for each position of the animal
 
-
 ```{code-cell} ipython3
 position_basis = basis_2d.compute_features(position["x"], position["y"])
 ```
 
 Now try to make sense of what it is
-
 
 ```{code-cell} ipython3
 print(position_basis.shape)
@@ -190,12 +180,11 @@ print(position_basis.shape)
 The shape is (n_samples, n_basis). This means that for each time point "t", we evaluated the basis at the
 corresponding position. Let's plot 5 time steps.
 
-
 ```{code-cell} ipython3
 fig = plt.figure(figsize=(12, 4))
 gs = plt.GridSpec(2, 5)
 xt = np.arange(0, 1000, 200)
-cmap = plt.get_cmap("rainbow")
+cmap = plt.colormaps["rainbow"]
 colors = np.linspace(0, 1, len(xt))
 for cnt, i in enumerate(xt):
     ax = plt.subplot(gs[0, i // 200])
@@ -217,7 +206,6 @@ plt.tight_layout()
 Now we can fit the GLM and see what we get. In this case, we use Ridge for regularization.
 Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 
-
 ```{code-cell} ipython3
 model = nmo.glm.GLM(
     regularizer="Ridge",
@@ -230,7 +218,6 @@ model = nmo.glm.GLM(
 
 Let's fit the model
 
-
 ```{code-cell} ipython3
 neuron = 7
 
@@ -239,13 +226,11 @@ model.fit(position_basis, counts[:, neuron])
 
 We can compute the model predicted firing rate.
 
-
 ```{code-cell} ipython3
 rate_pos = model.predict(position_basis)
 ```
 
 And compute the tuning curves/
-
 
 ```{code-cell} ipython3
 model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
@@ -254,7 +239,6 @@ model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
 ```
 
 Let's compare the tuning curve predicted by the model with that based on the actual spikes.
-
 
 ```{code-cell} ipython3
 smooth_pos_tuning = gaussian_filter(pos_tuning[neuron], sigma=1)
@@ -277,7 +261,6 @@ We can fix this by tuning the regularization strength by means of cross-validati
 This can be done through scikit-learn. Let's apply a grid-search over different
 values, and select the regularization by k-fold cross-validation.
 
-
 ```{code-cell} ipython3
 # import the grid-search cross-validation from scikit-learn
 from sklearn.model_selection import GridSearchCV
@@ -294,13 +277,11 @@ cls.fit(position_basis, counts[:, neuron])
 
 Let's get the best estimator and see what we get.
 
-
 ```{code-cell} ipython3
 best_model = cls.best_estimator_
 ```
 
 Let's predict and compute the tuning curves once again.
-
 
 ```{code-cell} ipython3
 # predict the rate with the selected model
@@ -313,7 +294,6 @@ best_model_tuning, binsxy = nap.compute_2d_tuning_curves_continuous(
 ```
 
 We can now plot the results.
-
 
 ```{code-cell} ipython3
 # plot the resutls

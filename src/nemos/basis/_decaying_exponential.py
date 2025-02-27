@@ -41,10 +41,10 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
         mode="eval",
         label: Optional[str] = "OrthExponentialBasis",
     ):
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
-        super().__init__(
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
+        Basis.__init__(
+            self,
             mode=mode,
-            label=label,
         )
         self.decay_rates = decay_rates
         self._check_rates()

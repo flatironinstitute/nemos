@@ -97,7 +97,7 @@ def plot_custom_features():
 
     # Plot stacked signals
     plt.figure(figsize=(12, 4))
-    cmap = plt.cm.get_cmap("rainbow")
+    cmap = plt.colormaps["rainbow"]
     colors = cmap(np.linspace(0, 1, num_signals))
 
     ax = plt.subplot(111)

@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -39,7 +39,6 @@ warnings.filterwarnings(
     category=RuntimeWarning,
 )
 ```
-
 
 # GLM Demo: Toy Model Examples
 
@@ -106,7 +105,6 @@ Currently, we implemented the un-regularized, Ridge, Lasso, and Group-Lasso regu
 The default for the GLM class is the [`PoissonObservations`](nemos.observation_models.PoissonObservations) with log-link function with a Ridge regularization.
 Here is how to define the model.
 
-
 ```{code-cell} ipython3
 # default Poisson GLM with Ridge regularization and Poisson observation model.
 model = nmo.glm.GLM()
@@ -117,7 +115,6 @@ print("Observation model:", type(model.observation_model))
 
 ### Model Configuration
 One could visualize the model hyperparameters by calling [`get_params`](nemos.glm.GLM.get_params) method.
-
 
 ```{code-cell} ipython3
 # get the glm model parameters only
@@ -137,7 +134,6 @@ for key, value in model.get_params(deep=True).items():
 These parameters can be configured at initialization and/or
 set after the model is initialized with the following syntax:
 
-
 ```{code-cell} ipython3
 # Poisson observation model with soft-plus NL
 observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
@@ -155,7 +151,6 @@ print("Observation model:", type(model.observation_model))
 ```
 
 Hyperparameters can be set at any moment via the [`set_params`](nemos.glm.GLM.set_params) method.
-
 
 ```{code-cell} ipython3
 model.set_params(
@@ -184,7 +179,6 @@ providing the design tensor and the population counts.
 Additionally one may provide an initial parameter guess.
 The same exact syntax works for any configuration.
 
-
 ```{code-cell} ipython3
 # fit a ridge regression Poisson GLM
 model = nmo.glm.GLM(regularizer="Ridge", regularizer_strength=0.1)
@@ -205,7 +199,6 @@ Here is an example of how we can perform 5-fold cross-validation via `scikit-lea
 
 **Ridge**
 
-
 ```{code-cell} ipython3
 parameter_grid = {"regularizer_strength": np.logspace(-1.5, 1.5, 6)}
 # in practice, you should use more folds than 2, but for the purposes of this
@@ -223,7 +216,6 @@ We can compare the Ridge cross-validated results with other regularization schem
 
 **Lasso**
 
-
 ```{code-cell} ipython3
 model.set_params(regularizer=nmo.regularizer.Lasso(), solver_name="ProximalGradient")
 cls = model_selection.GridSearchCV(model, parameter_grid, cv=2)
@@ -236,7 +228,6 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 ```
 
 **Group Lasso**
-
 
 ```{code-cell} ipython3
 # define groups by masking. Mask size (n_groups, n_features)
@@ -260,7 +251,6 @@ print("Recovered weights: ", cls.best_estimator_.coef_)
 ## Simulate Spikes
 We can generate spikes in response to a feedforward-stimuli
 through the `model.simulate` method.
-
 
 ```{code-cell} ipython3
 # here we are creating a new data input, of 20 timepoints (arbitrary)
@@ -286,7 +276,6 @@ dynamics of your recurrently coupled model are unstable, you can try a `soft-plu
 instead of an exponential, and you can "shrink" your weights until stability is reached.
 :::
 
-
 ```{code-cell} ipython3
 # Neural population parameters
 n_neurons = 2
@@ -299,7 +288,6 @@ filters as a difference of two Gamma probability density function.
 The negative component will capture inhibitory effects such as the
 refractory period of a neuron, while the positive component will
 describe excitation.
-
 
 ```{code-cell} ipython3
 np.random.seed(101)
@@ -340,7 +328,6 @@ intercept = -4 * np.ones(n_neurons)
 We can check that our approximation worked by plotting the original filters
 and the basis expansion
 
-
 ```{code-cell} ipython3
 # plot coupling functions
 n_basis_coupling = coupling_basis.shape[1]
@@ -358,7 +345,6 @@ plt.tight_layout()
 
 Define a squared stimulus current for the first neuron, and no stimulus for
 the second neuron
-
 
 ```{code-cell} ipython3
 # define a squared current parameters
@@ -395,7 +381,6 @@ init_spikes = np.zeros((coupling_filter_duration, n_neurons))
 
 We can now simulate spikes by calling the `simulate_recurrent` function for the `nemos.simulate` module.
 
-
 ```{code-cell} ipython3
 # call simulate, with both the recurrent coupling
 # and the input
@@ -411,7 +396,6 @@ spikes, rates = nmo.simulation.simulate_recurrent(
 ```
 
 And finally plot the results for both neurons.
-
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 4
@@ -457,7 +441,7 @@ if path.exists():
   fig.savefig(path / "plot_02_glm_demo.svg")
 ```
 
-
 ## References
 (ref-1)=
 [1] [Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.](https://arxiv.org/abs/2010.12362)
+

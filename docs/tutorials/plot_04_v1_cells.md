@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -100,8 +100,6 @@ def fill_forward(time_series, data, ep=None, out_of_range=np.nan):
 
 ## Data Streaming
 
-
-
 ```{code-cell} ipython3
 path = nmo.fetch.fetch_data("m691l1.nwb")
 ```
@@ -110,20 +108,17 @@ path = nmo.fetch.fetch_data("m691l1.nwb")
 The data have been copied to your local station.
 We are gonna open the NWB file with pynapple
 
-
 ```{code-cell} ipython3
 dataset = nap.load_file(path)
 ```
 
 What does it look like?
 
-
 ```{code-cell} ipython3
 print(dataset)
 ```
 
 Let's extract the data.
-
 
 ```{code-cell} ipython3
 epochs = dataset["epochs"]
@@ -133,7 +128,6 @@ stimulus = dataset["whitenoise"]
 
 Stimulus is white noise shown at 40 Hz
 
-
 ```{code-cell} ipython3
 fig, ax = plt.subplots(1, 1, figsize=(12,4))
 ax.imshow(stimulus[0], cmap='Greys_r')
@@ -141,7 +135,6 @@ stimulus.shape
 ```
 
 There are 73 neurons recorded together in V1. To fit the GLM faster, we will focus on one neuron.
-
 
 ```{code-cell} ipython3
 print(units)
@@ -185,7 +178,6 @@ In practice, we do not just the stimulus on screen, but in some window of
 time around it. (it takes some time for info to travel through the eye/LGN to
 V1). Pynapple makes this easy:
 
-
 ```{code-cell} ipython3
 sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
                                         windowsize=(-0.15, 0.0))
@@ -194,20 +186,17 @@ sta = nap.compute_event_trigger_average(spikes, stimulus, binsize=0.025,
 sta is a [`TsdTensor`](https://pynapple.org/generated/pynapple.TsdTensor.html), which gives us the 2d receptive field at each of the
 time points.
 
-
 ```{code-cell} ipython3
 sta
 ```
 
 We index into this in a 2d manner: row, column (here we only have 1 column).
 
-
 ```{code-cell} ipython3
 sta[1, 0]
 ```
 
 we can easily plot this
-
 
 ```{code-cell} ipython3
 fig, axes = plt.subplots(1, len(sta), figsize=(3*len(sta),3))
@@ -222,7 +211,6 @@ orientation, and spatial frequency. that is, looks Gabor-ish
 
 To convert this to the spatial filter we'll use for the GLM, let's take the
 average across the bins that look informative: -.125 to -.05
-
 
 ```{code-cell} ipython3
 # mkdocs_gallery_thumbnail_number = 3
@@ -258,7 +246,6 @@ This receptive field gives us the spatial part of the linear response: it
 gives a map of weights that we use for a weighted sum on an image. There are
 multiple ways of performing this operation:
 
-
 ```{code-cell} ipython3
 # element-wise multiplication and sum
 print((receptive_field * stimulus[0]).sum())
@@ -274,7 +261,6 @@ methods like `np.tensordot`.
 We'll use einsum to do this, which is a convenient way of representing many
 different matrix operations:
 
-
 ```{code-cell} ipython3
 filtered_stimulus = np.einsum('t h w, h w -> t', stimulus, receptive_field)
 ```
@@ -284,7 +270,6 @@ and multiply and sum to get an array of shape `(t,)`. This performs the same
 operations as above.
 
 And this remains a pynapple object, so we can easily visualize it!
-
 
 ```{code-cell} ipython3
 fig, ax = plt.subplots(1, 1, figsize=(12,4))
@@ -302,7 +287,6 @@ This, then, is the spatial component of our input, as described above.
 We'll now use the GLM to fit the temporal component. To do that, let's get
 this and our spike counts into the proper format for NeMoS:
 
-
 ```{code-cell} ipython3
 # grab spikes from when we were showing our stimulus, and bin at 1 msec
 # resolution
@@ -318,7 +302,6 @@ and so we used `bin_average` to down-sample to the appropriate rate. When the
 input is at a lower rate, we need to think a little more carefully about how
 to up-sample.
 
-
 ```{code-cell} ipython3
 print(counts[:5])
 print(filtered_stimulus[:5])
@@ -328,7 +311,6 @@ What was the visual input to the neuron at time 0.005? It was the same input
 as time 0. At time 0.0015? Same thing, up until we pass time 0.025017. Thus,
 we want to "fill forward" the values of our input, and we have pynapple
 convenience function to do so:
-
 
 ```{code-cell} ipython3
 filtered_stimulus = fill_forward(counts, filtered_stimulus)
@@ -341,7 +323,6 @@ values the way we'd like.
 Now, similar to the [head direction tutorial](plot_02_head_direction), we'll
 use the log-stretched raised cosine basis to create the predictor for our
 GLM:
-
 
 ```{code-cell} ipython3
 window_size = 100
@@ -357,7 +338,6 @@ n_features is the singleton dimension from filtered_stimulus.
 
 Now we're ready to fit the model! Let's do it, same as before:
 
-
 ```{code-cell} ipython3
 model = nmo.glm.GLM()
 model.fit(convolved_input, counts)
@@ -365,7 +345,6 @@ model.fit(convolved_input, counts)
 
 We have our coefficients for each of our 8 basis functions, let's combine
 them to get the temporal time course of our input:
-
 
 ```{code-cell} ipython3
 time, basis_kernels = basis.evaluate_on_grid(window_size)
