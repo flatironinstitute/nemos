@@ -45,7 +45,7 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
     ------
     ValueError
         If width <= 1 or 2*width is not a positive integer. Values that do not match
-        this constraint will result in:
+        this constraint will result in the following, which contribute to aliasing:
         - No overlap between bumps (width < 1).
         - Oscillatory behavior when summing the basis elements (2*width not integer).
     """
@@ -92,14 +92,15 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         ------
         ValueError
             If width <= 1 or 2*width is not a positive integer. Values that do not match
-            this constraint will result in:
+            this constraint will result in the following, which contribute to aliasing:
             - No overlap between bumps (width < 1).
             - Oscillatory behavior when summing the basis elements (2*width not integer).
         """
         if width <= 1 or (not np.isclose(width * 2, round(2 * width))):
             raise ValueError(
                 f"Invalid raised cosine width. Width must be strictly greater than 1 and "
-                f"2*width must be a integer, but got width={width} instead!"
+                f"2*width must be a integer, but got width={width} instead! At other "
+                "values, basis sampling will lead to aliasing."
             )
 
     @support_pynapple(conv_type="numpy")
