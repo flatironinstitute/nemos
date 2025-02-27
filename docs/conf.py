@@ -167,7 +167,7 @@ nitpicky = True
 exclude_tutorials = os.environ.get("EXCLUDE_TUTORIALS", "false").lower() == "true"
 
 if exclude_tutorials:
-    nb_execution_excludepatterns = ["tutorials/**", "how_to_guide/**", "background/**"]
+    nb_execution_excludepatterns = ["tutorials/*md", "how_to_guide/*md", "background/*md", "background/*/*md"]
 
 viewcode_follow_imported_members = True
 

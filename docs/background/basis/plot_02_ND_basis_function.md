@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.16.4
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -123,23 +123,22 @@ $$
 
 Here, we simply add two basis objects, `a_basis` and `b_basis`, together to define the additive basis.
 
-
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 import numpy as np
 import nemos as nmo
 
 # Define 1D basis objects
-a_basis = nmo.basis.MSplineEval(n_basis_funcs=15, order=3)
-b_basis = nmo.basis.RaisedCosineLogEval(n_basis_funcs=14)
+a_basis = nmo.basis.MSplineEval(n_basis_funcs=15, order=3, label="a")
+b_basis = nmo.basis.RaisedCosineLogEval(n_basis_funcs=14, label="b")
 
 # Define the 2D additive basis object
 additive_basis = a_basis + b_basis
+additive_basis
 ```
 
 Evaluating the additive basis will require two inputs, one for each coordinate.
 The total number of elements of the additive basis will be the sum of the elements of the 1D basis.
-
 
 ```{code-cell} ipython3
 # Define a trajectory with 1000 time-points representing the recorded trajectory of the animal
@@ -154,13 +153,13 @@ eval_basis = additive_basis.compute_features(x_coord, y_coord)
 
 print(f"Sum of two 1D splines with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples:\n"
-      f"\t- a_basis had {a_basis.n_basis_funcs} elements\n\t- b_basis had {b_basis.n_basis_funcs} elements.")
+      f"\t- a_basis had {additive_basis['a'].n_basis_funcs} elements.\n"
+      f"\t- b_basis had {additive_basis['b'].n_basis_funcs} elements.")
 ```
 
 (plotting-2d-additive-basis-elements)=
 #### Plotting 2D Additive Basis Elements
 Let's select and plot a basis element from each of the basis we added.
-
 
 ```{code-cell} ipython3
 basis_a_element = 5
@@ -184,20 +183,17 @@ We can visualize how these elements are extended in 2D by evaluating the additiv
 on a grid of points that spans its domain and plotting the result.
 We use the `evaluate_on_grid` method for this.
 
-
 ```{code-cell} ipython3
 X, Y, Z = additive_basis.evaluate_on_grid(200, 200)
 ```
 
 We can select the indices of the 2D additive basis that corresponds to the 1D original elements.
 
-
 ```{code-cell} ipython3
 basis_elem_idx = [basis_a_element, a_basis.n_basis_funcs + basis_b_element]
 ```
 
 Finally, we can plot the 2D counterparts.
-
 
 ```{code-cell} ipython3
 _, axs = plt.subplots(1, 2, subplot_kw={'aspect': 1})
@@ -218,6 +214,19 @@ plt.tight_layout()
 plt.show()
 ```
 
+If we don't want to do the index algebra ourself, we can use the `split_by_feature` method to split `Z` for each additive element of the basis.
+
+```{code-cell} ipython3
+Z_split = additive_basis.split_by_feature(Z, axis=-1)
+print(Z_split["a"].shape, Z_split["b"].shape)
+```
+
+And then index directly the splitted array.
+
+```{code-cell} ipython3
+element_a, element_b = Z_split["a"][basis_a_element], Z_split["b"][basis_b_element]
+```
+
 ### Multiplicative Basis Object
 
 If the aim is to capture interactions between the coordinates, the response function can be modeled as the external
@@ -230,7 +239,6 @@ $$
 In this model, we define the 2D basis function as the product of two 1D basis objects.
 This allows the response to capture non-linear and interaction effects between the x and y coordinates.
 
-
 ```{code-cell} ipython3
 # 2D basis function as the product of the two 1D basis objects
 prod_basis = a_basis * b_basis
@@ -238,7 +246,6 @@ prod_basis = a_basis * b_basis
 
 Again evaluating the basis will require 2 inputs.
 The number of elements of the product basis will be the product of the elements of the two 1D bases.
-
 
 ```{code-cell} ipython3
 # Evaluate the product basis at the x and y coordinates
@@ -255,9 +262,7 @@ print(f"Product of two 1D splines with {eval_basis.shape[1]} "
 Plotting works in the same way as before. To demonstrate that, we select a few pairs of 1D basis elements,
 and we visualize the corresponding product.
 
-
 ```{code-cell} ipython3
-
 X, Y, Z = prod_basis.evaluate_on_grid(200, 200)
 
 # basis element pairs
@@ -299,7 +304,6 @@ A practical example would be characterizing the responses to position
 in a linear maze and the LFP phase angle.
 :::
 
-
 N-Dimensional Basis
 -------------------
 Sometimes it may be useful to model even higher dimensional interactions, for example between the heding direction of
@@ -330,7 +334,6 @@ print(f"Product of three 1D splines results in {prod_basis_3.n_basis_funcs} "
 ```
 
 The evaluation of the product of 3 basis is a 4 dimensional tensor; we can visualize slices of it.
-
 
 ```{code-cell} ipython3
 X, Y, W, Z = prod_basis_3.evaluate_on_grid(30, 30, 30)
@@ -368,7 +371,6 @@ full domain of the basis.
 
 Here we demonstrate a shortcut syntax for multiplying bases of the same class.
 This is achieved using the power operator with an integer exponent.
-
 
 ```{code-cell} ipython3
 # First, let's define a basis `power_basis` that is equivalent to `prod_basis_3`,
