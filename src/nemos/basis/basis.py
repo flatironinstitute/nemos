@@ -9,25 +9,11 @@ from numpy.typing import ArrayLike, NDArray
 
 from ..typing import FeatureMatrix
 from ._basis import add_docstring
-from ._basis_mixin import (
-    AtomicBasisMixin,
-    ConvBasisMixin,
-    EvalBasisMixin,
-)
-from ._composition_utils import __PUBLIC_BASES__
+from ._basis_mixin import AtomicBasisMixin, ConvBasisMixin, EvalBasisMixin
 from ._decaying_exponential import OrthExponentialBasis
 from ._identity import HistoryBasis, IdentityBasis
 from ._raised_cosine_basis import RaisedCosineBasisLinear, RaisedCosineBasisLog
 from ._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
-
-# add transformer basis here to avoid flake8 complaining
-from ._transformer_basis import TransformerBasis
-
-__all__ = __PUBLIC_BASES__ + ["TransformerBasis"]
-
-
-def __dir__() -> list[str]:
-    return __all__
 
 
 class BSplineEval(EvalBasisMixin, BSplineBasis):
