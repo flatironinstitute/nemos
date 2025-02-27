@@ -96,8 +96,6 @@ nmo.basis.BSplineEval(5, label="x") + nmo.basis.MSplineEval(5, label="x")
 Because we ensure that all basis labels are unique, you can always retrieve a specific basis using its label, even when the composite basis is made up of many individual basis objects.
 
 ```{code-cell} ipython3
-label = "label_"
-
 # add 10 basis
 composite_bas = nmo.basis.MSplineEval(4, label="label_0")
 for k in range(1, 10):
