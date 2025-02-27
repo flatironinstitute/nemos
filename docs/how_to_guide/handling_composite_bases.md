@@ -119,7 +119,7 @@ nmo.basis.BSplineEval(10) + nmo.basis.BSplineEval(5)
 ```
 
 ### Modifying Basis Parameters with `get_params` and `set_params`
-Another way to get and set the basis parameter is via the `get_params` and `set_params` methods. This is how `scikit-learn` interacts with basis objects, and so enables cross-validation,.
+Another way to get and set the basis parameter is via the `get_params` and `set_params` methods. This is how `scikit-learn` interacts with basis objects, and so enables cross-validation.
 
 The `get_params` method returns a dictionary, containing all the parameters. The dictionary keys start with the basis label, followed by a double underscore and the name of the parameter.
 
