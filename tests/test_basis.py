@@ -15,7 +15,7 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import HistoryConv, IdentityEval, TransformerBasis
-from nemos.basis._basis import AdditiveBasis, MultiplicativeBasis, add_docstring
+from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -2558,6 +2558,20 @@ class TestAdditiveBasis(CombinedBasis):
         assert (add + add)._input_shape_product == (1, 6, 1, 6)
 
     @pytest.mark.parametrize(
+        "bas", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_rmul_lmul(self, bas, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas, basis_class_specific_params, window_size=10
+        )
+        out = 10 * basis_obj
+        assert isinstance(out, AdditiveBasis)
+        assert sum((1 for _ in out._iterate_over_components())) == 10
+        out = basis_obj * 10
+        assert isinstance(out, AdditiveBasis)
+        assert sum((1 for _ in out._iterate_over_components())) == 10
+
+    @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
     )
     @pytest.mark.parametrize(
@@ -4820,15 +4834,15 @@ def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
         raise_exception_value = False
 
     basis_obj = CombinedBasis.instantiate_basis(
-        5, basis_class, basis_class_specific_params, window_size=10
+        5, basis_class, basis_class_specific_params, window_size=5
     )
 
     if raise_exception_type:
-        with pytest.raises(TypeError, match=r"Exponent should be an integer\!"):
+        with pytest.raises(TypeError, match=r"Basis exponent should be an integer\!"):
             basis_obj**exponent
     elif raise_exception_value:
         with pytest.raises(
-            ValueError, match=r"Exponent should be a non-negative integer\!"
+            ValueError, match=r"Basis exponent should be a non-negative integer\!"
         ):
             basis_obj**exponent
     else:
@@ -4850,6 +4864,52 @@ def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
             out[non_nan],
         )
         assert np.all(np.isnan(out[~non_nan]))
+
+
+@pytest.mark.parametrize("mul", [-1, 0, 0.5, 1, 2, 3])
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
+def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
+    """Test if the power behaves as expected."""
+    raise_exception_type = not isinstance(mul, int)
+
+    if not raise_exception_type:
+        raise_exception_value = mul <= 0
+    else:
+        raise_exception_value = False
+
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+
+    if raise_exception_type:
+        with pytest.raises(TypeError, match=r"Basis multiplicative factor should be"):
+            basis_obj * mul
+    elif raise_exception_value:
+        with pytest.raises(ValueError, match=r"Basis multiplication error"):
+            basis_obj * mul
+    else:
+
+        for basis_mul in [basis_obj * mul, mul * basis_obj]:
+            samples = np.linspace(0, 1, 10)
+            eval_mul = basis_mul.compute_features(
+                *[samples] * basis_mul._n_input_dimensionality
+            )
+
+            if mul == 2:
+                basis_add = basis_obj + basis_obj
+            elif mul == 3:
+                basis_add = basis_obj + basis_obj + basis_obj
+            else:
+                basis_add = basis_obj
+            non_nan = ~np.isnan(eval_mul)
+            out = basis_add.compute_features(
+                *[samples] * basis_add._n_input_dimensionality
+            )
+            assert np.allclose(
+                eval_mul[non_nan],
+                out[non_nan],
+            )
+            assert np.all(np.isnan(out[~non_nan]))
 
 
 @pytest.mark.parametrize(
@@ -5928,7 +5988,7 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "basis2='BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
+        "MultiplicativeBasis(\n                        ...\n                    ),\n                ),\n            ),\n            basis2=BSplineEval(n_basis_funcs=10, order=4),\n        ),\n    ),\n)"
     )
     assert "    ...\n" in out
 
@@ -5946,6 +6006,16 @@ def test_composite_basis_repr_wrapping():
     )
     assert "    ...\n" in out
 
+    bas = basis.MSplineEval(10) * 100
+    out = repr(bas)
+    assert out.startswith(
+        "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
+    )
+    assert out.endswith(
+        "AdditiveBasis(\n                        ...\n                    ),\n                ),\n            ),\n            basis2=MSplineEval(n_basis_funcs=10, order=4),\n        ),\n    ),\n)"
+    )
+    assert "    ...\n" in out
+
 
 def test_all_public_importable_bases_equal():
     import nemos.basis
@@ -5955,7 +6025,8 @@ def test_all_public_importable_bases_equal():
     # these are all the bases that are imported in the init file
     # Get all classes that are explicitly defined or imported into nemos.basis
     imported_bases = {
-        name for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
+        name
+        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
         if issubclass(obj, nemos.basis._basis.Basis)
     }
 

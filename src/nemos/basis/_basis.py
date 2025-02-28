@@ -4,6 +4,8 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
+from contextlib import nullcontext
+from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
 
@@ -18,6 +20,44 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+
+
+def _bisect_mul(base: Basis, mul: int):
+    """Speed up adding n basis of the same type
+
+    Achieve substantial speed-up minimizing the additions and
+    deep-copy operations.
+    """
+    if mul == 1:
+        return deepcopy(base)  # Base case
+    half = _bisect_mul(base, mul // 2)
+    context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
+    with context(True):
+        addition = half + deepcopy(half)
+    if mul % 2:
+        with addition._set_shallow_copy_temporarily(True):
+            addition = addition + deepcopy(base)
+    return addition
+
+
+def _bisect_power(base: Basis, expon: int):
+    """Speed up multiplying n basis of the same type.
+
+    Achieve substantial speed-up minimizing the multiplication and
+    deep-copy operations.
+    """
+    if expon == 1:
+        return deepcopy(base)  # Base case
+    squared = _bisect_power(base, expon // 2)
+
+    context = getattr(squared, "_set_shallow_copy_temporarily", nullcontext)
+
+    with context(True):
+        squared = squared * deepcopy(squared)
+    if expon % 2:
+        with squared._set_shallow_copy_temporarily(True):
+            squared = squared * deepcopy(base)
+    return squared
 
 
 def add_docstring(method_name, cls):
@@ -466,7 +506,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         return AdditiveBasis(self, other)
 
-    def __mul__(self, other: Basis) -> MultiplicativeBasis:
+    def __rmul__(self, other: Basis | int):
+        return self.__mul__(other)
+
+    def __mul__(self, other: Basis | int) -> MultiplicativeBasis:
         """
         Multiply two Basis objects together.
 
@@ -480,6 +523,23 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         :
             The resulting Basis object.
         """
+        if isinstance(other, int):
+            if other <= 0:
+                raise ValueError(
+                    "Basis multiplication error. Integer multiplicative factor must be positive, "
+                    f"{other} provided instead."
+                )
+            elif not all(
+                b._has_default_label for _, b in generate_basis_label_pair(self)
+            ):
+                raise ValueError(
+                    "Cannot multiply by an integer a basis including a user-defined labels."
+                )
+            return _bisect_mul(self, other)
+        if not isinstance(other, Basis):
+            raise TypeError(
+                "Basis multiplicative factor should be a Basis object or a positive integer!"
+            )
         return MultiplicativeBasis(self, other)
 
     def __pow__(self, exponent: int) -> MultiplicativeBasis:
@@ -506,15 +566,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             If the integer is zero or negative.
         """
         if not isinstance(exponent, int):
-            raise TypeError("Exponent should be an integer!")
+            raise TypeError("Basis exponent should be an integer!")
 
         if exponent <= 0:
-            raise ValueError("Exponent should be a non-negative integer!")
+            raise ValueError("Basis exponent should be a non-negative integer!")
 
-        result = self
-        for _ in range(exponent - 1):
-            result = result * self
-        return result
+        return _bisect_power(self, exponent)
 
     def __repr__(self):
         return format_repr(self)
@@ -1219,6 +1276,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
+
         Basis.__init__(self, mode="composite")
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
