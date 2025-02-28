@@ -69,7 +69,8 @@ class Base:
         if not params:
             # Simple optimization to gain speed (inspect is slow)
             return self
-        valid_params = self.get_params(deep=True)
+        get_params = getattr(self, "__sklearn_get_params__", self.get_params)
+        valid_params = get_params(deep=True)
         nested_params: defaultdict = defaultdict(dict)  # grouped by prefix
         for key, value in params.items():
             key, delim, sub_key = key.partition("__")

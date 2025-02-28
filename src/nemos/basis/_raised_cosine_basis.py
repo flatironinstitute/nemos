@@ -57,10 +57,10 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
-        super().__init__(
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
+        Basis.__init__(
+            self,
             mode=mode,
-            label=label,
         )
         self._n_input_dimensionality = 1
         self._check_width(width)

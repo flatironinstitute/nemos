@@ -4,6 +4,7 @@ import pynapple as nap
 import pytest
 from sklearn import pipeline
 from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
 
 from nemos import basis
 from nemos.basis._transformer_basis import TransformerBasis
@@ -200,3 +201,103 @@ def test_sklearn_transformer_pipeline_pynapple(
     assert np.all(rate.t == X_nap.t)
     assert np.all(rate.time_support == X_nap.time_support)
     assert np.sum(np.isnan(rate.d)) == expected_nans
+
+
+def test_pipeline_additive_bases_with_labels(poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.RaisedCosineLinearEval(5, label="x") + basis.MSplineEval(5, label="y")
+    pipe = Pipeline([("bas", bas), ("fit", model)])
+    params = pipe.get_params()
+    expected_keys = {
+        "bas__x__bounds",
+        "bas__x__label",
+        "bas__x__n_basis_funcs",
+        "bas__x__width",
+        "bas__x",
+        "bas__y__bounds",
+        "bas__y__label",
+        "bas__y__n_basis_funcs",
+        "bas__y__order",
+        "bas__y",
+    }
+    assert expected_keys.issubset(params.keys())
+
+    # try set_items
+    new_items = {
+        "bas__x__bounds": (-1, 1),
+        "bas__y__bounds": (-2, 2),
+        "bas__x__n_basis_funcs": 4,
+        "bas__y__n_basis_funcs": 6,
+        "bas__x__width": 4,
+    }
+    pipe.set_params(**new_items)
+    nem_params = pipe.get_params()
+    assert all(new_items[k] == nem_params[k] for k in new_items.keys())
+
+
+def test_pipeline_multiplicative_bases_with_labels(poissonGLM_model_instantiation):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.RaisedCosineLinearEval(5, label="x") * basis.MSplineEval(5, label="y")
+    pipe = Pipeline([("bas", bas), ("fit", model)])
+    params = pipe.get_params()
+    expected_keys = {
+        "bas__x__bounds",
+        "bas__x__label",
+        "bas__x__n_basis_funcs",
+        "bas__x__width",
+        "bas__x",
+        "bas__y__bounds",
+        "bas__y__label",
+        "bas__y__n_basis_funcs",
+        "bas__y__order",
+        "bas__y",
+    }
+    assert expected_keys.issubset(params.keys())
+
+    # try set_items
+    new_items = {
+        "bas__x__bounds": (-1, 1),
+        "bas__y__bounds": (-2, 2),
+        "bas__x__n_basis_funcs": 4,
+        "bas__y__n_basis_funcs": 6,
+        "bas__x__width": 4,
+    }
+    pipe.set_params(**new_items)
+    nem_params = pipe.get_params()
+    assert all(new_items[k] == nem_params[k] for k in new_items.keys())
+
+
+def test_cross_validate_multiplicative_basis_in_pipe_with_label(
+    poissonGLM_model_instantiation,
+):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.RaisedCosineLinearEval(4, label="x") * basis.MSplineEval(5, label="y")
+    pipe = Pipeline(
+        [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
+    )
+    cls = GridSearchCV(
+        pipe,
+        param_grid={"bas__x__n_basis_funcs": [3, 4], "bas__y__n_basis_funcs": [6]},
+        cv=2,
+    )
+    cls.fit(X[:, :2], y)
+    assert cls.best_estimator_.get_params()["bas__x__n_basis_funcs"] in [3, 4]
+    assert cls.best_estimator_.get_params()["bas__y__n_basis_funcs"] == 6
+
+
+def test_cross_validate_additive_basis_in_pipe_with_label(
+    poissonGLM_model_instantiation,
+):
+    X, y, model, _, _ = poissonGLM_model_instantiation
+    bas = basis.RaisedCosineLinearEval(4, label="x") + basis.MSplineEval(5, label="y")
+    pipe = Pipeline(
+        [("bas", bas.to_transformer().set_input_shape(1, 1)), ("fit", model)]
+    )
+    cls = GridSearchCV(
+        pipe,
+        param_grid={"bas__x__n_basis_funcs": [3, 4], "bas__y__n_basis_funcs": [6]},
+        cv=2,
+    )
+    cls.fit(X[:, :2], y)
+    assert cls.best_estimator_.get_params()["bas__x__n_basis_funcs"] in [3, 4]
+    assert cls.best_estimator_.get_params()["bas__y__n_basis_funcs"] == 6

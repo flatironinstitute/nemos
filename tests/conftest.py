@@ -22,6 +22,7 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 from nemos.basis import AdditiveBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
+from nemos.basis._transformer_basis import TransformerBasis
 
 # shut-off conversion warnings
 nap.nap_config.suppress_conversion_warnings = True
@@ -117,7 +118,7 @@ def list_all_basis_classes(filter_basis="all") -> list[type]:
     ] + [
         bas
         for _, bas in inspect_utils.get_non_abstract_classes(nmo.basis._basis)
-        if bas != basis.TransformerBasis
+        if bas != TransformerBasis
     ]
     if filter_basis != "all":
         all_basis = [a for a in all_basis if filter_basis in a.__name__]
