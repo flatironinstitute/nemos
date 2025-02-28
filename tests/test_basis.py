@@ -1826,21 +1826,21 @@ class TestRaisedCosineLogBasis(BasisFuncsTesting):
                 0.5,
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    match=r"Invalid raised cosine width. Width must be strictly greater",
                 ),
             ),
             (
                 10.3,
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    match=r"Invalid raised cosine width. Width must be strictly greater",
                 ),
             ),
             (
                 -10,
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    match=r"Invalid raised cosine width. Width must be strictly greater",
                 ),
             ),
             (None, pytest.raises(TypeError, match="'<=' not supported between")),
@@ -1949,14 +1949,14 @@ class TestRaisedCosineLinearBasis(BasisFuncsTesting):
                 0.5,
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    match=r"Invalid raised cosine width. Width must be strictly greater",
                 ),
             ),
             (
                 -10,
                 pytest.raises(
                     ValueError,
-                    match=r"Invalid raised cosine width\. 2\*width must be a positive",
+                    match=r"Invalid raised cosine width. Width must be strictly greater",
                 ),
             ),
         ],
