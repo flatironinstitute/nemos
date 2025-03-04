@@ -402,7 +402,7 @@ class ConvBasisMixin:
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
         conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
-        return np.reshape(conv, shape=(conv.shape[0], -1))
+        return np.reshape(conv, (conv.shape[0], -1))
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
