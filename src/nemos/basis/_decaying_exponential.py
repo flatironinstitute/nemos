@@ -123,7 +123,7 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
@@ -141,7 +141,6 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
         basis_funcs
             Evaluated exponentially decaying basis functions, numerically
             orthogonalized, shape ``(n_samples, n_basis_funcs)``.
-
         """
         self._check_sample_size(sample_pts)
         sample_pts, _ = min_max_rescale_samples(

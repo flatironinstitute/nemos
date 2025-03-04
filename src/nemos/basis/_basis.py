@@ -40,7 +40,7 @@ def check_transform_input(func: Callable) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
-    when the wrong number of input is provided to _evaluate.
+    when the wrong number of input is provided to evaluate.
     """
 
     @wraps(func)
@@ -266,7 +266,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -382,7 +382,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # evaluates the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self._evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        Y = self.evaluate(*(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
@@ -853,7 +853,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -881,13 +881,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> additive_basis = basis_1 + basis_2
 
         >>> # call the basis.
-        >>> out = additive_basis._evaluate(x, y)
+        >>> out = additive_basis.evaluate(x, y)
 
         """
         X = np.hstack(
             (
-                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
             )
         )
         return X
@@ -1266,7 +1266,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Evaluate the basis at the input samples.
 
@@ -1287,12 +1287,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> import nemos as nmo
         >>> mult_basis = nmo.basis.BSplineEval(5) * nmo.basis.RaisedCosineLinearEval(6)
         >>> x, y = np.random.randn(2, 30)
-        >>> X = mult_basis._evaluate(x, y)
+        >>> X = mult_basis.evaluate(x, y)
         """
         X = np.asarray(
             row_wise_kron(
-                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )

@@ -474,7 +474,7 @@ class TestSharedMethods:
             **extra_decay_rates(cls["eval"], 5),
         )
         with expectation:
-            bas._evaluate(samples)
+            bas.evaluate(samples)
 
     @pytest.mark.parametrize("n_basis", [5, 6])
     @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
@@ -772,7 +772,7 @@ class TestSharedMethods:
             **extra_decay_rates(cls[mode], n_basis),
         )
         x = np.linspace(0, 1, 10)
-        assert bas._evaluate(x).shape[1] == n_basis
+        assert bas.evaluate(x).shape[1] == n_basis
 
     @pytest.mark.parametrize("n_basis", [6])
     def test_call_equivalent_in_conv(self, n_basis, cls):
@@ -791,7 +791,7 @@ class TestSharedMethods:
             **extra_decay_rates(cls["eval"], n_basis),
         )
         x = np.linspace(0, 1, 10)
-        assert np.all(bas_con._evaluate(x) == bas_eval._evaluate(x))
+        assert np.all(bas_con.evaluate(x) == bas_eval.evaluate(x))
 
     @pytest.mark.parametrize(
         "num_input, expectation",
@@ -813,7 +813,7 @@ class TestSharedMethods:
             **extra_decay_rates(cls[mode], n_basis),
         )
         with expectation:
-            bas._evaluate(*([np.linspace(0, 1, 10)] * num_input))
+            bas.evaluate(*([np.linspace(0, 1, 10)] * num_input))
 
     @pytest.mark.parametrize(
         "inp, expectation",
@@ -841,7 +841,7 @@ class TestSharedMethods:
             if inp.ndim != 1:
                 return
         with expectation:
-            out = bas._evaluate(inp)
+            out = bas.evaluate(inp)
             out2 = bas.evaluate_on_grid(inp.shape[0])[1]
             assert np.all((out.reshape(out.shape[0], -1, n_basis) - out2[:, None]) == 0)
             assert out.shape == tuple((*inp.shape, n_basis))
@@ -864,7 +864,7 @@ class TestSharedMethods:
         inp = np.random.randn(10, 2, 3)
         inp[2, 0, [0, 2]] = np.nan
         inp[4, 1, 1] = np.nan
-        out = bas._evaluate(inp)
+        out = bas.evaluate(inp)
         assert np.all(np.isnan(out[2, 0, [0, 2]]))
         assert np.all(np.isnan(out[4, 1, 1]))
         assert np.isnan(out).sum() == 3 * n_basis
@@ -887,14 +887,14 @@ class TestSharedMethods:
             **extra_decay_rates(cls["eval"], n_basis),
         )  # Only eval mode is relevant here
         with expectation:
-            bas._evaluate(samples)
+            bas.evaluate(samples)
 
     @pytest.mark.parametrize(
         "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
     )
     def test_call_nan(self, mode, kwargs, cls):
         if cls[mode] is HistoryConv:
-            # eval simply returns the _evaluate...
+            # eval simply returns the evaluate...
             return
         elif cls[mode] is IdentityEval:
             n_basis = 1
@@ -908,7 +908,7 @@ class TestSharedMethods:
         )
         x = np.linspace(0, 1, 10)
         x[3] = np.nan
-        assert all(np.isnan(bas._evaluate(x)[3]))
+        assert all(np.isnan(bas.evaluate(x)[3]))
 
     @pytest.mark.parametrize("n_basis", [6, 7])
     @pytest.mark.parametrize(
@@ -922,7 +922,7 @@ class TestSharedMethods:
             **extra_decay_rates(cls[mode], n_basis),
         )
         with pytest.raises(ValueError, match="All sample provided must"):
-            bas._evaluate(np.array([]))
+            bas.evaluate(np.array([]))
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     @pytest.mark.parametrize(
@@ -933,7 +933,7 @@ class TestSharedMethods:
             cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
         )
         assert (
-            bas._evaluate(np.linspace(0, 1, time_axis_shape)).shape[0]
+            bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0]
             == time_axis_shape
         )
 
@@ -952,7 +952,7 @@ class TestSharedMethods:
             cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
         )
         with expectation:
-            bas._evaluate(np.linspace(mn, mx, 10))
+            bas.evaluate(np.linspace(mn, mx, 10))
 
     @pytest.mark.parametrize(
         "kwargs, input1_shape, expectation",
@@ -1420,8 +1420,8 @@ class TestSharedMethods:
         )
         x = np.linspace(0, 1, 10)
         x_nap = nap.Tsd(t=np.arange(10), d=x)
-        y = bas._evaluate(x)
-        y_nap = bas._evaluate(x_nap)
+        y = bas.evaluate(x)
+        y_nap = bas.evaluate(x_nap)
         assert isinstance(y_nap, nap.TsdFrame)
         assert np.all(y == y_nap.d)
         assert np.all(y_nap.t == x_nap.t)
@@ -3032,7 +3032,7 @@ class TestAdditiveBasis(CombinedBasis):
                 TypeError, match="Input dimensionality mismatch"
             )
         with expectation:
-            basis_obj._evaluate(*([np.linspace(0, 1, 10)] * num_input))
+            basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
 
     @pytest.mark.parametrize(
         "inp, expectation",
@@ -3065,7 +3065,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj + basis_b_obj
         with expectation:
-            basis_obj._evaluate(*([inp] * basis_obj._n_input_dimensionality))
+            basis_obj.evaluate(*([inp] * basis_obj._n_input_dimensionality))
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     @pytest.mark.parametrize(" window_size", [8])
@@ -3091,7 +3091,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj + basis_b_obj
         inp = [np.linspace(0, 1, time_axis_shape)] * basis_obj._n_input_dimensionality
-        assert basis_obj._evaluate(*inp).shape[0] == time_axis_shape
+        assert basis_obj.evaluate(*inp).shape[0] == time_axis_shape
 
     @pytest.mark.parametrize(" window_size", [8])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
@@ -3130,7 +3130,7 @@ class TestAdditiveBasis(CombinedBasis):
         inp = [np.linspace(0, 1, 10)] * basis_obj._n_input_dimensionality
         for x in inp:
             x[3] = np.nan
-        assert all(np.isnan(basis_obj._evaluate(*inp)[3]))
+        assert all(np.isnan(basis_obj.evaluate(*inp)[3]))
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -3159,7 +3159,7 @@ class TestAdditiveBasis(CombinedBasis):
         bas_con = basis_a_obj + basis_b_obj
 
         x = [np.linspace(0, 1, 10)] * bas_con._n_input_dimensionality
-        assert np.all(bas_con._evaluate(*x) == bas_eva._evaluate(*x))
+        assert np.all(bas_con.evaluate(*x) == bas_eva.evaluate(*x))
 
     @pytest.mark.parametrize(" window_size", [8])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
@@ -3185,8 +3185,8 @@ class TestAdditiveBasis(CombinedBasis):
         x = np.linspace(0, 1, 10)
         x_nap = [nap.Tsd(t=np.arange(10), d=x)] * bas._n_input_dimensionality
         x = [x] * bas._n_input_dimensionality
-        y = bas._evaluate(*x)
-        y_nap = bas._evaluate(*x_nap)
+        y = bas.evaluate(*x)
+        y_nap = bas.evaluate(*x_nap)
         assert isinstance(y_nap, nap.TsdFrame)
         assert np.all(y == y_nap.d)
         assert np.all(y_nap.t == x_nap[0].t)
@@ -3214,7 +3214,7 @@ class TestAdditiveBasis(CombinedBasis):
         bas = basis_a_obj + basis_b_obj
         x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
         assert (
-            bas._evaluate(*x).shape[1]
+            bas.evaluate(*x).shape[1]
             == basis_a_obj.n_basis_funcs + basis_b_obj.n_basis_funcs
         )
 
@@ -3240,7 +3240,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         bas = basis_a_obj + basis_b_obj
         with pytest.raises(ValueError, match="All sample provided must"):
-            bas._evaluate(*([np.array([])] * bas._n_input_dimensionality))
+            bas.evaluate(*([np.array([])] * bas._n_input_dimensionality))
 
     @pytest.mark.parametrize(
         "mn, mx, expectation",
@@ -3285,7 +3285,7 @@ class TestAdditiveBasis(CombinedBasis):
         )
         bas = basis_a_obj + basis_b_obj
         with expectation:
-            bas._evaluate(*([np.linspace(mn, mx, 10)] * bas._n_input_dimensionality))
+            bas.evaluate(*([np.linspace(mn, mx, 10)] * bas._n_input_dimensionality))
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -4190,7 +4190,7 @@ class TestMultiplicativeBasis(CombinedBasis):
                 TypeError, match="Input dimensionality mismatch"
             )
         with expectation:
-            basis_obj._evaluate(*([np.linspace(0, 1, 10)] * num_input))
+            basis_obj.evaluate(*([np.linspace(0, 1, 10)] * num_input))
 
     @pytest.mark.parametrize(
         "inp, expectation",
@@ -4223,7 +4223,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj * basis_b_obj
         with expectation:
-            basis_obj._evaluate(*([inp] * basis_obj._n_input_dimensionality))
+            basis_obj.evaluate(*([inp] * basis_obj._n_input_dimensionality))
 
     @pytest.mark.parametrize("time_axis_shape", [10, 11, 12])
     @pytest.mark.parametrize(" window_size", [8])
@@ -4249,7 +4249,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         basis_obj = basis_a_obj * basis_b_obj
         inp = [np.linspace(0, 1, time_axis_shape)] * basis_obj._n_input_dimensionality
-        assert basis_obj._evaluate(*inp).shape[0] == time_axis_shape
+        assert basis_obj.evaluate(*inp).shape[0] == time_axis_shape
 
     @pytest.mark.parametrize(" window_size", [8])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
@@ -4282,7 +4282,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         inp = [np.linspace(0, 1, 10)] * basis_obj._n_input_dimensionality
         for x in inp:
             x[3] = np.nan
-        assert all(np.isnan(basis_obj._evaluate(*inp)[3]))
+        assert all(np.isnan(basis_obj.evaluate(*inp)[3]))
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())
@@ -4311,7 +4311,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas_con = basis_a_obj * basis_b_obj
 
         x = [np.linspace(0, 1, 10)] * bas_con._n_input_dimensionality
-        assert np.all(bas_con._evaluate(*x) == bas_eva._evaluate(*x))
+        assert np.all(bas_con.evaluate(*x) == bas_eva.evaluate(*x))
 
     @pytest.mark.parametrize(" window_size", [8])
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
@@ -4337,8 +4337,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         x = np.linspace(0, 1, 10)
         x_nap = [nap.Tsd(t=np.arange(10), d=x)] * bas._n_input_dimensionality
         x = [x] * bas._n_input_dimensionality
-        y = bas._evaluate(*x)
-        y_nap = bas._evaluate(*x_nap)
+        y = bas.evaluate(*x)
+        y_nap = bas.evaluate(*x_nap)
         assert isinstance(y_nap, nap.TsdFrame)
         assert np.all(y == y_nap.d)
         assert np.all(y_nap.t == x_nap[0].t)
@@ -4366,7 +4366,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         bas = basis_a_obj * basis_b_obj
         x = [np.linspace(0, 1, 10)] * bas._n_input_dimensionality
         assert (
-            bas._evaluate(*x).shape[1]
+            bas.evaluate(*x).shape[1]
             == basis_a_obj.n_basis_funcs * basis_b_obj.n_basis_funcs
         )
 
@@ -4392,7 +4392,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         bas = basis_a_obj * basis_b_obj
         with pytest.raises(ValueError, match="All sample provided must"):
-            bas._evaluate(*([np.array([])] * bas._n_input_dimensionality))
+            bas.evaluate(*([np.array([])] * bas._n_input_dimensionality))
 
     @pytest.mark.parametrize(
         "mn, mx, expectation",
@@ -4437,7 +4437,7 @@ class TestMultiplicativeBasis(CombinedBasis):
         )
         bas = basis_a_obj * basis_b_obj
         with expectation:
-            bas._evaluate(*([np.linspace(mn, mx, 10)] * bas._n_input_dimensionality))
+            bas.evaluate(*([np.linspace(mn, mx, 10)] * bas._n_input_dimensionality))
 
     @pytest.mark.parametrize("basis_a", list_all_basis_classes())
     @pytest.mark.parametrize("basis_b", list_all_basis_classes())

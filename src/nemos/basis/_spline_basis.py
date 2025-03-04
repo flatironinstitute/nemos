@@ -203,7 +203,7 @@ class MSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
@@ -328,7 +328,7 @@ class BSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
@@ -442,7 +442,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:

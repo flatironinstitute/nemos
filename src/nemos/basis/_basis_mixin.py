@@ -297,7 +297,7 @@ class EvalBasisMixin:
             A matrix with the transformed features.
 
         """
-        out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
 
     def setup_basis(self, *xi: NDArray) -> Basis:
@@ -458,7 +458,7 @@ class ConvBasisMixin:
         computed and how the input parameters are utilized.
 
         """
-        self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
+        self.kernel_ = self.evaluate(np.linspace(0, 1, self.window_size))
         return self
 
     @property
