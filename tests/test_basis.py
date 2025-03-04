@@ -3310,7 +3310,7 @@ class TestAdditiveBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
-                    basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
+                    basis_obj.kernel_ is not None if basis_obj.__class__.__name__.endswith("Conv") else True
                 ]
             return has_kern
 
@@ -4462,7 +4462,7 @@ class TestMultiplicativeBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
-                    basis_obj.kernel_ is not None if basis_obj.mode == "conv" else True
+                    basis_obj.kernel_ is not None if basis_obj.__class__.__name__.endswith("Conv") else True
                 ]
             return has_kern
 
