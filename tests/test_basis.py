@@ -577,9 +577,9 @@ class TestSharedMethods:
         "n_input, expectation",
         [
             (2, does_not_raise()),
-            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (3, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (0, pytest.raises(ValueError, match="Empty array provided")),
+            (1, does_not_raise()),
+            (3, does_not_raise()),
         ],
     )
     def test_expected_input_number(self, n_input, expectation, cls):
