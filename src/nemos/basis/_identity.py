@@ -147,7 +147,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         """
         sample_pts = np.squeeze(np.asarray(sample_pts))
         if sample_pts.ndim != 1:
-            raise ValueError("`_evaluate` for HistoryBasis allows 1D input only.")
+            raise ValueError("`evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.
         return np.eye(np.asarray(sample_pts).shape[0], self.n_basis_funcs)
 

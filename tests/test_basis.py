@@ -802,9 +802,10 @@ class TestSharedMethods:
     @pytest.mark.parametrize(
         "num_input, expectation",
         [
-            (0, pytest.raises(TypeError, match="Input dimensionality mismatch")),
+            (0, pytest.raises(TypeError, match="missing 1 required positional argument")),
             (1, does_not_raise()),
-            (2, pytest.raises(TypeError, match="Input dimensionality mismatch")),
+            (2, pytest.raises(TypeError, match="takes 2 positional arguments but 3 were given"
+                                               "")),
         ],
     )
     @pytest.mark.parametrize(
