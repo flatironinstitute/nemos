@@ -240,17 +240,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _set_input_independent_states(self):
-        """
-        Compute all the basis states that do not depend on the input.
-
-        An example of such state is the kernel_ for Conv bases, which can be computed
-        without any input (it only depends on the basis type, the window size and the
-        number of basis elements).
-        """
-        pass
-
-    @abc.abstractmethod
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Set the expected input shape for the basis object.
