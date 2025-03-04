@@ -1734,7 +1734,7 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
         >>> ortho_basis = OrthExponentialEval(n_basis_funcs=5, decay_rates=decay_rates)
         >>> out = ortho_basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
-        (100, 5, 2, 4)
+        (100, 5, 2, 5)
         """
         return super().evaluate(sample_pts)
 
@@ -1893,7 +1893,7 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         >>> ortho_basis = OrthExponentialConv(n_basis_funcs=5, window_size=20, decay_rates=decay_rates)
         >>> out = ortho_basis.evaluate(np.random.randn(100, 5, 2))
         >>> out.shape
-        (100, 5, 2, 4)
+        (100, 5, 2, 5)
         """
         return super().evaluate(sample_pts)
 
