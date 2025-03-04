@@ -131,7 +131,10 @@ def test_all_basis_are_tested() -> None:
 def test_example_docstrings_add(
     basis_cls, method_name, descr_match, basis_class_specific_params
 ):
-    if basis_cls.__name__ in ["HistoryConv", "IdentityEval"] and method_name == "evaluate":
+    if (
+        basis_cls.__name__ in ["HistoryConv", "IdentityEval"]
+        and method_name == "evaluate"
+    ):
         return
 
     basis_instance = CombinedBasis().instantiate_basis(
@@ -802,10 +805,19 @@ class TestSharedMethods:
     @pytest.mark.parametrize(
         "num_input, expectation",
         [
-            (0, pytest.raises(TypeError, match="missing 1 required positional argument")),
+            (
+                0,
+                pytest.raises(
+                    TypeError, match="missing 1 required positional argument"
+                ),
+            ),
             (1, does_not_raise()),
-            (2, pytest.raises(TypeError, match="takes 2 positional arguments but 3 were given"
-                                               "")),
+            (
+                2,
+                pytest.raises(
+                    TypeError, match="takes 2 positional arguments but 3 were given" ""
+                ),
+            ),
         ],
     )
     @pytest.mark.parametrize(
@@ -3394,7 +3406,8 @@ class TestAdditiveBasis(CombinedBasis):
             x = np.random.randn(30, 2), np.random.randn(30, n_input)
             bas.compute_features(*x)
             assert all(
-                xi.shape[1:] == ishape  if xi.ndim != 1 else () == ishape for ishape, xi in zip(bas.input_shape, x)
+                xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+                for ishape, xi in zip(bas.input_shape, x)
             )
 
     @pytest.mark.parametrize(
@@ -3429,7 +3442,8 @@ class TestAdditiveBasis(CombinedBasis):
         add.set_input_shape(shape_a, shape_b)
         add.compute_features(*x)
         assert all(
-            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(add.input_shape, x)
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+            for ishape, xi in zip(add.input_shape, x)
         )
 
     @pytest.mark.parametrize(
@@ -3464,7 +3478,8 @@ class TestAdditiveBasis(CombinedBasis):
         add.set_input_shape(shape_a, shape_b)
         add.compute_features(*x)
         assert all(
-            xi.shape[1:] == ishape  if xi.ndim != 1 else () == ishape for ishape, xi in zip(add.input_shape, x)
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+            for ishape, xi in zip(add.input_shape, x)
         )
 
     @pytest.mark.parametrize(
@@ -3499,7 +3514,8 @@ class TestAdditiveBasis(CombinedBasis):
         add.set_input_shape(shape_a, shape_b)
         add.compute_features(*x)
         assert all(
-            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(add.input_shape, x)
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+            for ishape, xi in zip(add.input_shape, x)
         )
 
     @pytest.mark.parametrize(
@@ -4585,7 +4601,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul.set_input_shape(shape_a, shape_b)
         mul.compute_features(*x)
         assert all(
-            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(mul.input_shape, x)
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+            for ishape, xi in zip(mul.input_shape, x)
         )
 
     @pytest.mark.parametrize(
@@ -4620,7 +4637,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul.set_input_shape(shape_a, shape_b)
         mul.compute_features(*x)
         assert all(
-            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(mul.input_shape, x)
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+            for ishape, xi in zip(mul.input_shape, x)
         )
 
     @pytest.mark.parametrize(
@@ -4655,7 +4673,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul.set_input_shape(shape_a, shape_b)
         mul.compute_features(*x)
         assert all(
-            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(mul.input_shape, x)
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape
+            for ishape, xi in zip(mul.input_shape, x)
         )
 
     @pytest.mark.parametrize(
