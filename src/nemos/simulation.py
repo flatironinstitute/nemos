@@ -269,12 +269,12 @@ def simulate_recurrent(
     >>> import jax
     >>> import matplotlib.pyplot as plt
     >>> from nemos.simulation import simulate_recurrent
-    >>>
+    >>> np.random.seed(42)
     >>> n_neurons = 2
     >>> coupling_duration = 100
     >>> feedforward_input = np.random.normal(size=(1000, n_neurons, 1))
     >>> coupling_basis = np.random.normal(size=(coupling_duration, 10))
-    >>> coupling_coef = np.random.normal(size=(n_neurons, n_neurons, 10))
+    >>> coupling_coef = 0.5*np.random.normal(size=(n_neurons, n_neurons, 10))
     >>> intercept = -9 * np.ones(n_neurons)
     >>> init_spikes = np.zeros((coupling_duration, n_neurons))
     >>> random_key = jax.random.key(123)
