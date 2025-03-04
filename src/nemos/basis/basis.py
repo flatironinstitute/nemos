@@ -69,7 +69,6 @@ class BSplineEval(EvalBasisMixin, BSplineBasis):
         BSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="eval",
             order=order,
             label=label,
         )
@@ -223,7 +222,6 @@ class BSplineConv(ConvBasisMixin, BSplineBasis):
         BSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             order=order,
             label=label,
         )
@@ -363,7 +361,6 @@ class CyclicBSplineEval(EvalBasisMixin, CyclicBSplineBasis):
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="eval",
             order=order,
             label=label,
         )
@@ -508,7 +505,6 @@ class CyclicBSplineConv(ConvBasisMixin, CyclicBSplineBasis):
         CyclicBSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             order=order,
             label=label,
         )
@@ -672,7 +668,6 @@ class MSplineEval(EvalBasisMixin, MSplineBasis):
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="eval",
             order=order,
             label=label,
         )
@@ -841,7 +836,6 @@ class MSplineConv(ConvBasisMixin, MSplineBasis):
         MSplineBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             order=order,
             label=label,
         )
@@ -990,7 +984,6 @@ class RaisedCosineLinearEval(EvalBasisMixin, RaisedCosineBasisLinear):
             self,
             n_basis_funcs,
             width=width,
-            mode="eval",
             label=label,
         )
 
@@ -1135,7 +1128,6 @@ class RaisedCosineLinearConv(ConvBasisMixin, RaisedCosineBasisLinear):
         RaisedCosineBasisLinear.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             width=width,
             label=label,
         )
@@ -1285,7 +1277,6 @@ class RaisedCosineLogEval(EvalBasisMixin, RaisedCosineBasisLog):
             width=width,
             time_scaling=time_scaling,
             enforce_decay_to_zero=enforce_decay_to_zero,
-            mode="eval",
             label=label,
         )
 
@@ -1440,7 +1431,6 @@ class RaisedCosineLogConv(ConvBasisMixin, RaisedCosineBasisLog):
         RaisedCosineBasisLog.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             width=width,
             time_scaling=time_scaling,
             enforce_decay_to_zero=enforce_decay_to_zero,
@@ -1578,7 +1568,6 @@ class OrthExponentialEval(EvalBasisMixin, OrthExponentialBasis):
             self,
             n_basis_funcs,
             decay_rates=decay_rates,
-            mode="eval",
             label=label,
         )
 
@@ -1719,7 +1708,6 @@ class OrthExponentialConv(ConvBasisMixin, OrthExponentialBasis):
         OrthExponentialBasis.__init__(
             self,
             n_basis_funcs,
-            mode="conv",
             decay_rates=decay_rates,
             label=label,
         )

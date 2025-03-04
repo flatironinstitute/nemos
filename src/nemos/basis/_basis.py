@@ -120,18 +120,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     often more compact or interpretable forms. This class provides a template for such
     transformations, with specific implementations defining the actual behavior.
 
-    Parameters
-    ----------
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
-
     Raises
     ------
-    ValueError:
-        If ``mode`` is not 'eval' or 'conv'.
-    ValueError:
-        If ``kwargs`` are not None and ``mode =="eval"``.
     ValueError:
         If ``kwargs`` include parameters not recognized or do not have
         default values in ``create_convolutional_predictor``.
@@ -141,11 +131,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __init__(
         self,
-        mode: Literal["eval", "conv", "composite"] = "eval",
     ) -> None:
         self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
-
-        self._mode = mode
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -185,11 +172,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._n_basis_funcs = orig_n_basis
             raise e
 
-    @property
-    def mode(self):
-        """Mode of operation, either ``"conv"`` or ``"eval"``."""
-        return self._mode
-
     @check_transform_input
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
@@ -212,8 +194,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Returns
         -------
         :
-            Transformed features. In 'eval' mode, it corresponds to the basis functions
-            evaluated at the input samples. In 'conv' mode, it consists of convolved
+            Transformed features. In 'Eval' mode, it corresponds to the basis functions
+            evaluated at the input samples. In 'Conv' mode, it consists of convolved
             input samples with the basis functions. The output shape varies based on
             the subclass and mode.
 
@@ -814,7 +796,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
-        Basis.__init__(self, mode="composite")
+        Basis.__init__(self)
 
         # number of input arrays that the basis receives
         self._n_input_dimensionality = (
@@ -1255,7 +1237,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
 
-        Basis.__init__(self, mode="composite")
+        Basis.__init__(self)
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality
         )

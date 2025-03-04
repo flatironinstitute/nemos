@@ -24,9 +24,6 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     width :
         Width of the raised cosine. Must be $x/2$ for any integer $x\geq 3$ (e.g., 1.5,
         2, 2.5, 3, etc.)
@@ -53,14 +50,12 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        mode="eval",
         width: float = 2.0,
         label: Optional[str] = "RaisedCosineBasisLinear",
     ) -> None:
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
-            mode=mode,
         )
         self._n_input_dimensionality = 1
         self._check_width(width)
@@ -218,9 +213,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     ----------
     n_basis_funcs :
         The number of basis functions.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     width :
         Width of the raised cosine. Must be $x/2$ for any integer $x\geq 3$ (e.g., 1.5,
         2, 2.5, 3, etc.)
@@ -248,7 +240,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        mode="eval",
         width: float = 2.0,
         time_scaling: float = None,
         enforce_decay_to_zero: bool = True,
@@ -256,7 +247,6 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            mode=mode,
             width=width,
             label=label,
         )

@@ -35,7 +35,6 @@ class IdentityBasis(Basis, AtomicBasisMixin):
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
-            mode="eval",
         )
         self._n_input_dimensionality = 1
 
@@ -122,7 +121,6 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
-            mode="conv",
         )
         self._n_input_dimensionality = 1
 
