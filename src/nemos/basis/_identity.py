@@ -130,7 +130,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
-        Returns an identity matrix of size len(samples).
+        Returns an identity matrix of shape (len(samples), n_basis_funcs).
 
         The output is the convolutional kernels for spike history.
 
@@ -147,7 +147,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         """
         sample_pts = np.squeeze(np.asarray(sample_pts))
         if sample_pts.ndim != 1:
-            raise ValueError("`evaluate` for HistoryBasis allows 1D input only.")
+            raise ValueError("`_evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.
         return np.eye(np.asarray(sample_pts).shape[0], self.n_basis_funcs)
 

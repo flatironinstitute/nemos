@@ -122,11 +122,17 @@ def test_all_basis_are_tested() -> None:
             "set_input_shape",
             "Set the expected input shape for the basis object",
         ),
+        (
+            "evaluate",
+            "Evaluate the .+ sample points",
+        ),
     ],
 )
 def test_example_docstrings_add(
     basis_cls, method_name, descr_match, basis_class_specific_params
 ):
+    if basis_cls.__name__ in ["HistoryConv", "IdentityEval"] and method_name == "evaluate":
+        return
 
     basis_instance = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10

@@ -127,7 +127,7 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate basis functions with given spacing.
+        """Evaluate the OrthExponential basis at the given sample points.
 
         Parameters
         ----------

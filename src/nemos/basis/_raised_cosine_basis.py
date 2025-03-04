@@ -104,7 +104,7 @@ class RaisedCosineBasisLinear(Basis, AtomicBasisMixin, abc.ABC):
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate basis functions with given samples.
+        """Evaluate the raised cosine basis at the sample points.
 
         Parameters
         ----------
@@ -339,7 +339,7 @@ class RaisedCosineBasisLog(RaisedCosineBasisLinear, abc.ABC):
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate log-spaced raised cosine basis with given samples.
+        """Evaluate the log-spaced raised cosine basis at the sample points.
 
         Parameters
         ----------

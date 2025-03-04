@@ -855,7 +855,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     @check_one_dimensional
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
-        Evaluate the basis at the input samples.
+        Evaluate the basis at the sample points.
 
         Parameters
         ----------
@@ -1268,7 +1268,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @check_one_dimensional
     def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
-        Evaluate the basis at the input samples.
+        Evaluate the basis at the sample points.
 
         Parameters
         ----------
