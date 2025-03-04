@@ -4,7 +4,6 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
-from contextlib import nullcontext
 from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
@@ -501,10 +500,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             if other == 1:
                 return deepcopy(self)
 
-            add = deepcopy(self) + deepcopy(self)
-            for _ in range(2, other):
-                with add._set_shallow_copy_temporarily(True):
-                    add = add + deepcopy(self)
+            add = AdditiveBasis(self, self)
+            with add._set_shallow_copy_temporarily(True):
+                for _ in range(2, other):
+                    add = AdditiveBasis(add, deepcopy(self))
             return add
 
         if not isinstance(other, Basis):
@@ -546,12 +545,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if exponent == 1:
             return deepcopy(self)
 
-        mul = deepcopy(self) * deepcopy(self)
-        for _ in range(2, exponent):
-            with mul._set_shallow_copy_temporarily(True):
-                mul = mul * deepcopy(self)
+        mul = MultiplicativeBasis(self, self)
+        with mul._set_shallow_copy_temporarily(True):
+            for _ in range(2, exponent):
+                mul = MultiplicativeBasis(mul, deepcopy(self))
         return mul
-
 
     def __repr__(self):
         return format_repr(self)
