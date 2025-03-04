@@ -933,8 +933,7 @@ class TestSharedMethods:
             cls[mode], n_basis_funcs=5, **kwargs, **extra_decay_rates(cls[mode], 5)
         )
         assert (
-            bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0]
-            == time_axis_shape
+            bas.evaluate(np.linspace(0, 1, time_axis_shape)).shape[0] == time_axis_shape
         )
 
     @pytest.mark.parametrize(
@@ -3310,7 +3309,11 @@ class TestAdditiveBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
-                    basis_obj.kernel_ is not None if basis_obj.__class__.__name__.endswith("Conv") else True
+                    (
+                        basis_obj.kernel_ is not None
+                        if basis_obj.__class__.__name__.endswith("Conv")
+                        else True
+                    )
                 ]
             return has_kern
 
@@ -4462,7 +4465,11 @@ class TestMultiplicativeBasis(CombinedBasis):
                 has_kern += check_kernel(basis_obj.basis2)
             else:
                 has_kern += [
-                    basis_obj.kernel_ is not None if basis_obj.__class__.__name__.endswith("Conv") else True
+                    (
+                        basis_obj.kernel_ is not None
+                        if basis_obj.__class__.__name__.endswith("Conv")
+                        else True
+                    )
                 ]
             return has_kern
 

@@ -6,7 +6,7 @@ import copy
 from collections import OrderedDict
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, List, Optional, Tuple, Union
 
 import jax
 import numpy as np

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
-from typing import Literal, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
