@@ -5988,7 +5988,7 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "MultiplicativeBasis(\n                        ...\n                    ),\n                ),\n            ),\n            basis2=BSplineEval(n_basis_funcs=10, order=4),\n        ),\n    ),\n)"
+        "BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=BSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 
@@ -6012,7 +6012,7 @@ def test_composite_basis_repr_wrapping():
         "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
     )
     assert out.endswith(
-        "AdditiveBasis(\n                        ...\n                    ),\n                ),\n            ),\n            basis2=MSplineEval(n_basis_funcs=10, order=4),\n        ),\n    ),\n)"
+        "MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=MSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 

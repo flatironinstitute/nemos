@@ -22,44 +22,6 @@ from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 
 
-def _bisect_mul(base: Basis, mul: int):
-    """Speed up adding n basis of the same type
-
-    Achieve substantial speed-up minimizing the additions and
-    deep-copy operations.
-    """
-    if mul == 1:
-        return deepcopy(base)  # Base case
-    half = _bisect_mul(base, mul // 2)
-    context = getattr(half, "_set_shallow_copy_temporarily", nullcontext)
-    with context(True):
-        addition = half + deepcopy(half)
-    if mul % 2:
-        with addition._set_shallow_copy_temporarily(True):
-            addition = addition + deepcopy(base)
-    return addition
-
-
-def _bisect_power(base: Basis, expon: int):
-    """Speed up multiplying n basis of the same type.
-
-    Achieve substantial speed-up minimizing the multiplication and
-    deep-copy operations.
-    """
-    if expon == 1:
-        return deepcopy(base)  # Base case
-    squared = _bisect_power(base, expon // 2)
-
-    context = getattr(squared, "_set_shallow_copy_temporarily", nullcontext)
-
-    with context(True):
-        squared = squared * deepcopy(squared)
-    if expon % 2:
-        with squared._set_shallow_copy_temporarily(True):
-            squared = squared * deepcopy(base)
-    return squared
-
-
 def add_docstring(method_name, cls):
     """Prepend super-class docstrings."""
     attr = getattr(cls, method_name, None)
@@ -509,7 +471,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     def __rmul__(self, other: Basis | int):
         return self.__mul__(other)
 
-    def __mul__(self, other: Basis | int) -> MultiplicativeBasis:
+    def __mul__(self, other: Basis | int) -> Basis:
         """
         Multiply two Basis objects together.
 
@@ -535,14 +497,23 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 raise ValueError(
                     "Cannot multiply by an integer a basis including a user-defined labels."
                 )
-            return _bisect_mul(self, other)
+            # default case
+            if other == 1:
+                return deepcopy(self)
+
+            add = deepcopy(self) + deepcopy(self)
+            for _ in range(2, other):
+                with add._set_shallow_copy_temporarily(True):
+                    add = add + deepcopy(self)
+            return add
+
         if not isinstance(other, Basis):
             raise TypeError(
                 "Basis multiplicative factor should be a Basis object or a positive integer!"
             )
         return MultiplicativeBasis(self, other)
 
-    def __pow__(self, exponent: int) -> MultiplicativeBasis:
+    def __pow__(self, exponent: int) -> Basis:
         """Exponentiation of a Basis object.
 
         Define the power of a basis by repeatedly applying the method __multiply__.
@@ -571,7 +542,16 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if exponent <= 0:
             raise ValueError("Basis exponent should be a non-negative integer!")
 
-        return _bisect_power(self, exponent)
+        # default case
+        if exponent == 1:
+            return deepcopy(self)
+
+        mul = deepcopy(self) * deepcopy(self)
+        for _ in range(2, exponent):
+            with mul._set_shallow_copy_temporarily(True):
+                mul = mul * deepcopy(self)
+        return mul
+
 
     def __repr__(self):
         return format_repr(self)
