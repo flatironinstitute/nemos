@@ -1630,23 +1630,23 @@ class TestSharedMethods:
             (
                 np.ones((10, 1)),
                 1,
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (np.ones((10, 2)), 2, does_not_raise()),
             (
                 np.ones((10, 1)),
                 2,
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (
                 np.ones((10, 2, 1)),
                 2,
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (
                 np.ones((10, 1, 2)),
                 2,
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (np.ones((10, 1)), (1,), does_not_raise()),
             (np.ones((10,)), tuple(), does_not_raise()),
@@ -1654,22 +1654,22 @@ class TestSharedMethods:
             (
                 np.ones((10,)),
                 (1,),
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (
                 np.ones((10, 1)),
                 (),
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (
                 np.ones((10, 1)),
                 np.zeros((12,)),
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
             (
                 np.ones((10)),
                 np.zeros((12, 1)),
-                pytest.raises(ValueError, match="Input shape mismatch detected"),
+                does_not_raise(),
             ),
         ],
     )
@@ -3379,9 +3379,9 @@ class TestAdditiveBasis(CombinedBasis):
         "n_input, expectation",
         [
             (3, does_not_raise()),
-            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (4, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (0, pytest.raises(ValueError, match="Empty array provided")),
+            (1, does_not_raise()),
+            (4, does_not_raise()),
         ],
     )
     def test_expected_input_number(self, n_input, expectation):
@@ -3391,7 +3391,11 @@ class TestAdditiveBasis(CombinedBasis):
         x = np.random.randn(20, 2), np.random.randn(20, 3)
         bas.compute_features(*x)
         with expectation:
-            bas.compute_features(np.random.randn(30, 2), np.random.randn(30, n_input))
+            x = np.random.randn(30, 2), np.random.randn(30, n_input)
+            bas.compute_features(*x)
+            assert all(
+                xi.shape[1:] == ishape  if xi.ndim != 1 else () == ishape for ishape, xi in zip(bas.input_shape, x)
+            )
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -3423,14 +3427,10 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a + basis_b
 
         add.set_input_shape(shape_a, shape_b)
-        if add_shape_a == () and add_shape_b == ():
-            expectation = does_not_raise()
-        else:
-            expectation = pytest.raises(
-                ValueError, match="Input shape mismatch detected"
-            )
-        with expectation:
-            add.compute_features(*x)
+        add.compute_features(*x)
+        assert all(
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(add.input_shape, x)
+        )
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -3462,14 +3462,10 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a + basis_b
 
         add.set_input_shape(shape_a, shape_b)
-        if add_shape_a == () and add_shape_b == ():
-            expectation = does_not_raise()
-        else:
-            expectation = pytest.raises(
-                ValueError, match="Input shape mismatch detected"
-            )
-        with expectation:
-            add.compute_features(*x)
+        add.compute_features(*x)
+        assert all(
+            xi.shape[1:] == ishape  if xi.ndim != 1 else () == ishape for ishape, xi in zip(add.input_shape, x)
+        )
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -3501,14 +3497,10 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a + basis_b
 
         add.set_input_shape(shape_a, shape_b)
-        if add_shape_a == () and add_shape_b == ():
-            expectation = does_not_raise()
-        else:
-            expectation = pytest.raises(
-                ValueError, match="Input shape mismatch detected"
-            )
-        with expectation:
-            add.compute_features(*x)
+        add.compute_features(*x)
+        assert all(
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(add.input_shape, x)
+        )
 
     @pytest.mark.parametrize(
         "inp_shape, expectation",
@@ -4535,9 +4527,9 @@ class TestMultiplicativeBasis(CombinedBasis):
         "n_input, expectation",
         [
             (3, does_not_raise()),
-            (0, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (1, pytest.raises(ValueError, match="Input shape mismatch detected")),
-            (4, pytest.raises(ValueError, match="Input shape mismatch detected")),
+            (0, pytest.raises(ValueError, match="Empty array provided")),
+            (1, does_not_raise()),
+            (4, does_not_raise()),
         ],
     )
     def test_expected_input_number(self, n_input, expectation):
@@ -4547,7 +4539,8 @@ class TestMultiplicativeBasis(CombinedBasis):
         x = np.random.randn(20, 2), np.random.randn(20, 3)
         bas.compute_features(*x)
         with expectation:
-            bas.compute_features(np.random.randn(30, 2), np.random.randn(30, n_input))
+            x = np.random.randn(30, 2), np.random.randn(30, n_input)
+            bas.compute_features(*x)
 
     @pytest.mark.parametrize("n_basis_input1", [1, 2, 3])
     @pytest.mark.parametrize("n_basis_input2", [1, 2, 3])
@@ -4590,14 +4583,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul = basis_a * basis_b
 
         mul.set_input_shape(shape_a, shape_b)
-        if add_shape_a == () and add_shape_b == ():
-            expectation = does_not_raise()
-        else:
-            expectation = pytest.raises(
-                ValueError, match="Input shape mismatch detected"
-            )
-        with expectation:
-            mul.compute_features(*x)
+        mul.compute_features(*x)
+        assert all(
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(mul.input_shape, x)
+        )
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4629,14 +4618,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul = basis_a * basis_b
 
         mul.set_input_shape(shape_a, shape_b)
-        if add_shape_a == () and add_shape_b == ():
-            expectation = does_not_raise()
-        else:
-            expectation = pytest.raises(
-                ValueError, match="Input shape mismatch detected"
-            )
-        with expectation:
-            mul.compute_features(*x)
+        mul.compute_features(*x)
+        assert all(
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(mul.input_shape, x)
+        )
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4668,14 +4653,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         mul = basis_a * basis_b
 
         mul.set_input_shape(shape_a, shape_b)
-        if add_shape_a == () and add_shape_b == ():
-            expectation = does_not_raise()
-        else:
-            expectation = pytest.raises(
-                ValueError, match="Input shape mismatch detected"
-            )
-        with expectation:
-            mul.compute_features(*x)
+        mul.compute_features(*x)
+        assert all(
+            xi.shape[1:] == ishape if xi.ndim != 1 else () == ishape for ishape, xi in zip(mul.input_shape, x)
+        )
 
     @pytest.mark.parametrize(
         "inp_shape, expectation",

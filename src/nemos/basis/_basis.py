@@ -204,10 +204,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
-        if self._input_shape_product is None:
-            self.set_input_shape(*xi)
+        kern = getattr(self, "kernel_", None)
+        input_shape = getattr(self, "_input_shape_product", None)
+        if kern is None or input_shape is None:
+            self.setup_basis(*xi)
         self._check_input_shape_consistency(*xi)
-        self._set_input_independent_states()
         return self._compute_features(*xi)
 
     @abc.abstractmethod
