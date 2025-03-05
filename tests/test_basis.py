@@ -15,7 +15,13 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import HistoryConv, IdentityEval, TransformerBasis
-from nemos.basis._basis import AdditiveBasis, Basis, MultiplicativeBasis, add_docstring
+from nemos.basis._basis import (
+    AdditiveBasis,
+    Basis,
+    MultiplicativeBasis,
+    add_docstring,
+    generate_basis_label_pair,
+)
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -4864,6 +4870,48 @@ def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
             out[non_nan],
         )
         assert np.all(np.isnan(out[~non_nan]))
+
+
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
+def test_power_of_basis_repr(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    pow_basis = basis_obj**3
+    actual_labels = list(l for l, _ in generate_basis_label_pair(pow_basis))
+    assert len(actual_labels) == len(set(actual_labels))
+    cls_names = {b.__class__.__name__ for b in pow_basis._iterate_over_components()}
+    count_cls = {c: 0 for c in cls_names}
+    lab_additive_expected = []
+    for b in pow_basis._iterate_over_components():
+        k = count_cls[b.__class__.__name__]
+        lab_additive_expected.append(
+            b.__class__.__name__ + f"_{k}" if k > 0 else b.__class__.__name__
+        )
+        count_cls[b.__class__.__name__] += 1
+    list_additive_actual = [b.label for b in pow_basis._iterate_over_components()]
+    assert set(lab_additive_expected) == set(list_additive_actual)
+
+
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
+def test_mul_of_basis_repr(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    mul_basis = basis_obj * 3
+    actual_labels = list(l for l, _ in generate_basis_label_pair(mul_basis))
+    assert len(actual_labels) == len(set(actual_labels))
+    cls_names = {b.__class__.__name__ for b in mul_basis._iterate_over_components()}
+    count_cls = {c: 0 for c in cls_names}
+    lab_additive_expected = []
+    for b in mul_basis._iterate_over_components():
+        k = count_cls[b.__class__.__name__]
+        lab_additive_expected.append(
+            b.__class__.__name__ + f"_{k}" if k > 0 else b.__class__.__name__
+        )
+        count_cls[b.__class__.__name__] += 1
+    list_additive_actual = [b.label for b in mul_basis._iterate_over_components()]
+    assert set(lab_additive_expected) == set(list_additive_actual)
 
 
 @pytest.mark.parametrize("mul", [-1, 0, 0.5, 1, 2, 3])
