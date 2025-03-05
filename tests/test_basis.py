@@ -48,6 +48,43 @@ def extra_decay_rates(cls, n_basis):
     return {}
 
 
+def filter_attributes(obj, exclude_keys):
+    return {
+        key: val for key, val in obj.__dict__.items() if key not in exclude_keys
+    }
+
+
+def compare_basis(b1, b2):
+    assert id(b1) != id(b2)
+    assert b1.__class__.__name__ == b2.__class__.__name__
+    par1 = b1.__dict__.get("_parent", None)
+    par2 = b2.__dict__.get("_parent", None)
+    if par1 is None:
+        assert par2 is None
+    elif par2 is None:
+        assert par1 is None
+
+    # root and all child are checked recursively
+    if hasattr(b1, "basis1"):
+        compare_basis(b1.basis1, b2.basis1)
+        compare_basis(b1.basis2, b2.basis2)
+        # add all params that are not parent or basis1,basis2
+        d1 = filter_attributes(
+            b1, exclude_keys=["_basis1", "_basis2", "_parent"]
+        )
+        d2 = filter_attributes(
+            b2, exclude_keys=["_basis1", "_basis2", "_parent"]
+        )
+        assert d1 == d2
+    else:
+        decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
+        decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
+        assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
+        d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
+        assert d1 == d2
+
+
 def test_all_basis_are_tested() -> None:
     """Meta-test.
 
@@ -2732,35 +2769,8 @@ class TestAdditiveBasis(CombinedBasis):
         )
         add = basis_a_obj + basis_b_obj
 
-        def filter_attributes(obj, exclude_keys):
-            return {
-                key: val for key, val in obj.__dict__.items() if key not in exclude_keys
-            }
-
-        def compare(b1, b2):
-            assert id(b1) != id(b2)
-            assert b1.__class__.__name__ == b2.__class__.__name__
-            if hasattr(b1, "basis1"):
-                compare(b1.basis1, b2.basis1)
-                compare(b1.basis2, b2.basis2)
-                # add all params that are not parent or basis1,basis2
-                d1 = filter_attributes(
-                    b1, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
-                d2 = filter_attributes(
-                    b2, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
-                assert d1 == d2
-            else:
-                decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
-                decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
-                assert np.array_equal(decay_rates_b1, decay_rates_b2)
-                d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
-                d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
-                assert d1 == d2
-
         add2 = add.__sklearn_clone__()
-        compare(add, add2)
+        compare_basis(add, add2)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -4958,6 +4968,17 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
                 out[non_nan],
             )
             assert np.all(np.isnan(out[~non_nan]))
+
+@pytest.mark.parametrize("basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    add = basis_obj * 2
+    b1 = add.basis1 * 2
+    # use deep copy
+    b2 = AdditiveBasis(add.basis1, add.basis1)
+    compare_basis(b1, b2)
 
 
 @pytest.mark.parametrize(
