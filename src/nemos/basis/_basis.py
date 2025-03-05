@@ -548,7 +548,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         mul = MultiplicativeBasis(self, self)
         with mul._set_shallow_copy_temporarily(True):
             for _ in range(2, exponent):
-                mul = MultiplicativeBasis(mul, deepcopy(self))
+                mul *= deepcopy(self)
         return mul
 
     def __repr__(self):
