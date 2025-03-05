@@ -549,6 +549,13 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         if exponent <= 0:
             raise ValueError("Basis exponent should be a non-negative integer!")
+        elif not all(
+                b._has_default_label for _, b in generate_basis_label_pair(self)
+        ):
+            raise ValueError(
+                "Cannot calculate the power of a basis including a user-defined labels "
+                "(because then they won't be unique). Set labels after exponentiation."
+            )
 
         # default case
         if exponent == 1:
