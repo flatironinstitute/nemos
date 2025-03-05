@@ -49,9 +49,7 @@ def extra_decay_rates(cls, n_basis):
 
 
 def filter_attributes(obj, exclude_keys):
-    return {
-        key: val for key, val in obj.__dict__.items() if key not in exclude_keys
-    }
+    return {key: val for key, val in obj.__dict__.items() if key not in exclude_keys}
 
 
 def compare_basis(b1, b2):
@@ -69,12 +67,8 @@ def compare_basis(b1, b2):
         compare_basis(b1.basis1, b2.basis1)
         compare_basis(b1.basis2, b2.basis2)
         # add all params that are not parent or basis1,basis2
-        d1 = filter_attributes(
-            b1, exclude_keys=["_basis1", "_basis2", "_parent"]
-        )
-        d2 = filter_attributes(
-            b2, exclude_keys=["_basis1", "_basis2", "_parent"]
-        )
+        d1 = filter_attributes(b1, exclude_keys=["_basis1", "_basis2", "_parent"])
+        d2 = filter_attributes(b2, exclude_keys=["_basis1", "_basis2", "_parent"])
         assert d1 == d2
     else:
         decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
@@ -3742,10 +3736,10 @@ class TestMultiplicativeBasis(CombinedBasis):
         basis_obj = self.instantiate_basis(
             5, bas_cls, basis_class_specific_params, window_size=10
         )
-        _ = basis_obj ** 2
+        _ = basis_obj**2
         basis_obj.label = "x"
         with pytest.raises(ValueError, match="Cannot calculate the power of a basis"):
-            _ = basis_obj ** 2
+            _ = basis_obj**2
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4993,7 +4987,10 @@ def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
             )
             assert np.all(np.isnan(out[~non_nan]))
 
-@pytest.mark.parametrize("basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv"))
+
+@pytest.mark.parametrize(
+    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+)
 def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
     basis_obj = CombinedBasis.instantiate_basis(
         5, basis_class, basis_class_specific_params, window_size=5
