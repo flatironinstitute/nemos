@@ -494,7 +494,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 b._has_default_label for _, b in generate_basis_label_pair(self)
             ):
                 raise ValueError(
-                    "Cannot multiply by an integer a basis including a user-defined labels."
+                    "Cannot multiply by an integer a basis including a user-defined labels (because then they won't be unique). Set labels after multiplication."
                 )
             # default case
             if other == 1:
