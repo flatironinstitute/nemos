@@ -503,7 +503,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             add = AdditiveBasis(self, self)
             with add._set_shallow_copy_temporarily(True):
                 for _ in range(2, other):
-                    add = AdditiveBasis(add, deepcopy(self))
+                    add += deepcopy(self)
             return add
 
         if not isinstance(other, Basis):
