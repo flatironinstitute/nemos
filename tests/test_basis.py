@@ -2457,6 +2457,18 @@ class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
     @pytest.mark.parametrize(
+        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_mul_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas_cls, basis_class_specific_params, window_size=10
+        )
+        _ = basis_obj * 2
+        basis_obj.label = "x"
+        with pytest.raises(ValueError, match="Cannot multiply by an integer"):
+            _ = basis_obj * 2
+
+    @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
@@ -3722,6 +3734,18 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    @pytest.mark.parametrize(
+        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_pow_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas_cls, basis_class_specific_params, window_size=10
+        )
+        _ = basis_obj ** 2
+        basis_obj.label = "x"
+        with pytest.raises(ValueError, match="Cannot calculate the power of a basis"):
+            _ = basis_obj ** 2
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
