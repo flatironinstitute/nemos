@@ -4996,9 +4996,47 @@ def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
         5, basis_class, basis_class_specific_params, window_size=5
     )
     add = basis_obj * 2
-    b1 = add.basis1 * 2
+    b1 = add.basis1 * 1
     # use deep copy
-    b2 = AdditiveBasis(add.basis1, add.basis1)
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
+    # nest one more
+    add = basis_obj * 3
+    b1 = add.basis1 * 1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
+
+
+@pytest.mark.parametrize(
+    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+)
+def test_pow_of_basis_from_nested(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    add = basis_obj * 2
+    b1 = add.basis1**1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
+    # nest one more
+    add = basis_obj * 3
+    b1 = add.basis1**1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
     compare_basis(b1, b2)
 
 
@@ -6078,7 +6116,7 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=BSplineEval(n_basis_funcs=10, order=4),\n)"
+        "'BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 
@@ -6102,7 +6140,7 @@ def test_composite_basis_repr_wrapping():
         "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
     )
     assert out.endswith(
-        "MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2=MSplineEval(n_basis_funcs=10, order=4),\n)"
+        "'MSplineEval_98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='MSplineEval_99': MSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 

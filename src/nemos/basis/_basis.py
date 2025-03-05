@@ -502,7 +502,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             if other == 1:
                 # __sklearn_clone__ reset the parent to None in case bas.basis1 * 1
                 # (deepcopy would not)
-                copy_ = getattr(self, "__sklearn_clone__", deepcopy)
+                copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
                 bas = copy_(self)
 
                 # if deepcopy was called (custom basis used in composition)
@@ -564,7 +564,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if exponent == 1:
             # __sklearn_clone__ reset the parent to None in case bas.basis1 ** 1
             # (deepcopy would not)
-            copy_ = getattr(self, "__sklearn_clone__", deepcopy)
+            copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
             bas = copy_(self)
 
             # if deepcopy was called (custom basis used in composition)
