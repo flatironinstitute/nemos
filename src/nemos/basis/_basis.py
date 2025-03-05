@@ -500,10 +500,15 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 )
             # default case
             if other == 1:
-                bas = deepcopy(self)
-                # reset parent
-                # takes care of case: bas.basis1 * 1
-                bas._parent = None
+                # __sklearn_clone__ reset the parent to None in case bas.basis1 * 1
+                # (deepcopy would not)
+                copy_ = getattr(self, "__sklearn_clone__", deepcopy)
+                bas = copy_(self)
+
+                # if deepcopy was called (custom basis used in composition)
+                # reset _parent if it exists and is not None
+                if hasattr(bas, "_parent") and bas._parent is not None:
+                    bas._parent = None
                 _recompute_all_default_labels(bas)
                 return bas
 
@@ -557,10 +562,16 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # default case
         if exponent == 1:
-            bas = deepcopy(self)
-            # reset parent
-            # takes care of case: bas.basis1 * 1
-            bas._parent = None
+            # __sklearn_clone__ reset the parent to None in case bas.basis1 ** 1
+            # (deepcopy would not)
+            copy_ = getattr(self, "__sklearn_clone__", deepcopy)
+            bas = copy_(self)
+
+            # if deepcopy was called (custom basis used in composition)
+            # reset _parent if it exists and it is not None
+            if hasattr(bas, "_parent") and bas._parent is not None:
+                bas._parent = None
+
             _recompute_all_default_labels(bas)
             return bas
 
