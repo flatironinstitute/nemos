@@ -102,6 +102,32 @@ def min_max_rescale_samples(
 
     return sample_pts, scaling
 
+def get_euqi_spaced_samples(*n_samples, bounds: Optional[tuple[float, float]] = None) -> Generator[NDArray]:
+    """Get equi-spaced samples for all the input dimensions.
+
+    This will be used to evaluate the basis on a grid of
+    points derived by the samples.
+
+    Parameters
+    ----------
+    n_samples[0],...,n_samples[n]
+        The number of samples in each axis of the grid.
+    bounds:
+        The bounds for the linspace, if provided.
+
+    Returns
+    -------
+    :
+        A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
+    """
+    # handling of defaults when evaluating on a grid
+    # (i.e. when we cannot use max and min of samples)
+    if bounds is None:
+        mn, mx = 0, 1
+    else:
+        mn, mx = bounds
+    return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+
 
 def generate_basis_label_pair(bas: Basis):
     if hasattr(bas, "basis1"):
@@ -297,11 +323,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
         bounds = getattr(self, "bounds", None)
-        if bounds is None:
-            mn, mx = 0, 1
-        else:
-            mn, mx = bounds
-        return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+        return get_euqi_spaced_samples(*n_samples, bounds=bounds)
 
     @support_pynapple(conv_type="numpy")
     def _check_transform_input(
@@ -364,8 +386,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         if self._has_zero_samples(n_samples):
             raise ValueError("All sample counts provided must be greater than zero.")
 
-        # get the samples
-        sample_tuple = self._get_samples(*n_samples)
+        # get the samples (can be re-implemented, by providing a _get_samples)
+        bounds = getattr(self, "bounds", None)
+        get_samples = getattr(self, "_get_samples", lambda *x: get_euqi_spaced_samples(*x, bounds=bounds))
+        sample_tuple = get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # evaluates the basis on a flat NDArray and reshape to match meshgrid output
