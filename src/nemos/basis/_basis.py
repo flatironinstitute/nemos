@@ -4,6 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from collections import OrderedDict
+from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
 
@@ -18,6 +19,7 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+from ._composition_utils import _recompute_all_default_labels
 
 
 def add_docstring(method_name, cls):
@@ -466,7 +468,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         return AdditiveBasis(self, other)
 
-    def __mul__(self, other: Basis) -> MultiplicativeBasis:
+    def __rmul__(self, other: Basis | int):
+        return self.__mul__(other)
+
+    def __mul__(self, other: Basis | int) -> Basis:
         """
         Multiply two Basis objects together.
 
@@ -480,9 +485,48 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         :
             The resulting Basis object.
         """
+        if isinstance(other, int):
+            if other <= 0:
+                raise ValueError(
+                    "Basis multiplication error. Integer multiplicative factor must be positive, "
+                    f"{other} provided instead."
+                )
+            elif not all(
+                b._has_default_label for _, b in generate_basis_label_pair(self)
+            ):
+                raise ValueError(
+                    "Cannot multiply by an integer a basis including a user-defined labels "
+                    "(because then they won't be unique). Set labels after multiplication."
+                )
+            # default case
+            if other == 1:
+                # __sklearn_clone__ reset the parent to None in case bas.basis1 * 1
+                # (deepcopy would not)
+                copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
+                bas = copy_(self)
+
+                # if deepcopy was called (custom basis used in composition)
+                # reset _parent if it exists and is not None
+                if hasattr(bas, "_parent") and bas._parent is not None:
+                    bas._parent = None
+                _recompute_all_default_labels(bas)
+                return bas
+
+            # parent is set to None at init for add and updated for self.
+            add = AdditiveBasis(self, self)
+            with add._set_shallow_copy(True):
+                for _ in range(2, other):
+                    add += deepcopy(self)
+            _recompute_all_default_labels(add)
+            return add
+
+        if not isinstance(other, Basis):
+            raise TypeError(
+                "Basis multiplicative factor should be a Basis object or a positive integer!"
+            )
         return MultiplicativeBasis(self, other)
 
-    def __pow__(self, exponent: int) -> MultiplicativeBasis:
+    def __pow__(self, exponent: int) -> Basis:
         """Exponentiation of a Basis object.
 
         Define the power of a basis by repeatedly applying the method __multiply__.
@@ -506,15 +550,37 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             If the integer is zero or negative.
         """
         if not isinstance(exponent, int):
-            raise TypeError("Exponent should be an integer!")
+            raise TypeError("Basis exponent should be an integer!")
 
         if exponent <= 0:
-            raise ValueError("Exponent should be a non-negative integer!")
+            raise ValueError("Basis exponent should be a non-negative integer!")
+        elif not all(b._has_default_label for _, b in generate_basis_label_pair(self)):
+            raise ValueError(
+                "Cannot calculate the power of a basis including a user-defined labels "
+                "(because then they won't be unique). Set labels after exponentiation."
+            )
 
-        result = self
-        for _ in range(exponent - 1):
-            result = result * self
-        return result
+        # default case
+        if exponent == 1:
+            # __sklearn_clone__ reset the parent to None in case bas.basis1 ** 1
+            # (deepcopy would not)
+            copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
+            bas = copy_(self)
+
+            # if deepcopy was called (custom basis used in composition)
+            # reset _parent if it exists and it is not None
+            if hasattr(bas, "_parent") and bas._parent is not None:
+                bas._parent = None
+
+            _recompute_all_default_labels(bas)
+            return bas
+
+        mul = MultiplicativeBasis(self, self)
+        with mul._set_shallow_copy(True):
+            for _ in range(2, exponent):
+                mul *= deepcopy(self)
+        _recompute_all_default_labels(mul)
+        return mul
 
     def __repr__(self):
         return format_repr(self)
@@ -1219,6 +1285,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
+
         Basis.__init__(self, mode="composite")
         self._n_input_dimensionality = (
             basis1._n_input_dimensionality + basis2._n_input_dimensionality

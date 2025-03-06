@@ -6,6 +6,7 @@ import abc
 import copy
 import inspect
 import re
+from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
@@ -401,7 +402,7 @@ class ConvBasisMixin:
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
         conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
-        return np.reshape(conv, shape=(conv.shape[0], -1))
+        return np.reshape(conv, (conv.shape[0], -1))
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
@@ -585,15 +586,22 @@ class CompositeBasisMixin:
     (AdditiveBasis and MultiplicativeBasis).
     """
 
+    _shallow_copy: bool = False
+
     def __init__(self, basis1: Basis, basis2: Basis, label: Optional[str] = None):
-        # deep copy to avoid changes directly to the 1d basis to be reflected
-        # in the composite basis.
         # This step is slow if you add a very large number of bases
         self._basis1 = None
         self._basis2 = None
+        # deep copy to avoid changes directly to the 1d basis to be reflected
+        # in the composite basis.
 
-        self.basis1 = copy.deepcopy(basis1)
-        self.basis2 = copy.deepcopy(basis2)
+        if not self.__class__._shallow_copy:
+            self.basis1 = copy.deepcopy(basis1)
+            self.basis2 = copy.deepcopy(basis2)
+        else:
+            # skip checks and shallow copy
+            self._basis1 = basis1
+            self._basis2 = basis2
 
         # set parents
         self.basis1._parent = self
@@ -683,7 +691,7 @@ class CompositeBasisMixin:
 
     def _input_shape_update(self):
         # if all bases where set, then set input for composition.
-        set_bases = [s is not None for s in self.input_shape]
+        set_bases = (s is not None for s in self.input_shape)
 
         if all(set_bases):
             # pass down the input shapes
@@ -852,6 +860,16 @@ class CompositeBasisMixin:
             components2,
         )
 
+    @contextmanager
+    def _set_shallow_copy(self, value):
+        """Context manager for setting the shallow copy flag in a thread safe way."""
+        old_value = self.__class__._shallow_copy
+        self.__class__._shallow_copy = value
+        try:
+            yield
+        finally:
+            self.__class__._shallow_copy = old_value
+
     @set_input_shape_state(states=("_input_shape_product", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
@@ -861,14 +879,21 @@ class CompositeBasisMixin:
         as in the regular sklearn clone would drop these attributes, rendering
         cross-validation unusable.
         The method also handles recursive cloning for composite basis structures.
-        """
-        # clone recursively
-        basis1 = self.basis1.__sklearn_clone__()
-        basis2 = self.basis2.__sklearn_clone__()
-        klass = self.__class__(basis1, basis2)
 
-        for attr_name in ["_input_shape_product"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
+        Notes
+        -----
+        The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
+        before the klass definition, and reset to False after cloning.
+        """
+
+        with self._set_shallow_copy(True):
+            # clone recursively
+            basis1 = self.basis1.__sklearn_clone__()
+            basis2 = self.basis2.__sklearn_clone__()
+
+            # shallow copy init
+            klass = self.__class__(basis1, basis2)
+
         return klass
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:

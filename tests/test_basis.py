@@ -15,7 +15,13 @@ import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
 import nemos.convolve as convolve
 from nemos.basis import HistoryConv, IdentityEval, TransformerBasis
-from nemos.basis._basis import AdditiveBasis, MultiplicativeBasis, add_docstring
+from nemos.basis._basis import (
+    AdditiveBasis,
+    Basis,
+    MultiplicativeBasis,
+    add_docstring,
+    generate_basis_label_pair,
+)
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -40,6 +46,37 @@ def extra_decay_rates(cls, n_basis):
     if "OrthExp" in name:
         return dict(decay_rates=np.arange(1, n_basis + 1))
     return {}
+
+
+def filter_attributes(obj, exclude_keys):
+    return {key: val for key, val in obj.__dict__.items() if key not in exclude_keys}
+
+
+def compare_basis(b1, b2):
+    assert id(b1) != id(b2)
+    assert b1.__class__.__name__ == b2.__class__.__name__
+    par1 = b1.__dict__.get("_parent", None)
+    par2 = b2.__dict__.get("_parent", None)
+    if par1 is None:
+        assert par2 is None
+    elif par2 is None:
+        assert par1 is None
+
+    # root and all child are checked recursively
+    if hasattr(b1, "basis1"):
+        compare_basis(b1.basis1, b2.basis1)
+        compare_basis(b1.basis2, b2.basis2)
+        # add all params that are not parent or basis1,basis2
+        d1 = filter_attributes(b1, exclude_keys=["_basis1", "_basis2", "_parent"])
+        d2 = filter_attributes(b2, exclude_keys=["_basis1", "_basis2", "_parent"])
+        assert d1 == d2
+    else:
+        decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
+        decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
+        assert np.array_equal(decay_rates_b1, decay_rates_b2)
+        d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
+        d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
+        assert d1 == d2
 
 
 def test_all_basis_are_tested() -> None:
@@ -2414,6 +2451,18 @@ class TestAdditiveBasis(CombinedBasis):
     cls = {"eval": AdditiveBasis, "conv": AdditiveBasis}
 
     @pytest.mark.parametrize(
+        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_mul_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas_cls, basis_class_specific_params, window_size=10
+        )
+        _ = basis_obj * 2
+        basis_obj.label = "x"
+        with pytest.raises(ValueError, match="Cannot multiply by an integer"):
+            _ = basis_obj * 2
+
+    @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
     )
     def test_add_label_using_class_name(self, basis_a, basis_class_specific_params):
@@ -2556,6 +2605,20 @@ class TestAdditiveBasis(CombinedBasis):
         add = basis_a_obj + basis_b_obj
         assert add._input_shape_product == (1, 6)
         assert (add + add)._input_shape_product == (1, 6, 1, 6)
+
+    @pytest.mark.parametrize(
+        "bas", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_rmul_lmul(self, bas, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas, basis_class_specific_params, window_size=10
+        )
+        out = 10 * basis_obj
+        assert isinstance(out, AdditiveBasis)
+        assert sum((1 for _ in out._iterate_over_components())) == 10
+        out = basis_obj * 10
+        assert isinstance(out, AdditiveBasis)
+        assert sum((1 for _ in out._iterate_over_components())) == 10
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -2712,35 +2775,8 @@ class TestAdditiveBasis(CombinedBasis):
         )
         add = basis_a_obj + basis_b_obj
 
-        def filter_attributes(obj, exclude_keys):
-            return {
-                key: val for key, val in obj.__dict__.items() if key not in exclude_keys
-            }
-
-        def compare(b1, b2):
-            assert id(b1) != id(b2)
-            assert b1.__class__.__name__ == b2.__class__.__name__
-            if hasattr(b1, "basis1"):
-                compare(b1.basis1, b2.basis1)
-                compare(b1.basis2, b2.basis2)
-                # add all params that are not parent or basis1,basis2
-                d1 = filter_attributes(
-                    b1, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
-                d2 = filter_attributes(
-                    b2, exclude_keys=["_basis1", "_basis2", "_parent"]
-                )
-                assert d1 == d2
-            else:
-                decay_rates_b1 = b1.__dict__.get("_decay_rates", -1)
-                decay_rates_b2 = b2.__dict__.get("_decay_rates", -1)
-                assert np.array_equal(decay_rates_b1, decay_rates_b2)
-                d1 = filter_attributes(b1, exclude_keys=["_decay_rates", "_parent"])
-                d2 = filter_attributes(b2, exclude_keys=["_decay_rates", "_parent"])
-                assert d1 == d2
-
         add2 = add.__sklearn_clone__()
-        compare(add, add2)
+        compare_basis(add, add2)
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -3692,6 +3728,18 @@ class TestAdditiveBasis(CombinedBasis):
 
 class TestMultiplicativeBasis(CombinedBasis):
     cls = {"eval": MultiplicativeBasis, "conv": MultiplicativeBasis}
+
+    @pytest.mark.parametrize(
+        "bas_cls", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+    )
+    def test_pow_by_int_basis_with_label(self, bas_cls, basis_class_specific_params):
+        basis_obj = self.instantiate_basis(
+            5, bas_cls, basis_class_specific_params, window_size=10
+        )
+        _ = basis_obj**2
+        basis_obj.label = "x"
+        with pytest.raises(ValueError, match="Cannot calculate the power of a basis"):
+            _ = basis_obj**2
 
     @pytest.mark.parametrize(
         "basis_a", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
@@ -4820,15 +4868,15 @@ def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
         raise_exception_value = False
 
     basis_obj = CombinedBasis.instantiate_basis(
-        5, basis_class, basis_class_specific_params, window_size=10
+        5, basis_class, basis_class_specific_params, window_size=5
     )
 
     if raise_exception_type:
-        with pytest.raises(TypeError, match=r"Exponent should be an integer\!"):
+        with pytest.raises(TypeError, match=r"Basis exponent should be an integer\!"):
             basis_obj**exponent
     elif raise_exception_value:
         with pytest.raises(
-            ValueError, match=r"Exponent should be a non-negative integer\!"
+            ValueError, match=r"Basis exponent should be a non-negative integer\!"
         ):
             basis_obj**exponent
     else:
@@ -4850,6 +4898,146 @@ def test_power_of_basis(exponent, basis_class, basis_class_specific_params):
             out[non_nan],
         )
         assert np.all(np.isnan(out[~non_nan]))
+
+
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
+def test_power_of_basis_repr(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    pow_basis = basis_obj**3
+    actual_labels = list(l for l, _ in generate_basis_label_pair(pow_basis))
+    assert len(actual_labels) == len(set(actual_labels))
+    cls_names = {b.__class__.__name__ for b in pow_basis._iterate_over_components()}
+    count_cls = {c: 0 for c in cls_names}
+    lab_additive_expected = []
+    for b in pow_basis._iterate_over_components():
+        k = count_cls[b.__class__.__name__]
+        lab_additive_expected.append(
+            b.__class__.__name__ + f"_{k}" if k > 0 else b.__class__.__name__
+        )
+        count_cls[b.__class__.__name__] += 1
+    list_additive_actual = [b.label for b in pow_basis._iterate_over_components()]
+    assert set(lab_additive_expected) == set(list_additive_actual)
+
+
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
+def test_mul_of_basis_repr(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    mul_basis = basis_obj * 3
+    actual_labels = list(l for l, _ in generate_basis_label_pair(mul_basis))
+    assert len(actual_labels) == len(set(actual_labels))
+    cls_names = {b.__class__.__name__ for b in mul_basis._iterate_over_components()}
+    count_cls = {c: 0 for c in cls_names}
+    lab_additive_expected = []
+    for b in mul_basis._iterate_over_components():
+        k = count_cls[b.__class__.__name__]
+        lab_additive_expected.append(
+            b.__class__.__name__ + f"_{k}" if k > 0 else b.__class__.__name__
+        )
+        count_cls[b.__class__.__name__] += 1
+    list_additive_actual = [b.label for b in mul_basis._iterate_over_components()]
+    assert set(lab_additive_expected) == set(list_additive_actual)
+
+
+@pytest.mark.parametrize("mul", [-1, 0, 0.5, 1, 2, 3])
+@pytest.mark.parametrize("basis_class", list_all_basis_classes())
+def test_mul_of_basis_by_int(mul, basis_class, basis_class_specific_params):
+    """Test if the power behaves as expected."""
+    raise_exception_type = not isinstance(mul, int)
+
+    if not raise_exception_type:
+        raise_exception_value = mul <= 0
+    else:
+        raise_exception_value = False
+
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+
+    if raise_exception_type:
+        with pytest.raises(TypeError, match=r"Basis multiplicative factor should be"):
+            basis_obj * mul
+    elif raise_exception_value:
+        with pytest.raises(ValueError, match=r"Basis multiplication error"):
+            basis_obj * mul
+    else:
+
+        for basis_mul in [basis_obj * mul, mul * basis_obj]:
+            samples = np.linspace(0, 1, 10)
+            eval_mul = basis_mul.compute_features(
+                *[samples] * basis_mul._n_input_dimensionality
+            )
+
+            if mul == 2:
+                basis_add = basis_obj + basis_obj
+            elif mul == 3:
+                basis_add = basis_obj + basis_obj + basis_obj
+            else:
+                basis_add = basis_obj
+            non_nan = ~np.isnan(eval_mul)
+            out = basis_add.compute_features(
+                *[samples] * basis_add._n_input_dimensionality
+            )
+            assert np.allclose(
+                eval_mul[non_nan],
+                out[non_nan],
+            )
+            assert np.all(np.isnan(out[~non_nan]))
+
+
+@pytest.mark.parametrize(
+    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+)
+def test_mul_of_basis_from_nested(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    add = basis_obj * 2
+    b1 = add.basis1 * 1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
+    # nest one more
+    add = basis_obj * 3
+    b1 = add.basis1 * 1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
+
+
+@pytest.mark.parametrize(
+    "basis_class", list_all_basis_classes("Eval") + list_all_basis_classes("Conv")
+)
+def test_pow_of_basis_from_nested(basis_class, basis_class_specific_params):
+    basis_obj = CombinedBasis.instantiate_basis(
+        5, basis_class, basis_class_specific_params, window_size=5
+    )
+    add = basis_obj * 2
+    b1 = add.basis1**1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
+    # nest one more
+    add = basis_obj * 3
+    b1 = add.basis1**1
+    # use deep copy
+    b2 = add.basis1
+    with pytest.raises(AssertionError):
+        compare_basis(b1, b2)
+    b2._parent = None
+    compare_basis(b1, b2)
 
 
 @pytest.mark.parametrize(
@@ -5928,7 +6116,7 @@ def test_composite_basis_repr_wrapping():
         "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
     )
     assert out.endswith(
-        "basis2='BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
+        "'BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
     )
     assert "    ...\n" in out
 
@@ -5946,6 +6134,16 @@ def test_composite_basis_repr_wrapping():
     )
     assert "    ...\n" in out
 
+    bas = basis.MSplineEval(10) * 100
+    out = repr(bas)
+    assert out.startswith(
+        "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
+    )
+    assert out.endswith(
+        "'MSplineEval_98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='MSplineEval_99': MSplineEval(n_basis_funcs=10, order=4),\n)"
+    )
+    assert "    ...\n" in out
+
 
 def test_all_public_importable_bases_equal():
     import nemos.basis
@@ -5955,7 +6153,8 @@ def test_all_public_importable_bases_equal():
     # these are all the bases that are imported in the init file
     # Get all classes that are explicitly defined or imported into nemos.basis
     imported_bases = {
-        name for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
+        name
+        for name, obj in inspect.getmembers(nemos.basis, inspect.isclass)
         if issubclass(obj, nemos.basis._basis.Basis)
     }
 
