@@ -595,7 +595,7 @@ class CompositeBasisMixin:
         # deep copy to avoid changes directly to the 1d basis to be reflected
         # in the composite basis.
 
-        if not self._shallow_copy:
+        if not self.__class__._shallow_copy:
             self.basis1 = copy.deepcopy(basis1)
             self.basis2 = copy.deepcopy(basis2)
         else:
@@ -861,7 +861,7 @@ class CompositeBasisMixin:
         )
 
     @contextmanager
-    def _set_shallow_copy_temporarily(self, value):
+    def _set_shallow_copy(self, value):
         """Context manger for setting the shallow copy flag in a thread safe way."""
         old_value = self.__class__._shallow_copy
         self.__class__._shallow_copy = value
@@ -886,7 +886,7 @@ class CompositeBasisMixin:
         before the klass definition, and reset to False after cloning.
         """
 
-        with self._set_shallow_copy_temporarily(True):
+        with self._set_shallow_copy(True):
             # clone recursively
             basis1 = self.basis1.__sklearn_clone__()
             basis2 = self.basis2.__sklearn_clone__()

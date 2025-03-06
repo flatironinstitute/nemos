@@ -19,6 +19,7 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+from ._composition_utils import _recompute_all_default_labels
 
 
 def add_docstring(method_name, cls):
@@ -487,16 +488,29 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 b._has_default_label for _, b in generate_basis_label_pair(self)
             ):
                 raise ValueError(
-                    "Cannot multiply by an integer a basis including a user-defined labels."
+                    "Cannot multiply by an integer a basis including a user-defined labels "
+                    "(because then they won't be unique). Set labels after multiplication."
                 )
             # default case
             if other == 1:
-                return deepcopy(self)
+                # __sklearn_clone__ reset the parent to None in case bas.basis1 * 1
+                # (deepcopy would not)
+                copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
+                bas = copy_(self)
 
+                # if deepcopy was called (custom basis used in composition)
+                # reset _parent if it exists and is not None
+                if hasattr(bas, "_parent") and bas._parent is not None:
+                    bas._parent = None
+                _recompute_all_default_labels(bas)
+                return bas
+
+            # parent is set to None at init for add and updated for self.
             add = AdditiveBasis(self, self)
-            with add._set_shallow_copy_temporarily(True):
+            with add._set_shallow_copy(True):
                 for _ in range(2, other):
-                    add = AdditiveBasis(add, deepcopy(self))
+                    add += deepcopy(self)
+            _recompute_all_default_labels(add)
             return add
 
         if not isinstance(other, Basis):
@@ -533,15 +547,32 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         if exponent <= 0:
             raise ValueError("Basis exponent should be a non-negative integer!")
+        elif not all(b._has_default_label for _, b in generate_basis_label_pair(self)):
+            raise ValueError(
+                "Cannot calculate the power of a basis including a user-defined labels "
+                "(because then they won't be unique). Set labels after exponentiation."
+            )
 
         # default case
         if exponent == 1:
-            return deepcopy(self)
+            # __sklearn_clone__ reset the parent to None in case bas.basis1 ** 1
+            # (deepcopy would not)
+            copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
+            bas = copy_(self)
+
+            # if deepcopy was called (custom basis used in composition)
+            # reset _parent if it exists and it is not None
+            if hasattr(bas, "_parent") and bas._parent is not None:
+                bas._parent = None
+
+            _recompute_all_default_labels(bas)
+            return bas
 
         mul = MultiplicativeBasis(self, self)
-        with mul._set_shallow_copy_temporarily(True):
+        with mul._set_shallow_copy(True):
             for _ in range(2, exponent):
-                mul = MultiplicativeBasis(mul, deepcopy(self))
+                mul *= deepcopy(self)
+        _recompute_all_default_labels(mul)
         return mul
 
     def __repr__(self):
