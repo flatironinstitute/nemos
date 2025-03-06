@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from . import utils
 from .base_class import Base
 
-__all__ = ["PoissonObservations", "GammaObservations"]
+__all__ = ["PoissonObservations", "GammaObservations", "BernoulliObservations"]
 
 
 def __dir__():

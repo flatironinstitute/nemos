@@ -15,6 +15,11 @@ from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
 
+special_key_names = {
+    jax.scipy.stats.norm.cdf: "norm.cdf",
+}
+
+
 def check_dimensionality(
     pytree: Any,
     expected_dim: int,
@@ -536,7 +541,10 @@ def format_repr(
         )
         if repr_param:
             if k in use_name_keys:
-                v = getattr(v, "__name__", repr(v))
+                if v in special_key_names:
+                    v = special_key_names[v]
+                else:
+                    v = getattr(v, "__name__", repr(v))
             elif isinstance(v, str):
                 v = repr(v)
             disp_params.append(f"{k}={v}")

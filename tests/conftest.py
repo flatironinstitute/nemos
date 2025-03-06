@@ -755,3 +755,30 @@ def example_X_y_high_firing_rates():
     rate = jnp.exp(jnp.dot(X, w_true) + b_true)
     spikes = np.random.poisson(rate)
     return X, spikes
+
+
+@pytest.fixture
+def bernoulliGLM_model_instantiation():
+    """Set up a Bernoulli GLM for testing purposes.
+
+    This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(100, 5))
+    b_true = np.zeros((1,))
+    w_true = np.random.normal(size=(5,))
+    observation_model = nmo.observation_models.BernoulliObservations(jax.lax.logistic)
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.GLM(observation_model, regularizer)
+    rate = jax.lax.logistic(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+    return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
