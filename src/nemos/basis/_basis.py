@@ -13,7 +13,9 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
+from .._inspect_utils.inspect_utils import count_positional_and_var_args
 from ..base_class import Base
+from ..tree_utils import has_matching_axis_pytree
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
@@ -103,7 +105,10 @@ def min_max_rescale_samples(
 
     return sample_pts, scaling
 
-def get_euqi_spaced_samples(*n_samples, bounds: Optional[tuple[float, float]] = None) -> Generator[NDArray]:
+
+def get_equi_spaced_samples(
+    *n_samples, bounds: Optional[tuple[float, float]] = None
+) -> Generator[NDArray]:
     """Get equi-spaced samples for all the input dimensions.
 
     This will be used to evaluate the basis on a grid of
@@ -324,7 +329,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
         bounds = getattr(self, "bounds", None)
-        return get_euqi_spaced_samples(*n_samples, bounds=bounds)
+        return get_equi_spaced_samples(*n_samples, bounds=bounds)
 
     @support_pynapple(conv_type="numpy")
     def _check_transform_input(
@@ -360,8 +365,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             raise ValueError("All sample provided must be non empty.")
 
         # checks on input and outputs
-        self._check_samples_consistency(*xi)
         self._check_input_dimensionality(xi)
+        self._check_samples_consistency(*xi)
 
         return xi
 
@@ -389,7 +394,9 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # get the samples (can be re-implemented, by providing a _get_samples)
         bounds = getattr(self, "bounds", None)
-        get_samples = getattr(self, "_get_samples", lambda *x: get_euqi_spaced_samples(*x, bounds=bounds))
+        get_samples = getattr(
+            self, "_get_samples", lambda *x: get_equi_spaced_samples(*x, bounds=bounds)
+        )
         sample_tuple = get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
@@ -418,9 +425,14 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the number of inputs doesn't match what the Basis object requires.
         """
-        if len(xi) != self._n_input_dimensionality:
+        n_input_dim = getattr(self, "_n_input_dimensionality", None)
+        if n_input_dim is None:
+            # infer from compute_features (facilitate custom basis compatibility).
+            # assume compute_features is always implemented.
+            n_input_dim, _ = count_positional_and_var_args(self.compute_features)
+        if len(xi) != n_input_dim:
             raise TypeError(
-                f"Input dimensionality mismatch. This basis evaluation requires {self._n_input_dimensionality} inputs, "
+                f"Input dimensionality mismatch. This basis evaluation requires {n_input_dim} inputs, "
                 f"{len(xi)} inputs provided instead."
             )
 
@@ -439,8 +451,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the time point number is inconsistent between inputs.
         """
-        sample_sizes = [sample.shape[0] for sample in xi]
-        if any(elem != sample_sizes[0] for elem in sample_sizes):
+        if not has_matching_axis_pytree(*xi, axis=0):
             raise ValueError(
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )

@@ -1,6 +1,6 @@
 import abc
 import inspect
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 
 def reimplements_method(
@@ -245,3 +245,22 @@ def trim_kwargs(cls: type, kwargs: dict, class_specific_params: dict):
         for key, value in kwargs.items()
         if key in class_specific_params[cls.__name__]
     }
+
+
+def count_params_by_kind(func: Callable, kind: set[inspect.Parameter]):
+    """Count how many parameters of the callable are of the desired kind."""
+    sig = inspect.signature(func)
+    params = sig.parameters.values()
+    return sum(1 for p in params if p.kind in kind)
+
+
+def count_positional_and_var_args(func: Callable):
+    """Count the positional arguments of a callable."""
+    num_positional_args = count_params_by_kind(
+        func,
+        {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD},
+    )
+    num_var_args = count_params_by_kind(
+        func, {inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL}
+    )
+    return num_positional_args, num_var_args
