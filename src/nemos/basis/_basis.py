@@ -13,7 +13,6 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
-from .._inspect_utils.inspect_utils import count_positional_and_var_args
 from ..base_class import Base
 from ..tree_utils import has_matching_axis_pytree
 from ..type_casting import support_pynapple
@@ -21,7 +20,10 @@ from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
-from ._composition_utils import _recompute_all_default_labels
+from ._composition_utils import (
+    _recompute_all_default_labels,
+    infer_input_dimensionality,
+)
 
 
 def add_docstring(method_name, cls):
@@ -425,11 +427,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the number of inputs doesn't match what the Basis object requires.
         """
-        n_input_dim = getattr(self, "_n_input_dimensionality", None)
-        if n_input_dim is None:
-            # infer from compute_features (facilitate custom basis compatibility).
-            # assume compute_features is always implemented.
-            n_input_dim, _ = count_positional_and_var_args(self.compute_features)
+        n_input_dim = infer_input_dimensionality(self)
         if len(xi) != n_input_dim:
             raise TypeError(
                 f"Input dimensionality mismatch. This basis evaluation requires {n_input_dim} inputs, "
@@ -850,11 +848,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
-
-        # number of input arrays that the basis receives
-        self._n_input_dimensionality = (
-            basis1._n_input_dimensionality + basis2._n_input_dimensionality
-        )
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " + " + self.basis2.label + ")"
@@ -1289,11 +1282,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
-
         Basis.__init__(self)
-        self._n_input_dimensionality = (
-            basis1._n_input_dimensionality + basis2._n_input_dimensionality
-        )
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " * " + self.basis2.label + ")"

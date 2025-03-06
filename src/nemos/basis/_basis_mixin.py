@@ -23,6 +23,7 @@ from ._composition_utils import (
     _composite_basis_setter_logic,
     _get_root,
     _recompute_all_default_labels,
+    infer_input_dimensionality,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -611,6 +612,11 @@ class CompositeBasisMixin:
         self._label = None
         # use setter to check & set provided label
         self.label = label
+
+        # number of input arrays that the basis receives
+        self._n_input_dimensionality = infer_input_dimensionality(
+            basis1
+        ) + infer_input_dimensionality(basis2)
 
     @property
     def basis1(self):

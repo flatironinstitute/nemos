@@ -8,6 +8,8 @@ with no to minimal re
 import re
 from typing import TYPE_CHECKING
 
+from .._inspect_utils.inspect_utils import count_positional_and_var_args
+
 if TYPE_CHECKING:
     from ._basis import Basis
     from ._basis_mixin import AtomicBasisMixin, CompositeBasisMixin
@@ -232,3 +234,12 @@ def _check_input_consistency(bas, *x):
             "different shape, please create a new basis instance, or set a new input shape by calling "
             "`set_input_shape`."
         )
+
+
+def infer_input_dimensionality(bas: "Basis") -> int:
+    n_input_dim = getattr(bas, "_n_input_dimensionality", None)
+    if n_input_dim is None:
+        # infer from compute_features (facilitate custom basis compatibility).
+        # assume compute_features is always implemented.
+        n_input_dim, _ = count_positional_and_var_args(bas.compute_features)
+    return n_input_dim
