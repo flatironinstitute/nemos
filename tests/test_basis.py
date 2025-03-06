@@ -1356,7 +1356,7 @@ class TestSharedMethods:
             window_size=30,
             **extra_decay_rates(cls["conv"], 5),
         )
-        bas.set_kernel()
+        bas._set_kernel()
         assert bas.kernel_ is not None
 
     def test_fit_kernel_shape(self, cls):
@@ -1367,7 +1367,7 @@ class TestSharedMethods:
             window_size=30,
             **extra_decay_rates(cls["conv"], n_basis),
         )
-        bas.set_kernel()
+        bas._set_kernel()
         assert bas.kernel_.shape == (30, n_basis)
 
     @pytest.mark.parametrize(

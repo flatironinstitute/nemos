@@ -425,7 +425,7 @@ class ConvBasisMixin:
         :
             The basis with ready for evaluation.
         """
-        self.set_kernel()
+        self._set_kernel()
         self.set_input_shape(*xi)
         return self
 
@@ -435,9 +435,9 @@ class ConvBasisMixin:
 
         For Conv mixin the only attribute is the kernel.
         """
-        return self.set_kernel()
+        return self._set_kernel()
 
-    def set_kernel(self) -> "ConvBasisMixin":
+    def _set_kernel(self) -> "ConvBasisMixin":
         """
         Prepare or compute the convolutional kernel for the basis functions.
 

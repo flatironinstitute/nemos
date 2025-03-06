@@ -121,7 +121,7 @@ def extract_body_exclude_def_and_return(func):
 @capture_print
 def two_step_convolve_cell_body(basis, inp, out):
     # setup the kernels
-    basis.set_kernel()
+    basis._set_kernel()
     print(f"Kernel shape (window_size, n_basis_funcs): {basis.kernel_.shape}")
 
     # apply the convolution
