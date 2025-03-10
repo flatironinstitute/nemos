@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
+from ._composition_utils import _iterate_over_components, infer_input_dimensionality
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -97,7 +98,26 @@ class TransformerBasis:
                 f"\nMissing methods: {missing_attrs}."
             )
         self.basis = copy.deepcopy(basis)
+        self._assign_input_shape(self.basis)
+        self.basis._parent = None
         self._wrapped_methods = {}  # Cache for wrapped methods
+
+    @staticmethod
+    def _assign_input_shape(basis):
+        # iterate over atomic or custom components
+        default_shape = []
+        for bas in _iterate_over_components(basis):
+            ishape = getattr(bas, "input_shape", None)
+            # handles the case of a multi-dim basis with set shape
+            if isinstance(ishape, list):
+                default_shape.extend(ishape)
+            # handles the case of a 1dim basis with set shape
+            elif ishape is not None:
+                default_shape.append(ishape)
+            # handles custom or 1dim with no set shape
+            else:
+                default_shape.extend([()] * infer_input_dimensionality(bas))
+        basis.set_input_shape(*default_shape)
 
     @staticmethod
     def _check_initialized(basis):

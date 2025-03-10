@@ -11,7 +11,13 @@ from sklearn.pipeline import Pipeline
 import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
-from nemos.basis import AdditiveBasis, HistoryConv, IdentityEval, MultiplicativeBasis
+from nemos.basis import (
+    AdditiveBasis,
+    HistoryConv,
+    IdentityEval,
+    MultiplicativeBasis,
+    TransformerBasis,
+)
 
 
 @pytest.mark.parametrize(
@@ -472,13 +478,7 @@ def test_transformerbasis_pickle(
     "set_input, expectation",
     [
         (True, does_not_raise()),
-        (
-            False,
-            pytest.raises(
-                RuntimeError,
-                match="Cannot apply TransformerBasis: the provided basis has no defined input shape",
-            ),
-        ),
+        (False, does_not_raise()),
     ],
 )
 @pytest.mark.parametrize(
@@ -498,9 +498,15 @@ def test_to_transformer_and_set_input(
         bas.set_input_shape(*([inp] * bas._n_input_dimensionality))
     trans = bas.to_transformer()
     with expectation:
-        X = np.concatenate(
-            [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-        )
+        if set_input:
+            X = np.concatenate(
+                [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
+            )
+        else:
+            X = np.concatenate(
+                [inp.reshape(inp.shape[0], -1)[:, :1]] * bas._n_input_dimensionality,
+                axis=1,
+            )
         trans.fit(X)
 
 
@@ -798,15 +804,23 @@ def test_initialization(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
+    expectation = (
+        does_not_raise()
+        if not isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis))
+        else pytest.raises(
+            ValueError,
+            match="Input mismatch: expected 2 inputs, but got 1 columns in X",
+        )
+    )
     transformer = bas.to_transformer()
-    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
-        transformer.fit(np.ones((100,)))
+    with expectation:
+        transformer.fit(np.ones((100, 1)))
 
-    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
-        transformer.transform(np.ones((100,)))
+    with expectation:
+        transformer.transform(np.ones((100, 1)))
 
-    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
-        transformer.fit_transform(np.ones((100,)))
+    with expectation:
+        transformer.fit_transform(np.ones((100, 1)))
 
 
 @pytest.mark.parametrize(
@@ -1013,3 +1027,45 @@ def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
 def test_transformer_init_type(bas, expectation):
     with expectation:
         out = nmo.basis.TransformerBasis(bas)
+
+
+def test_top_level_parent_is_reset():
+    bas = nmo.basis.BSplineEval(5) * 3
+    tbas = bas.basis1.to_transformer()
+    assert tbas._parent is None
+    assert tbas.basis1._parent is not None
+    assert tbas.basis2._parent is not None
+    tbas = TransformerBasis(bas)
+    assert tbas._parent is None
+    assert tbas.basis1._parent is not None
+    assert tbas.basis2._parent is not None
+
+
+@pytest.mark.parametrize(
+    "bas", [nmo.basis.BSplineEval(5) * 3, nmo.basis.BSplineEval(5) ** 3]
+)
+def test_input_shape_defaults(bas):
+    tbas = bas.to_transformer()
+    assert tbas.input_shape == [()] * 3
+    assert tbas._input_shape_product == (1, 1, 1)
+    tbas = TransformerBasis(bas)
+    assert tbas.input_shape == [()] * 3
+    assert tbas._input_shape_product == (1, 1, 1)
+
+    bas.basis1.set_input_shape(1, (2, 3))
+    tbas = bas.to_transformer()
+    assert tbas.input_shape == [(), (2, 3), ()]
+    assert tbas._input_shape_product == (1, 6, 1)
+    tbas = TransformerBasis(bas)
+    assert tbas.input_shape == [(), (2, 3), ()]
+    assert tbas._input_shape_product == (1, 6, 1)
+
+    bas.basis1.basis2._input_shape_ = None
+    bas.basis1.basis1.set_input_shape((1,))
+    bas.basis2.set_input_shape((4, 5, 6))
+    tbas = bas.to_transformer()
+    assert tbas.input_shape == [(1,), (), (4, 5, 6)]
+    assert tbas._input_shape_product == (1, 1, 120)
+    tbas = TransformerBasis(bas)
+    assert tbas.input_shape == [(1,), (), (4, 5, 6)]
+    assert tbas._input_shape_product == (1, 1, 120)

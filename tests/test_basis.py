@@ -200,6 +200,68 @@ def test_example_docstrings_add(
         assert f" {basis_name}" not in doc_components[1]
 
 
+@pytest.mark.parametrize(
+    "public_class, meth_super",
+    [
+        ("IdentityEval", "IdentityBasis"),
+        ("HistoryConv", "HistoryBasis"),
+        ("MSplineEval", "MSplineBasis"),
+        ("MSplineConv", "MSplineBasis"),
+        ("BSplineEval", "BSplineBasis"),
+        ("BSplineConv", "BSplineBasis"),
+        ("CyclicBSplineEval", "CyclicBSplineBasis"),
+        ("CyclicBSplineConv", "CyclicBSplineBasis"),
+        ("RaisedCosineLinearEval", "RaisedCosineBasisLinear"),
+        ("RaisedCosineLinearConv", "RaisedCosineBasisLinear"),
+        ("RaisedCosineLogEval", "RaisedCosineBasisLog"),
+        ("RaisedCosineLogConv", "RaisedCosineBasisLog"),
+        ("OrthExponentialEval", "OrthExponentialBasis"),
+        ("OrthExponentialConv", "OrthExponentialBasis"),
+    ],
+)
+@pytest.mark.parametrize("method", ["evaluate", "split_by_feature", "evaluate_on_grid"])
+def test_docstrings_decorator_superclass(public_class, meth_super, method):
+    cls_pub = getattr(basis, public_class)
+    cls_sup = getattr(basis, meth_super)
+    meth_pub = getattr(cls_pub, method)
+    meth_super = getattr(cls_sup, method)
+    assert meth_pub.__doc__.startswith(meth_super.__doc__)
+
+
+@pytest.mark.parametrize(
+    "public_class",
+    [
+        "IdentityEval",
+        "HistoryConv",
+        "MSplineEval",
+        "MSplineConv",
+        "BSplineEval",
+        "BSplineConv",
+        "CyclicBSplineEval",
+        "CyclicBSplineConv",
+        "RaisedCosineLinearEval",
+        "RaisedCosineLinearConv",
+        "RaisedCosineLogEval",
+        "RaisedCosineLogConv",
+        "OrthExponentialEval",
+        "OrthExponentialConv",
+    ],
+)
+@pytest.mark.parametrize(
+    "method, mixin",
+    [("set_input_shape", "AtomicBasisMixin"), ("compute_features", None)],
+)
+def test_docstrings_decorator_mixinclass(public_class, mixin, method):
+    cls_pub = getattr(basis, public_class)
+    if mixin is None:
+        mixin = "EvalBasisMixin" if public_class.endswith("Eval") else "ConvBasisMixin"
+        mixin_meth = getattr(getattr(basis, mixin), "_" + method)
+    else:
+        mixin_meth = getattr(getattr(basis, mixin), method)
+    meth_pub = getattr(cls_pub, method)
+    assert meth_pub.__doc__.startswith(mixin_meth.__doc__)
+
+
 def test_add_docstring():
 
     class CustomClass:

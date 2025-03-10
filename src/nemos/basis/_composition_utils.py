@@ -35,6 +35,15 @@ __PUBLIC_BASES__ = [
 ]
 
 
+def _iterate_over_components(basis: "Basis"):
+    components = (
+        basis._iterate_over_components()
+        if hasattr(basis, "_iterate_over_components")
+        else [basis]
+    )
+    yield from components
+
+
 def _get_root(bas: "AtomicBasisMixin | CompositeBasisMixin"):
     """Get the basis root"""
     parent = bas
@@ -81,12 +90,7 @@ def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin
     bas_id = 0
     # if root is one of our bases it will have the iteration method, if custom from user
     # I assume it is atomic
-    components = (
-        root._iterate_over_components()
-        if hasattr(root, "_iterate_over_components")
-        else [root]
-    )
-    for comp_bas in components:
+    for comp_bas in _iterate_over_components(root):
         if re.match(pattern, comp_bas._label):
             comp_bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
             bas_id += 1
@@ -95,12 +99,7 @@ def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin
 def _recompute_all_default_labels(root: "Basis") -> "Basis":
     """Recompute default all labels."""
     updated = []
-    components = (
-        root._iterate_over_components()
-        if hasattr(root, "_iterate_over_components")
-        else [root]
-    )
-    for bas in components:
+    for bas in _iterate_over_components(root):
         if _has_default_label(bas) and bas.__class__.__name__ not in updated:
             _recompute_class_default_labels(bas)
             updated.append(bas.__class__.__name__)
@@ -128,12 +127,7 @@ def _update_label_from_root(
     current_id = int(match.group(1)[1:]) if match.group(1) else 0
     # subtract one to the ID of any other default label with ID > current_id
     root = _get_root(bas)
-    components = (
-        root._iterate_over_components()
-        if hasattr(root, "_iterate_over_components")
-        else [root]
-    )
-    for bas in components:
+    for bas in _iterate_over_components(root):
         match = re.match(pattern, bas._label)
         if match:
             bas_id = int(match.group(1)[1:]) if match.group(1) else 0
