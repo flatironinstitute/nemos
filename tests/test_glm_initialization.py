@@ -15,6 +15,10 @@ import nemos as nmo
         jax.nn.softplus,
         lambda x: jnp.exp(x),
         jax.nn.sigmoid,
+        jax.lax.logistic,
+        lambda x: jax.lax.logistic(x),
+        jax.scipy.special.expit,
+        jax.scipy.stats.norm.cdf,
     ],
 )
 @pytest.mark.parametrize(

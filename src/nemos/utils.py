@@ -15,7 +15,7 @@ from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
 
-special_key_names = {
+SPECIAL_KEY_NAMES = {
     jax.scipy.stats.norm.cdf: "norm.cdf",
 }
 
@@ -541,8 +541,8 @@ def format_repr(
         )
         if repr_param:
             if k in use_name_keys:
-                if v in special_key_names:
-                    v = special_key_names[v]
+                if v in SPECIAL_KEY_NAMES:
+                    v = SPECIAL_KEY_NAMES[v]
                 else:
                     v = getattr(v, "__name__", repr(v))
             elif isinstance(v, str):
