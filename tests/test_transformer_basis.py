@@ -403,7 +403,6 @@ def test_transformerbasis_dir(basis_cls, basis_class_specific_params):
         "transform",
         "fit_transform",
         "n_basis_funcs",
-        "mode",
         "window_size",
     ):
         if (
