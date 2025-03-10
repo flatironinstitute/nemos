@@ -868,7 +868,7 @@ class CompositeBasisMixin:
 
     @contextmanager
     def _set_shallow_copy(self, value):
-        """Context manger for setting the shallow copy flag in a thread safe way."""
+        """Context manager for setting the shallow copy flag in a thread safe way."""
         old_value = self.__class__._shallow_copy
         self.__class__._shallow_copy = value
         try:
