@@ -1,6 +1,7 @@
 import pickle
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -68,9 +69,9 @@ def test_to_transformer_and_constructor_are_equivalent(
 
     # they both just have a _basis
     assert (
-        list(trans_bas_a.__dict__.keys())
-        == list(trans_bas_b.__dict__.keys())
-        == ["basis", "_wrapped_methods"]
+        set(trans_bas_a.__dict__.keys())
+        == set(trans_bas_b.__dict__.keys())
+        == {"_basis", "_wrapped_methods"}
     )
     # and those bases are the same
     assert np.all(
@@ -996,14 +997,17 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
     ],
 )
 def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
-    bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
-    )
-    bas = bas.set_input_shape(*([10] * bas._n_input_dimensionality)).to_transformer()
-    out = expected_out.get(basis_cls, "")
-    if out == "":
-        raise ValueError(f"Missing test case for {basis_cls}!")
-    assert repr(bas) == out
+    with patch("os.get_terminal_size", return_value=(80, 24)):
+        bas = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=10
+        )
+        bas = bas.set_input_shape(
+            *([10] * bas._n_input_dimensionality)
+        ).to_transformer()
+        out = expected_out.get(basis_cls, "")
+        if out == "":
+            raise ValueError(f"Missing test case for {basis_cls}!")
+        assert repr(bas) == out
 
 
 @pytest.mark.parametrize(

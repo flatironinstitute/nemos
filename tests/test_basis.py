@@ -4,6 +4,7 @@ import re
 from contextlib import nullcontext as does_not_raise
 from functools import partial
 from typing import Literal
+from unittest.mock import patch
 
 import jax.numpy
 import numpy as np
@@ -414,16 +415,17 @@ def test_expected_output_split_by_feature(basis_instance, super_class):
 
 @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
 def test_repr_label(label):
-    if label == "default-behavior":
-        bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
-    else:
-        bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
-    if label in [None, "default-behavior"]:
-        expected = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
-    else:
-        expected = f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
-    out = repr(bas)
-    assert out == expected
+    with patch("os.get_terminal_size", return_value=(80, 24)):
+        if label == "default-behavior":
+            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
+        else:
+            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+        if label in [None, "default-behavior"]:
+            expected = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+        else:
+            expected = f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+        out = repr(bas)
+        assert out == expected
 
 
 @pytest.mark.parametrize("composite_op", ["add", "multiply"])
@@ -3774,36 +3776,38 @@ class TestAdditiveBasis(CombinedBasis):
     def test_repr_out(
         self, basis_a, basis_b, basis_class_specific_params, expected_out
     ):
-        basis_a_obj = self.instantiate_basis(
-            5, basis_a, basis_class_specific_params, window_size=10
-        )
-        basis_b_obj = self.instantiate_basis(
-            6, basis_b, basis_class_specific_params, window_size=10
-        )
-        basis_obj = basis_a_obj + basis_b_obj
-        assert repr(basis_obj) == expected_out[basis_a]
+        with patch("os.get_terminal_size", return_value=(80, 24)):
+            basis_a_obj = self.instantiate_basis(
+                5, basis_a, basis_class_specific_params, window_size=10
+            )
+            basis_b_obj = self.instantiate_basis(
+                6, basis_b, basis_class_specific_params, window_size=10
+            )
+            basis_obj = basis_a_obj + basis_b_obj
+            assert repr(basis_obj) == expected_out[basis_a]
 
     @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
     def test_repr_label(self, label, basis_class_specific_params):
-        if label == "default-behavior":
-            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
-        else:
-            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+        with patch("os.get_terminal_size", return_value=(80, 24)):
+            if label == "default-behavior":
+                bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
+            else:
+                bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
 
-        if label in [None, "default-behavior"]:
-            expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
-            exp_name = "RaisedCosineLinearEval"
-        else:
-            expected_a = (
-                f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+            if label in [None, "default-behavior"]:
+                expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+                exp_name = "RaisedCosineLinearEval"
+            else:
+                expected_a = (
+                    f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+                )
+                exp_name = label
+            bas = bas + self.instantiate_basis(
+                6, basis.MSplineEval, basis_class_specific_params
             )
-            exp_name = label
-        bas = bas + self.instantiate_basis(
-            6, basis.MSplineEval, basis_class_specific_params
-        )
-        expected = f"'({exp_name} + MSplineEval)': AdditiveBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
-        out = repr(bas)
-        assert out == expected
+            expected = f"'({exp_name} + MSplineEval)': AdditiveBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
+            out = repr(bas)
+            assert out == expected
 
 
 class TestMultiplicativeBasis(CombinedBasis):
@@ -3959,36 +3963,38 @@ class TestMultiplicativeBasis(CombinedBasis):
     def test_repr_out(
         self, basis_a, basis_b, basis_class_specific_params, expected_out
     ):
-        basis_a_obj = self.instantiate_basis(
-            5, basis_a, basis_class_specific_params, window_size=10
-        )
-        basis_b_obj = self.instantiate_basis(
-            6, basis_b, basis_class_specific_params, window_size=10
-        )
-        basis_obj = basis_a_obj * basis_b_obj
-        assert repr(basis_obj) == expected_out[basis_a]
+        with patch("os.get_terminal_size", return_value=(80, 24)):
+            basis_a_obj = self.instantiate_basis(
+                5, basis_a, basis_class_specific_params, window_size=10
+            )
+            basis_b_obj = self.instantiate_basis(
+                6, basis_b, basis_class_specific_params, window_size=10
+            )
+            basis_obj = basis_a_obj * basis_b_obj
+            assert repr(basis_obj) == expected_out[basis_a]
 
     @pytest.mark.parametrize("label", [None, "", "default-behavior", "CoolFeature"])
     def test_repr_label(self, label, basis_class_specific_params):
-        if label == "default-behavior":
-            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
-        else:
-            bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
+        with patch("os.get_terminal_size", return_value=(80, 24)):
+            if label == "default-behavior":
+                bas = basis.RaisedCosineLinearEval(n_basis_funcs=5)
+            else:
+                bas = basis.RaisedCosineLinearEval(n_basis_funcs=5, label=label)
 
-        if label in [None, "default-behavior"]:
-            expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
-            exp_name = "RaisedCosineLinearEval"
-        else:
-            expected_a = (
-                f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+            if label in [None, "default-behavior"]:
+                expected_a = "RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+                exp_name = "RaisedCosineLinearEval"
+            else:
+                expected_a = (
+                    f"'{label}': RaisedCosineLinearEval(n_basis_funcs=5, width=2.0)"
+                )
+                exp_name = label
+            bas = bas * self.instantiate_basis(
+                6, basis.MSplineEval, basis_class_specific_params
             )
-            exp_name = label
-        bas = bas * self.instantiate_basis(
-            6, basis.MSplineEval, basis_class_specific_params
-        )
-        expected = f"'({exp_name} * MSplineEval)': MultiplicativeBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
-        out = repr(bas)
-        assert out == expected
+            expected = f"'({exp_name} * MSplineEval)': MultiplicativeBasis(\n    basis1={expected_a},\n    basis2=MSplineEval(n_basis_funcs=6, order=4),\n)"
+            out = repr(bas)
+            assert out == expected
 
     @pytest.mark.parametrize("n_basis_a", [5, 6])
     @pytest.mark.parametrize("n_basis_b", [5, 6])
@@ -6185,40 +6191,41 @@ def test_split_feature_axis(
 
 
 def test_composite_basis_repr_wrapping():
-    # check multi
-    bas = basis.BSplineEval(10) ** 100
-    out = repr(bas)
-    assert out.startswith(
-        "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
-    )
-    assert out.endswith(
-        "'BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
-    )
-    assert "    ...\n" in out
+    with patch("os.get_terminal_size", return_value=(80, 24)):
+        # check multi
+        bas = basis.BSplineEval(10) ** 100
+        out = repr(bas)
+        assert out.startswith(
+            "MultiplicativeBasis(\n    basis1=MultiplicativeBasis(\n        basis1=MultiplicativeBasis(\n "
+        )
+        assert out.endswith(
+            "'BSplineEval_98': BSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='BSplineEval_99': BSplineEval(n_basis_funcs=10, order=4),\n)"
+        )
+        assert "    ...\n" in out
 
-    bas = basis.MSplineEval(10, label="0")
-    for k in range(1, 100):
-        bas = bas + basis.MSplineEval(10, label=str(k))
+        bas = basis.MSplineEval(10, label="0")
+        for k in range(1, 100):
+            bas = bas + basis.MSplineEval(10, label=str(k))
 
-    # large additive basis
-    out = repr(bas)
-    assert out.startswith(
-        "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
-    )
-    assert out.endswith(
-        "        basis2='98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='99': MSplineEval(n_basis_funcs=10, order=4),\n)"
-    )
-    assert "    ...\n" in out
+        # large additive basis
+        out = repr(bas)
+        assert out.startswith(
+            "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
+        )
+        assert out.endswith(
+            "        basis2='98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='99': MSplineEval(n_basis_funcs=10, order=4),\n)"
+        )
+        assert "    ...\n" in out
 
-    bas = basis.MSplineEval(10) * 100
-    out = repr(bas)
-    assert out.startswith(
-        "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
-    )
-    assert out.endswith(
-        "'MSplineEval_98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='MSplineEval_99': MSplineEval(n_basis_funcs=10, order=4),\n)"
-    )
-    assert "    ...\n" in out
+        bas = basis.MSplineEval(10) * 100
+        out = repr(bas)
+        assert out.startswith(
+            "AdditiveBasis(\n    basis1=AdditiveBasis(\n        basis1=AdditiveBasis(\n "
+        )
+        assert out.endswith(
+            "'MSplineEval_98': MSplineEval(n_basis_funcs=10, order=4),\n    ),\n    basis2='MSplineEval_99': MSplineEval(n_basis_funcs=10, order=4),\n)"
+        )
+        assert "    ...\n" in out
 
 
 def test_all_public_importable_bases_equal():

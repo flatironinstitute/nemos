@@ -238,7 +238,7 @@ X.shape
 x_multi = np.ones((500, 3))
 
 # convolve a multiple signals
-X_multi = basis.set_input_shape(3).compute_features(x_multi)
+X_multi = basis.compute_features(x_multi)
 X_multi.shape
 
 ```
