@@ -248,7 +248,24 @@ def trim_kwargs(cls: type, kwargs: dict, class_specific_params: dict):
 
 
 def count_params_by_kind(func: Callable, kind: set[inspect.Parameter]):
-    """Count how many parameters of the callable are of the desired kind."""
+    """Count how many parameters of the callable are of the desired kind.
+
+    In a callable definition, the parameter kind is one of the following:
+
+    - POSITIONAL_ONLY: A parameter that can only be specified positionally
+      (i.e., it cannot be passed as a keyword argument).
+
+    - POSITIONAL_OR_KEYWORD: A parameter that can be passed either positionally or as a keyword argument.
+
+    - KEYWORD_ONLY: A parameter that must be passed as a keyword argument
+      (appears after `*args` in function signatures).
+
+    - VAR_POSITIONAL: A variable-length positional argument (`*args`),
+      which collects extra positional arguments.
+
+    - VAR_KEYWORD: A variable-length keyword argument (`**kwargs`),
+      which collects extra keyword arguments.
+    """
     sig = inspect.signature(func)
     params = sig.parameters.values()
     return sum(1 for p in params if p.kind in kind)
