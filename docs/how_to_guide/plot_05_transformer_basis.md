@@ -103,7 +103,7 @@ At this point, we have an object equipped with the necessary methods. So, all we
 
 ### Understanding Input Shapes in `TransformerBasis`
 
-By default, `TransformerBasis` assumes that inp has one column per input in the composition. In this example, we are composing two one-dimensional basis functions, so `TransformerBasis` expects an input of shape `(n_samples, 2)`.
+By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. In this example, we are composing two one-dimensional basis functions, so `TransformerBasis` expects an input of shape `(n_samples, 2)`.
 
 However, our actual input has shape `(n_samples, 6)`:
 
@@ -117,6 +117,7 @@ This mismatch leads to an error when calling fit_transform:
 
 
 ```{code-cell} ipython3
+:tags: [raises-exception]
 
 # reinstantiate the basis transformer for illustration porpuses
 composite_basis = counts_basis + speed_basis
@@ -125,10 +126,7 @@ trans_bas = (composite_basis).to_transformer()
 inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
 print(inp.shape)
 
-try:
-    trans_bas.fit_transform(inp)
-except ValueError as e:
-    print(repr(e))
+trans_bas.fit_transform(inp)
     
 ```
 ### Defining the Input Shape
