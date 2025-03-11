@@ -99,7 +99,7 @@ As with any `sckit-learn` transformer, the `TransformerBasis` implements `fit`, 
 
 ## Setting up the TransformerBasis
 
-At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.** The challenge is that the `TransformerBasis` does not automatically know which columns of `inp` should be processed by `count_basis` and which by `speed_basis`.
+At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.** The problem is that the `TransformerBasis` does not automatically know which columns of `inp` should be processed by `count_basis` and which by `speed_basis`.
 
 ### Understanding Input Shapes in `TransformerBasis`
 
