@@ -129,6 +129,7 @@ print(inp.shape)
 trans_bas.fit_transform(inp)
     
 ```
+
 ### Defining the Input Shape
 
 To resolve this, we need to explicitly specify the input structure using the `set_input_shape` method. This method tells `TransformerBasis` how to interpret the input columns by storing the number of columns assigned to each basis function.
