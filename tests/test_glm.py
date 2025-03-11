@@ -54,9 +54,36 @@ class TestGLM:
     @pytest.mark.parametrize(
         "regularizer, solver_name, expectation",
         [
-            (nmo.regularizer.Ridge(), "BFGS", does_not_raise()),
+            # test solver at initialization, where test_regularizers.py tests solvers with set_params
+            (None, does_not_raise()),
+            ("BFGS", does_not_raise()),
+            ("ProximalGradient", does_not_raise()),
+            ("LBFGS", does_not_raise()),
+            ("NonlinearCG")("SVRG", does_not_raise()),
+            ("ProxSVRG", does_not_raise()),
             (
-                None,
+                1,
+                pytest.raises(TypeError, match="The solver: 1 is not allowed "),
+            ),
+        ],
+    )
+    def test_init_solver_type(self, solver_name, expectation, glm_class):
+        """
+        Test that an error is raised if a non-compatible solver is passed.
+        """
+        with expectation:
+            glm_class(solver_name=solver_name)
+
+    @pytest.mark.parametrize(
+        "regularizer, expectation",
+        [
+            # regularizer with class objects are tested in test_regularizers.py
+            # so here we only test the string input names
+            ("UnRegularized", does_not_raise()),
+            ("Ridge", does_not_raise()),
+            ("Lasso", does_not_raise()),
+            ("GroupLasso", does_not_raise()),
+            (
                 None,
                 pytest.raises(
                     TypeError, match="The regularizer should be either a string from "
@@ -64,26 +91,26 @@ class TestGLM:
             ),
             (
                 nmo.regularizer.Ridge,
-                None,
                 pytest.raises(
                     TypeError, match="The regularizer should be either a string from "
                 ),
             ),
         ],
     )
-    def test_solver_type(self, regularizer, solver_name, expectation, glm_class):
+    def test_init_regularizer_type(self, regularizer, expectation, glm_class):
         """
-        Test that an error is raised if a non-compatible solver is passed.
+        Test initialization with different regularizer types.
+        Test that an error is raised if a non-compatible regularizer is passed.
         """
         with expectation:
-            glm_class(
-                regularizer=regularizer, solver_name=solver_name, regularizer_strength=1
-            )
+            glm_class(regularizer=regularizer, regularizer_strength=1)
 
     @pytest.mark.parametrize(
         "observation, expectation",
         [
             (nmo.observation_models.PoissonObservations(), does_not_raise()),
+            (nmo.observation_models.GammaObservations(), does_not_raise()),
+            (nmo.observation_models.BernoulliObservations(), does_not_raise()),
             (
                 nmo.regularizer.Regularizer,
                 pytest.raises(
@@ -104,8 +131,8 @@ class TestGLM:
         self, observation, expectation, glm_class, ridge_regularizer
     ):
         """
-        Test initialization with different regularizer names. Check if an appropriate exception is raised
-        when the regularizer name is not present in jaxopt.
+        Test initialization with different observation models. Check if an appropriate exception is raised
+        when the observation model does not have the required attributes.
         """
         with expectation:
             glm_class(
