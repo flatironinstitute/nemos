@@ -825,8 +825,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> additive_basis = basis_1 + basis_2
     >>> additive_basis
     '(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
-        basis1=BSplineEval(n_basis_funcs=10, order=4),
-        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+        ...
     )
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
@@ -834,11 +833,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> additive_basis_2 = additive_basis + basis_3
     >>> additive_basis_2
     '((BSplineEval + RaisedCosineLinearEval) + RaisedCosineLogEval)': AdditiveBasis(
-        basis1='(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
-            basis1=BSplineEval(n_basis_funcs=10, order=4),
-            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
-        ),
-        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+        ...
     )
     """
 
@@ -1259,8 +1254,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> multiplicative_basis = basis_1 * basis_2
     >>> multiplicative_basis
     '(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
-        basis1=BSplineEval(n_basis_funcs=10, order=4),
-        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+        ...
     )
 
     >>> # Can multiply or add another basis to the AdditiveBasis object
@@ -1269,11 +1263,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     >>> multiplicative_basis_2
     '((BSplineEval * RaisedCosineLinearEval) * RaisedCosineLogEval)': MultiplicativeBasis(
-        basis1='(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
-            basis1=BSplineEval(n_basis_funcs=10, order=4),
-            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
-        ),
-        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+        ...
     )
     """
 
