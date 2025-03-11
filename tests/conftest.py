@@ -758,7 +758,7 @@ def example_X_y_high_firing_rates():
 
 
 @pytest.fixture
-def bernoulliGLM_model_instantiation():
+def bernoulliGLM_model_instantiation(inv_link_func):
     """Set up a Bernoulli GLM for testing purposes.
 
     This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
@@ -777,8 +777,8 @@ def bernoulliGLM_model_instantiation():
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
-    observation_model = nmo.observation_models.BernoulliObservations(jax.lax.logistic)
+    observation_model = nmo.observation_models.BernoulliObservations(inv_link_func)
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
-    rate = jax.lax.logistic(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+    rate = inv_link_func(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.binomial(1, rate), model, (w_true, b_true), rate

@@ -742,6 +742,29 @@ class TestBernoulliObservations:
             "inverse_link_function": observation_model.inverse_link_function
         }
 
+    @pytest.mark.parametrize(
+        "link_func, link_func_name",
+        [
+            (jax.lax.logistic, "logistic"),
+            (jax.scipy.special.expit, "expit"),
+            (jax.scipy.stats.norm.cdf, "norm.cdf"),
+        ],
+    )
+    def test_repr_out(self, link_func, link_func_name):
+        obs = nmo.observation_models.BernoulliObservations(
+            inverse_link_function=link_func
+        )
+        assert (
+            repr(obs)
+            == f"BernoulliObservations(inverse_link_function={link_func_name})"
+        )
+
+
+@pytest.mark.parametrize(
+    "inv_link_func",
+    [jax.lax.logistic, jax.scipy.stats.norm.cdf],
+)
+class TestBernoulliModelInstantiation:
     def test_deviance_against_statsmodels(self, bernoulliGLM_model_instantiation):
         """
         Compare fitted parameters to statsmodels.
@@ -923,20 +946,3 @@ class TestBernoulliObservations:
             y, firing_rate, aggregate_sample_scores=jnp.mean
         )
         assert np.allclose(sm, mn)
-
-    @pytest.mark.parametrize(
-        "link_func, link_func_name",
-        [
-            (jax.lax.logistic, "logistic"),
-            (jax.scipy.special.expit, "expit"),
-            (jax.scipy.stats.norm.cdf, "norm.cdf"),
-        ],
-    )
-    def test_repr_out(self, link_func, link_func_name):
-        obs = nmo.observation_models.BernoulliObservations(
-            inverse_link_function=link_func
-        )
-        assert (
-            repr(obs)
-            == f"BernoulliObservations(inverse_link_function={link_func_name})"
-        )

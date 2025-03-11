@@ -52,6 +52,20 @@ def test_invert_non_linearity(non_linearity, output_y):
                 ValueError, match=".+Please, provide initial parameters instead"
             ),
         ),
+        (
+            jax.lax.logistic,
+            pytest.raises(ValueError, match=".+The mean firing rate has"),
+        ),
+        (
+            lambda x: jax.lax.logistic(x),
+            pytest.raises(
+                ValueError, match=".+Please, provide initial parameters instead"
+            ),
+        ),
+        (
+            jax.scipy.stats.norm.cdf,
+            pytest.raises(ValueError, match=".+The mean firing rate has"),
+        ),
     ],
 )
 def test_initialization_error_nan_input(non_linearity, expectation):
