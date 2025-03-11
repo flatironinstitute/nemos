@@ -240,28 +240,6 @@ class AtomicBasisMixin:
         self._input_shape_product = n_inputs
         return self
 
-    def _check_input_shape_consistency(self, x: NDArray):
-        """Check input consistency across calls."""
-        # remove sample axis and squeeze
-        shape = x.shape[1:]
-
-        initialized = self._input_shape_ is not None
-        is_shape_match = self._input_shape_[0] == shape
-        if initialized and not is_shape_match:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape_[0]}"[1:]
-            expected_shape_str = expected_shape_str.replace(",)", ")")
-            raise ValueError(
-                f"Input shape mismatch detected.\n\n"
-                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
-                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
-                f"  Expected: {expected_shape_str}\n"
-                f"  But got:  {x.shape}.\n\n"
-                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
-                "but all other dimensions must remain the same. If you need to process inputs with a "
-                "different shape, please create a new basis instance, or set a new input shape by calling "
-                "`set_input_shape`."
-            )
-
     @property
     def input_shape(self) -> NDArray:
         return self._input_shape_[0] if self._input_shape_ else None
@@ -831,15 +809,6 @@ class CompositeBasisMixin:
         """
         self.basis1._set_input_independent_states()
         self.basis2._set_input_independent_states()
-
-    def _check_input_shape_consistency(self, *xi: NDArray):
-        """Check the input shape consistency for all basis elements."""
-        self.basis1._check_input_shape_consistency(
-            *xi[: self.basis1._n_input_dimensionality]
-        )
-        self.basis2._check_input_shape_consistency(
-            *xi[self.basis1._n_input_dimensionality :]
-        )
 
     def _iterate_over_components(self):
         """Return a generator that iterates over all basis components.

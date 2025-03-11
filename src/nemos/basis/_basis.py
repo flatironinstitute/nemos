@@ -239,7 +239,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         basis function types and operation modes.
         """
         self.setup_basis(*xi)
-        self._check_input_shape_consistency(*xi)
         return self._compute_features(*xi)
 
     @abc.abstractmethod
