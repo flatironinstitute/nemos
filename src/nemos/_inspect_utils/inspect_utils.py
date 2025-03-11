@@ -247,7 +247,7 @@ def trim_kwargs(cls: type, kwargs: dict, class_specific_params: dict):
     }
 
 
-def count_params_by_kind(func: Callable, kind: set[inspect.Parameter]):
+def count_params_by_kind(func: Callable, kind: set[inspect.Parameter.kind]):
     """Count how many parameters of the callable are of the desired kind.
 
     In a callable definition, the parameter kind is one of the following:
