@@ -207,29 +207,6 @@ def _atomic_basis_label_setter_logic(
     return
 
 
-def _check_input_consistency(bas, *x):
-    """Check input consistency across calls."""
-    # remove sample axis and squeeze
-    shape = x.shape[1:]
-
-    initialized = bas._input_shape_ is not None
-    is_shape_match = bas._input_shape_[0] == shape
-    if initialized and not is_shape_match:
-        expected_shape_str = "(n_samples, " + f"{bas._input_shape_[0]}"[1:]
-        expected_shape_str = expected_shape_str.replace(",)", ")")
-        raise ValueError(
-            f"Input shape mismatch detected.\n\n"
-            f"The basis `{bas.__class__.__name__}` with label '{bas.label}' expects inputs with "
-            f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
-            f"  Expected: {expected_shape_str}\n"
-            f"  But got:  {x.shape}.\n\n"
-            "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
-            "but all other dimensions must remain the same. If you need to process inputs with a "
-            "different shape, please create a new basis instance, or set a new input shape by calling "
-            "`set_input_shape`."
-        )
-
-
 def infer_input_dimensionality(bas: "Basis") -> int:
     n_input_dim = getattr(bas, "_n_input_dimensionality", None)
     if n_input_dim is None:
