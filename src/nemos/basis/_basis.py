@@ -382,11 +382,11 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Returns
         -------
         X :
-           Array of shape (n_samples,) containing the equi-spaced sample
+           Array of shape ``(n_samples,)`` containing the equi-spaced sample
            points where we've evaluated the basis.
         basis_funcs :
            Evaluated exponentially decaying basis functions, numerically
-           orthogonalized, shape (n_samples, n_basis_funcs)
+           orthogonalized, shape ``(n_samples, n_basis_funcs)``
         """
         self._check_input_dimensionality(n_samples)
 

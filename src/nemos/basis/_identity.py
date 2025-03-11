@@ -129,8 +129,8 @@ class HistoryBasis(Basis, AtomicBasisMixin):
     def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
-        """
-        Returns an identity matrix of shape (len(samples), n_basis_funcs).
+        r"""
+        Returns an identity matrix of shape ``(len(samples), n_basis_funcs)``.
 
         The output is the convolutional kernels for spike history.
 
@@ -142,7 +142,7 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         Returns
         -------
         :
-            np.eye(*samples.shape, n_basis_funcs).
+            Identity matrix of shape ``(*samples.shape, n_basis_funcs)``.
 
         """
         sample_pts = np.squeeze(np.asarray(sample_pts))
