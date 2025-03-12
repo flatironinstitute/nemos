@@ -280,8 +280,8 @@ def current_injection_plot(
         ax = plt.subplot2grid((4, 3), loc=(2, i), rowspan=1, colspan=1, fig=fig)
         ax.plot(firing_rate.restrict(interval), color="k")
         ax.plot(spikes.restrict(interval).to_tsd([-1.5]), "|", color="k", ms=10)
-        if predicted_firing_rates:
-            for pred_fr, style in zip(predicted_firing_rates, ["-", "--"]):
+        if predicted_firing_rate:
+            for pred_fr, style in zip(predicted_firing_rate, ["-", "--"]):
                 ax.plot(pred_fr.restrict(interval), linestyle=style, color="tomato")
         else:
             ax.set_ylim(ylim)
@@ -1141,25 +1141,28 @@ def plot_features(
     return fig
 
 
-def plot_current_history_features(current, features, basis, window_duration_sec,
-                                  interval=nap.IntervalSet(462.77, 463)):
-    fig, axes = plt.subplots(2, 3, sharey='row',  figsize=(8, 3.5))
+def plot_current_history_features(
+    current, features, basis, window_duration_sec, interval=nap.IntervalSet(462.77, 463)
+):
+    fig, axes = plt.subplots(2, 3, sharey="row", figsize=(8, 3.5))
     time, basis = basis.evaluate_on_grid(basis.window_size)
     time *= window_duration_sec
     current = current.restrict(interval)
-    features = features.restrict(interval) / features.restrict(interval).max(0) * current.max()
+    features = (
+        features.restrict(interval) / features.restrict(interval).max(0) * current.max()
+    )
     for ax in axes[1, :]:
-        ax.plot(current, 'k--')
+        ax.plot(current, "k--")
         ax.set_xlabel("Time (sec")
-    axes[0, 0].plot(time, basis, alpha=.1)
-    axes[0, 0].plot(time, basis[:, 0], 'C0', alpha=1)
+    axes[0, 0].plot(time, basis, alpha=0.1)
+    axes[0, 0].plot(time, basis[:, 0], "C0", alpha=1)
     axes[0, 0].set_ylabel("Amplitude (A.U.)")
-    axes[1, 0].plot(features[:,0])
+    axes[1, 0].plot(features[:, 0])
     axes[1, 0].set_ylabel("Current")
     axes[0, 0].set_title("Feature 1")
-    axes[1, 1].plot(features[:, -1], f'C{basis.shape[1]-1}')
-    axes[0, 1].plot(time, basis, alpha=.1)
-    axes[0, 1].plot(time, basis[:, -1], f'C{basis.shape[1]-1}', alpha=1)
+    axes[1, 1].plot(features[:, -1], f"C{basis.shape[1]-1}")
+    axes[0, 1].plot(time, basis, alpha=0.1)
+    axes[0, 1].plot(time, basis[:, -1], f"C{basis.shape[1]-1}", alpha=1)
     axes[0, 1].set_title(f"Feature {basis.shape[1]}")
     axes[0, 2].plot(time, basis)
     axes[1, 2].plot(features)
@@ -1167,7 +1170,7 @@ def plot_current_history_features(current, features, basis, window_duration_sec,
     return fig
 
 
-def plot_basis_filter(basis, model, current_history_duration_sec=.2):
+def plot_basis_filter(basis, model, current_history_duration_sec=0.2):
     """Visualize the model's learned filter."""
     fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     time, kernel = basis.evaluate_on_grid(200)
@@ -1178,8 +1181,8 @@ def plot_basis_filter(basis, model, current_history_duration_sec=.2):
     axes[1].set(title="Coefficient Weights", xlabel="Basis number")
     axes[2].plot(time, kernel * model.coef_)
     axes[2].set(title="Weighted basis functions", xlabel="Time (sec)")
-    axes[2].axhline(0, c='k', linestyle='--')
+    axes[2].axhline(0, c="k", linestyle="--")
     axes[3].plot(time, np.matmul(kernel, model.coef_))
-    axes[3].axhline(0, c='k', linestyle='--')
+    axes[3].axhline(0, c="k", linestyle="--")
     axes[3].set(title="Learned linear filter", xlabel="Time (sec)")
     return fig
