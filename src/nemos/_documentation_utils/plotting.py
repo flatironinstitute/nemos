@@ -238,11 +238,11 @@ def current_injection_plot(
     resp_ax = plt.subplot2grid((4, 3), loc=(1, 0), rowspan=1, colspan=3, fig=fig)
     resp_ax.plot(firing_rate, color="k", label="Observed firing rate")
     if predicted_firing_rate:
-        if len(predicted_firing_rates) > 1:
+        if len(predicted_firing_rate) > 1:
             lbls = [" (current history)", " (instantaneous only)"]
         else:
             lbls = [""]
-        for pred_fr, style, lbl in zip(predicted_firing_rates, ["-", "--"], lbls):
+        for pred_fr, style, lbl in zip(predicted_firing_rate, ["-", "--"], lbls):
             resp_ax.plot(
                 pred_fr,
                 linestyle=style,
