@@ -2,56 +2,35 @@
 
 Facilitate the construction of a custom basis class.
 """
+import itertools
 from typing import Optional, Callable, Iterable, Tuple, List
 from numpy.typing import NDArray
 
 from ._composition_utils import count_positional_and_var_args
+from ._basis_mixin import AtomicBasisMixin
 import numpy as np
 
 
-def _default_compute_num_output_features(*shapes: Tuple[int,...]):
-    return sum(np.prod(s, dtype=int) for s in shapes).item()
-
-
 def apply_f_vectorized(f: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input: int = 1):
-    if ndim_input == 0 or xi[0].ndim - 1 == ndim_input:
+    """Iterate over the output dim and apply the function to all input combination."""
+
+    # check if no dimension needs vectorization
+    if all(x[0].ndim - 1 == ndim_input for x in xi):
         return f(*xi)[...,np.newaxis]
 
-    # assume all xi have the same shape
-    x_shape = xi[0].shape
-
-    # compute the expected input shape after moving axis
-    shape_after_mv_axis = tuple(
-        x_shape[i]
-        for i in (0, *range(1 + ndim_input, len(x_shape)), *range(1, 1 + ndim_input))
+    # compute the flat shape of the dimension that must be vectorized.
+    flat_vec_dims = (range(1) if x.ndim - 1 == ndim_input else range(np.prod(x.shape[1+ndim_input:])) for x in xi)
+    xi_reshape = [x[...,np.newaxis] if x.ndim - 1 == ndim_input else  x.reshape(*x.shape[:1+ndim_input], -1) for x in xi]
+    return np.concatenate(
+        [
+            f(*(x[..., i] for i, x in zip(index, xi_reshape)))[..., np.newaxis]
+            for index in itertools.product(*flat_vec_dims)
+        ],
+        axis = -1
     )
 
-    # count the axis we are vectorizing over
-    n_vec_input = len(shape_after_mv_axis[:-ndim_input]) - 1
 
-    # move axis and reshape lazily
-    def move_axes_gen(x_tuple):
-        for x in x_tuple:
-            yield np.moveaxis(x, range(1, 1 + ndim_input), range(len(x.shape) - ndim_input, len(x.shape)))
-
-    def reshape_gen(x_tuple):
-        for x in x_tuple:
-            yield x.reshape(-1, *shape_after_mv_axis[-ndim_input:])
-
-    xi_lazy = reshape_gen(move_axes_gen(xi))
-
-    # apply the function to the correct array shape.
-    out = f(*xi_lazy)  # this is (n_samples * n_vec_inputs, *out_shape)
-    # split back to original func & add axis for concat
-    return np.moveaxis(
-        np.reshape(out, (*shape_after_mv_axis[:-ndim_input], *out.shape[1:])),
-        range(1, 1 + n_vec_input),
-        range(len(shape_after_mv_axis[:-ndim_input]) + len(out.shape[1:]) - n_vec_input,
-              len(shape_after_mv_axis[:-ndim_input]) + len(out.shape[1:]))
-    )[..., np.newaxis]
-
-
-class CustomBasis:
+class CustomBasis(AtomicBasisMixin):
     def __init__(
             self,
             *funcs: Callable[[NDArray,...], NDArray],
@@ -64,9 +43,10 @@ class CustomBasis:
         self.ndim_input = int(ndim_input)
         self.ndim_output = int(ndim_output)
         self.calculate_n_output_features = calculate_n_output_features
+
         # nomenclature is confusing, should rename this to _n_args_compute_features
         self._n_input_dimensionality = sum(count_positional_and_var_args(f)[0] for f in self.funcs)
-        
+        super().__init__(n_basis_funcs=len(self.funcs), label=label)
 
 
     @property
@@ -94,7 +74,7 @@ class CustomBasis:
     @calculate_n_output_features.setter
     def calculate_n_output_features(self, val: Optional[Callable[[Tuple[int,...]],  int]]):
         if val is None:
-            self._calculate_n_output_features = _default_compute_num_output_features
+            self._calculate_n_output_features = None
             return 
         
         if not isinstance(val, Callable):
@@ -110,12 +90,13 @@ class CustomBasis:
             yield x[cc:cc + n_inp]
             cc += n_inp
 
-    
-    def evaluate(self, *x: NDArray):
-
+    @staticmethod
+    def _check_all_same_shape(*x: NDArray):
         if not len(set(xi.shape for xi in x)) == 1:
             raise ValueError("All inputs must have the same shape.")
 
+    def evaluate(self, *x: NDArray):
+        """Evaluate funcs in a vectorized form."""
         return np.concatenate(
             [               
                 apply_f_vectorized(f, *xi, ndim_input=self.ndim_input)

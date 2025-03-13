@@ -126,7 +126,9 @@ class AtomicBasisMixin:
     def __init__(self, n_basis_funcs: int, label: Optional[str] = None):
         self._n_basis_funcs = n_basis_funcs
         self._input_shape_ = None
-        self._check_n_basis_min()
+        check_basis_min = getattr(self, "_check_n_basis_min", None)
+        if check_basis_min:
+            check_basis_min()
 
         # initialize as default
         self._label = self.__class__.__name__
