@@ -23,12 +23,12 @@ from ._composition_utils import (
     _composite_basis_setter_logic,
     _get_root,
     _recompute_all_default_labels,
-    infer_input_dimensionality,
     generate_basis_label_pair,
     generate_composite_basis_labels,
+    get_input_shape,
+    infer_input_dimensionality,
     label_setter,
     set_input_shape,
-    get_input_shape,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -124,6 +124,7 @@ def remap_parameters(method):
 
     return wrapper
 
+
 class BasisMixin:
     def __init__(self, label: Optional[str] = None):
         # initialize as default
@@ -196,7 +197,7 @@ class BasisMixin:
         """Label for the basis."""
         if getattr(self, "_label", None) is None and hasattr(self, "_generate_label"):
             return self._generate_label()
-        return getattr(self, "_label",  self.__class__.__name__)
+        return getattr(self, "_label", self.__class__.__name__)
 
     @label.setter
     def label(self, label: str | None) -> None:
@@ -626,7 +627,9 @@ class CompositeBasisMixin(BasisMixin):
 
     _shallow_copy: bool = False
 
-    def __init__(self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None):
+    def __init__(
+        self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
+    ):
         # number of input arrays that the basis receives
         self._n_input_dimensionality = infer_input_dimensionality(
             basis1
@@ -652,7 +655,6 @@ class CompositeBasisMixin(BasisMixin):
 
         # trigger label setter
         super().__init__(label=label)
-
 
     @property
     def basis1(self):
@@ -856,7 +858,6 @@ class CompositeBasisMixin(BasisMixin):
         """
         self.basis1._set_input_independent_states()
         self.basis2._set_input_independent_states()
-
 
     @contextmanager
     def _set_shallow_copy(self, value):

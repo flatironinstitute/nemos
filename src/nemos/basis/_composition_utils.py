@@ -6,17 +6,17 @@ with no to minimal re
 """
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple
+
+import numpy as np
+from numpy.typing import NDArray
 
 from .._inspect_utils.inspect_utils import count_positional_and_var_args
-from numpy.typing import NDArray
-import numpy as np
-from typing import List, Tuple
 
 if TYPE_CHECKING:
     from ._basis import Basis
-    from ._basis_mixin import AtomicBasisMixin, CompositeBasisMixin, BasisMixin
-    from._custom_basis import CustomBasis
+    from ._basis_mixin import AtomicBasisMixin, BasisMixin, CompositeBasisMixin
+    from ._custom_basis import CustomBasis
 
 __PUBLIC_BASES__ = [
     "IdentityEval",
@@ -76,7 +76,9 @@ def _has_default_label(bas: "Basis"):
         return re.match(rf"^{bas.__class__.__name__}(_\d+)?$", label)
 
 
-def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin | CustomBasis"):
+def _recompute_class_default_labels(
+    bas: "AtomicBasisMixin | CompositeBasisMixin | CustomBasis",
+):
     """
     Recompute all labels matching default for self.
 
@@ -250,7 +252,7 @@ def generate_composite_basis_labels(bas: "Basis | CustomBasis", type_label: str)
 
     else:
         if type_label == "all" or (not _has_default_label(bas)):
-            yield getattr(bas, "label",  bas.__class__.__name__)
+            yield getattr(bas, "label", bas.__class__.__name__)
 
 
 def label_setter(bas: "BasisMixin", label: str | None):
@@ -357,6 +359,7 @@ def set_input_shape(bas, *xi):
     )
     return bas
 
+
 def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
     """Get the input shape of a composite basis.
 
@@ -373,7 +376,6 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
         ishape = getattr(bas, "_input_shape_", None)
         return bas._input_shape_[0] if ishape else None
 
-
     elif not hasattr(bas, "basis1") and hasattr(bas, "_input_shape_"):
         return bas._input_shape_
 
@@ -383,7 +385,7 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
         elif hasattr(basis, "input_shape"):
             yield basis.input_shape
         else:
-            yield from  [None] * infer_input_dimensionality(basis)
+            yield from [None] * infer_input_dimensionality(basis)
 
     def list_shapes(basis) -> List[Tuple | None]:
         if basis is None:

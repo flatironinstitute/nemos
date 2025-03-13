@@ -19,11 +19,11 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin, BasisMixin
+from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
 from ._composition_utils import (
     _recompute_all_default_labels,
-    infer_input_dimensionality,
     generate_basis_label_pair,
+    infer_input_dimensionality,
 )
 
 
@@ -136,7 +136,6 @@ def get_equi_spaced_samples(
     else:
         mn, mx = bounds
     return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
-
 
 
 class Basis(Base, abc.ABC, BasisTransformerMixin):
