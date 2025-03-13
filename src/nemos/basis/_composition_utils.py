@@ -9,11 +9,14 @@ import re
 from typing import TYPE_CHECKING
 
 from .._inspect_utils.inspect_utils import count_positional_and_var_args
+from numpy.typing import NDArray
+import numpy as np
+from typing import List, Tuple
 
 if TYPE_CHECKING:
     from ._basis import Basis
-    from ._basis_mixin import AtomicBasisMixin, CompositeBasisMixin
-
+    from ._basis_mixin import AtomicBasisMixin, CompositeBasisMixin, BasisMixin
+    from._custom_basis import CustomBasis
 
 __PUBLIC_BASES__ = [
     "IdentityEval",
@@ -44,7 +47,7 @@ def _iterate_over_components(basis: "Basis"):
     yield from components
 
 
-def _get_root(bas: "AtomicBasisMixin | CompositeBasisMixin"):
+def _get_root(bas: "BasisMixin"):
     """Get the basis root"""
     parent = bas
     while hasattr(parent, "_parent") and parent._parent is not None:
@@ -73,7 +76,7 @@ def _has_default_label(bas: "Basis"):
         return re.match(rf"^{bas.__class__.__name__}(_\d+)?$", label)
 
 
-def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin"):
+def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin | CustomBasis"):
     """
     Recompute all labels matching default for self.
 
@@ -157,7 +160,7 @@ def _composite_basis_setter_logic(new: "Basis", current: "Basis"):
 
 
 def _atomic_basis_label_setter_logic(
-    bas: "AtomicBasisMixin", new_label: str
+    bas: "AtomicBasisMixin | CustomBasis", new_label: str
 ) -> Exception | None:
     # check default cases
     current_label = getattr(bas, "_label", None)
@@ -207,10 +210,197 @@ def _atomic_basis_label_setter_logic(
     return
 
 
-def infer_input_dimensionality(bas: "Basis") -> int:
+def infer_input_dimensionality(bas: "BasisMixin") -> int:
     n_input_dim = getattr(bas, "_n_input_dimensionality", None)
     if n_input_dim is None:
         # infer from compute_features (facilitate custom basis compatibility).
         # assume compute_features is always implemented.
-        n_input_dim, _ = count_positional_and_var_args(bas.compute_features)
+        if hasattr(bas, "funcs"):
+            funcs = bas.funcs
+        else:
+            funcs = [bas.compute_features]
+        n_input_dim = sum(count_positional_and_var_args(f)[0] for f in funcs)
     return n_input_dim
+
+
+def generate_basis_label_pair(bas: "Basis"):
+    if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
+        for label, sub_bas in generate_basis_label_pair(bas.basis1):
+            yield label, sub_bas
+        for label, sub_bas in generate_basis_label_pair(bas.basis2):
+            yield label, sub_bas
+    yield getattr(bas, "label", bas.__class__.__name__), bas
+
+
+def generate_composite_basis_labels(bas: "Basis | CustomBasis", type_label: str):
+    if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
+        if type_label == "all" or bas._label:
+            yield bas.label
+
+        # generator for sub-basis
+        def generate_labels(sub_basis):
+            generate_subtree = getattr(sub_basis, "_generate_subtree_labels", None)
+            if generate_subtree:
+                yield from generate_subtree(type_label)
+            elif type_label == "all" or not _has_default_label(sub_basis):
+                yield sub_basis.label
+
+        yield from generate_labels(bas.basis1)
+        yield from generate_labels(bas.basis2)
+
+    else:
+        if type_label == "all" or (not _has_default_label(bas)):
+            yield getattr(bas, "label",  bas.__class__.__name__)
+
+
+def label_setter(bas: "BasisMixin", label: str | None):
+    if not hasattr(bas, "basis1") or not hasattr(bas, "basis2"):
+        return _atomic_basis_label_setter_logic(bas, label)
+    # composite basis setter logic.
+    reset = (
+        (label is None)
+        or (label == bas._generate_label())
+        or (label == bas.__class__.__name__)
+    )
+    error = None
+    if reset:
+        bas._label = None
+    else:
+        label = str(label)
+        if label in _get_root(bas)._generate_subtree_labels():
+            error = ValueError(
+                f"Label '{label}' is already in use. When user-provided, label must be unique."
+            )
+        elif label in __PUBLIC_BASES__ and label != bas.__class__.__name__:
+            error = ValueError(
+                f"Cannot set basis label '{label}' for basis of type {type(bas)}."
+            )
+    if not error:
+        bas._label = label
+    return error
+
+
+def set_input_shape_atomic(
+    bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray
+) -> "AtomicBasisMixin":
+    """Set input shape attributes for atomic basis."""
+    shapes = []
+    n_inputs = ()
+    for xi in xis:
+        if isinstance(xi, tuple):
+            if not all(isinstance(i, int) for i in xi):
+                raise ValueError(
+                    f"The tuple provided contains non integer values. Tuple: {xi}."
+                )
+            shape = xi
+        elif isinstance(xi, int):
+            shape = () if xi == 1 else (xi,)
+        else:
+            shape = xi.shape[1:]
+
+        n_inputs = (*n_inputs, int(np.prod(shape)))
+        shapes.append(shape)
+
+    bas._input_shape_ = shapes
+
+    # total number of input time series. Used  for slicing and reshaping
+    bas._input_shape_product = n_inputs
+    return bas
+
+
+def set_input_shape(bas, *xi):
+    # use 1 as default or number of non-variable args
+    n_args = (
+        count_positional_and_var_args(bas.compute_features)[0]
+        if hasattr(bas, "compute_features")
+        else 1
+    )
+    # get the attribute if available
+    n_input_dim = getattr(bas, "_n_input_dimensionality", n_args)
+    if len(xi) != n_input_dim:
+        expected_inputs = getattr(bas, "_n_input_dimensionality", 1)
+        raise ValueError(
+            f"set_input_shape expects {expected_inputs} input"
+            f"{'s' if expected_inputs > 1 else ''}, but {len(xi)} were provided."
+        )
+    if not hasattr(bas, "basis1"):
+        return set_input_shape_atomic(bas, *xi)
+
+    # here we can assume it is a composite basis
+    set_input_shape1 = getattr(
+        bas.basis1,
+        "set_input_shape",
+        lambda *x: set_input_shape_atomic(bas.basis1, *x),
+    )
+    set_input_shape2 = getattr(
+        bas.basis2,
+        "set_input_shape",
+        lambda *x: set_input_shape_atomic(bas.basis2, *x),
+    )
+
+    # grab the input dimensionality
+    n_args_1, _ = (
+        count_positional_and_var_args(bas.basis1.compute_features)
+        if hasattr(bas.basis1, "compute_features")
+        else 1
+    )
+    n_input_dim_1 = getattr(bas.basis1, "_n_input_dimensionality", n_args_1)
+
+    out1 = set_input_shape1(*xi[:n_input_dim_1])
+    out2 = set_input_shape2(*xi[n_input_dim_1:])
+
+    # out1 and out2 will have an _input_shape_product set by the "set_input_shape_atomic" method.
+    # here is safe to use the attribute.
+    bas._input_shape_product = (
+        *out1._input_shape_product,
+        *out2._input_shape_product,
+    )
+    return bas
+
+def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
+    """Get the input shape of a composite basis.
+
+    Get input shape from composition of basis, including user defined ones.
+    The function treats any bases without a `_iterate_over_components` methods as an
+    atomic basis.
+
+    The input shape for user-defined bases is retrieved with _input_shape_ property that
+    is set at runtime when `compute_features` or `set_input_shape` is called. If the
+    number of inputs is not set yet, it returns a list of None.
+    """
+    input_dim = infer_input_dimensionality(bas)
+    if input_dim == 1:
+        ishape = getattr(bas, "_input_shape_", None)
+        return bas._input_shape_[0] if ishape else None
+
+
+    elif not hasattr(bas, "basis1") and hasattr(bas, "_input_shape_"):
+        return bas._input_shape_
+
+    def unpack_shapes(basis) -> Tuple:
+        if hasattr(basis, "_input_shape_") and hasattr(basis, "input_shape"):
+            yield from basis._input_shape_
+        elif hasattr(basis, "input_shape"):
+            yield basis.input_shape
+        else:
+            yield from  [None] * infer_input_dimensionality(basis)
+
+    def list_shapes(basis) -> List[Tuple | None]:
+        if basis is None:
+            return [None]
+        components = getattr(basis, "_iterate_over_components", lambda: [basis])()
+        return [shape for comp in components for shape in unpack_shapes(comp)]
+
+    basis1 = getattr(bas, "_basis1", None)
+    basis2 = getattr(bas, "_basis2", None)
+
+    # Handle cases where one or both bases are missing
+    if basis1 is None and basis2 is None:
+        return [None, None]
+    if basis1 is None:
+        return [None] + list_shapes(basis2)
+    if basis2 is None:
+        return list_shapes(basis1) + [None]
+
+    # If both bases exist, return combined shapes
+    return list_shapes(basis1) + list_shapes(basis2)

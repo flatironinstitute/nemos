@@ -6,8 +6,9 @@ import itertools
 from typing import Optional, Callable, Iterable, Tuple, List
 from numpy.typing import NDArray
 
-from ._composition_utils import count_positional_and_var_args
-from ._basis_mixin import AtomicBasisMixin
+from ._composition_utils import count_positional_and_var_args, infer_input_dimensionality
+from ._basis_mixin import BasisMixin
+from ..base_class import Base
 import numpy as np
 
 
@@ -30,10 +31,10 @@ def apply_f_vectorized(f: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input
     )
 
 
-class CustomBasis(AtomicBasisMixin):
+class CustomBasis(BasisMixin, Base):
     def __init__(
             self,
-            *funcs: Callable[[NDArray,...], NDArray],
+            funcs: List[Callable[[NDArray,...], NDArray]],
             ndim_input: int = 1,
             ndim_output: int = 1,
             calculate_n_output_features: Optional[Callable[[Tuple[int,...]],  int]] = None,
@@ -45,8 +46,9 @@ class CustomBasis(AtomicBasisMixin):
         self.calculate_n_output_features = calculate_n_output_features
 
         # nomenclature is confusing, should rename this to _n_args_compute_features
-        self._n_input_dimensionality = sum(count_positional_and_var_args(f)[0] for f in self.funcs)
-        super().__init__(n_basis_funcs=len(self.funcs), label=label)
+        self._n_input_dimensionality = infer_input_dimensionality(self)
+        self._n_basis_funcs = len(self.funcs)
+        super().__init__(label=label)
 
 
     @property
@@ -94,6 +96,13 @@ class CustomBasis(AtomicBasisMixin):
     def _check_all_same_shape(*x: NDArray):
         if not len(set(xi.shape for xi in x)) == 1:
             raise ValueError("All inputs must have the same shape.")
+
+    def _check_input_dimensionality(self, xi: Tuple) -> None:
+        # TODO fill in the check, if possible
+        pass
+
+    def compute_features(self, *xi):
+        pass
 
     def evaluate(self, *x: NDArray):
         """Evaluate funcs in a vectorized form."""

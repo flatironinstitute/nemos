@@ -17,12 +17,13 @@ from ..base_class import Base
 from ..tree_utils import has_matching_axis_pytree
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
-from ..utils import format_repr, row_wise_kron
+from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin, BasisMixin
 from ._composition_utils import (
     _recompute_all_default_labels,
     infer_input_dimensionality,
+    generate_basis_label_pair,
 )
 
 
@@ -137,14 +138,6 @@ def get_equi_spaced_samples(
     return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
 
 
-def generate_basis_label_pair(bas: Basis):
-    if hasattr(bas, "basis1"):
-        for label, sub_bas in generate_basis_label_pair(bas.basis1):
-            yield label, sub_bas
-        for label, sub_bas in generate_basis_label_pair(bas.basis2):
-            yield label, sub_bas
-    yield bas.label, bas
-
 
 class Basis(Base, abc.ABC, BasisTransformerMixin):
     """
@@ -170,10 +163,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
-
-        # initialize parent to None. This should not end in "_" because it is
-        # a permanent property of a basis, defined at composite basis init
-        self._parent = None
 
     @property
     def n_output_features(self) -> int | None:
@@ -582,28 +571,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 mul *= deepcopy(self)
         _recompute_all_default_labels(mul)
         return mul
-
-    def __repr__(self):
-        return format_repr(self)
-
-    def __getitem__(self, index: str) -> Basis:
-
-        if isinstance(index, (int, slice)):
-            string = "Slicing" if isinstance(index, slice) else "Indexing with integer"
-            raise IndexError(
-                f"You can only index basis using labels. {string} is invalid."
-            )
-
-        search = next(
-            (bas for lab, bas in generate_basis_label_pair(self) if lab == index), None
-        )
-
-        if search is None:
-            avail_index = ",".join(f"'{b}'" for b in self._generate_subtree_labels())
-            raise IndexError(
-                f"Basis label {index} not found. Available labels: {avail_index}"
-            )
-        return search
 
     def _get_feature_slicing(
         self,
