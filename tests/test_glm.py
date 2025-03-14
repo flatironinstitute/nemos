@@ -66,7 +66,7 @@ class TestGLM:
             ("ProxSVRG", does_not_raise()),
             (
                 1,
-                pytest.raises(TypeError, match="The solver: 1 is not allowed "),
+                pytest.raises(ValueError, match="The solver: 1 is not allowed "),
             ),
         ],
     )
@@ -1417,33 +1417,6 @@ class TestGLM:
             (glm2.coef_, glm2.intercept_),
         )
 
-    @pytest.mark.parametrize(
-        "reg, dof",
-        [
-            (nmo.regularizer.UnRegularized(), np.array([5])),
-            (
-                nmo.regularizer.Lasso(),
-                np.array([3]),
-            ),  # this lasso fit has only 3 coeff of the first neuron
-            # surviving
-            (nmo.regularizer.Ridge(), np.array([5])),
-        ],
-    )
-    @pytest.mark.parametrize("n_samples", [1, 20])
-    def test_estimate_dof_resid(
-        self, n_samples, dof, reg, poissonGLM_model_instantiation
-    ):
-        """
-        Test that the dof is an integer.
-        """
-        X, y, model, true_params, firing_rate = poissonGLM_model_instantiation
-        strength = None if isinstance(reg, nmo.regularizer.UnRegularized) else 1.0
-        model.set_params(regularizer=reg, regularizer_strength=strength)
-        model.solver_name = model.regularizer.default_solver
-        model.fit(X, y)
-        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
-        assert np.allclose(num, n_samples - dof - 1)
-
     @pytest.mark.parametrize("reg", ["Ridge", "Lasso", "GroupLasso"])
     def test_warning_solver_reg_str(self, reg):
         # check that a warning is triggered
@@ -1678,187 +1651,109 @@ class TestGLM:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
 
-    @pytest.mark.parametrize("batch_size", [None, 1, 10])
-    @pytest.mark.parametrize("stepsize", [None, 0.01])
-    @pytest.mark.parametrize(
-        "regularizer", ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
-    )
-    @pytest.mark.parametrize(
-        "solver_name, has_dafaults",
-        [
-            ("GradientDescent", False),
-            ("LBFGS", False),
-            ("ProximalGradient", False),
-            ("SVRG", True),
-            ("ProxSVRG", True),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "inv_link, link_has_defaults", [(jax.nn.softplus, True), (jax.numpy.exp, False)]
-    )
-    @pytest.mark.parametrize(
-        "observation_model, obs_has_defaults",
-        [
-            (nmo.observation_models.PoissonObservations, True),
-            (nmo.observation_models.GammaObservations, False),
-        ],
-    )
-    def test_optimize_solver_params(
-        self,
-        batch_size,
-        stepsize,
-        regularizer,
-        solver_name,
-        inv_link,
-        observation_model,
-        has_dafaults,
-        link_has_defaults,
-        obs_has_defaults,
-        poissonGLM_model_instantiation,
-    ):
-        """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
-        obs = observation_model(inverse_link_function=inv_link)
-        X, y, _, _, _ = poissonGLM_model_instantiation
-        solver_kwargs = dict(stepsize=stepsize, batch_size=batch_size)
-        # use glm static methods to check if the solver is batchable
-        # if not pop the batch_size kwarg
-        try:
-            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
-            nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
-        except NameError:
-            solver_kwargs.pop("batch_size")
 
-        # if the regularizer is not allowed for the solver type, return
-        try:
-            model = nmo.glm.GLM(
-                regularizer=regularizer,
-                solver_name=solver_name,
-                observation_model=obs,
-                solver_kwargs=solver_kwargs,
-                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
-            )
-        except ValueError as e:
-            if not str(e).startswith(
-                rf"The solver: {solver_name} is not allowed for {regularizer} regularization"
-            ):
-                raise e
-            return
+##########################################################
+## Observation model specific fixtures for shared tests ##
+##########################################################
+@pytest.fixture
+def ll_scipy_stats(model_instantiation):
+    """
+    Fixture for test_loglikelihood_against_scipy_stats
+    """
+    if "poisson" in model_instantiation:
 
-        kwargs = model._optimize_solver_params(X, y)
-        if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
-            # if batch size was provided, then it should be returned unchanged
-            assert batch_size == kwargs["batch_size"]
-        elif has_dafaults and link_has_defaults and obs_has_defaults:
-            # if defaults are available, a batch size is computed
-            assert isinstance(kwargs["batch_size"], int) and kwargs["batch_size"] > 0
-        elif "batch_size" in solver_kwargs:
-            # return None otherwise
-            assert isinstance(kwargs["batch_size"], type(None))
+        def ll(y, mean_firing):
+            return jax.scipy.stats.poisson.logpmf(y, mean_firing).mean()
 
-        if isinstance(stepsize, float):
-            # if stepsize was provided, then it should be returned unchanged
-            assert stepsize == kwargs["stepsize"]
-        elif has_dafaults and link_has_defaults and obs_has_defaults:
-            # if defaults are available, compute a value
-            assert isinstance(kwargs["stepsize"], float) and kwargs["stepsize"] > 0
-        else:
-            # return None otherwise
-            assert isinstance(kwargs["stepsize"], type(None))
+    elif "gamma" in model_instantiation:
 
-    @pytest.mark.parametrize("batch_size", [None, 1, 10])
-    @pytest.mark.parametrize("stepsize", [None, 0.01])
-    @pytest.mark.parametrize(
-        "regularizer", ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
-    )
-    @pytest.mark.parametrize(
-        "solver_name, has_dafaults",
-        [
-            ("GradientDescent", False),
-            ("LBFGS", False),
-            ("ProximalGradient", False),
-            ("SVRG", True),
-            ("ProxSVRG", True),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "inv_link, link_has_defaults", [(jax.nn.softplus, True), (jax.numpy.exp, False)]
-    )
-    @pytest.mark.parametrize(
-        "observation_model, obs_has_defaults",
-        [
-            (nmo.observation_models.PoissonObservations, True),
-            (nmo.observation_models.GammaObservations, False),
-        ],
-    )
-    def test_optimize_solver_params_pytree(
-        self,
-        batch_size,
-        stepsize,
-        regularizer,
-        solver_name,
-        inv_link,
-        observation_model,
-        has_dafaults,
-        link_has_defaults,
-        obs_has_defaults,
-        poissonGLM_model_instantiation_pytree,
-    ):
-        """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
-        obs = observation_model(inverse_link_function=inv_link)
-        X, y, _, _, _ = poissonGLM_model_instantiation_pytree
-        solver_kwargs = dict(stepsize=stepsize, batch_size=batch_size)
-        # use glm static methods to check if the solver is batchable
-        # if not pop the batch_size kwarg
-        try:
-            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
-            nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
-        except NameError:
-            solver_kwargs.pop("batch_size")
+        def ll(y, mean_firing, scale):
+            return sm.families.Gamma().loglike(y, mean_firing, scale=scale) / y.shape[0]
 
-        # if the regularizer is not allowed for the solver type, return
-        try:
-            model = nmo.glm.GLM(
-                regularizer=regularizer,
-                solver_name=solver_name,
-                observation_model=obs,
-                solver_kwargs=solver_kwargs,
-                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
-            )
-        except ValueError as e:
-            if not str(e).startswith(
-                rf"The solver: {solver_name} is not allowed for {regularizer} regularization"
-            ):
-                raise e
-            return
+    elif "bernoulli" in model_instantiation:
 
-        kwargs = model._optimize_solver_params(X, y)
-        if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
-            # if batch size was provided, then it should be returned unchanged
-            assert batch_size == kwargs["batch_size"]
-        elif has_dafaults and link_has_defaults and obs_has_defaults:
-            # if defaults are available, a batch size is computed
-            assert isinstance(kwargs["batch_size"], int) and kwargs["batch_size"] > 0
-        elif "batch_size" in solver_kwargs:
-            # return None otherwise
-            assert isinstance(kwargs["batch_size"], type(None))
+        def ll(y, mean_firing):
+            return jax.scipy.stats.bernoulli.logpmf(y, mean_firing).mean()
 
-        if isinstance(stepsize, float):
-            # if stepsize was provided, then it should be returned unchanged
-            assert stepsize == kwargs["stepsize"]
-        elif has_dafaults and link_has_defaults and obs_has_defaults:
-            # if defaults are available, compute a value
-            assert isinstance(kwargs["stepsize"], float) and kwargs["stepsize"] > 0
-        else:
-            # return None otherwise
-            assert isinstance(kwargs["stepsize"], type(None))
+    else:
+        raise ValueError("Unknown model instantiation")
+    return ll
 
-    def test_repr_out(self, poissonGLM_model_instantiation):
-        model = poissonGLM_model_instantiation[2]
-        assert (
-            repr(model)
-            == "GLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),"
-            "\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+@pytest.fixture
+def sklearn_model(model_instantiation):
+    """
+    Fixture for test_glm_fit_matches_sklearn
+    """
+    if "poisson" in model_instantiation:
+        return PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+
+    elif "gamma" in model_instantiation:
+        return GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+
+    elif "bernoulli" in model_instantiation:
+        return LogisticRegression(
+            fit_intercept=True,
+            tol=10**-12,
+            penalty=None,
         )
+
+    else:
+        raise ValueError("Unknown model instantiation")
+
+
+@pytest.fixture
+def dof_lasso_strength(model_instantiation):
+    """
+    Fixture for test_estimate_dof_resid
+    """
+    if "poisson" in model_instantiation:
+        return 1.0
+
+    elif "gamma" in model_instantiation:
+        return 0.01
+
+    elif "bernoulli" in model_instantiation:
+        return 0.1
+
+    else:
+        raise ValueError("Unknown model instantiation")
+
+
+@pytest.fixture
+def obs_has_defaults(model_instantiation):
+    """
+    Fixture for test_optimize_solver_params and test_optimize_solver_params_pytree
+    """
+    if "poisson" in model_instantiation:
+        return True
+
+    elif "gamma" in model_instantiation:
+        return False
+
+    elif "bernoulli" in model_instantiation:
+        return False
+
+    else:
+        raise ValueError("Unknown model instantiation")
+
+
+@pytest.fixture
+def model_repr(model_instantiation):
+    """
+    Fixture for test_repr_out
+    """
+    if "poisson" in model_instantiation:
+        return "GLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+    elif "gamma" in model_instantiation:
+        return "GLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+    elif "bernoulli" in model_instantiation:
+        return "GLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+    else:
+        raise ValueError("Unknown model instantiation")
 
 
 @pytest.mark.parametrize(
@@ -1876,6 +1771,9 @@ class TestGLMShared:
     and tests that inspect the output when obervation model methods are called.
     """
 
+    #########################
+    ## Test initialization ##
+    #########################
     @pytest.mark.parametrize(
         "X, y",
         [
@@ -1888,7 +1786,7 @@ class TestGLMShared:
         _, _, model, _, _ = request.getfixturevalue(model_instantiation)
 
         # right now default initialization is specific to poissonGLMs and will fail for the others
-        # this test will need to be updated once we move parameter initialization to be observation model specific
+        # TODO: this test will need to be updated once we move parameter initialization to be observation model specific
         if model_instantiation == "poissonGLM_model_instantiation":
             coef, inter = model._initialize_parameters(X, y)
             assert coef.shape == (X.shape[1],)
@@ -1896,6 +1794,9 @@ class TestGLMShared:
         else:
             return
 
+    #####################
+    ## Test get_params ##
+    #####################
     def test_get_params(self, request, model_instantiation):
         """
         Test that get_params() contains expected values.
@@ -1968,6 +1869,9 @@ class TestGLMShared:
         assert set(model.get_params().keys()) == expected_keys
         assert list(model.get_params().values()) == expected_values
 
+    ####################
+    ## Test model.fit ##
+    ####################
     def test_fit_mask_grouplasso(self, request, model_instantiation):
         """Test that the group lasso fit goes through"""
 
@@ -1982,7 +1886,7 @@ class TestGLMShared:
             )
             model.fit(X, y)
         else:
-            # need to define this fixture for the other models
+            # TODO: need to define this fixture for the other models
             return
 
     def test_fit_pytree_equivalence(self, request, model_instantiation):
@@ -2015,9 +1919,9 @@ class TestGLMShared:
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
         assert np.allclose(model.scale_, model_tree.scale_)
 
-    #######################
-    # Test model.score
-    #######################
+    ######################
+    ## Test model.score ##
+    ######################
     @pytest.mark.parametrize(
         "score_type, expectation",
         [
@@ -2046,7 +1950,9 @@ class TestGLMShared:
         with expectation:
             model.score(X, y, score_type=score_type)
 
-    def test_loglikelihood_against_scipy_stats(self, request, model_instantiation):
+    def test_loglikelihood_against_scipy_stats(
+        self, request, model_instantiation, ll_scipy_stats
+    ):
         """
         Compare the model's log-likelihood computation against `jax.scipy`.
         Ensure consistent and correct calculations.
@@ -2062,19 +1968,11 @@ class TestGLMShared:
         # get the rate
         mean_firing = model.predict(X)
         # compute the log-likelihood using jax.scipy
-        if "poisson" in model_instantiation:
-            mean_ll_jax = jax.scipy.stats.poisson.logpmf(y, mean_firing).mean()
-        elif "gamma" in model_instantiation:
-            mean_ll_jax = (
-                sm.families.Gamma().loglike(y, mean_firing, scale=model.scale_)
-                / y.shape[0]
-            )
-        elif "bernoulli" in model_instantiation:
-            mean_ll_jax = jax.scipy.stats.bernoulli.logpmf(y, mean_firing).mean()
+        if "gamma" in model_instantiation:
+            mean_ll_jax = ll_scipy_stats(y, mean_firing, model.scale_)
         else:
-            raise TypeError(
-                f"{model_instantiation} does not have a defined case in test."
-            )
+            mean_ll_jax = ll_scipy_stats(y, mean_firing)
+
         model_ll = model.score(X, y, score_type="log-likelihood")
         if not np.allclose(mean_ll_jax, model_ll):
             raise ValueError(
@@ -2082,9 +1980,9 @@ class TestGLMShared:
                 "that of jax.scipy!"
             )
 
-    #######################
-    # Test model.initialize_solver
-    #######################
+    ##################################
+    ## Test model.initialize_solver ##
+    ##################################
     def test_initializer_solver_set_solver_callable(self, request, model_instantiation):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation
@@ -2099,7 +1997,7 @@ class TestGLMShared:
         assert isinstance(model.solver_run, Callable)
 
     #######################
-    # Test model.update
+    ## Test model.update ##
     #######################
     @pytest.mark.parametrize(
         "n_samples, expectation",
@@ -2168,9 +2066,9 @@ class TestGLMShared:
         # check for equivalence update
         assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
 
-    #######################
-    # Test model.simulate
-    #######################
+    #########################
+    ## Test model.simulate ##
+    #########################
     @pytest.mark.parametrize(
         "input_type, expected_out_type",
         [
@@ -2214,9 +2112,9 @@ class TestGLMShared:
         # check the time point number is that expected (same as the input)
         assert ysim.shape[0] == X.shape[0]
 
-    #######################################
-    # Compare with standard implementation
-    #######################################
+    ##########################################
+    ## Compare with standard implementation ##
+    ##########################################
     def test_compatibility_with_sklearn_cv(self, request, model_instantiation):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation
@@ -2359,7 +2257,9 @@ class TestGLMShared:
         )
 
     @pytest.mark.parametrize("solver_name", ["GradientDescent", "SVRG"])
-    def test_glm_fit_matches_sklearn(self, solver_name, request, model_instantiation):
+    def test_glm_fit_matches_sklearn(
+        self, solver_name, request, model_instantiation, sklearn_model
+    ):
         """Test that different solvers converge to the same solution."""
         jax.config.update("jax_enable_x64", True)
         X, y, model_obs, true_params, firing_rate = request.getfixturevalue(
@@ -2381,22 +2281,237 @@ class TestGLMShared:
         model.data_type = jnp.float64
         model.fit(X, y)
 
-        if "poisson" in model_instantiation:
-            model_skl = PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
-        elif "gamma" in model_instantiation:
-            model_skl = GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
-        elif "bernoulli" in model_instantiation:
-            model_skl = LogisticRegression(
-                fit_intercept=True,
-                tol=10**-12,
-                penalty=None,
-            )
+        sklearn_model.fit(X, y)
 
-        model_skl.fit(X, y)
-
-        match_weights = jnp.allclose(model_skl.coef_, model.coef_, atol=1e-5, rtol=0.0)
+        match_weights = jnp.allclose(
+            sklearn_model.coef_, model.coef_, atol=1e-5, rtol=0.0
+        )
         match_intercepts = jnp.allclose(
-            model_skl.intercept_, model.intercept_, atol=1e-5, rtol=0.0
+            sklearn_model.intercept_, model.intercept_, atol=1e-5, rtol=0.0
         )
         if (not match_weights) or (not match_intercepts):
             raise ValueError("GLM.fit estimate does not match sklearn!")
+
+    #######################
+    ## Test redidual DOF ##
+    #######################
+    @pytest.mark.parametrize(
+        "reg, dof, strength",
+        [
+            (nmo.regularizer.UnRegularized(), np.array([5]), None),
+            (
+                nmo.regularizer.Lasso(),
+                np.array([3]),
+                "dof_lasso_strength",
+            ),  # this lasso fit has only 3 coeff of the first neuron
+            # surviving
+            (nmo.regularizer.Ridge(), np.array([5]), 1.0),
+        ],
+    )
+    @pytest.mark.parametrize("n_samples", [1, 20])
+    def test_estimate_dof_resid(
+        self,
+        n_samples,
+        strength,
+        dof,
+        reg,
+        request,
+        model_instantiation,
+    ):
+        """
+        Test that the dof is an integer.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            model_instantiation
+        )
+        # need different strengths for different obs models with lasso reg
+        # for 3 coefs to survive
+        if strength == "dof_lasso_strength":
+            strength = request.getfixturevalue(strength)
+        model.set_params(regularizer=reg, regularizer_strength=strength)
+        model.solver_name = model.regularizer.default_solver
+        model.fit(X, y)
+        num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
+        assert np.allclose(num, n_samples - dof - 1)
+
+    ########################
+    ## Optimizer defaults ##
+    ########################
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    @pytest.mark.parametrize(
+        "regularizer", ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+    )
+    @pytest.mark.parametrize(
+        "solver_name, has_defaults",
+        [
+            ("GradientDescent", False),
+            ("LBFGS", False),
+            ("ProximalGradient", False),
+            ("SVRG", True),
+            ("ProxSVRG", True),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "inv_link, link_has_defaults",
+        [(jax.nn.softplus, True), (jax.numpy.exp, False), (jax.lax.logistic, False)],
+    )
+    def test_optimize_solver_params(
+        self,
+        batch_size,
+        stepsize,
+        regularizer,
+        solver_name,
+        inv_link,
+        has_defaults,
+        link_has_defaults,
+        obs_has_defaults,
+        request,
+        model_instantiation,
+    ):
+        """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
+        X, y, model, _, _ = request.getfixturevalue(model_instantiation)
+
+        obs = model.observation_model
+        obs.inverse_link_function = inv_link
+        solver_kwargs = dict(stepsize=stepsize, batch_size=batch_size)
+        # use glm static methods to check if the solver is batchable
+        # if not pop the batch_size kwarg
+        try:
+            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
+            nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
+        except NameError:
+            solver_kwargs.pop("batch_size")
+
+        # if the regularizer is not allowed for the solver type, return
+        try:
+            model = nmo.glm.GLM(
+                regularizer=regularizer,
+                solver_name=solver_name,
+                observation_model=obs,
+                solver_kwargs=solver_kwargs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
+            )
+        except ValueError as e:
+            if not str(e).startswith(
+                rf"The solver: {solver_name} is not allowed for {regularizer} regularization"
+            ):
+                raise e
+            return
+
+        kwargs = model._optimize_solver_params(X, y)
+        if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
+            # if batch size was provided, then it should be returned unchanged
+            assert batch_size == kwargs["batch_size"]
+        elif has_defaults and link_has_defaults and obs_has_defaults:
+            # if defaults are available, a batch size is computed
+            assert isinstance(kwargs["batch_size"], int) and kwargs["batch_size"] > 0
+        elif "batch_size" in solver_kwargs:
+            # return None otherwise
+            assert isinstance(kwargs["batch_size"], type(None))
+
+        if isinstance(stepsize, float):
+            # if stepsize was provided, then it should be returned unchanged
+            assert stepsize == kwargs["stepsize"]
+        elif has_defaults and link_has_defaults and obs_has_defaults:
+            # if defaults are available, compute a value
+            assert isinstance(kwargs["stepsize"], float) and kwargs["stepsize"] > 0
+        else:
+            # return None otherwise
+            assert isinstance(kwargs["stepsize"], type(None))
+
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    @pytest.mark.parametrize(
+        "regularizer", ["UnRegularized", "Ridge", "Lasso", "GroupLasso"]
+    )
+    @pytest.mark.parametrize(
+        "solver_name, has_dafaults",
+        [
+            ("GradientDescent", False),
+            ("LBFGS", False),
+            ("ProximalGradient", False),
+            ("SVRG", True),
+            ("ProxSVRG", True),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "inv_link, link_has_defaults", [(jax.nn.softplus, True), (jax.numpy.exp, False)]
+    )
+    @pytest.mark.parametrize(
+        "observation_model, obs_has_defaults",
+        [
+            (nmo.observation_models.PoissonObservations, True),
+            (nmo.observation_models.GammaObservations, False),
+        ],
+    )
+    def test_optimize_solver_params_pytree(
+        self,
+        batch_size,
+        stepsize,
+        regularizer,
+        solver_name,
+        inv_link,
+        observation_model,
+        has_dafaults,
+        link_has_defaults,
+        obs_has_defaults,
+        request,
+        model_instantiation,
+    ):
+        """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
+        obs = observation_model(inverse_link_function=inv_link)
+        if "bernoulli" in model_instantiation:
+            # TODO need to add this fixture
+            return
+        else:
+            X, y, _, _, _ = request.getfixturevalue(model_instantiation + "_pytree")
+        solver_kwargs = dict(stepsize=stepsize, batch_size=batch_size)
+        # use glm static methods to check if the solver is batchable
+        # if not pop the batch_size kwarg
+        try:
+            slv_class = nmo.glm.GLM._get_solver_class(solver_name)
+            nmo.glm.GLM._check_solver_kwargs(slv_class, solver_kwargs)
+        except NameError:
+            solver_kwargs.pop("batch_size")
+
+        # if the regularizer is not allowed for the solver type, return
+        try:
+            model = nmo.glm.GLM(
+                regularizer=regularizer,
+                solver_name=solver_name,
+                observation_model=obs,
+                solver_kwargs=solver_kwargs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
+            )
+        except ValueError as e:
+            if not str(e).startswith(
+                rf"The solver: {solver_name} is not allowed for {regularizer} regularization"
+            ):
+                raise e
+            return
+
+        kwargs = model._optimize_solver_params(X, y)
+        if isinstance(batch_size, int) and "batch_size" in solver_kwargs:
+            # if batch size was provided, then it should be returned unchanged
+            assert batch_size == kwargs["batch_size"]
+        elif has_dafaults and link_has_defaults and obs_has_defaults:
+            # if defaults are available, a batch size is computed
+            assert isinstance(kwargs["batch_size"], int) and kwargs["batch_size"] > 0
+        elif "batch_size" in solver_kwargs:
+            # return None otherwise
+            assert isinstance(kwargs["batch_size"], type(None))
+
+        if isinstance(stepsize, float):
+            # if stepsize was provided, then it should be returned unchanged
+            assert stepsize == kwargs["stepsize"]
+        elif has_dafaults and link_has_defaults and obs_has_defaults:
+            # if defaults are available, compute a value
+            assert isinstance(kwargs["stepsize"], float) and kwargs["stepsize"] > 0
+        else:
+            # return None otherwise
+            assert isinstance(kwargs["stepsize"], type(None))
+
+    def test_repr_out(self, request, model_instantiation, model_repr):
+        model = request.getfixturevalue(model_instantiation)[2]
+        assert repr(model) == model_repr
