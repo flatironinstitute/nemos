@@ -19,7 +19,7 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
+from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
 from ._composition_utils import (
     _recompute_all_default_labels,
     generate_basis_label_pair,

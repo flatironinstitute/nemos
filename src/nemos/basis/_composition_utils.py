@@ -360,6 +360,22 @@ def set_input_shape(bas, *xi):
     return bas
 
 
+def unpack_shapes(basis) -> Tuple:
+    if hasattr(basis, "_input_shape_") and hasattr(basis, "input_shape"):
+        yield from basis._input_shape_
+    elif hasattr(basis, "input_shape"):
+        yield basis.input_shape
+    else:
+        yield from [None] * infer_input_dimensionality(basis)
+
+
+def list_shapes(basis) -> List[Tuple | None]:
+    if basis is None:
+        return [None]
+    components = getattr(basis, "_iterate_over_components", lambda: [basis])()
+    return [shape for comp in components for shape in unpack_shapes(comp)]
+
+
 def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
     """Get the input shape of a composite basis.
 
@@ -378,20 +394,6 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
 
     elif not hasattr(bas, "basis1") and hasattr(bas, "_input_shape_"):
         return bas._input_shape_
-
-    def unpack_shapes(basis) -> Tuple:
-        if hasattr(basis, "_input_shape_") and hasattr(basis, "input_shape"):
-            yield from basis._input_shape_
-        elif hasattr(basis, "input_shape"):
-            yield basis.input_shape
-        else:
-            yield from [None] * infer_input_dimensionality(basis)
-
-    def list_shapes(basis) -> List[Tuple | None]:
-        if basis is None:
-            return [None]
-        components = getattr(basis, "_iterate_over_components", lambda: [basis])()
-        return [shape for comp in components for shape in unpack_shapes(comp)]
 
     basis1 = getattr(bas, "_basis1", None)
     basis2 = getattr(bas, "_basis2", None)
