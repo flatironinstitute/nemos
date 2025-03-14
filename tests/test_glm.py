@@ -535,19 +535,6 @@ class TestGLM:
         with expectation:
             model.fit(X, y)
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
-    def test_fit_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
-        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        model.observation_model.inverse_link_function = inv_link
-        model.fit(X, y)
-
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
-    def test_fit_set_scale(self, inv_link, gammaGLM_model_instantiation):
-        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        model.observation_model.inverse_link_function = inv_link
-        model.fit(X, y)
-        assert model.scale_ != 1
-
     #######################
     # Test model.score
     #######################
@@ -712,15 +699,6 @@ class TestGLM:
         with expectation:
             model.score(X, y)
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
-    def test_score_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
-        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        model.observation_model.inverse_link_function = inv_link
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        model.scale_ = 1.0
-        model.score(X, y)
-
     #######################
     # Test model.predict
     #######################
@@ -774,9 +752,9 @@ class TestGLM:
         with expectation:
             model.predict(X)
 
-    #######################
+    ##############################
     # Test model.initialize_solver
-    #######################
+    ##############################
     @pytest.mark.parametrize(
         "n_params, expectation",
         [
@@ -805,20 +783,6 @@ class TestGLM:
             # check that params are set
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
-
-    @pytest.mark.parametrize(
-        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.relu]
-    )
-    def test_high_firing_rate_initialization(
-        self, inv_link, example_X_y_high_firing_rates
-    ):
-        model = nmo.glm.GLM(
-            observation_model=nmo.observation_models.PoissonObservations(
-                inverse_link_function=inv_link
-            )
-        )
-        X, y = example_X_y_high_firing_rates
-        model.initialize_params(X, y[:, 0])
 
     @pytest.mark.parametrize(
         "dim_weights, expectation",
@@ -1265,17 +1229,6 @@ class TestGLM:
                 feedforward_input=feedforward_input,
             )
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
-    def test_simulate_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
-        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
-        model.observation_model.inverse_link_function = inv_link
-        model.coef_ = true_params[0]
-        model.intercept_ = true_params[1]
-        model.scale_ = 1.0
-        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
-        assert ysim.shape == y.shape
-        assert ratesim.shape == y.shape
-
     #######################################
     # Compare with standard implementation
     #######################################
@@ -1541,115 +1494,6 @@ class TestGLM:
         model = nmo.glm.GLM(regularizer=reg, regularizer_strength=1)
         with warns:
             model.set_params(**params)
-
-    @pytest.mark.parametrize(
-        "solver_name, reg",
-        [
-            ("SVRG", "Ridge"),
-            ("SVRG", "UnRegularized"),
-            ("ProxSVRG", "Ridge"),
-            ("ProxSVRG", "UnRegularized"),
-            ("ProxSVRG", "Lasso"),
-            ("ProxSVRG", "GroupLasso"),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "obs",
-        [
-            nmo.observation_models.PoissonObservations(
-                inverse_link_function=jax.nn.softplus
-            )
-        ],
-    )
-    @pytest.mark.parametrize("batch_size", [None, 1, 10])
-    @pytest.mark.parametrize("stepsize", [None, 0.01])
-    def test_glm_optimal_config_set_initial_state(
-        self,
-        solver_name,
-        batch_size,
-        stepsize,
-        reg,
-        obs,
-        poissonGLM_model_instantiation,
-    ):
-        X, y, _, true_params, _ = poissonGLM_model_instantiation
-        if reg == "GroupLasso":
-            reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
-        model = nmo.glm.GLM(
-            solver_name=solver_name,
-            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
-            observation_model=obs,
-            regularizer=reg,
-            regularizer_strength=None if reg == "UnRegularized" else 1.0,
-        )
-        opt_state = model.initialize_state(X, y, true_params)
-        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
-
-        if stepsize is not None:
-            assert opt_state.stepsize == stepsize
-            assert solver.stepsize == stepsize
-        else:
-            assert opt_state.stepsize > 0
-            assert isinstance(opt_state.stepsize, float)
-
-        if batch_size is not None:
-            assert solver.batch_size == batch_size
-        else:
-            assert isinstance(solver.batch_size, int)
-            assert solver.batch_size > 0
-
-    @pytest.mark.parametrize(
-        "solver_name, reg",
-        [
-            ("SVRG", "Ridge"),
-            ("SVRG", "UnRegularized"),
-            ("ProxSVRG", "Ridge"),
-            ("ProxSVRG", "UnRegularized"),
-            ("ProxSVRG", "Lasso"),
-        ],
-    )
-    @pytest.mark.parametrize(
-        "obs",
-        [
-            nmo.observation_models.PoissonObservations(
-                inverse_link_function=jax.nn.softplus
-            )
-        ],
-    )
-    @pytest.mark.parametrize("batch_size", [None, 1, 10])
-    @pytest.mark.parametrize("stepsize", [None, 0.01])
-    def test_glm_optimal_config_set_initial_state_pytree(
-        self,
-        solver_name,
-        batch_size,
-        stepsize,
-        reg,
-        obs,
-        poissonGLM_model_instantiation_pytree,
-    ):
-        X, y, _, true_params, _ = poissonGLM_model_instantiation_pytree
-        model = nmo.glm.GLM(
-            solver_name=solver_name,
-            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
-            observation_model=obs,
-            regularizer=reg,
-            regularizer_strength=None if reg == "UnRegularized" else 1.0,
-        )
-        opt_state = model.initialize_state(X, y, true_params)
-        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
-
-        if stepsize is not None:
-            assert opt_state.stepsize == stepsize
-            assert solver.stepsize == stepsize
-        else:
-            assert opt_state.stepsize > 0
-            assert isinstance(opt_state.stepsize, float)
-
-        if batch_size is not None:
-            assert solver.batch_size == batch_size
-        else:
-            assert isinstance(solver.batch_size, int)
-            assert solver.batch_size > 0
 
 
 ##########################################################
@@ -2515,3 +2359,177 @@ class TestGLMShared:
     def test_repr_out(self, request, model_instantiation, model_repr):
         model = request.getfixturevalue(model_instantiation)[2]
         assert repr(model) == model_repr
+
+
+class TestPoissonGLM:
+    """
+    Unit tests specific to Poisson GLM.
+    """
+
+    @pytest.mark.parametrize(
+        "inv_link", [jnp.exp, lambda x: jnp.exp(x), jax.nn.softplus, jax.nn.relu]
+    )
+    def test_high_firing_rate_initialization(
+        self, inv_link, example_X_y_high_firing_rates
+    ):
+        model = nmo.glm.GLM(
+            observation_model=nmo.observation_models.PoissonObservations(
+                inverse_link_function=inv_link
+            )
+        )
+        X, y = example_X_y_high_firing_rates
+        model.initialize_params(X, y[:, 0])
+
+    @pytest.mark.parametrize(
+        "solver_name, reg",
+        [
+            ("SVRG", "Ridge"),
+            ("SVRG", "UnRegularized"),
+            ("ProxSVRG", "Ridge"),
+            ("ProxSVRG", "UnRegularized"),
+            ("ProxSVRG", "Lasso"),
+            ("ProxSVRG", "GroupLasso"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "obs",
+        [
+            nmo.observation_models.PoissonObservations(
+                inverse_link_function=jax.nn.softplus
+            )
+        ],
+    )
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    def test_glm_optimal_config_set_initial_state(
+        self,
+        solver_name,
+        batch_size,
+        stepsize,
+        reg,
+        obs,
+        poissonGLM_model_instantiation,
+    ):
+        """
+        Test special initialization of Poisson GLM + softmax inverse link function for SVRG and ProxSVRG.
+        """
+        X, y, _, true_params, _ = poissonGLM_model_instantiation
+        if reg == "GroupLasso":
+            reg = nmo.regularizer.GroupLasso(mask=jnp.ones((1, X.shape[1])))
+        model = nmo.glm.GLM(
+            solver_name=solver_name,
+            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
+            observation_model=obs,
+            regularizer=reg,
+            regularizer_strength=None if reg == "UnRegularized" else 1.0,
+        )
+        opt_state = model.initialize_state(X, y, true_params)
+        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+
+        if stepsize is not None:
+            assert opt_state.stepsize == stepsize
+            assert solver.stepsize == stepsize
+        else:
+            assert opt_state.stepsize > 0
+            assert isinstance(opt_state.stepsize, float)
+
+        if batch_size is not None:
+            assert solver.batch_size == batch_size
+        else:
+            assert isinstance(solver.batch_size, int)
+            assert solver.batch_size > 0
+
+    @pytest.mark.parametrize(
+        "solver_name, reg",
+        [
+            ("SVRG", "Ridge"),
+            ("SVRG", "UnRegularized"),
+            ("ProxSVRG", "Ridge"),
+            ("ProxSVRG", "UnRegularized"),
+            ("ProxSVRG", "Lasso"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "obs",
+        [
+            nmo.observation_models.PoissonObservations(
+                inverse_link_function=jax.nn.softplus
+            )
+        ],
+    )
+    @pytest.mark.parametrize("batch_size", [None, 1, 10])
+    @pytest.mark.parametrize("stepsize", [None, 0.01])
+    def test_glm_optimal_config_set_initial_state_pytree(
+        self,
+        solver_name,
+        batch_size,
+        stepsize,
+        reg,
+        obs,
+        poissonGLM_model_instantiation_pytree,
+    ):
+        """
+        Test special initialization of Poisson GLM + softmax inverse link function for SVRG and ProxSVRG (with pytrees).
+        """
+        X, y, _, true_params, _ = poissonGLM_model_instantiation_pytree
+        model = nmo.glm.GLM(
+            solver_name=solver_name,
+            solver_kwargs=dict(batch_size=batch_size, stepsize=stepsize),
+            observation_model=obs,
+            regularizer=reg,
+            regularizer_strength=None if reg == "UnRegularized" else 1.0,
+        )
+        opt_state = model.initialize_state(X, y, true_params)
+        solver = inspect.getclosurevars(model._solver_run).nonlocals["solver"]
+
+        if stepsize is not None:
+            assert opt_state.stepsize == stepsize
+            assert solver.stepsize == stepsize
+        else:
+            assert opt_state.stepsize > 0
+            assert isinstance(opt_state.stepsize, float)
+
+        if batch_size is not None:
+            assert solver.batch_size == batch_size
+        else:
+            assert isinstance(solver.batch_size, int)
+            assert solver.batch_size > 0
+
+
+class TestGammaGLM:
+    """
+    Unit tests specific to Gamma GLM.
+    """
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_fit_set_scale(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+        assert model.scale_ != 1
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_score_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale_ = 1.0
+        model.score(X, y)
+
+    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
+    def test_simulate_gamma_glm(self, inv_link, gammaGLM_model_instantiation):
+        X, y, model, true_params, firing_rate = gammaGLM_model_instantiation
+        model.observation_model.inverse_link_function = inv_link
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.scale_ = 1.0
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
