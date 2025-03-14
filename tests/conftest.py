@@ -433,7 +433,7 @@ def jaxopt_solvers():
 
 
 @pytest.fixture
-def group_sparse_poisson_glm_model_instantiation():
+def poissonGLM_model_instantiation_group_sparse():
     """Set up a Poisson GLM for testing purposes with group sparse weights.
 
     This fixture initializes a Poisson GLM with random, group sparse, parameters, simulates its response, and
@@ -758,7 +758,7 @@ def example_X_y_high_firing_rates():
 
 
 @pytest.fixture
-def bernoulliGLM_model_instantiation(inv_link_func):
+def bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
     """Set up a Bernoulli GLM for testing purposes.
 
     This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
