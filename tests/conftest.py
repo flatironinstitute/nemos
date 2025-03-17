@@ -279,7 +279,33 @@ def poissonGLM_model_instantiation():
 
 
 @pytest.fixture
-def poisson_population_GLM_model():
+def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
+    """Set up a Poisson GLM for testing purposes.
+
+    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = poissonGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_poissonGLM_model_instantiation():
     """Set up a population Poisson GLM for testing purposes.
 
     This fixture initializes a Poisson GLM with random parameters, simulates its response, and
@@ -308,7 +334,9 @@ def poisson_population_GLM_model():
 
 
 @pytest.fixture
-def poisson_population_GLM_model_pytree(poisson_population_GLM_model):
+def population_poissonGLM_model_instantiation_pytree(
+    population_poissonGLM_model_instantiation,
+):
     """Set up a population Poisson GLM for testing purposes.
 
     This fixture initializes a Poisson GLM with random parameters, simulates its response, and
@@ -323,7 +351,7 @@ def poisson_population_GLM_model_pytree(poisson_population_GLM_model):
             - (w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
-    X, spikes, model, true_params, rate = poisson_population_GLM_model
+    X, spikes, model, true_params, rate = population_poissonGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
@@ -332,32 +360,6 @@ def poisson_population_GLM_model_pytree(poisson_population_GLM_model):
     model_tree = nmo.glm.PopulationGLM(
         observation_model=model.observation_model, regularizer=model.regularizer
     )
-    return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
-
-
-@pytest.fixture
-def poissonGLM_model_instantiation_pytree(poissonGLM_model_instantiation):
-    """Set up a Poisson GLM for testing purposes.
-
-    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
-    returns the test data, expected output, the model instance, true parameters, and the rate
-    of response.
-
-    Returns:
-        tuple: A tuple containing:
-            - X (numpy.ndarray): Simulated input data.
-            - np.random.poisson(rate) (numpy.ndarray): Simulated spike responses.
-            - model (nmo.glm.PoissonGLM): Initialized model instance.
-            - (w_true, b_true) (tuple): True weight and bias parameters.
-            - rate (jax.numpy.ndarray): Simulated rate of response.
-    """
-    X, spikes, model, true_params, rate = poissonGLM_model_instantiation
-    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
-    true_params_tree = (
-        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
-        true_params[1],
-    )
-    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
     return X_tree, np.random.poisson(rate), model_tree, true_params_tree, rate
 
 
@@ -464,7 +466,7 @@ def poissonGLM_model_instantiation_group_sparse():
 
 
 @pytest.fixture
-def poisson_population_GLM_model_group_sparse():
+def population_poissonGLM_model_instantiation_group_sparse():
     """Set up a Poisson GLM for testing purposes with group sparse weights.
 
     This fixture initializes a Poisson GLM with random, group sparse, parameters, simulates its response, and
@@ -624,7 +626,7 @@ def gammaGLM_model_instantiation_pytree(gammaGLM_model_instantiation):
 
 
 @pytest.fixture()
-def gamma_population_GLM_model():
+def population_gammaGLM_model_instantiation():
     np.random.seed(123)
     X = np.random.uniform(size=(500, 5))
     b_true = 0.5 * np.ones((3,))
@@ -642,8 +644,10 @@ def gamma_population_GLM_model():
 
 
 @pytest.fixture()
-def gamma_population_GLM_model_pytree(gamma_population_GLM_model):
-    X, spikes, model, true_params, rate = gamma_population_GLM_model
+def population_gammaGLM_model_instantiation_pytree(
+    population_gammaGLM_model_instantiation,
+):
+    X, spikes, model, true_params, rate = population_gammaGLM_model_instantiation
     X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
     true_params_tree = (
         dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
@@ -780,7 +784,7 @@ def bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
     observation_model = nmo.observation_models.BernoulliObservations(inv_link_func)
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
-    rate = inv_link_func(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+    rate = inv_link_func(jnp.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
 
 
@@ -807,4 +811,63 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
         true_params[1],
     )
     model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
+
+
+@pytest.fixture
+def population_bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
+    """Set up a population Bernoulli GLM for testing purposes.
+
+    This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PopulationGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    np.random.seed(123)
+    X = np.random.normal(size=(500, 5))
+    b_true = np.zeros((3,))
+    w_true = np.random.normal(size=(5, 3))
+    observation_model = nmo.observation_models.BernoulliObservations(inv_link_func)
+    regularizer = nmo.regularizer.UnRegularized()
+    model = nmo.glm.PopulationGLM(
+        observation_model=observation_model, regularizer=regularizer
+    )
+    rate = inv_link_func(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def population_bernoulliGLM_model_instantiation_pytree(
+    population_bernoulliGLM_model_instantiation,
+):
+    """Set up a population Poisson GLM for testing purposes.
+
+    This fixture initializes a Poisson GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.PopulationGLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = population_bernoulliGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.PopulationGLM(
+        observation_model=model.observation_model, regularizer=model.regularizer
+    )
     return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
