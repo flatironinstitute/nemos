@@ -464,7 +464,7 @@ def poissonGLM_model_instantiation_group_sparse():
 
 
 @pytest.fixture
-def group_sparse_poisson_glm_population():
+def poisson_population_GLM_model_group_sparse():
     """Set up a Poisson GLM for testing purposes with group sparse weights.
 
     This fixture initializes a Poisson GLM with random, group sparse, parameters, simulates its response, and
@@ -488,9 +488,9 @@ def group_sparse_poisson_glm_population():
     mask[0, 1:4] = 1
     mask[1, [0, 4]] = 1
     observation_model = nmo.observation_models.PoissonObservations(jnp.exp)
-    regularizer = nmo.regularizer.UnRegularized("GradientDescent", {})
+    regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(observation_model, regularizer)
-    rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
+    rate = jax.numpy.exp(jax.numpy.einsum("kn,tk->tn", w_true, X) + b_true)
     return X, np.random.poisson(rate), model, (w_true, b_true), rate, mask
 
 
