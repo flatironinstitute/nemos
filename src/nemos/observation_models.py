@@ -35,11 +35,11 @@ class Observations(Base, abc.ABC):
     See Also
     --------
     :class:`~nemos.observation_models.PoissonObservations`
-        A specific implementation of a observation model using the Poisson distribution.
+        A specific implementation of an observation model using the Poisson distribution.
     :class:`~nemos.observation_models.GammaObservations`
-        A specific implementation of a observation model using the Gamma distribution.
+        A specific implementation of an observation model using the Gamma distribution.
     :class:`~nemos.observation_models.BernoulliObservations`
-        A specific implementation of a observation model using the Bernoulli distribution.
+        A specific implementation of an observation model using the Bernoulli distribution.
     """
 
     def __init__(self, inverse_link_function: Callable, **kwargs):

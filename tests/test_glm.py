@@ -2001,9 +2001,6 @@ class TestGLMShared:
         Make sure that calling GLM.update with the rest of the algorithm implemented outside in a naive loop
         is consistent with running the compiled GLM.fit on the same data with the same parameters
         """
-        # TODO: need to add this fixture
-        if ("bernoulli" in model_instantiation) and "pytree" in regr_setup:
-            return
         jax.config.update("jax_enable_x64", True)
         X, y, model, true_params, rate = request.getfixturevalue(
             model_instantiation + regr_setup
@@ -2305,11 +2302,7 @@ class TestGLMShared:
     ):
         """Test the behavior of `optimize_solver_params` for different solver, regularizer, and observation model configurations."""
         obs = observation_model(inverse_link_function=inv_link)
-        if "bernoulli" in model_instantiation:
-            # TODO need to add this fixture
-            return
-        else:
-            X, y, _, _, _ = request.getfixturevalue(model_instantiation + "_pytree")
+        X, y, _, _, _ = request.getfixturevalue(model_instantiation + "_pytree")
         solver_kwargs = dict(stepsize=stepsize, batch_size=batch_size)
         # use glm static methods to check if the solver is batchable
         # if not pop the batch_size kwarg

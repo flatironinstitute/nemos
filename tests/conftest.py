@@ -769,7 +769,7 @@ def bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
         tuple: A tuple containing:
             - X (numpy.ndarray): Simulated input data.
             - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
-            - model (nmo.glm.PoissonGLM): Initialized model instance.
+            - model (nmo.glm.GLM): Initialized model instance.
             - (w_true, b_true) (tuple): True weight and bias parameters.
             - rate (jax.numpy.ndarray): Simulated rate of response.
     """
@@ -782,3 +782,29 @@ def bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
     model = nmo.glm.GLM(observation_model, regularizer)
     rate = inv_link_func(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
+
+
+@pytest.fixture
+def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
+    """Set up a Bernoulli GLM for testing purposes.
+
+    This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
+    returns the test data, expected output, the model instance, true parameters, and the rate
+    of response.
+
+    Returns:
+        tuple: A tuple containing:
+            - X (numpy.ndarray): Simulated input data.
+            - np.random.binomial(1,rate) (numpy.ndarray): Simulated spike responses.
+            - model (nmo.glm.GLM): Initialized model instance.
+            - (w_true, b_true) (tuple): True weight and bias parameters.
+            - rate (jax.numpy.ndarray): Simulated rate of response.
+    """
+    X, spikes, model, true_params, rate = bernoulliGLM_model_instantiation
+    X_tree = nmo.pytrees.FeaturePytree(input_1=X[..., :3], input_2=X[..., 3:])
+    true_params_tree = (
+        dict(input_1=true_params[0][:3], input_2=true_params[0][3:]),
+        true_params[1],
+    )
+    model_tree = nmo.glm.GLM(model.observation_model, model.regularizer)
+    return X_tree, np.random.binomial(1, rate), model_tree, true_params_tree, rate
