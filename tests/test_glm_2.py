@@ -45,6 +45,10 @@ def test_validate_lower_dimensional_data_X(mock_glm):
 
 @pytest.fixture
 def model_instantiation_type(glm_class_type):
+    """
+    Fixure to grab the appropriate model instantiation function based on the type of GLM class.
+    Used by TestGLM and TestPoissonGLM classes.
+    """
     if "population" in glm_class_type:
         return "population_poissonGLM_model_instantiation"
     else:
@@ -1628,150 +1632,6 @@ class TestGLM:
             model.set_params(**params)
 
 
-##########################################################
-## Observation model specific fixtures for shared tests ##
-##########################################################
-@pytest.fixture
-def ll_scipy_stats(model_instantiation):
-    """
-    Fixture for test_loglikelihood_against_scipy_stats
-    """
-    if "poisson" in model_instantiation:
-
-        def ll(y, mean_firing):
-            return jax.scipy.stats.poisson.logpmf(y, mean_firing).mean()
-
-    elif "gamma" in model_instantiation:
-
-        def ll(y, mean_firing, scale):
-            if y.ndim == 1:
-                norm = y.shape[0]
-            elif y.ndim == 2:
-                norm = y.shape[0] * y.shape[1]
-            return sm.families.Gamma().loglike(y, mean_firing, scale=scale) / norm
-
-    elif "bernoulli" in model_instantiation:
-
-        def ll(y, mean_firing):
-            return jax.scipy.stats.bernoulli.logpmf(y, mean_firing).mean()
-
-    else:
-        raise ValueError("Unknown model instantiation")
-    return ll
-
-
-@pytest.fixture
-def sklearn_model(model_instantiation):
-    """
-    Fixture for test_glm_fit_matches_sklearn
-    """
-    if "poisson" in model_instantiation:
-        return PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
-
-    elif "gamma" in model_instantiation:
-        return GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
-
-    elif "bernoulli" in model_instantiation:
-        return LogisticRegression(
-            fit_intercept=True,
-            tol=10**-12,
-            penalty=None,
-        )
-
-    else:
-        raise ValueError("Unknown model instantiation")
-
-
-@pytest.fixture
-def dof_lasso_strength(model_instantiation):
-    """
-    Fixture for test_estimate_dof_resid
-    """
-    if "poisson" in model_instantiation:
-        return 1.0
-
-    elif "gamma" in model_instantiation:
-        return 0.02
-
-    elif "bernoulli" in model_instantiation:
-        return 0.1
-
-    else:
-        raise ValueError("Unknown model instantiation")
-
-
-@pytest.fixture
-def dof_lasso_dof(glm_type, model_instantiation):
-    """
-    Fixture for test_estimate_dof_resid
-    """
-    if "poisson" in model_instantiation:
-        if "population" in glm_type:
-            return np.array([3, 0, 0])
-        else:
-            return np.array([3])
-
-    elif "gamma" in model_instantiation:
-        if "population" in glm_type:
-            return np.array([1, 4, 3])
-        else:
-            return np.array([3])
-
-    elif "bernoulli" in model_instantiation:
-        if "population" in glm_type:
-            return np.array([3, 2, 1])
-        else:
-            return np.array([3])
-
-    else:
-        raise ValueError("Unknown model instantiation")
-
-
-@pytest.fixture
-def obs_has_defaults(model_instantiation):
-    """
-    Fixture for test_optimize_solver_params and test_optimize_solver_params_pytree
-    """
-    if "poisson" in model_instantiation:
-        return True
-
-    elif "gamma" in model_instantiation:
-        return False
-
-    elif "bernoulli" in model_instantiation:
-        return False
-
-    else:
-        raise ValueError("Unknown model instantiation")
-
-
-@pytest.fixture
-def model_repr(glm_type, model_instantiation):
-    """
-    Fixture for test_repr_out
-    """
-    if "poisson" in model_instantiation:
-        if "population" in glm_type:
-            return "PopulationGLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-        else:
-            return "GLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
-    elif "gamma" in model_instantiation:
-        if "population" in glm_type:
-            return "PopulationGLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-        else:
-            return "GLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
-    elif "bernoulli" in model_instantiation:
-        if "population" in glm_type:
-            return "PopulationGLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-        else:
-            return "GLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
-
-    else:
-        raise ValueError("Unknown model instantiation")
-
-
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize(
     "model_instantiation",
@@ -1786,7 +1646,147 @@ class TestGLMShared:
     Shared unit tests of the GLM class that do depend on obeservation model.
     i.e. tests that directly depend on observation model methods (e.g. model.fit, model.score, model.update),
     and tests that inspect the output when obervation model methods are called.
+
+    For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
+
+    ##########################################################
+    ## Observation model specific fixtures for shared tests ##
+    ##########################################################
+    @pytest.fixture
+    def ll_scipy_stats(self, model_instantiation):
+        """
+        Fixture for test_loglikelihood_against_scipy_stats
+        """
+        if "poisson" in model_instantiation:
+
+            def ll(y, mean_firing):
+                return jax.scipy.stats.poisson.logpmf(y, mean_firing).mean()
+
+        elif "gamma" in model_instantiation:
+
+            def ll(y, mean_firing, scale):
+                if y.ndim == 1:
+                    norm = y.shape[0]
+                elif y.ndim == 2:
+                    norm = y.shape[0] * y.shape[1]
+                return sm.families.Gamma().loglike(y, mean_firing, scale=scale) / norm
+
+        elif "bernoulli" in model_instantiation:
+
+            def ll(y, mean_firing):
+                return jax.scipy.stats.bernoulli.logpmf(y, mean_firing).mean()
+
+        else:
+            raise ValueError("Unknown model instantiation")
+        return ll
+
+    @pytest.fixture
+    def sklearn_model(self, model_instantiation):
+        """
+        Fixture for test_glm_fit_matches_sklearn
+        """
+        if "poisson" in model_instantiation:
+            return PoissonRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+
+        elif "gamma" in model_instantiation:
+            return GammaRegressor(fit_intercept=True, tol=10**-12, alpha=0.0)
+
+        elif "bernoulli" in model_instantiation:
+            return LogisticRegression(
+                fit_intercept=True,
+                tol=10**-12,
+                penalty=None,
+            )
+
+        else:
+            raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def dof_lasso_strength(self, model_instantiation):
+        """
+        Fixture for test_estimate_dof_resid
+        """
+        if "poisson" in model_instantiation:
+            return 1.0
+
+        elif "gamma" in model_instantiation:
+            return 0.02
+
+        elif "bernoulli" in model_instantiation:
+            return 0.1
+
+        else:
+            raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def dof_lasso_dof(self, glm_type, model_instantiation):
+        """
+        Fixture for test_estimate_dof_resid
+        """
+        if "poisson" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([3, 0, 0])
+            else:
+                return np.array([3])
+
+        elif "gamma" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([1, 4, 3])
+            else:
+                return np.array([3])
+
+        elif "bernoulli" in model_instantiation:
+            if "population" in glm_type:
+                return np.array([3, 2, 1])
+            else:
+                return np.array([3])
+
+        else:
+            raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def obs_has_defaults(self, model_instantiation):
+        """
+        Fixture for test_optimize_solver_params
+        """
+        if "poisson" in model_instantiation:
+            return True
+
+        elif "gamma" in model_instantiation:
+            return False
+
+        elif "bernoulli" in model_instantiation:
+            return False
+
+        else:
+            raise ValueError("Unknown model instantiation")
+
+    @pytest.fixture
+    def model_repr(self, glm_type, model_instantiation):
+        """
+        Fixture for test_repr_out
+        """
+        if "poisson" in model_instantiation:
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+            else:
+                return "GLM(\n    observation_model=PoissonObservations(inverse_link_function=exp),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+        elif "gamma" in model_instantiation:
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+            else:
+                return "GLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+        elif "bernoulli" in model_instantiation:
+            if "population" in glm_type:
+                return "PopulationGLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+            else:
+                return "GLM(\n    observation_model=BernoulliObservations(inverse_link_function=logistic),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+
+        else:
+            raise ValueError("Unknown model instantiation")
 
     #########################
     ## Test initialization ##
