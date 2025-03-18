@@ -29,6 +29,7 @@ from ._composition_utils import (
     infer_input_dimensionality,
     label_setter,
     set_input_shape,
+    is_basis_like,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -656,17 +657,25 @@ class CompositeBasisMixin(BasisMixin):
         # trigger label setter
         super().__init__(label=label)
 
+    def _is_basis_like(self, basis1: Optional[BasisMixin]=None, basis2:Optional[BasisMixin]=None):
+        if basis1 and not is_basis_like(basis1):
+            raise ValueError(
+                "`basis1` does not implement `compute_features`. "
+                "The method is required for the correct behavior of the basis."
+            )
+        if basis2 and not is_basis_like(basis2):
+            raise ValueError(
+                "`basis2` does not implement `compute_features`. "
+                "The method is required for the correct behavior of the basis."
+            )
+
     @property
     def basis1(self):
         return self._basis1
 
     @basis1.setter
     def basis1(self, basis):
-        if not hasattr(basis, "get_params") or not hasattr(basis, "compute_features"):
-            raise TypeError(
-                "`basis1` does not implement `compute_features`. "
-                "The method is required for the correct behavior of the basis."
-            )
+        self._is_basis_like(basis1=basis)
 
         if self._basis2:
             self._set_labels(basis, self._basis2)
@@ -681,11 +690,7 @@ class CompositeBasisMixin(BasisMixin):
 
     @basis2.setter
     def basis2(self, basis):
-        if not hasattr(basis, "compute_features"):
-            raise TypeError(
-                "`basis2` does not implement `compute_features`. "
-                "The method is required for the correct behavior of the basis."
-            )
+        self._is_basis_like(basis2=basis)
         if self._basis1:
             self._set_labels(self._basis1, basis)
         if self._basis2:

@@ -24,6 +24,7 @@ from ._composition_utils import (
     _recompute_all_default_labels,
     generate_basis_label_pair,
     infer_input_dimensionality,
+    is_basis_like,
 )
 
 
@@ -509,7 +510,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             _recompute_all_default_labels(add)
             return add
 
-        if not isinstance(other, Basis):
+        if not is_basis_like(other):
             raise TypeError(
                 "Basis multiplicative factor should be a Basis object or a positive integer!"
             )

@@ -6,7 +6,7 @@ with no to minimal re
 """
 
 import re
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List, Tuple, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -220,7 +220,7 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
         if hasattr(bas, "funcs"):
             funcs = bas.funcs
         else:
-            funcs = [bas.compute_features]
+            funcs = [bas.compute_features] if hasattr(bas, "compute_features") else []
         n_input_dim = sum(count_positional_and_var_args(f)[0] for f in funcs)
     return n_input_dim
 
@@ -362,7 +362,10 @@ def set_input_shape(bas, *xi):
 
 def unpack_shapes(basis) -> Tuple:
     if hasattr(basis, "_input_shape_") and hasattr(basis, "input_shape"):
-        yield from basis._input_shape_
+        if basis._input_shape_ is None:
+            yield None
+        else:
+            yield from basis._input_shape_
     elif hasattr(basis, "input_shape"):
         yield basis.input_shape
     else:
@@ -408,3 +411,10 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
 
     # If both bases exist, return combined shapes
     return list_shapes(basis1) + list_shapes(basis2)
+
+
+def is_basis_like(putative_basis: Any, sklearn_compat=False) -> bool:
+    is_basis = hasattr(putative_basis, "compute_features")
+    if sklearn_compat:
+        is_basis &= hasattr(putative_basis, "get_params") and hasattr(putative_basis, "set_params")
+    return is_basis
