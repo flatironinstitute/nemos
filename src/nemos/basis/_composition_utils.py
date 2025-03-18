@@ -413,8 +413,8 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
     return list_shapes(basis1) + list_shapes(basis2)
 
 
-def is_basis_like(putative_basis: Any, sklearn_compat=False) -> bool:
+def is_basis_like(putative_basis: Any, sklearn_compatibility=False) -> bool:
     is_basis = hasattr(putative_basis, "compute_features")
-    if sklearn_compat:
+    if sklearn_compatibility:
         is_basis &= hasattr(putative_basis, "get_params") and hasattr(putative_basis, "set_params")
     return is_basis
