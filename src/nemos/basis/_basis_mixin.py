@@ -27,9 +27,9 @@ from ._composition_utils import (
     generate_composite_basis_labels,
     get_input_shape,
     infer_input_dimensionality,
+    is_basis_like,
     label_setter,
     set_input_shape,
-    is_basis_like,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -657,7 +657,9 @@ class CompositeBasisMixin(BasisMixin):
         # trigger label setter
         super().__init__(label=label)
 
-    def _is_basis_like(self, basis1: Optional[BasisMixin]=None, basis2:Optional[BasisMixin]=None):
+    def _is_basis_like(
+        self, basis1: Optional[BasisMixin] = None, basis2: Optional[BasisMixin] = None
+    ):
         if basis1 and not is_basis_like(basis1):
             raise ValueError(
                 "`basis1` does not implement `compute_features`. "

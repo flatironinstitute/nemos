@@ -6,7 +6,7 @@ with no to minimal re
 """
 
 import re
-from typing import TYPE_CHECKING, List, Tuple, Any
+from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -416,5 +416,7 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
 def is_basis_like(putative_basis: Any, sklearn_compatibility=False) -> bool:
     is_basis = hasattr(putative_basis, "compute_features")
     if sklearn_compatibility:
-        is_basis &= hasattr(putative_basis, "get_params") and hasattr(putative_basis, "set_params")
+        is_basis &= hasattr(putative_basis, "get_params") and hasattr(
+            putative_basis, "set_params"
+        )
     return is_basis
