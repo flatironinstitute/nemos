@@ -360,18 +360,22 @@ class BasisMixin:
 
         # Apply the slicing using the custom leaf function
         out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
-
-        # reshape the arrays to match input shapes
-        reshaped_out = dict()
+        reshaped_out: dict = dict()
         for items, bas in zip(out.items(), self):
             key, val = items
-            shape = list(val.shape)
-            reshaped_out[key] = val.reshape(
-                shape[:axis]
-                + [*(b for sh in bas._input_shape_ for b in sh), -1]
-                + shape[axis + 1 :]
-            )
+            reshaped_out[key] = self._reshape_concatenated_arrays(val, bas, axis)
         return reshaped_out
+
+    @staticmethod
+    def _reshape_concatenated_arrays(array: NDArray, bas, axis: int) -> NDArray:
+        # reshape the arrays to match input shapes
+        shape = list(array.shape)
+        array = array.reshape(
+            shape[:axis]
+            + [*(b for sh in bas._input_shape_ for b in sh), -1]
+            + shape[axis + 1:]
+        )
+        return array
 
     def __iter__(self):
         """Makes basis iterable. Re-implemented for additive."""
