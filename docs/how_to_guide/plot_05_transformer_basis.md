@@ -132,6 +132,10 @@ trans_bas.fit_transform(inp)
 
 ### Defining the Input Shape
 
+:::{note}
+If each basis accepts a single column of the input, as in [this example](sklearn-how-to), then the default behavior works fine, and `set_input_shape` does not need to be called.
+:::
+
 To resolve this, we need to explicitly specify the input structure using the `set_input_shape` method. This method tells `TransformerBasis` how to interpret the input columns by storing the number of columns assigned to each basis function.
 
 You can call set_input_shape before or after defining the transformer basis. There are multiple ways to specify the input shape:
