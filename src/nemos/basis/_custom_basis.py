@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..base_class import Base
-from ._basis_mixin import BasisMixin
+from ._basis_mixin import BasisMixin, set_input_shape_state
 from ._composition_utils import (
     count_positional_and_var_args,
     infer_input_dimensionality,
@@ -64,6 +64,7 @@ class CustomBasis(BasisMixin, Base):
         self.funcs = funcs
         self.ndim_input = int(ndim_input)
         self.ndim_output = int(ndim_output)
+        self._out_shape = None
         self.calculate_n_output_features = calculate_n_output_features
 
         # nomenclature is confusing, should rename this to _n_args_compute_features
@@ -128,7 +129,10 @@ class CustomBasis(BasisMixin, Base):
         pass
 
     def compute_features(self, *xi):
-        pass
+        self.set_input_shape(*xi)
+        out = self.evaluate(*xi)
+        self._out_shape = out.shape[1:]
+        return out.reshape(xi[0].shape[0], -1)
 
     def evaluate(self, *x: NDArray):
         """Evaluate funcs in a vectorized form."""
@@ -139,3 +143,15 @@ class CustomBasis(BasisMixin, Base):
             ],
             axis=-1,
         )
+
+    @set_input_shape_state(states=("_input_shape_product", "_input_shape_", "_label", "_out_shape"))
+    def __sklearn_clone__(self) -> "CustomBasis":
+        """Clone the basis while preserving attributes related to input shapes.
+
+        This method ensures that input shape attributes (e.g., `_input_shape_product`,
+        `_input_shape_`) are preserved during cloning. Reinitializing the class
+        as in the regular sklearn clone would drop these attributes, rendering
+        cross-validation unusable.
+        """
+        klass = self.__class__(**self.get_params())
+        return klass

@@ -576,7 +576,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         self,
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
-        split_by_input: bool = True,
     ) -> Tuple[OrderedDict, int]:
         """
         Calculate and return the slicing for features based on the input structure.
@@ -589,16 +588,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             The number of input basis for each component, by default it uses ``self._input_shape_product``.
         start_slice :
             The starting index for slicing, by default it starts from 0.
-        split_by_input :
-            Flag indicating whether to split the slicing by individual inputs or not.
-            If ``False``, a single slice is generated for all inputs.
 
         Returns
         -------
         split_dict :
             Dictionary with keys as labels and values as slices representing
-            the slicing for each input or additive component, if split_by_input equals to
-            True or False respectively.
+            the slicing for each additive component.
         start_slice :
             The updated starting index after slicing.
 
@@ -612,7 +607,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # Handle the default case for non-additive basis types
         # See overwritten method for recursion logic
         split_dict, start_slice = self._get_default_slicing(
-            split_by_input=split_by_input, start_slice=start_slice
+            start_slice=start_slice
         )
 
         return split_dict, start_slice
@@ -628,31 +623,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         return new_key
 
     def _get_default_slicing(
-        self, split_by_input: bool, start_slice: int
+        self, start_slice: int
     ) -> Tuple[OrderedDict, int]:
         """Handle default slicing logic."""
-        if split_by_input:
-            # should we remove this option?
-            if self._input_shape_product[0] == 1 or isinstance(
-                self, MultiplicativeBasis
-            ):
-                split_dict = {
-                    self.label: slice(start_slice, start_slice + self.n_output_features)
-                }
-            else:
-                split_dict = {
-                    self.label: {
-                        f"{i}": slice(
-                            start_slice + i * self.n_basis_funcs,
-                            start_slice + (i + 1) * self.n_basis_funcs,
-                        )
-                        for i in range(self._input_shape_product[0])
-                    }
-                }
-        else:
-            split_dict = {
-                self.label: slice(start_slice, start_slice + self.n_output_features)
-            }
+        split_dict = {
+            self.label: slice(start_slice, start_slice + self.n_output_features)
+        }
         start_slice += self.n_output_features
         return OrderedDict(split_dict), start_slice
 
@@ -724,7 +700,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
 
         # Get the slice dictionary based on predefined feature slicing
-        slice_dict = self._get_feature_slicing(split_by_input=False)[0]
+        slice_dict = self._get_feature_slicing()[0]
 
         # Helper function to build index tuples for each slice
         def build_index_tuple(slice_obj, axis: int, ndim: int):
@@ -1125,7 +1101,6 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         self,
         n_inputs: Optional[tuple] = None,
         start_slice: Optional[int] = None,
-        split_by_input: bool = True,
     ) -> Tuple[dict, int]:
         """
         Calculate and return the slicing for features based on the input structure.
@@ -1138,16 +1113,12 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             The number of input basis for each component, by default it uses ``self._n_basis_input``.
         start_slice :
             The starting index for slicing, by default it starts from 0.
-        split_by_input :
-            Flag indicating whether to split the slicing by individual inputs or not.
-            If ``False``, a single slice is generated for all inputs.
 
         Returns
         -------
         split_dict :
             Dictionary with keys as labels and values as slices representing
-            the slicing for each input or additive component, if split_by_input equals to
-            True or False respectively.
+            the slicing for each additive component.
         start_slice :
             The updated starting index after slicing.
 
@@ -1165,12 +1136,10 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         split_dict, start_slice = self.basis1._get_feature_slicing(
             n_inputs[: len(self.basis1._input_shape_product)],
             start_slice,
-            split_by_input=split_by_input,
         )
         sp2, start_slice = self.basis2._get_feature_slicing(
             n_inputs[len(self.basis1._input_shape_product) :],
             start_slice,
-            split_by_input=split_by_input,
         )
         split_dict = self._merge_slicing_dicts(split_dict, sp2)
         return split_dict, start_slice
