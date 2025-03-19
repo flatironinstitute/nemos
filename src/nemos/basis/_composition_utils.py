@@ -219,9 +219,13 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
         # assume compute_features is always implemented.
         if hasattr(bas, "funcs"):
             funcs = bas.funcs
+            dims = [count_positional_and_var_args(f)[0] for f in funcs]
+            if len(set(dims)) != 1:
+                raise ValueError("``funcs`` in CustomBasis must accept the same number of time series as input.")
+            n_input_dim = dims[0]
         else:
             funcs = [bas.compute_features] if hasattr(bas, "compute_features") else []
-        n_input_dim = sum(count_positional_and_var_args(f)[0] for f in funcs)
+            n_input_dim = sum(count_positional_and_var_args(f)[0] for f in funcs)
     return n_input_dim
 
 

@@ -18,23 +18,6 @@ from ._composition_utils import (
     _check_valid_shape_tuple,
 )
 
-def _get_unpack_slice(funcs: List[Callable]):
-    idx_start = 0
-    for f in funcs:
-        n_inp, _ = count_positional_and_var_args(f)
-        yield slice(idx_start, idx_start + n_inp)
-        idx_start += n_inp
-
-def _unpack_inputs(funcs: List[Callable], *x):
-    for slc in _get_unpack_slice(funcs):
-        yield x[slc]
-
-
-def compute_vectorized_input_number(funcs: List[Callable], input_shape: Tuple[int], ndim_input: int) -> List[int]:
-    return [
-        int(np.prod([np.prod(inp_shape[ndim_input:]) for inp_shape in input_shape[slc]]))
-        for slc in _get_unpack_slice(funcs)
-    ]
 
 def apply_f_vectorized(
     f: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input: int = 1
@@ -141,16 +124,17 @@ class CustomBasis(BasisMixin, Base):
     def compute_features(self, *xi):
         self.set_input_shape(*xi)
         out = self.evaluate(*xi)
-        # first dim is samples, last is the concatenated features
+        # first dim is samples, the last the concatenated features
         self.output_shape = out.shape[1:-1]
+        # return a model design
         return out.reshape(xi[0].shape[0], -1)
 
-    def evaluate(self, *x: NDArray):
+    def evaluate(self, *xi: NDArray):
         """Evaluate funcs in a vectorized form."""
         return np.concatenate(
             [
                 apply_f_vectorized(f, *xi, ndim_input=self.ndim_input)
-                for xi, f in zip(_unpack_inputs(self.funcs, *x), self.funcs)
+                for f in self.funcs
             ],
             axis=-1,
         )
@@ -171,21 +155,23 @@ class CustomBasis(BasisMixin, Base):
     def n_output_features(self):
         if self.input_shape is None:
             return None
-        # vectorized input are concatenated, resulting in an additive number of output features
-        vec_inp = sum(compute_vectorized_input_number(self.funcs, self._input_shape_, self.ndim_input))
+        # Computation for number of output features:
+        # 1. Compute the number of vectorized dimensions:
+        #    - discard axis corresponding to input dimensionality
+        #    - multiply the shape of the remaining axis
+        # 2. Each basis contributes to the same number of outputs
+        vec_inp = len(self.funcs) * np.prod([shape[self.ndim_input:] for shape in self._input_shape_])
         return int(vec_inp * np.prod(self.output_shape))
 
+
     @staticmethod
-    def _reshape_concatenated_arrays(out: NDArray, bas: "CustomBasis", axis: int) -> NDArray:
-        # if all input vec dimension are the same just call super
-        all_same_input_shape = len(set(inp_shape for inp_shape in bas._input_shape_)) == 1
-        if all_same_input_shape:
-            return super()._reshape_concatenated_arrays(out, bas, axis)
-        reshaped_out: dict = dict()
-        num_vec_inputs = sum(compute_vectorized_input_number(bas.funcs, bas._input_shape_, bas.ndim_input))
-        shape = list(out.shape)
-        return out.reshape(
-                shape[:axis]
-                + [*bas.output_shape, -1]
-                + shape[axis + 1:]
-            )
+    def _reshape_concatenated_arrays(array: NDArray, bas: "CustomBasis", axis: int) -> NDArray:
+        # reshape the arrays to match input shapes
+        shape = list(array.shape)
+        array = array.reshape(
+            shape[:axis]
+            + [*bas.output_shape, *(i for shape in bas._input_shape_ for i in shape[bas.ndim_input:]), len(bas.funcs)]
+            + shape[axis + 1:]
+        )
+        return array
+
