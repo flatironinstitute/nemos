@@ -4,6 +4,7 @@ Facilitate the construction of a custom basis class.
 """
 
 import itertools
+from numbers import Number
 from typing import Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
@@ -14,8 +15,26 @@ from ._basis_mixin import BasisMixin, set_input_shape_state
 from ._composition_utils import (
     count_positional_and_var_args,
     infer_input_dimensionality,
+    _check_valid_shape_tuple,
 )
 
+def _get_unpack_slice(funcs: List[Callable]):
+    idx_start = 0
+    for f in funcs:
+        n_inp, _ = count_positional_and_var_args(f)
+        yield slice(idx_start, idx_start + n_inp)
+        idx_start += n_inp
+
+def _unpack_inputs(funcs: List[Callable], *x):
+    for slc in _get_unpack_slice(funcs):
+        yield x[slc]
+
+
+def compute_vectorized_input_number(funcs: List[Callable], input_shape: Tuple[int], ndim_input: int) -> List[int]:
+    return [
+        int(np.prod([np.prod(inp_shape[ndim_input:]) for inp_shape in input_shape[slc]]))
+        for slc in _get_unpack_slice(funcs)
+    ]
 
 def apply_f_vectorized(
     f: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input: int = 1
@@ -23,7 +42,7 @@ def apply_f_vectorized(
     """Iterate over the output dim and apply the function to all input combination."""
 
     # check if no dimension needs vectorization
-    if all(x[0].ndim - 1 == ndim_input for x in xi):
+    if all(x.ndim - 1 == ndim_input for x in xi):
         return f(*xi)[..., np.newaxis]
 
     # compute the flat shape of the dimension that must be vectorized.
@@ -51,21 +70,26 @@ def apply_f_vectorized(
         axis=-1,
     )
 
+def check_valid_shape(shape):
+    is_numeric = not all(isinstance(i, Number) for i in shape)
+    is_int = all(i == int(i) for i in shape) if is_numeric else False
+    if not (is_numeric and is_int):
+        raise ValueError("`output_shape` must be an iterable of integers.")
 
 class CustomBasis(BasisMixin, Base):
     def __init__(
         self,
         funcs: List[Callable[[NDArray, ...], NDArray]],
         ndim_input: int = 1,
-        ndim_output: int = 1,
-        calculate_n_output_features: Optional[Callable[[Tuple[int, ...]], int]] = None,
+        output_shape: Tuple[int, ...] = (),
         label: Optional[str] = None,
     ):
         self.funcs = funcs
         self.ndim_input = int(ndim_input)
-        self.ndim_output = int(ndim_output)
-        self._out_shape = None
-        self.calculate_n_output_features = calculate_n_output_features
+
+        output_shape = tuple(output_shape)
+
+        self.output_shape = output_shape
 
         # nomenclature is confusing, should rename this to _n_args_compute_features
         self._n_input_dimensionality = infer_input_dimensionality(self)
@@ -92,32 +116,18 @@ class CustomBasis(BasisMixin, Base):
                 )
         self._funcs = val
 
-    @property
-    def calculate_n_output_features(self):
-        return self._calculate_n_output_features
-
-    @calculate_n_output_features.setter
-    def calculate_n_output_features(
-        self, val: Optional[Callable[[Tuple[int, ...]], int]]
-    ):
-        if val is None:
-            self._calculate_n_output_features = None
-            return
-
-        if not isinstance(val, Callable):
-            raise ValueError(
-                "When provided, `calculate_n_output_features` must be callable receiving a tuple of "
-                "input shapes and return the number of output features that ``compute_features`` "
-                "will return."
-            )
-
-    @staticmethod
-    def _unpack_inputs(funcs, *x):
-        cc = 0
-        for f in funcs:
-            n_inp, _ = count_positional_and_var_args(f)
-            yield x[cc : cc + n_inp]
-            cc += n_inp
+    def set_output_shape(self, output_shape: Tuple[int] | int):
+        if isinstance(output_shape, tuple):
+            _check_valid_shape_tuple(output_shape)
+            self.output_shape = output_shape
+        if isinstance(output_shape, int):
+            if output_shape == 1:
+                self.output_shape = ()
+            if output_shape > 1:
+                self.output_shape = (output_shape,)
+            else:
+                raise ValueError(f"Output shape must be strictly positive (> 0), {output_shape} provided instead.")
+        raise TypeError("`output_shape` must be a tuple of positive integers or a positive integer.}")
 
     @staticmethod
     def _check_all_same_shape(*x: NDArray):
@@ -131,7 +141,8 @@ class CustomBasis(BasisMixin, Base):
     def compute_features(self, *xi):
         self.set_input_shape(*xi)
         out = self.evaluate(*xi)
-        self._out_shape = out.shape[1:]
+        # first dim is samples, last is the concatenated features
+        self.output_shape = out.shape[1:-1]
         return out.reshape(xi[0].shape[0], -1)
 
     def evaluate(self, *x: NDArray):
@@ -139,7 +150,7 @@ class CustomBasis(BasisMixin, Base):
         return np.concatenate(
             [
                 apply_f_vectorized(f, *xi, ndim_input=self.ndim_input)
-                for xi, f in zip(self._unpack_inputs(self.funcs, *x), self.funcs)
+                for xi, f in zip(_unpack_inputs(self.funcs, *x), self.funcs)
             ],
             axis=-1,
         )
@@ -155,3 +166,11 @@ class CustomBasis(BasisMixin, Base):
         """
         klass = self.__class__(**self.get_params())
         return klass
+
+    @property
+    def n_output_features(self):
+        if self.input_shape is None:
+            return None
+        # vectorized input are concatenated, resulting in an additive number of output features
+        vec_inp = sum(compute_vectorized_input_number(self.funcs, self._input_shape_, self.ndim_input))
+        return int(vec_inp * np.prod(self.output_shape))

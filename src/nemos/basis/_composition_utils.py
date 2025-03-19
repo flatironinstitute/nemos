@@ -225,7 +225,7 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
     return n_input_dim
 
 
-def generate_basis_label_pair(bas: "Basis"):
+def generate_basis_label_pair(bas: "BasisMixin"):
     if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
         for label, sub_bas in generate_basis_label_pair(bas.basis1):
             yield label, sub_bas
@@ -234,7 +234,7 @@ def generate_basis_label_pair(bas: "Basis"):
     yield getattr(bas, "label", bas.__class__.__name__), bas
 
 
-def generate_composite_basis_labels(bas: "Basis | CustomBasis", type_label: str):
+def generate_composite_basis_labels(bas: "BasisMixin", type_label: str):
     if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
         if type_label == "all" or bas._label:
             yield bas.label
@@ -282,6 +282,12 @@ def label_setter(bas: "BasisMixin", label: str | None):
     return error
 
 
+def _check_valid_shape_tuple(shape):
+    if not all(isinstance(i, int) for i in shape):
+        raise ValueError(
+            f"The tuple provided contains non integer values. Tuple: {shape}."
+        )
+
 def set_input_shape_atomic(
     bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray
 ) -> "AtomicBasisMixin":
@@ -290,10 +296,7 @@ def set_input_shape_atomic(
     n_inputs = ()
     for xi in xis:
         if isinstance(xi, tuple):
-            if not all(isinstance(i, int) for i in xi):
-                raise ValueError(
-                    f"The tuple provided contains non integer values. Tuple: {xi}."
-                )
+            _check_valid_shape_tuple(xi)
             shape = xi
         elif isinstance(xi, int):
             shape = () if xi == 1 else (xi,)

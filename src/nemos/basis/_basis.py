@@ -19,7 +19,7 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
+from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin, BasisMixin
 from ._composition_utils import (
     _recompute_all_default_labels,
     generate_basis_label_pair,
@@ -163,22 +163,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
-
-    @property
-    def n_output_features(self) -> int | None:
-        """
-        Number of features returned by the basis.
-
-        Notes
-        -----
-        The number of output features can be determined only when the number of inputs
-        provided to the basis is known. Therefore, before the first call to ``compute_features``,
-        this property will return ``None``. After that call, or after setting the input shape with
-        ``set_input_shape``, ``n_output_features`` will be available.
-        """
-        if self._input_shape_product is not None:
-            return self.n_basis_funcs * self._input_shape_product[0]
-        return None
 
     @property
     def n_basis_funcs(self):
@@ -572,46 +556,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         _recompute_all_default_labels(mul)
         return mul
 
-    def _get_feature_slicing(
-        self,
-        n_inputs: Optional[tuple] = None,
-        start_slice: Optional[int] = None,
-    ) -> Tuple[OrderedDict, int]:
-        """
-        Calculate and return the slicing for features based on the input structure.
-
-        This method determines how to slice the features for different basis types.
-
-        Parameters
-        ----------
-        n_inputs :
-            The number of input basis for each component, by default it uses ``self._input_shape_product``.
-        start_slice :
-            The starting index for slicing, by default it starts from 0.
-
-        Returns
-        -------
-        split_dict :
-            Dictionary with keys as labels and values as slices representing
-            the slicing for each additive component.
-        start_slice :
-            The updated starting index after slicing.
-
-        See Also
-        --------
-        _get_default_slicing : Handles default slicing logic.
-        _merge_slicing_dicts : Merges multiple slicing dictionaries, handling keys conflicts.
-        """
-        # Set default values for start_slice if not provided
-        start_slice = start_slice or 0
-        # Handle the default case for non-additive basis types
-        # See overwritten method for recursion logic
-        split_dict, start_slice = self._get_default_slicing(
-            start_slice=start_slice
-        )
-
-        return split_dict, start_slice
-
     @staticmethod
     def _generate_unique_key(existing_dict: dict | List | Tuple, key: str) -> str:
         """Generate a unique key if there is a conflict."""
@@ -621,124 +565,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             extra += 1
             new_key = f"{key}_{extra}"
         return new_key
-
-    def _get_default_slicing(
-        self, start_slice: int
-    ) -> Tuple[OrderedDict, int]:
-        """Handle default slicing logic."""
-        split_dict = {
-            self.label: slice(start_slice, start_slice + self.n_output_features)
-        }
-        start_slice += self.n_output_features
-        return OrderedDict(split_dict), start_slice
-
-    def split_by_feature(
-        self,
-        x: NDArray,
-        axis: int = 1,
-    ):
-        r"""
-        Decompose an array along a specified axis into sub-arrays based on the number of expected inputs.
-
-        This function takes an array (e.g., a design matrix or model coefficients) and splits it along
-        a designated axis.
-
-        **How it works:**
-
-        - If the basis expects an input shape ``(n_samples, n_inputs)``, then the feature axis length will
-          be ``total_n_features = n_inputs * n_basis_funcs``. This axis is reshaped into dimensions
-          ``(n_inputs, n_basis_funcs)``.
-
-        - If the basis expects an input of shape ``(n_samples,)``, then the feature axis length will
-          be ``total_n_features = n_basis_funcs``. This axis is reshaped into ``(1, n_basis_funcs)``.
-
-        For example, if the input array ``x`` has shape ``(1, 2, total_n_features, 4, 5)``,
-        then after applying this method, it will be reshaped into ``(1, 2, n_inputs, n_basis_funcs, 4, 5)``.
-
-        The specified axis (``axis``) determines where the split occurs, and all other dimensions
-        remain unchanged. See the example section below for the most common use cases.
-
-        Parameters
-        ----------
-        x :
-            The input array to be split, representing concatenated features, coefficients,
-            or other data. The shape of ``x`` along the specified axis must match the total
-            number of features generated by the basis, i.e., ``self.n_output_features``.
-
-            **Examples:**
-
-            - For a design matrix: ``(n_samples, total_n_features)``
-
-            - For model coefficients: ``(total_n_features,)`` or ``(total_n_features, n_neurons)``.
-
-        axis : int, optional
-            The axis along which to split the features. Defaults to 1.
-            Use ``axis=1`` for design matrices (features along columns) and ``axis=0`` for
-            coefficient arrays (features along rows). All other dimensions are preserved.
-
-        Raises
-        ------
-        ValueError
-            If the shape of ``x`` along the specified axis does not match ``self.n_output_features``.
-
-        Returns
-        -------
-        dict
-            A dictionary where:
-
-            - **Key**: Label of the basis.
-            - **Value**: the array reshaped to: ``(..., n_inputs, n_basis_funcs, ...)``
-        """
-        # convert axis to positive ints
-        axis = axis if axis >= 0 else x.ndim + axis
-
-        if x.shape[axis] != self.n_output_features:
-            raise ValueError(
-                "`x.shape[axis]` does not match the expected number of features."
-                f" `x.shape[axis] == {x.shape[axis]}`, while the expected number "
-                f"of features is {self.n_output_features}"
-            )
-
-        # Get the slice dictionary based on predefined feature slicing
-        slice_dict = self._get_feature_slicing()[0]
-
-        # Helper function to build index tuples for each slice
-        def build_index_tuple(slice_obj, axis: int, ndim: int):
-            """Create an index tuple to apply a slice on the given axis."""
-            index = [slice(None)] * ndim  # Initialize index for all dimensions
-            index[axis] = slice_obj  # Replace the axis with the slice object
-            return tuple(index)
-
-        # Get the dict for slicing the correct axis
-        index_dict = jax.tree_util.tree_map(
-            lambda sl: build_index_tuple(sl, axis, x.ndim), slice_dict
-        )
-
-        # Custom leaf function to identify index tuples as leaves
-        def is_leaf(val):
-            # Check if it's a tuple, length matches ndim, and all elements are slice objects
-            if isinstance(val, tuple) and len(val) == x.ndim:
-                return all(isinstance(v, slice) for v in val)
-            return False
-
-        # Apply the slicing using the custom leaf function
-        out = jax.tree_util.tree_map(lambda sl: x[sl], index_dict, is_leaf=is_leaf)
-
-        # reshape the arrays to match input shapes
-        reshaped_out = dict()
-        for items, bas in zip(out.items(), self):
-            key, val = items
-            shape = list(val.shape)
-            reshaped_out[key] = val.reshape(
-                shape[:axis]
-                + [*(b for sh in bas._input_shape_ for b in sh), -1]
-                + shape[axis + 1 :]
-            )
-        return reshaped_out
-
-    def __iter__(self):
-        """Makes basis iterable. Re-implemented for additive."""
-        yield self
 
     def __len__(self):
         return 1
@@ -1365,7 +1191,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         """
         return super().compute_features(*xi)
 
-    @add_docstring("split_by_feature", Basis)
+    @add_docstring("split_by_feature", BasisMixin)
     def split_by_feature(
         self,
         x: NDArray,
