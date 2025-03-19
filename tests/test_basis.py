@@ -2568,15 +2568,6 @@ class TestAdditiveBasis(CombinedBasis):
         basis_update.set_params(z=comp_bases)
         assert basis_update.basis2.label != "z"
 
-    @pytest.mark.parametrize("bas", list_all_basis_classes())
-    def test_class_method_gen_key(self, bas, basis_class_specific_params):
-        basis_a_obj = self.instantiate_basis(
-            5, bas, basis_class_specific_params, window_size=10
-        )
-        add = basis_a_obj + basis_a_obj
-        out = add._merge_slicing_dicts({"1": 1, "2": 2, "3": 3}, {"1": 11, "2": 12})
-        assert out == {"1": 1, "2": 2, "3": 3, "1_1": 11, "2_1": 12}
-
     def test_redundant_label_in_nested_basis(self):
         bas = (
             basis.BSplineEval(4)

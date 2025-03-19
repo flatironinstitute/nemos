@@ -556,16 +556,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         _recompute_all_default_labels(mul)
         return mul
 
-    @staticmethod
-    def _generate_unique_key(existing_dict: dict | List | Tuple, key: str) -> str:
-        """Generate a unique key if there is a conflict."""
-        extra = 1
-        new_key = f"{key}_{extra}"
-        while new_key in existing_dict:
-            extra += 1
-            new_key = f"{key}_{extra}"
-        return new_key
-
     def __len__(self):
         return 1
 
@@ -967,19 +957,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
             n_inputs[len(self.basis1._input_shape_product) :],
             start_slice,
         )
-        split_dict = self._merge_slicing_dicts(split_dict, sp2)
+        # label should always be unique, so update is safe
+        split_dict.update(sp2)
         return split_dict, start_slice
-
-    @classmethod
-    def _merge_slicing_dicts(cls, dict1: dict, dict2: dict) -> dict:
-        """Merge two slicing dictionaries, handling key conflicts."""
-        for key, val in dict2.items():
-            if key in dict1:
-                new_key = cls._generate_unique_key(dict1, key)
-                dict1[new_key] = val
-            else:
-                dict1[key] = val
-        return dict1
 
     def __iter__(self):
         """Iterate over components."""
