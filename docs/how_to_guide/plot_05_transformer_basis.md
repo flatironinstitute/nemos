@@ -99,11 +99,7 @@ As with any `sckit-learn` transformer, the `TransformerBasis` implements `fit`, 
 
 ## Setting up the TransformerBasis
 
-At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.** The problem is that the `TransformerBasis` does not automatically know which columns of `inp` should be processed by `count_basis` and which by `speed_basis`.
-
-### Understanding Input Shapes in `TransformerBasis`
-
-By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. In this example, we are composing two one-dimensional basis functions, so `TransformerBasis` expects an input of shape `(n_samples, 2)`.
+At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.** By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. So in this example, with two one-dimensional basis functions, `TransformerBasis` expects an input of shape `(n_samples, 2)`.
 
 However, our actual input has shape `(n_samples, 6)`:
 
@@ -111,7 +107,7 @@ However, our actual input has shape `(n_samples, 6)`:
 
 - `speed` consists of **1 column**
 
-- When concatenated, this results in a **6-column input**
+When concatenated, this results in a **6-column input**, and our `TransformerBasis` doesn't know how to split those 6 columns.
 
 This mismatch leads to an error when calling fit_transform:
 
