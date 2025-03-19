@@ -14,8 +14,7 @@ from numpy.typing import NDArray
 from .._inspect_utils.inspect_utils import count_positional_and_var_args
 
 if TYPE_CHECKING:
-    from ._basis import Basis
-    from ._basis_mixin import AtomicBasisMixin, BasisMixin, CompositeBasisMixin
+    from ._basis_mixin import AtomicBasisMixin, BasisMixin
     from ._custom_basis import CustomBasis
 
 __PUBLIC_BASES__ = [
@@ -38,7 +37,7 @@ __PUBLIC_BASES__ = [
 ]
 
 
-def _iterate_over_components(basis: "Basis"):
+def _iterate_over_components(basis: "BasiBasisMixin"):
     components = (
         basis._iterate_over_components()
         if hasattr(basis, "_iterate_over_components")
@@ -63,7 +62,7 @@ def _call_parent_method(bas: "AtomicBasisMixin", method: str, *args, **kwargs):
         return method(*args, **kwargs)
 
 
-def _has_default_label(bas: "Basis"):
+def _has_default_label(bas: "BasisMixin"):
     """Check for default label.
 
     The check either use the property (if it is a nemos basis), or the class name
@@ -77,7 +76,7 @@ def _has_default_label(bas: "Basis"):
 
 
 def _recompute_class_default_labels(
-    bas: "AtomicBasisMixin | CompositeBasisMixin | CustomBasis",
+    bas: "BasisMixin",
 ):
     """
     Recompute all labels matching default for self.
@@ -101,7 +100,7 @@ def _recompute_class_default_labels(
             bas_id += 1
 
 
-def _recompute_all_default_labels(root: "Basis") -> "Basis":
+def _recompute_all_default_labels(root: "BasisMixin") -> "BasisMixin":
     """Recompute default all labels."""
     updated = []
     for bas in _iterate_over_components(root):
@@ -112,7 +111,7 @@ def _recompute_all_default_labels(root: "Basis") -> "Basis":
 
 
 def _update_label_from_root(
-    bas: "AtomicBasisMixin | CompositeBasisMixin", cls_name: str, cls_label: str
+    bas: "BasisMixin", cls_name: str, cls_label: str
 ):
     """
     Subtract 1 to each matching default label with higher ID then current.
@@ -140,7 +139,7 @@ def _update_label_from_root(
             bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
 
 
-def _composite_basis_setter_logic(new: "Basis", current: "Basis"):
+def _composite_basis_setter_logic(new: "BasisMixin", current: "BasisMixin"):
     """Setter logic for composite basis."""
     # Carry-on label if possible
     if _has_default_label(new) and not _has_default_label(current):
@@ -164,6 +163,7 @@ def _composite_basis_setter_logic(new: "Basis", current: "Basis"):
 def _atomic_basis_label_setter_logic(
     bas: "AtomicBasisMixin | CustomBasis", new_label: str
 ) -> Exception | None:
+    """Setter logic for atomic basis."""
     # check default cases
     current_label = getattr(bas, "_label", None)
     if new_label == current_label:
@@ -213,6 +213,11 @@ def _atomic_basis_label_setter_logic(
 
 
 def infer_input_dimensionality(bas: "BasisMixin") -> int:
+    """Infer input dimensionality from compute_features signature.
+
+    If `_n_input_dimensionality` return the attribute, otherwise return
+    the number of fixed arguments in `compute_features`.
+    """
     n_input_dim = getattr(bas, "_n_input_dimensionality", None)
     if n_input_dim is None:
         # infer from compute_features (facilitate custom basis compatibility).
@@ -230,6 +235,7 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
 
 
 def generate_basis_label_pair(bas: "BasisMixin"):
+    """Generate all labels and basis in a basis tree."""
     if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
         for label, sub_bas in generate_basis_label_pair(bas.basis1):
             yield label, sub_bas
@@ -238,7 +244,8 @@ def generate_basis_label_pair(bas: "BasisMixin"):
     yield getattr(bas, "label", bas.__class__.__name__), bas
 
 
-def generate_composite_basis_labels(bas: "BasisMixin", type_label: str):
+def generate_composite_basis_labels(bas: "BasisMixin", type_label: str) -> str:
+    """Generate all labels in a basis tree."""
     if hasattr(bas, "basis1") and hasattr(bas, "basis2"):
         if type_label == "all" or bas._label:
             yield bas.label
@@ -259,9 +266,11 @@ def generate_composite_basis_labels(bas: "BasisMixin", type_label: str):
             yield getattr(bas, "label", bas.__class__.__name__)
 
 
-def label_setter(bas: "BasisMixin", label: str | None):
+def label_setter(bas: "BasisMixin", label: str | None) -> None | ValueError:
+    """Label setter logic for any basis."""
     if not hasattr(bas, "basis1") or not hasattr(bas, "basis2"):
         return _atomic_basis_label_setter_logic(bas, label)
+
     # composite basis setter logic.
     reset = (
         (label is None)
@@ -318,6 +327,10 @@ def set_input_shape_atomic(
 
 
 def set_input_shape(bas, *xi):
+    """Set input shape.
+
+    Set input shape logic, compatible with all bases (composite, atomic, and custom).
+    """
     # use 1 as default or number of non-variable args
     n_args = (
         count_positional_and_var_args(bas.compute_features)[0]
@@ -368,6 +381,11 @@ def set_input_shape(bas, *xi):
 
 
 def unpack_shapes(basis) -> Tuple:
+    """Generate input shapes for any basis type.
+
+    Generate input shape independently of the basis kind (i.e. works
+    for composite, custom, and atomic bases).
+    """
     if hasattr(basis, "_input_shape_") and hasattr(basis, "input_shape"):
         if basis._input_shape_ is None:
             yield None
@@ -380,6 +398,7 @@ def unpack_shapes(basis) -> Tuple:
 
 
 def list_shapes(basis) -> List[Tuple | None]:
+    """List input shape for all components."""
     if basis is None:
         return [None]
     components = getattr(basis, "_iterate_over_components", lambda: [basis])()
@@ -421,6 +440,7 @@ def get_input_shape(bas: "BasisMixin") -> List[Tuple | None]:
 
 
 def is_basis_like(putative_basis: Any, sklearn_compatibility=False) -> bool:
+    """Check if putative_basis respect nemos basis API."""
     is_basis = hasattr(putative_basis, "compute_features")
     if sklearn_compatibility:
         is_basis &= hasattr(putative_basis, "get_params") and hasattr(
