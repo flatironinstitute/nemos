@@ -112,15 +112,6 @@ class CustomBasis(BasisMixin, Base):
                 raise ValueError(f"Output shape must be strictly positive (> 0), {output_shape} provided instead.")
         raise TypeError("`output_shape` must be a tuple of positive integers or a positive integer.}")
 
-    @staticmethod
-    def _check_all_same_shape(*x: NDArray):
-        if not len(set(xi.shape for xi in x)) == 1:
-            raise ValueError("All inputs must have the same shape.")
-
-    def _check_input_dimensionality(self, xi: Tuple) -> None:
-        # TODO fill in the check, if possible
-        pass
-
     def compute_features(self, *xi):
         self.set_input_shape(*xi)
         out = self.evaluate(*xi)
