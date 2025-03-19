@@ -20,13 +20,13 @@ from ._composition_utils import (
 
 
 def apply_f_vectorized(
-    f: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input: int = 1
+    func: Callable[[NDArray], NDArray], *xi: NDArray, ndim_input: int = 1
 ):
     """Iterate over the output dim and apply the function to all input combination."""
 
     # check if no dimension needs vectorization
     if all(x.ndim - 1 == ndim_input for x in xi):
-        return f(*xi)[..., np.newaxis]
+        return func(*xi)[..., np.newaxis]
 
     # compute the flat shape of the dimension that must be vectorized.
     flat_vec_dims = (
@@ -47,7 +47,7 @@ def apply_f_vectorized(
     ]
     return np.concatenate(
         [
-            f(*(x[..., i] for i, x in zip(index, xi_reshape)))[..., np.newaxis]
+            func(*(x[..., i] for i, x in zip(index, xi_reshape)))[..., np.newaxis]
             for index in itertools.product(*flat_vec_dims)
         ],
         axis=-1,
