@@ -6,7 +6,7 @@ import copy
 from collections import OrderedDict
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, List, Literal, Optional, Tuple, Union
+from typing import Callable, Generator, List, Optional, Tuple, Union
 
 import jax
 import numpy as np
@@ -14,12 +14,16 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
+from ..tree_utils import has_matching_axis_pytree
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import format_repr, row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin
-from ._composition_utils import _recompute_all_default_labels
+from ._composition_utils import (
+    _recompute_all_default_labels,
+    infer_input_dimensionality,
+)
 
 
 def add_docstring(method_name, cls):
@@ -41,7 +45,7 @@ def check_transform_input(func: Callable) -> Callable:
     """Check input before calling basis.
 
     This decorator allows to raise an exception that is more readable
-    when the wrong number of input is provided to _evaluate.
+    when the wrong number of input is provided to evaluate.
     """
 
     @wraps(func)
@@ -104,6 +108,35 @@ def min_max_rescale_samples(
     return sample_pts, scaling
 
 
+def get_equi_spaced_samples(
+    *n_samples, bounds: Optional[tuple[float, float]] = None
+) -> Generator[NDArray]:
+    """Get equi-spaced samples for all the input dimensions.
+
+    This will be used to evaluate the basis on a grid of
+    points derived by the samples.
+
+    Parameters
+    ----------
+    n_samples[0],...,n_samples[n]
+        The number of samples in each axis of the grid.
+    bounds:
+        The bounds for the linspace, if provided.
+
+    Returns
+    -------
+    :
+        A generator yielding numpy arrays of linspaces from 0 to 1 of sizes specified by ``n_samples``.
+    """
+    # handling of defaults when evaluating on a grid
+    # (i.e. when we cannot use max and min of samples)
+    if bounds is None:
+        mn, mx = 0, 1
+    else:
+        mn, mx = bounds
+    return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+
+
 def generate_basis_label_pair(bas: Basis):
     if hasattr(bas, "basis1"):
         for label, sub_bas in generate_basis_label_pair(bas.basis1):
@@ -121,18 +154,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
     often more compact or interpretable forms. This class provides a template for such
     transformations, with specific implementations defining the actual behavior.
 
-    Parameters
-    ----------
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
-
     Raises
     ------
-    ValueError:
-        If ``mode`` is not 'eval' or 'conv'.
-    ValueError:
-        If ``kwargs`` are not None and ``mode =="eval"``.
     ValueError:
         If ``kwargs`` include parameters not recognized or do not have
         default values in ``create_convolutional_predictor``.
@@ -142,11 +165,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
 
     def __init__(
         self,
-        mode: Literal["eval", "conv", "composite"] = "eval",
     ) -> None:
         self._n_input_dimensionality = getattr(self, "_n_input_dimensionality", 0)
-
-        self._mode = mode
 
         # specified only after inputs/input shapes are provided
         self._input_shape_product = getattr(self, "_input_shape_product", None)
@@ -186,11 +206,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             self._n_basis_funcs = orig_n_basis
             raise e
 
-    @property
-    def mode(self):
-        """Mode of operation, either ``"conv"`` or ``"eval"``."""
-        return self._mode
-
     @check_transform_input
     def compute_features(
         self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor
@@ -213,8 +228,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Returns
         -------
         :
-            Transformed features. In 'eval' mode, it corresponds to the basis functions
-            evaluated at the input samples. In 'conv' mode, it consists of convolved
+            Transformed features. In 'Eval' mode, it corresponds to the basis functions
+            evaluated at the input samples. In 'Conv' mode, it consists of convolved
             input samples with the basis functions. The output shape varies based on
             the subclass and mode.
 
@@ -223,10 +238,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Subclasses should implement how to handle the transformation specific to their
         basis function types and operation modes.
         """
-        if self._input_shape_product is None:
-            self.set_input_shape(*xi)
-        self._check_input_shape_consistency(*xi)
-        self._set_input_independent_states()
+        self.setup_basis(*xi)
         return self._compute_features(*xi)
 
     @abc.abstractmethod
@@ -261,17 +273,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _set_input_independent_states(self):
-        """
-        Compute all the basis states that do not depend on the input.
-
-        An example of such state is the kernel_ for Conv bases, which can be computed
-        without any input (it only depends on the basis type, the window size and the
-        number of basis elements).
-        """
-        pass
-
-    @abc.abstractmethod
     def set_input_shape(self, xi: int | tuple[int, ...] | NDArray):
         """
         Set the expected input shape for the basis object.
@@ -285,7 +286,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         pass
 
     @abc.abstractmethod
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
         Abstract method to evaluate the basis functions at given points.
 
@@ -329,11 +330,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         # handling of defaults when evaluating on a grid
         # (i.e. when we cannot use max and min of samples)
         bounds = getattr(self, "bounds", None)
-        if bounds is None:
-            mn, mx = 0, 1
-        else:
-            mn, mx = bounds
-        return (np.linspace(mn, mx, n_samples[k]) for k in range(len(n_samples)))
+        return get_equi_spaced_samples(*n_samples, bounds=bounds)
 
     @support_pynapple(conv_type="numpy")
     def _check_transform_input(
@@ -369,8 +366,8 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             raise ValueError("All sample provided must be non empty.")
 
         # checks on input and outputs
-        self._check_samples_consistency(*xi)
         self._check_input_dimensionality(xi)
+        self._check_samples_consistency(*xi)
 
         return xi
 
@@ -385,23 +382,27 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         Returns
         -------
         X :
-           Array of shape (n_samples,) containing the equi-spaced sample
+           Array of shape ``(n_samples,)`` containing the equi-spaced sample
            points where we've evaluated the basis.
         basis_funcs :
            Evaluated exponentially decaying basis functions, numerically
-           orthogonalized, shape (n_samples, n_basis_funcs)
+           orthogonalized, shape ``(n_samples, n_basis_funcs)``
         """
         self._check_input_dimensionality(n_samples)
 
         if self._has_zero_samples(n_samples):
             raise ValueError("All sample counts provided must be greater than zero.")
 
-        # get the samples
-        sample_tuple = self._get_samples(*n_samples)
+        # get the samples (can be re-implemented, by providing a _get_samples)
+        bounds = getattr(self, "bounds", None)
+        get_samples = getattr(
+            self, "_get_samples", lambda *x: get_equi_spaced_samples(*x, bounds=bounds)
+        )
+        sample_tuple = get_samples(*n_samples)
         Xs = np.meshgrid(*sample_tuple, indexing="ij")
 
         # evaluates the basis on a flat NDArray and reshape to match meshgrid output
-        Y = self._evaluate(*tuple(grid_axis.flatten() for grid_axis in Xs)).reshape(
+        Y = self.evaluate(*(grid_axis.flatten() for grid_axis in Xs)).reshape(
             (*n_samples, self.n_basis_funcs)
         )
 
@@ -425,9 +426,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the number of inputs doesn't match what the Basis object requires.
         """
-        if len(xi) != self._n_input_dimensionality:
+        n_input_dim = infer_input_dimensionality(self)
+        if len(xi) != n_input_dim:
             raise TypeError(
-                f"Input dimensionality mismatch. This basis evaluation requires {self._n_input_dimensionality} inputs, "
+                f"Input dimensionality mismatch. This basis evaluation requires {n_input_dim} inputs, "
                 f"{len(xi)} inputs provided instead."
             )
 
@@ -446,8 +448,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the time point number is inconsistent between inputs.
         """
-        sample_sizes = [sample.shape[0] for sample in xi]
-        if any(elem != sample_sizes[0] for elem in sample_sizes):
+        if not has_matching_axis_pytree(*xi, axis=0):
             raise ValueError(
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
@@ -824,8 +825,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> additive_basis = basis_1 + basis_2
     >>> additive_basis
     '(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
-        basis1=BSplineEval(n_basis_funcs=10, order=4),
-        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+        ...
     )
     >>> # can add another basis to the AdditiveBasis object
     >>> X = np.random.normal(size=(30, 3))
@@ -833,11 +833,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     >>> additive_basis_2 = additive_basis + basis_3
     >>> additive_basis_2
     '((BSplineEval + RaisedCosineLinearEval) + RaisedCosineLogEval)': AdditiveBasis(
-        basis1='(BSplineEval + RaisedCosineLinearEval)': AdditiveBasis(
-            basis1=BSplineEval(n_basis_funcs=10, order=4),
-            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
-        ),
-        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+        ...
     )
     """
 
@@ -845,12 +841,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
-        Basis.__init__(self, mode="composite")
-
-        # number of input arrays that the basis receives
-        self._n_input_dimensionality = (
-            basis1._n_input_dimensionality + basis2._n_input_dimensionality
-        )
+        Basis.__init__(self)
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " + " + self.basis2.label + ")"
@@ -902,9 +893,9 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
-        Evaluate the basis at the input samples.
+        Evaluate the basis at the sample points.
 
         Parameters
         ----------
@@ -930,13 +921,13 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         >>> additive_basis = basis_1 + basis_2
 
         >>> # call the basis.
-        >>> out = additive_basis._evaluate(x, y)
+        >>> out = additive_basis.evaluate(x, y)
 
         """
         X = np.hstack(
             (
-                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
             )
         )
         return X
@@ -1263,8 +1254,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> multiplicative_basis = basis_1 * basis_2
     >>> multiplicative_basis
     '(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
-        basis1=BSplineEval(n_basis_funcs=10, order=4),
-        basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
+        ...
     )
 
     >>> # Can multiply or add another basis to the AdditiveBasis object
@@ -1273,11 +1263,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     >>> multiplicative_basis_2 = multiplicative_basis * basis_3
     >>> multiplicative_basis_2
     '((BSplineEval * RaisedCosineLinearEval) * RaisedCosineLogEval)': MultiplicativeBasis(
-        basis1='(BSplineEval * RaisedCosineLinearEval)': MultiplicativeBasis(
-            basis1=BSplineEval(n_basis_funcs=10, order=4),
-            basis2=RaisedCosineLinearEval(n_basis_funcs=15, width=2.0),
-        ),
-        basis2=RaisedCosineLogEval(n_basis_funcs=100, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True),
+        ...
     )
     """
 
@@ -1285,11 +1271,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         self, basis1: Basis, basis2: Basis, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
-
-        Basis.__init__(self, mode="composite")
-        self._n_input_dimensionality = (
-            basis1._n_input_dimensionality + basis2._n_input_dimensionality
-        )
+        Basis.__init__(self)
 
     def _generate_label(self) -> str:
         return "(" + self.basis1.label + " * " + self.basis2.label + ")"
@@ -1315,9 +1297,9 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     @support_pynapple(conv_type="numpy")
     @check_transform_input
     @check_one_dimensional
-    def _evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
+    def evaluate(self, *xi: ArrayLike | Tsd | TsdFrame | TsdTensor) -> FeatureMatrix:
         """
-        Evaluate the basis at the input samples.
+        Evaluate the basis at the sample points.
 
         Parameters
         ----------
@@ -1336,12 +1318,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> import nemos as nmo
         >>> mult_basis = nmo.basis.BSplineEval(5) * nmo.basis.RaisedCosineLinearEval(6)
         >>> x, y = np.random.randn(2, 30)
-        >>> X = mult_basis._evaluate(x, y)
+        >>> X = mult_basis.evaluate(x, y)
         """
         X = np.asarray(
             row_wise_kron(
-                self.basis1._evaluate(*xi[: self.basis1._n_input_dimensionality]),
-                self.basis2._evaluate(*xi[self.basis1._n_input_dimensionality :]),
+                self.basis1.evaluate(*xi[: self.basis1._n_input_dimensionality]),
+                self.basis2.evaluate(*xi[self.basis1._n_input_dimensionality :]),
                 transpose=False,
             )
         )

@@ -161,14 +161,12 @@ trans_bas = nmo.basis.TransformerBasis(bas)
 # equivalent initialization via "to_transformer"
 trans_bas = bas.to_transformer()
 
-# setup the transformer
-trans_bas.set_input_shape(1)
 ```
 
-:::{admonition} Learn More about `TransformerBasis`
-:class: note
+:::{admonition} Additional `TransformerBasis` Setup
+:class: attention
 
-To learn more about `sklearn` transformers and `TransforerBasis`, check out [this note](tansformer-vs-nemos-basis).
+`TransformerBasis` requires an additional setup step when working with multi-dimensional inputs. Learn everything you need to know about using `TransformerBasis` in [this note](tansformer-vs-nemos-basis).
 :::
 
 ### Creating and fitting a pipeline
@@ -181,7 +179,7 @@ pipeline = Pipeline(
     [
         (
             "transformerbasis",
-            nmo.basis.RaisedCosineLinearEval(6).set_input_shape(1).to_transformer(),
+            nmo.basis.RaisedCosineLinearEval(6).to_transformer(),
         ),
         (
             "glm",
@@ -339,7 +337,7 @@ scores = np.zeros((len(regularizer_strength) * len(n_basis_funcs), n_folds))
 coeffs = {}
 
 # initialize basis and model
-basis = nmo.basis.RaisedCosineLinearEval(6).set_input_shape(1)
+basis = nmo.basis.RaisedCosineLinearEval(6)
 basis = nmo.basis.TransformerBasis(basis)
 model = nmo.glm.GLM(regularizer="Ridge")
 
@@ -464,12 +462,12 @@ Here we include `transformerbasis__basis` in the parameter grid to try different
 param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__basis=(
-        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
-        nmo.basis.MSplineEval(5).set_input_shape(1),
-        nmo.basis.MSplineEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```
@@ -551,12 +549,12 @@ param_grid = dict(
     glm__regularizer_strength=(0.1, 0.01, 0.001, 1e-6),
     transformerbasis__n_basis_funcs=(3, 5, 10, 20, 100),
     transformerbasis__basis=(
-        nmo.basis.RaisedCosineLinearEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLinearEval(10).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(5).set_input_shape(1),
-        nmo.basis.RaisedCosineLogEval(10).set_input_shape(1),
-        nmo.basis.MSplineEval(5).set_input_shape(1),
-        nmo.basis.MSplineEval(10).set_input_shape(1),
+        nmo.basis.RaisedCosineLinearEval(5),
+        nmo.basis.RaisedCosineLinearEval(10),
+        nmo.basis.RaisedCosineLogEval(5),
+        nmo.basis.RaisedCosineLogEval(10),
+        nmo.basis.MSplineEval(5),
+        nmo.basis.MSplineEval(10),
     ),
 )
 ```

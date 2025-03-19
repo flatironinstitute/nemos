@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Generator
 import numpy as np
 
 from ..typing import FeatureMatrix
+from ._composition_utils import _iterate_over_components, infer_input_dimensionality
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -82,6 +83,17 @@ class TransformerBasis:
     )
 
     def __init__(self, basis: Basis):
+        self._wrapped_methods = {}  # Cache for wrapped methods
+        self._basis = None
+        self.basis = copy.deepcopy(basis)
+        self.basis._parent = None
+
+    @property
+    def basis(self):
+        return self._basis
+
+    @basis.setter
+    def basis(self, basis):
         if (
             not hasattr(basis, "get_params")
             or not hasattr(basis, "set_params")
@@ -96,8 +108,25 @@ class TransformerBasis:
                 "TransformerBasis accepts only object implementing `get_params`, `set_params`, and `compute_features`."
                 f"\nMissing methods: {missing_attrs}."
             )
-        self.basis = copy.deepcopy(basis)
-        self._wrapped_methods = {}  # Cache for wrapped methods
+        self._assign_input_shape(basis)
+        self._basis = basis
+
+    @staticmethod
+    def _assign_input_shape(basis):
+        # iterate over atomic or custom components
+        default_shape = []
+        for bas in _iterate_over_components(basis):
+            ishape = getattr(bas, "input_shape", None)
+            # handles the case of a multi-dim basis with set shape
+            if isinstance(ishape, list):
+                default_shape.extend(ishape)
+            # handles the case of a 1dim basis with set shape
+            elif ishape is not None:
+                default_shape.append(ishape)
+            # handles custom or 1dim with no set shape
+            else:
+                default_shape.extend([()] * infer_input_dimensionality(bas))
+        basis.set_input_shape(*default_shape)
 
     @staticmethod
     def _check_initialized(basis):
@@ -268,7 +297,7 @@ class TransformerBasis:
         # returning the cached wrapped methods would create
         # a circular binding of the state to self (i.e. infinite recursion when
         # unpickling).
-        return {"basis": self.basis}
+        return {"basis": self._basis}
 
     def __setstate__(self, state):
         """
@@ -280,7 +309,7 @@ class TransformerBasis:
         See https://docs.python.org/3/library/pickle.html#object.__setstate__
         and https://docs.python.org/3/library/pickle.html#pickle-state
         """
-        self.basis = state["basis"]
+        self._basis = state["basis"]
         self._wrapped_methods = {}  # Reinitialize the cache
 
     def __getattr__(self, name: str):
@@ -305,11 +334,11 @@ class TransformerBasis:
         if name in self._wrapped_methods:
             return self._wrapped_methods[name]
 
-        if not hasattr(self.basis, name) or name == "to_transformer":
+        if not hasattr(self._basis, name) or name == "to_transformer":
             raise AttributeError(f"'TransformerBasis' object has no attribute '{name}'")
 
         # Get the original attribute from the basis
-        attr = getattr(self.basis, name)
+        attr = getattr(self._basis, name)
 
         # If the attribute is a callable method, wrap it dynamically
         if name in self._chainable_methods:
@@ -351,7 +380,7 @@ class TransformerBasis:
         ValueError('Only setting basis or existing attributes of basis is allowed. Attempt to set `rand_atrr`.')
         """
         # allow self.basis = basis and other attrs of self to be retrievable
-        if name in ["basis", "_wrapped_methods"]:
+        if name in ["basis", "_wrapped_methods", "_basis"]:
             super().__setattr__(name, value)
         # allow changing existing attributes of self.basis
         elif hasattr(self.basis, name):

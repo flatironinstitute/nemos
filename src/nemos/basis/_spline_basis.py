@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import copy
-from typing import Literal, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -24,9 +24,6 @@ class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     order : optional
         Spline order.
     label :
@@ -44,13 +41,11 @@ class SplineBasis(Basis, AtomicBasisMixin, abc.ABC):
         n_basis_funcs: int,
         order: int = 2,
         label: Optional[str] = None,
-        mode: Literal["conv", "eval"] = "eval",
     ) -> None:
         self.order = order
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
-            mode=mode,
         )
 
         self._n_input_dimensionality = 1
@@ -162,9 +157,6 @@ class MSplineBasis(SplineBasis, abc.ABC):
     n_basis_funcs :
         The number of basis functions to generate. More basis functions allow for
         more flexible data modeling but can lead to overfitting.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     order :
         The order of the splines used in basis functions. Must be between [1,
         n_basis_funcs]. Default is 2. Higher order splines have more continuous
@@ -200,20 +192,18 @@ class MSplineBasis(SplineBasis, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        mode: Literal["eval", "conv"] = "eval",
         order: int = 2,
         label: Optional[str] = "MSplineEval",
     ) -> None:
         super().__init__(
             n_basis_funcs,
-            mode=mode,
             order=order,
             label=label,
         )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
@@ -304,9 +294,6 @@ class BSplineBasis(SplineBasis, abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    mode :
-        The mode of operation. ``'eval'`` for evaluation at sample points,
-        'conv' for convolutional operation.
     order :
         Order of the splines used in basis functions. Must lie within ``[1, n_basis_funcs]``.
         The B-splines have (order-2) continuous derivatives at each interior knot.
@@ -330,20 +317,18 @@ class BSplineBasis(SplineBasis, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        mode="eval",
         order: int = 4,
         label: Optional[str] = "BSplineBasis",
     ):
         super().__init__(
             n_basis_funcs,
-            mode=mode,
             order=order,
             label=label,
         )
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
@@ -422,9 +407,6 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     ----------
     n_basis_funcs :
         Number of basis functions.
-    mode :
-        The mode of operation. 'eval' for evaluation at sample points,
-        'conv' for convolutional operation.
     order :
         Order of the splines used in basis functions. Order must lie within [2, n_basis_funcs].
         The B-splines have (order-2) continuous derivatives at each interior knot.
@@ -444,13 +426,11 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
     def __init__(
         self,
         n_basis_funcs: int,
-        mode="eval",
         order: int = 4,
         label: Optional[str] = "CyclicBSplineBasis",
     ):
         super().__init__(
             n_basis_funcs,
-            mode=mode,
             order=order,
             label=label,
         )
@@ -462,7 +442,7 @@ class CyclicBSplineBasis(SplineBasis, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
