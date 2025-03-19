@@ -363,11 +363,11 @@ class BasisMixin:
         reshaped_out: dict = dict()
         for items, bas in zip(out.items(), self):
             key, val = items
-            reshaped_out[key] = self._reshape_concatenated_arrays(val, bas, axis)
+            reshaped_out[key] = bas._reshape_concatenated_arrays(val, bas, axis)
         return reshaped_out
 
     @staticmethod
-    def _reshape_concatenated_arrays(array: NDArray, bas, axis: int) -> NDArray:
+    def _reshape_concatenated_arrays(array: NDArray, bas: BasisMixin, axis: int) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
         array = array.reshape(

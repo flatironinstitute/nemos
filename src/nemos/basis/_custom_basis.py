@@ -175,18 +175,17 @@ class CustomBasis(BasisMixin, Base):
         vec_inp = sum(compute_vectorized_input_number(self.funcs, self._input_shape_, self.ndim_input))
         return int(vec_inp * np.prod(self.output_shape))
 
-    # def _reshape_concatenated_arrays(self, out: dict, axis: int) -> dict:
-    #     # if all input vec dimension are the same just call super
-    #     all_same_input_shape = len(set(inp_shape for inp_shape in self._input_shape_)) == 1
-    #     if all_same_input_shape:
-    #         return super()._reshape_concatenated_arrays(out, axis)
-    #     reshaped_out: dict = dict()
-    #     num_vec_inputs = sum(compute_vectorized_input_number(self.funcs, self._input_shape_, self.ndim_input))
-    #     for items, bas in zip(out.items(), self):
-    #         key, val = items
-    #         shape = list(val.shape)
-    #         reshaped_out[key] = val.reshape(
-    #             shape[:axis]
-    #             + [*(b for sh in bas._input_shape_ for b in sh), -1]
-    #             + shape[axis + 1:]
-    #         )
+    @staticmethod
+    def _reshape_concatenated_arrays(out: NDArray, bas: "CustomBasis", axis: int) -> NDArray:
+        # if all input vec dimension are the same just call super
+        all_same_input_shape = len(set(inp_shape for inp_shape in bas._input_shape_)) == 1
+        if all_same_input_shape:
+            return super()._reshape_concatenated_arrays(out, bas, axis)
+        reshaped_out: dict = dict()
+        num_vec_inputs = sum(compute_vectorized_input_number(bas.funcs, bas._input_shape_, bas.ndim_input))
+        shape = list(out.shape)
+        return out.reshape(
+                shape[:axis]
+                + [*bas.output_shape, -1]
+                + shape[axis + 1:]
+            )
