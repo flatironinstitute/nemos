@@ -150,9 +150,9 @@ class CustomBasis(BasisMixin, Base):
         # 1. Compute the number of vectorized dimensions:
         #    - discard axis corresponding to input dimensionality
         #    - multiply the shape of the remaining axis
-        # 2. Each basis contributes to the same number of outputs
-        vec_inp = len(self.funcs) * np.prod([shape[self.ndim_input:] for shape in self._input_shape_])
-        return int(vec_inp * np.prod(self.output_shape))
+        # 2. multiply by the number of basis and the shape of the output
+        vec_inp = np.prod([shape[self.ndim_input:] for shape in self._input_shape_])
+        return int(vec_inp * np.prod(self.output_shape) * len(self.funcs))
 
 
     @staticmethod
