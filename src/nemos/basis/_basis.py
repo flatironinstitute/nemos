@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import abc
 import copy
-from collections import OrderedDict
 from copy import deepcopy
 from functools import wraps
-from typing import Callable, Generator, List, Optional, Tuple, Union
+from typing import Callable, Generator, Optional, Tuple, Union
 
-import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
