@@ -2986,26 +2986,70 @@ class TestGammaGLM:
     Unit tests specific to Gamma GLM.
     """
 
-    def test_fit_gamma_glm(self, inv_link, request, glm_type, model_instantiation):
+    def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
 
-    def test_fit_set_scale(self, inv_link, request, glm_type, model_instantiation):
+    def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be scored with different link functions.
+        """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
         model.observation_model.inverse_link_function = inv_link
-        model.fit(X, y)
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        model.score(X, y)
+
+    def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that data can be simulated with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.observation_model.inverse_link_function = inv_link
         if "population" in glm_type:
-            assert np.all(model.scale_ != 1)
-            assert model.scale_.size == y.shape[1]
+            model.feature_mask = jnp.ones((X.shape[1], y.shape[1]))
+            model.scale_ = jnp.ones((y.shape[1]))
         else:
-            assert model.scale_ != 1
+            model.scale_ = 1.0
+        model.coef_ = true_params[0]
+        model.intercept_ = true_params[1]
+        ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
+        assert ysim.shape == y.shape
+        assert ratesim.shape == y.shape
 
-    def test_score_gamma_glm(self, inv_link, request, glm_type, model_instantiation):
+
+@pytest.mark.parametrize("inv_link", [jax.lax.logistic, jax.scipy.stats.norm.cdf])
+@pytest.mark.parametrize("glm_type", ["", "population_"])
+@pytest.mark.parametrize("model_instantiation", ["bernoulliGLM_model_instantiation"])
+class TestBernoulliGLM:
+    """
+    Unit tests specific to Bernoulli GLM.
+    """
+
+    def test_fit_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be fit with different link functions.
+        """
+        X, y, model, true_params, firing_rate = request.getfixturevalue(
+            glm_type + model_instantiation
+        )
+        model.observation_model.inverse_link_function = inv_link
+        model.fit(X, y)
+
+    def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that the model can be scored with different link functions.
+        """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
@@ -3018,7 +3062,10 @@ class TestGammaGLM:
             model.scale_ = 1.0
         model.score(X, y)
 
-    def test_simulate_gamma_glm(self, inv_link, request, glm_type, model_instantiation):
+    def test_simulate_glm(self, inv_link, request, glm_type, model_instantiation):
+        """
+        Ensure that data can be simulated with different link functions.
+        """
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
         )
