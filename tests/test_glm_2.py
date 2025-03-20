@@ -2912,7 +2912,73 @@ class TestPoissonGLM:
             assert isinstance(solver.batch_size, int)
             assert solver.batch_size > 0
 
+    @pytest.mark.parametrize(
+        "regularizer, expected_type_convexity",
+        [
+            ("UnRegularized", type(None)),
+            ("Lasso", type(None)),
+            ("GroupLasso", type(None)),
+            ("Ridge", float),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "solver_name, expected_type_solver",
+        [
+            ("GradientDescent", type(None)),
+            ("ProximalGradient", type(None)),
+            ("LBFGS", type(None)),
+            ("SVRG", Callable),
+            ("ProxSVRG", Callable),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "inv_link_func, expected_type_link",
+        [(jax.nn.softplus, Callable), (jax.numpy.exp, type(None))],
+    )
+    def test_optimal_config_outputs(
+        self,
+        regularizer,
+        solver_name,
+        inv_link_func,
+        expected_type_convexity,
+        expected_type_link,
+        expected_type_solver,
+        request,
+        glm_class_type,
+    ):
+        """Test that 'required_params' is a dictionary."""
+        glm_class = request.getfixturevalue(glm_class_type)
+        obs = nmo.observation_models.PoissonObservations(
+            inverse_link_function=inv_link_func
+        )
 
+        # if the regularizer is not allowed for the solver type, return
+        try:
+            model = glm_class(
+                regularizer=regularizer,
+                solver_name=solver_name,
+                observation_model=obs,
+                regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
+            )
+        except ValueError as e:
+            if not str(e).startswith(
+                rf"The solver: {solver_name} is not allowed for {regularizer} regularization"
+            ):
+                raise e
+            return
+
+        # if there is no callable for the model specs, then convexity should be None
+        func1, func2, convexity = (
+            nmo.solvers._compute_defaults.glm_compute_optimal_stepsize_configs(model)
+        )
+        assert isinstance(func1, expected_type_solver)
+        assert isinstance(func2, expected_type_link)
+        assert isinstance(
+            convexity, expected_type_convexity
+        ), f"convexity type: {type(convexity)}, expected type: {expected_type_convexity}"
+
+
+@pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
 @pytest.mark.parametrize("glm_type", ["", "population_"])
 @pytest.mark.parametrize("model_instantiation", ["gammaGLM_model_instantiation"])
 class TestGammaGLM:
@@ -2920,7 +2986,6 @@ class TestGammaGLM:
     Unit tests specific to Gamma GLM.
     """
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
     def test_fit_gamma_glm(self, inv_link, request, glm_type, model_instantiation):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -2928,7 +2993,6 @@ class TestGammaGLM:
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
     def test_fit_set_scale(self, inv_link, request, glm_type, model_instantiation):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -2941,7 +3005,6 @@ class TestGammaGLM:
         else:
             assert model.scale_ != 1
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
     def test_score_gamma_glm(self, inv_link, request, glm_type, model_instantiation):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -2955,7 +3018,6 @@ class TestGammaGLM:
             model.scale_ = 1.0
         model.score(X, y)
 
-    @pytest.mark.parametrize("inv_link", [jnp.exp, lambda x: 1 / x])
     def test_simulate_gamma_glm(self, inv_link, request, glm_type, model_instantiation):
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             glm_type + model_instantiation
@@ -2971,65 +3033,3 @@ class TestGammaGLM:
         ysim, ratesim = model.simulate(jax.random.PRNGKey(123), X)
         assert ysim.shape == y.shape
         assert ratesim.shape == y.shape
-
-
-@pytest.mark.parametrize(
-    "regularizer, expected_type_convexity",
-    [
-        ("UnRegularized", type(None)),
-        ("Lasso", type(None)),
-        ("GroupLasso", type(None)),
-        ("Ridge", float),
-    ],
-)
-@pytest.mark.parametrize(
-    "solver_name, expected_type_solver",
-    [
-        ("GradientDescent", type(None)),
-        ("ProximalGradient", type(None)),
-        ("LBFGS", type(None)),
-        ("SVRG", Callable),
-        ("ProxSVRG", Callable),
-    ],
-)
-@pytest.mark.parametrize(
-    "inv_link_func, expected_type_link",
-    [(jax.nn.softplus, Callable), (jax.numpy.exp, type(None))],
-)
-def test_optimal_config_outputs(
-    regularizer,
-    solver_name,
-    inv_link_func,
-    expected_type_convexity,
-    expected_type_link,
-    expected_type_solver,
-):
-    """Test that 'required_params' is a dictionary."""
-    obs = nmo.observation_models.PoissonObservations(
-        inverse_link_function=inv_link_func
-    )
-
-    # if the regularizer is not allowed for the solver type, return
-    try:
-        model = nmo.glm.GLM(
-            regularizer=regularizer,
-            solver_name=solver_name,
-            observation_model=obs,
-            regularizer_strength=None if regularizer == "UnRegularized" else 1.0,
-        )
-    except ValueError as e:
-        if not str(e).startswith(
-            rf"The solver: {solver_name} is not allowed for {regularizer} regularization"
-        ):
-            raise e
-        return
-
-    # if there is no callable for the model specs, then convexity should be None
-    func1, func2, convexity = (
-        nmo.solvers._compute_defaults.glm_compute_optimal_stepsize_configs(model)
-    )
-    assert isinstance(func1, expected_type_solver)
-    assert isinstance(func2, expected_type_link)
-    assert isinstance(
-        convexity, expected_type_convexity
-    ), f"convexity type: {type(convexity)}, expected type: {expected_type_convexity}"
