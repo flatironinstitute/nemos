@@ -953,7 +953,8 @@ class BernoulliObservations(Observations):
     Attributes
     ----------
     inverse_link_function :
-        A function that maps the success probability to the domain of the Bernoulli parameter. Defaults to ``jax.lax.logistic``.
+        A function that maps the success probability to the domain of the Bernoulli parameter.
+        Defaults to ``jax.lax.logistic``.
 
     """
 
@@ -977,7 +978,8 @@ class BernoulliObservations(Observations):
         y :
             The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
         predicted_rate :
-            The predicted rate (success probability) of the current model. Shape (n_time_bins, ), or (n_time_bins, n_observations).
+            The predicted rate (success probability) of the current model.
+            Shape (n_time_bins, ), or (n_time_bins, n_observations).
         aggregate_sample_scores :
             Function that aggregates the log-likelihood of each sample.
 
@@ -994,7 +996,8 @@ class BernoulliObservations(Observations):
             \text{LL}(p | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
             [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
 
-        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the observed binary variable.
+        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is
+        the observed binary variable.
         """
         predicted_rate = jnp.clip(
             predicted_rate,
@@ -1022,7 +1025,8 @@ class BernoulliObservations(Observations):
         y :
             The target observation to compare against. Shape (n_time_bins, ), or (n_time_bins, n_observations).
         predicted_rate :
-            The predicted rate (success probability) of the current model. Shape (n_time_bins, ), or (n_time_bins, n_observations).
+            The predicted rate (success probability) of the current model. Shape (n_time_bins, ),
+            or (n_time_bins, n_observations).
         scale :
             The scale parameter of the model.
         aggregate_sample_scores :
@@ -1041,7 +1045,8 @@ class BernoulliObservations(Observations):
             \text{LL}(p | y) &= \frac{1}{T \cdot N} \sum_{n=1}^{N} \sum_{t=1}^{T}
             [y_{tn} \log(p_{tn}) + (1 - y_{tn}) \log(1 - p_{tn})]
 
-        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the observed binary variable.
+        where :math:`p` is the predicted success probability, given by the inverse link function, and :math:`y` is the
+        observed binary variable.
         """
         nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
         return -nll  # - aggregate_sample_scores(jax.scipy.special.gammaln(y + 1))
@@ -1086,10 +1091,10 @@ class BernoulliObservations(Observations):
         Parameters
         ----------
         observations:
-            The binary observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_observations)`` for population 
+            The binary observations. Shape ``(n_time_bins, )`` or ``(n_time_bins, n_observations)`` for population
             models (i.e. multiple observations).
         predicted_rate:
-            The predicted rate (success probability). Shape ``(n_time_bins, )``  or ``(n_time_bins, n_observations)`` 
+            The predicted rate (success probability). Shape ``(n_time_bins, )``  or ``(n_time_bins, n_observations)``
             for population models (i.e. multiple observations).
         scale:
             Scale parameter of the model. For Bernoulli should be equal to 1.
@@ -1106,8 +1111,10 @@ class BernoulliObservations(Observations):
 
         .. math::
             \begin{aligned}
-                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn} | \hat{y}_{tn}\right)\right) \\\
-                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1 - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
+                D(y_{tn}, \hat{y}_{tn}) &= 2 \left( \text{LL}\left(y_{tn} | y_{tn}\right) - \text{LL}\left(y_{tn}
+                  | \hat{y}_{tn}\right)\right) \\\
+                &= 2 \left[ y_{tn} \log\left(\frac{y_{tn}}{\hat{y}_{tn}}\right) + (1 - y_{tn}) \log\left(\frac{1
+                  - y_{tn}}{1 - \hat{y}_{tn}}\right) \right]
             \end{aligned}
 
         where :math:`y` is the observed data, :math:`\hat{y}` is the predicted data, and :math:`\text{LL}` is
@@ -1144,8 +1151,8 @@ class BernoulliObservations(Observations):
         y :
             Observed spike counts.
         predicted_rate :
-            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating scale,
-            but is retained for compatibility with the abstract method signature.
+            The predicted rate values (success probabilities). This is not used in the Bernoulli model for estimating
+            scale, but is retained for compatibility with the abstract method signature.
         dof_resid :
             The DOF of the residuals.
         """
