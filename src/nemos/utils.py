@@ -14,7 +14,6 @@ from .base_class import Base
 from .tree_utils import pytree_map_and_reduce
 from .type_casting import is_numpy_array_like, support_pynapple
 
-
 SPECIAL_KEY_NAMES = {
     jax.scipy.stats.norm.cdf: "norm.cdf",
 }
