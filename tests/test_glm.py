@@ -1650,9 +1650,9 @@ class TestGLMObservationModel:
     For new observation models, add it in the class parameterization above, and add cases for the fixtures below.
     """
 
-    ##########################################################
-    ## Observation model specific fixtures for shared tests ##
-    ##########################################################
+    ########################################################
+    # Observation model specific fixtures for shared tests #
+    ########################################################
     @pytest.fixture
     def ll_scipy_stats(self, model_instantiation):
         """
@@ -1788,9 +1788,9 @@ class TestGLMObservationModel:
         else:
             raise ValueError("Unknown model instantiation")
 
-    #########################
-    ## Test initialization ##
-    #########################
+    #######################
+    # Test initialization #
+    #######################
     @pytest.mark.parametrize(
         "X, y",
         [
@@ -1822,9 +1822,9 @@ class TestGLMObservationModel:
         else:
             return
 
-    #####################
-    ## Test get_params ##
-    #####################
+    ###################
+    # Test get_params #
+    ###################
     def test_get_params(self, request, glm_type, model_instantiation):
         """
         Test that get_params() contains expected values.
@@ -1902,9 +1902,9 @@ class TestGLMObservationModel:
         assert set(model.get_params().keys()) == expected_keys
         assert list(model.get_params().values()) == expected_values
 
-    ####################
-    ## Test model.fit ##
-    ####################
+    ##################
+    # Test model.fit #
+    ##################
     def test_fit_mask_grouplasso(self, request, glm_type, model_instantiation):
         """Test that the group lasso fit goes through"""
 
@@ -1954,9 +1954,9 @@ class TestGLMObservationModel:
         assert np.allclose(model.predict(X), model_tree.predict(X_tree))
         assert np.allclose(model.scale_, model_tree.scale_)
 
-    ######################
-    ## Test model.score ##
-    ######################
+    ####################
+    # Test model.score #
+    ####################
     @pytest.mark.parametrize(
         "score_type, expectation",
         [
@@ -2019,9 +2019,9 @@ class TestGLMObservationModel:
                 "that of jax.scipy!"
             )
 
-    ##################################
-    ## Test model.initialize_solver ##
-    ##################################
+    ################################
+    # Test model.initialize_solver #
+    ################################
     def test_initializer_solver_set_solver_callable(
         self, request, glm_type, model_instantiation
     ):
@@ -2037,9 +2037,9 @@ class TestGLMObservationModel:
         assert isinstance(model.solver_update, Callable)
         assert isinstance(model.solver_run, Callable)
 
-    #######################
-    ## Test model.update ##
-    #######################
+    #####################
+    # Test model.update #
+    #####################
     @pytest.mark.parametrize(
         "n_samples, expectation",
         [
@@ -2109,9 +2109,9 @@ class TestGLMObservationModel:
         # check for equivalence update
         assert all(jnp.allclose(p0, jit_update[k]) for k, p0 in enumerate(nojit_update))
 
-    #########################
-    ## Test model.simulate ##
-    #########################
+    #######################
+    # Test model.simulate #
+    #######################
     @pytest.mark.parametrize(
         "input_type, expected_out_type",
         [
@@ -2164,9 +2164,9 @@ class TestGLMObservationModel:
         # check the time point number is that expected (same as the input)
         assert ysim.shape[0] == X.shape[0]
 
-    ##########################################
-    ## Compare with standard implementation ##
-    ##########################################
+    ########################################
+    # Compare with standard implementation #
+    ########################################
     def test_compatibility_with_sklearn_cv(
         self, request, glm_type, model_instantiation
     ):
@@ -2355,9 +2355,9 @@ class TestGLMObservationModel:
             if (not match_weights) or (not match_intercepts):
                 raise ValueError("GLM.fit estimate does not match sklearn!")
 
-    #######################
-    ## Test redidual DOF ##
-    #######################
+    #####################
+    # Test redidual DOF #
+    #####################
     @pytest.mark.parametrize(
         "reg, dof, strength",
         [
@@ -2407,9 +2407,9 @@ class TestGLMObservationModel:
         num = model._estimate_resid_degrees_of_freedom(X, n_samples=n_samples)
         assert np.allclose(num, n_samples - dof - 1)
 
-    ########################
-    ## Optimizer defaults ##
-    ########################
+    ######################
+    # Optimizer defaults #
+    ######################
     @pytest.mark.parametrize("reg_setup", ["", "_pytree"])
     @pytest.mark.parametrize("batch_size", [None, 1, 10])
     @pytest.mark.parametrize("stepsize", [None, 0.01])

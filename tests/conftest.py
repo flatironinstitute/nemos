@@ -762,7 +762,7 @@ def example_X_y_high_firing_rates():
 
 
 @pytest.fixture
-def bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
+def bernoulliGLM_model_instantiation():
     """Set up a Bernoulli GLM for testing purposes.
 
     This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
@@ -781,10 +781,10 @@ def bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
     X = np.random.normal(size=(100, 5))
     b_true = np.zeros((1,))
     w_true = np.random.normal(size=(5,))
-    observation_model = nmo.observation_models.BernoulliObservations(inv_link_func)
+    observation_model = nmo.observation_models.BernoulliObservations(jax.lax.logistic)
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.GLM(observation_model, regularizer)
-    rate = inv_link_func(jnp.einsum("k,tk->t", w_true, X) + b_true)
+    rate = jax.lax.logistic(jnp.einsum("k,tk->t", w_true, X) + b_true)
     return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
 
 
@@ -815,7 +815,7 @@ def bernoulliGLM_model_instantiation_pytree(bernoulliGLM_model_instantiation):
 
 
 @pytest.fixture
-def population_bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
+def population_bernoulliGLM_model_instantiation():
     """Set up a population Bernoulli GLM for testing purposes.
 
     This fixture initializes a Bernoulli GLM with random parameters, simulates its response, and
@@ -834,12 +834,12 @@ def population_bernoulliGLM_model_instantiation(inv_link_func=jax.lax.logistic):
     X = np.random.normal(size=(500, 5))
     b_true = np.zeros((3,))
     w_true = np.random.normal(size=(5, 3))
-    observation_model = nmo.observation_models.BernoulliObservations(inv_link_func)
+    observation_model = nmo.observation_models.BernoulliObservations(jax.lax.logistic)
     regularizer = nmo.regularizer.UnRegularized()
     model = nmo.glm.PopulationGLM(
         observation_model=observation_model, regularizer=regularizer
     )
-    rate = inv_link_func(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
+    rate = jax.lax.logistic(jnp.einsum("ki,tk->ti", w_true, X) + b_true)
     return X, np.random.binomial(1, rate), model, (w_true, b_true), rate
 
 
