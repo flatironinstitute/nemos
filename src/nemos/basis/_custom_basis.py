@@ -14,6 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..base_class import Base
+from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, set_input_shape_state
@@ -171,8 +172,10 @@ class CustomBasis(BasisMixin, Base):
         ndim_input: int = 1,
         output_shape: Tuple[int, ...] = (),
         basis_kwargs: Optional[Any] = None,
+        pynapple_support: bool = True,
         label: Optional[str] = None,
     ):
+        self._pynapple_support = bool(pynapple_support)
         self.funcs = funcs
         self.ndim_input = int(ndim_input)
 
@@ -183,6 +186,8 @@ class CustomBasis(BasisMixin, Base):
         # nomenclature is confusing, should rename this to _n_args_compute_features
         self._n_input_dimensionality = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)
+
+
 
         # store args and kwargs
         basis_kwargs = basis_kwargs if basis_kwargs is not None else {}
@@ -202,12 +207,16 @@ class CustomBasis(BasisMixin, Base):
         super().__init__(label=label)
 
     @property
+    def pynapple_support(self) -> bool:
+        return self._pynapple_support
+
+    @property
     def funcs(self) -> "FunctionList":
         return self._funcs
 
     @funcs.setter
     def funcs(self, val: Iterable[Callable[[NDArray, ...], NDArray]]):
-        val = FunctionList(val)
+        val = FunctionList([support_pynapple()(v) if self._pynapple_support else v for v in val])
 
         if not all(isinstance(f, Callable) for f in val):
             raise ValueError("User must provide an iterable of callable.")
