@@ -12,6 +12,7 @@ from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
 
+import jax
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
@@ -33,7 +34,6 @@ from ._composition_utils import (
     set_input_shape,
 )
 from ._transformer_basis import TransformerBasis
-import jax
 
 if TYPE_CHECKING:
     from ._basis import Basis
@@ -253,15 +253,11 @@ class BasisMixin:
         start_slice = start_slice or 0
         # Handle the default case for non-additive basis types
         # See overwritten method for recursion logic
-        split_dict, start_slice = self._get_default_slicing(
-            start_slice=start_slice
-        )
+        split_dict, start_slice = self._get_default_slicing(start_slice=start_slice)
 
         return split_dict, start_slice
 
-    def _get_default_slicing(
-        self, start_slice: int
-    ) -> Tuple[OrderedDict, int]:
+    def _get_default_slicing(self, start_slice: int) -> Tuple[OrderedDict, int]:
         """Handle default slicing logic."""
         split_dict = {
             self.label: slice(start_slice, start_slice + self.n_output_features)
@@ -367,13 +363,15 @@ class BasisMixin:
         return reshaped_out
 
     @staticmethod
-    def _reshape_concatenated_arrays(array: NDArray, bas: BasisMixin, axis: int) -> NDArray:
+    def _reshape_concatenated_arrays(
+        array: NDArray, bas: BasisMixin, axis: int
+    ) -> NDArray:
         # reshape the arrays to match input shapes
         shape = list(array.shape)
         array = array.reshape(
             shape[:axis]
             + [*(b for sh in bas._input_shape_ for b in sh), -1]
-            + shape[axis + 1:]
+            + shape[axis + 1 :]
         )
         return array
 

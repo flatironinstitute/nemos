@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import abc
 import copy
-from copy import deepcopy
 from functools import wraps
 from typing import Callable, Generator, Optional, Tuple, Union
 
@@ -17,7 +16,7 @@ from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
-from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin, BasisMixin
+from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
 from ._composition_utils import (
     infer_input_dimensionality,
     is_basis_like,
@@ -667,16 +666,16 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         # the numpy conversion is important, there is some in-place
         # array modification in basis.
         hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
-        comp_feature_1 = getattr(self.basis1, "_compute_features", self.basis1.compute_features)
-        comp_feature_2 = getattr(self.basis2, "_compute_features", self.basis2.compute_features)
+        comp_feature_1 = getattr(
+            self.basis1, "_compute_features", self.basis1.compute_features
+        )
+        comp_feature_2 = getattr(
+            self.basis2, "_compute_features", self.basis2.compute_features
+        )
         X = hstack_pynapple(
             (
-                comp_feature_1(
-                    *xi[: self.basis1._n_input_dimensionality]
-                ),
-                comp_feature_2(
-                    *xi[self.basis1._n_input_dimensionality :]
-                ),
+                comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
+                comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
             ),
         )
         return X
@@ -1034,8 +1033,12 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> X = mult_basis.compute_features(x, y)
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
-        comp_feature_1 = getattr(self.basis1, "_compute_features", self.basis1.compute_features)
-        comp_feature_2 = getattr(self.basis2, "_compute_features", self.basis2.compute_features)
+        comp_feature_1 = getattr(
+            self.basis1, "_compute_features", self.basis1.compute_features
+        )
+        comp_feature_2 = getattr(
+            self.basis2, "_compute_features", self.basis2.compute_features
+        )
         X = kron(
             comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
             comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),

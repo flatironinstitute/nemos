@@ -6,11 +6,11 @@ with no to minimal re
 """
 
 import re
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
-from copy import deepcopy
 
 from .._inspect_utils.inspect_utils import count_positional_and_var_args
 
@@ -35,11 +35,11 @@ __PUBLIC_BASES__ = [
     "OrthExponentialConv",
     "AdditiveBasis",
     "MultiplicativeBasis",
-    "CustomBasis"
+    "CustomBasis",
 ]
 
 
-def _iterate_over_components(basis: "BasiBasisMixin"):
+def _iterate_over_components(basis: "BasisMixin"):
     components = (
         basis._iterate_over_components()
         if hasattr(basis, "_iterate_over_components")
@@ -112,9 +112,7 @@ def _recompute_all_default_labels(root: "BasisMixin") -> "BasisMixin":
     return root
 
 
-def _update_label_from_root(
-    bas: "BasisMixin", cls_name: str, cls_label: str
-):
+def _update_label_from_root(bas: "BasisMixin", cls_name: str, cls_label: str):
     """
     Subtract 1 to each matching default label with higher ID then current.
 
@@ -228,7 +226,9 @@ def infer_input_dimensionality(bas: "BasisMixin") -> int:
             funcs = bas.funcs
             dims = [count_positional_and_var_args(f)[0] for f in funcs]
             if len(set(dims)) != 1:
-                raise ValueError("``funcs`` in CustomBasis must accept the same number of time series as input.")
+                raise ValueError(
+                    "``funcs`` in CustomBasis must accept the same number of time series as input."
+                )
             n_input_dim = dims[0]
         else:
             funcs = [bas.compute_features] if hasattr(bas, "compute_features") else []
@@ -302,6 +302,7 @@ def _check_valid_shape_tuple(shape):
         raise ValueError(
             f"The tuple provided contains non integer values. Tuple: {shape}."
         )
+
 
 def set_input_shape_atomic(
     bas: "AtomicBasisMixin | CustomBasis", *xis: int | tuple[int, ...] | NDArray
@@ -451,16 +452,14 @@ def is_basis_like(putative_basis: Any, sklearn_compatibility=False) -> bool:
     return is_basis
 
 
-def multiply_basis_by_integer(bas: "BasisMixin | Basis", mul: int) -> "BasisMixin":
+def multiply_basis_by_integer(bas: "BasisMixin", mul: int) -> "BasisMixin":
     """Multiplication by integer logic for bases."""
     if mul <= 0:
         raise ValueError(
             "Basis multiplication error. Integer multiplicative factor must be positive, "
             f"{mul} provided instead."
         )
-    elif not all(
-            b._has_default_label for _, b in generate_basis_label_pair(bas)
-    ):
+    elif not all(b._has_default_label for _, b in generate_basis_label_pair(bas)):
         raise ValueError(
             "Cannot multiply by an integer a basis including a user-defined labels "
             "(because then they won't be unique). Set labels after multiplication."
@@ -487,7 +486,8 @@ def multiply_basis_by_integer(bas: "BasisMixin | Basis", mul: int) -> "BasisMixi
     _recompute_all_default_labels(add)
     return add
 
-def raise_basis_to_power(bas: "BasisMixin | Basis", exponent: int) -> "BasisMixin":
+
+def raise_basis_to_power(bas: "BasisMixin", exponent: int) -> "BasisMixin":
     """Power of basis by integer."""
     if not isinstance(exponent, int):
         raise TypeError("Basis exponent should be an integer!")
