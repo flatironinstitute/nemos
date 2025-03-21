@@ -36,9 +36,13 @@ P = jnp.array(P)
 
 def laguerre_poly(x, poly_coef, decay_rate):
     """
-    Evaluate a single basis function with polynomial coefficients `p` at position `x` with decay time constant `c`.
+    Laguerre polynomial.
+    
+    Evaluate a single basis function with polynomial coefficients `p` at 
+    position `x` with decay time constant `c`.
     """
-    return jnp.exp(-decay_rate * x/2) * jnp.polyval(poly_coef[::-1], decay_rate * x)
+    exp_decay = jnp.exp(-decay_rate * x/2)
+    return exp_decay * jnp.polyval(poly_coef[::-1], decay_rate * x)
 
 funcs = [partial(laguerre_poly, poly_coef=p, decay_rate=c) for p in P]
 
@@ -52,6 +56,7 @@ plt.show()
 ```
 
 :::{admonition} Python sharp bit
+:class: warning
 
 Replacing `functools.partial` with a `lambda` function would not work. 
 
@@ -59,7 +64,9 @@ Replacing `functools.partial` with a `lambda` function would not work.
 funcs = [lambda x: laguerre_poly, p, decay_rate=c) for p in P]
 ```
 
-Will create a list of identical Laguerre polynomials. Why? Because `p` is captured as a reference, not as a value. When the `lambda` funciton is called, the reference is the last `p` in the loop for all the functions. On the other hand, `functools.partial` evaluate its arguments immediately, preventing the issue.
+This will create a list of identical Laguerre polynomial functions. Why? Because p is captured by reference, not by value. When each lambda is called, it uses the value of `p` at that moment — which will be the last value in `P`, for all functions.
+
+In contrast, `functools.partial` evaluates its arguments immediately, so each function correctly captures its own `p` value, avoiding this issue.
 :::
 
 ## Custom Basis with multi-dimensional input and output

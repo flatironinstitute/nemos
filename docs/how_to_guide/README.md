@@ -139,7 +139,7 @@ custom_predictors.md
 
 ```{eval-rst}
 
-.. plot:: scripts/basis_fig.py plot_laguerre_basis
+.. plot:: scripts/basis_figs.py plot_laguerre_basis
    :show-source-link: False
    :height: 100px
 ```
