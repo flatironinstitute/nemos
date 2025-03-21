@@ -19,10 +19,10 @@ from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisTransformerMixin, CompositeBasisMixin, BasisMixin
 from ._composition_utils import (
-    _recompute_all_default_labels,
-    generate_basis_label_pair,
     infer_input_dimensionality,
     is_basis_like,
+    multiply_basis_by_integer,
+    raise_basis_to_power,
 )
 
 
@@ -424,7 +424,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
 
-    def __add__(self, other: Basis) -> AdditiveBasis:
+    def __add__(self, other: BasisMixin) -> AdditiveBasis:
         """
         Add two Basis objects together.
 
@@ -440,10 +440,10 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         return AdditiveBasis(self, other)
 
-    def __rmul__(self, other: Basis | int):
+    def __rmul__(self, other: BasisMixin | int):
         return self.__mul__(other)
 
-    def __mul__(self, other: Basis | int) -> Basis:
+    def __mul__(self, other: BasisMixin | int) -> BasisMixin:
         """
         Multiply two Basis objects together.
 
@@ -458,39 +458,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             The resulting Basis object.
         """
         if isinstance(other, int):
-            if other <= 0:
-                raise ValueError(
-                    "Basis multiplication error. Integer multiplicative factor must be positive, "
-                    f"{other} provided instead."
-                )
-            elif not all(
-                b._has_default_label for _, b in generate_basis_label_pair(self)
-            ):
-                raise ValueError(
-                    "Cannot multiply by an integer a basis including a user-defined labels "
-                    "(because then they won't be unique). Set labels after multiplication."
-                )
-            # default case
-            if other == 1:
-                # __sklearn_clone__ reset the parent to None in case bas.basis1 * 1
-                # (deepcopy would not)
-                copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
-                bas = copy_(self)
-
-                # if deepcopy was called (custom basis used in composition)
-                # reset _parent if it exists and is not None
-                if hasattr(bas, "_parent") and bas._parent is not None:
-                    bas._parent = None
-                _recompute_all_default_labels(bas)
-                return bas
-
-            # parent is set to None at init for add and updated for self.
-            add = AdditiveBasis(self, self)
-            with add._set_shallow_copy(True):
-                for _ in range(2, other):
-                    add += deepcopy(self)
-            _recompute_all_default_labels(add)
-            return add
+            return multiply_basis_by_integer(self, other)
 
         if not is_basis_like(other):
             raise TypeError(
@@ -498,7 +466,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
         return MultiplicativeBasis(self, other)
 
-    def __pow__(self, exponent: int) -> Basis:
+    def __pow__(self, exponent: int) -> BasisMixin:
         """Exponentiation of a Basis object.
 
         Define the power of a basis by repeatedly applying the method __multiply__.
@@ -521,38 +489,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         ValueError
             If the integer is zero or negative.
         """
-        if not isinstance(exponent, int):
-            raise TypeError("Basis exponent should be an integer!")
-
-        if exponent <= 0:
-            raise ValueError("Basis exponent should be a non-negative integer!")
-        elif not all(b._has_default_label for _, b in generate_basis_label_pair(self)):
-            raise ValueError(
-                "Cannot calculate the power of a basis including a user-defined labels "
-                "(because then they won't be unique). Set labels after exponentiation."
-            )
-
-        # default case
-        if exponent == 1:
-            # __sklearn_clone__ reset the parent to None in case bas.basis1 ** 1
-            # (deepcopy would not)
-            copy_ = getattr(self.__class__, "__sklearn_clone__", deepcopy)
-            bas = copy_(self)
-
-            # if deepcopy was called (custom basis used in composition)
-            # reset _parent if it exists and it is not None
-            if hasattr(bas, "_parent") and bas._parent is not None:
-                bas._parent = None
-
-            _recompute_all_default_labels(bas)
-            return bas
-
-        mul = MultiplicativeBasis(self, self)
-        with mul._set_shallow_copy(True):
-            for _ in range(2, exponent):
-                mul *= deepcopy(self)
-        _recompute_all_default_labels(mul)
-        return mul
+        return raise_basis_to_power(self, exponent)
 
     def __len__(self):
         return 1
@@ -595,7 +532,7 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
     """
 
     def __init__(
-        self, basis1: Basis, basis2: Basis, label: Optional[str] = None
+        self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
@@ -730,12 +667,14 @@ class AdditiveBasis(CompositeBasisMixin, Basis):
         # the numpy conversion is important, there is some in-place
         # array modification in basis.
         hstack_pynapple = support_pynapple(conv_type="numpy")(np.hstack)
+        comp_feature_1 = getattr(self.basis1, "_compute_features", self.basis1.compute_features)
+        comp_feature_2 = getattr(self.basis2, "_compute_features", self.basis2.compute_features)
         X = hstack_pynapple(
             (
-                self.basis1._compute_features(
+                comp_feature_1(
                     *xi[: self.basis1._n_input_dimensionality]
                 ),
-                self.basis2._compute_features(
+                comp_feature_2(
                     *xi[self.basis1._n_input_dimensionality :]
                 ),
             ),
@@ -1008,7 +947,7 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
     """
 
     def __init__(
-        self, basis1: Basis, basis2: Basis, label: Optional[str] = None
+        self, basis1: BasisMixin, basis2: BasisMixin, label: Optional[str] = None
     ) -> None:
         CompositeBasisMixin.__init__(self, basis1, basis2, label=label)
         Basis.__init__(self)
@@ -1095,9 +1034,11 @@ class MultiplicativeBasis(CompositeBasisMixin, Basis):
         >>> X = mult_basis.compute_features(x, y)
         """
         kron = support_pynapple(conv_type="numpy")(row_wise_kron)
+        comp_feature_1 = getattr(self.basis1, "_compute_features", self.basis1.compute_features)
+        comp_feature_2 = getattr(self.basis2, "_compute_features", self.basis2.compute_features)
         X = kron(
-            self.basis1._compute_features(*xi[: self.basis1._n_input_dimensionality]),
-            self.basis2._compute_features(*xi[self.basis1._n_input_dimensionality :]),
+            comp_feature_1(*xi[: self.basis1._n_input_dimensionality]),
+            comp_feature_2(*xi[self.basis1._n_input_dimensionality :]),
             transpose=False,
         )
         return X

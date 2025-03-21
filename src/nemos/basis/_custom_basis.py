@@ -10,12 +10,16 @@ from typing import Callable, Iterable, List, Optional, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
+from . import AdditiveBasis, MultiplicativeBasis
 from ..base_class import Base
 from ._basis_mixin import BasisMixin, set_input_shape_state
 from ._composition_utils import (
     count_positional_and_var_args,
     infer_input_dimensionality,
     _check_valid_shape_tuple,
+    multiply_basis_by_integer,
+    raise_basis_to_power,
+    is_basis_like,
 )
 
 
@@ -166,3 +170,22 @@ class CustomBasis(BasisMixin, Base):
         )
         return array
 
+    def __add__(self, other: BasisMixin) -> AdditiveBasis:
+        return AdditiveBasis(self, other)
+
+    def __rmul__(self, other: BasisMixin | int) -> BasisMixin:
+        return self.__mul__(other)
+
+    def __mul__(self, other: BasisMixin | int) -> BasisMixin:
+        if isinstance(other, int):
+            return multiply_basis_by_integer(self, other)
+
+        if not is_basis_like(other):
+            raise TypeError(
+                "Basis multiplicative factor should be a Basis object or a positive integer!"
+            )
+
+        return MultiplicativeBasis(self, other)
+
+    def __pow__(self, exponent) -> BasisMixin:
+        return raise_basis_to_power(self, exponent)

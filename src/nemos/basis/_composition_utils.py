@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
+from copy import deepcopy
 
 from .._inspect_utils.inspect_utils import count_positional_and_var_args
 
@@ -448,3 +449,75 @@ def is_basis_like(putative_basis: Any, sklearn_compatibility=False) -> bool:
             putative_basis, "set_params"
         )
     return is_basis
+
+
+def multiply_basis_by_integer(bas: "BasisMixin | Basis", mul: int) -> "BasisMixin":
+    """Multiplication by integer logic for bases."""
+    if mul <= 0:
+        raise ValueError(
+            "Basis multiplication error. Integer multiplicative factor must be positive, "
+            f"{mul} provided instead."
+        )
+    elif not all(
+            b._has_default_label for _, b in generate_basis_label_pair(bas)
+    ):
+        raise ValueError(
+            "Cannot multiply by an integer a basis including a user-defined labels "
+            "(because then they won't be unique). Set labels after multiplication."
+        )
+    # default case
+    if mul == 1:
+        # __sklearn_clone__ reset the parent to None in case bas.basis1 * 1
+        # (deepcopy would not)
+        copy_ = getattr(bas.__class__, "__sklearn_clone__", deepcopy)
+        bas = copy_(bas)
+
+        # if deepcopy was called (custom basis used in composition)
+        # reset _parent if it exists and is not None
+        if hasattr(bas, "_parent") and bas._parent is not None:
+            bas._parent = None
+        _recompute_all_default_labels(bas)
+        return bas
+
+    # parent is set to None at init for add and updated for self.
+    add = bas + bas
+    with add._set_shallow_copy(True):
+        for _ in range(2, mul):
+            add += deepcopy(bas)
+    _recompute_all_default_labels(add)
+    return add
+
+def raise_basis_to_power(bas: "BasisMixin | Basis", exponent: int) -> "BasisMixin":
+    """Power of basis by integer."""
+    if not isinstance(exponent, int):
+        raise TypeError("Basis exponent should be an integer!")
+
+    if exponent <= 0:
+        raise ValueError("Basis exponent should be a non-negative integer!")
+    elif not all(b._has_default_label for _, b in generate_basis_label_pair(bas)):
+        raise ValueError(
+            "Cannot calculate the power of a basis including a user-defined labels "
+            "(because then they won't be unique). Set labels after exponentiation."
+        )
+
+    # default case
+    if exponent == 1:
+        # __sklearn_clone__ reset the parent to None in case bas.basis1 ** 1
+        # (deepcopy would not)
+        copy_ = getattr(bas.__class__, "__sklearn_clone__", deepcopy)
+        bas = copy_(bas)
+
+        # if deepcopy was called (custom basis used in composition)
+        # reset _parent if it exists and it is not None
+        if hasattr(bas, "_parent") and bas._parent is not None:
+            bas._parent = None
+
+        _recompute_all_default_labels(bas)
+        return bas
+
+    mul = bas * bas
+    with mul._set_shallow_copy(True):
+        for _ in range(2, exponent):
+            mul *= deepcopy(bas)
+    _recompute_all_default_labels(mul)
+    return mul

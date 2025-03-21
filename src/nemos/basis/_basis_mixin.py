@@ -1044,8 +1044,10 @@ class CompositeBasisMixin(BasisMixin):
         :
             The basis with the states stored as attributes of each component.
         """
-        self.basis1._set_input_independent_states()
-        self.basis2._set_input_independent_states()
+        if hasattr(self.basis1, "_set_input_independent_states"):
+            self.basis1._set_input_independent_states()
+        if hasattr(self.basis2, "_set_input_independent_states"):
+            self.basis2._set_input_independent_states()
 
     @contextmanager
     def _set_shallow_copy(self, value):

@@ -13,9 +13,9 @@ kernelspec:
 
 # How to Define A Custom Basis Class
 
-If you want to design features that are not covered by our collection of basis function, you can design a custom basis class with `nemos.basis.CustomBasis`.
+If you want to design features that are not covered by our collection of basis function, you can design a custom basis class with `nemos.basis.CustomBasis`. The `CustomBasis` can be composed as usual with any other basis.
 
-## Custom 1D basis Example: Laguerre Polynomials
+## Example: Laguerre Polynomials
 
 ```{code-cell} ipython3
 
@@ -53,6 +53,10 @@ features = bas.compute_features(x)
 # Plot basis functions.
 plt.plot(x, bas.compute_features(x))
 plt.show()
+
+# Add two Laguerre Poly
+add = bas + nmo.basis.CustomBasis(funcs=funcs, label="Laguerre-2")
+print(add.compute_features(x, x).shape)
 ```
 
 :::{admonition} Python sharp bit
@@ -69,7 +73,7 @@ This will create a list of identical Laguerre polynomial functions. Why? Because
 In contrast, `functools.partial` evaluates its arguments immediately, so each function correctly captures its own `p` value, avoiding this issue.
 :::
 
-## Custom Basis with multi-dimensional input and output
+## Multi-dimensional Outputs
 
 Custom basis works with multi-dimensional outputs as well. Continuing on the Laguerre polynomial example, let's assume that we want to take advantage of the `JAX` vmap capability for efficiency. We can create a single basis that maps a sample to a 5-dimensional output as follows.
 
@@ -84,4 +88,27 @@ bas_vmap = nmo.basis.CustomBasis(funcs=[lambda x: vmap_laguerre(x, P)], label="L
 # Plot basis functions.
 plt.plot(x, bas_vmap.compute_features(x))
 plt.show()
+```
+
+## Multi-dimensional Inputs
+
+A custom basis can receive a multi-dimensional input too. As an example, let's write down a basis that acts on image inputs, and compute the dot product of an image with a bank of filter masks.
+
+```{code-cell} ipython3
+
+# generate 100 random noise 50 x 50 images
+imgs = np.random.randn(100, 50, 50)
+
+def image_dot_product(img, mask):
+    return jnp.sum(img * mask[None], axis=(1,2))    
+
+# define masks using a nemos 2D basis
+basis_2d = nmo.basis.RaisedCosineLinearEval(8)**2
+_, _, masks = basis_2d.evaluate_on_grid(50, 50)
+funcs = [partial(image_dot_product, mask=m) for m in masks.T]
+
+# specify the the expected for each sample is 2D
+bas_img = nmo.basis.CustomBasis(funcs=funcs, ndim_input=2, label="Image-dot")
+
+print(bas_img.compute_features(imgs).shape)
 ```
