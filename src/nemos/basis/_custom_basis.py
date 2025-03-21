@@ -148,7 +148,21 @@ class CustomBasis(BasisMixin, Base):
     >>> # Define a list of basis functions
     >>> funcs = [partial(decay_exp, rate=r) for r in np.linspace(0, 1, 10)]
     >>> bas = nmo.basis.CustomBasis(funcs=funcs, basis_kwargs=dict(shift=1))
-    >>> X = bas.compute_features(np.linspace(0, 1, 100))
+    >>> bas
+    CustomBasis(
+        funcs=partial(decay_exp, rate=np.float64(0.0)), ..., partial(decay_exp, rate=np.float64(1.0)),
+        ndim_input=1,
+        basis_kwargs={'shift': 1}
+    )
+    >>> samples = np.linspace(0, 1, 50)
+    >>> X = bas.compute_features(samples)
+    >>> X.shape
+    (50, 10)
+    >>> # Can be composed with other basis (including other custom basis)
+    >>> add = bas + bas
+    >>> X = add.compute_features(samples, samples)
+    >>> X.shape
+    (50, 20)
     """
 
     def __init__(
