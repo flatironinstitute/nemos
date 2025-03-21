@@ -33,7 +33,7 @@ def apply_f_vectorized(
         (
             range(1)
             if x.ndim - 1 == ndim_input
-            else range(np.prod(x.shape[1 + ndim_input :]))
+            else range(int(np.prod(x.shape[1 + ndim_input :])))
         )
         for x in xi
     )

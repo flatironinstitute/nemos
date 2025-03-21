@@ -1,6 +1,7 @@
 from ._basis import AdditiveBasis, MultiplicativeBasis
 from ._composition_utils import __PUBLIC_BASES__
 from ._transformer_basis import TransformerBasis
+from ._custom_basis import CustomBasis
 from .basis import (
     BSplineConv,
     BSplineEval,

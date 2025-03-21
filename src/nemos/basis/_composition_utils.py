@@ -34,6 +34,7 @@ __PUBLIC_BASES__ = [
     "OrthExponentialConv",
     "AdditiveBasis",
     "MultiplicativeBasis",
+    "CustomBasis"
 ]
 
 

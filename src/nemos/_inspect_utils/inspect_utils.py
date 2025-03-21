@@ -268,7 +268,7 @@ def count_params_by_kind(func: Callable, kind: set[inspect.Parameter.kind]):
     """
     sig = inspect.signature(func)
     params = sig.parameters.values()
-    return sum(1 for p in params if p.kind in kind)
+    return sum(1 for p in params if p.kind in kind and p.default == inspect.Parameter.empty)
 
 
 def count_positional_and_var_args(func: Callable):
