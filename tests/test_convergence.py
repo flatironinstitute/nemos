@@ -35,11 +35,11 @@ def test_unregularized_convergence(solver_names):
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     y = np.random.poisson(rate)
 
-    # instantiate and fit unregularized GLM with GradientDescent
+    # instantiate and fit unregularized GLM with GradientDescent or SVRG
     model_GD = nmo.glm.GLM(solver_name=solver_names[0], solver_kwargs=dict(tol=10**-12))
     model_GD.fit(X, y)
 
-    # instantiate and fit unregularized GLM with ProximalGradient
+    # instantiate and fit unregularized GLM with ProximalGradient or ProxSVRG
     model_PG = nmo.glm.GLM(solver_name=solver_names[1], solver_kwargs=dict(tol=10**-12))
     model_PG.fit(X, y)
 
@@ -73,7 +73,7 @@ def test_ridge_convergence(solver_names):
     rate = jax.numpy.exp(jax.numpy.einsum("k,tk->t", w_true, X) + b_true)
     y = np.random.poisson(rate)
 
-    # instantiate and fit ridge GLM with GradientDescent
+    # instantiate and fit ridge GLM with GradientDescent or SVRG
     model_GD = nmo.glm.GLM(
         solver_name=solver_names[0],
         regularizer_strength=1.0,
@@ -82,7 +82,7 @@ def test_ridge_convergence(solver_names):
     )
     model_GD.fit(X, y)
 
-    # instantiate and fit ridge GLM with ProximalGradient
+    # instantiate and fit ridge GLM with ProximalGradient or ProxSVRG
     model_PG = nmo.glm.GLM(
         solver_name=solver_names[1],
         regularizer_strength=1.0,
@@ -109,7 +109,7 @@ def test_lasso_convergence(solver_name):
     w = [0.5]  # define some weights
     y = np.random.poisson(np.exp(X.dot(w)))  # observed counts
 
-    # instantiate and fit GLM with ProximalGradient
+    # instantiate and fit GLM with ProximalGradient or ProxSVRG
     model_PG = nmo.glm.GLM(
         regularizer="Lasso",
         regularizer_strength=1.0,
@@ -158,7 +158,7 @@ def test_group_lasso_convergence(solver_name):
     mask[0] = [1, 1, 0]  # Group 0 includes features 0 and 1
     mask[1] = [0, 0, 1]  # Group 1 includes features 1
 
-    # instantiate and fit GLM with ProximalGradient
+    # instantiate and fit GLM with ProximalGradient or ProxSVRG
     model_PG = nmo.glm.GLM(
         solver_name=solver_name,
         regularizer=nmo.regularizer.GroupLasso(mask=mask),
