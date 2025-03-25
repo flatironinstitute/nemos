@@ -16,6 +16,7 @@ def test_unregularized_convergence(solver_names):
     """
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     unregularized GLM is the same.
+    Also for SVRG vs ProxSVRG.
     """
     jax.config.update("jax_enable_x64", True)
 
@@ -55,6 +56,7 @@ def test_ridge_convergence(solver_names):
     """
     Assert that solution found when using GradientDescent vs ProximalGradient with an
     ridge GLM is the same.
+    Also for SVRG vs ProxSVRG.
     """
     jax.config.update("jax_enable_x64", True)
     # generate toy data
@@ -99,7 +101,7 @@ def test_ridge_convergence(solver_names):
 @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
 def test_lasso_convergence(solver_name):
     """
-    Assert that solution found when using ProximalGradient versus Nelder-Mead method using
+    Assert that solution found when using ProximalGradient or ProxSVRG versus Nelder-Mead method using
     lasso GLM is the same.
     """
     jax.config.update("jax_enable_x64", True)
@@ -144,7 +146,7 @@ def test_lasso_convergence(solver_name):
 @pytest.mark.parametrize("solver_name", ["ProximalGradient", "ProxSVRG"])
 def test_group_lasso_convergence(solver_name):
     """
-    Assert that solution found when using ProximalGradient versus Nelder-Mead method using
+    Assert that solution found when using ProximalGradient or ProxSVRG versus Nelder-Mead method using
     group lasso GLM is the same.
     """
     jax.config.update("jax_enable_x64", True)
