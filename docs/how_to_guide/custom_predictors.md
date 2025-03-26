@@ -60,6 +60,4 @@ print(f"Design matrix shape: {X.shape}")
 model = nmo.glm.GLM().fit(X, counts)
 ```
 
-```{code-cell} ipython3
 
-```

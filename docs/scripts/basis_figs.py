@@ -1,5 +1,8 @@
+import jax
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.special import laguerre
 
 import nemos as nmo
 from nemos._inspect_utils.inspect_utils import trim_kwargs
@@ -25,6 +28,16 @@ def plot_basis(cls):
     bas = cls(**new_kwargs)
     fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
     ax.plot(*bas.evaluate_on_grid(300), lw=4)
+    for side in ["left", "right", "top", "bottom"]:
+        ax.spines[side].set_visible(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    plt.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.02)
+
+
+def plot_basis_from_values(x, bx):
+    fig, ax = plt.subplots(1, 1, figsize=(5, 2.5))
+    ax.plot(x, bx, lw=4)
     for side in ["left", "right", "top", "bottom"]:
         ax.spines[side].set_visible(False)
     ax.set_xticks([])
@@ -140,3 +153,23 @@ def plot_history_basis():
     plt.ylim(0, 1.2)
     plt.xlabel("lag", fontsize=20)
     plt.subplots_adjust(left=0.02, right=0.98, top=0.98, bottom=0.15)
+
+
+def plot_laguerre_basis():
+
+    def laguerre_poly(x, poly_coef, decay_rate):
+        return jnp.exp(-decay_rate * x / 2) * jnp.polyval(
+            poly_coef[::-1], decay_rate * x
+        )
+
+    x = jnp.linspace(0, 30, 1000)
+    c = 1.0
+    N = 5
+    P = np.zeros((N, N))
+    for n in range(N):
+        P[n, : (n + 1)] = laguerre(n).coef[::-1]
+    P = jnp.array(P)
+    vmap_laguerre = jax.vmap(
+        lambda x, p: laguerre_poly(x, p, c), in_axes=(None, 0), out_axes=1
+    )
+    plot_basis_from_values(x, vmap_laguerre(x, P))
