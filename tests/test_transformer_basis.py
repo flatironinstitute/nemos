@@ -1,4 +1,5 @@
 import itertools
+import operator
 import pickle
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
@@ -6,7 +7,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-import operator
 from conftest import CombinedBasis, list_all_basis_classes
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
@@ -1078,15 +1078,12 @@ def test_input_shape_defaults(bas):
     assert tbas._input_shape_product == (1, 1, 120)
 
 
-@pytest.mark.parametrize(
-    "label", ["x", "y", "(x + y)", "(z * (x + y))"]
-)
+@pytest.mark.parametrize("label", ["x", "y", "(x + y)", "(z * (x + y))"])
 def test_transformer_basis_getitem_return_transformer(label):
-    add = (nmo.basis.BSplineEval(5, label="x") + nmo.basis.MSplineEval(5, label="y"))
+    add = nmo.basis.BSplineEval(5, label="x") + nmo.basis.MSplineEval(5, label="y")
     mul = nmo.basis.RaisedCosineLinearEval(5, label="z") * add
     mul = mul.to_transformer()
     assert isinstance(mul[label], TransformerBasis)
-
 
 
 def test_chainable_methods():
@@ -1109,7 +1106,7 @@ def test_basis_operations_type():
     # test pow/multiply by int
     assert isinstance(bas * 3, TransformerBasis)
     assert isinstance(3 * bas, TransformerBasis)
-    assert isinstance(bas ** 3, TransformerBasis)
+    assert isinstance(bas**3, TransformerBasis)
 
 
 def test_basis_operations_type_wrapped_basis():
@@ -1126,9 +1123,7 @@ def test_basis_operations_type_wrapped_basis():
 
 @pytest.mark.parametrize(
     "shape, expected_input_shape",
-    [
-        (None, [(), ()]), ([(1, 2)], [(1, 2)]), ([(1,), (1, 2)], [(1,), (1, 2)])
-    ]
+    [(None, [(), ()]), ([(1, 2)], [(1, 2)]), ([(1,), (1, 2)], [(1,), (1, 2)])],
 )
 def test_assign_shape_custom_ndim(shape, expected_input_shape):
     class Mock:

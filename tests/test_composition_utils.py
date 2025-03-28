@@ -2,14 +2,15 @@
 Test corner case handling in nemos.basis._composition_utils.py
 """
 
+from contextlib import nullcontext as does_not_raise
+
 import pytest
 
 import nemos.basis._composition_utils as compose_utils
-from contextlib import nullcontext as does_not_raise
 from nemos.basis import BSplineEval
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def mock_class(request):
     class Mock:
         def __init__(self, label=None):
@@ -24,19 +25,17 @@ def mock_class(request):
     return Mock(request.param)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def atomic_basis(request):
     return BSplineEval(5, label=request.param)
 
 
-
-@pytest.mark.parametrize('mock_class', ["custom", None], indirect=True)
+@pytest.mark.parametrize("mock_class", ["custom", None], indirect=True)
 def test_external_class_has_default_label(mock_class):
     if hasattr(mock_class, "label"):
         assert compose_utils._has_default_label(mock_class) is None
     else:
         assert compose_utils._has_default_label(mock_class) is not None
-
 
 
 @pytest.mark.parametrize(
@@ -49,13 +48,13 @@ def test_external_class_has_default_label(mock_class):
 )
 def test_composition_basis_setter_label_type(atomic_basis, new_label, expectation):
     with expectation:
-        exception = compose_utils._atomic_basis_label_setter_logic(atomic_basis, new_label)
+        exception = compose_utils._atomic_basis_label_setter_logic(
+            atomic_basis, new_label
+        )
         if exception:
             raise exception
 
 
-@pytest.mark.parametrize(
-    "mock_class", ["custom"], indirect=True
-)
+@pytest.mark.parametrize("mock_class", ["custom"], indirect=True)
 def test_infer_input_dimensionality(mock_class):
     assert compose_utils.infer_input_dimensionality(mock_class) == 2
