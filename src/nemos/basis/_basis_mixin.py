@@ -133,10 +133,6 @@ class AtomicBasisMixin:
         # pass through the checker
         self.label = label
 
-    def _generate_label(self) -> str:
-        """Return label"""
-        return self._label
-
     @property
     def label(self) -> str:
         """Label for the basis."""
