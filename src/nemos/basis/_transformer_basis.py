@@ -76,7 +76,7 @@ class TransformerBasis:
     """
 
     _chainable_methods = (
-        "set_kernel",
+        "_set_kernel",
         "set_input_shape",
         "_set_input_independent_states",
         "setup_basis",
@@ -392,7 +392,7 @@ class TransformerBasis:
             )
 
     def __getitem__(self, name: str):
-        return self.basis.__getitem__(name)
+        return self.__class__(self.basis.__getitem__(name))
 
     def __sklearn_clone__(self) -> TransformerBasis:
         """
