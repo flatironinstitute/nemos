@@ -1,3 +1,4 @@
+import itertools
 import pickle
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
@@ -5,6 +6,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+import operator
 from conftest import CombinedBasis, list_all_basis_classes
 from sklearn.base import clone as sk_clone
 from sklearn.pipeline import Pipeline
@@ -19,6 +21,7 @@ from nemos.basis import (
     MultiplicativeBasis,
     TransformerBasis,
 )
+from nemos.basis._basis import generate_basis_label_pair
 
 
 @pytest.mark.parametrize(
@@ -1091,3 +1094,52 @@ def test_chainable_methods():
     for meth in bas._chainable_methods:
         args = (1,) if meth in ["set_input_shape", "setup_basis"] else ()
         assert isinstance(getattr(bas, meth)(*args), TransformerBasis)
+
+
+def test_basis_operations_type():
+    bas = nmo.basis.BSplineConv(5, 100).to_transformer()
+    # test add/multiply by transformer basis
+    assert isinstance(bas + bas, TransformerBasis)
+    assert isinstance(bas * bas, TransformerBasis)
+    # test add/multiply by basis
+    assert isinstance(bas.basis + bas, TransformerBasis)
+    assert isinstance(bas.basis * bas, TransformerBasis)
+    assert isinstance(bas + bas.basis, TransformerBasis)
+    assert isinstance(bas * bas.basis, TransformerBasis)
+    # test pow/multiply by int
+    assert isinstance(bas * 3, TransformerBasis)
+    assert isinstance(3 * bas, TransformerBasis)
+    assert isinstance(bas ** 3, TransformerBasis)
+
+
+def test_basis_operations_type_wrapped_basis():
+    bas = nmo.basis.BSplineConv(5, 100).to_transformer()
+    # test non-root components are regular basis
+    for op in (operator.add, operator.mul):
+        for b in (bas, bas.basis):
+            for args in [(bas, b), (b, bas)]:
+                composite = op(*args)
+                for _, component in generate_basis_label_pair(composite):
+                    if getattr(component, "_parent", None):
+                        assert not isinstance(component, TransformerBasis)
+
+
+@pytest.mark.parametrize(
+    "shape, expected_input_shape",
+    [
+        (None, [(), ()]), ([(1, 2)], [(1, 2)]), ([(1,), (1, 2)], [(1,), (1, 2)])
+    ]
+)
+def test_assign_shape_custom_ndim(shape, expected_input_shape):
+    class Mock:
+        def __init__(self, shape):
+            self.input_shape = shape
+
+        def compute_features(self, x, y):
+            return
+
+        def set_input_shape(self, *shape):
+            self.input_shape = [*shape]
+
+    out = TransformerBasis._assign_input_shape(Mock(shape))
+    assert out.input_shape == expected_input_shape

@@ -127,6 +127,7 @@ class TransformerBasis:
             else:
                 default_shape.extend([()] * infer_input_dimensionality(bas))
         basis.set_input_shape(*default_shape)
+        return basis
 
     @staticmethod
     def _check_initialized(basis):
@@ -463,7 +464,7 @@ class TransformerBasis:
         unique_attrs.discard("to_transformer")
         return list(unique_attrs)
 
-    def __add__(self, other: TransformerBasis) -> TransformerBasis:
+    def __add__(self, other: TransformerBasis | Basis) -> TransformerBasis:
         """
         Add two TransformerBasis objects.
 
@@ -477,9 +478,13 @@ class TransformerBasis:
         : TransformerBasis
             The resulting Basis object.
         """
-        return TransformerBasis(self.basis + other.basis)
+        add = getattr(other, "basis", other)
+        return TransformerBasis(self.basis + add)
 
-    def __mul__(self, other: TransformerBasis) -> TransformerBasis:
+    def __rmul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
+        return self.__mul__(other)
+
+    def __mul__(self, other: TransformerBasis | Basis | int) -> TransformerBasis:
         """
         Multiply two TransformerBasis objects.
 
@@ -493,7 +498,8 @@ class TransformerBasis:
         :
             The resulting Basis object.
         """
-        return TransformerBasis(self.basis * other.basis)
+        mul = getattr(other, "basis", other)
+        return TransformerBasis(self.basis * mul)
 
     def __pow__(self, exponent: int) -> TransformerBasis:
         """Exponentiation of a TransformerBasis object.
