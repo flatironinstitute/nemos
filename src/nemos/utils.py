@@ -156,6 +156,8 @@ def _pad_dimension(
         "acausal": ((pad_size) // 2, pad_size - (pad_size) // 2),
         "anti-causal": (0, pad_size),
     }
+    # convert negative axis in jax jit compilable way
+    axis = axis * (axis >= 0) + (array.ndim + axis) * (axis < 0)
 
     pad_width = (
         ((0, 0),) * axis
@@ -525,7 +527,7 @@ def format_repr(
 
     init_params = list(inspect.signature(obj.__init__).parameters.keys())
     disp_params = []
-
+    # use special method for basis
     all_params = obj.get_params(deep=False)
     label = all_params.pop("label", None)
     for k, v in all_params.items():

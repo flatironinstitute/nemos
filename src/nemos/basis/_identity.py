@@ -32,16 +32,15 @@ class IdentityBasis(Basis, AtomicBasisMixin):
         n_basis_funcs: int,
         label: Optional[str] = None,
     ) -> None:
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
-        super().__init__(
-            label=label,
-            mode="eval",
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
+        Basis.__init__(
+            self,
         )
         self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
         """
@@ -119,20 +118,19 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         n_basis_funcs: int,
         label: Optional[str] = None,
     ) -> None:
-        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs)
-        super().__init__(
-            label=label,
-            mode="conv",
+        AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
+        Basis.__init__(
+            self,
         )
         self._n_input_dimensionality = 1
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self, sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor
     ) -> FeatureMatrix:
-        """
-        Returns an identity matrix of size len(samples).
+        r"""
+        Returns an identity matrix of shape ``(len(samples), n_basis_funcs)``.
 
         The output is the convolutional kernels for spike history.
 
@@ -144,12 +142,12 @@ class HistoryBasis(Basis, AtomicBasisMixin):
         Returns
         -------
         :
-            np.eye(*samples.shape, n_basis_funcs).
+            Identity matrix of shape ``(*samples.shape, n_basis_funcs)``.
 
         """
         sample_pts = np.squeeze(np.asarray(sample_pts))
         if sample_pts.ndim != 1:
-            raise ValueError("`_evaluate` for HistoryBasis allows 1D input only.")
+            raise ValueError("`evaluate` for HistoryBasis allows 1D input only.")
         # this is called by set kernel.
         return np.eye(np.asarray(sample_pts).shape[0], self.n_basis_funcs)
 

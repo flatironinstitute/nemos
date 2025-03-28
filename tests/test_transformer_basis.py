@@ -1,6 +1,9 @@
+import itertools
+import operator
 import pickle
 from contextlib import nullcontext as does_not_raise
 from copy import deepcopy
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -11,7 +14,14 @@ from sklearn.pipeline import Pipeline
 import nemos as nmo
 from nemos import basis
 from nemos._inspect_utils import get_subclass_methods, list_abstract_methods
-from nemos.basis import AdditiveBasis, HistoryConv, IdentityEval, MultiplicativeBasis
+from nemos.basis import (
+    AdditiveBasis,
+    HistoryConv,
+    IdentityEval,
+    MultiplicativeBasis,
+    TransformerBasis,
+)
+from nemos.basis._basis import generate_basis_label_pair
 
 
 @pytest.mark.parametrize(
@@ -62,9 +72,9 @@ def test_to_transformer_and_constructor_are_equivalent(
 
     # they both just have a _basis
     assert (
-        list(trans_bas_a.__dict__.keys())
-        == list(trans_bas_b.__dict__.keys())
-        == ["basis", "_wrapped_methods"]
+        set(trans_bas_a.__dict__.keys())
+        == set(trans_bas_b.__dict__.keys())
+        == {"_basis", "_wrapped_methods"}
     )
     # and those bases are the same
     assert np.all(
@@ -366,8 +376,8 @@ def test_transformerbasis_multiplication(basis_cls, basis_class_specific_params)
     [
         (2, does_not_raise, None),
         (5, does_not_raise, None),
-        (0.5, TypeError, "Exponent should be an integer"),
-        (-1, ValueError, "Exponent should be a non-negative integer"),
+        (0.5, TypeError, "Basis exponent should be an integer"),
+        (-1, ValueError, "Basis exponent should be a non-negative integer"),
     ],
 )
 def test_transformerbasis_exponentiation(
@@ -403,7 +413,6 @@ def test_transformerbasis_dir(basis_cls, basis_class_specific_params):
         "transform",
         "fit_transform",
         "n_basis_funcs",
-        "mode",
         "window_size",
     ):
         if (
@@ -473,13 +482,7 @@ def test_transformerbasis_pickle(
     "set_input, expectation",
     [
         (True, does_not_raise()),
-        (
-            False,
-            pytest.raises(
-                RuntimeError,
-                match="Cannot apply TransformerBasis: the provided basis has no defined input shape",
-            ),
-        ),
+        (False, does_not_raise()),
     ],
 )
 @pytest.mark.parametrize(
@@ -499,9 +502,15 @@ def test_to_transformer_and_set_input(
         bas.set_input_shape(*([inp] * bas._n_input_dimensionality))
     trans = bas.to_transformer()
     with expectation:
-        X = np.concatenate(
-            [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
-        )
+        if set_input:
+            X = np.concatenate(
+                [inp.reshape(inp.shape[0], -1)] * bas._n_input_dimensionality, axis=1
+            )
+        else:
+            X = np.concatenate(
+                [inp.reshape(inp.shape[0], -1)[:, :1]] * bas._n_input_dimensionality,
+                axis=1,
+            )
         trans.fit(X)
 
 
@@ -799,15 +808,23 @@ def test_initialization(basis_cls, basis_class_specific_params):
     bas = CombinedBasis().instantiate_basis(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
+    expectation = (
+        does_not_raise()
+        if not isinstance(bas, (basis.AdditiveBasis, basis.MultiplicativeBasis))
+        else pytest.raises(
+            ValueError,
+            match="Input mismatch: expected 2 inputs, but got 1 columns in X",
+        )
+    )
     transformer = bas.to_transformer()
-    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
-        transformer.fit(np.ones((100,)))
+    with expectation:
+        transformer.fit(np.ones((100, 1)))
 
-    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
-        transformer.transform(np.ones((100,)))
+    with expectation:
+        transformer.transform(np.ones((100, 1)))
 
-    with pytest.raises(RuntimeError, match="Cannot apply TransformerBasis"):
-        transformer.fit_transform(np.ones((100,)))
+    with expectation:
+        transformer.fit_transform(np.ones((100, 1)))
 
 
 @pytest.mark.parametrize(
@@ -977,17 +994,147 @@ def test_check_input(inp, expectation, basis_cls, basis_class_specific_params, m
             basis.RaisedCosineLinearEval: "Transformer(RaisedCosineLinearEval(n_basis_funcs=5, width=2.0))",
             basis.RaisedCosineLogConv: "Transformer(RaisedCosineLogConv(n_basis_funcs=5, window_size=10, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
             basis.RaisedCosineLogEval: "Transformer(RaisedCosineLogEval(n_basis_funcs=5, width=2.0, time_scaling=50.0, enforce_decay_to_zero=True))",
-            basis.AdditiveBasis: "Transformer(AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
-            basis.MultiplicativeBasis: "Transformer(MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+            basis.AdditiveBasis: "Transformer('(MSplineEval + RaisedCosineLinearConv)': AdditiveBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
+            basis.MultiplicativeBasis: "Transformer('(MSplineEval * RaisedCosineLinearConv)': MultiplicativeBasis(\n    basis1=MSplineEval(n_basis_funcs=5, order=4),\n    basis2=RaisedCosineLinearConv(n_basis_funcs=5, window_size=10, width=2.0),\n))",
         }
     ],
 )
 def test_repr_out(basis_cls, basis_class_specific_params, expected_out):
-    bas = CombinedBasis().instantiate_basis(
-        5, basis_cls, basis_class_specific_params, window_size=10
-    )
-    bas = bas.set_input_shape(*([10] * bas._n_input_dimensionality)).to_transformer()
-    out = expected_out.get(basis_cls, "")
-    if out == "":
-        raise ValueError(f"Missing test case for {basis_cls}!")
-    assert repr(bas) == out
+    with patch("os.get_terminal_size", return_value=(80, 24)):
+        bas = CombinedBasis().instantiate_basis(
+            5, basis_cls, basis_class_specific_params, window_size=10
+        )
+        bas = bas.set_input_shape(
+            *([10] * bas._n_input_dimensionality)
+        ).to_transformer()
+        out = expected_out.get(basis_cls, "")
+        if out == "":
+            raise ValueError(f"Missing test case for {basis_cls}!")
+        assert repr(bas) == out
+
+
+@pytest.mark.parametrize(
+    "bas, expectation",
+    [
+        (nmo.basis.BSplineEval(5), does_not_raise()),
+        (
+            3,
+            pytest.raises(
+                TypeError, match=r"TransformerBasis accepts only object implementing"
+            ),
+        ),
+        (
+            nmo.regularizer.Ridge(),
+            pytest.raises(
+                TypeError, match=r"TransformerBasis accepts only object implementing"
+            ),
+        ),
+    ],
+)
+def test_transformer_init_type(bas, expectation):
+    with expectation:
+        out = nmo.basis.TransformerBasis(bas)
+
+
+def test_top_level_parent_is_reset():
+    bas = nmo.basis.BSplineEval(5) * 3
+    tbas = bas.basis1.to_transformer()
+    assert tbas._parent is None
+    assert tbas.basis1._parent is not None
+    assert tbas.basis2._parent is not None
+    tbas = TransformerBasis(bas)
+    assert tbas._parent is None
+    assert tbas.basis1._parent is not None
+    assert tbas.basis2._parent is not None
+
+
+@pytest.mark.parametrize(
+    "bas", [nmo.basis.BSplineEval(5) * 3, nmo.basis.BSplineEval(5) ** 3]
+)
+def test_input_shape_defaults(bas):
+    tbas = bas.to_transformer()
+    assert tbas.input_shape == [()] * 3
+    assert tbas._input_shape_product == (1, 1, 1)
+    tbas = TransformerBasis(bas)
+    assert tbas.input_shape == [()] * 3
+    assert tbas._input_shape_product == (1, 1, 1)
+
+    bas.basis1.set_input_shape(1, (2, 3))
+    tbas = bas.to_transformer()
+    assert tbas.input_shape == [(), (2, 3), ()]
+    assert tbas._input_shape_product == (1, 6, 1)
+    tbas = TransformerBasis(bas)
+    assert tbas.input_shape == [(), (2, 3), ()]
+    assert tbas._input_shape_product == (1, 6, 1)
+
+    bas.basis1.basis2._input_shape_ = None
+    bas.basis1.basis1.set_input_shape((1,))
+    bas.basis2.set_input_shape((4, 5, 6))
+    tbas = bas.to_transformer()
+    assert tbas.input_shape == [(1,), (), (4, 5, 6)]
+    assert tbas._input_shape_product == (1, 1, 120)
+    tbas = TransformerBasis(bas)
+    assert tbas.input_shape == [(1,), (), (4, 5, 6)]
+    assert tbas._input_shape_product == (1, 1, 120)
+
+
+@pytest.mark.parametrize("label", ["x", "y", "(x + y)", "(z * (x + y))"])
+def test_transformer_basis_getitem_return_transformer(label):
+    add = nmo.basis.BSplineEval(5, label="x") + nmo.basis.MSplineEval(5, label="y")
+    mul = nmo.basis.RaisedCosineLinearEval(5, label="z") * add
+    mul = mul.to_transformer()
+    assert isinstance(mul[label], TransformerBasis)
+
+
+def test_chainable_methods():
+    bas = nmo.basis.BSplineConv(5, 100, label="x").to_transformer()
+    for meth in bas._chainable_methods:
+        args = (1,) if meth in ["set_input_shape", "setup_basis"] else ()
+        assert isinstance(getattr(bas, meth)(*args), TransformerBasis)
+
+
+def test_basis_operations_type():
+    bas = nmo.basis.BSplineConv(5, 100).to_transformer()
+    # test add/multiply by transformer basis
+    assert isinstance(bas + bas, TransformerBasis)
+    assert isinstance(bas * bas, TransformerBasis)
+    # test add/multiply by basis
+    assert isinstance(bas.basis + bas, TransformerBasis)
+    assert isinstance(bas.basis * bas, TransformerBasis)
+    assert isinstance(bas + bas.basis, TransformerBasis)
+    assert isinstance(bas * bas.basis, TransformerBasis)
+    # test pow/multiply by int
+    assert isinstance(bas * 3, TransformerBasis)
+    assert isinstance(3 * bas, TransformerBasis)
+    assert isinstance(bas**3, TransformerBasis)
+
+
+def test_basis_operations_type_wrapped_basis():
+    bas = nmo.basis.BSplineConv(5, 100).to_transformer()
+    # test non-root components are regular basis
+    for op in (operator.add, operator.mul):
+        for b in (bas, bas.basis):
+            for args in [(bas, b), (b, bas)]:
+                composite = op(*args)
+                for _, component in generate_basis_label_pair(composite):
+                    if getattr(component, "_parent", None):
+                        assert not isinstance(component, TransformerBasis)
+
+
+@pytest.mark.parametrize(
+    "shape, expected_input_shape",
+    [(None, [(), ()]), ([(1, 2)], [(1, 2)]), ([(1,), (1, 2)], [(1,), (1, 2)])],
+)
+def test_assign_shape_custom_ndim(shape, expected_input_shape):
+    class Mock:
+        def __init__(self, shape):
+            self.input_shape = shape
+
+        def compute_features(self, x, y):
+            return
+
+        def set_input_shape(self, *shape):
+            self.input_shape = [*shape]
+
+    out = TransformerBasis._assign_input_shape(Mock(shape))
+    assert out.input_shape == expected_input_shape
