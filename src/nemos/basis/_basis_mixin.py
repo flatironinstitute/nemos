@@ -709,17 +709,8 @@ class CompositeBasisMixin:
     def input_shape(self):
         basis1 = getattr(self, "_basis1", None)
         basis2 = getattr(self, "_basis2", None)
-        if basis1 is None and basis2 is not None:
-            components = (
-                basis2._iterate_over_components()
-                if hasattr(basis2, "_iterate_over_components")
-                else [basis2]
-            )
-            return [
-                None,
-                *(getattr(bas2, "input_shape", None) for bas2 in components),
-            ]
-        elif basis2 is None and basis1 is not None:
+        # happens at initialization
+        if basis2 is None and basis1 is not None:
             components = (
                 basis1._iterate_over_components()
                 if hasattr(basis1, "_iterate_over_components")
@@ -729,8 +720,6 @@ class CompositeBasisMixin:
                 *(getattr(bas1, "input_shape", None) for bas1 in components),
                 None,
             ]
-        elif basis1 is None and basis2 is None:
-            return [None, None]
         components1 = (
             basis1._iterate_over_components()
             if hasattr(basis1, "_iterate_over_components")
