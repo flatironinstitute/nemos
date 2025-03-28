@@ -52,14 +52,6 @@ def _get_root(bas: "AtomicBasisMixin | CompositeBasisMixin"):
     return parent
 
 
-def _call_parent_method(bas: "AtomicBasisMixin", method: str, *args, **kwargs):
-    """Call a parent's basis method, if available."""
-    parent = getattr(bas, "_parent", None)
-    if parent is not None:
-        method = getattr(parent, method, None)
-        return method(*args, **kwargs)
-
-
 def _has_default_label(bas: "Basis"):
     """Check for default label.
 
