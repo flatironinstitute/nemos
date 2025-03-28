@@ -10,7 +10,7 @@ description = "NEural MOdelS, a statistical modeling framework for neuroscience.
 readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["neuroscience", "Poisson-GLM"]
-license = { file = "LICENSE" }
+license = "MIT"
 classifiers = [
     "Intended Audience :: Science/Research",
     "Natural Language :: English",

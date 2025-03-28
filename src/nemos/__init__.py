@@ -3,7 +3,6 @@ from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _get_version
 
 from . import (
-    _inspect_utils,
     basis,
     convolve,
     exceptions,

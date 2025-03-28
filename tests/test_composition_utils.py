@@ -14,7 +14,7 @@ from nemos.basis import BSplineEval
 def mock_class(request):
     class Mock:
         def __init__(self, label=None):
-            if label is "no-default":
+            if label == "no-default":
                 return
             elif label:
                 self.label = label
