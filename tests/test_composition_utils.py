@@ -14,7 +14,9 @@ from nemos.basis import BSplineEval
 def mock_class(request):
     class Mock:
         def __init__(self, label=None):
-            if label:
+            if label is "no-default":
+                return
+            elif label:
                 self.label = label
             else:
                 self.label = self.__class__.__name__
@@ -30,7 +32,7 @@ def atomic_basis(request):
     return BSplineEval(5, label=request.param)
 
 
-@pytest.mark.parametrize("mock_class", ["custom", None], indirect=True)
+@pytest.mark.parametrize("mock_class", ["custom", "no-default"], indirect=True)
 def test_external_class_has_default_label(mock_class):
     if hasattr(mock_class, "label"):
         assert compose_utils._has_default_label(mock_class) is None
