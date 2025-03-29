@@ -1205,7 +1205,7 @@ class TestGroupLasso:
 
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
     def test_mask_validity_groups(
-        self, n_groups_assign, group_sparse_poisson_glm_model_instantiation
+        self, n_groups_assign, poissonGLM_model_instantiation_group_sparse
     ):
         """Test that mask assigns at most 1 group to each weight."""
         raise_exception = n_groups_assign > 1
@@ -1216,7 +1216,7 @@ class TestGroupLasso:
             true_params,
             firing_rate,
             _,
-        ) = group_sparse_poisson_glm_model_instantiation
+        ) = poissonGLM_model_instantiation_group_sparse
 
         # create a valid mask
         mask = np.zeros((2, X.shape[1]))
@@ -1318,7 +1318,7 @@ class TestGroupLasso:
             model.set_params(regularizer=self.cls(mask=mask), regularizer_strength=1.0)
 
     def test_group_sparsity_enforcement(
-        self, group_sparse_poisson_glm_model_instantiation
+        self, poissonGLM_model_instantiation_group_sparse
     ):
         """Test that group lasso works on a simple dataset."""
         (
@@ -1328,7 +1328,7 @@ class TestGroupLasso:
             true_params,
             firing_rate,
             _,
-        ) = group_sparse_poisson_glm_model_instantiation
+        ) = poissonGLM_model_instantiation_group_sparse
         zeros_true = true_params[0].flatten() == 0
         mask = np.zeros((2, X.shape[1]))
         mask[0, zeros_true] = 1
@@ -1350,7 +1350,7 @@ class TestGroupLasso:
     ###########
     @pytest.mark.parametrize("n_groups_assign", [0, 1, 2])
     def test_mask_validity_groups_set_params(
-        self, n_groups_assign, group_sparse_poisson_glm_model_instantiation
+        self, n_groups_assign, poissonGLM_model_instantiation_group_sparse
     ):
         """Test that mask assigns at most 1 group to each weight."""
         raise_exception = n_groups_assign > 1
@@ -1361,7 +1361,7 @@ class TestGroupLasso:
             true_params,
             firing_rate,
             _,
-        ) = group_sparse_poisson_glm_model_instantiation
+        ) = poissonGLM_model_instantiation_group_sparse
 
         # create a valid mask
         mask = np.zeros((2, X.shape[1]))

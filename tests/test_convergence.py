@@ -36,13 +36,11 @@ def test_unregularized_convergence(solver_names):
     y = np.random.poisson(rate)
 
     # instantiate and fit unregularized GLM with GradientDescent
-    model_GD = nmo.glm.GLM(solver_kwargs=dict(tol=10**-12))
+    model_GD = nmo.glm.GLM(solver_name=solver_names[0], solver_kwargs=dict(tol=10**-12))
     model_GD.fit(X, y)
 
     # instantiate and fit unregularized GLM with ProximalGradient
-    model_PG = nmo.glm.GLM(
-        solver_name="ProximalGradient", solver_kwargs=dict(tol=10**-12)
-    )
+    model_PG = nmo.glm.GLM(solver_name=solver_names[1], solver_kwargs=dict(tol=10**-12))
     model_PG.fit(X, y)
 
     # assert weights are the same
@@ -77,7 +75,10 @@ def test_ridge_convergence(solver_names):
 
     # instantiate and fit ridge GLM with GradientDescent
     model_GD = nmo.glm.GLM(
-        regularizer_strength=1.0, regularizer="Ridge", solver_kwargs=dict(tol=10**-12)
+        regularizer_strength=1.0,
+        regularizer="Ridge",
+        solver_kwargs=dict(tol=10**-12),
+        solver_name=solver_names[0],
     )
     model_GD.fit(X, y)
 
@@ -85,7 +86,7 @@ def test_ridge_convergence(solver_names):
     model_PG = nmo.glm.GLM(
         regularizer_strength=1.0,
         regularizer="Ridge",
-        solver_name="ProximalGradient",
+        solver_name=solver_names[1],
         solver_kwargs=dict(tol=10**-12),
     )
     model_PG.fit(X, y)
@@ -112,7 +113,7 @@ def test_lasso_convergence(solver_name):
     model_PG = nmo.glm.GLM(
         regularizer="Lasso",
         regularizer_strength=1.0,
-        solver_name="ProximalGradient",
+        solver_name=solver_name,
         solver_kwargs=dict(tol=10**-12),
     )
     model_PG.regularizer_strength = 0.1
@@ -162,6 +163,7 @@ def test_group_lasso_convergence(solver_name):
         regularizer=nmo.regularizer.GroupLasso(mask=mask),
         solver_kwargs=dict(tol=10**-14, maxiter=10000),
         regularizer_strength=0.2,
+        solver_name=solver_name,
     )
     model_PG.fit(X, y)
 

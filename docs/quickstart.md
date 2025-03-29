@@ -265,6 +265,20 @@ glm = nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
 
 Take a look at our [tutorial](tutorial-calcium-imaging) for a detailed example.
 
+## **Binary Observations**
+
+
+NeMoS additionally supports a [Bernoulli observation model](nemos.observation_models.BernoulliObservations), which is useful for modeling binary observations, such as a binary choices or singular spikes. To use this observation model, set the `observation_model` argument during model initialization.
+
+
+```{code-cell} ipython3
+
+import nemos as nmo
+
+# set up a Bernoulli GLM for modeling binary observations
+glm = nmo.glm.GLM(observation_model=nmo.observation_models.BernoulliObservations())
+
+```
 
 ## **Regularization**
 

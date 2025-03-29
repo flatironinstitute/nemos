@@ -15,6 +15,10 @@ import nemos as nmo
         jax.nn.softplus,
         lambda x: jnp.exp(x),
         jax.nn.sigmoid,
+        jax.lax.logistic,
+        lambda x: jax.lax.logistic(x),
+        jax.scipy.special.expit,
+        jax.scipy.stats.norm.cdf,
     ],
 )
 @pytest.mark.parametrize(
@@ -47,6 +51,20 @@ def test_invert_non_linearity(non_linearity, output_y):
             pytest.raises(
                 ValueError, match=".+Please, provide initial parameters instead"
             ),
+        ),
+        (
+            jax.lax.logistic,
+            pytest.raises(ValueError, match=".+The mean firing rate has"),
+        ),
+        (
+            lambda x: jax.lax.logistic(x),
+            pytest.raises(
+                ValueError, match=".+Please, provide initial parameters instead"
+            ),
+        ),
+        (
+            jax.scipy.stats.norm.cdf,
+            pytest.raises(ValueError, match=".+The mean firing rate has"),
         ),
     ],
 )
