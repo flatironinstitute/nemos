@@ -99,9 +99,21 @@ As with any `sckit-learn` transformer, the `TransformerBasis` implements `fit`, 
 
 ## Setting up the TransformerBasis
 
-At this point we have an object equipped with the correct methods, so now, all we have to do is concatenate the inputs into a unique array and call `fit_transform`, right? 
+At this point, we have an object equipped with the necessary methods. So, all we need to do is concatenate the inputs into a single array and call fit_transform, right? **Not quite.** By default, `TransformerBasis` assumes that `inp` has one column per input in the composition. So in this example, with two one-dimensional basis functions, `TransformerBasis` expects an input of shape `(n_samples, 2)`.
+
+However, our actual input has shape `(n_samples, 6)`:
+
+- `counts` consists of **5 columns**
+
+- `speed` consists of **1 column**
+
+When concatenated, this results in a **6-column input**, and our `TransformerBasis` doesn't know how to split those 6 columns.
+
+This mismatch leads to an error when calling fit_transform:
+
 
 ```{code-cell} ipython3
+:tags: [raises-exception]
 
 # reinstantiate the basis transformer for illustration porpuses
 composite_basis = counts_basis + speed_basis
@@ -110,18 +122,19 @@ trans_bas = (composite_basis).to_transformer()
 inp = np.concatenate([counts, speed[:, np.newaxis]], axis=1)
 print(inp.shape)
 
-try:
-    trans_bas.fit_transform(inp)
-except RuntimeError as e:
-    print(repr(e))
+trans_bas.fit_transform(inp)
     
 ```
 
-...Unfortunately, not yet. The problem is that the basis doesn't know which columns of `inp` should be processed by `count_basis` and which by `speed_basis`.
+### Defining the Input Shape
 
-You can provide this information by calling the `set_input_shape` method of the basis. 
+:::{note}
+If each basis accepts a single column of the input, as in [this example](sklearn-how-to), then the default behavior works fine, and `set_input_shape` does not need to be called.
+:::
 
-This can be called before or after the transformer basis is defined. The method extracts and stores the number of columns for each input. There are multiple ways to call this method:
+To resolve this, we need to explicitly specify the input structure using the `set_input_shape` method. This method tells `TransformerBasis` how to interpret the input columns by storing the number of columns assigned to each basis function.
+
+You can call set_input_shape before or after defining the transformer basis. There are multiple ways to specify the input shape:
 
 - It directly accepts the input: `composite_basis.set_input_shape(counts, speed)`.
 - If the input is 1D or 2D, it also accepts the number of columns: `composite_basis.set_input_shape(5, 1)`.

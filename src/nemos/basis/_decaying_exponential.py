@@ -26,9 +26,6 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
             Number of basis functions.
     decay_rates :
             Decay rates of the exponentials, shape ``(n_basis_funcs,)``.
-    mode :
-        The mode of operation. ``'eval'`` for evaluation at sample points,
-        ``'conv'`` for convolutional operation.
     label :
         The label of the basis, intended to be descriptive of the task variable being processed.
         For example: velocity, position, spike_counts.
@@ -38,13 +35,11 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
         self,
         n_basis_funcs: int,
         decay_rates: NDArray[np.floating],
-        mode="eval",
         label: Optional[str] = "OrthExponentialBasis",
     ):
         AtomicBasisMixin.__init__(self, n_basis_funcs=n_basis_funcs, label=label)
         Basis.__init__(
             self,
-            mode=mode,
         )
         self.decay_rates = decay_rates
         self._check_rates()
@@ -128,11 +123,11 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
 
     @support_pynapple(conv_type="numpy")
     @check_transform_input
-    def _evaluate(
+    def evaluate(
         self,
         sample_pts: ArrayLike | Tsd | TsdFrame | TsdTensor,
     ) -> FeatureMatrix:
-        """Generate basis functions with given spacing.
+        """Evaluate the OrthExponential basis at the given sample points.
 
         Parameters
         ----------
@@ -146,7 +141,6 @@ class OrthExponentialBasis(Basis, AtomicBasisMixin, abc.ABC):
         basis_funcs
             Evaluated exponentially decaying basis functions, numerically
             orthogonalized, shape ``(n_samples, n_basis_funcs)``.
-
         """
         self._check_sample_size(sample_pts)
         sample_pts, _ = min_max_rescale_samples(

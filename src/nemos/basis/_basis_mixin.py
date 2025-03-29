@@ -6,6 +6,7 @@ import abc
 import copy
 import inspect
 import re
+from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
 from typing import TYPE_CHECKING, Any, Generator, Literal, Optional, Tuple, Union
@@ -22,6 +23,7 @@ from ._composition_utils import (
     _composite_basis_setter_logic,
     _get_root,
     _recompute_all_default_labels,
+    infer_input_dimensionality,
 )
 from ._transformer_basis import TransformerBasis
 
@@ -131,10 +133,6 @@ class AtomicBasisMixin:
         # pass through the checker
         self.label = label
 
-    def _generate_label(self) -> str:
-        """Return label"""
-        return self._label
-
     @property
     def label(self) -> str:
         """Label for the basis."""
@@ -238,28 +236,6 @@ class AtomicBasisMixin:
         self._input_shape_product = n_inputs
         return self
 
-    def _check_input_shape_consistency(self, x: NDArray):
-        """Check input consistency across calls."""
-        # remove sample axis and squeeze
-        shape = x.shape[1:]
-
-        initialized = self._input_shape_ is not None
-        is_shape_match = self._input_shape_[0] == shape
-        if initialized and not is_shape_match:
-            expected_shape_str = "(n_samples, " + f"{self._input_shape_[0]}"[1:]
-            expected_shape_str = expected_shape_str.replace(",)", ")")
-            raise ValueError(
-                f"Input shape mismatch detected.\n\n"
-                f"The basis `{self.__class__.__name__}` with label '{self.label}' expects inputs with "
-                f"a consistent shape (excluding the sample axis). Specifically, the shape should be:\n"
-                f"  Expected: {expected_shape_str}\n"
-                f"  But got:  {x.shape}.\n\n"
-                "Note: The number of samples (`n_samples`) can vary between calls of `compute_features`, "
-                "but all other dimensions must remain the same. If you need to process inputs with a "
-                "different shape, please create a new basis instance, or set a new input shape by calling "
-                "`set_input_shape`."
-            )
-
     @property
     def input_shape(self) -> NDArray:
         return self._input_shape_[0] if self._input_shape_ else None
@@ -296,7 +272,7 @@ class EvalBasisMixin:
             A matrix with the transformed features.
 
         """
-        out = self._evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
+        out = self.evaluate(*(np.reshape(x, (x.shape[0], -1)) for x in xi))
         return np.reshape(out, (out.shape[0], -1))
 
     def setup_basis(self, *xi: NDArray) -> Basis:
@@ -401,7 +377,7 @@ class ConvBasisMixin:
         # is applied at the end of the recursion on the 1D basis, ensuring len(xi) == 1.
         conv = create_convolutional_predictor(self.kernel_, *xi, **self._conv_kwargs)
         # make sure to return a matrix
-        return np.reshape(conv, shape=(conv.shape[0], -1))
+        return np.reshape(conv, (conv.shape[0], -1))
 
     def setup_basis(self, *xi: NDArray) -> Basis:
         """
@@ -423,7 +399,7 @@ class ConvBasisMixin:
         :
             The basis with ready for evaluation.
         """
-        self.set_kernel()
+        self._set_kernel()
         self.set_input_shape(*xi)
         return self
 
@@ -433,9 +409,9 @@ class ConvBasisMixin:
 
         For Conv mixin the only attribute is the kernel.
         """
-        return self.set_kernel()
+        return self._set_kernel()
 
-    def set_kernel(self) -> "ConvBasisMixin":
+    def _set_kernel(self) -> "ConvBasisMixin":
         """
         Prepare or compute the convolutional kernel for the basis functions.
 
@@ -457,7 +433,7 @@ class ConvBasisMixin:
         computed and how the input parameters are utilized.
 
         """
-        self.kernel_ = self._evaluate(np.linspace(0, 1, self.window_size))
+        self.kernel_ = self.evaluate(np.linspace(0, 1, self.window_size))
         return self
 
     @property
@@ -585,15 +561,22 @@ class CompositeBasisMixin:
     (AdditiveBasis and MultiplicativeBasis).
     """
 
+    _shallow_copy: bool = False
+
     def __init__(self, basis1: Basis, basis2: Basis, label: Optional[str] = None):
-        # deep copy to avoid changes directly to the 1d basis to be reflected
-        # in the composite basis.
         # This step is slow if you add a very large number of bases
         self._basis1 = None
         self._basis2 = None
+        # deep copy to avoid changes directly to the 1d basis to be reflected
+        # in the composite basis.
 
-        self.basis1 = copy.deepcopy(basis1)
-        self.basis2 = copy.deepcopy(basis2)
+        if not self.__class__._shallow_copy:
+            self.basis1 = copy.deepcopy(basis1)
+            self.basis2 = copy.deepcopy(basis2)
+        else:
+            # skip checks and shallow copy
+            self._basis1 = basis1
+            self._basis2 = basis2
 
         # set parents
         self.basis1._parent = self
@@ -603,6 +586,11 @@ class CompositeBasisMixin:
         self._label = None
         # use setter to check & set provided label
         self.label = label
+
+        # number of input arrays that the basis receives
+        self._n_input_dimensionality = infer_input_dimensionality(
+            basis1
+        ) + infer_input_dimensionality(basis2)
 
     @property
     def basis1(self):
@@ -683,7 +671,7 @@ class CompositeBasisMixin:
 
     def _input_shape_update(self):
         # if all bases where set, then set input for composition.
-        set_bases = [s is not None for s in self.input_shape]
+        set_bases = (s is not None for s in self.input_shape)
 
         if all(set_bases):
             # pass down the input shapes
@@ -717,17 +705,8 @@ class CompositeBasisMixin:
     def input_shape(self):
         basis1 = getattr(self, "_basis1", None)
         basis2 = getattr(self, "_basis2", None)
-        if basis1 is None and basis2 is not None:
-            components = (
-                basis2._iterate_over_components()
-                if hasattr(basis2, "_iterate_over_components")
-                else [basis2]
-            )
-            return [
-                None,
-                *(getattr(bas2, "input_shape", None) for bas2 in components),
-            ]
-        elif basis2 is None and basis1 is not None:
+        # happens at initialization
+        if basis2 is None and basis1 is not None:
             components = (
                 basis1._iterate_over_components()
                 if hasattr(basis1, "_iterate_over_components")
@@ -737,8 +716,6 @@ class CompositeBasisMixin:
                 *(getattr(bas1, "input_shape", None) for bas1 in components),
                 None,
             ]
-        elif basis1 is None and basis2 is None:
-            return [None, None]
         components1 = (
             basis1._iterate_over_components()
             if hasattr(basis1, "_iterate_over_components")
@@ -818,15 +795,6 @@ class CompositeBasisMixin:
         self.basis1._set_input_independent_states()
         self.basis2._set_input_independent_states()
 
-    def _check_input_shape_consistency(self, *xi: NDArray):
-        """Check the input shape consistency for all basis elements."""
-        self.basis1._check_input_shape_consistency(
-            *xi[: self.basis1._n_input_dimensionality]
-        )
-        self.basis2._check_input_shape_consistency(
-            *xi[self.basis1._n_input_dimensionality :]
-        )
-
     def _iterate_over_components(self):
         """Return a generator that iterates over all basis components.
 
@@ -852,6 +820,16 @@ class CompositeBasisMixin:
             components2,
         )
 
+    @contextmanager
+    def _set_shallow_copy(self, value):
+        """Context manager for setting the shallow copy flag in a thread safe way."""
+        old_value = self.__class__._shallow_copy
+        self.__class__._shallow_copy = value
+        try:
+            yield
+        finally:
+            self.__class__._shallow_copy = old_value
+
     @set_input_shape_state(states=("_input_shape_product", "_label"))
     def __sklearn_clone__(self) -> Basis:
         """Clone the basis while preserving attributes related to input shapes.
@@ -861,14 +839,21 @@ class CompositeBasisMixin:
         as in the regular sklearn clone would drop these attributes, rendering
         cross-validation unusable.
         The method also handles recursive cloning for composite basis structures.
-        """
-        # clone recursively
-        basis1 = self.basis1.__sklearn_clone__()
-        basis2 = self.basis2.__sklearn_clone__()
-        klass = self.__class__(basis1, basis2)
 
-        for attr_name in ["_input_shape_product"]:
-            setattr(klass, attr_name, getattr(self, attr_name))
+        Notes
+        -----
+        The ``_shallow_copy`` attribute is set to True in the context, forcing a shallow copy, at
+        before the klass definition, and reset to False after cloning.
+        """
+
+        with self._set_shallow_copy(True):
+            # clone recursively
+            basis1 = self.basis1.__sklearn_clone__()
+            basis2 = self.basis2.__sklearn_clone__()
+
+            # shallow copy init
+            klass = self.__class__(basis1, basis2)
+
         return klass
 
     def set_input_shape(self, *xi: int | tuple[int, ...] | NDArray) -> Basis:

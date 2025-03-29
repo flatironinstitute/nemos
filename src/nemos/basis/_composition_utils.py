@@ -8,6 +8,8 @@ with no to minimal re
 import re
 from typing import TYPE_CHECKING
 
+from .._inspect_utils.inspect_utils import count_positional_and_var_args
+
 if TYPE_CHECKING:
     from ._basis import Basis
     from ._basis_mixin import AtomicBasisMixin, CompositeBasisMixin
@@ -33,20 +35,21 @@ __PUBLIC_BASES__ = [
 ]
 
 
+def _iterate_over_components(basis: "Basis"):
+    components = (
+        basis._iterate_over_components()
+        if hasattr(basis, "_iterate_over_components")
+        else [basis]
+    )
+    yield from components
+
+
 def _get_root(bas: "AtomicBasisMixin | CompositeBasisMixin"):
     """Get the basis root"""
     parent = bas
     while hasattr(parent, "_parent") and parent._parent is not None:
         parent = parent._parent
     return parent
-
-
-def _call_parent_method(bas: "AtomicBasisMixin", method: str, *args, **kwargs):
-    """Call a parent's basis method, if available."""
-    parent = getattr(bas, "_parent", None)
-    if parent is not None:
-        method = getattr(parent, method, None)
-        return method(*args, **kwargs)
 
 
 def _has_default_label(bas: "Basis"):
@@ -79,12 +82,7 @@ def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin
     bas_id = 0
     # if root is one of our bases it will have the iteration method, if custom from user
     # I assume it is atomic
-    components = (
-        root._iterate_over_components()
-        if hasattr(root, "_iterate_over_components")
-        else [root]
-    )
-    for comp_bas in components:
+    for comp_bas in _iterate_over_components(root):
         if re.match(pattern, comp_bas._label):
             comp_bas._label = f"{cls_name}_{bas_id}" if bas_id else cls_name
             bas_id += 1
@@ -93,12 +91,7 @@ def _recompute_class_default_labels(bas: "AtomicBasisMixin | CompositeBasisMixin
 def _recompute_all_default_labels(root: "Basis") -> "Basis":
     """Recompute default all labels."""
     updated = []
-    components = (
-        root._iterate_over_components()
-        if hasattr(root, "_iterate_over_components")
-        else [root]
-    )
-    for bas in components:
+    for bas in _iterate_over_components(root):
         if _has_default_label(bas) and bas.__class__.__name__ not in updated:
             _recompute_class_default_labels(bas)
             updated.append(bas.__class__.__name__)
@@ -126,12 +119,7 @@ def _update_label_from_root(
     current_id = int(match.group(1)[1:]) if match.group(1) else 0
     # subtract one to the ID of any other default label with ID > current_id
     root = _get_root(bas)
-    components = (
-        root._iterate_over_components()
-        if hasattr(root, "_iterate_over_components")
-        else [root]
-    )
-    for bas in components:
+    for bas in _iterate_over_components(root):
         match = re.match(pattern, bas._label)
         if match:
             bas_id = int(match.group(1)[1:]) if match.group(1) else 0
@@ -209,3 +197,12 @@ def _atomic_basis_label_setter_logic(
         )
         bas._label = new_label
     return
+
+
+def infer_input_dimensionality(bas: "Basis") -> int:
+    n_input_dim = getattr(bas, "_n_input_dimensionality", None)
+    if n_input_dim is None:
+        # infer from compute_features (facilitate custom basis compatibility).
+        # assume compute_features is always implemented.
+        n_input_dim, _ = count_positional_and_var_args(bas.compute_features)
+    return n_input_dim
