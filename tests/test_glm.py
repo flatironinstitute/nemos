@@ -121,9 +121,15 @@ class TestGLM:
         Test initialization with different regularizer types.
         Test that an error is raised if a non-compatible regularizer is passed.
         """
-        glm_class = request.getfixturevalue(glm_class_type)
-        with expectation:
-            glm_class(regularizer=regularizer, regularizer_strength=1)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=UserWarning,
+                message="Unused parameter `regularizer_strength`.*",
+            )
+            glm_class = request.getfixturevalue(glm_class_type)
+            with expectation:
+                glm_class(regularizer=regularizer, regularizer_strength=1)
 
     @pytest.mark.parametrize(
         "observation, expectation",
