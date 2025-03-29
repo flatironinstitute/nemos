@@ -5,8 +5,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import scipy.stats as sts
 import scipy as sp
+import scipy.stats as sts
 import statsmodels.api as sm
 from numba import njit
 

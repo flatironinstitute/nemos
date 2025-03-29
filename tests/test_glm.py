@@ -10,7 +10,7 @@ import pytest
 import sklearn
 import statsmodels.api as sm
 from pynapple import Tsd, TsdFrame
-from sklearn.linear_model import GammaRegressor, PoissonRegressor, LogisticRegression
+from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
 
 import nemos as nmo
