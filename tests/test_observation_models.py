@@ -23,7 +23,7 @@ def gamma_observations():
 
 
 @pytest.mark.parametrize(
-    "obs_mode_string, expectation",
+    "obs_model_string, expectation",
     [
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
@@ -34,13 +34,13 @@ def gamma_observations():
     ],
 )
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_glm_instantiation_from_string_at_init(obs_mode_string, glm_class, expectation):
+def test_glm_instantiation_from_string_at_init(obs_model_string, glm_class, expectation):
     with expectation:
-        glm_class(observation_model=obs_mode_string)
+        glm_class(observation_model=obs_model_string)
 
 
 @pytest.mark.parametrize(
-    "obs_mode_string, expectation",
+    "obs_model_string, expectation",
     [
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
@@ -51,19 +51,19 @@ def test_glm_instantiation_from_string_at_init(obs_mode_string, glm_class, expec
     ],
 )
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_glm_setter_observation_model(obs_mode_string, glm_class, expectation):
-    if obs_mode_string == "Gamma":
+def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
+    if obs_model_string == "Gamma":
         obs = nmo.observation_models.PoissonObservations()
     else:
         obs = nmo.observation_models.GammaObservations()
     model = glm_class(observation_model=obs)
     with expectation:
-        model.observation_model = obs_mode_string
-    if obs_mode_string == "Gamma":
+        model.observation_model = obs_model_string
+    if obs_model_string == "Gamma":
         assert isinstance(
             model.observation_model, nmo.observation_models.GammaObservations
         )
-    elif obs_mode_string == "Poisson":
+    elif obs_model_string == "Poisson":
         assert isinstance(
             model.observation_model, nmo.observation_models.PoissonObservations
         )
