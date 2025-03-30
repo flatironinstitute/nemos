@@ -14,8 +14,12 @@ def instantiate_observation_model(observation_model: str):
 
     Returns
     -------
-        The instantiated observation model.
+        The observation model instance with default parameters.
 
+    Raises
+    ------
+    ValueError
+        If the `observation_model` provided does not match to any available observation models.
     """
     if observation_model == "Poisson":
         return PoissonObservations()
