@@ -14,6 +14,7 @@ from numpy.typing import ArrayLike
 
 from . import observation_models as obs
 from . import tree_utils, validation
+from ._observation_model_builder import instantiate_observation_model
 from .base_regressor import BaseRegressor
 from .exceptions import NotFittedError
 from .initialize_regressor import initialize_intercept_matching_mean_rate
@@ -167,7 +168,9 @@ class GLM(BaseRegressor):
 
     def __init__(
         self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
+        # With python 3.11 Literal[*AVAILABLE_OBSERVATION_MODELS] will be allowed.
+        # Replace this manual list after dropping support for 3.10?
+        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,
@@ -196,6 +199,8 @@ class GLM(BaseRegressor):
 
     @observation_model.setter
     def observation_model(self, observation: obs.Observations):
+        if isinstance(observation, str):
+            observation = instantiate_observation_model(observation)
         # check that the model has the required attributes
         # and that the attribute can be called
         obs.check_observation_model(observation)
@@ -1283,7 +1288,7 @@ class PopulationGLM(GLM):
 
     def __init__(
         self,
-        observation_model: obs.Observations = obs.PoissonObservations(),
+        observation_model: obs.Observations | Literal["Poisson", "Gamma"] = "Poisson",
         regularizer: Union[str, Regularizer] = "UnRegularized",
         regularizer_strength: Optional[float] = None,
         solver_name: str = None,

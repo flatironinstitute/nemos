@@ -22,6 +22,53 @@ def gamma_observations():
     return nmo.observation_models.GammaObservations
 
 
+@pytest.mark.parametrize(
+    "obs_mode_string, expectation",
+    [
+        ("Poisson", does_not_raise()),
+        ("Gamma", does_not_raise()),
+        (
+            "invalid",
+            pytest.raises(ValueError, match="Unknown observation model: invalid"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_glm_instantiation_from_string_at_init(obs_mode_string, glm_class, expectation):
+    with expectation:
+        glm_class(observation_model=obs_mode_string)
+
+
+@pytest.mark.parametrize(
+    "obs_mode_string, expectation",
+    [
+        ("Poisson", does_not_raise()),
+        ("Gamma", does_not_raise()),
+        (
+            "invalid",
+            pytest.raises(ValueError, match="Unknown observation model: invalid"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
+def test_glm_setter_observation_model(obs_mode_string, glm_class, expectation):
+    if obs_mode_string == "Gamma":
+        obs = nmo.observation_models.PoissonObservations()
+    else:
+        obs = nmo.observation_models.GammaObservations()
+    model = glm_class(observation_model=obs)
+    with expectation:
+        model.observation_model = obs_mode_string
+    if obs_mode_string == "Gamma":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.GammaObservations
+        )
+    elif obs_mode_string == "Poisson":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.PoissonObservations
+        )
+
+
 class TestPoissonObservations:
     @pytest.mark.parametrize("link_function", [jnp.exp, jax.nn.softplus, 1])
     def test_initialization_link_is_callable(self, link_function, poisson_observations):
