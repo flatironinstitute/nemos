@@ -970,10 +970,8 @@ overfitting and so, while the difference is small here, it's possible that
 including the extra parameters has made us more sensitive to noise. To properly
 investigate whether that's the case, one should split the dataset into test and
 train sets, training the model on one subset of the data and testing it on
-another to test the model's generalizability. We'll see a simple version of this
-in the [next notebook](./head_direction.md), and a more streamlined version,
-using `scikit-learn`'s pipelining and cross-validation machinery, will be shown
-in the [final notebook](./place_cells.md).
+another to test the model's generalizability. You can find a simple version of
+this in the [head direction tutorial](head-direction-tutorial).
 
 ### Finishing up
 
