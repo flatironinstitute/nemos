@@ -600,7 +600,7 @@ fig = doc_plots.current_injection_plot(current, spikes, firing_rate,
                                  # plot the predicted firing rate that has
                                  # been smoothed the same way as the
                                  # smoothed spike train
-                                 predicted_firing_rate=smooth_predicted_fr)
+                                 predicted_firing_rates=smooth_predicted_fr)
 ```
 
 ```{code-cell} ipython3
@@ -903,7 +903,7 @@ history_pred_fr = history_model.predict(current_history)
 history_pred_fr = history_pred_fr / bin_size
 smooth_history_pred_fr = history_pred_fr.dropna().smooth(.05, size_factor=20)
 doc_plots.current_injection_plot(current, spikes, firing_rate,
-                                 smooth_history_pred_fr, smooth_predicted_fr)
+                                 [smooth_history_pred_fr, smooth_predicted_fr])
 ```
 
 We can see that there are only some small changes here. Our new model maintains the

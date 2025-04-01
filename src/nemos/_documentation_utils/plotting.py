@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import jax
 
@@ -197,9 +197,13 @@ def current_injection_plot(
     current: nap.Tsd,
     spikes: nap.TsGroup,
     firing_rate: nap.TsdFrame,
-    predicted_firing_rate: Optional[nap.TsdFrame] = None,
+    predicted_firing_rates: Optional[Union[nap.TsdFrame, List[nap.TsdFrame]]] = None,
 ):
     ex_intervals = current.threshold(0.0).time_support
+
+    # that is, if predicted_firing_rates looks like a pynapple object
+    if predicted_firing_rates and hasattr(predicted_firing_rates, "t"):
+        predicted_firing_rates = [predicted_firing_rates]
 
     # define plotting parameters
     # colormap, color levels and transparency level
@@ -237,12 +241,12 @@ def current_injection_plot(
     # second row subplot: response
     resp_ax = plt.subplot2grid((4, 3), loc=(1, 0), rowspan=1, colspan=3, fig=fig)
     resp_ax.plot(firing_rate, color="k", label="Observed firing rate")
-    if predicted_firing_rate:
-        if len(predicted_firing_rate) > 1:
+    if predicted_firing_rates:
+        if len(predicted_firing_rates) > 1:
             lbls = [" (current history)", " (instantaneous only)"]
         else:
             lbls = [""]
-        for pred_fr, style, lbl in zip(predicted_firing_rate, ["-", "--"], lbls):
+        for pred_fr, style, lbl in zip(predicted_firing_rates, ["-", "--"], lbls):
             resp_ax.plot(
                 pred_fr,
                 linestyle=style,
@@ -280,8 +284,8 @@ def current_injection_plot(
         ax = plt.subplot2grid((4, 3), loc=(2, i), rowspan=1, colspan=1, fig=fig)
         ax.plot(firing_rate.restrict(interval), color="k")
         ax.plot(spikes.restrict(interval).to_tsd([-1.5]), "|", color="k", ms=10)
-        if predicted_firing_rate:
-            for pred_fr, style in zip(predicted_firing_rate, ["-", "--"]):
+        if predicted_firing_rates:
+            for pred_fr, style in zip(predicted_firing_rates, ["-", "--"]):
                 ax.plot(pred_fr.restrict(interval), linestyle=style, color="tomato")
         else:
             ax.set_ylim(ylim)
