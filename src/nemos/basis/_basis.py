@@ -4,7 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Any, Callable, Generator, List, Optional, Tuple, Union
+from typing import Any, Callable, Generator, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray

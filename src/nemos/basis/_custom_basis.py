@@ -187,8 +187,6 @@ class CustomBasis(BasisMixin, Base):
         self._n_input_dimensionality = infer_input_dimensionality(self)
         self._n_basis_funcs = len(self.funcs)
 
-
-
         # store args and kwargs
         basis_kwargs = basis_kwargs if basis_kwargs is not None else {}
         sig = inspect.signature(apply_f_vectorized)
@@ -216,7 +214,9 @@ class CustomBasis(BasisMixin, Base):
 
     @funcs.setter
     def funcs(self, val: Iterable[Callable[[NDArray, ...], NDArray]]):
-        val = FunctionList([support_pynapple()(v) if self._pynapple_support else v for v in val])
+        val = FunctionList(
+            [support_pynapple()(v) if self._pynapple_support else v for v in val]
+        )
 
         if not all(isinstance(f, Callable) for f in val):
             raise ValueError("User must provide an iterable of callable.")
