@@ -593,3 +593,15 @@ def _get_terminal_size():
         cols, rows = shutil.get_terminal_size()
 
     return cols, rows
+
+
+class NamedFunction:
+    def __init__(self, func, name=None):
+        self.func = func
+        self.name = name or func.__name__
+
+    def __call__(self, *args, **kwargs):
+        return self.func(*args, **kwargs)
+
+    def __repr__(self):
+        return self.name

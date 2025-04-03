@@ -160,14 +160,14 @@ class GLM(BaseRegressor):
     >>> # define a Gamma GLM providing a string
     >>> nmo.glm.GLM(observation_model="Gamma")
     GLM(
-        observation_model=GammaObservations(inverse_link_function=<lambda>),
+        observation_model=GammaObservations(inverse_link_function=1/x),
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
     >>> # or equivalently, passing the observation model object
     >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
     GLM(
-        observation_model=GammaObservations(inverse_link_function=<lambda>),
+        observation_model=GammaObservations(inverse_link_function=1/x),
         regularizer=UnRegularized(),
         solver_name='GradientDescent'
     )
