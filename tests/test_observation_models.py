@@ -54,6 +54,7 @@ def test_glm_instantiation_from_string_at_init(
 )
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
 def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
+    """Test that the observation model can be set after the init providing the string."""
     if obs_model_string == "Gamma":
         obs = nmo.observation_models.PoissonObservations()
     else:
