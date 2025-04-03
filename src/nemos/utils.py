@@ -596,7 +596,7 @@ def _get_terminal_size():
 
 
 class NamedFunction:
-    def __init__(self, func, name=None):
+    def __init__(self, func: Callable, name: Optional[str]=None):
         self.func = func
         self.name = name or func.__name__
 
