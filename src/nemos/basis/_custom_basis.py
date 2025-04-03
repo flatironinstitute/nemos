@@ -68,10 +68,15 @@ class FunctionList:
     def __iter__(self):
         return iter(self.funcs_)
 
+    @staticmethod
+    def _unwrap(func):
+        return func.__wrapped__ if hasattr(func, "__wrapped__") else func
+
     def __repr__(self):
-        if len(self.funcs_) <= 2:
-            return simplify_func_repr(repr(self.funcs_))
-        return f"{simplify_func_repr(repr(self.funcs_[0]))}, ..., {simplify_func_repr(repr(self.funcs_[-1]))}"
+        unwrap = [self._unwrap(f) for f in self.funcs_]
+        if len(unwrap) <= 2:
+            return simplify_func_repr(repr(unwrap))
+        return f"{simplify_func_repr(repr(unwrap[0]))}, ..., {simplify_func_repr(repr(unwrap[-1]))}"
 
 
 def apply_f_vectorized(
