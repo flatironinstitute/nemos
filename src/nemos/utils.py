@@ -593,3 +593,7 @@ def _get_terminal_size():
         cols, rows = shutil.get_terminal_size()
 
     return cols, rows
+
+
+def one_over_x(x):
+    return jnp.power(x, -1)
