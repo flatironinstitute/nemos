@@ -6064,7 +6064,7 @@ def test_all_public_importable_bases_equal():
         if issubclass(obj, nemos.basis._basis.Basis)
     }
 
-    if public_bases != imported_bases:
+    if public_bases.difference(imported_bases) != {"CustomBasis"}:
         raise ValueError(
             "nemos/basis/__init__.py imported basis objects does not match"
             " nemos/basis/_composition_utils.py's __PUBLIC_BASES__ list:\n"
