@@ -1,4 +1,3 @@
-import itertools
 import operator
 import pickle
 from contextlib import nullcontext as does_not_raise
@@ -21,7 +20,7 @@ from nemos.basis import (
     MultiplicativeBasis,
     TransformerBasis,
 )
-from nemos.basis._basis import generate_basis_label_pair
+from nemos.basis._composition_utils import generate_basis_label_pair
 
 
 @pytest.mark.parametrize(
