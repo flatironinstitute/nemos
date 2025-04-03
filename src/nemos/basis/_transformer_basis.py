@@ -203,7 +203,9 @@ class TransformerBasis:
         """
         self._check_initialized(self.basis)
         self._check_input(X, y)
-        self.basis.setup_basis(*self._unpack_inputs(X))
+        setup_basis = getattr(self.basis, "setup_basis", None)
+        if setup_basis:
+            setup_basis(*self._unpack_inputs(X))
         return self
 
     def transform(self, X: FeatureMatrix, y=None) -> FeatureMatrix:
