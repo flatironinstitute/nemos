@@ -179,8 +179,8 @@ def test_example_docstrings_add(
         5, basis_cls, basis_class_specific_params, window_size=10
     )
     method = getattr(basis_instance, method_name)
-    doc = method.__doc__
-    examp_delim = "\n        Examples\n        --------"
+    doc = inspect.getdoc(method)  # strips uniform indentation and ensures full doc
+    examp_delim = "\nExamples\n--------"
 
     assert examp_delim in doc
     doc_components = doc.split(examp_delim)

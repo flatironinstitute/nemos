@@ -406,10 +406,6 @@ class AtomicBasisMixin(BasisMixin):
             return self.n_basis_funcs * self._input_shape_product[0]
         return None
 
-    def _generate_label(self) -> str:
-        """Return label"""
-        return self._label
-
     @property
     def label(self) -> str:
         """Label for the basis."""
@@ -950,6 +946,37 @@ class CompositeBasisMixin(BasisMixin):
                     f"Cannot set basis label '{label}' for basis of type {type(self)}."
                 )
             self._label = label
+
+    @property
+    def input_shape(self):
+        basis1 = getattr(self, "_basis1", None)
+        basis2 = getattr(self, "_basis2", None)
+        # happens at initialization
+        if basis2 is None and basis1 is not None:
+            components = (
+                basis1._iterate_over_components()
+                if hasattr(basis1, "_iterate_over_components")
+                else [basis1]
+            )
+            return [
+                *(getattr(bas1, "input_shape", None) for bas1 in components),
+                None,
+            ]
+        components1 = (
+            basis1._iterate_over_components()
+            if hasattr(basis1, "_iterate_over_components")
+            else [basis1]
+        )
+        components2 = (
+            basis2._iterate_over_components()
+            if hasattr(basis2, "_iterate_over_components")
+            else [basis2]
+        )
+        shapes = [
+            *(getattr(bas1, "input_shape", None) for bas1 in components1),
+            *(getattr(bas2, "input_shape", None) for bas2 in components2),
+        ]
+        return shapes
 
     @property
     def _input_shape_(self):

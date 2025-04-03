@@ -56,6 +56,7 @@ def _get_root(bas: "BasisMixin"):
     return parent
 
 
+<<<<<<< HEAD
 def _call_parent_method(bas: "AtomicBasisMixin", method: str, *args, **kwargs):
     """Call a parent's basis method, if available."""
     parent = getattr(bas, "_parent", None)

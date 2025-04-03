@@ -4,7 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Callable, Generator, Optional, Tuple, Union
+from typing import Any, Callable, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -23,6 +23,33 @@ from ._composition_utils import (
     multiply_basis_by_integer,
     raise_basis_to_power,
 )
+
+
+def is_transformer(bas: Any):
+    """Check if it conforms to transformer API."""
+    return hasattr(bas, "basis") and hasattr(bas, "fit_transform")
+
+
+def promote_to_transformer(method):
+    """Apply operations to basis within transformer and transform output,"""
+
+    @wraps(method)
+    def wrapper(*args, **kwargs):
+        # if it looks like a transformer, pull out basis
+        args_bas = (b.basis if is_transformer(b) else b for b in args)
+        kwargs_bas = {k: b.basis if is_transformer(b) else b for k, b in kwargs.items()}
+        out = method(*args_bas, **kwargs_bas)
+        any_transformer = any(
+            (
+                *(is_transformer(a) for a in args),
+                *(is_transformer(b) for b in kwargs.values()),
+            )
+        )
+        if any_transformer and hasattr(out, "to_transformer"):
+            return out.to_transformer()
+        return out
+
+    return wrapper
 
 
 def add_docstring(method_name, cls):
@@ -423,6 +450,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
                 "Sample size mismatch. Input elements have inconsistent sample sizes."
             )
 
+    @promote_to_transformer
     def __add__(self, other: BasisMixin) -> AdditiveBasis:
         """
         Add two Basis objects together.
@@ -439,10 +467,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         """
         return AdditiveBasis(self, other)
 
+    @promote_to_transformer
     def __rmul__(self, other: BasisMixin | int):
         return self.__mul__(other)
 
-    def __mul__(self, other: BasisMixin | int) -> BasisMixin:
+    @promote_to_transformer
+    def __mul__(self, other: BasisMixin | int) -> Basis:
         """
         Multiply two Basis objects together.
 
@@ -465,6 +495,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             )
         return MultiplicativeBasis(self, other)
 
+    @promote_to_transformer
     def __pow__(self, exponent: int) -> BasisMixin:
         """Exponentiation of a Basis object.
 
