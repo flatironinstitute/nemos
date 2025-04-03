@@ -595,13 +595,5 @@ def _get_terminal_size():
     return cols, rows
 
 
-class NamedFunction:
-    def __init__(self, func: Callable, name: Optional[str]=None):
-        self.func = func
-        self.name = name or func.__name__
-
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
-
-    def __repr__(self):
-        return self.name
+def one_over_x(x):
+    return jnp.power(x, -1)

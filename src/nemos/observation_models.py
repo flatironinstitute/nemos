@@ -662,7 +662,7 @@ class GammaObservations(Observations):
 
     def __init__(
         self,
-        inverse_link_function=utils.NamedFunction(lambda x: jnp.power(x, -1), "1/x"),
+        inverse_link_function=utils.one_over_x,
     ):
         super().__init__(inverse_link_function=inverse_link_function)
         self.scale = 1.0

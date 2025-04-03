@@ -635,22 +635,3 @@ def test_shape_param_exclusion():
 
     obj = Example(a=np.arange(3), b=1, c=None)
     assert utils.format_repr(obj) == "Example(b=1, d=1)"
-
-
-def test_named_func_repr():
-    f = utils.NamedFunction(lambda x: x, "identity")
-    assert repr(f) == "identity"
-
-
-def test_named_func_call():
-    f = utils.NamedFunction(lambda x: x, "identity")
-    x = np.random.rand(10, 2)
-    assert np.all(f(x) == x)
-
-
-def test_named_func_jax_diff():
-    f = utils.NamedFunction(lambda x: jnp.exp(2 * x).sum(), "exp")
-    # this is lazy, must try to compute to get the error
-    fgrad = jax.grad(f)
-    x = np.linspace(0, 1, 4)
-    assert np.all(fgrad(x) == 2 * jnp.exp(2 * x))
