@@ -4,7 +4,7 @@ from __future__ import annotations
 import abc
 import copy
 from functools import wraps
-from typing import Any, Callable, Generator, Optional, Tuple, Union
+from typing import Callable, Generator, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -21,9 +21,10 @@ from ._composition_utils import (
     infer_input_dimensionality,
     is_basis_like,
     multiply_basis_by_integer,
-    raise_basis_to_power,
     promote_to_transformer,
+    raise_basis_to_power,
 )
+
 
 def add_docstring(method_name, cls):
     """Prepend super-class docstrings."""

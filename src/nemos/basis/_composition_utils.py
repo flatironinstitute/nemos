@@ -4,9 +4,10 @@ Utility function for composite basis.
 Collection of functions that transverse the composite basis tree
 with no to minimal re
 """
-from functools import wraps
+
 import re
 from copy import deepcopy
+from functools import wraps
 from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np

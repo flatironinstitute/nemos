@@ -17,16 +17,17 @@ from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
-from ._basis_mixin import BasisMixin, set_input_shape_state, BasisTransformerMixin
+from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
 from ._composition_utils import (
     _check_valid_shape_tuple,
     count_positional_and_var_args,
     infer_input_dimensionality,
     is_basis_like,
     multiply_basis_by_integer,
-    raise_basis_to_power,
     promote_to_transformer,
+    raise_basis_to_power,
 )
+
 
 def simplify_func_repr(string: str):
     """

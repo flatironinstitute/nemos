@@ -21,6 +21,7 @@ from nemos.basis._basis import (
     MultiplicativeBasis,
     add_docstring,
 )
+from nemos.basis._composition_utils import generate_basis_label_pair
 from nemos.basis._decaying_exponential import OrthExponentialBasis
 from nemos.basis._identity import HistoryBasis, IdentityBasis
 from nemos.basis._raised_cosine_basis import (
@@ -29,7 +30,6 @@ from nemos.basis._raised_cosine_basis import (
 )
 from nemos.basis._spline_basis import BSplineBasis, CyclicBSplineBasis, MSplineBasis
 from nemos.utils import pynapple_concatenate_numpy
-from nemos.basis._composition_utils import generate_basis_label_pair
 
 
 def instantiate_atomic_basis(cls, **kwargs):
