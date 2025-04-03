@@ -34,7 +34,9 @@ def gamma_observations():
     ],
 )
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
-def test_glm_instantiation_from_string_at_init(obs_model_string, glm_class, expectation):
+def test_glm_instantiation_from_string_at_init(
+    obs_model_string, glm_class, expectation
+):
     with expectation:
         glm_class(observation_model=obs_model_string)
 

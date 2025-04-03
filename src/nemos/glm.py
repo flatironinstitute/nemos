@@ -157,6 +157,20 @@ class GLM(BaseRegressor):
     Regularizer type:  <class 'nemos.regularizer.UnRegularized'>
     >>> print("Observation model: ", type(model.observation_model))
     Observation model:  <class 'nemos.observation_models.PoissonObservations'>
+    >>> # define a Gamma GLM providing a string
+    >>> nmo.glm.GLM(observation_model="Gamma")
+    GLM(
+        observation_model=GammaObservations(inverse_link_function=<lambda>),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
+    >>> # or equivalently, passing the observation model object
+    >>> nmo.glm.GLM(observation_model=nmo.observation_models.GammaObservations())
+    GLM(
+        observation_model=GammaObservations(inverse_link_function=<lambda>),
+        regularizer=UnRegularized(),
+        solver_name='GradientDescent'
+    )
     >>> # define GLM model of PoissonObservations model with soft-plus NL
     >>> observation_models = nmo.observation_models.PoissonObservations(jax.nn.softplus)
     >>> model = nmo.glm.GLM(observation_model=observation_models, solver_name="LBFGS")
