@@ -17,7 +17,7 @@ from ..base_class import Base
 from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
-from ._basis_mixin import BasisMixin, set_input_shape_state
+from ._basis_mixin import BasisMixin, set_input_shape_state, BasisTransformerMixin
 from ._composition_utils import (
     _check_valid_shape_tuple,
     count_positional_and_var_args,
@@ -25,8 +25,8 @@ from ._composition_utils import (
     is_basis_like,
     multiply_basis_by_integer,
     raise_basis_to_power,
+    promote_to_transformer,
 )
-
 
 def simplify_func_repr(string: str):
     """
@@ -123,7 +123,7 @@ def check_valid_shape(shape):
         raise ValueError("`output_shape` must be an iterable of integers.")
 
 
-class CustomBasis(BasisMixin, Base):
+class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     """
     Custom basis class.
 
@@ -316,12 +316,15 @@ class CustomBasis(BasisMixin, Base):
         )
         return array
 
+    @promote_to_transformer
     def __add__(self, other: BasisMixin) -> AdditiveBasis:
         return AdditiveBasis(self, other)
 
+    @promote_to_transformer
     def __rmul__(self, other: BasisMixin | int) -> BasisMixin:
         return self.__mul__(other)
 
+    @promote_to_transformer
     def __mul__(self, other: BasisMixin | int) -> BasisMixin:
         if isinstance(other, int):
             return multiply_basis_by_integer(self, other)
@@ -333,6 +336,7 @@ class CustomBasis(BasisMixin, Base):
 
         return MultiplicativeBasis(self, other)
 
+    @promote_to_transformer
     def __pow__(self, exponent) -> BasisMixin:
         return raise_basis_to_power(self, exponent)
 

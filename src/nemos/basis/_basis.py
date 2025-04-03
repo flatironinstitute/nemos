@@ -22,35 +22,8 @@ from ._composition_utils import (
     is_basis_like,
     multiply_basis_by_integer,
     raise_basis_to_power,
+    promote_to_transformer,
 )
-
-
-def is_transformer(bas: Any):
-    """Check if it conforms to transformer API."""
-    return hasattr(bas, "basis") and hasattr(bas, "fit_transform")
-
-
-def promote_to_transformer(method):
-    """Apply operations to basis within transformer and transform output,"""
-
-    @wraps(method)
-    def wrapper(*args, **kwargs):
-        # if it looks like a transformer, pull out basis
-        args_bas = (b.basis if is_transformer(b) else b for b in args)
-        kwargs_bas = {k: b.basis if is_transformer(b) else b for k, b in kwargs.items()}
-        out = method(*args_bas, **kwargs_bas)
-        any_transformer = any(
-            (
-                *(is_transformer(a) for a in args),
-                *(is_transformer(b) for b in kwargs.values()),
-            )
-        )
-        if any_transformer and hasattr(out, "to_transformer"):
-            return out.to_transformer()
-        return out
-
-    return wrapper
-
 
 def add_docstring(method_name, cls):
     """Prepend super-class docstrings."""

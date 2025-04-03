@@ -4,7 +4,7 @@ Utility function for composite basis.
 Collection of functions that transverse the composite basis tree
 with no to minimal re
 """
-
+from functools import wraps
 import re
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, List, Tuple
@@ -513,3 +513,30 @@ def raise_basis_to_power(bas: "BasisMixin", exponent: int) -> "BasisMixin":
             mul *= deepcopy(bas)
     _recompute_all_default_labels(mul)
     return mul
+
+
+def is_transformer(bas: Any):
+    """Check if it conforms to transformer API."""
+    return hasattr(bas, "basis") and hasattr(bas, "fit_transform")
+
+
+def promote_to_transformer(method):
+    """Apply operations to basis within transformer and transform output,"""
+
+    @wraps(method)
+    def wrapper(*args, **kwargs):
+        # if it looks like a transformer, pull out basis
+        args_bas = (b.basis if is_transformer(b) else b for b in args)
+        kwargs_bas = {k: b.basis if is_transformer(b) else b for k, b in kwargs.items()}
+        out = method(*args_bas, **kwargs_bas)
+        any_transformer = any(
+            (
+                *(is_transformer(a) for a in args),
+                *(is_transformer(b) for b in kwargs.values()),
+            )
+        )
+        if any_transformer and hasattr(out, "to_transformer"):
+            return out.to_transformer()
+        return out
+
+    return wrapper
