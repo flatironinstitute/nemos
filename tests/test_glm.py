@@ -280,37 +280,37 @@ class TestGLM:
         Fixture to define the expected behavior for test_fit_weights_dimensionality based on the type of GLM class.
         """
         if "population" in glm_class_type:
-            return [
-                pytest.raises(
+            return {
+                0: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-                pytest.raises(
+                1: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-                does_not_raise(),
-                pytest.raises(
+                2: does_not_raise(),
+                3: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-            ]
+            }
         else:
-            return [
-                pytest.raises(
+            return {
+                0: pytest.raises(
                     ValueError,
                     match=r"Inconsistent number of features",
                 ),
-                does_not_raise(),
-                pytest.raises(
+                1: does_not_raise(),
+                2: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-                pytest.raises(
+                3: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-            ]
+            }
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     def test_fit_weights_dimensionality(
@@ -380,90 +380,85 @@ class TestGLM:
         with expectation:
             model.fit(X, y, init_params=(init_w, init_b))
 
-    @pytest.fixture
-    def fit_init_params_type_init_params(self, glm_class_type):
-        """
-        Fixture to define specialized initial parameters for test_init_params_type
-        based on the type of GLM class.
-        """
-        if "population" in glm_class_type:
-            return (
-                [jnp.zeros((5, 3)), jnp.zeros((3,))],
-                [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
-                dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
-                [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
-                [
-                    FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
-                    jnp.zeros((3,)),
-                ],
-                0,
-                {0, 1},
-                [jnp.zeros((1, 5)), ""],
-                ["", jnp.zeros((1,))],
-            )
-        else:
-            return (
+    """
+    Parameterization used by test_fit_init_params_type and test_initialize_solver_init_params_type
+    Contains the expected behavior and separate initial parameters for regular and population GLMs
+    """
+    fit_init_params_type_init_params = (
+        "expectation, init_params_glm, init_params_population_glm",
+        [
+            (
+                does_not_raise(),
                 [jnp.zeros((5,)), jnp.zeros((1,))],
+                [jnp.zeros((5, 3)), jnp.zeros((3,))],
+            ),
+            (
+                pytest.raises(ValueError, match="Params must have length two."),
                 [[jnp.zeros((1, 5)), jnp.zeros((1,))]],
+                [[jnp.zeros((1, 5)), jnp.zeros((3,))]],
+            ),
+            (
+                pytest.raises(KeyError),
                 dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))),
+                dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+            ),
+            (
+                pytest.raises(
+                    TypeError, match=r"X and params\[0\] must be the same type"
+                ),
                 [dict(p1=jnp.zeros((5,)), p2=jnp.zeros((1,))), jnp.zeros((1,))],
+                [dict(p1=jnp.zeros((3, 3)), p2=jnp.zeros((2, 3))), jnp.zeros((3,))],
+            ),
+            (
+                pytest.raises(
+                    TypeError, match=r"X and params\[0\] must be the same type"
+                ),
                 [
                     FeaturePytree(p1=jnp.zeros((5,)), p2=jnp.zeros((5,))),
                     jnp.zeros((1,)),
                 ],
-                0,
+                [
+                    FeaturePytree(p1=jnp.zeros((3, 3)), p2=jnp.zeros((3, 2))),
+                    jnp.zeros((3,)),
+                ],
+            ),
+            (pytest.raises(ValueError, match="Params must have length two."), 0, 0),
+            (
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
                 {0, 1},
+                {0, 1},
+            ),
+            (
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
                 [jnp.zeros((1, 5)), ""],
+                [jnp.zeros((1, 5)), ""],
+            ),
+            (
+                pytest.raises(TypeError, match="Initial parameters must be array-like"),
                 ["", jnp.zeros((1,))],
-            )
-
-    @pytest.mark.parametrize(
-        "init_params_idx, expectation",
-        [
-            (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="Params must have length two.")),
-            (2, pytest.raises(KeyError)),
-            (
-                3,
-                pytest.raises(
-                    TypeError, match=r"X and params\[0\] must be the same type"
-                ),
-            ),
-            (
-                4,
-                pytest.raises(
-                    TypeError, match=r"X and params\[0\] must be the same type"
-                ),
-            ),
-            (5, pytest.raises(ValueError, match="Params must have length two.")),
-            (
-                6,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-            (
-                7,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-            (
-                8,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
+                ["", jnp.zeros((1,))],
             ),
         ],
     )
+
+    @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_fit_init_params_type(
         self,
-        init_params_idx,
-        expectation,
         request,
         glm_class_type,
         model_instantiation_type,
-        fit_init_params_type_init_params,
+        expectation,
+        init_params_glm,
+        init_params_population_glm,
     ):
         """
         Test the `fit` method with various types of initial parameters. Ensure that the provided initial parameters
         are array-like.
         """
-        init_params = fit_init_params_type_init_params[init_params_idx]
+        if "population" in glm_class_type:
+            init_params = init_params_population_glm
+        else:
+            init_params = init_params_glm
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
@@ -497,9 +492,9 @@ class TestGLM:
     @pytest.mark.parametrize(
         "delta_dim, expectation",
         [
-            (-1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+            (-1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
             (0, does_not_raise()),
-            (1, pytest.raises(ValueError, match="y must be ...-dimensional")),
+            (1, pytest.raises(ValueError, match=r"y must be (one|two)-dimensional")),
         ],
     )
     def test_fit_y_dimensionality(
@@ -712,14 +707,14 @@ class TestGLM:
             (
                 -1,
                 pytest.raises(
-                    ValueError, match="y must be ...-dimensional, with shape"
+                    ValueError, match=r"y must be (one|two)-dimensional, with shape"
                 ),
             ),
             (0, does_not_raise()),
             (
                 1,
                 pytest.raises(
-                    ValueError, match="y must be ...-dimensional, with shape"
+                    ValueError, match=r"y must be (one|two)-dimensional, with shape"
                 ),
             ),
         ],
@@ -969,37 +964,37 @@ class TestGLM:
     @pytest.fixture
     def initialize_solver_weights_dimensionality_expectation(self, glm_class_type):
         if "population" in glm_class_type:
-            return (
-                pytest.raises(
+            return {
+                0: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-                pytest.raises(
+                1: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-                does_not_raise(),
-                pytest.raises(
+                2: does_not_raise(),
+                3: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-            )
+            }
         else:
-            return (
-                pytest.raises(
+            return {
+                0: pytest.raises(
                     ValueError,
                     match=r"Inconsistent number of features",
                 ),
-                does_not_raise(),
-                pytest.raises(
+                1: does_not_raise(),
+                2: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-                pytest.raises(
+                3: pytest.raises(
                     ValueError,
                     match=r"params\[0\] must be an array or .* of shape \(n_features",
                 ),
-            )
+            }
 
     @pytest.mark.parametrize("dim_weights", [0, 1, 2, 3])
     def test_initialize_solver_weights_dimensionality(
@@ -1075,50 +1070,15 @@ class TestGLM:
             init_state = model.initialize_state(X, y, params)
             assert init_state.velocity == params
 
-    @pytest.mark.parametrize(
-        "init_params_idx, expectation",
-        [
-            (0, does_not_raise()),
-            (
-                1,
-                pytest.raises(ValueError, match="Params must have length two."),
-            ),
-            (2, pytest.raises(KeyError)),
-            (
-                3,
-                pytest.raises(
-                    TypeError, match=r"X and params\[0\] must be the same type"
-                ),
-            ),
-            (
-                4,
-                pytest.raises(
-                    TypeError, match=r"X and params\[0\] must be the same type"
-                ),
-            ),
-            (5, pytest.raises(ValueError, match="Params must have length two.")),
-            (
-                6,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-            (
-                7,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-            (
-                8,
-                pytest.raises(TypeError, match="Initial parameters must be array-like"),
-            ),
-        ],
-    )
+    @pytest.mark.parametrize(*fit_init_params_type_init_params)
     def test_initialize_solver_init_params_type(
         self,
-        init_params_idx,
-        expectation,
         request,
         glm_class_type,
         model_instantiation_type,
-        fit_init_params_type_init_params,
+        expectation,
+        init_params_glm,
+        init_params_population_glm,
     ):
         """
         Test the `initialize_solver` method with various types of initial parameters.
@@ -1128,7 +1088,10 @@ class TestGLM:
         X, y, model, true_params, firing_rate = request.getfixturevalue(
             model_instantiation_type
         )
-        init_params = fit_init_params_type_init_params[init_params_idx]
+        if "population" in glm_class_type:
+            init_params = init_params_population_glm
+        else:
+            init_params = init_params_glm
         with expectation:
             params = model.initialize_params(X, y, init_params=init_params)
             # check that params are set
@@ -2566,75 +2529,72 @@ class TestPopulationGLM:
         with expectation:
             model.feature_mask = mask
 
-    @pytest.fixture
-    def feature_mask_compatibility_fit_expectation(self, reg_setup):
-        """
-        Fixture to return the expected exceptions for test_feature_mask_compatibility_fit
-        based on the setup of the model inputs.
-        """
-        if "pytree" in reg_setup:
-            return (
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                does_not_raise(),
-                pytest.raises(ValueError, match="Inconsistent number of neurons"),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-            )
-        else:
-            return (
-                does_not_raise(),
-                pytest.raises(ValueError, match="Inconsistent number of features"),
-                pytest.raises(ValueError, match="Inconsistent number of neurons"),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-                pytest.raises(
-                    TypeError, match="feature_mask and X must have the same structure"
-                ),
-            )
-
-    @pytest.mark.parametrize(
-        "mask, expectation_idx",
+    # @pytest.fixture
+    # def feature_mask_compatibility_fit_expectation(self, reg_setup):
+    """
+    Fixture to return the expected exceptions for test_feature_mask_compatibility_fit
+    based on the setup of the model inputs.
+    """
+    feature_mask_compatibility_fit_expectation = (
+        "mask, expectation_np, expectation_pytree",
         [
-            (np.array([0, 1, 1] * 5).reshape(5, 3), 0),
-            (np.array([0, 1, 1] * 4).reshape(4, 3), 1),
-            (np.array([0, 1, 1, 1] * 5).reshape(5, 4), 2),
+            (
+                np.array([0, 1, 1] * 5).reshape(5, 3),
+                does_not_raise(),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                np.array([0, 1, 1] * 4).reshape(4, 3),
+                pytest.raises(ValueError, match="Inconsistent number of features"),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
+            (
+                np.array([0, 1, 1, 1] * 5).reshape(5, 4),
+                pytest.raises(ValueError, match="Inconsistent number of neurons"),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+            ),
             (
                 {"input_1": np.array([0, 1, 0]), "input_2": np.array([1, 0, 1])},
-                3,
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+                does_not_raise(),
             ),
             (
                 {"input_1": np.array([0, 1, 0, 1]), "input_2": np.array([1, 0, 1, 0])},
-                4,
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+                pytest.raises(ValueError, match="Inconsistent number of neurons"),
             ),
             (
                 {"input_1": np.array([0, 1, 0])},
-                5,
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
             ),
             (
                 {"input_1": np.array([0, 1, 0, 1])},
-                6,
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
+                pytest.raises(
+                    TypeError, match="feature_mask and X must have the same structure"
+                ),
             ),
         ],
     )
+
+    @pytest.mark.parametrize(*feature_mask_compatibility_fit_expectation)
     @pytest.mark.parametrize("attr_name", ["fit", "predict", "score"])
     @pytest.mark.parametrize(
         "reg_setup",
@@ -2646,14 +2606,17 @@ class TestPopulationGLM:
     def test_feature_mask_compatibility_fit(
         self,
         mask,
-        expectation_idx,
-        feature_mask_compatibility_fit_expectation,
+        expectation_np,
+        expectation_pytree,
         attr_name,
         request,
         reg_setup,
     ):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
-        expectation = feature_mask_compatibility_fit_expectation[expectation_idx]
+        if "pytree" in reg_setup:
+            expectation = expectation_pytree
+        else:
+            expectation = expectation_np
         model.feature_mask = mask
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
@@ -3001,6 +2964,10 @@ class TestGammaGLM:
         )
         model.observation_model.inverse_link_function = inv_link
         model.fit(X, y)
+        if "population" in glm_type:
+            assert np.all(model.scale_ != 1)
+        else:
+            assert model.scale_ != 1
 
     def test_score_glm(self, inv_link, request, glm_type, model_instantiation):
         """

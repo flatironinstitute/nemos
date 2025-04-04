@@ -1049,7 +1049,7 @@ class BernoulliObservations(Observations):
         observed binary variable.
         """
         nll = self._negative_log_likelihood(y, predicted_rate, aggregate_sample_scores)
-        return -nll  # - aggregate_sample_scores(jax.scipy.special.gammaln(y + 1))
+        return -nll
 
     def sample_generator(
         self,
