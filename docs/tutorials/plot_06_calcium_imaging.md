@@ -234,7 +234,7 @@ X = basis.compute_features(head_direction, Y[:, selected_neurons])
 
 ```{info}
 
-In the absence of regularization, a GLM with an intercept term would be [non identifiable](https://en.wikipedia.org/wiki/Identifiability), since the Cyclic-BSpline always sums to one over the basis functions. You can enforce a full rank by dropping the liearly dependent columns. We provide the [`identifiability_constraint` module](~nemos.identifiability_constraints.apply_identifiability_constraints) to automate the procedure. 
+In the absence of regularization, a GLM with an intercept term would be [non identifiable](https://en.wikipedia.org/wiki/Identifiability), since the Cyclic-BSpline always sums to one over the basis functions. You can enforce a full rank by dropping the liearly dependent columns. We provide the [`identifiability_constraint` module](~nemos.identifiability_constraints.apply_identifiability_constraints) to automate the procedure.
 ```
 
 +++
@@ -349,7 +349,7 @@ if root:
 # if local store in assets
 else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)

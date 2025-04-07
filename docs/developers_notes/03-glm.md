@@ -13,7 +13,7 @@ The [`nemos.glm`](nemos_glm) module currently  offers implementations of two GLM
 
 Our design aligns with the `scikit-learn` API, facilitating seamless integration of our GLM classes with the well-established `scikit-learn` pipeline and its cross-validation tools.
 
-The classes provided here are modular by design offering a standard foundation for any GLM variant. 
+The classes provided here are modular by design offering a standard foundation for any GLM variant.
 
 Instantiating a specific GLM simply requires providing an observation model (Gamma, Poisson, etc.), a regularization strategies (Ridge, Lasso, etc.) and an optimization scheme during initialization. This is done using the [`nemos.observation_models.Observations`](nemos.observation_models.Observations), [`nemos.regularizer.Regularizer`](nemos.regularizer.Regularizer) objects as well as the compatible `jaxopt` solvers, respectively.
 
@@ -88,7 +88,6 @@ When crafting a functional (i.e., concrete) GLM class:
 
 - You **must** inherit from [`GLM`](nemos.glm.GLM) or one of its derivatives.
 - If you inherit directly from  `BaseRegressor`, you **must** implement all the abstract methods, see the [`BaseRegressor` page](02-base_regressor.md)  for more details.
-- If you inherit [`GLM`](nemos.glm.GLM) or any of the other concrete classes directly, there won't be any abstract methods. 
+- If you inherit [`GLM`](nemos.glm.GLM) or any of the other concrete classes directly, there won't be any abstract methods.
 - You **may** embed additional parameter and input checks if required by the specific GLM subclass.
 - You **may** override some of the computations if needed by the model specifications.
-

@@ -74,7 +74,7 @@ pynapple throughout this notebook, as it simplifies handling this type of data
 After we've explored the data some, we'll introduce the Generalized Linear Model
 and how to fit it with NeMoS.
 
-## Learning objectives 
+## Learning objectives
 
 - Learn how to explore spiking data and do basic analyses using pynapple
 - Learn how to structure data for NeMoS
@@ -365,7 +365,7 @@ binning our spikes based on the instantaneous input current and computing the
 firing rate within those bins:
 
 :::{admonition} Tuning curve in `pynapple`
-:class: note 
+:class: note
 
 [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
 :::
@@ -388,14 +388,14 @@ it's definitely not a linear relationship, and it might start decreasing as
 the current gets too large.
 
 So this gives us three interesting phenomena we'd like our model to help
-explain: 
+explain:
 
 - the tuning curve between the firing rate and the current.
 - the firing rate's periodicity.
 - the gradual reduction in firing rate while the current remains on.
 
 
-## NeMoS 
+## NeMoS
 
 ### Preparing data
 
@@ -616,7 +616,7 @@ if root:
 # if local store in assets
 else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)

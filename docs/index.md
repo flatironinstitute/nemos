@@ -23,11 +23,11 @@ For Developers <developers_notes/README>
 # __Neural ModelS__
 
 
-NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/). 
+NeMoS (Neural ModelS) is a statistical modeling framework optimized for systems neuroscience and powered by [JAX](https://jax.readthedocs.io/en/latest/).
 It streamlines the process of defining and selecting models, through a collection of easy-to-use methods for feature design.
 
-The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently 
-focusing on the Generalized Linear Model (GLM). 
+The core of NeMoS includes GPU-accelerated, well-tested implementations of standard statistical models, currently
+focusing on the Generalized Linear Model (GLM).
 
 We provide a **Poisson GLM** for analyzing spike counts, and a **Gamma GLM** for calcium or voltage imaging traces.
 
@@ -117,7 +117,7 @@ Access a detailed description of each module and function, including parameters 
 
 <div style="text-align: center;">
 
-__Learning Resources:__ [<span class="iconify" data-icon="mdi:book-open-variant-outline"></span> Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [<span class="iconify" data-icon="mdi:youtube"></span> Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br> 
+__Learning Resources:__ [<span class="iconify" data-icon="mdi:book-open-variant-outline"></span> Neuromatch Academy's Lessons](https://compneuro.neuromatch.io/tutorials/W1D3_GeneralizedLinearModels/student/W1D3_Tutorial1.html) | [<span class="iconify" data-icon="mdi:youtube"></span> Cosyne 2018 Tutorial](https://www.youtube.com/watch?v=NFeGW5ljUoI&t=424s) <br>
 __Useful Links:__ [<span class="iconify" data-icon="mdi:chat-question"></span> Getting Help](getting_help.md) | [<span class="iconify" data-icon="mdi:alert-circle-outline"></span> Issue Tracker](https://github.com/flatironinstitute/nemos/issues) | [<span class="iconify" data-icon="mdi:order-bool-ascending-variant"></span> Contributing Guidelines](https://github.com/flatironinstitute/nemos/blob/main/CONTRIBUTING.md)
 
 </div>
