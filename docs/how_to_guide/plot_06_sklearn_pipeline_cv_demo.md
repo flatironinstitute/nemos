@@ -249,7 +249,8 @@ Pipelines include parameters from all the steps, as well as that of the pipeline
 pipeline.get_params()
 ```
 
-You can retrieve any paramter of any pipeline step by creating a key starting with the name of the step followed by a double underscore and the name of the parameter: `step_name__parameter_name`.
+You can retrieve any parameter of any pipeline step by creating a key starting with the name of the step followed by a double underscore and the name of the parameter: `step_name__parameter_name`.
+
 
 ```{code-cell} ipython3
 # retrieve the number of basis function from the transformerbasis of the pipeline

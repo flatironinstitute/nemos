@@ -660,7 +660,10 @@ class GammaObservations(Observations):
 
     """
 
-    def __init__(self, inverse_link_function=lambda x: jnp.power(x, -1)):
+    def __init__(
+        self,
+        inverse_link_function=utils.one_over_x,
+    ):
         super().__init__(inverse_link_function=inverse_link_function)
         self.scale = 1.0
 
@@ -890,6 +893,10 @@ def check_observation_model(observation_model):
     ...                     jnp.sum((y_true - y_true.mean()) ** 2))
     ...     def sample_generator(self, key, params, scale=1.):
     ...         return jax.random.bernoulli(key, params)
+    ...     def estimate_scale(self, y, predicted_rate, dof_resid):
+    ...         return 1
+    ...     def log_likelihood(self, params, y_true, aggregate_sample_scores=jnp.mean):
+    ...         return -self._negative_log_likelihood(params, y_true, aggregate_sample_scores)
     >>> model = MyObservationModel()
     >>> check_observation_model(model)  # Should pass without error if the model is correctly implemented.
     """
