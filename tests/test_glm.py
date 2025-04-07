@@ -12,6 +12,7 @@ import statsmodels.api as sm
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
+from sqlalchemy.testing.suite.test_reflection import metadata
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
@@ -2662,6 +2663,46 @@ class TestPopulationGLM:
                 getattr(model, attr_name)(X)
             else:
                 getattr(model, attr_name)(X, y)
+
+    @pytest.mark.parametrize(
+        "reg_setup",
+        [
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ],
+    )
+    def test_metadata_pynapple_fit(self, reg_setup, request):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
+        y = TsdFrame(
+            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
+        )
+        meta = y.metadata
+        model.fit(X, y)
+        assert hasattr(model, "_metadata") and (model._metadata is not None)
+        assert np.all(meta == model._metadata)
+
+    @pytest.mark.parametrize(
+        "reg_setup",
+        [
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ],
+    )
+    def test_metdata_pynapple_predict(self, reg_setup, request):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
+        y = TsdFrame(
+            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
+        )
+
+        def convert_to_nap(arr):
+            return TsdFrame(t=y.t, d=getattr(arr, "d", arr))
+
+        X = jax.tree_util.tree_map(convert_to_nap, X)
+        meta = y.metadata
+        model.fit(X, y)
+        rate = model.predict(X)
+        assert hasattr(rate, "metadata") and (rate.metadata is not None)
+        assert np.all(meta == rate.metadata)
 
 
 @pytest.mark.parametrize(

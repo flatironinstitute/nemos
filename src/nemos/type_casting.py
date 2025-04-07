@@ -19,6 +19,7 @@ import pynapple as nap
 from numpy.typing import NDArray
 
 from . import tree_utils
+from .pytrees import FeaturePytree
 
 _NAP_TIME_PRECISION = 10 ** (-nap.nap_config.time_index_precision)
 
@@ -97,6 +98,12 @@ def is_pynapple_tsd(x: Any) -> bool:
     :
         Indicates the result of the evaluation.
     """
+    if isinstance(x, FeaturePytree):
+        return any(
+            hasattr(d, attr)
+            for attr in ("times", "data", "time_support")
+            for d in x.data.values()
+        )
     return all(hasattr(x, attr) for attr in ["times", "data", "time_support"])
 
 
@@ -125,9 +132,16 @@ def _has_same_time_axis(*args, **kwargs) -> bool:
     if len(flat_tree) == 1:
         return True
 
+    def get_time(arr):
+        if hasattr(arr, "items"):
+            for v in arr.values():
+                yield v.index
+        else:
+            yield arr.index
+
     # get first pynapple
     is_nap = (is_pynapple_tsd(x) for x in flat_tree)
-    time = [x.t for x, bl in zip(flat_tree, is_nap) if bl]
+    time = [t for x, bl in zip(flat_tree, is_nap) if bl for t in get_time(x)]
 
     # check time samples are close (using pynapple precision)
     return _check_all_close(time)
@@ -245,7 +259,7 @@ def get_time_info(*args, **kwargs):
     idx = flat.index(True)
 
     # get the corresponding tsd
-    tsd, _ = jax.tree_util.tree_flatten((args, kwargs))
+    tsd = jax.tree_util.tree_leaves((args, kwargs))
 
     return tsd[idx].t, tsd[idx].time_support
 
@@ -282,8 +296,14 @@ def cast_to_pynapple(
     elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
-        metadata = metadata if  hasattr(metadata, "__len__") and (len(metadata) == array.shape[1]) else None
-        return nap.TsdFrame(t=time, d=array, time_support=time_support, metadata=metadata)
+        metadata = (
+            metadata
+            if hasattr(metadata, "__len__") and (len(metadata) == array.shape[1])
+            else None
+        )
+        return nap.TsdFrame(
+            t=time, d=array, time_support=time_support, metadata=metadata
+        )
     else:
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
@@ -388,7 +408,10 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                 def cast_out(tree, metadata=None):
                     # cast back to pynapple
                     return jax.tree_util.tree_map(
-                        lambda x: cast_to_pynapple(x, time, time_support, metadata=metadata), tree
+                        lambda x: cast_to_pynapple(
+                            x, time, time_support, metadata=metadata
+                        ),
+                        tree,
                     )
 
             else:

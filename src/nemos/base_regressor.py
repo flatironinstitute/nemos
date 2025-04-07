@@ -8,6 +8,7 @@ import inspect
 import warnings
 from abc import abstractmethod
 from copy import deepcopy
+from functools import wraps
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
 import jax
@@ -20,7 +21,7 @@ from ._regularizer_builder import AVAILABLE_REGULARIZERS, create_regularizer
 from .base_class import Base
 from .regularizer import Regularizer, UnRegularized
 from .typing import DESIGN_INPUT_TYPE, SolverInit, SolverRun, SolverUpdate
-from functools import wraps
+
 
 def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = None):
     """Strip metadata from arg."""
