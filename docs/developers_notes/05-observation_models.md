@@ -18,9 +18,9 @@ For subclasses derived from [`Observations`](nemos.observation_models.Observatio
 - **_negative_log_likelihood**: Computes the negative-log likelihood of the model up to a normalization constant. This method is usually part of the objective function used to learn GLM parameters.
 
 - [`log_likelihood`](nemos.observation_models.Observations.log_likelihood): Computes the full log-likelihood including the normalization constant.
-  
+
 - [`sample_generator`](nemos.observation_models.Observations.sample_generator): Returns the random emission probability function. This typically invokes `jax.random` emission probability, provided some sufficient statistics, [see below](#suff-stat). For distributions in the exponential family, the sufficient statistics are the canonical parameter and the scale. In GLMs, the canonical parameter is entirely specified by the model's weights, while the scale is either fixed (i.e., Poisson) or needs to be estimated (i.e., Gamma).
-  
+
 - [`deviance`](nemos.observation_models.Observations.deviance): Computes the deviance based on the model's estimated rates and observations.
 
 - [`estimate_scale`](nemos.observation_models.Observations.estimate_scale): A method for estimating the scale parameter of the model. Rate and scale are sufficient to fully characterize distributions from the exponential family.
@@ -34,10 +34,10 @@ In statistics, a statistic is sufficient with respect to a statistical model and
 
 ### Public Methods
 
-- [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2): Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Cohen at al. 2003[$^{[2]}$](#ref-2). 
+- [`pseudo_r2`](nemos.observation_models.Observations.pseudo_r2): Method for computing the pseudo-$R^2$ of the model based on the residual deviance. There is no consensus definition for the pseudo-$R^2$, what we used here is the definition by Cohen at al. 2003[$^{[2]}$](#ref-2).
 - [`check_inverse_link_function`](nemos.observation_models.Observations.check_inverse_link_function): Check that the link function is a auto-differentiable, vectorized function form $\mathbb{R} \longrightarrow \mathbb{R}$.
 
-## Contributor Guidelines 
+## Contributor Guidelines
 
 To implement an observation model class you
 
@@ -53,7 +53,7 @@ To implement an observation model class you
 </p>
 
 <p id="ref-2">
-    [2] 
+    [2]
     <a href="https://www.taylorfrancis.com/books/mono/10.4324/9780203774441/applied-multiple-regression-correlation-analysis-behavioral-sciences-jacob-cohen-patricia-cohen-stephen-west-leona-aiken">
         Jacob Cohen, Patricia Cohen, Steven G. West, Leona S. Aiken. <em>Applied Multiple Regression/Correlation Analysis for the Behavioral Sciences</em>. 3rd edition. Routledge, 2002. p.502. ISBN 978-0-8058-2223-6. (May 2012)
     </a>
