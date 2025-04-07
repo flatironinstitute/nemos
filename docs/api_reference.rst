@@ -194,7 +194,7 @@ solutions.
 
 The ``nemos.pytrees.FeaturePytree`` class
 -----------------------------------------
-Class for storing the input arrays in a dictionary. Keys are usually variable names. 
+Class for storing the input arrays in a dictionary. Keys are usually variable names.
 These objects can be provided as input to nemos GLM methods.
 
 .. currentmodule:: nemos.pytrees

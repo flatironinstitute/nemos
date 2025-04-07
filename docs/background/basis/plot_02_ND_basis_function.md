@@ -62,28 +62,28 @@ Let's say we've defined two basis functions for these inputs:
 These basis functions can be combined in the following ways:
 
 1. **Addition:** If we assume that there is no interaction between the stimuli, the response function can be adequately described by the sum of the individual components. The function is defined as:
-   
-   $$ 
-   f(\mathbf{x}, \mathbf{y}) \approx \sum_{i=0}^{k-1} \alpha_{i} \, a_i (\mathbf{x})  + \sum_{j=0}^{h-1} \beta_j b_j(\mathbf{y}). 
-   $$
-   
-   The resulting additive basis simply consists of the concatenation of the two basis sets: 
 
-   $$ 
+   $$
+   f(\mathbf{x}, \mathbf{y}) \approx \sum_{i=0}^{k-1} \alpha_{i} \, a_i (\mathbf{x})  + \sum_{j=0}^{h-1} \beta_j b_j(\mathbf{y}).
+   $$
+
+   The resulting additive basis simply consists of the concatenation of the two basis sets:
+
+   $$
    [A_0 (\mathbf{x}, \mathbf{y}), ..., A_{k+h-1} (\mathbf{x}, \mathbf{y})],
    $$
 
    where
-   
+
    $$
-   A_j(\mathbf{x}, \mathbf{y}) = \begin{cases} a_j(\mathbf{x}) &\text{if }\; j \leq k-1 \\ 
+   A_j(\mathbf{x}, \mathbf{y}) = \begin{cases} a_j(\mathbf{x}) &\text{if }\; j \leq k-1 \\
    b_{j-k+1}(\mathbf{y}) &\text{otherwise.} \end{cases}
    $$
 
    Note that we have a total of $k+h$ basis elements, and that each element is constant in one of the axis.
 
 2. **Multiplication:** If we expect the response function to capture arbitrary interactions between the inputs, we can approximate it as the external product of the two bases:
-   
+
    $$
    f(\mathbf{x}, \mathbf{y}) \approx \sum_{i=0}^{k-1}\sum_{j=0}^{h-1} \alpha_{ij} \, a_i (\mathbf{x}) b_j(\mathbf{y}).
    $$
@@ -251,7 +251,7 @@ The number of elements of the product basis will be the product of the elements 
 # Evaluate the product basis at the x and y coordinates
 eval_basis = prod_basis.compute_features(x_coord, y_coord)
 
-# Output the number of elements and samples of the evaluated basis, 
+# Output the number of elements and samples of the evaluated basis,
 # as well as the number of elements in the original 1D basis objects
 print(f"Product of two 1D splines with {eval_basis.shape[1]} "
       f"basis element and {eval_basis.shape[0]} samples:\n"

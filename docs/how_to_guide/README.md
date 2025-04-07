@@ -103,7 +103,7 @@ plot_07_glm_pytree.md
 :::{grid-item-card}
 
 ```{eval-rst}
- 
+
 .. plot:: scripts/glm_predictors.py plot_categorical_var_design_matrix
    :show-source-link: False
    :height: 100px

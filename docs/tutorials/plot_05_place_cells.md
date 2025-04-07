@@ -147,7 +147,7 @@ if root:
 # if local store in assets
 else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
