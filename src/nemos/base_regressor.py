@@ -83,6 +83,7 @@ class BaseRegressor(Base, abc.ABC):
 
         if solver_kwargs is None:
             solver_kwargs = dict()
+        # add comment to understand pre-commit
         self.solver_kwargs = solver_kwargs
         self._solver_init_state = None
         self._solver_update = None
