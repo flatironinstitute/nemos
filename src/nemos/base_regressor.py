@@ -36,7 +36,7 @@ def strip_metadata(arg_num: Optional[int] = None, kwarg_key: Optional[str] = Non
             inp = args[arg_num] if arg_num is not None else kwargs[kwarg_key]
             self._metadata = {
                 "metadata": inp.metadata if hasattr(inp, "metadata") else None,
-                "columns": inp.columns if hasattr(inp, "columns") else None
+                "columns": inp.columns if hasattr(inp, "columns") else None,
             }
             return func(self, *args, **kwargs)
 

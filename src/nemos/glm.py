@@ -649,7 +649,6 @@ class GLM(BaseRegressor):
         )
         return init_params
 
-    @strip_metadata(arg_num=1)
     @cast_to_jax
     def fit(
         self,
@@ -1511,6 +1510,7 @@ class PopulationGLM(GLM):
             f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
         )
 
+    @strip_metadata(arg_num=1)
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],

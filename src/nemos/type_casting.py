@@ -302,9 +302,7 @@ def cast_to_pynapple(
             if hasattr(cols, "__len__") and (len(cols) == array.shape[1])
             else {}
         )
-        return nap.TsdFrame(
-            t=time, d=array, time_support=time_support, **metadata
-        )
+        return nap.TsdFrame(t=time, d=array, time_support=time_support, **metadata)
     else:
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
