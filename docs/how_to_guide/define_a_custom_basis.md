@@ -105,7 +105,7 @@ In the example below, only `x` is passed positionally, so `vmap` sees just one a
 ```{code} ipython
 import inspect
 
-# This raises a ValueError because partial() has bound 'poly_coef' and 'decay_rate'
+# partial() will bind 'poly_coef' and 'decay_rate'
 # as keyword arguments, leaving 'x' as a keyword-only parameter.
 vmap_laguerre = jax.vmap(laguerre_poly, in_axes=0, out_axes=1)
 f = partial(vmap_laguerre, poly_coef=P, decay_rate=c)
