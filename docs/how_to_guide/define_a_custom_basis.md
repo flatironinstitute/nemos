@@ -13,7 +13,11 @@ kernelspec:
 
 # How to Define A Custom Basis Class
 
-If you want to design features that are not covered by our collection of basis function, you can design a custom basis class with `nemos.basis.CustomBasis`. The `CustomBasis` can be composed as usual with any other basis.
+If you want to design features that are not covered by our collection of basis functions, you can create a custom basis class using [`nemos.basis.CustomBasis`]. To do so, simply provide a list of functions when initializing the `CustomBasis` object.
+
+Below, we define a **parametric family** of functions—Laguerre polynomials—and fix their parameters using [`functools.partial`](https://docs.python.org/3/library/functools.html#functools.partial). (See the admonition below for why we avoid using `lambda` functions in this context.)
+
+As with any other basis, a `CustomBasis` can be composed with other basis objects in the usual way.
 
 ## Example: Laguerre Polynomials
 
