@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import warnings
-from copy import deepcopy
 from functools import wraps
 from typing import Any, Callable, Literal, NamedTuple, Optional, Tuple, Union
 
@@ -1644,7 +1643,7 @@ class PopulationGLM(GLM):
     def __sklearn_clone__(self) -> PopulationGLM:
         """Clone the PopulationGLM, dropping feature_mask"""
         params = self.get_params(deep=False)
-        feature_mask = params.pop("feature_mask")
+        params.pop("feature_mask")
         klass = self.__class__(**params)
         # reattach metadata
         klass._metadata = self._metadata
