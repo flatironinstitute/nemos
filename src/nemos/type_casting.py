@@ -296,13 +296,14 @@ def cast_to_pynapple(
     elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
+        cols = metadata.get("columns", None) if hasattr(metadata, "get") else None
         metadata = (
             metadata
-            if hasattr(metadata, "__len__") and (len(metadata) == array.shape[1])
-            else None
+            if hasattr(cols, "__len__") and (len(cols) == array.shape[1])
+            else {}
         )
         return nap.TsdFrame(
-            t=time, d=array, time_support=time_support, metadata=metadata
+            t=time, d=array, time_support=time_support, **metadata
         )
     else:
         return nap.TsdTensor(t=time, d=array, time_support=time_support)

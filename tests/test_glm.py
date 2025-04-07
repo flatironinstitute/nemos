@@ -2526,10 +2526,13 @@ class TestPopulationGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         model._initialize_feature_mask(X, y)
-        # model.fit(X, y)
+        # hardcode metadata
+        model._metadata = {"columns": 1, "metadata": 2}
         cloned = sklearn.clone(model)
         assert cloned.feature_mask is None, "cloned GLM shouldn't have feature mask!"
         assert model.feature_mask is not None, "fit GLM should have feature mask!"
+        assert model._metadata == cloned._metadata
+
 
     @pytest.mark.parametrize(
         "mask, expectation",
@@ -2691,18 +2694,18 @@ class TestPopulationGLM:
     def test_metdata_pynapple_predict(self, reg_setup, request):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
         y = TsdFrame(
-            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
+            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}, columns=range(1, 1+y.shape[1])
         )
 
         def convert_to_nap(arr):
             return TsdFrame(t=y.t, d=getattr(arr, "d", arr))
 
         X = jax.tree_util.tree_map(convert_to_nap, X)
-        meta = y.metadata
         model.fit(X, y)
         rate = model.predict(X)
         assert hasattr(rate, "metadata") and (rate.metadata is not None)
-        assert np.all(meta == rate.metadata)
+        assert np.all(y.metadata == rate.metadata)
+        assert np.all(y.columns == rate.columns)
 
 
 @pytest.mark.parametrize(
