@@ -432,7 +432,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
@@ -444,4 +444,3 @@ if path.exists():
 ## References
 (ref-1)=
 [1] [Arribas, Diego, Yuan Zhao, and Il Memming Park. "Rescuing neural spike train models from bad MLE." Advances in Neural Information Processing Systems 33 (2020): 2293-2303.](https://arxiv.org/abs/2010.12362)
-

@@ -28,14 +28,14 @@ Abstract Class Base
 │   ├─ Concrete Subclass UnRegularized
 │   │
 │   ├─ Concrete Subclass Ridge
-│   ... 
+│   ...
 │
 ├─ Abstract Subclass Observations
 │   │
 │   ├─ Concrete Subclass PoissonObservations
 │   │
 │   ├─ Concrete Subclass GammaObservations
-│   ... 
+│   ...
 │
 ...
 ```
@@ -55,4 +55,3 @@ We've intentionally omitted the `get_metadata_routing` method. Given its current
 
 - **`get_params`**: The `get_params` method retrieves parameters set during model instance initialization. Opting for a deep inspection allows the method to assess nested object parameters, resulting in a comprehensive parameter dictionary.
 - **`set_params`**: The `set_params` method offers a mechanism to adjust or set an estimator's parameters. It's versatile, accommodating both individual estimators and more complex nested structures like pipelines. Feeding an unrecognized parameter will raise a `ValueError`.
-

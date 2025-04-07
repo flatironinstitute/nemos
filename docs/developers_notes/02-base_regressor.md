@@ -6,7 +6,7 @@
 :::{admonition} Example
 :class: note
 
-The current package version includes a concrete class named [`nemos.glm.GLM`](nemos.glm.GLM). This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the "GLM regression" category. 
+The current package version includes a concrete class named [`nemos.glm.GLM`](nemos.glm.GLM). This class inherits from `BaseRegressor`, which in turn inherits `Base`, since it falls under the "GLM regression" category.
 As a `BaseRegressor`, it **must** implement the [`fit`](nemos.glm.GLM.fit), [`score`](nemos.glm.GLM.score), [`predict`](nemos.glm.GLM.predict) and the other abstract methods of this class, see below.
 :::
 
@@ -25,7 +25,7 @@ For subclasses derived from `BaseRegressor` to function correctly, they must imp
 9. `_check_input_and_params_consistency`: Checks that the input and the parameters are consistent.
 10. `_get_coef_and_intercept` and `_set_coef_and_intercept`: set and get model coefficient and intercept term.
 
-All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided 
+All the `_check_<method-name>` methods are called by the `_validate` method which checks that the provided
 input and parameters conform with the model requirements.
 
 ### Attributes
@@ -40,10 +40,10 @@ Public attributes are stored as properties:
 
 When implementing a new subclass of `BaseRegressor`, the only attributes you must interact directly with are those that operate on the solver, i.e. `solver_init_state`, `solver_update`, `solver_run`.
 
-Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update). 
+Typically, in `YourRegressor` you will call `self.solver_init_state` at the parameter initialization step, `self.sovler_run` in [`fit`](nemos.glm.GLM.fit), and `self.solver_update` in [`update`](nemos.glm.GLM.update).
 
 :::{admonition} Solvers
-:class: note 
+:class: note
 
 Solvers are typically optimizers from the `jaxopt` package, but in principle they could be custom optimization routines as long as they respect the `jaxopt` api (i.e., have a `run`, `init_state`, and [`update`](nemos.glm.GLM.update) method with the appropriate input/output types).
 We rely on `jaxopt` because it provides a comprehensive set of robust, GPU accelerated, batchable and differentiable optimizers in JAX, that are highly customizable. In the future we may provide a number of custom solvers optimized for convex stochastic optimization.

@@ -210,9 +210,9 @@ Here we will focus on the last neuron (neuron 7) who has a nice grid pattern
 model = nmo.glm.GLM(
     regularizer="Ridge",
     regularizer_strength=0.0001,
-    # lowering the tolerance means that the solution will be closer to the optimum 
+    # lowering the tolerance means that the solution will be closer to the optimum
     # (at the cost of increasing execution time)
-    solver_kwargs=dict(tol=10**-12), 
+    solver_kwargs=dict(tol=10**-12),
 )
 ```
 
@@ -326,11 +326,11 @@ if root:
 # if local store in ../_build/html...
 else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
-   
+
 if path.exists():
   fig.savefig(path / "plot_03_grid_cells.svg")
 ```

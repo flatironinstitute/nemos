@@ -69,14 +69,14 @@ of this notebook, we'll use only the input current and the recorded spikes
 displayed in the first and third rows.
 
 First, let us see how to load in the data and reproduce the above figure, which
-we'll do using the [Pynapple package](https://pynapple-org.github.io/pynapple/). We will rely on 
+we'll do using the [Pynapple package](https://pynapple-org.github.io/pynapple/). We will rely on
 pynapple throughout this notebook, as it simplifies handling this type of
-data (we will explain the essentials of pynapple as they are used, but see the 
+data (we will explain the essentials of pynapple as they are used, but see the
 [Pynapple docs](https://pynapple-org.github.io/pynapple/)
 if you are interested in learning more). After we've explored the data some, we'll introduce the Generalized
 Linear Model and how to fit it with NeMoS.
 
-## Learning objectives 
+## Learning objectives
 
 - Learn how to explore spiking data and do basic analyses using pynapple
 - Learn how to structure data for NeMoS
@@ -371,7 +371,7 @@ binning our spikes based on the instantaneous input current and computing the
 firing rate within those bins:
 
 :::{admonition} Tuning curve in `pynapple`
-:class: note 
+:class: note
 
 [`compute_1d_tuning_curves`](https://pynapple.org/generated/pynapple.process.tuning_curves.html#pynapple.process.tuning_curves.compute_1d_tuning_curves) : compute the firing rate as a function of a 1-dimensional feature.
 :::
@@ -401,7 +401,7 @@ current remains on.
 
 
 
-## NeMoS 
+## NeMoS
 
 ### Preparing data
 
@@ -608,7 +608,7 @@ if root:
 # if local store in assets
 else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)

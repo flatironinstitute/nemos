@@ -86,7 +86,7 @@ plt.title("B-Spline Basis")
 ```
 
 ## Computing Features
-All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features). 
+All bases in the `nemos.basis` module perform a transformation of one or more time series into a set of features. This operation is always carried out by the method  [`compute_features`](nemos.basis._basis.Basis.compute_features).
 We can group the bases into two categories depending on the type of transformation that [`compute_features`](nemos.basis._basis.Basis.compute_features) applies:
 
 1. **Evaluation Bases**: These bases use `compute_features` to evaluate the basis directly, applying a non-linear transformation to the input. Classes in this category have names ending with "Eval," such as `BSplineEval`.
@@ -154,7 +154,7 @@ out = basis.compute_features(inp)
 out.shape
 ```
 
-For each of the $3 \times 2 = 6$ inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of 
+For each of the $3 \times 2 = 6$ inputs, `n_basis_funcs = 5` features are computed. These are concatenated on the second axis of the feature matrix, for a total of
 $3 \times 2 \times 5  = 30$ outputs.
 
 This concatenation can be undone by the `split_by_feature` method of basis, which creates a dictionary with keys the labels of the basis and values a reshaped array.
@@ -190,7 +190,7 @@ Plotting the Basis Function Elements
 ------------------------------------
 We suggest visualizing the basis post-instantiation by evaluating each element on a set of equi-spaced sample points
 and then plotting the result. The method [`Basis.evaluate_on_grid`](nemos.basis._basis.Basis.evaluate_on_grid) is designed for this, as it generates and returns
-the equi-spaced samples along with the evaluated basis functions. 
+the equi-spaced samples along with the evaluated basis functions.
 
 :::{admonition} Note
 
@@ -216,7 +216,7 @@ The benefits of using `evaluate_on_grid` become particularly evident when workin
 Sometimes, it is useful to restrict the basis to a fixed range. This can help manage outliers or ensure that
 your basis covers the same range across multiple experimental sessions.
 You can specify a range for the support of your basis by setting the `bounds`
-parameter at initialization of Eval bases. 
+parameter at initialization of Eval bases.
 Evaluating the basis at any sample outside the bounds will result in a NaN.
 
 ```{code-cell} ipython3

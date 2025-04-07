@@ -17,4 +17,3 @@ We communicate via several channels on Github:
 
 In all cases, we request that you respect our [code of
 conduct](https://github.com/flatironinstitute/nemos?tab=coc-ov-file).
-
