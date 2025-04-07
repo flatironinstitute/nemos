@@ -30,7 +30,7 @@ These notes are primarily intended for the following groups:
 
 - **Contributors**: If you wish to contribute to the NeMoS project, the Developer Notes can provide a solid foundation of understanding, helping to ensure that your contributions align with the existing structure and design principles of the library.
 
-- **Advanced Users**: While the primary focus of these notes is on development, they might also be of interest to advanced users who want a deeper understanding of the library's functionality. 
+- **Advanced Users**: While the primary focus of these notes is on development, they might also be of interest to advanced users who want a deeper understanding of the library's functionality.
 
 Please note that these notes assume a certain level of programming knowledge. Familiarity with Python, object-oriented programming, and the NumPy, Scipy and Jax libraries would be beneficial when reading these notes.
 
@@ -40,7 +40,7 @@ The Developer Notes are divided into sections, each focusing on a different modu
 
 - **Must**: This denotes a requirement. Any method or function that fails to meet the requirement will not be merged.
 - **Should**: This denotes a suggestion. Reasons should be provided if a suggestion is not followed.
-- **May**: This denotes an option that, if implemented, could enhance the user/developer experience but can be overlooked if deemed unnecessary. 
+- **May**: This denotes an option that, if implemented, could enhance the user/developer experience but can be overlooked if deemed unnecessary.
 
 ## Interact with us
 
@@ -49,7 +49,3 @@ If you're considering contributing to the library, first of all, welcome aboard!
 If you have any questions or need further clarification on any of the topics covered in these notes, please don't hesitate to reach out to us. You can do so via the [discussion](https://github.com/flatironinstitute/nemos/discussions/) forum on GitHub.
 
 We're looking forward to your contributions and to answering any queries you might have!
-
-
-
-

@@ -173,7 +173,7 @@ count = nap.TsdFrame(
 )
 ```
 
-## NeMoS 
+## NeMoS
 It's time to use NeMoS. Our goal is to estimate the pairwise interaction between neurons.
 This can be quantified with a GLM if we use the recent population spike history to predict the current time step.
 ### Self-Connected Single Neuron
@@ -674,7 +674,7 @@ if root:
 # if local store in assets
 else:
    path = Path("../_build/html/_static/thumbnails/tutorials")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)

@@ -150,7 +150,7 @@ At each step, we store the log-likelihood of the model for each neuron evaluated
 n_step = 500
 logl = np.zeros(n_step)
 
-for i in range(n_step):	
+for i in range(n_step):
 
 	# Get a batch of data
 	X, Y = batcher()
@@ -196,7 +196,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)

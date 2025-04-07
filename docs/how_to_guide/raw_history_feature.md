@@ -25,7 +25,7 @@ You can learn more about GLMs for pairwise interactions by following our [head d
 
 ### Raw Spike History as a Feature
 
-We will start by learning how to model the pairwise interaction using the raw spike history. Let's first generate some 
+We will start by learning how to model the pairwise interaction using the raw spike history. Let's first generate some
 population counts.
 
 ```{code-cell} ipython3

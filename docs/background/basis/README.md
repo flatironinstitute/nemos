@@ -5,7 +5,7 @@
 
 .. role:: raw-html(raw)
     :format: html
-    
+
 .. list-table::
    :header-rows: 1
    :name: table-basis
@@ -44,7 +44,7 @@
      - .. plot:: scripts/basis_figs.py plot_raised_cosine_linear
           :show-source-link: False
           :height: 80px
-     - 
+     -
      - :class:`~nemos.basis.RaisedCosineLinearEval`  :raw-html:`<br />`
        :class:`~nemos.basis.RaisedCosineLinearConv`
      - 🟢 Eval
@@ -60,7 +60,7 @@
      - .. plot:: scripts/basis_figs.py plot_orth_exp_basis
           :show-source-link: False
           :height: 80px
-     - 
+     -
      - :class:`~nemos.basis.OrthExponentialEval`  :raw-html:`<br />`
        :class:`~nemos.basis.OrthExponentialConv`
      - 🟢 Eval
@@ -71,7 +71,7 @@
      - :ref:`Custom Features <custom-features>`
      - :class:`~nemos.basis.IdentityEval`  :raw-html:`<br />`
      - 🟢 Eval
-     
+
    * - **History Effects**
      - .. plot:: scripts/basis_figs.py plot_history_basis
           :show-source-link: False
@@ -96,7 +96,7 @@ $$
 f(x) \approx \alpha_1 \psi_1(x) + \dots + \alpha_n \psi_n(x)
 $$
 
-Here, $\approx$ means "approximately equal". 
+Here, $\approx$ means "approximately equal".
 
 Instead of tackling the hard problem of learning an unknown function $f(x)$ directly, we reduce it to the simpler task of learning the weights $\{\alpha_i\}$. This preserves convexity, resulting in a much simpler optimization problem.
 

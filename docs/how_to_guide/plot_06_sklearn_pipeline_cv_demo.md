@@ -78,7 +78,7 @@ from sklearn.pipeline import Pipeline
 # Assume transformer_i/predictor is a transformer/model object
 pipe = Pipeline(
     [
-        ("label_1", transformer_1), 
+        ("label_1", transformer_1),
         ("label_2", transformer_2),
         ...,
         ("label_n", transformer_n),
@@ -249,7 +249,8 @@ Pipelines include parameters from all the steps, as well as that of the pipeline
 pipeline.get_params()
 ```
 
-You can retrieve any paramter of any pipeline step by creating a key starting with the name of the step followed by a double underscore and the name of the parameter: `step_name__parameter_name`. 
+You can retrieve any parameter of any pipeline step by creating a key starting with the name of the step followed by a double underscore and the name of the parameter: `step_name__parameter_name`.
+
 
 ```{code-cell} ipython3
 # retrieve the number of basis function from the transformerbasis of the pipeline
@@ -439,7 +440,7 @@ if root:
 # if local store in ../_build/html/...
 else:
    path = Path("../_build/html/_static/thumbnails/how_to_guide")
- 
+
 # make sure the folder exists if run from build
 if root or Path("../assets/stylesheets").exists():
    path.mkdir(parents=True, exist_ok=True)
@@ -505,7 +506,7 @@ cvdf_wide = cvdf.pivot(
 doc_plots.plot_heatmap_cv_results(cvdf_wide)
 ```
 
-As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineLinearEval basis (as used above), which appears to be a suitable choice for our toy data. 
+As shown in the table, the model with the highest score, highlighted in blue, used a RaisedCosineLinearEval basis (as used above), which appears to be a suitable choice for our toy data.
 We can confirm that by plotting the firing rate predictions:
 
 ```{code-cell} ipython3
