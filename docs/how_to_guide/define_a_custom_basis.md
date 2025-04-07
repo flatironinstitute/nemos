@@ -95,6 +95,19 @@ plt.plot(x, bas_vmap.compute_features(x))
 plt.show()
 ```
 
+:::{admonition} Python sharp bit #2
+:class: warning
+
+Using `partial` with **keyword arguments** in combination with a `vmap`-ed function will not work as expected. This is because `jax.vmap` applies `in_axes` only to **positional arguments**, and the number of positional arguments must match the length of `in_axes`.
+
+In the example below, only `x` is passed positionally, so `vmap` sees just one argument—causing a mismatch with `in_axes=(None, 0, None)`.
+
+```{code} ipython
+# This raises a ValueError
+partial(vmap_laguerre, poly_coef=P, decay_rate=c)(x)
+```
+:::
+
 ## Multi-dimensional Inputs
 
 A custom basis can receive a multi-dimensional input too. As an example, let's write down a basis that acts on image inputs, and compute the dot product of an image with a bank of filter masks.
