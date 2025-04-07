@@ -80,7 +80,7 @@ Custom basis works with multi-dimensional outputs as well. Continuing on the Lag
 ```{code-cell} ipython3
 import jax
 
-# vmap_laguarre: R -> R^5
+# vmap_laguerre: R -> R^5
 vmap_laguerre = jax.vmap(laguerre_poly, in_axes=(0, None, None), out_axes=1)
 
 # a single function can be provided directly (i.e. not wrapped in a list)
