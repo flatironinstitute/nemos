@@ -133,8 +133,10 @@ def _has_same_time_axis(*args, **kwargs) -> bool:
         return True
 
     def get_time(arr):
+        # loop over "items" because pynapple object
+        # have the attribute "values" as well
         if hasattr(arr, "items"):
-            for v in arr.values():
+            for _, v in arr.itmes():
                 yield v.index
         else:
             yield arr.index
