@@ -251,7 +251,7 @@ def get_time_info(*args, **kwargs):
 
 
 def cast_to_pynapple(
-    array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet
+    array: jnp.ndarray, time: NDArray, time_support: nap.IntervalSet, metadata=None
 ) -> Union[nap.Tsd, nap.TsdFrame, nap.TsdTensor]:
     """
     Convert an array to a pynapple time series object.
@@ -267,6 +267,8 @@ def cast_to_pynapple(
         Time axis for the pynapple object.
     time_support:
         Time support information for the pynapple object.
+    metadata:
+        Pynapple metadata to be re-attached.
 
     Returns
     -------
@@ -280,7 +282,8 @@ def cast_to_pynapple(
     elif array.ndim == 1:
         return nap.Tsd(t=time, d=array, time_support=time_support)
     elif array.ndim == 2:
-        return nap.TsdFrame(t=time, d=array, time_support=time_support)
+        metadata = metadata if  hasattr(metadata, "__len__") and (len(metadata) == array.shape[1]) else None
+        return nap.TsdFrame(t=time, d=array, time_support=time_support, metadata=metadata)
     else:
         return nap.TsdTensor(t=time, d=array, time_support=time_support)
 
@@ -382,10 +385,10 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                     )
                 time, time_support = get_time_info(*args, **kwargs)
 
-                def cast_out(tree):
+                def cast_out(tree, metadata=None):
                     # cast back to pynapple
                     return jax.tree_util.tree_map(
-                        lambda x: cast_to_pynapple(x, time, time_support), tree
+                        lambda x: cast_to_pynapple(x, time, time_support, metadata=metadata), tree
                     )
 
             else:
@@ -404,8 +407,10 @@ def support_pynapple(conv_type: Literal["jax", "numpy"] = "jax") -> Callable:
                 )
             # apply function/method
             res = func(*args, **kwargs)
+            # strip metadata (if args[0] hasattr _metadata)
+            meta = getattr(args[0], "_metadata", None) if args else None
             # revert casting if pynapple
-            return cast_out(res)
+            return cast_out(res, metadata=meta)
 
         return wrapper
 

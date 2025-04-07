@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike
 
 from . import observation_models as obs
 from . import tree_utils, validation
-from .base_regressor import BaseRegressor
+from .base_regressor import BaseRegressor, strip_metadata
 from .exceptions import NotFittedError
 from .initialize_regressor import initialize_intercept_matching_mean_rate
 from .pytrees import FeaturePytree
@@ -648,6 +648,7 @@ class GLM(BaseRegressor):
         )
         return init_params
 
+    @strip_metadata(arg_num=1)
     @cast_to_jax
     def fit(
         self,
@@ -1299,6 +1300,7 @@ class PopulationGLM(GLM):
             solver_kwargs=solver_kwargs,
             **kwargs,
         )
+        self._metadata = None
         self.feature_mask = feature_mask
 
     @property
@@ -1508,7 +1510,6 @@ class PopulationGLM(GLM):
             f"model coefficients have {jax.tree_util.tree_map(lambda x: x.shape[1], params[0])}  instead!",
         )
 
-    @cast_to_jax
     def fit(
         self,
         X: Union[DESIGN_INPUT_TYPE, ArrayLike],
