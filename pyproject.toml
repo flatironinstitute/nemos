@@ -98,6 +98,7 @@ examples = [
 
 
 [tool.black]
+# try my commit
 target-version = ['py310', 'py311', 'py312']
 skip-string-normalization = false
 exclude = '''
