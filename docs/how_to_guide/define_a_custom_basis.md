@@ -100,11 +100,21 @@ plt.show()
 
 Using `partial` with **keyword arguments** in combination with a `vmap`-ed function will not work as expected. This is because `jax.vmap` applies `in_axes` only to **positional arguments**, and the number of positional arguments must match the length of `in_axes`.
 
-In the example below, only `x` is passed positionally, so `vmap` sees just one argument—causing a mismatch with `in_axes=(None, 0, None)`.
+In the example below, only `x` is passed positionally, so `vmap` sees just one argument—causing a mismatch with `in_axes=(0, None, None)`.
 
 ```{code} ipython
-# This raises a ValueError
-partial(vmap_laguerre, poly_coef=P, decay_rate=c)(x)
+import inspect
+
+# This raises a ValueError because partial() has bound 'poly_coef' and 'decay_rate'
+# as keyword arguments, leaving 'x' as a keyword-only parameter.
+vmap_laguerre = jax.vmap(laguerre_poly, in_axes=0, out_axes=1)
+f = partial(vmap_laguerre, poly_coef=P, decay_rate=c)
+print(inspect.signature(f))
+
+# Calling f(x) positionally confuses vmap’s shape inference (it expects three positional args),
+# so it fails with a shape/axis error before reaching laguerre_poly.
+f(x)
+
 ```
 :::
 
