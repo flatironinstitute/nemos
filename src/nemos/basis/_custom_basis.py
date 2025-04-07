@@ -175,7 +175,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     def __init__(
         self,
-        funcs: List[Callable[[NDArray, ...], NDArray]],
+        funcs: List[Callable[[NDArray], NDArray]] | Callable[[NDArray], NDArray],
         ndim_input: int = 1,
         output_shape: Tuple[int, ...] = (),
         basis_kwargs: Optional[Any] = None,
@@ -221,6 +221,8 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     @funcs.setter
     def funcs(self, val: Iterable[Callable[[NDArray, ...], NDArray]]):
+        if isinstance(val, Callable):
+            val = [val]
         val = FunctionList(
             [support_pynapple()(v) if self._pynapple_support else v for v in val]
         )

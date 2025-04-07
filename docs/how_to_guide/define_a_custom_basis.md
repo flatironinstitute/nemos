@@ -34,17 +34,17 @@ for n in range(N):
     P[n, :(n+1)] = laguerre(n).coef[::-1]
 P = jnp.array(P)
 
-def laguerre_poly(x, poly_coef, decay_rate):
+def laguerre_poly(poly_coef, decay_rate, x):
     """
     Laguerre polynomial.
-    
-    Evaluate a single basis function with polynomial coefficients `p` at 
+
+    Evaluate a single basis function with polynomial coefficients `p` at
     position `x` with decay time constant `c`.
     """
     exp_decay = jnp.exp(-decay_rate * x/2)
     return exp_decay * jnp.polyval(poly_coef[::-1], decay_rate * x)
 
-funcs = [partial(laguerre_poly, poly_coef=p, decay_rate=c) for p in P]
+funcs = [partial(laguerre_poly, p, c) for p in P]
 
 bas = nmo.basis.CustomBasis(funcs=funcs, label="Laguerre")
 
@@ -62,10 +62,10 @@ print(add.compute_features(x, x).shape)
 :::{admonition} Python sharp bit
 :class: warning
 
-Replacing `functools.partial` with a `lambda` function would not work. 
+Replacing `functools.partial` with a `lambda` function would not work.
 
 ```{code} ipython
-funcs = [lambda x: laguerre_poly, p, decay_rate=c) for p in P]
+funcs = [lambda x: laguerre_poly(p, c, x) for p in P]
 ```
 
 This will create a list of identical Laguerre polynomial functions. Why? Because p is captured by reference, not by value. When each lambda is called, it uses the value of `p` at that moment — which will be the last value in `P`, for all functions.
@@ -81,9 +81,10 @@ Custom basis works with multi-dimensional outputs as well. Continuing on the Lag
 import jax
 
 # vmap_laguarre: R -> R^5
-vmap_laguerre = jax.vmap(lambda x, p: laguerre_poly(x, p, c), in_axes=(None, 0), out_axes=1)
+vmap_laguerre = jax.vmap(laguerre_poly, in_axes=(0, None, None), out_axes=1)
 
-bas_vmap = nmo.basis.CustomBasis(funcs=[lambda x: vmap_laguerre(x, P)], label="Laguerre-vmap")
+# a single function can be provided directly (i.e. not wrapped in a list)
+bas_vmap = nmo.basis.CustomBasis(funcs=partial(vmap_laguerre, P, c), label="Laguerre-vmap")
 
 # Plot basis functions.
 plt.plot(x, bas_vmap.compute_features(x))
@@ -100,7 +101,7 @@ A custom basis can receive a multi-dimensional input too. As an example, let's w
 imgs = np.random.randn(100, 50, 50)
 
 def image_dot_product(img, mask):
-    return jnp.sum(img * mask[None], axis=(1,2))    
+    return jnp.sum(img * mask[None], axis=(1,2))
 
 # define masks using a nemos 2D basis
 basis_2d = nmo.basis.RaisedCosineLinearEval(8)**2
