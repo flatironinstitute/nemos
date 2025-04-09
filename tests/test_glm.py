@@ -1782,9 +1782,9 @@ class TestGLMObservationModel:
 
         elif "gamma" in model_instantiation:
             if "population" in glm_type:
-                return "PopulationGLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "PopulationGLM(\n    observation_model=GammaObservations(inverse_link_function=one_over_x),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
             else:
-                return "GLM(\n    observation_model=GammaObservations(inverse_link_function=<lambda>),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
+                return "GLM(\n    observation_model=GammaObservations(inverse_link_function=one_over_x),\n    regularizer=UnRegularized(),\n    solver_name='GradientDescent'\n)"
 
         elif "bernoulli" in model_instantiation:
             if "population" in glm_type:
