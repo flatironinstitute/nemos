@@ -9,6 +9,9 @@ from scipy.optimize import root_scalar
 INVERSE_FUNCS = {
     jnp.exp: jnp.log,
     jax.nn.softplus: lambda x: jnp.log(jnp.exp(x) - 1.0),
+    jax.scipy.special.expit: jax.scipy.special.logit,
+    jax.lax.logistic: jax.scipy.special.logit,
+    jax.scipy.stats.norm.cdf: jax.scipy.stats.norm.ppf,
 }
 
 
