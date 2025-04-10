@@ -18,6 +18,10 @@ from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
+def convert_to_nap(arr, t):
+    return TsdFrame(t=t, d=getattr(arr, "d", arr))
+
+
 def test_validate_higher_dimensional_data_X(mock_glm):
     """Test behavior with higher-dimensional input data."""
     X = jnp.array([[[[1, 2], [3, 4]]]])
@@ -2488,10 +2492,12 @@ class TestPopulationGLM:
         model.coef_ = true_params[0]
         model.intercept_ = true_params[1]
         model._initialize_feature_mask(X, y)
-        # model.fit(X, y)
+        # hardcode metadata
+        model._metadata = {"columns": 1, "metadata": 2}
         cloned = sklearn.clone(model)
         assert cloned.feature_mask is None, "cloned GLM shouldn't have feature mask!"
         assert model.feature_mask is not None, "fit GLM should have feature mask!"
+        assert model._metadata == cloned._metadata
 
     @pytest.mark.parametrize(
         "mask, expectation",
@@ -2625,6 +2631,66 @@ class TestPopulationGLM:
                 getattr(model, attr_name)(X)
             else:
                 getattr(model, attr_name)(X, y)
+
+    @pytest.mark.parametrize(
+        "reg_setup",
+        [
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ],
+    )
+    def test_metadata_pynapple_fit(self, reg_setup, request):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
+        y = TsdFrame(
+            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
+        )
+        model.fit(X, y)
+        assert hasattr(model, "_metadata") and (model._metadata is not None)
+        assert np.all(y._metadata == model._metadata["metadata"])
+        assert np.all(y.columns == model._metadata["columns"])
+
+    @pytest.mark.parametrize(
+        "reg_setup",
+        [
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ],
+    )
+    def test_metadata_pynapple_is_deepcopied(self, reg_setup, request):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
+        y = TsdFrame(
+            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
+        )
+        model.fit(X, y)
+        X = jax.tree_util.tree_map(lambda x: convert_to_nap(x, y.t), X)
+        rate = model.predict(X)
+        # modify metadata of y
+        y["newdata"] = np.arange(1, 1 + y.shape[1])
+        if "newdata" in rate._metadata:
+            raise RuntimeError("Metadata was shallow copied by pynapple init")
+
+    @pytest.mark.parametrize(
+        "reg_setup",
+        [
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ],
+    )
+    def test_metdata_pynapple_predict(self, reg_setup, request):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
+        y = TsdFrame(
+            t=np.arange(y.shape[0]),
+            d=y,
+            metadata={"y": np.arange(y.shape[1])},
+            columns=range(1, 1 + y.shape[1]),
+        )
+
+        X = jax.tree_util.tree_map(lambda x: convert_to_nap(x, y.t), X)
+        model.fit(X, y)
+        rate = model.predict(X)
+        assert hasattr(rate, "metadata") and (rate.metadata is not None)
+        assert np.all(y._metadata == rate.metadata)
+        assert np.all(y.columns == rate.columns)
 
 
 @pytest.mark.parametrize(
