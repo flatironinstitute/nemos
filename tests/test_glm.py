@@ -2643,7 +2643,7 @@ class TestPopulationGLM:
         )
         model.fit(X, y)
         assert hasattr(model, "_metadata") and (model._metadata is not None)
-        assert np.all(y.metadata == model._metadata["metadata"])
+        assert np.all(y._metadata == model._metadata["metadata"])
         assert np.all(y.columns == model._metadata["columns"])
 
     @pytest.mark.parametrize(
