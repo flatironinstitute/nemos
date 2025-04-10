@@ -2652,6 +2652,25 @@ class TestPopulationGLM:
             "population_poissonGLM_model_instantiation_pytree",
         ],
     )
+    def test_metadata_pynapple_is_deepcopied(self, reg_setup, request):
+        X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
+        y = TsdFrame(
+            t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
+        )
+        model.fit(X, y)
+        rate = model.predict(TsdFrame(t=y.t, d=X))
+        # modify metadata of y
+        y["newdata"] = np.arange(1, 1 + y.shape[1])
+        if "newdata" in rate._metadata:
+            raise RuntimeError("Metadata was shallow copied by pynapple init")
+
+    @pytest.mark.parametrize(
+        "reg_setup",
+        [
+            "population_poissonGLM_model_instantiation",
+            "population_poissonGLM_model_instantiation_pytree",
+        ],
+    )
     def test_metdata_pynapple_predict(self, reg_setup, request):
         X, y, model, true_params, firing_rate = request.getfixturevalue(reg_setup)
         y = TsdFrame(
