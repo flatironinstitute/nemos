@@ -18,6 +18,10 @@ from nemos.pytrees import FeaturePytree
 from nemos.tree_utils import pytree_map_and_reduce, tree_l2_norm, tree_slice, tree_sub
 
 
+def convert_to_nap(arr, t):
+    return TsdFrame(t=t, d=getattr(arr, "d", arr))
+
+
 def test_validate_higher_dimensional_data_X(mock_glm):
     """Test behavior with higher-dimensional input data."""
     X = jnp.array([[[[1, 2], [3, 4]]]])
@@ -2658,7 +2662,8 @@ class TestPopulationGLM:
             t=np.arange(y.shape[0]), d=y, metadata={"y": np.arange(y.shape[1])}
         )
         model.fit(X, y)
-        rate = model.predict(TsdFrame(t=y.t, d=X))
+        X = jax.tree_util.tree_map(lambda x: convert_to_nap(x, y.t), X)
+        rate = model.predict(X)
         # modify metadata of y
         y["newdata"] = np.arange(1, 1 + y.shape[1])
         if "newdata" in rate._metadata:
@@ -2680,10 +2685,7 @@ class TestPopulationGLM:
             columns=range(1, 1 + y.shape[1]),
         )
 
-        def convert_to_nap(arr):
-            return TsdFrame(t=y.t, d=getattr(arr, "d", arr))
-
-        X = jax.tree_util.tree_map(convert_to_nap, X)
+        X = jax.tree_util.tree_map(lambda x: convert_to_nap(x, y.t), X)
         model.fit(X, y)
         rate = model.predict(X)
         assert hasattr(rate, "metadata") and (rate.metadata is not None)
