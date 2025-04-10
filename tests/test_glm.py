@@ -12,7 +12,6 @@ import statsmodels.api as sm
 from pynapple import Tsd, TsdFrame
 from sklearn.linear_model import GammaRegressor, LogisticRegression, PoissonRegressor
 from sklearn.model_selection import GridSearchCV
-from sqlalchemy.testing.suite.test_reflection import metadata
 
 import nemos as nmo
 from nemos.pytrees import FeaturePytree
