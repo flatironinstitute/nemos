@@ -33,6 +33,7 @@ def bernoulli_observations():
     [
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
+        ("Bernoulli", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -52,6 +53,7 @@ def test_glm_instantiation_from_string_at_init(
     [
         ("Poisson", does_not_raise()),
         ("Gamma", does_not_raise()),
+        ("Bernoulli", does_not_raise()),
         (
             "invalid",
             pytest.raises(ValueError, match="Unknown observation model: invalid"),
@@ -61,7 +63,7 @@ def test_glm_instantiation_from_string_at_init(
 @pytest.mark.parametrize("glm_class", [nmo.glm.GLM, nmo.glm.PopulationGLM])
 def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
     """Test that the observation model can be set after the init providing a string."""
-    if obs_model_string == "Gamma":
+    if obs_model_string != "Poisson":
         obs = nmo.observation_models.PoissonObservations()
     else:
         obs = nmo.observation_models.GammaObservations()
@@ -75,6 +77,10 @@ def test_glm_setter_observation_model(obs_model_string, glm_class, expectation):
     elif obs_model_string == "Poisson":
         assert isinstance(
             model.observation_model, nmo.observation_models.PoissonObservations
+        )
+    elif obs_model_string == "Bernoulli":
+        assert isinstance(
+            model.observation_model, nmo.observation_models.BernoulliObservations
         )
 
 
