@@ -257,6 +257,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         )
 
     def compute_features(self, *xi):
+        xi = tuple(np.atleast_1d(x) for x in xi)
         self.set_input_shape(*xi)
         out = self.evaluate(*xi)
         # first dim is samples, the last the concatenated features
