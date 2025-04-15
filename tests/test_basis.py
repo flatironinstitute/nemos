@@ -795,6 +795,32 @@ class TestConvBasis:
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
 
+    def test_set_bounds(self, cls):
+        kwargs = (
+            {"bounds": (1, 2), "n_basis_funcs": 10}
+            if cls != HistoryConv
+            else {"bounds": (1, 2)}
+        )
+        with pytest.raises(
+                    TypeError, match="got an unexpected keyword argument 'bounds'"
+                ):
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
+
+        kwargs = {"n_basis_funcs": 10} if cls != IdentityEval else {}
+        bas = instantiate_atomic_basis(
+            cls,
+            **kwargs,
+            window_size=20,
+            **extra_decay_rates(cls, 10),
+        )
+        with pytest.raises(
+            ValueError, match="Invalid parameter 'bounds' for estimator"
+        ):
+            bas.set_params(bounds=(1, 2))
+
+
+
 
 @pytest.mark.parametrize(
     "cls",
@@ -1124,6 +1150,16 @@ class TestEvalBasis:
         extra = dict(n_basis_funcs=5) if cls != IdentityEval else {}
         with expectation:
             cls(**extra, window_size=ws, **extra_decay_rates(cls, 5))
+
+    def test_set_bounds(self, cls):
+        kwargs = (
+            {"bounds": (1, 2), "n_basis_funcs": 10}
+            if cls != IdentityEval
+            else {"bounds": (1, 2)}
+        )
+        with does_not_raise():
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
 
 
 @pytest.mark.parametrize(
@@ -1687,40 +1723,6 @@ class TestSharedMethods:
             f"Dimensions do not agree: The sample size of the output should match the input sample size. "
             f"Expected {sample_size}, but got {eval_basis.shape[0]}."
         )
-
-    @pytest.mark.parametrize(
-        "mode, expectation",
-        [
-            ("eval", does_not_raise()),
-            (
-                "conv",
-                pytest.raises(
-                    TypeError, match="got an unexpected keyword argument 'bounds'"
-                ),
-            ),
-        ],
-    )
-    def test_set_bounds(self, mode, expectation, cls):
-        kwargs = (
-            {"bounds": (1, 2), "n_basis_funcs": 10}
-            if cls["eval"] != IdentityEval
-            else {"bounds": (1, 2)}
-        )
-        with expectation:
-            cls[mode](**kwargs, **extra_decay_rates(cls[mode], 10))
-
-        if mode == "conv":
-            kwargs = {"n_basis_funcs": 10} if cls["eval"] != IdentityEval else {}
-            bas = instantiate_atomic_basis(
-                cls["conv"],
-                **kwargs,
-                window_size=20,
-                **extra_decay_rates(cls[mode], 10),
-            )
-            with pytest.raises(
-                ValueError, match="Invalid parameter 'bounds' for estimator"
-            ):
-                bas.set_params(bounds=(1, 2))
 
     @pytest.mark.parametrize(
         "enforce_decay_to_zero, time_scaling, width, window_size, n_basis_funcs, bounds, mode, decay_rates",
