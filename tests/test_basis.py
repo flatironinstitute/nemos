@@ -767,6 +767,195 @@ class TestConvBasis:
             bas._compute_features(np.linspace(0, 1, 10))
 
 
+
+@pytest.mark.parametrize(
+    "cls",
+    [
+        basis.RaisedCosineLogEval,
+        basis.RaisedCosineLinearEval,
+        basis.BSplineEval,
+        basis.CyclicBSplineEval,
+        basis.MSplineEval,
+        basis.OrthExponentialEval,
+        basis.IdentityEval,
+    ],
+)
+class TestEvalBasis:
+    @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (
+                    -0.5,
+                    0,
+                    1,
+                    pytest.raises(ValueError, match="All the samples lie outside"),
+            ),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (
+                    np.linspace(-1, 0, 10),
+                    0,
+                    1,
+                    pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+            (
+                    np.linspace(1, 2, 10),
+                    0,
+                    1,
+                    pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+        ],
+    )
+    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
+        if "OrthExp" in cls.__name__ and not hasattr(samples, "shape"):
+            return
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, 5),
+        )
+        with expectation:
+            bas.evaluate(samples)
+
+    @pytest.mark.parametrize("n_basis", [5, 6])
+    @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
+    @pytest.mark.parametrize("inp_num", [1, 2])
+    def test_sklearn_clone_eval(self, cls, n_basis, vmin, vmax, inp_num):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, n_basis),
+        )
+        bas.set_input_shape(inp_num)
+        bas2 = bas.__sklearn_clone__()
+        assert id(bas) != id(bas2)
+        assert np.all(
+            bas.__dict__.pop("decay_rates", True)
+            == bas2.__dict__.pop("decay_rates", True)
+        )
+        assert bas.__dict__ == bas2.__dict__
+
+    @pytest.mark.parametrize(
+        "bounds, samples, nan_idx, mn, mx",
+        [
+            (None, np.arange(5), [4], 0, 1),
+            ((0, 3), np.arange(5), [4], 0, 3),
+            ((1, 4), np.arange(5), [0], 1, 4),
+            ((1, 3), np.arange(5), [0, 4], 1, 3),
+        ],
+    )
+    def test_vmin_vmax_eval_on_grid_affects_x(
+            self, bounds, samples, nan_idx, mn, mx, cls
+    ):
+        bas_no_range = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=None,
+            **extra_decay_rates(cls, 5),
+        )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=bounds,
+            **extra_decay_rates(cls, 5),
+        )
+        x1, _ = bas.evaluate_on_grid(10)
+        x2, _ = bas_no_range.evaluate_on_grid(10)
+        assert np.allclose(x1, x2 * (mx - mn) + mn)
+
+    @pytest.mark.parametrize(
+        "vmin, vmax, samples, nan_idx",
+        [
+            (0, 3, np.arange(5), [4]),
+            (1, 4, np.arange(5), [0]),
+            (1, 3, np.arange(5), [0, 4]),
+        ],
+    )
+    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
+            self, vmin, vmax, samples, nan_idx, cls
+    ):
+        # MSPline integrates to 1 on domain so must be excluded from this check
+        # Identity also returns the same array, so if the range changes so will
+        # evaluate on grid output.
+        if "MSpline" in cls.__name__ or "Identity" in cls.__name__:
+            return
+        bas_no_range = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=None,
+            **extra_decay_rates(cls, 5),
+        )
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, 5),
+        )
+        _, out1 = bas.evaluate_on_grid(10)
+        _, out2 = bas_no_range.evaluate_on_grid(10)
+        assert np.allclose(out1, out2)
+
+    @pytest.mark.parametrize(
+        "bounds, expectation",
+        [
+            (None, does_not_raise()),
+            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+            ((1, 3), does_not_raise()),
+            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+            (
+                    (1, 2, 3),
+                    pytest.raises(
+                        ValueError, match="The provided `bounds` must be of length two"
+                    ),
+            ),
+        ],
+    )
+    def test_vmin_vmax_init(self, bounds, expectation, cls):
+        with expectation:
+            bas = instantiate_atomic_basis(
+                cls,
+                n_basis_funcs=5,
+                bounds=bounds,
+                **extra_decay_rates(cls, 5),
+            )
+            assert bounds == bas.bounds if bounds else bas.bounds is None
+
+    @pytest.mark.parametrize(
+        "samples, expectation",
+        [
+            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
+            (
+                    np.array(["a", "1", "2", "3", "4", "5"]),
+                    pytest.raises(TypeError, match="Input samples must"),
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("n_basis", [6])
+    def test_call_input_type(self, samples, expectation, n_basis, cls):
+        bas = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=n_basis,
+            **extra_decay_rates(cls, n_basis),
+        )  # Only eval mode is relevant here
+        with expectation:
+            bas.evaluate(samples)
+
+    @pytest.mark.parametrize(
+        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
+    )
+    def test_compute_features_input(self, eval_input, cls):
+        # test only in eval because conv requires at least window_size samples
+        # orth exp needs more inputs (orthogonalizaiton impossible otherwise)
+        if "OrthExp" in cls.__name__:
+            return
+        basis_obj = instantiate_atomic_basis(cls, n_basis_funcs=5)
+        basis_obj.compute_features(eval_input)
+
 @pytest.mark.parametrize(
     "cls",
     [
@@ -848,62 +1037,6 @@ class TestSharedMethods:
         out = repr(bas)
         assert out == expected_out.get(cls[mode], "")
 
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_call_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if "OrthExp" in cls["eval"].__name__ and not hasattr(samples, "shape"):
-            return
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        with expectation:
-            bas.evaluate(samples)
-
-    @pytest.mark.parametrize("n_basis", [5, 6])
-    @pytest.mark.parametrize("vmin, vmax", [(0, 1), (-1, 1)])
-    @pytest.mark.parametrize("inp_num", [1, 2])
-    def test_sklearn_clone_eval(self, cls, n_basis, vmin, vmax, inp_num):
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=n_basis,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], n_basis),
-        )
-        bas.set_input_shape(inp_num)
-        bas2 = bas.__sklearn_clone__()
-        assert id(bas) != id(bas2)
-        assert np.all(
-            bas.__dict__.pop("decay_rates", True)
-            == bas2.__dict__.pop("decay_rates", True)
-        )
-        assert bas.__dict__ == bas2.__dict__
-
 
     @pytest.mark.parametrize("n_basis", [5])
     @pytest.mark.parametrize("ws", [10])
@@ -947,9 +1080,10 @@ class TestSharedMethods:
             ),
         ],
     )
-    def test_attr_setter(self, attribute, value, cls, expectation):
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_attr_setter(self, attribute, value, cls, expectation, mode):
         bas = instantiate_atomic_basis(
-            cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
+            cls[mode], n_basis_funcs=5, **extra_decay_rates(cls[mode], 5), window_size=10
         )
         with expectation:
             setattr(bas, attribute, value)
@@ -959,14 +1093,16 @@ class TestSharedMethods:
                 assert getattr(bas, attribute) == value
 
     @pytest.mark.parametrize("label", [None, "label"])
-    def test_init_label(self, label, cls):
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_init_label(self, label, cls, mode):
         bas = instantiate_atomic_basis(
-            cls["eval"],
+            cls[mode],
             n_basis_funcs=5,
             label=label,
-            **extra_decay_rates(cls["eval"], 5),
+            **extra_decay_rates(cls[mode], 5),
+            window_size=10,
         )
-        expected_label = str(label) if label is not None else cls["eval"].__name__
+        expected_label = str(label) if label is not None else cls[mode].__name__
         assert bas.label == expected_label
 
     @pytest.mark.parametrize("mode", ["conv", "eval"])
@@ -983,93 +1119,6 @@ class TestSharedMethods:
         assert bas._input_shape_product == (n_input,)
         assert bas._input_shape_product == (n_input,)
 
-    @pytest.mark.parametrize(
-        "bounds, samples, nan_idx, mn, mx",
-        [
-            (None, np.arange(5), [4], 0, 1),
-            ((0, 3), np.arange(5), [4], 0, 3),
-            ((1, 4), np.arange(5), [0], 1, 4),
-            ((1, 3), np.arange(5), [0, 4], 1, 3),
-        ],
-    )
-    def test_vmin_vmax_eval_on_grid_affects_x(
-        self, bounds, samples, nan_idx, mn, mx, cls
-    ):
-        bas_no_range = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=None,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=bounds,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        x1, _ = bas.evaluate_on_grid(10)
-        x2, _ = bas_no_range.evaluate_on_grid(10)
-        assert np.allclose(x1, x2 * (mx - mn) + mn)
-
-    @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
-        [
-            (0, 3, np.arange(5), [4]),
-            (1, 4, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4]),
-        ],
-    )
-    def test_vmin_vmax_eval_on_grid_no_effect_on_eval(
-        self, vmin, vmax, samples, nan_idx, cls
-    ):
-        # MSPline integrates to 1 on domain so must be excluded from this check
-        # Identity also returns the same array, so if the range changes so will
-        # evaluate on grid output.
-        if "MSpline" in cls["eval"].__name__ or "Identity" in cls["eval"].__name__:
-            return
-        bas_no_range = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=None,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        _, out1 = bas.evaluate_on_grid(10)
-        _, out2 = bas_no_range.evaluate_on_grid(10)
-        assert np.allclose(out1, out2)
-
-    @pytest.mark.parametrize(
-        "bounds, expectation",
-        [
-            (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            (
-                (1, 2, 3),
-                pytest.raises(
-                    ValueError, match="The provided `bounds` must be of length two"
-                ),
-            ),
-        ],
-    )
-    def test_vmin_vmax_init(self, bounds, expectation, cls):
-        with expectation:
-            bas = instantiate_atomic_basis(
-                cls["eval"],
-                n_basis_funcs=5,
-                bounds=bounds,
-                **extra_decay_rates(cls["eval"], 5),
-            )
-            assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize("n_basis", [6, 7])
     @pytest.mark.parametrize(
@@ -1194,25 +1243,6 @@ class TestSharedMethods:
         assert np.all(np.isnan(out[4, 1, 1]))
         assert np.isnan(out).sum() == 3 * n_basis
 
-    @pytest.mark.parametrize(
-        "samples, expectation",
-        [
-            (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
-            (
-                np.array(["a", "1", "2", "3", "4", "5"]),
-                pytest.raises(TypeError, match="Input samples must"),
-            ),
-        ],
-    )
-    @pytest.mark.parametrize("n_basis", [6])
-    def test_call_input_type(self, samples, expectation, n_basis, cls):
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=n_basis,
-            **extra_decay_rates(cls["eval"], n_basis),
-        )  # Only eval mode is relevant here
-        with expectation:
-            bas.evaluate(samples)
 
     @pytest.mark.parametrize(
         "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
@@ -1278,16 +1308,6 @@ class TestSharedMethods:
         with expectation:
             bas.evaluate(np.linspace(mn, mx, 10))
 
-
-    @pytest.mark.parametrize(
-        "eval_input", [0, [0], (0,), np.array([0]), jax.numpy.array([0])]
-    )
-    def test_compute_features_input(self, eval_input, cls):
-        # orth exp needs more inputs (orthogonalizaiton impossible otherwise)
-        if "OrthExp" in cls["eval"].__name__:
-            return
-        basis_obj = instantiate_atomic_basis(cls["eval"], n_basis_funcs=5)
-        basis_obj.compute_features(eval_input)
 
     @pytest.mark.parametrize(
         "args, sample_size",
