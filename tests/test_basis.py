@@ -1174,25 +1174,24 @@ class TestEvalBasis:
         {"eval": basis.IdentityEval, "conv": basis.HistoryConv},
     ],
 )
-class TestCompareEvalConv:
-    @pytest.mark.parametrize("n_basis", [6])
-    def test_call_equivalent_in_conv(self, n_basis, cls):
-        # Identity and history have a different behavior
-        if cls["eval"] is IdentityEval:
-            return
-        bas_con = instantiate_atomic_basis(
-            cls["conv"],
-            n_basis_funcs=n_basis,
-            window_size=10,
-            **extra_decay_rates(cls["conv"], n_basis),
-        )
-        bas_eval = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=n_basis,
-            **extra_decay_rates(cls["eval"], n_basis),
-        )
-        x = np.linspace(0, 1, 10)
-        assert np.all(bas_con.evaluate(x) == bas_eval.evaluate(x))
+@pytest.mark.parametrize("n_basis", [6])
+def test_call_equivalent_in_conv(self, n_basis, cls):
+    # Identity and history have a different behavior
+    if cls["eval"] is IdentityEval:
+        return
+    bas_con = instantiate_atomic_basis(
+        cls["conv"],
+        n_basis_funcs=n_basis,
+        window_size=10,
+        **extra_decay_rates(cls["conv"], n_basis),
+    )
+    bas_eval = instantiate_atomic_basis(
+        cls["eval"],
+        n_basis_funcs=n_basis,
+        **extra_decay_rates(cls["eval"], n_basis),
+    )
+    x = np.linspace(0, 1, 10)
+    assert np.all(bas_con.evaluate(x) == bas_eval.evaluate(x))
 
 
 @pytest.mark.parametrize(
