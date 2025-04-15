@@ -11,14 +11,17 @@ from numpy.typing import ArrayLike, NDArray
 from pynapple import Tsd, TsdFrame, TsdTensor
 
 from ..base_class import Base
-from ..tree_utils import has_matching_axis_pytree
 from ..type_casting import support_pynapple
 from ..typing import FeatureMatrix
 from ..utils import row_wise_kron
 from ..validation import check_fraction_valid_samples
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, CompositeBasisMixin
+from ._check_basis import (
+    _check_input_dimensionality,
+    _check_transform_input,
+    _check_zero_samples,
+)
 from ._composition_utils import (
-    infer_input_dimensionality,
     is_basis_like,
     multiply_basis_by_integer,
     promote_to_transformer,
@@ -322,25 +325,7 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
             - At least one of the samples is empty.
 
         """
-        # check that the input is array-like (i.e., whether we can cast it to
-        # numeric arrays)
-        try:
-            # make sure array is at least 1d (so that we succeed when only
-            # passed a scalar)
-            xi = tuple(np.atleast_1d(np.asarray(x, dtype=float)) for x in xi)
-        # ValueError here surfaces the exception with e.g., `x=np.array["a", "b"])`
-        except (TypeError, ValueError):
-            raise TypeError("Input samples must be array-like of floats!")
-
-        # check for non-empty samples
-        if self._has_zero_samples(tuple(len(x) for x in xi)):
-            raise ValueError("All sample provided must be non empty.")
-
-        # checks on input and outputs
-        self._check_input_dimensionality(xi)
-        self._check_samples_consistency(*xi)
-
-        return xi
+        return _check_transform_input(self, *xi)
 
     def evaluate_on_grid(self, *n_samples: int) -> Tuple[Tuple[NDArray], NDArray]:
         """Evaluate the basis set on a grid of equi-spaced sample points.
@@ -359,10 +344,12 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
            Evaluated exponentially decaying basis functions, numerically
            orthogonalized, shape ``(n_samples, n_basis_funcs)``
         """
-        self._check_input_dimensionality(n_samples)
+        _check_input_dimensionality(self, n_samples)
 
-        if self._has_zero_samples(n_samples):
-            raise ValueError("All sample counts provided must be greater than zero.")
+        _check_zero_samples(
+            n_samples,
+            err_message="All sample counts provided must be greater than zero.",
+        )
 
         # get the samples (can be re-implemented, by providing a _get_samples)
         bounds = getattr(self, "bounds", None)
@@ -378,51 +365,6 @@ class Basis(Base, abc.ABC, BasisTransformerMixin):
         )
 
         return *Xs, Y
-
-    @staticmethod
-    def _has_zero_samples(n_samples: Tuple[int, ...]) -> bool:
-        return any([n <= 0 for n in n_samples])
-
-    def _check_input_dimensionality(self, xi: Tuple) -> None:
-        """
-        Check that the number of inputs provided by the user matches the number of inputs required.
-
-        Parameters
-        ----------
-        xi[0], ..., xi[n] :
-            The input samples, shape (number of samples, ).
-
-        Raises
-        ------
-        ValueError
-            If the number of inputs doesn't match what the Basis object requires.
-        """
-        n_input_dim = infer_input_dimensionality(self)
-        if len(xi) != n_input_dim:
-            raise TypeError(
-                f"Input dimensionality mismatch. This basis evaluation requires {n_input_dim} inputs, "
-                f"{len(xi)} inputs provided instead."
-            )
-
-    @staticmethod
-    def _check_samples_consistency(*xi: NDArray) -> None:
-        """
-        Check that each input provided to the Basis object has the same number of time points.
-
-        Parameters
-        ----------
-        xi[0], ..., xi[n] :
-            The input samples, shape (number of samples, ).
-
-        Raises
-        ------
-        ValueError
-            If the time point number is inconsistent between inputs.
-        """
-        if not has_matching_axis_pytree(*xi, axis=0):
-            raise ValueError(
-                "Sample size mismatch. Input elements have inconsistent sample sizes."
-            )
 
     @promote_to_transformer
     def __add__(self, other: BasisMixin) -> AdditiveBasis:

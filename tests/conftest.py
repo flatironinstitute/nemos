@@ -20,7 +20,7 @@ import pytest
 import nemos as nmo
 import nemos._inspect_utils as inspect_utils
 import nemos.basis.basis as basis
-from nemos.basis import AdditiveBasis, MultiplicativeBasis
+from nemos.basis import AdditiveBasis, CustomBasis, MultiplicativeBasis
 from nemos.basis._basis import Basis
 from nemos.basis._transformer_basis import TransformerBasis
 
@@ -31,7 +31,9 @@ nap.nap_config.suppress_conversion_warnings = True
 @pytest.fixture()
 def basis_class_specific_params():
     """Returns all the params for each class."""
-    all_cls = list_all_basis_classes("Conv") + list_all_basis_classes("Eval")
+    all_cls = (
+        list_all_basis_classes("Conv") + list_all_basis_classes("Eval") + [CustomBasis]
+    )
     return {cls.__name__: cls._get_param_names() for cls in all_cls}
 
 

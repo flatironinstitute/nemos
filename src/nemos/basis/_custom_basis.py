@@ -18,6 +18,7 @@ from ..type_casting import support_pynapple
 from ..utils import format_repr
 from . import AdditiveBasis, MultiplicativeBasis
 from ._basis_mixin import BasisMixin, BasisTransformerMixin, set_input_shape_state
+from ._check_basis import _check_transform_input
 from ._composition_utils import (
     _check_valid_shape_tuple,
     count_positional_and_var_args,
@@ -93,8 +94,8 @@ def apply_f_vectorized(
     flat_vec_dims = (
         (
             range(1)
-            if x.ndim - 1 == ndim_input
-            else range(int(np.prod(x.shape[1 + ndim_input :])))
+            if x.ndim == ndim_input
+            else range(int(np.prod(x.shape[ndim_input:])))
         )
         for x in xi
     )
@@ -102,7 +103,7 @@ def apply_f_vectorized(
         (
             x[..., np.newaxis]
             if x.ndim - 1 == ndim_input
-            else x.reshape(*x.shape[: 1 + ndim_input], -1)
+            else x.reshape((*x.shape[:ndim_input], -1))
         )
         for x in xi
     ]
@@ -223,9 +224,7 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
     def funcs(self, val: Iterable[Callable[[NDArray, ...], NDArray]]):
         if isinstance(val, Callable):
             val = [val]
-        val = FunctionList(
-            [support_pynapple()(v) if self._pynapple_support else v for v in val]
-        )
+        val = FunctionList(val)
 
         if not all(isinstance(f, Callable) for f in val):
             raise ValueError("User must provide an iterable of callable.")
@@ -257,21 +256,23 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
         )
 
     def compute_features(self, *xi):
-        xi = tuple(np.atleast_1d(x) for x in xi)
+        xi = _check_transform_input(self, *xi)
         self.set_input_shape(*xi)
         out = self.evaluate(*xi)
         # first dim is samples, the last the concatenated features
         self.output_shape = out.shape[1:-1]
         # return a model design
-        return out.reshape(xi[0].shape[0], -1)
+        return out.reshape((xi[0].shape[0], -1))
 
     def evaluate(self, *xi: NDArray):
         """Evaluate funcs in a vectorized form."""
+        if self._pynapple_support:
+            apply_func = support_pynapple("jax")(apply_f_vectorized)
+        else:
+            apply_func = apply_f_vectorized
         return np.concatenate(
             [
-                apply_f_vectorized(
-                    f, *xi, **self.basis_kwargs, ndim_input=self.ndim_input
-                )
+                apply_func(f, *xi, **self.basis_kwargs, ndim_input=self.ndim_input)
                 for f in self.funcs
             ],
             axis=-1,
@@ -346,3 +347,6 @@ class CustomBasis(BasisMixin, BasisTransformerMixin, Base):
 
     def __repr__(self):
         return format_repr(self, multiline=True)
+
+    def __len__(self) -> int:
+        return 1
