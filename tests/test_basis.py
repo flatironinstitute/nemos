@@ -926,6 +926,43 @@ class TestEvalBasis:
             assert bounds == bas.bounds if bounds else bas.bounds is None
 
     @pytest.mark.parametrize(
+        "samples, vmin, vmax, expectation",
+        [
+            (0.5, 0, 1, does_not_raise()),
+            (
+                    -0.5,
+                    0,
+                    1,
+                    pytest.raises(ValueError, match="All the samples lie outside"),
+            ),
+            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
+            (
+                    np.linspace(-1, 0, 10),
+                    0,
+                    1,
+                    pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+            (
+                    np.linspace(1, 2, 10),
+                    0,
+                    1,
+                    pytest.warns(UserWarning, match="More than 90% of the samples"),
+            ),
+        ],
+    )
+    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
+        if "OrthExp" in cls.__name__ and not hasattr(samples, "shape"):
+            return
+        basis_obj = instantiate_atomic_basis(
+            cls,
+            n_basis_funcs=5,
+            bounds=(vmin, vmax),
+            **extra_decay_rates(cls, 5),
+        )
+        with expectation:
+            basis_obj.compute_features(samples)
+
+    @pytest.mark.parametrize(
         "samples, expectation",
         [
             (np.array([0, 1, 2, 3, 4, 5]), does_not_raise()),
@@ -955,6 +992,88 @@ class TestEvalBasis:
             return
         basis_obj = instantiate_atomic_basis(cls, n_basis_funcs=5)
         basis_obj.compute_features(eval_input)
+
+    @pytest.mark.parametrize(
+         "vmin, vmax, samples, nan_idx",
+         [
+             (None, None, np.arange(5), []),
+             (0, 3, np.arange(5), [4]),
+             (1, 4, np.arange(5), [0]),
+             (1, 3, np.arange(5), [0, 4]),
+         ],
+     )
+    def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
+        bounds = None if vmin is None else (vmin, vmax)
+        bas = instantiate_atomic_basis(
+         cls,
+         n_basis_funcs=5,
+         bounds=bounds,
+         **extra_decay_rates(cls, 5),
+        )
+        out = bas.compute_features(samples)
+        assert np.all(np.isnan(out[nan_idx]))
+        valid_idx = list(set(samples).difference(nan_idx))
+        assert np.all(~np.isnan(out[valid_idx]))
+
+    @pytest.mark.parametrize(
+     "bounds, expectation",
+     [
+         (None, does_not_raise()),
+         ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
+         ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
+         ((1, 3), does_not_raise()),
+         (("a", 3), pytest.raises(TypeError, match="Could not convert")),
+         ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
+         (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
+         (
+             (2, 1),
+             pytest.raises(
+                 ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater"
+             ),
+         ),
+     ],
+    )
+    def test_vmin_vmax_setter(self, bounds, expectation, cls):
+     bas = instantiate_atomic_basis(
+         cls,
+         n_basis_funcs=5,
+         bounds=(1, 3),
+         **extra_decay_rates(cls, 5),
+     )
+     with expectation:
+         bas.set_params(bounds=bounds)
+         assert bounds == bas.bounds if bounds else bas.bounds is None
+
+    def test_conv_kwargs_error(self, cls):
+     with pytest.raises(
+         TypeError, match="got an unexpected keyword argument 'test'"
+     ):
+         if cls == IdentityEval:
+             extra = {}
+         else:
+             extra = dict(n_basis_funcs=5)
+         cls(**extra, test="hi", **extra_decay_rates(cls, 5))
+
+    def test_set_window_size(self, cls):
+        kwargs = (
+            {"window_size": 10, "n_basis_funcs": 10}
+            if cls != IdentityEval
+            else {"window_size": 10}
+        )
+        with pytest.raises(
+                    TypeError, match="got an unexpected keyword argument 'window_size'"
+                ):
+            cls(**kwargs, **extra_decay_rates(cls, 10))
+
+
+        bas = instantiate_atomic_basis(
+            cls, n_basis_funcs=10, **extra_decay_rates(cls, 10)
+        )
+        with pytest.raises(
+            ValueError, match="Invalid parameter 'window_size' for estimator"
+        ):
+            bas.set_params(window_size=10)
+
 
 @pytest.mark.parametrize(
     "cls",
@@ -1337,105 +1456,6 @@ class TestSharedMethods:
             f"evaluated basis has dimension {eval_basis.shape[1]}"
         )
 
-    @pytest.mark.parametrize(
-        "samples, vmin, vmax, expectation",
-        [
-            (0.5, 0, 1, does_not_raise()),
-            (
-                -0.5,
-                0,
-                1,
-                pytest.raises(ValueError, match="All the samples lie outside"),
-            ),
-            (np.linspace(-1, 1, 10), 0, 1, does_not_raise()),
-            (
-                np.linspace(-1, 0, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-            (
-                np.linspace(1, 2, 10),
-                0,
-                1,
-                pytest.warns(UserWarning, match="More than 90% of the samples"),
-            ),
-        ],
-    )
-    def test_compute_features_vmin_vmax(self, samples, vmin, vmax, expectation, cls):
-        if "OrthExp" in cls["eval"].__name__ and not hasattr(samples, "shape"):
-            return
-        basis_obj = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(vmin, vmax),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        with expectation:
-            basis_obj.compute_features(samples)
-
-    @pytest.mark.parametrize(
-        "vmin, vmax, samples, nan_idx",
-        [
-            (None, None, np.arange(5), []),
-            (0, 3, np.arange(5), [4]),
-            (1, 4, np.arange(5), [0]),
-            (1, 3, np.arange(5), [0, 4]),
-        ],
-    )
-    def test_vmin_vmax_range(self, vmin, vmax, samples, nan_idx, cls):
-        bounds = None if vmin is None else (vmin, vmax)
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=bounds,
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        out = bas.compute_features(samples)
-        assert np.all(np.isnan(out[nan_idx]))
-        valid_idx = list(set(samples).difference(nan_idx))
-        assert np.all(~np.isnan(out[valid_idx]))
-
-    @pytest.mark.parametrize(
-        "bounds, expectation",
-        [
-            (None, does_not_raise()),
-            ((None, 3), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, None), pytest.raises(TypeError, match=r"Could not convert")),
-            ((1, 3), does_not_raise()),
-            (("a", 3), pytest.raises(TypeError, match="Could not convert")),
-            ((1, "a"), pytest.raises(TypeError, match="Could not convert")),
-            (("a", "a"), pytest.raises(TypeError, match="Could not convert")),
-            (
-                (2, 1),
-                pytest.raises(
-                    ValueError, match=r"Invalid bound \(2, 1\). Lower bound is greater"
-                ),
-            ),
-        ],
-    )
-    def test_vmin_vmax_setter(self, bounds, expectation, cls):
-        bas = instantiate_atomic_basis(
-            cls["eval"],
-            n_basis_funcs=5,
-            bounds=(1, 3),
-            **extra_decay_rates(cls["eval"], 5),
-        )
-        with expectation:
-            bas.set_params(bounds=bounds)
-            assert bounds == bas.bounds if bounds else bas.bounds is None
-
-    def test_conv_kwargs_error(self, cls):
-        with pytest.raises(
-            TypeError, match="got an unexpected keyword argument 'test'"
-        ):
-            if cls["eval"] == IdentityEval:
-                extra = {}
-            else:
-                extra = dict(n_basis_funcs=5)
-            cls["eval"](**extra, test="hi", **extra_decay_rates(cls["eval"], 5))
-
-
     @pytest.mark.parametrize("sample_size", [-1, 0, 1, 10, 11, 100])
     @pytest.mark.parametrize(
         "mode, kwargs", [("eval", {}), ("conv", {"window_size": 8})]
@@ -1612,7 +1632,8 @@ class TestSharedMethods:
 
     @pytest.mark.parametrize("sample_size", [30])
     @pytest.mark.parametrize("n_basis", [5])
-    def test_pynapple_support_compute_features(self, n_basis, sample_size, cls):
+    @pytest.mark.parametrize("mode", ["conv", "eval"])
+    def test_pynapple_support_compute_features(self, n_basis, sample_size, cls, mode):
         iset = nap.IntervalSet(start=[0, 0.5], end=[0.49999, 1])
         inp = nap.Tsd(
             t=np.linspace(0, 1, sample_size),
@@ -1620,12 +1641,13 @@ class TestSharedMethods:
             time_support=iset,
         )
         out = instantiate_atomic_basis(
-            cls["eval"],
+            cls[mode],
             n_basis_funcs=n_basis,
-            **extra_decay_rates(cls["eval"], n_basis),
+            window_size=10,
+            **extra_decay_rates(cls[mode], n_basis),
         ).compute_features(inp)
         assert isinstance(out, nap.TsdFrame)
-        assert np.all(out.time_support.values == inp.time_support.values)
+        assert np.array_equal(out.time_support.values, inp.time_support.values, equal_nan=True)
 
     @pytest.mark.parametrize("sample_size", [100, 1000])
     @pytest.mark.parametrize("n_basis_funcs", [5, 10, 80])
@@ -1735,26 +1757,7 @@ class TestSharedMethods:
                 bas = bas.set_params(**par_set)
                 assert isinstance(bas, cls[mode])
 
-    def test_set_window_size(self, cls):
-        kwargs = (
-            {"window_size": 10, "n_basis_funcs": 10}
-            if cls["eval"] != IdentityEval
-            else {"window_size": 10}
-        )
-        with pytest.raises(
-                    TypeError, match="got an unexpected keyword argument 'window_size'"
-                ):
-            cls["eval"](**kwargs, **extra_decay_rates(cls["eval"], 10))
-
-
-        bas = instantiate_atomic_basis(
-            cls["eval"], n_basis_funcs=10, **extra_decay_rates(cls["eval"], 10)
-        )
-        with pytest.raises(
-            ValueError, match="Invalid parameter 'window_size' for estimator"
-        ):
-            bas.set_params(window_size=10)
-
+    ## ARRIVED HERE
     def test_transformer_get_params(self, cls):
         bas = instantiate_atomic_basis(
             cls["eval"], n_basis_funcs=5, **extra_decay_rates(cls["eval"], 5)
